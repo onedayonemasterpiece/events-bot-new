@@ -363,7 +363,7 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
 
 
 @pytest.mark.asyncio
-async def test_telegram_story_message_target_forwards_previous_story_to_channel(
+async def test_telegram_story_message_target_forwards_first_story_to_channel(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -416,6 +416,144 @@ async def test_telegram_story_message_target_forwards_previous_story_to_channel(
     assert story_message["media"] == {"peer": "peer:@kenigevents", "id": 101}
     assert story_message["message"] == ""
     assert client.sent_requests[1]["fwd_from_story"] == 101
+
+
+@pytest.mark.asyncio
+async def test_story_reposts_always_use_first_successful_story_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers=set(),
+        story_ids={
+            "peer:@kenigevents": 101,
+            "peer:@lovekenig": 202,
+            "peer:@loving_guide39": 303,
+            "peer:@catwithbag": 404,
+            "peer:@i_love_kaliningrad": 505,
+        },
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {"peer": "@kenigevents", "mode": "upload"},
+                {"peer": "@lovekenig", "mode": "repost_previous"},
+                {"peer": "@loving_guide39", "mode": "repost_previous"},
+                {"peer": "@catwithbag", "mode": "repost_previous"},
+                {"peer": "@i_love_kaliningrad", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert [item.get("story_id") for item in report["targets"]] == [101, 202, 303, 404, 505]
+    repost_requests = client.sent_requests[1:]
+    assert len(repost_requests) == 4
+    assert {request["fwd_from_id"] for request in repost_requests} == {"peer:@kenigevents"}
+    assert {request["fwd_from_story"] for request in repost_requests} == {101}
+    assert [item.get("source_label") for item in report["targets"][1:]] == [
+        "@kenigevents",
+        "@kenigevents",
+        "@kenigevents",
+        "@kenigevents",
+    ]
+    assert [item.get("source_strategy") for item in report["targets"][1:]] == [
+        "first_story",
+        "first_story",
+        "first_story",
+        "first_story",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_story_publish_emits_per_target_kaggle_status_events(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    import __main__
+
+    emitted: list[dict[str, object]] = []
+    original = getattr(__main__, "kaggle_status_event", None)
+
+    def fake_status_event(event, *, phase=None, status=None, progress=None, message=None):  # noqa: ANN001
+        emitted.append(
+            {
+                "event": event,
+                "phase": phase,
+                "status": status,
+                "progress": dict(progress or {}),
+                "message": message,
+            }
+        )
+        return {"ok": True}
+
+    monkeypatch.setattr(__main__, "kaggle_status_event", fake_status_event, raising=False)
+    try:
+        client = _FakeStoryClient(
+            boost_fail_peers={"peer:@lovekenig"},
+            story_ids={"peer:@kenigevents": 101},
+        )
+        media_path = tmp_path / "story.mp4"
+        media_path.write_bytes(b"video")
+
+        report = await helper._story_targets_report(
+            client,
+            auth={},
+            config={
+                "targets": [
+                    {"peer": "@kenigevents", "mode": "upload"},
+                    {"peer": "@lovekenig", "mode": "repost_previous", "required": True},
+                ]
+            },
+            log=lambda *_args, **_kwargs: None,
+            phase="publish",
+            media_path=media_path,
+            honor_delays=False,
+        )
+    finally:
+        if original is None:
+            monkeypatch.delattr(__main__, "kaggle_status_event", raising=False)
+        else:
+            monkeypatch.setattr(__main__, "kaggle_status_event", original, raising=False)
+
+    assert report["ok"] is False
+    assert [item["event"] for item in emitted] == [
+        "publish_target_started",
+        "publish_target_done",
+        "publish_target_started",
+        "publish_target_failed",
+    ]
+    assert emitted[0]["progress"]["target_label"] == "@kenigevents"
+    assert emitted[1]["progress"]["story_id"] == 101
+    assert emitted[2]["progress"]["target_required"] is True
+    assert emitted[3]["progress"]["target_label"] == "@lovekenig"
+    assert emitted[3]["status"] == "failed"
+    assert "BOOSTS_REQUIRED" in str(emitted[3]["message"])
 
 
 @pytest.mark.asyncio

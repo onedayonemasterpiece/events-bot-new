@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **CherryFlash/CrumpleVideo Telegram story fanout**: `repost_previous` Telegram story targets now always forward/share the first successful story source from the run instead of chaining through the immediately previous repost. This keeps downstream partner/channel stories anchored to the original `@kenigevents` story for more stable Telegram repost attribution/view aggregation. Kaggle story publishing also emits per-target `publish_target_started`/`publish_target_done`/`publish_target_failed` status callbacks with target labels and source story ids so missing fanout is visible in the run ledger instead of only in downloaded Kaggle reports.
 - **Incident / VK past-post prune starvation (INC-2026-06-27)**: `vk_post_prune`
   now prioritizes the freshest ended events before applying `VK_POST_PRUNE_LIMIT`,
   so old missing/repost-protected managed VK URLs cannot starve newly-past live

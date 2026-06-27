@@ -1027,6 +1027,81 @@ def _publish_vk_wall_story_forward(
     return result
 
 
+def _first_story_missing_error(kind: str) -> RuntimeError:
+    return RuntimeError(
+        f"{kind} target requires the first successful story upload/repost source"
+    )
+
+
+def _target_status_progress(
+    target_report: dict[str, Any],
+    *,
+    idx: int,
+    total: int,
+    phase: str,
+) -> dict[str, Any]:
+    progress = {
+        "phase": phase,
+        "target_index": idx + 1,
+        "target_total": total,
+        "target_label": target_report.get("label"),
+        "target_peer": target_report.get("peer"),
+        "target_transport": target_report.get("transport"),
+        "target_mode": target_report.get("mode"),
+        "target_required": bool(target_report.get("required")),
+        "target_blocking": bool(target_report.get("blocking")),
+    }
+    if target_report.get("story_id") is not None:
+        progress["story_id"] = target_report.get("story_id")
+    if target_report.get("message_id") is not None:
+        progress["message_id"] = target_report.get("message_id")
+    if target_report.get("source_story_id") is not None:
+        progress["source_story_id"] = target_report.get("source_story_id")
+    if target_report.get("source_label"):
+        progress["source_label"] = target_report.get("source_label")
+    if target_report.get("error"):
+        progress["error"] = str(target_report.get("error"))[:500]
+    return progress
+
+
+def _emit_kaggle_target_event(
+    event: str,
+    *,
+    target_report: dict[str, Any],
+    idx: int,
+    total: int,
+    phase: str,
+    status: str,
+    message: str | None = None,
+    log=None,
+) -> None:
+    """Best-effort bridge to the notebook-injected Kaggle status callback."""
+    try:
+        import __main__  # imported lazily so local helper tests stay standalone
+
+        callback = getattr(__main__, "kaggle_status_event", None)
+        if not callable(callback):
+            return
+        callback(
+            event,
+            phase=phase,
+            status=status,
+            progress=_target_status_progress(
+                target_report,
+                idx=idx,
+                total=total,
+                phase=phase,
+            ),
+            message=message,
+        )
+    except Exception as exc:
+        if log is not None:
+            try:
+                log(f"[kaggle_status] target event {event} failed: {exc}")
+            except Exception:
+                pass
+
+
 async def _story_targets_report(
     client: TelegramClient | None,
     *,
@@ -1053,9 +1128,11 @@ async def _story_targets_report(
         account=account,
         media_path=media_path,
     )
-    previous_story: dict[str, Any] | None = None
+    first_story: dict[str, Any] | None = None
     previous_vk_wall: dict[str, Any] | None = None
-    for idx, target_cfg in enumerate(config.get("targets") or []):
+    target_configs = list(config.get("targets") or [])
+    target_total = len(target_configs)
+    for idx, target_cfg in enumerate(target_configs):
         peer_ref = str(target_cfg.get("peer") or "").strip()
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
         delay_seconds = max(0, int(target_cfg.get("delay_seconds") or 0))
@@ -1082,6 +1159,15 @@ async def _story_targets_report(
             "pinned": bool(config.get("pinned")),
             "ok": False,
         }
+        _emit_kaggle_target_event(
+            "publish_target_started",
+            target_report=target_report,
+            idx=idx,
+            total=target_total,
+            phase=phase,
+            status="running",
+            log=log,
+        )
         try:
             if transport in {"vk_story", "vk_wall", "vk_wall_story"}:
                 group_id = _vk_group_id(peer_ref, auth=auth, config=config)
@@ -1165,6 +1251,15 @@ async def _story_targets_report(
                 else:
                     log(f"✅ VK {transport} preflight passed for {label} (club{group_id})")
                 target_report["ok"] = True
+                _emit_kaggle_target_event(
+                    "publish_target_done",
+                    target_report=target_report,
+                    idx=idx,
+                    total=target_total,
+                    phase=phase,
+                    status="done",
+                    log=log,
+                )
                 report["targets"].append(target_report)
                 continue
             if transport == "telegram_business":
@@ -1198,6 +1293,15 @@ async def _story_targets_report(
                 else:
                     log(f"✅ Business story preflight passed for {label}")
                 target_report["ok"] = True
+                _emit_kaggle_target_event(
+                    "publish_target_done",
+                    target_report=target_report,
+                    idx=idx,
+                    total=target_total,
+                    phase=phase,
+                    status="done",
+                    log=log,
+                )
                 report["targets"].append(target_report)
                 continue
             if transport == "telegram_story_message":
@@ -1206,20 +1310,19 @@ async def _story_targets_report(
                 peer = await client.get_input_entity(peer_ref)
                 target_report["effective_peer"] = peer_ref
                 if media_path is not None:
-                    if not previous_story:
-                        raise RuntimeError(
-                            "telegram_story_message target requires a successful prior story target"
-                        )
-                    source_peer = previous_story["peer"]
-                    source_story_id = int(previous_story["story_id"])
+                    if not first_story:
+                        raise _first_story_missing_error("telegram_story_message")
+                    source_peer = first_story["peer"]
+                    source_story_id = int(first_story["story_id"])
                     # Keep the feed post a clean story forward/share: adding a
                     # message caption makes Telegram render an ordinary commented
                     # story-message with a separate post view counter. The story
                     # itself already carries its caption.
                     media = types.InputMediaStory(peer=source_peer, id=source_story_id)
                     target_report["source_story_id"] = source_story_id
-                    target_report["source_peer"] = previous_story.get("peer_ref")
-                    target_report["source_label"] = previous_story.get("label")
+                    target_report["source_peer"] = first_story.get("peer_ref")
+                    target_report["source_label"] = first_story.get("label")
+                    target_report["source_strategy"] = "first_story"
                     result = await client(
                         functions.messages.SendMediaRequest(
                             peer=peer,
@@ -1245,6 +1348,15 @@ async def _story_targets_report(
                         f"(peer={peer_ref})"
                     )
                 target_report["ok"] = True
+                _emit_kaggle_target_event(
+                    "publish_target_done",
+                    target_report=target_report,
+                    idx=idx,
+                    total=target_total,
+                    phase=phase,
+                    status="done",
+                    log=log,
+                )
                 report["targets"].append(target_report)
                 continue
             if transport == "telegram_chat":
@@ -1277,6 +1389,15 @@ async def _story_targets_report(
                 else:
                     log(f"✅ Telegram chat preflight passed for {label} (peer={peer_ref})")
                 target_report["ok"] = True
+                _emit_kaggle_target_event(
+                    "publish_target_done",
+                    target_report=target_report,
+                    idx=idx,
+                    total=target_total,
+                    phase=phase,
+                    status="done",
+                    log=log,
+                )
                 report["targets"].append(target_report)
                 continue
             fallback_peer_ref = str(target_cfg.get("fallback_peer") or "").strip()
@@ -1302,16 +1423,15 @@ async def _story_targets_report(
                     if media_path is not None:
                         send_kwargs: dict[str, Any]
                         if publish_mode == "repost_previous":
-                            if not previous_story:
-                                raise RuntimeError(
-                                    "repost_previous target requires a successful prior story target"
-                                )
-                            source_peer = previous_story["peer"]
-                            source_story_id = int(previous_story["story_id"])
+                            if not first_story:
+                                raise _first_story_missing_error("repost_previous")
+                            source_peer = first_story["peer"]
+                            source_story_id = int(first_story["story_id"])
                             media = types.InputMediaStory(peer=source_peer, id=source_story_id)
                             target_report["source_story_id"] = source_story_id
-                            target_report["source_peer"] = previous_story.get("peer_ref")
-                            target_report["source_label"] = previous_story.get("label")
+                            target_report["source_peer"] = first_story.get("peer_ref")
+                            target_report["source_label"] = first_story.get("label")
+                            target_report["source_strategy"] = "first_story"
                             send_kwargs = {
                                 "peer": peer,
                                 "media": media,
@@ -1388,8 +1508,8 @@ async def _story_targets_report(
                         else f" (peer={chosen['peer_ref']})"
                     )
                 )
-                if chosen.get("story_id") is not None:
-                    previous_story = {
+                if chosen.get("story_id") is not None and first_story is None:
+                    first_story = {
                         "peer": chosen["peer_entity"],
                         "peer_ref": chosen["peer_ref"],
                         "label": label,
@@ -1398,10 +1518,29 @@ async def _story_targets_report(
             else:
                 log(f"✅ Story preflight passed for {label} (peer={chosen['peer_ref']})")
             target_report["ok"] = True
+            _emit_kaggle_target_event(
+                "publish_target_done",
+                target_report=target_report,
+                idx=idx,
+                total=target_total,
+                phase=phase,
+                status="done",
+                log=log,
+            )
         except Exception as exc:
             target_report["error"] = _format_story_error(exc, account=account)
             log(
                 f"❌ Story {phase} failed for {label}: {target_report['error']}"
+            )
+            _emit_kaggle_target_event(
+                "publish_target_failed",
+                target_report=target_report,
+                idx=idx,
+                total=target_total,
+                phase=phase,
+                status="failed",
+                message=target_report["error"],
+                log=log,
             )
         report["targets"].append(target_report)
     targets = report["targets"]
