@@ -44,6 +44,14 @@ failed with `missing video output`.
 - 2026-06-26 14:48 UTC: notebook still sent `render_done` and `report_written`.
 - 2026-06-26 14:49 UTC: server downloaded output, found no final mp4, and marked
   session `#763` as `FAILED` with `missing video output`.
+- 2026-06-26 21:05 UTC: compensation session `#766` was started through the
+  normal scheduled path after the asset fix.
+- 2026-06-26 21:08 UTC: Kaggle rejected the GPU push with
+  `Maximum weekly GPU quota of 30.00 hours reached`; the server retried the
+  CrumpleVideo kernel without GPU.
+- 2026-06-27 08:18 UTC: session `#766` was still `RENDERING`, with alive
+  callbacks and no Telegram story/feed-forward publication yet. Telethon
+  read-only inspection of `@kenigevents` showed no active stories.
 
 ## Root Cause
 
@@ -63,6 +71,10 @@ failed with `missing video output`.
 
 - The scheduled lane retried without GPU after a quota warning, making the run
   short and easy to mistake for a successful preflight-only run.
+- The same generic GPU-quota CPU fallback was also allowed for compensation run
+  `#766`. That fallback is unsafe for CrumpleVideo: Blender/Cycles render time
+  grows from the normal multi-hour window to roughly one hour per poster, while
+  the production lane remains occupied.
 - Runtime logs had the true Python traceback, but the status ledger did not carry
   the exception because the notebook did not fail hard.
 
@@ -116,6 +128,8 @@ for auditability.
   `DrukCyr-Bold.ttf`) to the per-session dataset as loose fallback files.
 - Fail the notebook hard when `main_pipeline()` returns false before producing
   the final video, so Kaggle/status no longer looks green after a render failure.
+- Disable GPU-quota CPU fallback for CrumpleVideo kernels: a weekly GPU quota
+  error must fail fast instead of launching an hours-long CPU render.
 - Add regression tests for required CrumpleVideo assets and notebook fail-fast
   behavior.
 
@@ -124,6 +138,9 @@ for auditability.
 - [ ] Collect read-only evidence from the next CrumpleVideo run.
 - [ ] Consider adding a status event for `final_video_missing` before the poller
       marks a session failed.
+- [ ] Add a clearer live progress label for individual CrumpleVideo poster
+      renders, because `progress_percent=55` currently hides the fact that the
+      kernel is slowly advancing through poster files.
 
 ## Release And Closure Evidence
 

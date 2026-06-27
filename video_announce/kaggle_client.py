@@ -121,6 +121,24 @@ def _is_gpu_quota_error(message: str) -> bool:
     return "gpu quota" in lowered or "weekly gpu quota" in lowered
 
 
+def _is_crumple_video_kernel_id(kernel_id: str | None) -> bool:
+    lowered = str(kernel_id or "").strip().casefold()
+    slug = lowered.split("/", 1)[-1]
+    return slug == "crumple-video" or slug.startswith("crumple-video-")
+
+
+def _allows_gpu_quota_cpu_fallback(kernel_id: str | None) -> bool:
+    """Return whether a session kernel may be pushed without GPU on quota errors.
+
+    CherryFlash and Koenigsberg can still finish acceptably without an
+    accelerator, but CrumpleVideo's Blender/Cycles render becomes hours-long
+    and blocks the production lane. For CrumpleVideo a GPU quota error must be
+    a loud launch failure instead of an implicit CPU run.
+    """
+
+    return _is_session_kernel_id(kernel_id) and not _is_crumple_video_kernel_id(kernel_id)
+
+
 def _duration_seconds(value: Any) -> float | None:
     raw = str(value or "").strip()
     if not raw:
@@ -1329,6 +1347,7 @@ class KaggleClient:
                 is_local
                 and bool(meta_data.get("enable_gpu"))
                 and _is_session_kernel_id(str(meta_data.get("id") or ""))
+                and _allows_gpu_quota_cpu_fallback(str(meta_data.get("id") or ""))
                 and _kaggle_kernel_exists(api, str(meta_data.get("id") or "")) is False
             ):
                 remaining_seconds = _read_gpu_quota_remaining_seconds(api)
@@ -1372,7 +1391,7 @@ class KaggleClient:
                 meta_data,
                 allow_cpu_fallback=(
                     is_local
-                    and _is_session_kernel_id(str(meta_data.get("id") or ""))
+                    and _allows_gpu_quota_cpu_fallback(str(meta_data.get("id") or ""))
                 ),
             )
             result_ref = str(

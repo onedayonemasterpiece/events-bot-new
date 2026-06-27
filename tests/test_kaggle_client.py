@@ -295,6 +295,67 @@ def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatc
     assert push_gpu_flags == [True, False]
 
 
+def test_deploy_kernel_update_does_not_cpu_fallback_crumple_video(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CrumpleVideo"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/crumple-video",
+  "title": "Crumple Video",
+  "code_file": "crumple_video.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": []
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "crumple_video.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+
+    class Response:
+        ref = ""
+        versionNumber = 0
+        error = "Maximum weekly GPU quota of 30.00 hours reached."
+        invalidDatasetSources: list[str] = []
+
+    push_gpu_flags: list[bool] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            push_gpu_flags.append(bool(meta.get("enable_gpu")))
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "crumple-video", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    with pytest.raises(RuntimeError, match="Maximum weekly GPU quota"):
+        client.deploy_kernel_update(
+            "local:CrumpleVideo",
+            ["zigomaro/video-afisha-session-766"],
+        )
+
+    assert push_gpu_flags == [True]
+
+
 def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
