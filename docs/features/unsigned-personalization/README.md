@@ -194,6 +194,12 @@ algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experimen
   "recent_event_ids": [123, 456],
   "positive_tags": {"concert": 0.7, "jazz": 0.4},
   "negative_interest_tags": {"kids": 0.8},
+  "liked_event_ids": [5878],
+  "not_interested_event_ids": [6093],
+  "feedback_log_tail": [
+    {"ts": "2026-06-27T14:00:00Z", "event_id": 5878, "action": "like_event"},
+    {"ts": "2026-06-27T14:02:00Z", "event_id": 6093, "action": "not_interested"}
+  ],
   "city_affinity": {"Калининград": 1.0},
   "hidden_event_ids": []
 }
@@ -212,6 +218,8 @@ reset или migrate-known-fields-only. UX обязан иметь действ�
 - `anonymous_session` — UUID session id, visitor id, started/ended, device/context, rollup state;
 - `personalization_session_summary` — основной browser-facing append-only payload: компактный итог сессии/интервала, а не каждое событие скролла;
 - `personalization_served_list_summary` — compact exposure/served-list summary для обучения будущего ranker;
+- `personalization_event_reaction` — компактный raw-журнал **только сильных явных действий** (`like_event`, `unlike_event`, `not_interested`, `undo_not_interested`) с временем, anonymous/session id, event id, surface и position; из него строится отчёт “сколько лайков сделал конкретный anonymous visitor и когда”;
+- `personalization_event_reaction_counter` / static aggregate snapshot — счётчики лайков/негативных реакций по событию для показа на карточках и статического build/export;
 - `interaction_event` — опциональная sampled/debug raw telemetry, выключена по умолчанию для слабых impression/skip;
 - `visitor_profile_snapshot` — compact `session`/`short`/`mid`/`long` profile horizons; each snapshot keeps positive vectors/maps and the separate negative-interest axis; в MVP это analytics/eval/post-MVP server-ranker evidence, а не browser read dependency;
 - `event_feature_snapshot` — lightweight snapshot event features for ranking;
@@ -240,6 +248,8 @@ profile snapshots / daily aggregates — дольше, потому что он�
 - `dwell_checkpoint`;
 - `ticket_click`;
 - `hide_event` / `not_interested`;
+- `like_event` / `unlike_event`;
+- `undo_not_interested`;
 - `share` / `copy_link`;
 - `recommendation_feed_loaded`;
 - `recommendation_fallback_used`.
@@ -269,9 +279,11 @@ score =
   + city/venue match
   + price match
   + popularity baseline
+  + explicit_like_boost
   + exploration_bonus
   - negative_interest_match
   - fatigue/already_seen penalty
+  - explicit_not_interested hard filter
   - explicit_hide hard filter
 ```
 
@@ -281,6 +293,9 @@ score =
 - не повторять одно venue слишком часто;
 - сохранять 10–20% exploration;
 - явно скрытые события не возвращать в ближайших выдачах;
+- explicit like — самый сильный положительный browser-сигнал: он сразу поднимает событие в локальной выдаче и при rollup усиливает `positive_tags`/profile snapshots;
+- unlike снимает только явный boost и не считается отрицательным интересом;
+- `not_interested` — явный отрицательный сигнал: событие демотируется/скрывается локально и при rollup влияет на `negative_interest_tags`;
 - ticket_click сильнее простого card click;
 - quick skip/hide — отрицательный сигнал, но quick skip считается только после valid impression.
 

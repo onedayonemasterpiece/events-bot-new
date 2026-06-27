@@ -140,10 +140,12 @@ personalized_related_score =
 + 0.10 * local_profile_affinity
 + 0.04 * price_match
 + 0.03 * time_match
++ 0.60 * explicit_like_match
 + 0.02 * exploration_bonus
 - 0.55 * negative_interest_match
 - 0.18 * fatigue_penalty
 - 0.20 * sold_out_penalty
+- explicit_not_interested_hard_filter
 - explicit_hide_hard_filter
 ```
 
@@ -152,6 +154,8 @@ Guardrails:
 - if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary;
 - `audience_exclusion_tags` belong to the event and are not user dislikes. A 18+/adult jazz event with `audience_exclusion_tags: ["kids"]` must not be penalized for a visitor whose `negative_interest_tags.kids` means “do not show me children's events”;
 - legacy profiles containing `negative_tags` or missing/mismatched `feature_schema_version` / `taxonomy_version` are incompatible and fall back to static order until reset/migration;
+- explicit `like_event` is a direct positive action and may immediately boost that event in the local surface; `unlike_event` only removes this boost and must not be interpreted as negative interest;
+- explicit `not_interested` is the direct negative action and should hard-filter/demote that event in the local surface and feed `negative_interest_tags` during rollup;
 - selected telemetry write path unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
 - localStorage unavailable/corrupted means no profile mutation and static fallback.
 - `anon_id` and `session_id` must be UUID-compatible while the database schema uses `uuid` columns; legacy prefixed ids are incompatible and fall back to static order until reset/migration.
@@ -167,6 +171,8 @@ Local profile fields consumed by MVP-0:
   "session_id": "uuid-v4-compatible",
   "positive_tags": {"jazz": 1.0, "live_music": 0.6},
   "negative_interest_tags": {"kids": 1.0},
+  "liked_event_ids": [5878],
+  "not_interested_event_ids": [6093],
   "hidden_event_ids": [12345],
   "seen_event_ids": [222],
   "seen_venue_ids": ["venue-or-name"],

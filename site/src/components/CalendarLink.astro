@@ -1,7 +1,8 @@
 ---
+import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 import { eventCalendarHref } from '../lib/events';
-interface Props { event: PreviewEvent; className?: string }
-const { event, className = 'secondary-button' } = Astro.props;
+interface Props { event: PreviewEvent; className?: string; label?: string }
+const { event, className = 'secondary-button', label = 'В календарь' } = Astro.props;
 ---
-<a class={className} href={eventCalendarHref(event)} download={`kenigevents-${event.slug}.ics`} type="text/calendar">Добавить в календарь</a>
+<a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>

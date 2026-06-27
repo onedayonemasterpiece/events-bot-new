@@ -54,7 +54,8 @@
       "pushkin_card": false,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-06-10 17:08:21.268304"
+      "updated_at": "2026-06-10 17:08:21.268304",
+      "likes_count": 42
     },
     {
       "id": 5370,
@@ -100,7 +101,8 @@
       "pushkin_card": false,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-05-27 09:00:22.114199"
+      "updated_at": "2026-05-27 09:00:22.114199",
+      "likes_count": 31
     },
     {
       "id": 6093,
@@ -126,7 +128,7 @@
       "map_query": "Гусев, Дизайн-резиденция Gumbinnen, Ленина 29",
       "ticket": {
         "kind": "source",
-        "label": "Уточнить регистрацию",
+        "label": "Открыть пост организатора",
         "href": "https://t.me/gumbinnen/1210",
         "status": "registration",
         "is_free": true,
@@ -150,7 +152,8 @@
       "data_quality_notes": [
         "no_ticket_link"
       ],
-      "updated_at": "2026-06-17 00:50:53.566675"
+      "updated_at": "2026-06-17 00:50:53.566675",
+      "likes_count": 7
     },
     {
       "id": 6322,
@@ -202,7 +205,8 @@
       "data_quality_notes": [
         "weak_address"
       ],
-      "updated_at": "2026-06-23 14:27:14.119278"
+      "updated_at": "2026-06-23 14:27:14.119278",
+      "likes_count": 15
     },
     {
       "id": 4913,
@@ -252,7 +256,8 @@
       "data_quality_notes": [
         "no_exact_start_time"
       ],
-      "updated_at": "2026-05-14 00:07:41.203895"
+      "updated_at": "2026-05-14 00:07:41.203895",
+      "likes_count": 22
     },
     {
       "id": 4512,
@@ -302,7 +307,8 @@
       "pushkin_card": true,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-05-02 23:51:01.674869"
+      "updated_at": "2026-05-02 23:51:01.674869",
+      "likes_count": 18
     },
     {
       "id": 5690,
@@ -351,7 +357,8 @@
         "weak_address",
         "no_local_image"
       ],
-      "updated_at": "2026-06-04 23:33:21.476164"
+      "updated_at": "2026-06-04 23:33:21.476164",
+      "likes_count": 11
     },
     {
       "id": 6437,
@@ -403,7 +410,8 @@
       "data_quality_notes": [
         "no_ticket_link"
       ],
-      "updated_at": "2026-06-26 00:03:11.187637"
+      "updated_at": "2026-06-26 00:03:11.187637",
+      "likes_count": 5
     },
     {
       "id": 6438,
@@ -455,7 +463,8 @@
       "data_quality_notes": [
         "no_ticket_link"
       ],
-      "updated_at": "2026-06-26 00:03:35.777877"
+      "updated_at": "2026-06-26 00:03:35.777877",
+      "likes_count": 4
     },
     {
       "id": 3730,
@@ -502,7 +511,8 @@
       "pushkin_card": false,
       "other_date_ids": [],
       "data_quality_notes": [],
-      "updated_at": "2026-04-08 12:54:17.921188"
+      "updated_at": "2026-04-08 12:54:17.921188",
+      "likes_count": 29
     }
   ]
 }

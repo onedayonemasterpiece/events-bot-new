@@ -1,19 +1,18 @@
 ---
 import CalendarLink from './CalendarLink.astro';
+import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAbsoluteUrl, isExternalHttpUrl, isTelephoneUrl } from '../lib/events';
+import { eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isTelephoneUrl } from '../lib/events';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
 const href = event.ticket.href;
 const external = isExternalHttpUrl(href);
 const telephone = isTelephoneUrl(href);
 const absolute = eventAbsoluteUrl(event);
-const tgShare = `https://t.me/share/url?url=${encodeURIComponent(absolute)}&text=${encodeURIComponent(event.title)}`;
-const vkShare = `https://vk.com/share.php?url=${encodeURIComponent(absolute)}`;
-const whatsappShare = `https://wa.me/?text=${encodeURIComponent(`${event.title} ${absolute}`)}`;
 const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
 const hasReliableMap = Boolean(event.address && event.map_query);
+const ctaLabel = eventTicketActionLabel(event);
 ---
 <aside class="section-card cta-panel" aria-label="Билеты и действия">
   <div class="cta-panel__top">
@@ -39,24 +38,14 @@ const hasReliableMap = Boolean(event.address && event.map_query);
     </div>
     <div class="action-grid">
       {href ? (
-        <a class="cta-button" href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{event.ticket.label}</a>
+        <a class="cta-button" href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{ctaLabel}</a>
       ) : (
-        <span class="cta-button" aria-disabled="true">{event.ticket.label}</span>
+        <span class="cta-button" aria-disabled="true">{ctaLabel}</span>
       )}
       <CalendarLink event={event} />
-      <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}>Поделиться</button>
-      <button type="button" class="secondary-button" data-copy-url={absolute}>Скопировать ссылку</button>
+      <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span>Поделиться</span></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
-    <div>
-      <p class="eyebrow">Поделиться</p>
-      <ul class="share-list" aria-label="Поделиться событием">
-        <li><a href={tgShare} target="_blank" rel="noopener noreferrer nofollow">Telegram</a></li>
-        <li><a href={vkShare} target="_blank" rel="noopener noreferrer nofollow">VK</a></li>
-        <li><a href={whatsappShare} target="_blank" rel="noopener noreferrer nofollow">WhatsApp</a></li>
-        <li><a href={absolute}>Ссылка</a></li>
-      </ul>
-      <p class="muted-note">Ссылки работают без JavaScript; кнопка копирования — улучшение поверх обычной ссылки.</p>
-    </div>
+    <p class="muted-note">Если системное окно “Поделиться” недоступно в браузере или webview, ссылка копируется в буфер.</p>
   </div>
 </aside>

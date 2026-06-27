@@ -14,6 +14,7 @@ const required = [
   'vyhodnye/index.html',
   'sitemap.xml',
   'robots.txt',
+  'favicon.svg',
   'preview-build.json',
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -35,8 +36,16 @@ if (/\bnull\b/.test(controlHtml)) throw new Error('Rendered HTML contains litera
 if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-prone event-card anchor leaked');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
 if (!controlHtml.includes('event-card__actions')) throw new Error('Control related cards miss quick actions');
+if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
+if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
+if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
+if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
+if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
 if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');
 if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
+if (controlHtml.includes('Уточнить регистрацию')) throw new Error('Ambiguous registration CTA leaked');
+if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
+if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
 if (controlHtml.includes('<details class="details-disclosure"')) throw new Error('Control description is hidden in a details disclosure');
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
@@ -45,6 +54,7 @@ for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART
 }
 if (/^DTEND:/m.test(ics)) throw new Error('Control ICS must not include DTEND without reliable duration');
 for (const event of eventsData.events) {
+  if (!Number.isInteger(event.likes_count) || event.likes_count < 0) throw new Error(`Event ${event.id} has invalid likes_count`);
   const eventIcs = readFileSync(join(root, `sobytiya/${event.slug}/event.ics`), 'utf8');
   for (const needle of ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:', 'SUMMARY:', 'URL:', 'END:VCALENDAR']) {
     if (!eventIcs.includes(needle)) throw new Error(`ICS for ${event.id} missing ${needle}`);

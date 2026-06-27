@@ -53,7 +53,7 @@ if (cp.status !== 0) process.exit(cp.status || 1);
 const find = spawnSync('find', [sourceDir, '-name', 'event.ics', '-type', 'f'], { encoding: 'utf8' });
 for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const rel = file.slice(sourceDir.length + 1);
-  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'attachment; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+  const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
 }
 const publicBase = (env.KENIGEVENTS_SITE_PUBLIC_BASE_URL || `https://kenigevents.ru`).replace(/\/+$/u, '');

@@ -12,16 +12,16 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v5/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v5/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v5/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v5/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v5/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v5/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v5/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v5/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v6/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v6/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v6/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v6/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v6/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v6/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v6/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v6/__preview/>
 
-Preview `v5` keeps the consultant P0 hardening (real Today/Weekend listing pages, poster cards, duplicate exclusion, honest CTA copy, weak-address map gate, build-time HTML/ICS/sitemap checks) and fixes the event-detail UX regression: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, and always-visible native-share-first button.
+Preview `v6` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions, single native-share-first button, favicon, prefetch for static links and sticky CTA hiding when the user reaches the feed.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 

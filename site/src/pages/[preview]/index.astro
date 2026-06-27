@@ -57,8 +57,21 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <li>слабый адрес — карта скрывается, вместо неё выводится “уточняйте у организатора”;</li>
             <li>«Другие даты» для пары 6437/6438;</li>
             <li>единая статическая лента «Смотрите дальше» без API и без отдельного пользовательского блока для диверсификации.</li>
+            <li>явные реакции: лайк с локальным увеличением счётчика, отмена лайка, “не интересно” и локальный raw-журнал для будущего Supabase ingest.</li>
             <li>минимальные листинги /segodnya/ и /vyhodnye/.</li>
           </ul>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner feedback-report" data-feedback-report>
+          <h2>Локальный отчёт по реакциям</h2>
+          <p class="muted-note">Preview хранит компактный raw-журнал только в этом браузере. В production такие события должны уходить в personalization Supabase через same-origin ingest/RPC и агрегироваться в отчёт по anonymous profile id.</p>
+          <div class="feedback-report__summary">
+            <span>Anonymous profile: <code data-feedback-profile>—</code></span>
+            <span data-feedback-summary>Загрузка локального журнала…</span>
+          </div>
+          <ul class="feedback-report__list" data-feedback-log></ul>
         </div>
       </section>
     </div>

@@ -376,6 +376,7 @@ create table if not exists public.personalization_interaction_event (
     'page_view', 'valid_impression', 'event_card_click', 'event_detail_view',
     'dwell_checkpoint', 'ticket_click', 'register_click', 'source_click',
     'calendar_add', 'ics_download', 'map_click', 'hide_event', 'not_interested',
+    'like_event', 'unlike_event', 'undo_not_interested',
     'share', 'share_native', 'copy_link', 'share_copy_link',
     'recommendation_feed_loaded', 'recommendation_fallback_used'
   )),
@@ -408,7 +409,59 @@ create index if not exists personalization_interaction_event_event_time_idx
   where event_id is not null;
 create index if not exists personalization_interaction_event_strong_actions_idx
   on public.personalization_interaction_event (anon_id, occurred_at desc, event_kind)
-  where event_kind in ('event_detail_view', 'ticket_click', 'share', 'copy_link', 'hide_event', 'not_interested');
+  where event_kind in ('event_detail_view', 'ticket_click', 'share', 'copy_link', 'hide_event', 'not_interested', 'like_event', 'unlike_event', 'undo_not_interested');
+
+-- Dedicated compact raw log for explicit feedback. This is intentionally much
+-- smaller than generic interaction telemetry and powers per-anonymous-profile
+-- reports: how many likes a visitor made, at which timestamps, and which
+-- events were marked not interesting. Browser clients must not write this
+-- table directly; same-origin endpoint or a hardened append-only RPC maps the
+-- client payload to these rows.
+create table if not exists public.personalization_event_reaction (
+  id uuid primary key default gen_random_uuid(),
+  client_event_id text not null,
+  anon_id uuid not null,
+  session_id uuid not null,
+  event_id bigint not null,
+  event_slug text,
+  reaction_kind text not null,
+  occurred_at timestamptz not null,
+  received_at timestamptz not null default now(),
+  surface text not null,
+  layout_mode text not null,
+  position integer,
+  page_url text not null,
+  algorithm_id text not null default 'static_fallback',
+  actor_class text not null default 'unknown',
+  trust_state text not null default 'accepted',
+  metadata jsonb not null default '{}'::jsonb,
+  constraint personalization_event_reaction_kind_chk check (reaction_kind in ('like_event', 'unlike_event', 'not_interested', 'undo_not_interested')),
+  constraint personalization_event_reaction_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),
+  constraint personalization_event_reaction_actor_chk check (actor_class in ('human_likely', 'unknown')),
+  constraint personalization_event_reaction_trust_chk check (trust_state = 'accepted'),
+  constraint personalization_event_reaction_position_chk check (position is null or position >= 0),
+  constraint personalization_event_reaction_metadata_size_chk check (length(metadata::text) <= 512),
+  unique (anon_id, client_event_id)
+);
+
+alter table public.personalization_event_reaction enable row level security;
+
+revoke all on public.personalization_event_reaction from anon, authenticated;
+grant select, insert, update, delete on public.personalization_event_reaction to service_role;
+
+create index if not exists personalization_event_reaction_anon_time_idx
+  on public.personalization_event_reaction (anon_id, occurred_at desc);
+create index if not exists personalization_event_reaction_event_kind_idx
+  on public.personalization_event_reaction (event_id, reaction_kind, occurred_at desc);
+
+-- Aggregate snapshot used by static export/build to render card like counts.
+-- It is derived from trusted reaction rows, not from Fly SQLite.
+create table if not exists personalization.event_reaction_counter (
+  event_id bigint primary key,
+  like_count integer not null default 0 check (like_count >= 0),
+  not_interested_count integer not null default 0 check (not_interested_count >= 0),
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists personalization.anonymous_visitor (
   anon_id uuid primary key,

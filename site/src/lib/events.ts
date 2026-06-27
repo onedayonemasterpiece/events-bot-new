@@ -131,3 +131,13 @@ export function formatDateMachine(date: string): string {
 export function getCtaLabel(event: PreviewEvent): string {
   return event.ticket.label;
 }
+
+export function eventTicketActionLabel(event: PreviewEvent): string {
+  if (event.ticket.kind === 'source') {
+    return 'Открыть пост организатора';
+  }
+  if (event.ticket.kind === 'free') {
+    return 'Открыть условия';
+  }
+  return event.ticket.label;
+}

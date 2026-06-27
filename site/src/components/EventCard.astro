@@ -1,17 +1,18 @@
 ---
+import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAbsoluteUrl, eventCalendarHref, eventHref } from '../lib/events';
+import { eventCalendarHref, eventHref } from '../lib/events';
 interface Props { event: PreviewEvent; label?: string }
 const { event, label } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const calendarHref = eventCalendarHref(event);
-const shareHref = `https://t.me/share/url?url=${encodeURIComponent(eventAbsoluteUrl(event))}&text=${encodeURIComponent(event.title)}`;
 const metaLabel = [label, event.display_date + (event.display_time ? ` · ${event.display_time}` : '')].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
+const likesCount = event.likes_count || 0;
 ---
-<article class="event-card" aria-label={`${event.title}: ${event.display_date}`}>
-  <a class="event-card__media-link" href={href} aria-label={`Открыть событие: ${event.title}`}>
+<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} aria-label={`${event.title}: ${event.display_date}`}>
+  <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
       <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="480" height="640" loading="lazy" decoding="async" />
     ) : (
@@ -22,17 +23,26 @@ const statusLabel = event.ticket.price_label || event.status_label;
       </span>
     )}
   </a>
+  <div class="event-card__feedback" aria-label={`Оценить событие: ${event.title}`}>
+    <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+      <Icon name="dislike" />
+      <span>Не интересно</span>
+    </button>
+    <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Поставить лайк: ${event.title}`}>
+      <Icon name="heart" />
+      <span class="feedback-count" data-feedback-count>{likesCount}</span>
+    </button>
+  </div>
   <div class="event-card__body">
     <div class="event-card__meta-row">
       <span class="event-card__meta">{metaLabel}</span>
       <span class="event-card__status">{statusLabel}</span>
     </div>
-    <a class="event-card__title" href={href}>{event.title}</a>
+    <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     {place && <span class="event-card__footer">{place}</span>}
     <div class="event-card__actions" aria-label={`Быстрые действия: ${event.title}`}>
-      <a href={calendarHref} download={`kenigevents-${event.slug}.ics`} type="text/calendar">В календарь</a>
-      <a href={href}>Открыть</a>
-      <a href={shareHref} target="_blank" rel="noopener noreferrer nofollow">Поделиться</a>
+      <a href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>В календарь</span></a>
+      <a href={href} data-prefetch>Открыть</a>
     </div>
   </div>
 </article>
