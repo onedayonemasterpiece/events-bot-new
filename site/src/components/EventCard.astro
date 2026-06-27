@@ -11,15 +11,19 @@ const absolute = eventAbsoluteUrl(event);
 const metaLabel = [label, event.display_date + (event.display_time ? ` · ${event.display_time}` : '')].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
 const likesCount = event.likes_count || 0;
+const sharesCount = event.shares_count ?? Math.max(0, Math.round(likesCount * 0.18));
 const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
-const mediaClass = ['event-card__media', event.image_text_mode === 'visual_only' ? 'event-card__media--cover' : 'event-card__media--preserve'].join(' ');
+const preservePoster = event.image_text_mode !== 'visual_only';
+const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover'].join(' ');
 ---
 <article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} aria-label={`${event.title}: ${event.display_date}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
-      <img class={mediaClass} src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="480" height="640" loading="lazy" decoding="async" />
+      <span class={mediaShellClass}>
+        <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
+      </span>
     ) : (
-      <span class="event-card__media event-card__fallback" aria-hidden="true">
+      <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">
         <span>{event.display_date}</span>
         <strong>{event.event_type || 'событие'}</strong>
         {event.city && <span>{event.city}</span>}
@@ -31,26 +35,28 @@ const mediaClass = ['event-card__media', event.image_text_mode === 'visual_only'
       <Icon name="dislike" />
       <span>Не интересно</span>
     </button>
+    <button
+      type="button"
+      class="feedback-button feedback-button--share"
+      data-native-share
+      data-share-event-id={event.id}
+      data-share-event-title={event.title}
+      data-share-base-count={sharesCount}
+      data-share-title={event.title}
+      data-share-text={shareText}
+      data-share-url={absolute}
+      aria-label={`Поделиться событием: ${event.title}`}
+    >
+      <Icon name="share" />
+      <span class="share-label" data-share-label>Поделиться</span>
+      <span class="feedback-count" data-share-count>{sharesCount}</span>
+    </button>
     <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Поставить лайк: ${event.title}`}>
       <Icon name="heart" />
       <span class="feedback-count" data-feedback-count>{likesCount}</span>
     </button>
   </div>
 
-  <button
-    type="button"
-    class="like-share-callout"
-    data-like-share-callout
-    data-native-share
-    data-share-title={event.title}
-    data-share-text={shareText}
-    data-share-url={absolute}
-    hidden
-    aria-label={`Поделиться событием: ${event.title}`}
-  >
-    <span class="like-share-callout__text">Понравилось?</span>
-    <strong><Icon name="share" /> <span data-share-label>Поделиться</span></strong>
-  </button>
   <div class="event-card__body">
     <div class="event-card__meta-row">
       <span class="event-card__meta">{metaLabel}</span>

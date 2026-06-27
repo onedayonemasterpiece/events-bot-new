@@ -11,12 +11,13 @@ const ctaHref = event.ticket.href;
 const ctaRel = isExternalHttpUrl(ctaHref) ? 'noopener noreferrer nofollow' : undefined;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const ctaLabel = eventTicketActionLabel(event);
-const mediaClass = ['listing-item__image', event.image_text_mode === 'visual_only' ? 'listing-item__image--cover' : 'listing-item__image--preserve'].join(' ');
+const preservePoster = event.image_text_mode !== 'visual_only';
+const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__media--preserve' : 'listing-item__media--cover'].join(' ');
 ---
 <article class="listing-item">
-  <a class="listing-item__media" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class={mediaLinkClass} href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
-      <img class={mediaClass} src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="240" height="320" loading="lazy" decoding="async" />
+      <img class="listing-item__image" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
     ) : (
       <span class="listing-item__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
     )}

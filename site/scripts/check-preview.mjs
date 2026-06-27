@@ -35,11 +35,14 @@ if (!controlHtml.includes(`https://kenigevents.ru/${buildId}/sobytiya/pesni-sssr
 if (/\bnull\b/.test(controlHtml)) throw new Error('Rendered HTML contains literal null');
 if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-prone event-card anchor leaked');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
-if (!controlHtml.includes('event-card__media--preserve')) throw new Error('Text/OCR poster cards must preserve full poster without crop');
+if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error('Text/OCR poster cards must preserve full poster without crop');
+if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 3:4 cover media shell');
+if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || /blur\(/u.test(controlHtml)) throw new Error('Blur/backdrop poster fill leaked into event page');
 if (!controlHtml.includes('event-card__actions')) throw new Error('Control related cards miss quick actions');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
+if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
-if (!controlHtml.includes('data-like-share-callout')) throw new Error('Control related cards miss post-like share callout');
+if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
@@ -76,6 +79,7 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
+if (/media-backdrop|image-backdrop|blur\(/u.test(css)) throw new Error('Blur/backdrop poster fill leaked into CSS');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
 for (const event of eventsData.events) {

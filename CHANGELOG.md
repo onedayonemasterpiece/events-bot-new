@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Static site pages / share count and poster media rules**: published `preview-20260627-event-pages-v9` with a separate VK-like share arrow button and visible share count on feed cards, post-like expansion of the share button instead of an overlapping bubble, native-share/copy share logging, strict 3:4 cover media only for `visual_only` posters, and natural-ratio no-crop/no-blur rendering for `ocr_text` and `unknown` posters.
 - **Static site pages / post-like share callout**: published `preview-20260627-event-pages-v8` with a Gemini Pro-reviewed non-layout-shifting share callout after successful likes, paper-plane native-share icon, session-limited share prompts, and anchored explicit-feedback rerank so the acted-on card and cards above it do not move.
 - **Static site pages / OCR-safe poster media**: published `preview-20260627-event-pages-v7` with `image_text_mode` metadata and card/list media rules that preserve full posters when OCR/text is present or unknown, while allowing verified visual-only images to fill the vertical 3:4 frame.
 - **Static site pages / explicit feedback controls**: published `preview-20260627-event-pages-v6` with right-thumb like buttons and visible aggregate counts, unlike/not-interested local feedback, compact local raw feedback report, icon calendar links served as inline `.ics`, clearer source-only CTA copy, favicon, duplicate share UI removal, fast same-origin prefetch markers, and sticky CTA hiding when the discovery feed is reached.

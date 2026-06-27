@@ -100,7 +100,6 @@ const safeDescription = description || 'Анонс события в Калин�
         z-index: 2;
         border-bottom: 1px solid rgba(121, 48, 20, 0.12);
         background: rgba(255, 253, 248, 0.86);
-        backdrop-filter: blur(10px);
       }
       .site-header__inner {
         width: min(1180px, calc(100% - 32px));
@@ -200,6 +199,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
       .icon { width: 1.15em; height: 1.15em; flex: 0 0 auto; fill: currentColor; }
+      .icon--share { fill: none; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
       .native-share-button { cursor: pointer; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
@@ -207,7 +207,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
       .cards-grid { display: grid; gap: 0.9rem; }
       .cards-grid--immersive { grid-template-columns: 1fr; gap: 1rem; }
-      .cards-grid--immersive .event-card__media { aspect-ratio: 3 / 4; }
+      .cards-grid--immersive .event-card__media-shell--cover { aspect-ratio: 3 / 4; }
       .cards-grid--feed {
         grid-auto-flow: column;
         grid-auto-columns: clamp(172px, 48vw, 220px);
@@ -230,23 +230,29 @@ const safeDescription = description || 'Анонс события в Калин�
         scroll-snap-align: start;
       }
       .event-card:hover { border-color: rgba(165,72,33,0.48); box-shadow: 0 18px 38px rgba(72,45,25,0.2); }
-      .event-card__media-link { display: block; color: inherit; text-decoration: none; }
-      .event-card__media { display: block; width: 100%; aspect-ratio: 3 / 4; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); object-position: center; }
-      .event-card__media--preserve { object-fit: contain; }
-      .event-card__media--cover { object-fit: cover; }
+      .event-card__media-link { display: block; color: inherit; text-decoration: none; background: #15110f; }
+      .event-card__media-shell { display: block; width: 100%; overflow: hidden; background: #15110f; }
+      .event-card__media-shell--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
+      .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+      .event-card__media-shell--preserve .event-card__media { display: block; width: 100%; height: auto; }
       .event-card__fallback { min-height: 100%; display: grid; align-content: space-between; gap: 0.7rem; padding: 1rem; color: rgba(255,255,255,0.9); font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
       .event-card__fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
-      .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem; }
+      .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem 0.85rem 4.85rem; }
       .event-card__meta-row { display: grid; gap: 0.35rem; }
       .event-card__meta { color: rgba(255,255,255,0.74); font-weight: 750; font-size: 0.82rem; line-height: 1.25; }
       .event-card__status { width: max-content; max-width: 100%; min-height: 28px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.22rem 0.55rem; background: rgba(215,240,236,0.16); border: 1px solid rgba(215,240,236,0.28); color: #d7f0ec; font-size: 0.75rem; font-weight: 850; line-height: 1.15; }
       .event-card__title { color: #fff; text-decoration: none; font-weight: 900; line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .event-card__title:hover { text-decoration: underline; text-decoration-thickness: 0.08em; }
       .event-card__footer { color: rgba(255,255,255,0.84); font-weight: 760; font-size: 0.86rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 3; display: flex; align-items: flex-end; justify-content: space-between; gap: 0.55rem; pointer-events: none; }
-      .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); backdrop-filter: blur(10px); font: inherit; font-weight: 900; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
+      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 3; display: flex; align-items: flex-end; justify-content: space-between; gap: 0.45rem; pointer-events: none; }
+      .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: 900; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
       .feedback-button .icon { width: 1.25rem; height: 1.25rem; }
       .feedback-button--like { min-width: 74px; padding: 0.52rem 0.74rem; font-size: 1.04rem; }
+      .feedback-button--share { min-width: 60px; padding: 0.5rem 0.62rem; color: rgba(229,235,244,0.94); font-size: 0.95rem; }
+      .feedback-button--share .icon { width: 1.28rem; height: 1.28rem; }
+      .feedback-button--share .share-label { display: none; }
+      .event-card.is-share-prompt .feedback-button--share { min-width: 156px; color: #261a13; background: rgba(255, 253, 248, 0.97); border-color: rgba(255,255,255,0.48); transform: translateY(-2px); }
+      .event-card.is-share-prompt .feedback-button--share .share-label { display: inline; }
       .feedback-button--negative { min-width: 52px; padding: 0.48rem 0.62rem; color: rgba(255,255,255,0.88); font-size: 0.72rem; }
       .feedback-button--negative .icon { width: 1rem; height: 1rem; }
       .feedback-button[aria-pressed="true"] { border-color: rgba(255,255,255,0.48); }
@@ -254,22 +260,15 @@ const safeDescription = description || 'Анонс события в Калин�
       .feedback-button--negative[aria-pressed="true"] { color: #1f1712; background: #f7efe3; }
       .event-card.is-not-interested { opacity: 0.58; filter: saturate(0.65); }
       .event-card.is-not-interested .event-card__title::after { content: " · скрыто из персональной выдачи"; color: rgba(255,255,255,0.7); font-weight: 700; }
-      .like-share-callout { position: absolute; right: 0.75rem; bottom: 4.7rem; z-index: 4; display: grid; gap: 0.12rem; min-width: 172px; max-width: min(252px, calc(100% - 1.5rem)); padding: 0.78rem 0.9rem 0.82rem; border: 1px solid rgba(255,255,255,0.22); border-radius: 20px; background: rgba(255, 253, 248, 0.96); color: #261a13; box-shadow: 0 18px 38px rgba(0,0,0,0.25); text-align: left; font: inherit; cursor: pointer; transform-origin: right bottom; animation: callout-pop 180ms ease-out; touch-action: manipulation; }
-      .like-share-callout[hidden] { display: none; }
-      .like-share-callout::after { content: ""; position: absolute; right: 1.65rem; bottom: -0.48rem; width: 0.9rem; height: 0.9rem; background: inherit; border-right: 1px solid rgba(255,255,255,0.22); border-bottom: 1px solid rgba(255,255,255,0.22); transform: rotate(45deg); }
-      .like-share-callout__text { color: #6d5c50; font-size: 0.78rem; font-weight: 850; }
-      .like-share-callout strong { display: inline-flex; align-items: center; gap: 0.42rem; font-size: 1rem; line-height: 1.1; }
-      .like-share-callout .icon { width: 1.15rem; height: 1.15rem; }
-      @keyframes callout-pop { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
-      .event-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem; margin-top: 0.25rem; padding-right: 4.6rem; }
+      .event-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem; margin-top: 0.25rem; }
       .event-card__actions a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 0.35rem 0.45rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; font-size: 0.76rem; font-weight: 850; text-align: center; }
       .event-card__actions a:hover { background: rgba(255,255,255,0.18); }
       .listing-stack { display: grid; gap: 0.85rem; }
       .listing-item { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 0.85rem; align-items: stretch; padding: 0.75rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
-      .listing-item__media { display: block; min-height: 138px; border-radius: 18px; overflow: hidden; background: linear-gradient(135deg, #8a3f23, #0f766e); text-decoration: none; }
-      .listing-item__media img { width: 100%; height: 100%; object-position: center; background: #15110f; }
-      .listing-item__image--preserve { object-fit: contain; }
-      .listing-item__image--cover { object-fit: cover; }
+      .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
+      .listing-item__media--cover { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background: linear-gradient(135deg, #8a3f23, #0f766e); }
+      .listing-item__media--cover .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+      .listing-item__media--preserve .listing-item__image { display: block; width: 100%; height: auto; }
       .listing-item__fallback { width: 100%; height: 100%; min-height: 138px; display: grid; place-items: center; color: #fff; padding: 0.7rem; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.07em; }
       .listing-item__body { min-width: 0; display: grid; gap: 0.42rem; align-content: center; }
       .listing-item__meta { display: flex; flex-wrap: wrap; gap: 0.4rem; color: var(--muted); font-size: 0.84rem; font-weight: 800; }
@@ -326,8 +325,8 @@ const safeDescription = description || 'Анонс события в Калин�
         .section-card__inner { padding: 1rem; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
-        .like-share-callout { right: 0.7rem; bottom: 4.55rem; min-width: 160px; }
-        .event-card__actions { padding-right: 4.3rem; }
+        .feedback-button--share { min-width: 58px; padding-inline: 0.56rem; }
+        .event-card.is-share-prompt .feedback-button--share { min-width: 144px; }
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
         .listing-item { grid-template-columns: 88px minmax(0, 1fr); gap: 0.65rem; padding: 0.65rem; }
@@ -417,14 +416,14 @@ const safeDescription = description || 'Анонс события в Калин�
         }
 
         function eventState(map, eventId) {
-          return map[String(eventId)] || { liked: false, not_interested: false };
+          return map[String(eventId)] || { liked: false, not_interested: false, shares: 0 };
         }
 
         function hideLikeShareCallouts() {
           window.clearTimeout(shareCalloutTimer);
           shareCalloutTimer = 0;
-          document.querySelectorAll('[data-like-share-callout]').forEach((callout) => {
-            callout.hidden = true;
+          document.querySelectorAll('[data-event-card].is-share-prompt').forEach((card) => {
+            card.classList.remove('is-share-prompt');
           });
         }
 
@@ -433,13 +432,13 @@ const safeDescription = description || 'Анонс события в Калин�
           let count = 0;
           try { count = Number(sessionStorage.getItem(SHARE_PROMPT_KEY) || '0'); } catch (_) {}
           if (count >= MAX_SHARE_PROMPTS_PER_SESSION) return;
-          const callout = card.querySelector('[data-like-share-callout]');
-          if (!callout) return;
+          const shareButton = card.querySelector('.feedback-button--share');
+          if (!shareButton) return;
           hideLikeShareCallouts();
-          callout.hidden = false;
+          card.classList.add('is-share-prompt');
           try { sessionStorage.setItem(SHARE_PROMPT_KEY, String(count + 1)); } catch (_) {}
           shareCalloutTimer = window.setTimeout(() => {
-            callout.hidden = true;
+            card.classList.remove('is-share-prompt');
           }, 4000);
         }
 
@@ -480,6 +479,11 @@ const safeDescription = description || 'Анонс события в Калин�
               const count = button.querySelector('[data-feedback-count]');
               if (count) count.textContent = String(base + (current.liked ? 1 : 0));
             });
+            card.querySelectorAll('[data-share-count]').forEach((count) => {
+              const shareButton = count.closest('[data-native-share]');
+              const base = Number(shareButton?.dataset.shareBaseCount || '0');
+              count.textContent = String(base + Number(current.shares || 0));
+            });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
               const title = current.not_interested ? 'Вернуть в рекомендации' : 'Не интересно';
@@ -506,13 +510,13 @@ const safeDescription = description || 'Анонс события в Калин�
           let shouldShowSharePrompt = false;
           if (button.dataset.feedbackAction === 'like') {
             const liked = !current.liked;
-            map[String(eventId)] = { liked, not_interested: liked ? false : current.not_interested };
+            map[String(eventId)] = { ...current, liked, not_interested: liked ? false : current.not_interested };
             appendLog({ event_id: Number(eventId), event_title: title, action: liked ? 'like_event' : 'unlike_event' });
             shouldShowSharePrompt = liked;
             if (!liked) hideLikeShareCallouts();
           } else if (button.dataset.feedbackAction === 'not_interested') {
             const notInterested = !current.not_interested;
-            map[String(eventId)] = { liked: notInterested ? false : current.liked, not_interested: notInterested };
+            map[String(eventId)] = { ...current, liked: notInterested ? false : current.liked, not_interested: notInterested };
             appendLog({ event_id: Number(eventId), event_title: title, action: notInterested ? 'not_interested' : 'undo_not_interested' });
             hideLikeShareCallouts();
           }
@@ -522,6 +526,18 @@ const safeDescription = description || 'Анонс события в Калин�
             showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
           }
         });
+
+        function recordShare(button) {
+          const eventId = button.dataset.shareEventId || button.closest('[data-event-card]')?.dataset.eventId;
+          if (!eventId) return;
+          const map = state();
+          const current = eventState(map, eventId);
+          const title = button.dataset.shareEventTitle || button.dataset.shareTitle || button.closest('[data-event-card]')?.dataset.eventTitle || '';
+          map[String(eventId)] = { ...current, shares: Number(current.shares || 0) + 1 };
+          saveState(map);
+          appendLog({ event_id: Number(eventId), event_title: title, action: 'share_event' });
+          applyFeedbackState({ anchorEventId: eventId });
+        }
 
         document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-native-share]');
@@ -536,6 +552,7 @@ const safeDescription = description || 'Анонс события в Калин�
                 text: button.dataset.shareText || '',
                 url,
               });
+              recordShare(button);
               return;
             } catch (_) {
               return;
@@ -547,6 +564,7 @@ const safeDescription = description || 'Анонс события в Калин�
             const original = label.textContent;
             label.textContent = 'Ссылка скопирована';
             setTimeout(() => { label.textContent = original || 'Поделиться'; }, 1800);
+            recordShare(button);
           } catch (_) {
             location.href = url;
           }
@@ -608,11 +626,12 @@ const safeDescription = description || 'Анонс события в Калин�
           const log = readJson(LOG_KEY, []);
           const activeLikes = Object.values(map).filter((item) => item?.liked).length;
           const activeNegative = Object.values(map).filter((item) => item?.not_interested).length;
+          const localShares = Object.values(map).reduce((sum, item) => sum + Number(item?.shares || 0), 0);
           const profile = root.querySelector('[data-feedback-profile]');
           const summary = root.querySelector('[data-feedback-summary]');
           const list = root.querySelector('[data-feedback-log]');
           if (profile) profile.textContent = profileId();
-          if (summary) summary.textContent = `Активных лайков: ${activeLikes}. “Не интересно”: ${activeNegative}. Сырых событий в локальном журнале: ${log.length}.`;
+          if (summary) summary.textContent = `Активных лайков: ${activeLikes}. “Не интересно”: ${activeNegative}. Локальных шеров: ${localShares}. Сырых событий в локальном журнале: ${log.length}.`;
           if (list) {
             list.innerHTML = '';
             log.slice().reverse().slice(0, 30).forEach((item) => {
@@ -622,7 +641,7 @@ const safeDescription = description || 'Анонс события в Калин�
             });
             if (!log.length) {
               const li = document.createElement('li');
-              li.textContent = 'Пока нет локальных лайков или отметок “не интересно”.';
+              li.textContent = 'Пока нет локальных лайков, шеров или отметок “не интересно”.';
               list.appendChild(li);
             }
           }
@@ -630,7 +649,7 @@ const safeDescription = description || 'Анонс события в Калин�
 
         document.addEventListener('scroll', hideLikeShareCallouts, { passive: true });
         document.addEventListener('pointerdown', (event) => {
-          if (!event.target.closest('[data-like-share-callout]') && !event.target.closest('[data-feedback-action="like"]')) {
+          if (!event.target.closest('.feedback-button--share') && !event.target.closest('[data-feedback-action="like"]')) {
             hideLikeShareCallouts();
           }
         }, { passive: true });

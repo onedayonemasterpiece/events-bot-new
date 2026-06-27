@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v8/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v9/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,13 +9,13 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v8/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v8/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v8/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v8/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v8/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v8/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v8/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v9/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v9/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v9/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v9/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v9/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v9/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v9/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md).
 
@@ -90,60 +90,61 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 31. Every discovery card has explicit feedback controls: large like button in the lower-right/right-thumb zone with current aggregate like count, toggle unlike, and a lower-priority “Не интересно” negative control. These labels are product actions, not hidden technical anti-bubble copy.
 32. A local like increments the visible count immediately for the current visitor; production source of truth is a compact personalization aggregate snapshot from Supabase/Postgres, not Fly SQLite.
 33. Card calendar action is icon-led and links directly to `.ics`; card share duplication is avoided.
-34. After a successful like, the MVP share upsell is a non-layout-shifting callout anchored near the lower-right like button, not a card-height expansion. It uses native Web Share on tap and copy fallback, is session-limited, and disappears on scroll/unlike/not-interested/share.
-35. Explicit-feedback rerank must preserve scroll orientation: the acted-on card and all cards above it do not move during the current interaction; only cards below that anchor may be re-ordered.
-36. Desktop renders the same continuation candidates as a normal grid; horizontal mobile rails are not the event-detail continuation pattern.
-37. Promo is omitted by default. If a real campaign exists, show at most one clearly labeled `Партнёр`/`Реклама` native card after organic context, not between H1/facts and primary CTA and not as an unlabeled related item.
+34. After a successful like, the MVP share upsell is a non-layout-shifting expansion of the separate share button in the bottom card action row, not a floating bubble over content and not an expansion of the like button. It uses native Web Share on tap and copy fallback, increments a visible share count, is session-limited, and collapses on scroll/unlike/not-interested/share.
+35. Media aspect rules are explicit: `visual_only` / no-OCR posters use a strict 3:4 cover media frame; `ocr_text` and `unknown` posters must not be cropped and must not use blur/backdrop fill, so they render at their natural image ratio rather than being forced into 3:4.
+36. Explicit-feedback rerank must preserve scroll orientation: the acted-on card and all cards above it do not move during the current interaction; only cards below that anchor may be re-ordered.
+37. Desktop renders the same continuation candidates as a normal grid; horizontal mobile rails are not the event-detail continuation pattern.
+38. Promo is omitted by default. If a real campaign exists, show at most one clearly labeled `Партнёр`/`Реклама` native card after organic context, not between H1/facts and primary CTA and not as an unlabeled related item.
 
 ## 7. Sidebar / mobile transaction block
 
-38. Date and time, with timezone implied by region or explicitly generated.
-39. Venue, city, reliable address and map link only when address/coordinates are reliable; weak-address pages say “Точный адрес уточняйте у организатора”.
-40. Primary CTA is a real `href`: `Купить билет`, `Зарегистрироваться`, `Позвонить`, `Открыть пост организатора`, or status-only for sold-out/cancelled.
-41. For `ticket_status=sale` and valid `ticket_link`, show `Купить билет`.
-42. Status indicator uses text plus color/icon: tickets in sale, free, sold out, cancelled/postponed.
-43. `.ics` calendar link works without JS and should be served as `text/calendar` with inline content disposition.
-44. Source-only CTAs use clear copy such as `Открыть пост организатора`, not ambiguous `Уточнить регистрацию`.
-45. Share button is visible by default and attempts native Web Share API first; duplicate Telegram/VK/WhatsApp share pills are not shown on the event page. If native share is unavailable, the single share button copies the URL.
+39. Date and time, with timezone implied by region or explicitly generated.
+40. Venue, city, reliable address and map link only when address/coordinates are reliable; weak-address pages say “Точный адрес уточняйте у организатора”.
+41. Primary CTA is a real `href`: `Купить билет`, `Зарегистрироваться`, `Позвонить`, `Открыть пост организатора`, or status-only for sold-out/cancelled.
+42. For `ticket_status=sale` and valid `ticket_link`, show `Купить билет`.
+43. Status indicator uses text plus color/icon: tickets in sale, free, sold out, cancelled/postponed.
+44. `.ics` calendar link works without JS and should be served as `text/calendar` with inline content disposition.
+45. Source-only CTAs use clear copy such as `Открыть пост организатора`, not ambiguous `Уточнить регистрацию`.
+46. Share button is visible by default and attempts native Web Share API first; duplicate Telegram/VK/WhatsApp share pills are not shown on the event page. If native share is unavailable, the single share button copies the URL.
 
 ## 8. Mobile sticky CTA
 
-46. Sticky bottom CTA appears only while the user is still in the decision area.
-47. It duplicates the same `href` as the primary CTA.
-48. It hides when the discovery feed enters the viewport, because at that point the user is choosing the next event and the old CTA becomes distracting.
-49. It reserves bottom/safe-area padding and never covers content/footer/action targets.
-50. If JS is unavailable, the page still has a visible primary CTA near the top.
+47. Sticky bottom CTA appears only while the user is still in the decision area.
+48. It duplicates the same `href` as the primary CTA.
+49. It hides when the discovery feed enters the viewport, because at that point the user is choosing the next event and the old CTA becomes distracting.
+50. It reserves bottom/safe-area padding and never covers content/footer/action targets.
+51. If JS is unavailable, the page still has a visible primary CTA near the top.
 
 ## 9. Personalization and recommendations in P0
 
-51. “Смотрите дальше” is static HTML; no required `/api/v1/related` or Supabase call in the first production slice.
-52. Explicit `like_event` / `unlike_event` / `not_interested` actions are strong personalization signals and may update local ranking immediately after consent.
-53. Later consented personalization may only rerank/hide within the static candidate pool.
-54. No personalization-dependent content above the fold.
-55. No visible reorder/jump after the related block is in viewport except direct response to an explicit user action such as like/not-interested.
-56. Current event, past events and expired lifecycle statuses are excluded.
-57. “Другие даты” is separated from recommendations.
+52. “Смотрите дальше” is static HTML; no required `/api/v1/related` or Supabase call in the first production slice.
+53. Explicit `like_event` / `unlike_event` / `not_interested` actions are strong personalization signals and may update local ranking immediately after consent.
+54. Later consented personalization may only rerank/hide within the static candidate pool.
+55. No personalization-dependent content above the fold.
+56. No visible reorder/jump after the related block is in viewport except direct response to an explicit user action such as like/not-interested.
+57. Current event, past events and expired lifecycle statuses are excluded.
+58. “Другие даты” is separated from recommendations.
     - Related/event cards must not use nested anchors: media/title/action links are separate, and every card has a visual slot plus `.ics` calendar action.
 
 ## 10. P0 acceptance gates
 
-58. Astro SSG generator exists and creates `/sobytiya/<stable-slug>/index.html` from production-like event export.
-59. At least 5–10 future active events are generated for preview, including paid/free/registration/unknown/other-dates cases.
-60. Page is usable with JS disabled: event facts, description, CTA, calendar link and static recommendations remain available.
-61. Mobile 375px: no horizontal scroll, CTA visible, touch targets at least 44px.
-62. Desktop 1366px: real two-column layout, not stretched mobile feed.
-63. `H1` wraps safely in main column for long Russian titles.
-64. No `null`, empty badges, empty fact rows or broken image placeholders are rendered.
-65. No layout shift from late image/recommendation/promo loading; hero dimensions are reserved.
-66. CTA state follows the canonical Variant A matrix.
-67. Ticket URL is valid, safely encoded and works as direct `href`.
-68. `.ics` file exists, is linked without a forced `download` attribute, and is served as inline `text/calendar` for mobile calendar handoff.
-69. `Event`/`MusicEvent` JSON-LD validates and matches visible facts.
-70. Breadcrumb links and sitemap entries are generated and valid.
+59. Astro SSG generator exists and creates `/sobytiya/<stable-slug>/index.html` from production-like event export.
+60. At least 5–10 future active events are generated for preview, including paid/free/registration/unknown/other-dates cases.
+61. Page is usable with JS disabled: event facts, description, CTA, calendar link and static recommendations remain available.
+62. Mobile 375px: no horizontal scroll, CTA visible, touch targets at least 44px.
+63. Desktop 1366px: real two-column layout, not stretched mobile feed.
+64. `H1` wraps safely in main column for long Russian titles.
+65. No `null`, empty badges, empty fact rows or broken image placeholders are rendered.
+66. No layout shift from late image/recommendation/promo loading; hero dimensions are reserved.
+67. CTA state follows the canonical Variant A matrix.
+68. Ticket URL is valid, safely encoded and works as direct `href`.
+69. `.ics` file exists, is linked without a forced `download` attribute, and is served as inline `text/calendar` for mobile calendar handoff.
+70. `Event`/`MusicEvent` JSON-LD validates and matches visible facts.
+71. Breadcrumb links and sitemap entries are generated and valid.
     - `/segodnya/` and `/vyhodnye/` are generated, linked from header and included in sitemap.
-71. Preview pages are `noindex`; production pages are indexable.
-72. Related freshness gate excludes current/past/expired events.
+72. Preview pages are `noindex`; production pages are indexable.
+73. Related freshness gate excludes current/past/expired events.
     - Related gate excludes `other_date_ids` / same occurrence group duplicates.
-73. Promo is omitted or clearly labeled and separated.
-74. Analytics are compact or disabled; no raw telemetry firehose in MVP.
-75. Rollback path exists: previous static tree or disabling links to generated event pages.
+74. Promo is omitted or clearly labeled and separated.
+75. Analytics are compact or disabled; no raw telemetry firehose in MVP.
+76. Rollback path exists: previous static tree or disabling links to generated event pages.

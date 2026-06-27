@@ -42,6 +42,7 @@ export interface PreviewEvent {
   description_html: string;
   topics: string[];
   likes_count: number;
+  shares_count?: number;
   pushkin_card: boolean;
   other_date_ids: number[];
   source_prod_id: number;
