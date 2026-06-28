@@ -1,6 +1,6 @@
 ---
 interface Props {
-  name: 'heart' | 'calendar' | 'dislike' | 'share' | 'pin' | 'ticket' | 'info' | 'spark' | 'lock' | 'image';
+  name: 'heart' | 'calendar' | 'dislike' | 'share' | 'pin' | 'ticket' | 'info' | 'spark' | 'lock' | 'image' | 'phone';
   className?: string;
   title?: string;
 }
@@ -53,6 +53,17 @@ const common = `icon icon--${name}${className ? ` ${className}` : ''}`;
   )}
   {name === 'image' && (
     <path d="M5.75 4.5h12.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25H5.75a2.25 2.25 0 0 1-2.25-2.25V6.75A2.25 2.25 0 0 1 5.75 4.5Zm0 1.7a.55.55 0 0 0-.55.55v7.1l3.03-3.03a1.25 1.25 0 0 1 1.77 0l2.1 2.1.86-.86a1.25 1.25 0 0 1 1.77 0l4.07 4.07V6.75a.55.55 0 0 0-.55-.55H5.75Zm9.75 3.05a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1Z" />
+  )}
+  {name === 'phone' && (
+    // Phone Call outline, adapted from SVG Repo 533283 (phone-call), chosen for clear handset + ringing arcs at small CTA size.
+    <path
+      d="M14.05 6c.98.19 1.87.67 2.58 1.37.7.7 1.18 1.6 1.37 2.58M14.05 2c2.03.23 3.92 1.13 5.37 2.58A9.9 9.9 0 0 1 22 9.94M18.5 21C9.94 21 3 14.06 3 5.5c0-.39.01-.77.04-1.15.03-.43.05-.65.16-.85.1-.16.27-.32.44-.4C3.84 3 4.08 3 4.56 3h2.82c.4 0 .6 0 .78.07.15.06.29.15.39.27.12.14.19.33.33.71l1.17 3.21c.16.44.24.66.23.87-.02.18-.08.36-.19.51-.12.17-.32.29-.72.53L8 10c1.2 2.65 3.35 4.8 6 6l.82-1.37c.24-.4.36-.6.53-.72.15-.11.33-.17.52-.19.21-.01.43.07.87.23l3.21 1.17c.38.14.57.2.71.33.12.1.21.24.27.39.07.17.07.37.07.78v2.82c0 .48 0 .72-.1.93-.08.17-.24.33-.4.43-.2.11-.42.13-.85.16-.38.03-.76.04-1.15.04Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   )}
 
 </svg>

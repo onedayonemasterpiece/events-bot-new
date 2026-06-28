@@ -42,12 +42,12 @@ const calendarPrimary = canAddToCalendar && (!href || event.ticket.kind === 'fre
     <div class="action-grid">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
       {href ? (
-        <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{ctaLabel}</a>
+        <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{telephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>
       ) : (!calendarPrimary ? (
         <span class="cta-button" aria-disabled="true">{ctaLabel}</span>
       ) : null)}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} />}
-      <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
     <p class="muted-note">Если системное окно “Поделиться” недоступно в браузере или webview, ссылка копируется в буфер.</p>

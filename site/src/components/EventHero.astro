@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, withBase } from '../lib/events';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
 export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
@@ -68,6 +68,7 @@ function normalizeObjectPosition(value: string | null | undefined) {
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const heroObjectPosition = heroMode === 'photo-cover' ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
+const ctaIsTelephone = isTelephoneUrl(ctaHref);
 
 const galleryImages = (() => {
   const seen = new Set<string>();
@@ -148,14 +149,14 @@ const showTicketCta = Boolean(ctaHref);
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
-      {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
+      {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
-      <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}>
         <Icon name="share" />
         <span data-share-label>Поделиться</span>
         <span class="feedback-count" data-share-count>{shareCountLabel}</span>
       </button>
-      <button type="button" class="secondary-button event-hero__like feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
+      <button type="button" class="secondary-button event-hero__like feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
         <Icon name="heart" />
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
@@ -168,10 +169,10 @@ const showTicketCta = Boolean(ctaHref);
   <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
-      <div class="hero-gallery__brand" aria-hidden="true">
+      <a class="hero-gallery__brand" href={withBase('/__preview/')} aria-label="Перейти к афише Полюбить Калининград Анонсы">
         <span>Полюбить Калининград</span>
         <strong>Анонсы</strong>
-      </div>
+      </a>
       <h2 id={heroGalleryTitleId} class="sr-only">Фото события: {event.title}</h2>
       <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
     </div>

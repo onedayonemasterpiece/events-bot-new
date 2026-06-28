@@ -19,7 +19,7 @@ MVP-0 is ready for an engineering implementation spike; product-quality validati
 That means concept churn should stop, but implementation must continue through bounded validation: expanded real-catalog probe, test/golden personas, static related block, browser prototype, bot/automation guardrails and later human top-10 review.
 
 
-## Current Astro preview implementation (`preview-20260627-event-pages-v16`)
+## Current Astro preview implementation (`preview-20260627-event-pages-v32`)
 
 The current static event-page preview implements this contract as a local/browser slice, not as a Supabase write path yet:
 
@@ -29,6 +29,9 @@ The current static event-page preview implements this contract as a local/browse
 4. After consent, the browser creates/uses `ke_personalization_profile` with UUID-compatible `anon_id` and `session_id`; legacy prefixed ids and profiles missing `feature_schema_version`/`taxonomy_version` are ignored.
 5. On activation with a compatible profile, the client removes hard-hidden / `not_interested` / strong negative-interest matches from the preloaded cards, reorders by local `rankEventDetailRelated`, performs one same-origin JSON top-up, then exposes only `Показать ещё` for additional cards.
 6. Strong actions (`like_event`, `unlike_event`, `not_interested`, `undo_not_interested`, `share_event`) are written only to compact local debug storage for the preview, with `served_list_id` / `served_list_hash` attached. Mapping this into Supabase remains the production telemetry slice.
+7. Static related selection is implemented in `site/src/lib/events.ts` as `static_related_v1`: explicit seeds from `site/src/data/preview-related.json` are merged with all eligible future active events, then scored by category equality, tag Jaccard overlap, same city, date proximity, same venue and price-band match. Hard exclusions remove current event, linked other dates, reverse linked dates, inactive/cancelled/past events. This solves the static fallback for the preview/MVP engineering slice, not final recommendation quality; production still needs expanded real-catalog probes and human/golden top-10 review.
+8. Mobile event cards now show `title → time/status → venue` after the image. Product rationale: in a feed/continuation scan the user first decides “what is this?”, then checks date/conditions; this also gives crawlers a cleaner text order inside each card.
+9. Service controls (`Не интересно`, share, like/unlike, undo plate) remain real `<button>` controls, not links, and are marked `data-nosnippet`. Ticket/registration/calendar/detail links remain crawlable. This prevents utility UI text from polluting snippets/LLM summaries while keeping event content and internal navigation indexable.
 
 ## MVP-0 page contract
 
@@ -40,7 +43,7 @@ URL shape:
 
 Page behavior:
 
-1. Static HTML renders the event page and a fallback block “Похожие события”.
+1. Static HTML renders the event page and a fallback continuation block (current public label: `Смотрите дальше`; historical/internal label: “Похожие события”).
 2. The fallback block is useful without JS, consent, Supabase, or localStorage profile.
 3. After consent:
    - if a compatible localStorage profile exists, the browser reranks the related block locally;
@@ -262,7 +265,7 @@ Session summary and strong actions stay compact:
 Under the event content:
 
 ```text
-Похожие события
+Смотрите дальше
 [card]
 [card]
 [card]
@@ -320,6 +323,13 @@ Acceptance is not “the model feels smart”. Required checks:
 - `negative_interest_tags` are absent/downranked in top 5;
 - top 10 does not exceed the event-type diversity cap;
 - mobile and desktop are evaluated separately.
+
+## SEO/GEO policy for service controls
+
+- Do **not** expose utility actions such as `Не интересно`, like/unlike, share/copy and undo as crawlable `<a href>` links. They are interaction controls and should stay `<button>` with clear `aria-label`.
+- Mark those controls/plates `data-nosnippet`, because repeated utility text can otherwise appear in snippets or be over-weighted by AI crawlers even though it is not event content.
+- Do not place `data-nosnippet` on title, date, venue, description, ticket/register/calendar links, JSON-LD or the static related card body. Those are useful public content and navigation.
+- Calendar/detail/ticket links may remain crawlable where appropriate; native share and negative feedback must not be indexed as destinations.
 
 ## Browser prototype before Astro implementation
 

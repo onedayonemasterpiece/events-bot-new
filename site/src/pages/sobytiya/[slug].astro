@@ -6,7 +6,7 @@ import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -38,6 +38,7 @@ const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ti
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
+const stickyIsTelephone = isTelephoneUrl(stickyHref);
 const fallbackHeroComposition: HeroComposition = event.image_url
   ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
@@ -118,7 +119,7 @@ const galleryCta = galleryCtaEvent ? {
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
         <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{stickyDateLabel}</span></div>
-        <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyLabel}</a>
+        <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span>{stickyLabel}</span></a>
       </div>
     </div>
   )}
