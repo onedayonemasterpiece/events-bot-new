@@ -94,12 +94,12 @@ On 2026-06-28 the managed VK community `klgdevents` showed a fresh post for `Д�
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending deploy
-- deploy path: pending deploy from `hotfix/vk-stale-publication-20260628`
+- deployed SHA: `b6853db551a27e63e3045184f1707fe19c4a41b9` (reachable from `origin/main`)
+- deploy path: clean linked worktree `/home/dev/projects/events-bot-new-worktrees/vk-stale-publication-20260628`, branch `hotfix/vk-stale-publication-20260628`, pushed to `origin/main`, `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KW6TWB6GV790CV5H1EF02XVV`, machine `683961db016e28` version `1513`
 - regression checks:
   - `python3 -m py_compile main.py main_part2.py tests/test_tg_event_publish.py` — passed locally.
   - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with-requirements requirements.txt python -m pytest -q -p pytest_asyncio.plugin tests/test_tg_event_publish.py -k 'inferred_end_date or explicit_end_date or reserved_slot_after_start_deadline or same_day_started'` — `4 passed, 54 deselected`.
-- post-deploy verification: pending deploy
+- post-deploy verification: Fly status `1 total, 1 passing`; in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true`, `db=ok`, scheduler/task statuses `ok`, `issues=[]`. Authenticated VK audit after deploy reported `suspicious_stale_managed_queue=[]`; exact stale posts `4839`, `4802`, `4651`, `4655`, and `4796` were absent/deleted.
 
 ## Prevention
 
