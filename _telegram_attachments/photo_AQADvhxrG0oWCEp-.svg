@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+  <title id="title">Vectorized logo from photo_AQADvhxrG0oWCEp-.jpg</title>
+  <desc id="desc">Clean SVG redraw of the attached red and navy logo on a transparent background.</desc>
+  <defs>
+    <style>
+      .navy { fill: #082d62; }
+      .red { fill: #ff3f32; }
+    </style>
+  </defs>
+
+  <!-- Top-left navy monogram, with transparent inner opening. -->
+  <path class="navy" d="
+    M 209 254
+    H 642
+    V 782
+    H 579
+    C 557 782 540 765 540 743
+    V 392
+    C 540 383 533 376 524 376
+    H 319
+    C 310 376 303 383 303 392
+    V 743
+    C 303 765 285 782 263 782
+    H 182
+    V 281
+    C 182 266 194 254 209 254
+    Z"/>
+
+  <!-- Red K mark. -->
+  <path class="red" d="
+    M 642 254
+    H 711
+    C 724 254 735 265 735 278
+    V 421
+    L 843 278
+    C 854 263 871 254 890 254
+    H 991
+    C 999 254 1003 263 998 270
+    L 819 499
+    L 998 768
+    C 1004 776 999 782 990 782
+    H 864
+    C 847 782 831 773 821 759
+    L 735 553
+    V 758
+    C 735 771 724 782 711 782
+    H 642
+    Z"/>
+
+  <!-- Three signal bars. -->
+  <rect class="red" x="947" y="552" width="40" height="232" rx="20"/>
+  <rect class="red" x="1006" y="506" width="40" height="278" rx="20"/>
+  <rect class="red" x="1065" y="421" width="40" height="363" rx="20"/>
+
+  <!-- Bottom-left navy block. -->
+  <path class="navy" d="
+    M 219 815
+    H 276
+    C 288 815 295 805 310 805
+    H 429
+    C 448 805 461 821 457 840
+    L 424 1004
+    C 420 1020 405 1032 388 1032
+    H 229
+    C 203 1032 182 1011 182 985
+    V 856
+    C 182 833 196 815 219 815
+    Z"/>
+
+  <!-- Bottom-center red block, with transparent heart cutout. -->
+  <path class="red" fill-rule="evenodd" d="
+    M 516 806
+    H 753
+    C 769 806 781 818 784 834
+    L 811 994
+    C 815 1015 799 1032 777 1032
+    H 476
+    C 454 1032 439 1015 443 994
+    L 476 834
+    C 479 818 492 806 516 806
+    Z
+    M 626 993
+    C 614 979 554 941 548 895
+    C 544 866 566 848 591 855
+    C 609 860 620 875 626 892
+    C 633 875 644 860 662 855
+    C 687 848 709 866 704 895
+    C 699 941 638 979 626 993
+    Z"/>
+
+  <!-- Bottom-right navy block. -->
+  <path class="navy" d="
+    M 820 806
+    H 956
+    C 971 806 978 817 993 817
+    H 1033
+    C 1056 817 1072 833 1072 856
+    V 986
+    C 1072 1011 1052 1032 1027 1032
+    H 869
+    C 850 1032 834 1019 830 1000
+    L 798 839
+    C 794 821 805 806 820 806
+    Z"/>
+</svg>
