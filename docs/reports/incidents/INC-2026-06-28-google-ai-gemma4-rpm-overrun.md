@@ -42,6 +42,8 @@ CherryFlash eco partner-track filter burst on 2026-06-27.
   RESOURCE_EXHAUSTED` with quota metric
   `generate_content_free_tier_requests`, `limit: 15`, `model: gemma-4-31b`.
 - 2026-06-28 — incident formalized and hotfix prepared.
+- 2026-06-28 09:27 UTC — hotfix `323dde2312422000709ef37d0283b9aeaea9cc4a`
+  deployed to Fly machine version `1512`.
 
 ## Root Cause
 
@@ -128,10 +130,29 @@ CherryFlash eco partner-track filter burst on 2026-06-27.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `323dde2312422000709ef37d0283b9aeaea9cc4a`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean
+  `hotfix/google-ai-rpm-fallback-20260628`; same SHA pushed to `origin/main`
+  before deploy.
+- regression checks:
+  - `/tmp/eventsbot-test-venv/bin/pytest -q tests/test_google_ai_client.py tests/test_video_partner_filter_gateway.py tests/test_partner_tracks.py`
+    -> `48 passed`.
+  - production code probe confirmed `/app/google_ai/client.py` contains
+    `local-fallback-no-supabase` and default local RPM `15`; `/app/video_announce/scenario.py`
+    contains `consumer="video_partner_filter"` and
+    `supabase_client=get_supabase_client()`.
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, scheduler/tasks `ok`.
+  - Fly status: app image `deployment-01KW6RTCS37D5N4C9VK8RS8ADZ`, machine
+    `683961db016e28`, version `1512`, health check passing.
+  - production construction smoke created a `GoogleAIClient` with
+    `has_supabase=true`, `consumer=video_partner_filter`,
+    `default_env_var_name=GOOGLE_API_KEY`, local fallback enabled, and overflow
+    envs `GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2`.
+  - No post-deploy `video_partner_filter` Gemma 4 reserve had occurred yet at
+    the time of this update; leave status `monitoring` until the next eco
+    partner-filter run or a deliberately safe live reserve smoke verifies
+    non-null `api_key_id` / `used_after`.
 
 ## Prevention
 
