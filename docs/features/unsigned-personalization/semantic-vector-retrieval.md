@@ -1,11 +1,6 @@
 # Semantic vector retrieval for events
 
-> Status: **target architecture**, not production implementation. The current
-> public preview (`preview-20260628-event-pages-v47-sparse-fixes`) uses the
-> honest lexical/sparse baseline `event_sparse_related_chain_v1` with
-> `retrieval_method=local_tfidf_sparse_v1`. Real semantic retrieval starts only
-> after BGE-M3 embeddings are generated, indexed, quality-gated and switched into
-> the static build.
+> Status: **updated target architecture with P0 pgvector infrastructure applied**. The current public static related preview still uses the honest lexical/sparse baseline `event_sparse_related_chain_v1`, but the accepted semantic sidecar is now Supabase pgvector + `gemini-embedding-2` (`vector(768)`) for authorized search and future semantic related canaries.
 
 ## Why this document exists
 
@@ -61,16 +56,12 @@ because both texts contain “город”. A semantic layer must understand th
 - Merge/rerank/filter happens client-side over compact card projections.
 - No Supabase read is required for an ordinary page view.
 
-### L4 — pgvector canary
+### L4 — pgvector authorized search / semantic canary
 
-- Supabase/Postgres+pgvector may be used only as a gated canary for dynamic
-  personalization/candidate refresh.
-- Access is through a same-origin endpoint or tightly scoped RPC, never browser
-  direct table `select`.
-- RPC returns compact card IDs/projections only: no profile vectors, no debug
-  internals, no raw event table.
-- Strict rate limits, payload caps, RLS/grants tests, cache and fallback are
-  mandatory before any traffic.
+- Supabase/Postgres+pgvector is the accepted retrieval layer for explicit authorized search and future semantic related canaries.
+- Access is through Supabase Edge Function/RPC, never browser direct table `select`.
+- RPC returns compact card snapshots only: no profile vectors, no debug internals, no raw event table.
+- Strict quotas, payload caps, RLS/grants tests, cache and fallback are mandatory before production traffic.
 
 ### L5 — learned ranker
 
@@ -79,20 +70,18 @@ because both texts contain “город”. A semantic layer must understand th
 
 ## Embedding model decision
 
-Primary: **local BGE-M3 on Kaggle batch jobs**.
+P0 accepted model: **`gemini-embedding-2` with `outputDimensionality=768`**, stored in Supabase pgvector.
 
 Reasons:
 
-- strong multilingual/Russian quality for short/noisy event texts;
-- no provider request/day ceiling for full backfills and re-embeds;
-- reproducible model/versioned outputs;
-- offline job, never page hot path.
+- current project quota includes `Gemini Embedding 2` (`100 RPM / 30K TPM / 1K RPD` from the Google AI Studio quota screen);
+- 768 dimensions keep pgvector storage/index size small enough for the 500 MB Supabase free-tier budget;
+- explicit search creates embeddings only for authenticated user queries, not for ordinary page views;
+- event-document backfills of the active/future catalogue are feasible as batch jobs after Smart Update.
 
-Fallback candidate: `intfloat/multilingual-e5-large`.
+Important API contract: Gemini Embedding 2 does not use `taskType`; include the task in the text prompt (`title: ... | text: ...` for documents, `task: search result | query: ...` for queries).
 
-Google/Gemini embeddings are allowed only as an audit/comparison lane unless a
-separate budget/limit decision is made. With the current free-tier quotas they
-are not the production primary for full catalogue backfills.
+BGE-M3 remains a possible offline comparison lane, but it is no longer the accepted P0 implementation target for this project stage.
 
 ## Storage ownership
 
@@ -166,22 +155,23 @@ CREATE TABLE embedding_manifest (
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE event_embedding_live (
-    event_id       INTEGER PRIMARY KEY,
-    model_version  TEXT NOT NULL,
-    embedding      vector(1024) NOT NULL,
-    text_hash      TEXT NOT NULL,
-    updated_at     timestamptz NOT NULL DEFAULT now()
+CREATE TABLE event_embeddings (
+    event_id        BIGINT NOT NULL REFERENCES event_search_documents(event_id),
+    embedding_model TEXT NOT NULL,
+    embedding_dim   SMALLINT NOT NULL DEFAULT 768,
+    embedding       vector(768) NOT NULL,
+    text_hash       TEXT NOT NULL,
+    embedded_at     timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (event_id, embedding_model, embedding_dim)
 );
 
-CREATE INDEX event_embedding_live_hnsw_idx
-ON event_embedding_live
+CREATE INDEX event_embeddings_embedding_hnsw_idx
+ON event_embeddings
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 128);
 ```
 
-This table remains canary-only until RLS/grants, RPC contract, abuse controls and
-payload limits are verified against the personalization Supabase budget.
+The table is closed to browser roles. Authenticated access is through controlled RPC/Edge Function only; see `authorized-event-search.md` for applied schema and verification evidence.
 
 ## Embedding text manifest
 

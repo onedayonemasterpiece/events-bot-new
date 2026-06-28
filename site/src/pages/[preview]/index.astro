@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
 import EventCard from '../../components/EventCard.astro';
 import { absoluteUrl, getEvents, getPreviewBuild, PREVIEW_BUILD_ID, SITE_NAME, withBase } from '../../lib/events';
 
@@ -83,6 +84,8 @@ const description = 'Открываемый preview Astro SSG страниц с�
           </div>
         </div>
       </section>
+
+      <AuthorizedEventSearch />
 
       <section class="section-card" style="margin-top: 1rem;" id="weekend">
         <div class="section-card__inner">

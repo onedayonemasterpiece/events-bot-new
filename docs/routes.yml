@@ -294,6 +294,8 @@ features:
     event_detail_related_probe: docs/features/unsigned-personalization/event-detail-related-probe.md
     golden_interest_facets: docs/features/unsigned-personalization/golden-interest-facets.md
     personal_feed_architecture: docs/features/unsigned-personalization/personal-feed-architecture.md
+    authorized_event_search: docs/features/unsigned-personalization/authorized-event-search.md
+    semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md
     gemini_review_2026_06_26: docs/features/unsigned-personalization/gemini-review-2026-06-26.md

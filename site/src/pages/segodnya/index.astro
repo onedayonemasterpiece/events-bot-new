@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
@@ -40,6 +41,8 @@ const sections = dayparts
           </div>
         </div>
       </section>
+
+      <AuthorizedEventSearch />
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">

@@ -185,6 +185,43 @@ const FOOTER_SOCIAL_LINKS = [
       .section-card--quiet { box-shadow: none; background: rgba(255, 253, 248, 0.74); }
       .section-card--event-details { overflow: hidden; }
       .section-card__inner { padding: clamp(0.85rem, 2.8vw, 1.55rem); }
+      .authorized-search {
+        margin-top: 1rem;
+        padding: clamp(0.9rem, 2.8vw, 1.35rem);
+        border: 1px solid rgba(121, 48, 20, 0.14);
+        border-radius: var(--radius-xl);
+        background: linear-gradient(180deg, rgba(255,253,248,0.96), rgba(255,248,239,0.92));
+        box-shadow: var(--shadow);
+      }
+      .authorized-search__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      .authorized-search__head h2 { margin-bottom: 0.35rem; }
+      .authorized-search__auth { display: flex; gap: 0.55rem; flex-wrap: wrap; justify-content: flex-end; }
+      .authorized-search__form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.6rem;
+        margin-top: 1rem;
+      }
+      .authorized-search__form input {
+        width: 100%;
+        min-height: 48px;
+        border: 1px solid rgba(121,48,20,0.18);
+        border-radius: 999px;
+        background: #fffdf8;
+        color: var(--text);
+        padding: 0.65rem 1rem;
+        font: inherit;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+      }
+      .authorized-search__status { margin: 0.72rem 0 0; color: var(--muted); font-size: 0.92rem; }
+      .authorized-search__results { margin-top: 1rem; display: grid; gap: 1rem; }
+      .authorized-search__fallback-title { margin: 1.1rem 0 0.2rem; color: var(--primary-strong); }
+      .authorized-search__more { margin-top: 0.85rem; }
       .eyebrow { color: var(--primary-strong); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.5rem; }
       h1, h2, h3 { line-height: 1.08; letter-spacing: -0.035em; margin: 0; }
       h1 { font-size: clamp(1.8rem, 6vw, 3.7rem); max-width: 16ch; overflow-wrap: anywhere; }
@@ -2383,6 +2420,8 @@ const FOOTER_SOCIAL_LINKS = [
           </article>`;
         }
 
+        window.KenigEventsRenderEventCard = eventCardHtml;
+
         function visibleFeedCardCount(feed) {
           return Array.from(feed.querySelectorAll(':scope > [data-event-card]')).filter((card) => !card.hidden).length;
         }
@@ -2683,6 +2722,8 @@ const FOOTER_SOCIAL_LINKS = [
           syncListingPersonalFilter();
           renderFeedbackReport();
         }
+
+        window.applyFeedbackState = applyFeedbackState;
 
         async function handleFeedbackButton(button) {
           const scope = button.closest('[data-event-card], [data-feedback-scope]');

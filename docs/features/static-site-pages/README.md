@@ -96,6 +96,8 @@ Product triggers for the promo/personalization roadmap:
 
 ## Listing personal feed / backend preparation
 
+Authenticated smart search is now designed/implemented as an optional static-site enhancement: when `PUBLIC_PERSONALIZATION_SUPABASE_URL` and `PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` are present, listing/index pages render `AuthorizedEventSearch.astro`. It uses Supabase Auth with custom Yandex provider `custom:yandex`, calls Edge Function `event-search`, and renders results as the same split-action event cards. Canonical design: `docs/features/unsigned-personalization/authorized-event-search.md`.
+
 Listing pages now include a hidden dynamic `Личная лента` slot at the end. Static HTML does not pre-render personal cards. If a backend/RPC feed is configured, the browser fetches up to 30 compact card projections once, caches the starter list in `localStorage` as `ke_listing_personal_feed_cache_v1` for 30 minutes, and reuses it across `/segodnya/`, `/zavtra/` and `/vyhodnye/`. If backend/RPC is absent, the section stays hidden and the static listing remains unchanged. Canonical design: `docs/features/static-site-pages/listing-personal-feed.md`.
 
 ## CDN asset delivery preparation

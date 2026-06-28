@@ -1,6 +1,6 @@
 # Anonymous Personalization for Static Event Pages
 
-> **Status:** MVP-0 design hardened; ready for engineering implementation spike, not product-quality proven
+> **Status:** MVP-0 design hardened; pgvector authorized-search infrastructure added; Yandex/Edge deploy gates remain
 > **MVP:** anonymous-only, no auth, consent/banner with “OK” before personalization telemetry  
 > **Primary product goal:** пользователь быстрее находит интересное событие, чем у конкурентов.
 
@@ -21,6 +21,7 @@ Canonical deploy target for this personalized static site: static HTML/CSS/JS/ma
 Golden interest facets / multi-horizon retrieval contract: `docs/features/unsigned-personalization/golden-interest-facets.md`.
 Personal feed architecture / listing continuation contract: `docs/features/unsigned-personalization/personal-feed-architecture.md`.
 Semantic vector retrieval target architecture: `docs/features/unsigned-personalization/semantic-vector-retrieval.md`.
+Authorized event search / pgvector RPC contract: `docs/features/unsigned-personalization/authorized-event-search.md`.
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
@@ -99,7 +100,7 @@ Traceability for the review:
 
 ## Принятые решения на MVP
 
-- Авторизации нет.
+- Для обычной персонализации MVP-0 авторизации нет; отдельная P0+ функция `Умный поиск` доступна только авторизованным пользователям через Supabase Auth/Yandex.
 - Используется anonymous visitor id + session id; пока SQL использует `uuid`, оба значения должны быть UUID-compatible без префиксов.
 - Consent banner допустим: простой “ОК” включает analytics/personalization.
 - Personalization state живёт в двух местах:
@@ -224,6 +225,8 @@ reset или migrate-known-fields-only. UX обязан иметь действ�
 - `personalization_event_reaction` — компактный raw-журнал **только сильных явных действий** (`like_event`, `unlike_event`, `not_interested`, `undo_not_interested`) с временем, anonymous/session id, event id, surface и position; из него строится отчёт “сколько лайков сделал конкретный anonymous visitor и когда”;
 - `personalization_event_reaction_counter` / static aggregate snapshot — счётчики лайков/негативных реакций по событию для показа на карточках и статического build/export. Для лайков источник и сервис хранятся консистентно в одной строке: `source_likes_count` (импортированные реакции из TG/VK/source posts) + `service_likes_count` (первые лайки KenigEvents) = generated `likes_count`; публичный UI/Data API показывает только общий `likes_count`, без технической разбивки;
 - `personalization_event_reaction_state` — одна строка на `(anon_id, event_id)` с текущим явным состоянием, чтобы повторные toggle-действия не раздували долгоживущие таблицы;
+- `event_search_documents` / `event_embeddings` — pgvector sidecar для авторизованного векторного поиска и будущего semantic related; хранит только compact digest/card snapshots, не raw OCR/source text;
+- `search_quota_plans`, `user_search_quota_ledger`, `event_search_requests` — квоты и privacy-safe аудит умного поиска без хранения raw query;
 - `personalization_visitor_reaction_daily` — компактный дневной rollup по anonymous visitor для отчётов после очистки raw-журнала;
 - `interaction_event` — опциональная sampled/debug raw telemetry, выключена по умолчанию для слабых impression/skip;
 - `visitor_profile_snapshot` — compact `session`/`short`/`mid`/`long` profile horizons; each snapshot keeps positive vectors/maps and the separate negative-interest axis; в MVP это analytics/eval/post-MVP server-ranker evidence, а не browser read dependency;

@@ -1,0 +1,173 @@
+---
+interface Props {
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
+const enabled = Boolean(supabaseUrl && supabaseKey);
+---
+{enabled && (
+<section class:list={["authorized-search", compact && "authorized-search--compact"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+  <div class="authorized-search__head">
+    <div>
+      <p class="eyebrow">Умный поиск</p>
+      <h2>Найти событие по описанию</h2>
+      <p class="muted-note">Векторный поиск доступен после входа через Яндекс. Результаты показываются такими же карточками: лайк, «не интересно», поделиться и календарь сохраняются.</p>
+    </div>
+    <div class="authorized-search__auth">
+      <button type="button" class="secondary-button" data-search-login>Войти через Яндекс</button>
+      <button type="button" class="secondary-button" data-search-logout hidden>Выйти</button>
+    </div>
+  </div>
+  {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
+  <form class="authorized-search__form" data-search-form hidden>
+    <label class="sr-only" for="authorized-event-search-input">Что хочется найти</label>
+    <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: урбанистика, детский мастер-класс, джаз вечером" autocomplete="off" />
+    <button type="submit" class="cta-button">Искать</button>
+  </form>
+  <p class="authorized-search__status" data-search-status>{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
+  <div class="authorized-search__results" data-search-results hidden></div>
+  <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
+</section>
+)}
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+
+  const root = document.querySelector('[data-authorized-search]');
+  if (root) {
+    const enabled = root.dataset.searchEnabled === 'true';
+    const status = root.querySelector('[data-search-status]');
+    const login = root.querySelector('[data-search-login]');
+    const logout = root.querySelector('[data-search-logout]');
+    const form = root.querySelector('[data-search-form]');
+    const input = root.querySelector('[data-search-input]');
+    const results = root.querySelector('[data-search-results]');
+    const more = root.querySelector('[data-search-more]');
+    let supabase = null;
+    let currentQuery = '';
+    let offset = 0;
+    let loading = false;
+    let fallbackStarted = false;
+
+    function setStatus(message) {
+      if (status) status.textContent = message || '';
+    }
+
+    function renderCards(items) {
+      const renderer = window.KenigEventsRenderEventCard;
+      if (typeof renderer === 'function') {
+        return items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: offset + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).join('');
+      }
+      return items.map((candidate) => {
+        const display = candidate.display || candidate;
+        const href = display.href || candidate.href || '#';
+        const title = display.title || candidate.title || 'Событие';
+        return `<article class="event-card event-card--split-actions" data-event-card data-event-id="${String(candidate.event_id || candidate.id || '')}" data-event-title="${escapeHtml(title)}" data-card-href="${escapeHtml(href)}" tabindex="0"><div class="event-card__body"><a class="event-card__title" href="${escapeHtml(href)}">${escapeHtml(title)}</a><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(display.display_date_time || '')}</span></div></div></article>`;
+      }).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    function appendSectionHeading(text) {
+      if (!results) return;
+      const heading = document.createElement('h3');
+      heading.className = 'authorized-search__fallback-title';
+      heading.textContent = text;
+      results.appendChild(heading);
+    }
+
+    async function refreshQuota() {
+      if (!supabase) return;
+      const { data, error } = await supabase.rpc('get_event_search_quota_v1', { p_plan_id: 'registered' });
+      if (error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) setStatus(`Осталось поисков: ${row.day_remaining} сегодня, ${row.month_remaining} в этом месяце.`);
+    }
+
+    async function updateAuth() {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      const signedIn = Boolean(data?.session?.user);
+      login.hidden = signedIn;
+      logout.hidden = !signedIn;
+      form.hidden = !signedIn;
+      root.classList.toggle('is-authorized', signedIn);
+      if (signedIn) await refreshQuota();
+      else setStatus('Войдите, чтобы включить поиск.');
+    }
+
+    async function runSearch({ append = false } = {}) {
+      if (!supabase || loading) return;
+      const query = String(input?.value || '').trim();
+      if (query.length < 3) {
+        setStatus('Введите хотя бы 3 символа.');
+        return;
+      }
+      loading = true;
+      more.hidden = true;
+      setStatus('Ищу события…');
+      if (!append || query !== currentQuery) {
+        currentQuery = query;
+        offset = 0;
+        fallbackStarted = false;
+        if (results) results.innerHTML = '';
+      }
+      const { data, error } = await supabase.functions.invoke('event-search', {
+        body: { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
+      });
+      loading = false;
+      if (error) {
+        setStatus(error.message || 'Поиск не сработал. Попробуйте позже.');
+        return;
+      }
+      const items = Array.isArray(data?.items) ? data.items : [];
+      if (results) {
+        const html = renderCards(items);
+        if (html) results.insertAdjacentHTML('beforeend', html);
+        if (items.length === 0 && !fallbackStarted) {
+          appendSectionHeading('Возможно, вам будет интересно');
+          fallbackStarted = true;
+        }
+        if (!data?.has_more && Array.isArray(data?.fallback_items) && data.fallback_items.length) {
+          if (!fallbackStarted) {
+            appendSectionHeading('Возможно, вам будет интересно');
+            fallbackStarted = true;
+          }
+          results.insertAdjacentHTML('beforeend', renderCards(data.fallback_items));
+        }
+        results.hidden = !results.children.length;
+      }
+      offset += items.length;
+      more.hidden = !data?.has_more;
+      const quota = data?.quota;
+      if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
+      else await refreshQuota();
+      if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
+    }
+
+    if (enabled) {
+      supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+      login?.addEventListener('click', async () => {
+        await supabase.auth.signInWithOAuth({ provider: root.dataset.yandexProvider || 'custom:yandex', options: { redirectTo: window.location.href } });
+      });
+      logout?.addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        if (results) { results.innerHTML = ''; results.hidden = true; }
+        more.hidden = true;
+        await updateAuth();
+      });
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await runSearch({ append: false });
+      });
+      more?.addEventListener('click', async () => runSearch({ append: true }));
+      supabase.auth.onAuthStateChange(() => updateAuth());
+      updateAuth();
+    }
+  }
+</script>
