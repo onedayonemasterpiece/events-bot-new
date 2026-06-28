@@ -1,23 +1,48 @@
-# Event vector related-chain v2
+# Event lexical related-chain v2
 
-Status: implemented for static-site preview/export; production promotion still gated by CDN/release checks.
+Status: implemented as a **temporary lexical/sparse baseline** for static-site
+preview/export; it is not production-grade semantic vector retrieval.
+
+Target replacement: `docs/features/unsigned-personalization/semantic-vector-retrieval.md`.
 
 ## Product role
 
-`Смотрите дальше` on an event page must be a real discovery chain, not a hand-written rail. The chain is built offline during Smart Update/static-site generation and rendered as static HTML/JSON. Page views must never call LLM or vector APIs.
+`Смотрите дальше` on an event page must be a real discovery chain, not a
+hand-written rail. The chain is built offline during Smart Update/static-site
+generation and rendered as static HTML/JSON. Page views must never call LLM,
+embedding models or vector APIs.
+
+Important terminology rule: the current v2 layer uses TF-IDF sparse vectors and
+cosine similarity over lexical/event-feature documents. It may be called
+`lexical_related`, `sparse_related` or `tfidf_related`, but it must not be called
+semantic embeddings or production semantic vector search.
 
 ## Retrieval contract
 
-Current P0 implementation in `site/scripts/export-production-preview-data.py`:
+Current P0 lexical implementation in `site/scripts/export-production-preview-data.py`:
 
 1. Build a canonical text document per event from title, type, topics, summary, visible description, venue/city and admission state.
-2. Build a local sparse TF-IDF vector index (`local_tfidf_sparse_v1`). This is the central retrieval layer for the current preview; it avoids extra embedding-provider calls and is deterministic on Kaggle CPU.
+2. Build a local sparse TF-IDF vector index (`local_tfidf_sparse_v1`). This is
+   the central retrieval layer for the current preview; it avoids extra
+   embedding-provider calls and is deterministic on Kaggle CPU, but it is
+   lexical matching, not semantic retrieval.
 3. Score candidates with vector cosine + deterministic business features: category/topic overlap, city/venue/date proximity, free/paid compatibility and source popularity.
 4. Hard-filter self links, duplicate date links, inactive/cancelled/sold-out candidates.
 5. Add mutual links for strong candidates so a new/updated event is discoverable from older related pages.
 6. Optionally audit changed chains with Gemma 4 26B via the shared GoogleAIClient + Supabase limiter. This is a batch verification step, not a retrieval source and not a page-view path.
 
-The consultant recommendation to move vector search into the center of related retrieval is accepted. The production-upgrade option is BGE-M3/pgvector or another ANN backend, but it is P1: the P0 shipped layer is local sparse vector retrieval because the current catalogue is small enough and the user explicitly did not want routine embedding API spend.
+The consultant recommendation to move real vector search into the center of
+related retrieval is accepted. The production target is BGE-M3 embeddings,
+canonical SQLite embedding manifests, Supabase pgvector for online ANN/RPC, and
+golden quality gates. See `semantic-vector-retrieval.md`.
+
+Until that cutover passes quality gates, the v2 TF-IDF layer is a fallback and
+preview baseline only. It must not be used to claim that semantic vector search
+is implemented.
+
+Known lexical failure mode: generic token overlap such as `город` can rank an
+unrelated concert above an urban-planning event. The semantic migration must use
+this as a hard-negative gate.
 
 ## Cache and LLM-call policy
 

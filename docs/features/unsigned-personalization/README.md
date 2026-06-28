@@ -20,6 +20,7 @@ Canonical deploy target for this personalized static site: static HTML/CSS/JS/ma
 Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 Golden interest facets / multi-horizon retrieval contract: `docs/features/unsigned-personalization/golden-interest-facets.md`.
 Personal feed architecture / listing continuation contract: `docs/features/unsigned-personalization/personal-feed-architecture.md`.
+Semantic vector retrieval target architecture: `docs/features/unsigned-personalization/semantic-vector-retrieval.md`.
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
