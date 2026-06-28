@@ -15,6 +15,7 @@ const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
 const hasReliableMap = Boolean(event.address && event.map_query);
 const ctaLabel = eventTicketActionLabel(event);
 const canAddToCalendar = isCalendarEligible(event);
+const calendarPrimary = canAddToCalendar && (!href || event.ticket.kind === 'free');
 ---
 <aside class="section-card cta-panel" aria-label="Билеты и действия">
   <div class="cta-panel__top">
@@ -39,12 +40,13 @@ const canAddToCalendar = isCalendarEligible(event);
       {event.ticket.note && <p class="muted-note">{event.ticket.note}</p>}
     </div>
     <div class="action-grid">
+      {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
       {href ? (
-        <a class="cta-button" href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{ctaLabel}</a>
-      ) : (
+        <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{ctaLabel}</a>
+      ) : (!calendarPrimary ? (
         <span class="cta-button" aria-disabled="true">{ctaLabel}</span>
-      )}
-      {canAddToCalendar && <CalendarLink event={event} />}
+      ) : null)}
+      {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} />}
       <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}

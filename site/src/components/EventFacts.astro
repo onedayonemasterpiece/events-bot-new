@@ -1,23 +1,25 @@
 ---
+import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 interface Props { event: PreviewEvent }
+type FactIcon = 'pin' | 'ticket' | 'spark' | 'info';
 const { event } = Astro.props;
-const sourceCount = Number(event.source_engagement_sources_count || 0);
-const sourceViews = Number(event.source_views_count || 0);
-const rows = [
-  ['Адрес', event.address],
-  ['Фестиваль', event.festival],
-  ['Вход', event.ticket.price_label || event.status_label],
-  ['Пушкинская карта', event.pushkin_card ? 'возможна' : null],
-  ['Источники', sourceCount > 0 ? String(sourceCount) : null],
-  ['Просмотры в источниках', sourceViews > 0 ? sourceViews.toLocaleString('ru-RU') : null],
-].filter(([, value]) => Boolean(value));
+const placeLine = [event.venue_name, event.address].filter(Boolean).join(' · ') || event.city || null;
+const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined }> = [
+  { icon: 'pin', label: 'Где', value: placeLine },
+  { icon: 'ticket', label: 'Вход', value: event.ticket.price_label || event.status_label },
+  { icon: 'spark', label: 'Пушкинская карта', value: event.pushkin_card ? 'возможна' : null },
+  { icon: 'info', label: 'Фестиваль', value: event.festival },
+].filter((item) => Boolean(item.value));
 ---
-<dl class="details-list">
-  {rows.map(([label, value]) => (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  ))}
-</dl>
+<div class="event-info-block" aria-label="Короткая информация о событии">
+  <dl class="event-info-grid">
+    {rows.map((item) => (
+      <div class="event-info-item">
+        <dt><span class="event-info-item__icon" aria-hidden="true"><Icon name={item.icon} /></span><span>{item.label}</span></dt>
+        <dd>{item.value}</dd>
+      </div>
+    ))}
+  </dl>
+  <p class="event-source-gate"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
+</div>

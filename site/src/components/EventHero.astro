@@ -108,6 +108,10 @@ const hasGallery = galleryImages.length > 0;
 const heroGalleryId = `hero-gallery-${event.id}`;
 const heroGalleryTitleId = `${heroGalleryId}-title`;
 const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
+const galleryPhotoCount = galleryImages.length;
+const galleryHintLabel = galleryPhotoCount > 1 ? `Фото ${galleryPhotoCount}` : 'Открыть фото';
+const calendarPrimary = canAddToCalendar && (!ctaHref || event.ticket.kind === 'free');
+const showTicketCta = Boolean(ctaHref);
 ---
 <section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
   {hasGallery ? (
@@ -128,7 +132,7 @@ const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
           <strong>{event.title}</strong>
         </div>
       )}
-      <span class="event-hero__gallery-hint" aria-hidden="true">Открыть фото</span>
+      <span class="event-hero__gallery-hint" aria-hidden="true"><Icon name="image" /><span>{galleryHintLabel}</span></span>
     </button>
   ) : (
     <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
@@ -143,8 +147,9 @@ const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
     {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
-      {ctaHref && <a class="cta-button" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
-      {canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
+      {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
+      {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
+      {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
       <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}>
         <Icon name="share" />
         <span data-share-label>Поделиться</span>
@@ -175,11 +180,13 @@ const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
           <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} aria-hidden={index === 0 ? 'false' : 'true'}>
             <img
               class="hero-gallery__image"
-              src={image.src}
+              data-gallery-src={image.src}
               alt={image.alt}
-              loading={index === 0 ? 'eager' : 'lazy'}
+              loading="lazy"
               decoding="async"
               data-image-text-mode={image.image_text_mode}
+              data-event-id={event.id}
+              data-event-title={event.title}
               style={image.recommended_object_position ? `object-position: ${image.recommended_object_position}` : undefined}
             />
             <figcaption>{event.title}</figcaption>
@@ -187,7 +194,7 @@ const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
         ))}
         {galleryCta && (
           <article class="hero-gallery__slide hero-gallery__slide--cta" data-hero-gallery-slide data-gallery-slide-kind="cta" data-gallery-index={galleryImages.length} aria-hidden="true">
-            {galleryCta.image_url && <img class="hero-gallery__cta-image" src={galleryCta.image_url} alt="" loading="lazy" decoding="async" />}
+            {galleryCta.image_url && <img class="hero-gallery__cta-image" data-gallery-src={galleryCta.image_url} alt="" loading="lazy" decoding="async" />}
             <div class="hero-gallery__cta-card">
               <span>Дальше можно похожее</span>
               <h2>{galleryCta.title}</h2>

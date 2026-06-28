@@ -5,7 +5,7 @@ import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { displayDateTime, eventAbsoluteUrl, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, withBase } from '../../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -33,6 +33,10 @@ const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
 const ctaHref = event.ticket.href;
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
+const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
+const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const fallbackHeroComposition: HeroComposition = event.image_url
   ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
@@ -74,9 +78,6 @@ const galleryCta = galleryCtaEvent ? {
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
-          <div class="source-links" aria-label="Источники данных">
-            {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
-          </div>
         </div>
       </section>
 
@@ -111,11 +112,11 @@ const galleryCta = galleryCtaEvent ? {
       </section>
     </div>
   </main>
-  {ctaHref && (
+  {stickyHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
         <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{stickyDateLabel}</span></div>
-        <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>
+        <a class="cta-button" href={stickyHref} target={stickyIsExternal ? '_blank' : undefined} rel={stickyIsExternal ? 'noopener noreferrer nofollow' : undefined}>{stickyLabel}</a>
       </div>
     </div>
   )}

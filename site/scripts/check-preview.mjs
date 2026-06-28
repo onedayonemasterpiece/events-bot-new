@@ -56,13 +56,15 @@ if (!controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
-if (!controlHtml.includes('data-feedback-scope') || !/data-event-hero[\s\S]{0,3500}data-feedback-action="like"/u.test(controlHtml)) throw new Error('Event hero must expose a first-party like button/count for the current event');
+if (!controlHtml.includes('data-feedback-scope') || !/data-event-hero[\s\S]{0,6500}data-feedback-action="like"/u.test(controlHtml)) throw new Error('Event hero must expose a first-party like button/count for the current event');
 if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.45-4.8')) throw new Error('Share/repost icon must use the VK-like outline path, not the old arrow stroke');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
 if (!controlHtml.includes('data-event-hero') || !controlHtml.includes('data-hero-mode="poster-stage"') || !controlHtml.includes('data-hero-composition="poster-billboard"') || !controlHtml.includes('data-hero-image-text-mode="ocr_text"')) throw new Error('Control event must render OCR-safe poster-billboard decision hero');
 if (!controlHtml.includes('data-hero-gallery-open="hero-gallery-5878"') || !controlHtml.includes('data-hero-gallery') || !controlHtml.includes('hero-gallery__slide--cta') || !controlHtml.includes('Смотреть похожее')) throw new Error('Event hero must expose fullscreen image gallery with final similar-event CTA slide');
+if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !controlVisibleHtml.includes('Открыть фото')) throw new Error('Event hero must expose a visible photo-view CTA over the image');
+if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
@@ -72,6 +74,15 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
   const item = eventsData.events.find((event) => event.id === id);
   if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
 }
+const tretyakovEvent = eventsData.events.find((event) => event.id === 5370);
+if (!tretyakovEvent) throw new Error('Missing 5370 ticket/free regression event');
+if (tretyakovEvent.ticket.is_free || tretyakovEvent.ticket.kind !== 'ticket' || tretyakovEvent.status_label !== 'Билеты') throw new Error('Event 5370 must not be rendered as free/registration in the preview fixture');
+if (!Array.isArray(tretyakovEvent.image_assets) || tretyakovEvent.image_assets.length < 5) throw new Error('Event 5370 must carry multi-image gallery assets for hero fullscreen review');
+const tretyakovHtml = readFileSync(join(root, `sobytiya/${tretyakovEvent.slug}/index.html`), 'utf8');
+const tretyakovJsonLd = [...tretyakovHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1])).find((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'));
+if (tretyakovJsonLd?.isAccessibleForFree !== false) throw new Error('Event 5370 JSON-LD must expose paid/non-free accessibility');
+if (!Array.isArray(tretyakovJsonLd?.image) || tretyakovJsonLd.image.length < 5) throw new Error('Event 5370 JSON-LD must connect gallery images to the event for SEO/GEO');
+if (!tretyakovHtml.includes('Фото 5')) throw new Error('Event 5370 hero must show photo count CTA on the image');
 const jsonLdItems = [...controlHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1]));
 if (!jsonLdItems.some((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'))) throw new Error('Control page must contain parseable Event-class JSON-LD');
 if (!jsonLdItems.some((item) => item['@type'] === 'BreadcrumbList')) throw new Error('Control page must contain parseable BreadcrumbList JSON-LD');
@@ -98,6 +109,7 @@ const footerSocialUrls = [
 for (const url of footerSocialUrls) {
   if (!controlHtml.includes(url)) throw new Error(`Footer social URL missing: ${url}`);
 }
+if (!controlHtml.includes('mailto:info@kenigevents.ru')) throw new Error('Footer contact email missing');
 for (const cls of ['site-footer__social', 'social-icon--telegram', 'social-icon--vk', 'social-icon--max']) {
   if (!controlHtml.includes(cls)) throw new Error(`Footer social icon/class missing: ${cls}`);
 }
@@ -108,7 +120,9 @@ if (controlVisibleHtml.includes('Preview A/B:') || controlVisibleHtml.includes('
 if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
 if (controlHtml.includes('Уточнить регистрацию')) throw new Error('Ambiguous registration CTA leaked');
 if (controlVisibleHtml.includes('Telegraph')) throw new Error('Event pages must not expose Telegraph link as a user-facing source');
-if (!controlVisibleHtml.includes('Источники') || !controlVisibleHtml.includes('Просмотры в источниках')) throw new Error('Compact facts must include source count and source views when available');
+if (controlVisibleHtml.includes('Просмотры в источниках') || controlVisibleHtml.includes('Источники')) throw new Error('Source count/views are gated and must not be shown in public compact facts');
+if (!controlVisibleHtml.includes('Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям')) throw new Error('Event page must show registered-user gate notice for sources/mentions/extended stats');
+if (!controlVisibleHtml.includes('event-info-block') || !controlVisibleHtml.includes('event-info-item__icon')) throw new Error('Compact facts must render icon-based event info block');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
@@ -181,11 +195,12 @@ if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.t
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
 if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
 if (!/mobile-discovery-menu__summary\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette discovery drawer handle and stable after-hero state');
-if (!/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*--drawer-handle-top:\s*max\(0px,[^}]*position:\s*fixed/iu.test(css) || !/mobile-discovery-menu\[open\] \.mobile-discovery-menu__summary\{[^}]*transform:\s*translate3d\(0,\s*var\(--drawer-rail-h\),\s*0\)/iu.test(css) || !/mobile-discovery-menu__panel\{[^}]*position:\s*fixed[^}]*width:\s*100vw[^}]*transform:\s*translate3d\(0,\s*-105%/iu.test(css) || !/(mobile-discovery-menu\[open\] \.mobile-discovery-menu__panel\{[^}]*transform:\s*(translate3d\(0,\s*0,\s*0\)|translateZ\(0\)))/iu.test(css) || !/@starting-style/iu.test(css)) throw new Error('Mobile discovery navigation must be a drawer: rail slides down, handle moves down with it and handle top is clamped to the viewport');
+if (!/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*--drawer-handle-top:\s*max\(0px,[^}]*position:\s*fixed/iu.test(css) || !/mobile-discovery-menu\[open\] \.mobile-discovery-menu__summary\{[^}]*transform:\s*translate3d\(0,\s*var\(--drawer-rail-h\),\s*0\)/iu.test(css) || !/mobile-discovery-menu__panel\{[^}]*position:\s*fixed[^}]*width:\s*100vw[^}]*transform:\s*translate3d\(0,\s*-105%[^}]*clip-path:\s*inset\(0 0 100% 0\)/iu.test(css) || !/(mobile-discovery-menu\[open\] \.mobile-discovery-menu__panel\{[^}]*transform:\s*(translate3d\(0,\s*0,\s*0\)|translateZ\(0\))[^}]*clip-path:\s*inset\(0 0 0 0\))/iu.test(css) || !/@starting-style/iu.test(css) || !controlHtml.includes('closeMenu')) throw new Error('Mobile discovery navigation must be a drawer: rail slides down, handle moves down with it and panel animates attached to the handle');
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, controlled and preserve full images with contain');
+if (!controlHtml.includes('loadGalleryMedia') || !/gallery-soft-pan/iu.test(css)) throw new Error('Hero gallery must lazy-load slides and expose a soft visual-only pan hook');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
 if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*flex-end/iu.test(css)) throw new Error('Split-actions under-card row must cluster share text near the right-thumb like action');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');

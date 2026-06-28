@@ -70,7 +70,7 @@
       "slug": "tochka-i-liniya-kaliningrad-5370",
       "event_type": "выставка",
       "festival": null,
-      "status_label": "Нужна регистрация",
+      "status_label": "Билеты",
       "lifecycle_status": "active",
       "starts_at": "2026-06-12T12:00:00+02:00",
       "start_date": "2026-06-12",
@@ -86,13 +86,13 @@
       "address": "Парадная наб. 3",
       "map_query": "Калининград, Филиал Третьяковской галереи, Парадная наб. 3",
       "ticket": {
-        "kind": "registration",
-        "label": "Зарегистрироваться",
+        "kind": "ticket",
+        "label": "Купить билет",
         "href": "https://kaliningrad.tretyakovgallery.ru/exhibitions/609/",
-        "status": "бесплатно по регистрации",
-        "is_free": true,
-        "price_label": "Бесплатно",
-        "note": "Регистрация у организатора"
+        "status": "available",
+        "is_free": false,
+        "price_label": null,
+        "note": "Билеты на сайте организатора"
       },
       "source_url": "https://vk.com/wall-212760444_5103",
       "telegraph_url": "https://telegra.ph/Vystavka-Tochka-i-liniya-05-27",
@@ -106,14 +106,68 @@
       ],
       "pushkin_card": false,
       "other_date_ids": [],
-      "data_quality_notes": [],
+      "data_quality_notes": [
+        "preview override: production currently marks 5370 as free because a free curator round-table source was merged into the paid long-running exhibition; needs source-of-truth repair under false-free incident family"
+      ],
       "updated_at": "2026-05-27 09:00:22.114199",
       "likes_count": 170,
       "image_text_mode": "visual_only",
       "source_likes_count": 170,
       "service_likes_count": 0,
       "source_views_count": 10080,
-      "source_engagement_sources_count": 9
+      "source_engagement_sources_count": 9,
+      "image_assets": [
+        {
+          "src": "https://storage.yandexcloud.net/kenigevents/p/dh16/06/06418d07991c919164cf4c7860c963611f63364b336f31ae31ae133c1b1c8b38.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фото выставки «Точка и линия» в Третьяковской галерее (1)",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true
+        },
+        {
+          "src": "https://storage.yandexcloud.net/kenigevents/p/dh16/51/518730973017921f31071a735c1e000f200f4025106228c911b4319a12ce016c.webp",
+          "width": 2560,
+          "height": 1707,
+          "alt": "Фото выставки «Точка и линия» в Третьяковской галерее (2)",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true
+        },
+        {
+          "src": "https://storage.yandexcloud.net/kenigevents/p/dh16/40/40028009400748494cc19dc909710a61cc615a611b60392c1d2c1f3c19e41e66.webp",
+          "width": 2560,
+          "height": 1707,
+          "alt": "Фото выставки «Точка и линия» в Третьяковской галерее (3)",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true
+        },
+        {
+          "src": "https://storage.yandexcloud.net/kenigevents/p/dh16/06/0610165133513333a2d372d3f311c311a293d693f493fe53611363c41a333a87.webp",
+          "width": 2560,
+          "height": 1707,
+          "alt": "Фото выставки «Точка и линия» в Третьяковской галерее (4)",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true
+        },
+        {
+          "src": "https://storage.yandexcloud.net/kenigevents/p/dh16/ab/abd8ab888b48aa482ac88ac8b2c833e430d030d038f033687078c0096401e129.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фото выставки «Точка и линия» в Третьяковской галерее (5)",
+          "image_text_mode": "visual_only",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true
+        }
+      ]
     },
     {
       "id": 6093,

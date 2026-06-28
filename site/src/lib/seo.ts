@@ -31,6 +31,7 @@ export function buildEventJsonLd(event: PreviewEvent) {
       addressCountry: 'RU',
     },
   } : undefined;
+  const imageList = Array.from(new Set([event.image_url, ...(event.image_assets || []).map((image) => image.src)].filter(Boolean))) as string[];
   const offerUrl = isExternalHttpUrl(event.ticket.href) ? event.ticket.href : (isExternalHttpUrl(event.source_url) ? event.source_url : undefined);
   const offer = offerUrl ? {
     '@type': 'Offer',
@@ -58,7 +59,7 @@ export function buildEventJsonLd(event: PreviewEvent) {
         : 'https://schema.org/EventScheduled',
     isAccessibleForFree: event.ticket.is_free,
     url: absolute,
-    image: event.image_url ? [event.image_url] : undefined,
+    image: imageList.length ? imageList : undefined,
     location,
     offers: offer,
     organizer: event.festival ? {
