@@ -158,11 +158,26 @@ All times are UTC.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `1004909a62f34d7f4138775c1af34179f3db8e49`, reachable from
+  `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only`
+  from clean branch `hotfix/inc-crumple-video-publish-only-storm-20260628`.
+  Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KW7RT48KM3ARG9ACV16CWR3T`,
+  machine `683961db016e28` version `1516`, `1 total, 1 passing`.
 - regression checks:
-  - `uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio pytest -q tests/test_video_announce_poller.py` — `18 passed in 3.67s` locally before deploy.
+  - `python3 -m py_compile video_announce/poller.py` — passed.
+  - `uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio pytest -q tests/test_video_announce_poller.py` — `18 passed in 3.84s` locally before deploy.
+  - `git diff --check` — passed.
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`.
+  - production code probe confirmed `/app/video_announce/poller.py` contains the
+    publish-only ledger guard and `resumable_live_statuses` filter.
+  - at `2026-06-28T18:50:40Z`, production DB had
+    `nonterminal_publish_only_count=0` for
+    `run_id LIKE 'videoannounce:777:publish-only:%'`; latest publish-only row
+    remained the contained `18:39:04Z` row marked `cancelled`.
+  - public Telegram HTML for `https://t.me/s/keniggpt` showed no new
+    `Видео-анонс #777` after `@keniggpt/2469` at `2026-06-28T18:35:34Z`.
 
 ## Prevention
 
