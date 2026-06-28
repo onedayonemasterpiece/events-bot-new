@@ -1,8 +1,11 @@
 # Semantic vector retrieval for events
 
-> Status: accepted target architecture after Gemini Pro + Opus consultation on
-> 2026-06-28. Implementation is not complete until embeddings are generated,
-> indexed, quality-gated and used by static build/RPC paths.
+> Status: **target architecture**, not production implementation. The current
+> public preview (`preview-20260628-event-pages-v47-sparse-fixes`) uses the
+> honest lexical/sparse baseline `event_sparse_related_chain_v1` with
+> `retrieval_method=local_tfidf_sparse_v1`. Real semantic retrieval starts only
+> after BGE-M3 embeddings are generated, indexed, quality-gated and switched into
+> the static build.
 
 ## Why this document exists
 
@@ -10,52 +13,110 @@ The current preview related-chain uses local sparse TF-IDF/cosine matching. That
 is useful as a deterministic lexical baseline, but it is **not** semantic vector
 search and must not be described as semantic embeddings.
 
-The failure mode is already visible: an event about the future/urban planning of
-Kaliningrad can rank a concert named “Музыка нашего города” too high because both
-texts contain “город”. A real semantic layer must understand that
-“Архитектурно-урбанистическая студия” is much closer.
+The failure mode is visible on real data: an event about the future/urban
+planning of Kaliningrad can rank a concert named “Музыка нашего города” too high
+because both texts contain “город”. A semantic layer must understand that
+“Архитектурно-урбанистическая студия” is closer to the urban-planning intent.
 
-## Decisions
+## Do not conflate these layers
 
-### Embedding model
+- `event_sparse_related_chain_v1` / `local_tfidf_sparse_v1` = lexical sparse
+  baseline, not semantic vector search.
+- `pure_related` = events genuinely similar to the opened event.
+- `adjacent_discovery` = nearby discovery/anti-bubble candidates, not “similar”.
+- `promo` = explicit campaign slot, never masquerades as organic similarity.
+- `related_chain` = offline event-to-event graph.
+- `personalized_feed` = user/profile-aware feed after consent/JS activation.
+- builder-owned SQLite artifact/release snapshot != mutable Fly web-runtime
+  vector store.
+- Supabase pgvector RPC != default page-view path.
 
-Primary: **local BGE-M3 on Kaggle GPU/CPU batch jobs**.
+## Rollout levels
+
+### L0 — lexical sparse baseline (current)
+
+- Exporter builds `event_sparse_related_chain_v1` from TF-IDF sparse vectors,
+  controlled facets and deterministic constraints.
+- Manifest explicitly says `semantic_embeddings=false` and
+  `retrieval_method=local_tfidf_sparse_v1`.
+- Static HTML renders 6–10 initial cards; JSON top-up uses the same static chain.
+
+### L1 — semantic shadow mode
+
+- BGE-M3 embeddings are generated offline on Kaggle for active/future events.
+- Semantic related output is emitted side-by-side with the lexical baseline.
+- UI is not cut over; `/__preview/related-quality/` compares old vs new results.
+
+### L2 — static semantic cutover
+
+- Static HTML/JSON uses the semantic related graph only after golden gates pass.
+- Page views still do not call LLMs, embedding models or pgvector.
+- Missing semantic artifact falls back to sparse baseline with
+  `fallback_used=true`; it must not be labeled semantic.
+
+### L3 — static golden-facet personalization
+
+- Browser local profile chooses precomputed golden-interest facet manifests from
+  CDN/same-origin JSON.
+- Merge/rerank/filter happens client-side over compact card projections.
+- No Supabase read is required for an ordinary page view.
+
+### L4 — pgvector canary
+
+- Supabase/Postgres+pgvector may be used only as a gated canary for dynamic
+  personalization/candidate refresh.
+- Access is through a same-origin endpoint or tightly scoped RPC, never browser
+  direct table `select`.
+- RPC returns compact card IDs/projections only: no profile vectors, no debug
+  internals, no raw event table.
+- Strict rate limits, payload caps, RLS/grants tests, cache and fallback are
+  mandatory before any traffic.
+
+### L5 — learned ranker
+
+- CatBoost/LightGBM/two-tower ranker is considered only after enough compact
+  exposure/action summaries exist for offline evaluation.
+
+## Embedding model decision
+
+Primary: **local BGE-M3 on Kaggle batch jobs**.
 
 Reasons:
 
-- strong multilingual/Russian quality for short and noisy event texts;
-- no request/day ceiling for full backfills and re-embeds;
+- strong multilingual/Russian quality for short/noisy event texts;
+- no provider request/day ceiling for full backfills and re-embeds;
 - reproducible model/versioned outputs;
 - offline job, never page hot path.
 
 Fallback candidate: `intfloat/multilingual-e5-large`.
 
 Google/Gemini embeddings are allowed only as an audit/comparison lane unless a
-separate budget/limit decision is made. With the current free-tier quota they are
-not the production primary for full catalogue backfills.
+separate budget/limit decision is made. With the current free-tier quotas they
+are not the production primary for full catalogue backfills.
 
-### Storage
+## Storage ownership
 
 Use two stores with explicit roles:
 
-- **Fly SQLite**: canonical embedding/job manifest and precomputed related rows
-  tied to the canonical event catalogue.
-- **Supabase/Postgres + pgvector**: online ANN/RPC layer for dynamic
-  personalization and candidate refresh, not source of truth for events.
+- **Builder-owned SQLite artifact / release snapshot**: canonical embedding/job
+  manifest and precomputed related rows tied to a source event snapshot. This is
+  produced by the static-site/embedding job and versioned by build/release id. It
+  is **not** a mutable vector store owned by the Fly web runtime.
+- **Supabase/Postgres + pgvector**: future L4 canary online ANN/RPC layer for
+  dynamic personalization and candidate refresh. It is not the source of truth
+  for events and is not the default page-view read path.
 
-This keeps static generation reproducible and lets the browser use Supabase only
-for lightweight personalized reads/writes when enabled.
+Production release artifacts should include:
 
-### Static and dynamic paths
-
-- Static event pages get a precomputed 10-slot discovery block in HTML/JSON.
-- Browser personalization never calls an embedding model or LLM.
-- Dynamic feed can call Supabase RPC against already-stored vectors/profile
-  vectors after JS activation.
+- `embedding_manifest.sqlite` or equivalent SQLite tables;
+- `event_related.sqlite/json` with 30–40 ranked IDs per anchor when possible;
+- related-quality report;
+- release manifest with `build_id`, `source_snapshot_id`, `model_version`,
+  `pipeline_version`, `text_manifest_version` and git SHA.
 
 ## Data model outline
 
-### SQLite canonical tables
+### Builder SQLite tables
 
 ```sql
 CREATE TABLE event_embedding (
@@ -63,11 +124,11 @@ CREATE TABLE event_embedding (
     model_version   TEXT NOT NULL,
     embedding_type  TEXT NOT NULL, -- dense | sparse | colbert | audit
     vector_blob      BLOB NOT NULL, -- float32-packed dense vector for BGE-M3
-    text_hash       TEXT NOT NULL,
-    input_text      TEXT,
-    dimensions      INTEGER NOT NULL,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    text_hash        TEXT NOT NULL,
+    input_text       TEXT,
+    dimensions       INTEGER NOT NULL,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (event_id, model_version, embedding_type)
 );
 
@@ -88,6 +149,7 @@ CREATE TABLE embedding_manifest (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     model_version     TEXT NOT NULL,
     pipeline_version  TEXT NOT NULL,
+    text_doc_version  TEXT NOT NULL,
     events_total      INTEGER NOT NULL,
     events_embedded   INTEGER NOT NULL,
     events_skipped    INTEGER NOT NULL,
@@ -99,7 +161,7 @@ CREATE TABLE embedding_manifest (
 );
 ```
 
-### Supabase pgvector live table
+### Supabase pgvector canary table
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -118,9 +180,8 @@ USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 128);
 ```
 
-For a catalogue of tens of thousands of events, 1024-dimensional float vectors
-plus HNSW index are still expected to fit in the personalization DB budget if raw
-telemetry is kept compact and old vectors are cleaned by model/version policy.
+This table remains canary-only until RLS/grants, RPC contract, abuse controls and
+payload limits are verified against the personalization Supabase budget.
 
 ## Embedding text manifest
 
@@ -138,14 +199,14 @@ manifest and hash it:
 Условия: <free / registration / ticketed / price range>
 ```
 
-`text_hash` changes only when this manifest changes. Smart Update can then skip
-unchanged events.
+`text_hash` changes only when this manifest changes. Smart Update/static build
+can skip unchanged events.
 
 ## Retrieval pipeline
 
 1. **Candidate generation**
    - Dense ANN by BGE-M3 vectors: top 50–100 future/active candidates.
-   - Metadata prefilters: not self, not cancelled, not same occurrence duplicate,
+   - Metadata prefilters: not self, not cancelled, not same-occurrence duplicate,
      date eligibility, city/surface constraints.
 2. **Pure related**
    - Semantic similarity is the primary score.
@@ -159,45 +220,52 @@ unchanged events.
    - Insert via explicit campaign rules and labels.
    - Promo does not masquerade as organic similarity.
 5. **Personalized feed**
-   - Build a compact user/profile vector from liked/viewed/saved events with
-     session/short/mid/long horizons.
-   - Query vector can blend context event and profile vector.
-   - Negative actions exclude or downrank; they do not delete the current card
-     while the user is interacting with it.
+   - Build compact session/short/mid/long interest vectors from liked/viewed/saved
+     events.
+   - Query can blend context event and profile vector.
+   - Negative actions exclude/downrank future candidates; they do not move/delete
+     the card the user is currently interacting with.
 
-Recommended initial 10-slot composition:
+## Product surfaces
 
-- positions 1–6: `pure_related`;
-- positions 7–9: `adjacent_discovery`;
-- position 10: promo or serendipity.
+- `Похожие события`: only `pure_related`.
+- `Смотрите дальше`: may mix `pure_related`, `adjacent_discovery` and labeled
+  promo/serendipity.
+- `Для меня`: local/profile-aware personalized feed using golden facets first;
+  pgvector only after L4 gates.
 
-Exact numbers are configurable and must be validated by quality reports.
+Recommended chain sizes:
+
+- related-chain artifact: 30–40 ranked IDs per event when enough events exist;
+- static HTML: first 6–10 cards;
+- JSON top-up: more candidates from the same chain for filtering, “Не
+  интересно” replacements and `Показать ещё`.
 
 ## Job sequence after Smart Update
 
 1. Smart Update records changed event ids.
 2. Static-site embedding job starts after the existing coalescing window.
-3. Job loads active/future events from SQLite.
+3. Job loads active/future events from a release/source SQLite snapshot.
 4. Job builds text manifests and hashes.
 5. Unchanged manifests reuse existing embeddings.
 6. Changed/new events are embedded in batch on Kaggle with BGE-M3.
 7. Full related graph is recomputed, not only changed anchors: a new event can
    become the best neighbor of older events.
-8. Embeddings are upserted into SQLite canonical store and synced to Supabase
-   pgvector.
-9. Static HTML/JSON is generated from `event_related`.
+8. Embeddings and related rows are written into the builder-owned SQLite artifact;
+   optional pgvector sync is a separate L4 canary step.
+9. Static HTML/JSON is generated from the related artifact.
 10. Quality gates run before publish; last-good static build remains fallback.
 
 ## Quality gates
 
-Create a curated golden dataset in the repository:
+Golden anchors are mandatory, not examples only:
 
 ```yaml
 - anchor_event_id: 6447
   must_include:
-    - <Архитектурно-урбанистическая студия event_id>
+    - 6310 # Архитектурно-урбанистическая студия
   must_exclude:
-    - <Музыка нашего города event_id>
+    - 5261 # Музыка нашего города
   notes: "Urban-planning intent must beat lexical 'город' overlap."
 ```
 
@@ -208,7 +276,10 @@ Required gates:
 - anchor recall@6 >= configured threshold;
 - zero hard-negative violations in top 10;
 - no deploy if semantic pipeline silently falls back to TF-IDF while still
-  claiming semantic output.
+  claiming semantic output;
+- no popularity/like/source-count boost is allowed to create a top-6
+  `pure_related` hard-negative;
+- every candidate has mandatory `slot_type` and score breakdown.
 
 Static preview must include `/__preview/related-quality/` with:
 
@@ -221,23 +292,28 @@ Static preview must include `/__preview/related-quality/` with:
 
 ## Migration plan
 
-1. **Terminology cleanup**
-   - Rename the current TF-IDF layer to lexical/sparse related.
-   - Stop using “semantic”, “embedding” or “vector search” for TF-IDF outputs.
-2. **Infrastructure**
-   - Add SQLite embedding tables, Supabase pgvector table/RPC, BGE-M3 Kaggle
-     notebook/script and golden anchor file.
-3. **Backfill / shadow mode**
+1. **Terminology cleanup (P0)**
+   - Current TF-IDF layer is `event_sparse_related_chain_v1` /
+     `local_tfidf_sparse_v1`.
+   - Old `event_vector_related_chain_v2` may exist only as compatibility alias
+     for reading old artifacts, not in new logs/manifests/debug labels.
+2. **Executable sparse gates (P0)**
+   - Mandatory `slot_type`.
+   - No popularity in `pure_related`.
+   - Golden anchor checks for obvious failures.
+3. **Semantic infrastructure (P1)**
+   - Add builder SQLite embedding tables, BGE-M3 Kaggle notebook/script and
+     golden anchor file.
+4. **Backfill / shadow mode (P1)**
    - Generate embeddings for existing events.
-   - Keep both JSONs side by side: legacy lexical and semantic candidate output.
-   - Build related-quality preview and review at least control anchors + random
-     events.
-4. **Static cutover**
-   - Switch `related.json` to semantic pipeline after gates pass.
-   - Keep legacy lexical output as rollback artifact for a short burn-in window.
-5. **Personalization cutover**
-   - Enable profile-vector RPC and listing continuation on top of pgvector.
-   - Keep static related as fallback if Supabase/RPC is unavailable.
+   - Keep lexical and semantic outputs side by side.
+   - Build related-quality preview and review control anchors + random events.
+5. **Static cutover (P1/P2)**
+   - Switch static `related.json` to semantic pipeline after gates pass.
+   - Keep lexical output as rollback artifact.
+6. **Golden facets and pgvector canary (P2+)**
+   - Enable static facet manifests first.
+   - Enable pgvector RPC only after RLS/grants/rate/payload/fallback gates.
 
 ## Forbidden patterns
 
@@ -246,6 +322,7 @@ Static preview must include `/__preview/related-quality/` with:
 - Mixing vectors from different models in one ANN index.
 - Updating related only for changed anchors.
 - Letting popularity/likes/source counts dominate pure related.
+- Browser direct table select from Supabase for recommendations.
+- Supabase pgvector RPC as default page-view path before L4 gates.
 - LLM/embedding calls on page view or browser hot path.
 - Deploying related changes without golden-anchor and preview-quality evidence.
-

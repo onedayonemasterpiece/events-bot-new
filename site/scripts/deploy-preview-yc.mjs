@@ -45,17 +45,49 @@ const awsEnv = {
   AWS_SECRET_ACCESS_KEY: secretKey,
   AWS_DEFAULT_REGION: region,
 };
+function loadPreviewEventsBySlug() {
+  const dataPath = join(siteDir, 'src', 'data', 'preview-events.json');
+  if (!existsSync(dataPath)) return new Map();
+  const parsed = JSON.parse(readFileSync(dataPath, 'utf8'));
+  const out = new Map();
+  for (const event of parsed.events || []) {
+    if (event?.slug && event?.id) out.set(String(event.slug), Number(event.id));
+  }
+  return out;
+}
+
 const target = `s3://${bucket}/${buildId}/`;
 console.log(`Uploading ${sourceDir} -> ${target}`);
-const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
 if (cp.status !== 0) process.exit(cp.status || 1);
+// Astro output filenames are content-hashed and the preview prefix is versioned,
+// so code assets are safe to cache aggressively through the CDN.
+const astroAssetsDir = join(sourceDir, '_astro');
+if (existsSync(astroAssetsDir)) {
+  const findAstroAssets = spawnSync('find', [astroAssetsDir, '-type', 'f'], { encoding: 'utf8' });
+  for (const file of findAstroAssets.stdout.split(/\r?\n/).filter(Boolean)) {
+    const rel = file.slice(sourceDir.length + 1);
+    const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    if (put.status !== 0) process.exit(put.status || 1);
+  }
+}
 // Ensure calendar endpoints have the right metadata for clients that care about content-type.
+const eventsBySlug = loadPreviewEventsBySlug();
+let stableIcsUploaded = 0;
 const find = spawnSync('find', [sourceDir, '-name', 'event.ics', '-type', 'f'], { encoding: 'utf8' });
 for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const rel = file.slice(sourceDir.length + 1);
   const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
+  const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
+  const eventId = match ? eventsBySlug.get(match[1]) : null;
+  if (eventId) {
+    const stablePut = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/ics/${eventId}.ics`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="event-${eventId}.ics"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
+    if (stablePut.status !== 0) process.exit(stablePut.status || 1);
+    stableIcsUploaded += 1;
+  }
 }
 const publicBase = (env.KENIGEVENTS_SITE_PUBLIC_BASE_URL || `https://kenigevents.ru`).replace(/\/+$/u, '');
 console.log(`Preview URL: ${publicBase}/${buildId}/__preview/`);
 console.log(`Website endpoint fallback: http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`);
+if (stableIcsUploaded) console.log(`Stable CDN ICS uploaded: ${stableIcsUploaded} -> s3://${bucket}/ics/<event_id>.ics`);

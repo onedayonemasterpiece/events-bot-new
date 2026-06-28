@@ -27,7 +27,8 @@ export const RELATED_SCHEMA_VERSION = 'event-detail-related-v1' as const;
 export const TAXONOMY_VERSION = 'event-taxonomy-v1' as const;
 export const RELATED_SURFACE = 'event_detail_related' as const;
 export const STATIC_RELATED_ALGORITHM_ID = 'static_related_v1' as const;
-export const VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2' as const;
+export const SPARSE_RELATED_ALGORITHM_ID = 'event_sparse_related_chain_v1' as const;
+export const LEGACY_VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2' as const;
 
 export function getPreviewBuild() {
   return data.build;
@@ -362,7 +363,7 @@ export function toRelatedManifestCandidate(current: PreviewEvent, candidate: Pre
   };
 }
 
-function vectorChainItemFor(event: PreviewEvent, candidate: PreviewEvent): Record<string, unknown> | null {
+function relatedChainItemFor(event: PreviewEvent, candidate: PreviewEvent): Record<string, unknown> | null {
   const chain = related.related[String(event.id)]?.chain || [];
   const item = chain.find((entry) => Number(entry.event_id) === candidate.id);
   return item || null;
@@ -370,16 +371,17 @@ function vectorChainItemFor(event: PreviewEvent, candidate: PreviewEvent): Recor
 
 function chainRelatedCandidate(event: PreviewEvent, candidate: PreviewEvent): RelatedManifestCandidate {
   const base = toRelatedManifestCandidate(event, candidate);
-  const chainItem = vectorChainItemFor(event, candidate);
+  const chainItem = relatedChainItemFor(event, candidate);
   if (!chainItem) return base;
-  const score = Number(chainItem.related_score ?? chainItem.vector_similarity ?? base.base_similarity);
-  const vectorSimilarity = Number(chainItem.vector_similarity ?? score);
+  const score = Number(chainItem.related_score ?? chainItem.lexical_similarity ?? chainItem.vector_similarity ?? base.base_similarity);
+  const lexicalSimilarity = Number(chainItem.lexical_similarity ?? chainItem.vector_similarity ?? score);
   const deterministicScore = Number(chainItem.deterministic_score ?? base.static_score);
   return {
     ...base,
     base_similarity: Number.isFinite(score) ? score : base.base_similarity,
     static_score: Number.isFinite(score) ? score : base.static_score,
-    vector_similarity: Number.isFinite(vectorSimilarity) ? vectorSimilarity : undefined,
+    slot_type: ['pure_related', 'adjacent_discovery', 'promo'].includes(String(chainItem.slot_type || '')) ? chainItem.slot_type as RelatedManifestCandidate['slot_type'] : undefined,
+    lexical_similarity: Number.isFinite(lexicalSimilarity) ? lexicalSimilarity : undefined,
     deterministic_score: Number.isFinite(deterministicScore) ? deterministicScore : undefined,
     llm_semantic_score: Number.isFinite(Number(chainItem.llm_semantic_score)) ? Number(chainItem.llm_semantic_score) : undefined,
     llm_confidence: Number.isFinite(Number(chainItem.llm_confidence)) ? Number(chainItem.llm_confidence) : undefined,
@@ -387,7 +389,7 @@ function chainRelatedCandidate(event: PreviewEvent, candidate: PreviewEvent): Re
     similarity_class: typeof chainItem.similarity_class === 'string' ? chainItem.similarity_class : undefined,
     retrieval_sources: Array.isArray(chainItem.retrieval_sources) ? chainItem.retrieval_sources.map(String) : undefined,
     reason_codes: unique([...(base.reason_codes || []), ...(Array.isArray(chainItem.reason_codes) ? chainItem.reason_codes.map(String) : [])]),
-    exploration_candidate: base.exploration_candidate || chainItem.similarity_class === 'adjacent_discovery',
+    exploration_candidate: base.exploration_candidate || chainItem.slot_type === 'adjacent_discovery' || chainItem.similarity_class === 'adjacent_discovery',
   };
 }
 
@@ -415,17 +417,23 @@ export function getStaticRelatedCandidates(event: PreviewEvent, limit = 30): Rel
     .slice(0, Math.max(0, limit));
 }
 
+export function eventDetailRelatedAlgorithmId(): 'static_related_v1' | 'event_sparse_related_chain_v1' {
+  const isSparse = related.algorithm === SPARSE_RELATED_ALGORITHM_ID || related.algorithm === LEGACY_VECTOR_RELATED_ALGORITHM_ID;
+  return isSparse ? SPARSE_RELATED_ALGORITHM_ID : STATIC_RELATED_ALGORITHM_ID;
+}
+
 export function buildEventDetailRelatedManifest(event: PreviewEvent, limit = 30): EventDetailRelatedManifest {
+  const isSparse = eventDetailRelatedAlgorithmId() === SPARSE_RELATED_ALGORITHM_ID;
   return {
     version: 1,
     schema_version: RELATED_SCHEMA_VERSION,
     feature_schema_version: RELATED_SCHEMA_VERSION,
     taxonomy_version: TAXONOMY_VERSION,
     surface: RELATED_SURFACE,
-    algorithm_id: related.algorithm === VECTOR_RELATED_ALGORITHM_ID ? VECTOR_RELATED_ALGORITHM_ID : STATIC_RELATED_ALGORITHM_ID,
+    algorithm_id: eventDetailRelatedAlgorithmId(),
     generated_at: getPreviewBuild().generated_at,
     event_id: event.id,
-    strategy: related.algorithm === VECTOR_RELATED_ALGORITHM_ID ? 'event_related_chain_v2_manifest' : 'static_related_manifest_v1',
+    strategy: isSparse ? 'event_sparse_related_chain_v1_manifest' : 'static_related_manifest_v1',
     preload_target: 10,
     page_size: 10,
     current_event: eventFeatureSummary(event),
@@ -603,8 +611,8 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   if (ticket.price_label) return ticket.price_label;
   if (hasDonation) return 'За донат';
   if (ticket.kind === 'phone') return 'Запись по телефону';
-  if (ticket.kind === 'ticket') return 'Платный вход';
-  if (/билет/u.test(statusText)) return 'Платный вход';
+  if (ticket.kind === 'ticket') return 'По билетам';
+  if (/билет/u.test(statusText)) return 'По билетам';
   return event.status_label || ticket.label || 'Условия уточняются';
 }
 
@@ -617,6 +625,9 @@ export function eventTicketActionLabel(event: PreviewEvent): string {
   }
   if (event.ticket.kind === 'free') {
     return 'Открыть условия';
+  }
+  if (event.ticket.kind === 'registration') {
+    return 'Зарегистрироваться';
   }
   return event.ticket.label;
 }

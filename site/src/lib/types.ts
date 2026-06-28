@@ -139,6 +139,15 @@ export interface RelatedManifestCandidate extends EventFeatureSummary {
   static_score: number;
   reason_codes: string[];
   exploration_candidate: boolean;
+  slot_type?: 'pure_related' | 'adjacent_discovery' | 'promo';
+  lexical_similarity?: number;
+  vector_similarity?: number;
+  deterministic_score?: number;
+  llm_semantic_score?: number;
+  llm_confidence?: number;
+  related_score?: number;
+  similarity_class?: string;
+  retrieval_sources?: string[];
   display: DiscoveryDisplayPayload;
 }
 
@@ -148,10 +157,10 @@ export interface EventDetailRelatedManifest {
   feature_schema_version: 'event-detail-related-v1';
   taxonomy_version: 'event-taxonomy-v1';
   surface: 'event_detail_related';
-  algorithm_id: 'static_related_v1';
+  algorithm_id: 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_vector_related_chain_v2';
   generated_at: string;
   event_id: number;
-  strategy: 'static_related_manifest_v1';
+  strategy: 'static_related_manifest_v1' | 'event_sparse_related_chain_v1_manifest' | 'event_related_chain_v2_manifest';
   preload_target: number;
   page_size: number;
   current_event: EventFeatureSummary;
@@ -169,7 +178,13 @@ export interface PreviewData {
 }
 
 export interface RelatedData {
+  schema_version?: string;
   generated_at: string;
   algorithm: string;
-  related: Record<string, { similar: number[]; explore: number[] }>;
+  retrieval_method?: string;
+  semantic_embeddings?: boolean;
+  embedding_model?: string;
+  gemma_verification?: unknown;
+  cache?: unknown;
+  related: Record<string, { similar: number[]; pure_related?: number[]; explore: number[]; adjacent_discovery?: number[]; chain?: Array<Record<string, unknown>>; underfilled?: boolean }>;
 }

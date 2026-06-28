@@ -587,4 +587,5 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 
 ## Документы
 
-- [Event vector related-chain v2](event-vector-related-chain.md) — offline vector retrieval + Gemma 4 26B cache/audit for static event discovery.
+- [Event sparse related-chain v1](event-vector-related-chain.md) — current lexical/sparse TF-IDF baseline + optional Gemma 4 batch audit for static event discovery; not semantic vector search.
+- [Semantic vector retrieval](semantic-vector-retrieval.md) — target BGE-M3 offline embedding architecture, rollout levels and quality gates.

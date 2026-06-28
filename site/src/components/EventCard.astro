@@ -15,8 +15,17 @@ const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
 const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
-const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const imageUrl = eventImageUrl(event.image_url);
+const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), statusLabel].filter(Boolean).join('\n');
+const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
+const shareFileName = `kenigevents-${event.slug}`;
+function typeHashtag(value: string | null | undefined) {
+  const compact = String(value || '')
+    .toLowerCase()
+    .replace(/ё/gu, 'е')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  return compact ? `#${compact}` : '';
+}
 function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
@@ -32,6 +41,7 @@ const canAddToCalendar = isCalendarEligible(event);
 const calendarHref = eventCalendarHref(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
+const eventTypeTag = typeHashtag(event.event_type);
 ---
 <article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
@@ -50,6 +60,7 @@ const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'ev
   <div class="event-card__body">
     <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     <div class="event-card__meta-row">
+      {eventTypeTag && <span class="event-card__tag">{eventTypeTag}</span>}
       <span class="event-card__meta">{metaLabel}</span>
       <span class="event-card__status">{statusLabel}</span>
     </div>
@@ -73,6 +84,12 @@ const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'ev
         data-share-title={event.title}
         data-share-text={shareText}
         data-share-url={absolute}
+        data-share-image={imageUrl || ''}
+        data-share-image-type={shareImageType}
+        data-share-file-name={shareFileName}
+        data-share-date-time={dateTimeLabel}
+        data-share-place={event.venue_name || event.city || ''}
+        data-share-admission={statusLabel}
         aria-label={`Поделиться событием: ${event.title}`}
       >
         <Icon name="share" />
@@ -112,6 +129,12 @@ const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'ev
           data-share-title={event.title}
           data-share-text={shareText}
           data-share-url={absolute}
+          data-share-image={imageUrl || ''}
+          data-share-image-type={shareImageType}
+          data-share-file-name={shareFileName}
+          data-share-date-time={dateTimeLabel}
+          data-share-place={event.venue_name || event.city || ''}
+          data-share-admission={statusLabel}
           aria-label={`Поделиться событием: ${event.title}`}
         >
           <Icon name="share" />

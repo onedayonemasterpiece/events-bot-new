@@ -47,6 +47,13 @@ The current verified path produces a checked tarball artifact. CDN host `static.
 
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
 
+
+## Current v47 evidence and open gate
+
+`preview-20260628-event-pages-v47-sparse-fixes` verifies the CDN-enabled preview path on real production-snapshot data: 70 events, `npm run check:preview` passed, public Playwright regression passed, 957 referenced active media keys were present in bucket `kenigevents.ru`, and stable ICS files were uploaded under `https://static.kenigevents.ru/ics/<event_id>.ics`.
+
+This does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
+
 ## Static-site Gemma/related secrets
 
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:

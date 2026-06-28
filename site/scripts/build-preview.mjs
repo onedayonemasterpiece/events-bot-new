@@ -21,6 +21,10 @@ const buildId = safeBuildId(process.env.PREVIEW_BUILD_ID || `preview-${stamp}-${
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
 const tempDir = mkdtempSync(join(tmpdir(), 'kenigevents-preview-dist-'));
+const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
+  .replace(/\{buildId\}/g, buildId)
+  .replace(/\{BUILD_ID\}/g, buildId)
+  .replace(/\/+$/u, '');
 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
@@ -28,6 +32,7 @@ const env = {
   SITE_BASE_PATH: `/${buildId}`,
   PUBLIC_PREVIEW_BUILD_ID: buildId,
   PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru',
+  ...(astroAssetBaseUrl ? { PUBLIC_ASTRO_ASSET_BASE_URL: astroAssetBaseUrl } : {}),
 };
 const astroBin = process.platform === 'win32' ? 'astro.cmd' : 'astro';
 const result = spawnSync(astroBin, ['build'], {
@@ -45,6 +50,7 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(join(distDir, buildId), { recursive: true });
 cpSync(tempDir, join(distDir, buildId), { recursive: true });
 rmSync(tempDir, { recursive: true, force: true });
-writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({ buildId, generatedAt: now.toISOString(), basePath: `/${buildId}` }, null, 2));
+writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({ buildId, generatedAt: now.toISOString(), basePath: `/${buildId}`, astroAssetBaseUrl: astroAssetBaseUrl || null }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);
+if (astroAssetBaseUrl) console.log(`Astro asset CDN: ${astroAssetBaseUrl}/_astro/`);

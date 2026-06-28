@@ -30,10 +30,23 @@ for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_
 
 CURRENT_DATE_DEFAULT = "2026-06-28"
 CONTROL_EVENT_IDS = [5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698]
-RELATED_CACHE_SCHEMA_VERSION = "event_related_chain_v2_cache_20260628b"
+SPARSE_RELATED_ALGORITHM = "event_sparse_related_chain_v1"
+SPARSE_RELATED_SCHEMA_VERSION = "event_sparse_related_chain_v1"
+SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
+RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
+TICKET_LINK_OVERRIDES = {
+    # Production row currently points to the organiser chat, while the source
+    # registration page is a first-party kgd80 URL provided by product QA.
+    5077: "https://kgd80.ru/sobytiya/kaliningrad-i-oblast-kak-kinodekoratsiya-istoriya-semok-hudozhestvennyh-filmov-v-regione/?register=1",
+}
+IMAGE_URL_OVERRIDES = {
+    # The original Tretyakov image URL for this event returns 404; keep preview
+    # image loading reliable until the upstream parser backfills a fresh poster.
+    5201: "https://kaliningrad.tretyakovgallery.ru/upload/iblock/d42/zgaiwharezzupzkt47zuydl5jtwgi7oe/jjjjjj.jpg",
+}
 TZ = "Europe/Kaliningrad"
 
 TRANSLIT = {
@@ -71,6 +84,8 @@ STOP_WORDS = {
     "все", "всех", "где", "когда", "чтобы", "если", "также", "после", "перед", "между", "который",
     "которая", "которые", "которых", "событие", "события", "мероприятие", "мероприятия", "калининград",
     "калининграде", "калининградской", "области", "пройдет", "состоится", "начало", "вход", "билеты",
+    "город", "города", "городе", "городской", "городская", "наш", "наша", "наше", "нашего", "нашей",
+    "нашем", "место", "места", "встреча", "встречи",
 }
 
 
@@ -82,7 +97,7 @@ def log_stage(stage: str, **payload: Any) -> None:
     cache state.
     """
     record = {
-        "scope": "static_site.event_related_chain_v2",
+        "scope": "static_site.event_sparse_related_chain_v1",
         "stage": stage,
         "ts": datetime.now(timezone.utc).isoformat(),
         **payload,
@@ -190,18 +205,22 @@ def is_sold_out_status(status: str) -> bool:
 
 
 def ticket_info(row: sqlite3.Row) -> dict[str, Any]:
+    event_id = int(row["id"])
     status = clean_text(row["ticket_status"])
     status_l = status.lower()
-    href = clean_text(row["ticket_link"]) or None
+    href = TICKET_LINK_OVERRIDES.get(event_id) or clean_text(row["ticket_link"]) or None
     free = bool(row["is_free"]) or bool(re.search(r"бесплат|free", status_l))
     price = price_label(row)
+    has_registration = bool(re.search(r"регистрац|registration|запис", status_l))
     if is_sold_out_status(status):
         kind, label, href = "status", "Билеты закончились", None
     elif href and href.startswith("tel:"):
         kind, label = "phone", "Позвонить организатору"
+    elif has_registration and href:
+        kind, label = "registration", "Зарегистрироваться"
     elif free:
         kind, label = "free", "Открыть условия"
-    elif re.search(r"регистрац|registration|запис", status_l):
+    elif has_registration:
         kind, label = "registration", "Зарегистрироваться"
     elif href:
         kind, label = "ticket", "Купить билет"
@@ -221,7 +240,7 @@ def status_label(row: sqlite3.Row, ticket: dict[str, Any]) -> str:
     if re.search(r"регистрац|registration", status, re.I):
         return "Регистрация"
     if re.search(r"sale|available|продаж|билет", status, re.I):
-        return "Платный вход"
+        return "По билетам"
     return "Условия уточняются"
 
 
@@ -229,7 +248,7 @@ def apply_preview_overrides(event_id: int, ticket: dict[str, Any], status: str) 
     if event_id == 5370:
         ticket = {**ticket, "kind": "ticket", "label": "Купить билет", "is_free": False, "status": "paid"}
         if not ticket.get("price_label"):
-            status = "Платный вход"
+            status = "По билетам"
     return ticket, status
 
 
@@ -341,6 +360,9 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             continue
         seen.add(url)
         urls.append(url)
+    override_url = IMAGE_URL_OVERRIDES.get(event_id)
+    if override_url:
+        urls = [override_url] + [url for url in urls if image_url_key(url) != image_url_key(override_url)]
     primary = urls[0] if urls else None
     assets: list[dict[str, Any]] = []
     for url in urls[:12]:
@@ -576,7 +598,7 @@ def plain_from_html(value: str) -> str:
 
 
 def event_embedding_document(event: dict[str, Any]) -> str:
-    """Canonical event text for offline vector retrieval.
+    """Canonical event text for offline sparse retrieval.
 
     Raw source text is intentionally not embedded verbatim: title/category/tags
     are repeated to make short real-catalog rows comparable to rich descriptions.
@@ -619,18 +641,18 @@ def event_fingerprint(event: dict[str, Any]) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
-def tokenize_for_vector(text: str) -> list[str]:
+def tokenize_for_sparse(text: str) -> list[str]:
     tokens = re.findall(r"[a-zа-яё0-9]{3,}", text.lower(), flags=re.I)
     return [token for token in tokens if token not in STOP_WORDS and not token.isdigit()]
 
 
-def build_sparse_tfidf_vectors(events: list[dict[str, Any]]) -> dict[int, dict[str, float]]:
-    docs = {int(event["id"]): tokenize_for_vector(event_embedding_document(event)) for event in events}
+def build_sparse_tfidf_index(events: list[dict[str, Any]]) -> dict[int, dict[str, float]]:
+    docs = {int(event["id"]): tokenize_for_sparse(event_embedding_document(event)) for event in events}
     df: Counter[str] = Counter()
     for tokens in docs.values():
         df.update(set(tokens))
     total = max(1, len(docs))
-    vectors: dict[int, dict[str, float]] = {}
+    sparse_index: dict[int, dict[str, float]] = {}
     for event_id, tokens in docs.items():
         tf = Counter(tokens)
         vec: dict[str, float] = {}
@@ -638,8 +660,8 @@ def build_sparse_tfidf_vectors(events: list[dict[str, Any]]) -> dict[int, dict[s
             idf = math.log((1 + total) / (1 + df[token])) + 1.0
             vec[token] = (1.0 + math.log(count)) * idf
         norm = math.sqrt(sum(value * value for value in vec.values())) or 1.0
-        vectors[event_id] = {token: value / norm for token, value in vec.items()}
-    return vectors
+        sparse_index[event_id] = {token: value / norm for token, value in vec.items()}
+    return sparse_index
 
 
 def sparse_cosine(left: dict[str, float], right: dict[str, float]) -> float:
@@ -672,9 +694,45 @@ def stable_jitter(left_id: int, right_id: int, salt: str) -> float:
     return (value - 0.5) * 0.012
 
 
-def build_vector_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict[str, list[dict[str, Any]]]:
-    vectors = build_sparse_tfidf_vectors(events)
+FACET_PATTERNS: dict[str, list[str]] = {
+    "urbanism": [
+        r"архитект", r"урбан", r"городск\w*\s+сред", r"общественн\w*\s+пространств",
+        r"будущ\w*\s+город", r"концепци", r"моделир", r"микрорайон", r"планиров",
+    ],
+    "music": [r"концерт", r"музык", r"симфон", r"фортепиан", r"pianissimo", r"джаз", r"оркестр", r"филармон"],
+    "cinema": [r"кино", r"фильм", r"съемк", r"съёмк", r"кинодекорац"],
+    "local_history": [r"краевед", r"истори", r"прусс", r"советск", r"област", r"80\s+истор"],
+    "art_exhibition": [r"выстав", r"галере", r"картина", r"худож", r"живопис", r"график", r"скульптур"],
+    "kids_family": [r"дет", r"семейн", r"аниматор", r"школь", r"подрост"],
+}
+
+
+def event_text_blob(event: dict[str, Any]) -> str:
+    return " ".join([
+        str(event.get("title") or ""),
+        str(event.get("event_type") or ""),
+        category(event),
+        " ".join(str(item) for item in event.get("topics") or []),
+        str(event.get("summary") or ""),
+        plain_from_html(event.get("description_html") or ""),
+        str(event.get("venue_name") or ""),
+        str(event.get("city") or ""),
+    ]).lower()
+
+
+def facet_set(event: dict[str, Any]) -> set[str]:
+    text = event_text_blob(event)
+    facets: set[str] = set()
+    for name, patterns in FACET_PATTERNS.items():
+        if any(re.search(pattern, text, flags=re.I | re.U) for pattern in patterns):
+            facets.add(name)
+    return facets
+
+
+def build_sparse_related_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict[str, list[dict[str, Any]]]:
+    sparse_index = build_sparse_tfidf_index(events)
     by_id = {int(event["id"]): event for event in events}
+    facets_by_id = {int(event["id"]): facet_set(event) for event in events}
     chains: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         event_id = int(event["id"])
@@ -683,23 +741,33 @@ def build_vector_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict
             candidate_id = int(candidate["id"])
             if not eligible_related_pair(event, candidate):
                 continue
-            vector_similarity = sparse_cosine(vectors.get(event_id, {}), vectors.get(candidate_id, {}))
+            lexical_similarity = sparse_cosine(sparse_index.get(event_id, {}), sparse_index.get(candidate_id, {}))
             deterministic = score_pair(event, candidate)
             same_category = category(event) == category(candidate)
-            freshness_quality = min(0.08, math.log1p(float(candidate.get("likes_count") or 0)) / 100)
+            anchor_facets = facets_by_id.get(event_id, set())
+            candidate_facets = facets_by_id.get(candidate_id, set())
+            shared_facets = sorted(anchor_facets & candidate_facets)
+            facet_score = min(1.0, len(shared_facets) / 2) if shared_facets else 0.0
+            mismatch_penalty = 0.10 if "music" in candidate_facets and "music" not in anchor_facets else 0.0
+            strong_domain = bool(shared_facets) or (same_category and (lexical_similarity >= 0.025 or deterministic >= 0.50))
+            slot_type = "pure_related" if strong_domain else "adjacent_discovery"
             related_score = (
-                0.58 * vector_similarity
-                + 0.30 * deterministic
-                + (0.08 if same_category else 0.0)
-                + freshness_quality
+                0.50 * lexical_similarity
+                + 0.25 * deterministic
+                + 0.25 * facet_score
+                + (0.055 if same_category else 0.0)
+                + (0.060 if shared_facets and not same_category else 0.0)
+                - mismatch_penalty
                 + stable_jitter(event_id, candidate_id, cache_salt)
             )
             reason_codes = [
-                "vector:local_tfidf_sparse_v1",
+                f"lexical:{SPARSE_RELATED_RETRIEVAL_METHOD}",
                 f"category:{category(candidate)}",
             ]
             if same_category:
                 reason_codes.append("same_category")
+            for facet in shared_facets:
+                reason_codes.append(f"facet:{facet}")
             if event.get("city") and event.get("city") == candidate.get("city"):
                 reason_codes.append("same_city")
             if event.get("venue_name") and event.get("venue_name") == candidate.get("venue_name"):
@@ -707,15 +775,16 @@ def build_vector_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict
             scored.append({
                 "event_id": candidate_id,
                 "related_score": round(max(0.0, min(1.0, related_score)), 4),
-                "vector_similarity": round(max(0.0, min(1.0, vector_similarity)), 4),
+                "lexical_similarity": round(max(0.0, min(1.0, lexical_similarity)), 4),
                 "deterministic_score": round(deterministic, 4),
-                "similarity_class": "same_domain" if same_category else "adjacent_discovery",
-                "confidence": round(max(0.15, min(0.95, 0.42 + vector_similarity * 0.42 + (0.10 if same_category else 0.0))), 4),
+                "slot_type": slot_type,
+                "similarity_class": "same_domain" if slot_type == "pure_related" else "adjacent_discovery",
+                "confidence": round(max(0.15, min(0.95, 0.42 + lexical_similarity * 0.42 + (0.10 if same_category else 0.0) + 0.08 * facet_score)), 4),
                 "reason_codes": reason_codes,
-                "retrieval_sources": ["vector", "deterministic"],
+                "retrieval_sources": ["lexical_sparse", "deterministic"],
                 "display_eligible": True,
             })
-        scored.sort(key=lambda item: (-float(item["related_score"]), -float(item["vector_similarity"]), int(item["event_id"])))
+        scored.sort(key=lambda item: (-float(item["related_score"]), -float(item.get("lexical_similarity") or 0), int(item["event_id"])))
         chains[str(event_id)] = scored[:40]
 
     # Mutual relinking: if a new/changed event is a strong candidate for an old
@@ -736,7 +805,7 @@ def build_vector_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict
                 "reason_codes": list(dict.fromkeys([*(item.get("reason_codes") or []), "mutual_link"])),
                 "retrieval_sources": list(dict.fromkeys([*(item.get("retrieval_sources") or []), "mutual_link"])),
             })
-            reverse.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("vector_similarity") or 0), int(entry["event_id"])))
+            reverse.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("lexical_similarity") or 0), int(entry["event_id"])))
             del reverse[40:]
     return chains
 
@@ -796,7 +865,7 @@ async def call_gemma_related_audit_async(
     candidates: list[dict[str, Any]],
     timeout_seconds: int = 45,
 ) -> dict[int, dict[str, Any]]:
-    """Optional Gemma 4 audit/rerank for already-vectorized candidates.
+    """Optional Gemma 4 audit/rerank for already-ranked sparse candidates.
 
     The page-view path never calls this. Export/build can enable it for changed
     anchors, and cache makes repeated rebuilds reuse the previous audit.
@@ -1007,12 +1076,16 @@ def maybe_apply_gemma_audit(
             if item["gemma_reject"]:
                 item["display_eligible"] = False
             item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), *(verdict.get("reason_codes") or []), "gemma4_26b_audit"]))
+            item["slot_type"] = "pure_related" if (llm_score >= 0.72 and not item.get("gemma_reject")) else str(item.get("slot_type") or "adjacent_discovery")
+            if llm_score < 0.35:
+                item["slot_type"] = "adjacent_discovery"
+                item["similarity_class"] = "adjacent_discovery"
             item["related_score"] = round(
-                max(0.0, min(1.0, 0.45 * float(item.get("vector_similarity") or 0) + 0.25 * float(item.get("deterministic_score") or 0) + 0.25 * llm_score + 0.05 * float(item.get("related_score") or 0))),
+                max(0.0, min(1.0, 0.55 * llm_score + 0.20 * float(item.get("lexical_similarity") or item.get("vector_similarity") or 0) + 0.20 * float(item.get("deterministic_score") or 0) + 0.05 * float(item.get("related_score") or 0))),
                 4,
             )
         chain[:] = [item for item in chain if item.get("display_eligible", True)]
-        chain.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("vector_similarity") or 0), int(entry["event_id"])))
+        chain.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("lexical_similarity") or entry.get("vector_similarity") or 0), int(entry["event_id"])))
         del chain[40:]
         audited += 1
     meta["audited_anchors"] = audited
@@ -1082,12 +1155,12 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
             )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
-        log_stage("vector_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids))
-        chains = build_vector_chain(events, cache_salt=salt)
+        log_stage("sparse_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids))
+        chains = build_sparse_related_chain(events, cache_salt=salt)
         cache_state = "miss_rebuilt"
         chain_lengths = [len(value or []) for value in chains.values()]
         log_stage(
-            "vector_rebuild_complete",
+            "sparse_rebuild_complete",
             event_count=len(events),
             min_chain=min(chain_lengths) if chain_lengths else 0,
             max_chain=max(chain_lengths) if chain_lengths else 0,
@@ -1106,9 +1179,10 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
     log_stage("gemma_audit_complete", **gemma_meta)
     cache_payload = {
         "schema_version": RELATED_CACHE_SCHEMA_VERSION,
-        "algorithm": "event_vector_related_chain_v2",
-        "embedding_model": "local_tfidf_sparse_v1",
+        "algorithm": SPARSE_RELATED_ALGORITHM,
+        "retrieval_method": SPARSE_RELATED_RETRIEVAL_METHOD,
         "embedding_document_version": "event_embedding_doc_v1",
+        "semantic_embeddings": False,
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
@@ -1125,22 +1199,26 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
     related: dict[str, dict[str, Any]] = {}
     for event in events:
         chain = chains.get(str(event["id"]), [])
-        similar = [int(item["event_id"]) for item in chain[:30]]
-        explore = [int(item["event_id"]) for item in chain if item.get("similarity_class") == "adjacent_discovery"][:10]
+        pure = [int(item["event_id"]) for item in chain if item.get("slot_type") == "pure_related"][:30]
+        similar = pure or [int(item["event_id"]) for item in chain[:30]]
+        explore = [int(item["event_id"]) for item in chain if item.get("slot_type") == "adjacent_discovery" or item.get("similarity_class") == "adjacent_discovery"][:10]
         if not explore:
             explore = [int(item["event_id"]) for item in chain[10:20]]
         related[str(event["id"])] = {
             "similar": similar[:30],
+            "pure_related": pure[:30],
             "explore": explore[:10],
+            "adjacent_discovery": explore[:10],
             "chain": chain[:40],
             "underfilled": len(chain) < min(20, max(0, len(events) - 1)),
         }
     return {
-        "schema_version": "event_related_chain_v2",
+        "schema_version": SPARSE_RELATED_SCHEMA_VERSION,
         "generated_at": generated_at,
-        "algorithm": "event_vector_related_chain_v2",
+        "algorithm": SPARSE_RELATED_ALGORITHM,
         "fallback_algorithm": "prod_sqlite_static_related_v1",
-        "embedding_model": "local_tfidf_sparse_v1",
+        "retrieval_method": SPARSE_RELATED_RETRIEVAL_METHOD,
+        "semantic_embeddings": False,
         "embedding_document_version": "event_embedding_doc_v1",
         "gemma_verification": gemma_meta,
         "cache": {"state": cache_state, "path": str(cache_path) if cache_path else None},
@@ -1155,7 +1233,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
-    parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_related_chain_v2")
+    parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")

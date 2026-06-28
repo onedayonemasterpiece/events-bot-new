@@ -550,7 +550,7 @@ const FOOTER_SOCIAL_LINKS = [
       .prose { margin-top: 1rem; color: #3b3029; max-width: 68ch; }
       .prose p { margin: 0 0 0.95rem; }
       .prose strong, .prose b { font-weight: 650; }
-      .event-updated-at { margin: -0.35rem 0 0.85rem; color: var(--muted); font-size: 0.86rem; font-weight: 720; }
+      .event-description-meta { margin: 0.9rem 0 0; color: var(--muted); font-size: 0.86rem; font-weight: 760; }
       .prose blockquote { margin: 0 0 1rem; padding: 1rem 1.1rem; border-left: 4px solid var(--primary); background: #fff4e6; border-radius: 0 18px 18px 0; color: #33251d; }
       .prose ul { margin: 0 0 1rem 1.2rem; padding: 0; }
       .details-list { display: grid; gap: 0.7rem; margin: 0; }
@@ -764,7 +764,8 @@ const FOOTER_SOCIAL_LINKS = [
       .event-card__fallback { min-height: 100%; display: grid; align-content: space-between; gap: 0.7rem; padding: 1rem; color: rgba(255,255,255,0.9); font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
       .event-card__fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem 0.85rem 4.85rem; }
-      .event-card__meta-row { display: grid; gap: 0.35rem; }
+      .event-card__meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.32rem 0.42rem; }
+      .event-card__tag { width: max-content; max-width: 100%; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.14rem 0.44rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.88); font-size: 0.72rem; line-height: 1.2; font-weight: 900; letter-spacing: 0.01em; }
       .event-card__meta { color: rgba(255,255,255,0.74); font-weight: 750; font-size: 0.82rem; line-height: 1.25; }
       .event-card__status { width: max-content; max-width: 100%; min-height: 28px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.22rem 0.55rem; background: rgba(215,240,236,0.16); border: 1px solid rgba(215,240,236,0.28); color: #d7f0ec; font-size: 0.75rem; font-weight: 850; line-height: 1.15; }
       .event-card__title { color: #fff; text-decoration: none; font-weight: 900; line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1175,6 +1176,8 @@ const FOOTER_SOCIAL_LINKS = [
           align-items: flex-start;
           overflow: visible;
           box-shadow: none;
+          transform: translateX(-50%) translate3d(0, var(--hero-poster-parallax-y, 0px), 0);
+          will-change: transform;
         }
         .event-hero--poster-billboard.event-hero--poster-stage .event-hero__image,
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__image {
@@ -1187,8 +1190,8 @@ const FOOTER_SOCIAL_LINKS = [
           object-position: center top;
           border-radius: 0;
           box-shadow: none;
-          transform: translate3d(0, var(--hero-parallax-y, 0px), 0);
-          will-change: transform;
+          transform: none;
+          will-change: auto;
         }
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
           min-height: 0;
@@ -2347,6 +2350,8 @@ const FOOTER_SOCIAL_LINKS = [
           const likeCount = formatCount(likes);
           const shareCount = formatCount(shares);
           const status = data.price_label || data.status_label || '';
+          const typeTagRaw = String(data.event_type || '').toLowerCase().replace(/ё/gu, 'е').replace(/[^0-9a-zа-я]/giu, '');
+          const typeTag = typeTagRaw ? `#${typeTagRaw}` : '';
           const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
           const shareImageType = data.image_url && String(data.image_url).toLowerCase().includes('.webp') ? 'image/webp' : data.image_url && String(data.image_url).toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
           const cardClass = `event-card event-card--${cardVariant}`;
@@ -2373,7 +2378,7 @@ const FOOTER_SOCIAL_LINKS = [
           return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
             <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
             ${overlayFeedback}
-            <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
+            <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row">${typeTag ? `<span class="event-card__tag">${escapeHtml(typeTag)}</span>` : ''}<span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
             ${splitUtility}
           </article>`;
         }
@@ -2604,8 +2609,12 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
         function hasMoreCandidates(feed, store) {
+          const profile = activeProfile(store.manifest);
           const existingIds = new Set(Array.from(feed.querySelectorAll(':scope > [data-event-card]')).map((card) => asId(card.dataset.eventId)));
-          return toArray(store.ranked).some((item) => !existingIds.has(asId(item.event_id)));
+          return toArray(store.ranked).some((item) => {
+            const id = asId(item.event_id);
+            return id && !existingIds.has(id) && isEligibleCandidate(item.candidate, store.manifest, profile);
+          });
         }
 
         async function syncFeedWithManifest(feed, options = {}) {
@@ -3203,18 +3212,23 @@ const FOOTER_SOCIAL_LINKS = [
           if (!heroes.length) return;
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
           let ticking = false;
-          const maxOffset = 64;
           const update = () => {
             ticking = false;
             heroes.forEach((visual) => {
               const images = Array.from(visual.querySelectorAll('.event-hero__image'));
               if (!images.length) return;
+              const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
               const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
+              const maxOffset = isPosterStage ? 28 : 64;
               const offset = -maxOffset + progress * maxOffset * 2;
-              images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));
+              if (isPosterStage) {
+                visual.style.setProperty('--hero-poster-parallax-y', `${(offset * 0.45).toFixed(1)}px`);
+              } else {
+                images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));
+              }
             });
           };
           const request = () => {

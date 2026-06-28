@@ -7,7 +7,7 @@ import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -28,6 +28,7 @@ if (!event) {
   return Astro.redirect(withBase('/__preview/'));
 }
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
+const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
@@ -44,6 +45,11 @@ const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);
 const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
+const sourceCount = Number(event.source_engagement_sources_count || 0);
+const sourceCountLabel = sourceCount > 0
+  ? `${sourceCount} ${sourceCount % 10 === 1 && sourceCount % 100 !== 11 ? 'источник' : [2, 3, 4].includes(sourceCount % 10) && ![12, 13, 14].includes(sourceCount % 100) ? 'источника' : 'источников'}`
+  : null;
+const descriptionMeta = [sourceCountLabel, updatedAtLabel ? `обновлено: ${updatedAtLabel} (Калининград)` : null].filter(Boolean);
 const fallbackHeroComposition: HeroComposition = event.image_url
   ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
@@ -82,10 +88,10 @@ const galleryCta = galleryCtaEvent ? {
       <section class="section-card section-card--quiet section-card--event-details" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Описание</h2>
-          {updatedAtLabel && <p class="event-updated-at" data-nosnippet>Обновлено: {updatedAtLabel} (Калининград)</p>}
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
+          {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
         </div>
         <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
       </section>
@@ -109,7 +115,7 @@ const galleryCta = galleryCtaEvent ? {
             data-discovery-feed
             data-surface="event_detail_related"
             data-layout-mode="module"
-            data-algorithm-id="static_related_v1"
+            data-algorithm-id={discoveryAlgorithmId}
             data-current-event-id={event.id}
             data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
             data-feed-card-variant={feedCardVariant}

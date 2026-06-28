@@ -1,6 +1,10 @@
 const STORAGE_PUBLIC_PREFIXES = [
   'https://storage.yandexcloud.net/kenigevents/',
   'http://storage.yandexcloud.net/kenigevents/',
+  'https://storage.yandexcloud.net/kenigevents.ru/',
+  'http://storage.yandexcloud.net/kenigevents.ru/',
+  'https://kenigevents.ru.storage.yandexcloud.net/',
+  'http://kenigevents.ru.storage.yandexcloud.net/',
 ];
 
 const ASSET_BASE_URL = (import.meta.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');

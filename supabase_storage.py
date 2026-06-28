@@ -127,12 +127,12 @@ def storage_object_exists_http(
 
     try:
         from yandex_storage import (
-            get_yandex_storage_bucket,
+            get_yandex_storage_bucket_candidates,
             yandex_storage_enabled,
             yandex_storage_object_exists,
         )
 
-        if yandex_storage_enabled() and b == get_yandex_storage_bucket():
+        if yandex_storage_enabled() and b in set(get_yandex_storage_bucket_candidates()):
             return yandex_storage_object_exists(bucket=b, object_path=p)
     except Exception:
         pass
@@ -506,14 +506,17 @@ async def flush_supabase_delete_queue(
     removed_ids: list[int] = []
     failed_ids: list[int] = []
     yandex_bucket = ""
+    yandex_buckets: set[str] = set()
     yandex_client = None
     try:
-        from yandex_storage import get_yandex_storage_bucket, get_yandex_storage_client
+        from yandex_storage import get_yandex_storage_bucket, get_yandex_storage_bucket_candidates, get_yandex_storage_client
 
         yandex_bucket = get_yandex_storage_bucket()
+        yandex_buckets = set(get_yandex_storage_bucket_candidates())
         yandex_client = get_yandex_storage_client()
     except Exception:
         yandex_bucket = ""
+        yandex_buckets = set()
         yandex_client = None
 
     for bucket, items in by_bucket.items():
@@ -523,7 +526,7 @@ async def flush_supabase_delete_queue(
             chunk_paths = paths[start : start + chunk_size]
             chunk_ids = ids[start : start + chunk_size]
             try:
-                if yandex_bucket and bucket == yandex_bucket:
+                if (yandex_bucket and bucket == yandex_bucket) or bucket in yandex_buckets:
                     if yandex_client is None:
                         raise RuntimeError("yandex storage client unavailable")
                     from yandex_storage import delete_yandex_objects

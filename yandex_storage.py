@@ -5,7 +5,9 @@ from urllib.parse import quote, urlparse
 
 _DEFAULT_ENDPOINT = "https://storage.yandexcloud.net"
 _DEFAULT_REGION = "ru-central1"
-_DEFAULT_BUCKET = "kenigevents"
+_DEFAULT_BUCKET = "kenigevents.ru"
+_LEGACY_BUCKET = "kenigevents"
+_DEFAULT_CDN_PUBLIC_BASE_URL = "https://static.kenigevents.ru"
 
 _CLIENT_CACHE: dict[tuple[str, str, str, str], Any] = {}
 
@@ -33,11 +35,58 @@ def yandex_storage_enabled() -> bool:
 
 
 def get_yandex_storage_bucket() -> str:
-    return _first_env("YC_STORAGE_BUCKET") or _DEFAULT_BUCKET
+    return (
+        _first_env(
+            "YC_STORAGE_BUCKET",
+            "KENIGEVENTS_MEDIA_YC_BUCKET",
+            "KENIGEVENTS_SITE_YC_BUCKET",
+        )
+        or _DEFAULT_BUCKET
+    )
+
+
+def get_yandex_storage_bucket_candidates() -> list[str]:
+    """Buckets that may contain managed Yandex media objects.
+
+    `kenigevents` is the legacy media bucket. `kenigevents.ru` is the current
+    CDN-fronted static-site bucket. Cleanup has to understand both while new
+    writes go to `get_yandex_storage_bucket()`.
+    """
+
+    candidates = [
+        get_yandex_storage_bucket(),
+        _first_env("KENIGEVENTS_SITE_YC_BUCKET"),
+        _first_env("KENIGEVENTS_LEGACY_MEDIA_YC_BUCKET"),
+        _LEGACY_BUCKET,
+        _DEFAULT_BUCKET,
+    ]
+    out: list[str] = []
+    for value in candidates:
+        bucket = (value or "").strip()
+        if bucket and bucket not in out:
+            out.append(bucket)
+    return out
 
 
 def get_yandex_storage_endpoint() -> str:
-    return (_first_env("YC_STORAGE_ENDPOINT", "YC_STORAGE_PUBLIC_BASE_URL") or _DEFAULT_ENDPOINT).rstrip("/")
+    return (_first_env("YC_STORAGE_ENDPOINT") or _DEFAULT_ENDPOINT).rstrip("/")
+
+
+def get_yandex_storage_public_base_url(*, bucket: str | None = None) -> str:
+    """Return the public base URL for object links.
+
+    For the CDN-fronted bucket we intentionally emit the CDN host, so new
+    persisted poster URLs are immediately usable by the static site and social
+    previews. Legacy/non-CDN buckets keep raw Object Storage URLs.
+    """
+
+    b = (bucket or get_yandex_storage_bucket()).strip()
+    explicit = _first_env("YC_STORAGE_PUBLIC_BASE_URL", "PUBLIC_ASSET_BASE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    if b == _DEFAULT_BUCKET:
+        return _DEFAULT_CDN_PUBLIC_BASE_URL
+    return f"{get_yandex_storage_endpoint()}/{quote(b)}"
 
 
 def get_yandex_storage_region() -> str:
@@ -79,7 +128,7 @@ def build_yandex_public_url(*, bucket: str | None = None, object_path: str) -> s
     p = str(object_path or "").strip().lstrip("/")
     if not b or not p:
         return None
-    return f"{get_yandex_storage_endpoint()}/{quote(b)}/{quote(p, safe='/')}"
+    return f"{get_yandex_storage_public_base_url(bucket=b)}/{quote(p, safe='/')}"
 
 
 def parse_yandex_storage_url(url: str | None) -> tuple[str, str] | None:
@@ -99,6 +148,24 @@ def parse_yandex_storage_url(url: str | None) -> tuple[str, str] | None:
             return None
         bucket = path_parts[0]
         object_path = "/".join(path_parts[1:])
+        return (bucket, object_path) if bucket and object_path else None
+
+    public_hosts = {
+        "static.kenigevents.ru": _DEFAULT_BUCKET,
+        "kenigevents.ru.storage.yandexcloud.net": _DEFAULT_BUCKET,
+    }
+    configured_public_base = _first_env("YC_STORAGE_PUBLIC_BASE_URL", "PUBLIC_ASSET_BASE_URL")
+    if configured_public_base:
+        try:
+            configured_host = (urlparse(configured_public_base).netloc or "").strip().lower()
+        except Exception:
+            configured_host = ""
+        if configured_host:
+            public_hosts[configured_host] = get_yandex_storage_bucket()
+
+    if host in public_hosts:
+        object_path = "/".join(path_parts)
+        bucket = public_hosts[host]
         return (bucket, object_path) if bucket and object_path else None
 
     suffix = ".storage.yandexcloud.net"
