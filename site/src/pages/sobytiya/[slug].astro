@@ -4,6 +4,7 @@ import EventHero, { type HeroComposition } from '../../components/EventHero.astr
 import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
+import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
 
@@ -72,13 +73,14 @@ const galleryCta = galleryCtaEvent ? {
         {event.event_type && <span>{event.event_type}</span>}
       </nav>
 
-      <section class="section-card section-card--quiet" style="margin-top: 1rem;">
+      <section class="section-card section-card--quiet section-card--event-details" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Описание</h2>
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
         </div>
+        <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
       </section>
 
       {otherDates.length > 0 && (

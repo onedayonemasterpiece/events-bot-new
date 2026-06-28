@@ -160,10 +160,7 @@ const showTicketCta = Boolean(ctaHref);
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
-    <div class="event-hero__facts" aria-label="Главные факты события">
-      <div class="event-hero__fact"><span aria-hidden="true">Когда</span><strong>{dateTimeLabel}</strong></div>
-      <div class="event-hero__fact"><span aria-hidden="true">Где</span><strong>{placeLabel}</strong></div>
-    </div>
+    <p class="event-hero__meta-line">{[dateTimeLabel, placeLabel].filter(Boolean).join(' · ')}</p>
     {event.summary && <p class="event-hero__summary">{event.summary}</p>}
   </div>
 </section>
@@ -171,7 +168,11 @@ const showTicketCta = Boolean(ctaHref);
   <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
-      <h2 id={heroGalleryTitleId}>Фото события</h2>
+      <div class="hero-gallery__brand" aria-hidden="true">
+        <span>Полюбить Калининград</span>
+        <strong>Анонсы</strong>
+      </div>
+      <h2 id={heroGalleryTitleId} class="sr-only">Фото события: {event.title}</h2>
       <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
     </div>
     <div class="hero-gallery__viewport">
@@ -189,7 +190,7 @@ const showTicketCta = Boolean(ctaHref);
               data-event-title={event.title}
               style={image.recommended_object_position ? `object-position: ${image.recommended_object_position}` : undefined}
             />
-            <figcaption>{event.title}</figcaption>
+            <figcaption><span>Фото события</span><strong>{event.title}</strong></figcaption>
           </figure>
         ))}
         {galleryCta && (

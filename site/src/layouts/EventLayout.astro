@@ -173,6 +173,7 @@ const FOOTER_SOCIAL_LINKS = [
         box-shadow: var(--shadow);
       }
       .section-card--quiet { box-shadow: none; background: rgba(255, 253, 248, 0.74); }
+      .section-card--event-details { overflow: hidden; }
       .section-card__inner { padding: clamp(0.85rem, 2.8vw, 1.55rem); }
       .eyebrow { color: var(--primary-strong); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.5rem; }
       h1, h2, h3 { line-height: 1.08; letter-spacing: -0.035em; margin: 0; }
@@ -233,10 +234,7 @@ const FOOTER_SOCIAL_LINKS = [
       .event-hero__decision { position: relative; z-index: 2; display: grid; gap: 0.75rem; padding: clamp(1rem, 4vw, 1.45rem); background: linear-gradient(180deg, #fffdf8, #fff8ef); }
       .event-hero__eyebrow { margin: 0; color: var(--primary-strong); font-size: 0.76rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; }
       .event-hero__title { max-width: 18ch; font-size: clamp(1.8rem, 7vw, 3.7rem); }
-      .event-hero__facts { display: grid; gap: 0.55rem; }
-      .event-hero__fact { display: grid; gap: 0.08rem; padding: 0.65rem 0.75rem; border: 1px solid rgba(121,48,20,0.12); border-radius: 16px; background: rgba(242,231,215,0.5); }
-      .event-hero__fact span { color: var(--muted); font-size: 0.78rem; font-weight: 850; text-transform: uppercase; letter-spacing: 0.07em; }
-      .event-hero__fact strong { color: #30241b; line-height: 1.18; overflow-wrap: anywhere; }
+      .event-hero__meta-line { margin: -0.18rem 0 0; color: #5b493e; font-size: 0.96rem; font-weight: 780; line-height: 1.32; overflow-wrap: anywhere; }
       .event-hero__actions { margin-top: 0.1rem; }
       .event-hero__summary { margin: 0.05rem 0 0; max-width: 62ch; color: #4f4339; font-size: clamp(0.98rem, 2.6vw, 1.08rem); line-height: 1.48; }
       .event-hero__gallery-hint {
@@ -272,8 +270,7 @@ const FOOTER_SOCIAL_LINKS = [
         position: fixed;
         inset: 0;
         z-index: 80;
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
+        display: block;
         background: #060504;
         color: #fff;
         opacity: 0;
@@ -289,24 +286,53 @@ const FOOTER_SOCIAL_LINKS = [
           linear-gradient(180deg, rgba(0,0,0,0.72) 0%, transparent 22%, transparent 78%, rgba(0,0,0,0.74) 100%);
       }
       .hero-gallery__topbar {
-        position: relative;
-        z-index: 2;
+        position: absolute;
+        inset: 0 0 auto 0;
+        z-index: 5;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
         padding: max(0.8rem, env(safe-area-inset-top)) max(0.85rem, env(safe-area-inset-right)) 0.65rem max(0.85rem, env(safe-area-inset-left));
+        pointer-events: none;
       }
-      .hero-gallery__topbar h2 {
-        margin: 0;
-        max-width: calc(100vw - 5.5rem);
-        color: rgba(255,255,255,0.92);
-        font-size: 0.92rem;
-        font-weight: 850;
-        letter-spacing: -0.01em;
-        white-space: nowrap;
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
         overflow: hidden;
-        text-overflow: ellipsis;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .hero-gallery__brand {
+        width: 7.45rem;
+        min-height: 5.35rem;
+        display: inline-grid;
+        align-content: end;
+        gap: 0.04rem;
+        padding: 1.32rem 0.72rem 0.58rem;
+        border-radius: 0 0 10px 10px;
+        background: linear-gradient(160deg, #793014 0%, #a54821 100%);
+        color: #fffdf8;
+        box-shadow: 0 20px 42px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.12) inset;
+        pointer-events: none;
+      }
+      .hero-gallery__brand span {
+        font-size: 0.54rem;
+        font-weight: 850;
+        line-height: 1.05;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      .hero-gallery__brand strong {
+        font-size: 1.24rem;
+        font-weight: 950;
+        line-height: 0.9;
+        letter-spacing: -0.065em;
       }
       .hero-gallery__close,
       .hero-gallery__nav {
@@ -322,12 +348,15 @@ const FOOTER_SOCIAL_LINKS = [
         border-radius: 999px;
         font-size: 1.65rem;
         line-height: 1;
+        pointer-events: auto;
       }
       .hero-gallery__viewport {
-        position: relative;
+        position: absolute;
+        inset: 0;
         z-index: 1;
         min-width: 0;
         min-height: 0;
+        height: 100%;
         overflow: hidden;
       }
       .hero-gallery__track {
@@ -342,7 +371,7 @@ const FOOTER_SOCIAL_LINKS = [
         position: relative;
         flex: 0 0 100%;
         min-width: 100%;
-        min-height: 0;
+        min-height: 100%;
         margin: 0;
         display: grid;
         place-items: center;
@@ -350,8 +379,9 @@ const FOOTER_SOCIAL_LINKS = [
       }
       .hero-gallery__image {
         width: 100%;
-        height: min(78svh, 780px);
-        max-height: 100%;
+        height: 100%;
+        min-height: 100svh;
+        max-height: none;
         object-fit: contain;
         object-position: center;
         border-radius: 0;
@@ -363,24 +393,52 @@ const FOOTER_SOCIAL_LINKS = [
         max-height: none;
         min-height: 100%;
         object-fit: cover;
-        animation: gallery-soft-pan 12s ease-in-out infinite alternate;
+        object-position: 58% center;
       }
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
-      @keyframes gallery-soft-pan {
+      .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+        animation: gallery-pan-forward 6.8s ease-in-out 1 both;
+      }
+      .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
+        animation: gallery-pan-backward 6.8s ease-in-out 1 both;
+      }
+      @keyframes gallery-pan-forward {
+        from { object-position: 58% center; }
+        to { object-position: 42% center; }
+      }
+      @keyframes gallery-pan-backward {
         from { object-position: 42% center; }
         to { object-position: 58% center; }
       }
       .hero-gallery__slide figcaption {
         position: absolute;
-        left: max(0.85rem, env(safe-area-inset-left));
-        right: max(0.85rem, env(safe-area-inset-right));
-        bottom: 0.75rem;
-        color: rgba(255,255,255,0.72);
-        font-size: 0.82rem;
-        font-weight: 750;
-        text-align: center;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 3;
+        display: grid;
+        gap: 0.2rem;
+        padding: 0.72rem max(1rem, env(safe-area-inset-right)) max(1.05rem, calc(env(safe-area-inset-bottom) + 0.85rem)) max(1rem, env(safe-area-inset-left));
+        color: rgba(255,255,255,0.96);
+        background: linear-gradient(180deg, rgba(6,5,4,0.08) 0%, rgba(6,5,4,0.78) 34%, rgba(6,5,4,0.94) 100%);
+        text-align: left;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.58);
+        pointer-events: none;
+      }
+      .hero-gallery__slide figcaption span {
+        color: rgba(255,255,255,0.66);
+        font-size: 0.73rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .hero-gallery__slide figcaption strong {
+        max-width: 22rem;
+        font-size: clamp(1.25rem, 5.5vw, 2rem);
+        font-weight: 950;
+        line-height: 1.02;
+        letter-spacing: -0.045em;
       }
       .hero-gallery__slide--cta {
         isolation: isolate;
@@ -445,10 +503,12 @@ const FOOTER_SOCIAL_LINKS = [
       .hero-gallery__nav--prev { left: max(0.55rem, env(safe-area-inset-left)); }
       .hero-gallery__nav--next { right: max(0.55rem, env(safe-area-inset-right)); }
       .hero-gallery__counter {
-        position: relative;
-        z-index: 2;
-        justify-self: center;
-        margin: 0 0 max(0.8rem, env(safe-area-inset-bottom));
+        position: absolute;
+        z-index: 5;
+        left: 50%;
+        top: max(1rem, calc(env(safe-area-inset-top) + 0.9rem));
+        transform: translateX(-50%);
+        margin: 0;
         padding: 0.3rem 0.62rem;
         border-radius: 999px;
         background: rgba(255,255,255,0.12);
@@ -538,6 +598,12 @@ const FOOTER_SOCIAL_LINKS = [
         height: 1rem;
         margin-top: 0.08rem;
         color: var(--primary-strong);
+      }
+      .event-source-gate--section {
+        border-radius: 0;
+        border-top-color: rgba(121, 48, 20, 0.14);
+        padding: 0.72rem clamp(0.85rem, 2.8vw, 1.55rem) max(0.78rem, env(safe-area-inset-bottom));
+        background: rgba(242, 231, 215, 0.76);
       }
       .cta-panel { padding: 1rem; }
       .cta-panel__top { display: grid; gap: 0.8rem; }
@@ -2439,10 +2505,42 @@ const FOOTER_SOCIAL_LINKS = [
             });
           };
 
-          const showSlide = (gallery, index) => {
+          const activeSlide = (gallery) => {
+            const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
+            return slides[Number(gallery.dataset.activeIndex || 0)] || null;
+          };
+
+          const activeSlideIsVisualPhoto = (gallery) => {
+            const slide = activeSlide(gallery);
+            const image = slide?.querySelector('.hero-gallery__image[data-image-text-mode="visual_only"]');
+            return Boolean(image && slide?.dataset.gallerySlideKind === 'image');
+          };
+
+          const scheduleGalleryPan = (gallery, direction) => {
+            delete gallery.dataset.autoPan;
+            const mode = direction === 'backward' ? 'backward' : 'forward';
+            if (!activeSlideIsVisualPhoto(gallery)) return;
+            window.requestAnimationFrame(() => {
+              gallery.dataset.autoPan = mode;
+            });
+          };
+
+          const nextImageIndex = (gallery) => {
+            const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
+            if (!slides.length) return 0;
+            const current = Number(gallery.dataset.activeIndex || 0);
+            for (let step = 1; step <= slides.length; step += 1) {
+              const idx = (current + step) % slides.length;
+              if (slides[idx]?.dataset.gallerySlideKind === 'image') return idx;
+            }
+            return current;
+          };
+
+          const showSlide = (gallery, index, options = {}) => {
             const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
             const track = gallery.querySelector('[data-hero-gallery-track]');
             if (!slides.length || !track) return;
+            delete gallery.dataset.autoPan;
             const next = ((Number(index) % slides.length) + slides.length) % slides.length;
             loadGalleryMedia(slides[next]);
             gallery.dataset.activeIndex = String(next);
@@ -2452,12 +2550,14 @@ const FOOTER_SOCIAL_LINKS = [
             });
             const counter = gallery.querySelector('[data-hero-gallery-counter]');
             if (counter) counter.textContent = `${next + 1} / ${slides.length}`;
+            scheduleGalleryPan(gallery, options.direction || 'forward');
           };
 
           const closeGallery = () => {
             if (!activeGallery) return;
             const gallery = activeGallery;
             gallery.classList.remove('is-open');
+            delete gallery.dataset.autoPan;
             document.body.classList.remove('has-hero-gallery-open');
             window.setTimeout(() => {
               if (!gallery.classList.contains('is-open')) gallery.hidden = true;
@@ -2473,7 +2573,8 @@ const FOOTER_SOCIAL_LINKS = [
             activeOpener = opener;
             if (gallery.parentElement !== document.body) document.body.appendChild(gallery);
             gallery.hidden = false;
-            showSlide(gallery, 0);
+            gallery.dataset.autoAdvance = 'true';
+            showSlide(gallery, 0, { direction: 'forward' });
             document.body.classList.add('has-hero-gallery-open');
             window.requestAnimationFrame(() => {
               gallery.classList.add('is-open');
@@ -2494,10 +2595,18 @@ const FOOTER_SOCIAL_LINKS = [
           document.querySelectorAll('[data-hero-gallery]').forEach((gallery) => {
             gallery.querySelector('[data-hero-gallery-close]')?.addEventListener('click', closeGallery);
             gallery.querySelector('[data-hero-gallery-prev]')?.addEventListener('click', () => {
-              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) - 1);
+              gallery.dataset.autoAdvance = 'false';
+              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) - 1, { direction: 'backward' });
             });
             gallery.querySelector('[data-hero-gallery-next]')?.addEventListener('click', () => {
-              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + 1);
+              gallery.dataset.autoAdvance = 'true';
+              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + 1, { direction: 'forward' });
+            });
+            gallery.addEventListener('animationend', (event) => {
+              if (event.animationName !== 'gallery-pan-forward') return;
+              if (!gallery.classList.contains('is-open') || gallery.hidden) return;
+              if (gallery.dataset.autoAdvance === 'false') return;
+              showSlide(gallery, nextImageIndex(gallery), { direction: 'forward' });
             });
             const swipeSurface = gallery.querySelector('.hero-gallery__viewport') || gallery;
             const swipeStart = (clientX, clientY) => {
@@ -2523,7 +2632,9 @@ const FOOTER_SOCIAL_LINKS = [
               const deltaX = endX - startX;
               const deltaY = endY - startY;
               if (Math.abs(deltaX) < 38 || Math.abs(deltaX) < Math.abs(deltaY) * 1.15) return;
-              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + (deltaX < 0 ? 1 : -1));
+              const direction = deltaX < 0 ? 'forward' : 'backward';
+              gallery.dataset.autoAdvance = direction === 'forward' ? 'true' : 'false';
+              showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + (deltaX < 0 ? 1 : -1), { direction });
             };
             swipeSurface.addEventListener('pointerdown', (event) => {
               swipeStart(event.clientX, event.clientY);
@@ -2566,10 +2677,12 @@ const FOOTER_SOCIAL_LINKS = [
               closeGallery();
             } else if (event.key === 'ArrowLeft') {
               event.preventDefault();
-              showSlide(activeGallery, Number(activeGallery.dataset.activeIndex || 0) - 1);
+              activeGallery.dataset.autoAdvance = 'false';
+              showSlide(activeGallery, Number(activeGallery.dataset.activeIndex || 0) - 1, { direction: 'backward' });
             } else if (event.key === 'ArrowRight') {
               event.preventDefault();
-              showSlide(activeGallery, Number(activeGallery.dataset.activeIndex || 0) + 1);
+              activeGallery.dataset.autoAdvance = 'true';
+              showSlide(activeGallery, Number(activeGallery.dataset.activeIndex || 0) + 1, { direction: 'forward' });
             }
           });
         }
