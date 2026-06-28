@@ -98,6 +98,8 @@ if (!controlHtml.includes('ke_personalization_profile') || controlHtml.includes(
 if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankEventDetailRelated') || !controlHtml.includes('served_list_id') || !controlHtml.includes('createServedListSummary')) throw new Error('Control page misses event_detail_related local-rerank/served-list contract');
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
+const faviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
+if (!faviconSvg.includes('cathedral-tower') || !faviconSvg.includes('calendar-page') || !faviconSvg.includes('heart-ribbon-left') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the two-color calendar/church vector SVG without embedded raster');
 const footerSocialUrls = [
   'https://t.me/kenigevents',
   'https://t.me/kldevents',
