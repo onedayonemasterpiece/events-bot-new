@@ -1,5 +1,6 @@
 import previewData from '../data/preview-events.json';
 import relatedData from '../data/preview-related.json';
+import { eventImageUrl } from './assets';
 import type {
   DiscoveryDisplayPayload,
   EventDetailRelatedManifest,
@@ -301,7 +302,7 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     href: eventHref(event),
     absolute_url: eventAbsoluteUrl(event),
     event_type: event.event_type,
-    image_url: event.image_url,
+    image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
     display_date: displayDate(event),
@@ -408,7 +409,7 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     href: eventHref(event),
     absolute_url: eventAbsoluteUrl(event),
     event_type: event.event_type,
-    image_url: event.image_url,
+    image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
     image_text_mode: event.image_text_mode,
     display_date: displayDate(event),

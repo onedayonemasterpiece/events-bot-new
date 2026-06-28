@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
+import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
 
 const events = getWeekendEvents();
@@ -38,6 +39,8 @@ const description = `Статический preview-листинг событи�
           </div>
         </div>
       </section>
+
+      <PersonalFeedSlot context="weekend" />
     </div>
   </main>
 </EventLayout>

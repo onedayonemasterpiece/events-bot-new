@@ -6,6 +6,7 @@ import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
+import { eventImageUrl } from '../../lib/assets';
 import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
@@ -48,11 +49,11 @@ const galleryCta = galleryCtaEvent ? {
   title: galleryCtaEvent.title,
   href: eventHref(galleryCtaEvent),
   label: 'Смотреть похожее',
-  image_url: galleryCtaEvent.image_url,
+  image_url: eventImageUrl(galleryCtaEvent.image_url),
   meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
 } : undefined;
 ---
-<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData} heroChrome="immersive">
+<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={structuredData} heroChrome="immersive">
   <main id="main">
     <div class="page-shell page-shell--event-impact">
       <div class="event-grid">

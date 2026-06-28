@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
+import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { absoluteUrl, eventDaypart, getTomorrowDate, getTomorrowEvents, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
@@ -68,6 +69,8 @@ const sections = dayparts
           )}
         </div>
       </section>
+
+      <PersonalFeedSlot context="tomorrow" />
     </div>
   </main>
 </EventLayout>

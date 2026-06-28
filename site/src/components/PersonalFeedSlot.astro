@@ -1,0 +1,15 @@
+---
+interface Props {
+  context: 'today' | 'tomorrow' | 'weekend';
+}
+const { context } = Astro.props;
+---
+<section class="section-card personal-feed-section" data-personal-feed-section data-listing-context={context} hidden>
+  <div class="section-card__inner">
+    <p class="eyebrow">Личная лента</p>
+    <h2>Дальше — под ваши интересы</h2>
+    <p class="muted-note personal-feed-section__status" data-personal-feed-status>Подбираем события…</p>
+    <div class="cards-grid cards-grid--feed personal-feed-section__feed" data-personal-feed-slot data-feed-card-variant="split-actions" data-listing-context={context}></div>
+    <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
+  </div>
+</section>

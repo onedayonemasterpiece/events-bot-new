@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, isCalendarEligible } from '../lib/events';
+import { eventImageUrl } from '../lib/assets';
 type CardVariant = 'overlay-controls' | 'split-actions';
 interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
 const { event, label, variant = 'split-actions' } = Astro.props;
@@ -15,6 +16,7 @@ const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
 const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
+const imageUrl = eventImageUrl(event.image_url);
 function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
@@ -33,9 +35,9 @@ const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'ev
 ---
 <article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
-    {event.image_url ? (
+    {imageUrl ? (
       <span class={mediaShellClass}>
-        <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined} />
+        <img class="event-card__media" src={imageUrl} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined} />
       </span>
     ) : (
       <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">

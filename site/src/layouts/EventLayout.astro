@@ -15,6 +15,9 @@ const { title, description, canonicalUrl, ogImage, structuredData = [], heroChro
 const robots = 'noindex,nofollow,noarchive';
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
+const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
 
 const FOOTER_SOCIAL_LINKS = [
   { network: 'Telegram', label: 'Анонсы', href: 'https://t.me/kenigevents', icon: 'telegram' },
@@ -129,7 +132,6 @@ const FOOTER_SOCIAL_LINKS = [
       .mobile-discovery-menu { display: none; }
       .mobile-discovery-menu__summary { list-style: none; cursor: pointer; }
       .mobile-discovery-menu__summary::-webkit-details-marker { display: none; }
-      .mobile-discovery-menu__brand-icon { display: none; }
       .mobile-discovery-menu__panel { display: block; }
       .mobile-discovery-menu__nav { display: block; }
       .mobile-discovery-menu__links { display: flex; gap: 1rem; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
@@ -762,6 +764,9 @@ const FOOTER_SOCIAL_LINKS = [
       .listing-daypart__header h3 { margin: 0; font-size: clamp(1.35rem, 5vw, 2rem); line-height: 1; letter-spacing: -0.055em; }
       .listing-daypart__count { min-width: 2.2rem; min-height: 2.2rem; display: inline-grid; place-items: center; border: 1px solid rgba(121,48,20,0.12); border-radius: 999px; background: #fff7ea; color: var(--primary-strong); font-weight: 920; }
       .listing-stack { display: grid; gap: 0.85rem; }
+      .personal-feed-section { margin-top: 1rem; }
+      .personal-feed-section__status { margin: 0 0 0.85rem; }
+      .personal-feed-section__refresh { margin-top: 0.9rem; }
       .listing-item { display: grid; grid-template-columns: minmax(132px, 18%) minmax(0, 1fr); gap: 0; align-items: stretch; min-height: 168px; padding: 0; overflow: hidden; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
       .listing-item__media { display: block; min-height: 100%; height: 100%; overflow: hidden; border-radius: 22px 0 0 22px; background: #15110f; text-decoration: none; align-self: stretch; }
       .listing-item__media--cover { position: relative; min-height: 168px; background: linear-gradient(135deg, #8a3f23, #0f766e); }
@@ -918,14 +923,13 @@ const FOOTER_SOCIAL_LINKS = [
           top: calc(var(--drawer-rail-h) + env(safe-area-inset-top) - 7px);
           z-index: 2;
           width: 8.8rem;
-          min-height: 6.35rem;
+          min-height: 4.2rem;
           display: inline-flex;
           align-items: center;
-          justify-content: end;
-          gap: 0.42rem;
+          justify-content: center;
           overflow: hidden;
           isolation: isolate;
-          padding: 1.45rem 0.76rem 0.58rem;
+          padding: 1.05rem 0.76rem 0.62rem;
           border: 1px solid rgba(255,255,255,0.14);
           border-radius: 0 0 10px 10px;
           background: linear-gradient(160deg, #793014 0%, #a54821 100%);
@@ -939,43 +943,21 @@ const FOOTER_SOCIAL_LINKS = [
         .mobile-discovery-menu[open] .mobile-discovery-menu__summary {
           box-shadow: 0 18px 38px rgba(72, 45, 25, 0.30), 0 1px 0 rgba(255,255,255,0.12) inset;
         }
-        .mobile-discovery-menu__brand-icon {
-          position: absolute;
-          left: 0.38rem;
-          bottom: 0.2rem;
-          z-index: 2;
-          display: block;
-          width: 4.4rem;
-          height: 5.35rem;
-          color: #fff1df;
-          background: currentColor;
-          -webkit-mask: var(--brand-icon-mask) center / contain no-repeat;
-          mask: var(--brand-icon-mask) center / contain no-repeat;
-          transform: translate3d(-135%, 0, 0) scale(0.94);
-          opacity: 0;
-          will-change: transform, opacity;
-          animation: mobile-brand-icon-cycle 11s cubic-bezier(0.22, 0.86, 0.32, 1) 2.2s infinite;
-          pointer-events: none;
-        }
         .mobile-discovery-menu__label {
           position: relative;
           z-index: 1;
-          min-width: 6.58rem;
-          transform-origin: left bottom;
-          will-change: transform, opacity;
-          animation: mobile-brand-text-cycle 11s cubic-bezier(0.22, 0.86, 0.32, 1) 2.2s infinite;
+          display: grid;
+          gap: 0.04rem;
+          min-width: 7.1rem;
+          transform-origin: center;
+          will-change: transform;
+          animation: mobile-brand-title-sway 14s cubic-bezier(0.22, 0.86, 0.32, 1) 2.8s infinite;
         }
-        @keyframes mobile-brand-icon-cycle {
-          0%, 16% { opacity: 0; transform: translate3d(-135%, 0, 0) scale(0.94); }
-          24%, 58% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-          70%, 100% { opacity: 0; transform: translate3d(-135%, 0, 0) scale(0.96); }
-        }
-        @keyframes mobile-brand-text-cycle {
-          0%, 18% { opacity: 1; transform: translate3d(0, 0, 0); }
-          25%, 35% { opacity: 1; transform: translate3d(3.55rem, 0, 0); }
-          43%, 57% { opacity: 0; transform: translate3d(-5.65rem, 0, 0); }
-          69%, 78% { opacity: 1; transform: translate3d(3.2rem, 0, 0); }
-          88%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
+        @keyframes mobile-brand-title-sway {
+          0%, 20% { transform: translate3d(0, 0, 0); }
+          30%, 42% { transform: translate3d(0.62rem, 0, 0); }
+          54%, 66% { transform: translate3d(-0.42rem, 0, 0); }
+          78%, 100% { transform: translate3d(0, 0, 0); }
         }
         .mobile-discovery-menu__kicker {
           font-size: 0.56rem;
@@ -990,10 +972,6 @@ const FOOTER_SOCIAL_LINKS = [
           font-weight: 950;
           line-height: 0.9;
           letter-spacing: -0.065em;
-        }
-        .mobile-discovery-menu__label {
-          display: grid;
-          gap: 0.04rem;
         }
         .mobile-discovery-menu__panel {
           position: absolute;
@@ -1263,7 +1241,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
     </style>
   </head>
-  <body class={bodyClass}>
+  <body class={bodyClass} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -1272,8 +1250,7 @@ const FOOTER_SOCIAL_LINKS = [
           <span class="brand__sub">афиша событий</span>
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
-          <summary class="mobile-discovery-menu__summary" style={`--brand-icon-mask: url(${withBase('/brand-mark.svg')})`} aria-label="Открыть навигацию афиши">
-            <span class="mobile-discovery-menu__brand-icon" aria-hidden="true"></span>
+          <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
             <span class="mobile-discovery-menu__label">
               <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
               <span class="mobile-discovery-menu__name">Анонсы</span>
@@ -1344,6 +1321,11 @@ const FOOTER_SOCIAL_LINKS = [
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         const DEFAULT_PRELOAD_TARGET = 10;
+        const PERSONAL_FEED_CACHE_KEY = 'ke_listing_personal_feed_cache_v1';
+        const PERSONAL_FEED_SURFACE = 'listing_personal_feed';
+        const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
+        const PERSONAL_FEED_LIMIT = 30;
+        const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -1361,6 +1343,7 @@ const FOOTER_SOCIAL_LINKS = [
         const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
         let pendingConsentAction = null;
+        let personalFeedRequest = null;
 
         function readJson(key, fallback) {
           try {
@@ -1778,6 +1761,197 @@ const FOOTER_SOCIAL_LINKS = [
             page_size: Number(payload?.page_size || DEFAULT_PRELOAD_TARGET),
             related_static: events,
           };
+        }
+
+
+        function personalFeedProfileHash(profile) {
+          return stableHash({
+            profile_version: profile?.profile_version || null,
+            feature_schema_version: profile?.feature_schema_version || FEATURE_SCHEMA_VERSION,
+            taxonomy_version: profile?.taxonomy_version || TAXONOMY_VERSION,
+            anon_id: profile?.anon_id || null,
+            positive_tags: profile?.positive_tags || {},
+            negative_interest_tags: profile?.negative_interest_tags || {},
+            liked_event_ids: toArray(profile?.liked_event_ids).slice(-80),
+            not_interested_event_ids: toArray(profile?.not_interested_event_ids).slice(-120),
+            hidden_event_ids: toArray(profile?.hidden_event_ids).slice(-120),
+            price_preferences: profile?.price_preferences || {},
+          });
+        }
+
+        function normalizePersonalFeedItem(item, index) {
+          const candidate = item && item.candidate ? item.candidate : item;
+          const display = displayOf(candidate);
+          const id = candidateId(candidate) ?? display.id ?? display.event_id;
+          return {
+            event_id: id,
+            title: candidate?.title || display.title || 'Событие',
+            category: candidate?.category || display.event_type || 'event',
+            tags: unique([...(toArray(candidate?.tags)), display.event_type, candidate?.category]),
+            audience_exclusion_tags: toArray(candidate?.audience_exclusion_tags),
+            city: candidate?.city || display.city || null,
+            location_name: candidate?.location_name || display.venue_name || null,
+            date: candidate?.date || display.display_date || display.date || '',
+            status: candidate?.status || display.status_label || 'available',
+            lifecycle_status: candidate?.lifecycle_status || 'active',
+            is_free: Boolean(candidate?.is_free) || /бесплат|свободн/iu.test(display.price_label || ''),
+            base_similarity: Number(candidate?.base_similarity ?? candidate?.personal_score ?? Math.max(0, 1 - index * 0.01)),
+            static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.01)),
+            reason_codes: unique([...(toArray(candidate?.reason_codes)), 'backend:listing_personal_feed']),
+            exploration_candidate: Boolean(candidate?.exploration_candidate),
+            display: {
+              ...display,
+              id,
+              href: display.href || candidate?.href || '#',
+              absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+              title: display.title || candidate?.title || 'Событие',
+              image_url: display.image_url || candidate?.image_url || null,
+              image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
+              image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
+              display_date: display.display_date || candidate?.date || '',
+              display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
+              city: display.city || candidate?.city || null,
+              venue_name: display.venue_name || candidate?.location_name || null,
+              place: display.place || [display.city || candidate?.city, display.venue_name || candidate?.location_name].filter(Boolean).join(' · '),
+              status_label: display.status_label || candidate?.status || '',
+              price_label: display.price_label || null,
+              likes_count: Number(display.likes_count || 0),
+              shares_count: Number(display.shares_count || 0),
+              calendar_href: display.calendar_href || candidate?.calendar_href || '#',
+              calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
+            },
+          };
+        }
+
+        function normalizePersonalFeedManifest(payload) {
+          const items = toArray(payload?.related_static || payload?.items || payload?.events || payload?.recommendations);
+          return {
+            version: payload?.version || 1,
+            schema_version: payload?.schema_version || PERSONAL_FEED_SCHEMA_VERSION,
+            feature_schema_version: payload?.feature_schema_version || FEATURE_SCHEMA_VERSION,
+            taxonomy_version: payload?.taxonomy_version || TAXONOMY_VERSION,
+            surface: payload?.surface || PERSONAL_FEED_SURFACE,
+            algorithm_id: payload?.algorithm_id || 'supabase_rpc_personal_feed_v1',
+            generated_at: payload?.generated_at || new Date().toISOString(),
+            preload_target: Number(payload?.preload_target || PERSONAL_FEED_LIMIT),
+            page_size: Number(payload?.page_size || PERSONAL_FEED_LIMIT),
+            current_event: null,
+            related_static: items.map(normalizePersonalFeedItem).filter((item) => item.event_id != null),
+          };
+        }
+
+        function readPersonalFeedCache(profile) {
+          const cache = readJson(PERSONAL_FEED_CACHE_KEY, null);
+          if (!cache || cache.schema_version !== PERSONAL_FEED_SCHEMA_VERSION) return null;
+          if (Number(cache.expires_at || 0) <= Date.now()) return null;
+          if (cache.profile_hash !== personalFeedProfileHash(profile)) return null;
+          if (!cache.manifest || !Array.isArray(cache.manifest.related_static)) return null;
+          return cache.manifest;
+        }
+
+        function writePersonalFeedCache(manifest, profile) {
+          if (!manifest || !Array.isArray(manifest.related_static) || !manifest.related_static.length) return;
+          writeJson(PERSONAL_FEED_CACHE_KEY, {
+            schema_version: PERSONAL_FEED_SCHEMA_VERSION,
+            profile_hash: personalFeedProfileHash(profile),
+            saved_at: Date.now(),
+            expires_at: Date.now() + PERSONAL_FEED_TTL_MS,
+            manifest,
+          });
+        }
+
+        function personalFeedConfig() {
+          const url = String(document.body.dataset.personalFeedSupabaseUrl || '').replace(/\/+$/u, '');
+          const key = String(document.body.dataset.personalFeedSupabaseKey || '');
+          const rpc = String(document.body.dataset.personalFeedRpcName || 'get_listing_personal_feed_v1');
+          if (!url || !key || !rpc) return null;
+          return { url, key, rpc };
+        }
+
+        function compactProfileForRpc(profile) {
+          if (!isCompatibleProfile(profile)) return null;
+          return {
+            anon_id: profile.anon_id,
+            session_id: profile.session_id,
+            feature_schema_version: profile.feature_schema_version,
+            taxonomy_version: profile.taxonomy_version,
+            positive_tags: profile.positive_tags || {},
+            negative_interest_tags: profile.negative_interest_tags || {},
+            liked_event_ids: toArray(profile.liked_event_ids).slice(-80),
+            not_interested_event_ids: toArray(profile.not_interested_event_ids).slice(-120),
+            hidden_event_ids: toArray(profile.hidden_event_ids).slice(-120),
+            seen_event_ids: toArray(profile.seen_event_ids).slice(-120),
+            seen_venue_ids: toArray(profile.seen_venue_ids).slice(-80),
+            price_preferences: profile.price_preferences || {},
+          };
+        }
+
+        async function fetchPersonalFeedManifest(profile) {
+          const config = personalFeedConfig();
+          if (!config) return null;
+          const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              apikey: config.key,
+              Authorization: `Bearer ${config.key}`,
+            },
+            body: JSON.stringify({
+              p_surface: PERSONAL_FEED_SURFACE,
+              p_limit: PERSONAL_FEED_LIMIT,
+              p_profile: compactProfileForRpc(profile),
+            }),
+          });
+          if (!response.ok) return null;
+          return normalizePersonalFeedManifest(await response.json());
+        }
+
+        async function getPersonalFeedManifest({ force = false } = {}) {
+          const profile = readProfile();
+          if (!force) {
+            const cached = readPersonalFeedCache(profile);
+            if (cached) return cached;
+          }
+          if (!personalFeedConfig()) return null;
+          if (personalFeedRequest && !force) return personalFeedRequest;
+          personalFeedRequest = fetchPersonalFeedManifest(profile)
+            .then((manifest) => {
+              if (manifest) writePersonalFeedCache(manifest, profile);
+              return manifest;
+            })
+            .catch(() => null)
+            .finally(() => { personalFeedRequest = null; });
+          return personalFeedRequest;
+        }
+
+        function renderPersonalFeedSection(section, manifest) {
+          const slot = section.querySelector('[data-personal-feed-slot]');
+          const status = section.querySelector('[data-personal-feed-status]');
+          const refresh = section.querySelector('[data-personal-feed-refresh]');
+          if (!slot || !manifest || !toArray(manifest.related_static).length) {
+            section.hidden = true;
+            return;
+          }
+          const profile = activeProfile(manifest);
+          const ranked = rankEventDetailRelated(manifest, profile, { maxSameCategory: 4, maxSameVenue: 3 }).slice(0, PERSONAL_FEED_LIMIT);
+          const eligible = ranked.filter((item) => isEligibleCandidate(item.candidate, manifest, profile));
+          if (!eligible.length) {
+            section.hidden = true;
+            return;
+          }
+          slot.innerHTML = eligible.map((item) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions')).join('');
+          section.hidden = false;
+          if (status) status.hidden = true;
+          if (refresh) refresh.hidden = !personalFeedConfig();
+          syncCardsFeedbackState(profile);
+        }
+
+        async function hydratePersonalFeedSlots({ force = false } = {}) {
+          const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
+          if (!sections.length) return;
+          const manifest = await getPersonalFeedManifest({ force });
+          sections.forEach((section) => renderPersonalFeedSection(section, manifest));
         }
 
         async function ensureDiscoveryStore(feed) {
@@ -2258,6 +2432,7 @@ const FOOTER_SOCIAL_LINKS = [
           if (!options.skipDiscoveryHydration) {
             await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
+          await hydratePersonalFeedSlots({ force: false });
           renderFeedbackReport();
         }
 
@@ -2433,6 +2608,13 @@ const FOOTER_SOCIAL_LINKS = [
           const feed = button.parentElement?.querySelector('[data-discovery-feed]');
           if (!feed) return;
           await syncFeedWithManifest(feed, { automatic: false });
+        });
+
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-personal-feed-refresh]');
+          if (!button) return;
+          event.preventDefault();
+          await hydratePersonalFeedSlots({ force: true });
         });
 
         const sticky = document.querySelector('[data-sticky-cta]');

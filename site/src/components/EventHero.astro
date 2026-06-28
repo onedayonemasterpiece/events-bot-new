@@ -3,6 +3,7 @@ import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
 import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, withBase } from '../lib/events';
+import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
 export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
@@ -31,7 +32,9 @@ type HeroGalleryImage = {
 
 const { event, modeOverride, composition, headingTag = 'h1', galleryCta } = Astro.props;
 const HeadingTag = headingTag;
-const derivedMode: HeroMode = event.image_url ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
+const primaryImageUrl = eventImageUrl(event.image_url);
+const galleryCtaImageUrl = eventImageUrl(galleryCta?.image_url);
+const derivedMode: HeroMode = primaryImageUrl ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
 const derivedComposition: HeroComposition = heroMode === 'fallback-art'
   ? 'compact-ticketing'
@@ -85,9 +88,9 @@ const galleryImages = (() => {
       recommended_object_position: normalizeObjectPosition(image?.recommended_object_position) || undefined,
     });
   };
-  if (event.image_url) {
+  if (primaryImageUrl) {
     push({
-      src: event.image_url,
+      src: primaryImageUrl,
       alt: heroAlt,
       image_text_mode: event.image_text_mode,
       recommended_object_position: heroObjectPosition || undefined,
@@ -96,7 +99,7 @@ const galleryImages = (() => {
   }
   for (const asset of event.image_assets || []) {
     push({
-      src: asset.src,
+      src: eventImageUrl(asset.src) || asset.src,
       alt: asset.alt || heroAlt,
       image_text_mode: asset.image_text_mode || 'unknown',
       recommended_object_position: asset.recommended_object_position,
@@ -117,10 +120,10 @@ const showTicketCta = Boolean(ctaHref);
 <section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
   {hasGallery ? (
     <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
-      {event.image_url && heroMode !== 'fallback-art' ? (
+      {primaryImageUrl && heroMode !== 'fallback-art' ? (
         <img
           class="event-hero__image"
-          src={event.image_url}
+          src={primaryImageUrl}
           alt={heroAlt}
           loading="eager"
           decoding="async"
@@ -196,7 +199,7 @@ const showTicketCta = Boolean(ctaHref);
         ))}
         {galleryCta && (
           <article class="hero-gallery__slide hero-gallery__slide--cta" data-hero-gallery-slide data-gallery-slide-kind="cta" data-gallery-index={galleryImages.length} aria-hidden="true">
-            {galleryCta.image_url && <img class="hero-gallery__cta-image" data-gallery-src={galleryCta.image_url} alt="" loading="lazy" decoding="async" />}
+            {galleryCtaImageUrl && <img class="hero-gallery__cta-image" data-gallery-src={galleryCtaImageUrl} alt="" loading="lazy" decoding="async" />}
             <div class="hero-gallery__cta-card">
               <span>Дальше можно похожее</span>
               <h2>{galleryCta.title}</h2>

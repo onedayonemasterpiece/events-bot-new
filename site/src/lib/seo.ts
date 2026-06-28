@@ -1,5 +1,6 @@
 import type { PreviewEvent } from './types';
 import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
+import { eventImageUrl } from './assets';
 
 const KALININGRAD_TZ_OFFSET = '+02:00';
 
@@ -31,7 +32,7 @@ export function buildEventJsonLd(event: PreviewEvent) {
       addressCountry: 'RU',
     },
   } : undefined;
-  const imageList = Array.from(new Set([event.image_url, ...(event.image_assets || []).map((image) => image.src)].filter(Boolean))) as string[];
+  const imageList = Array.from(new Set([event.image_url, ...(event.image_assets || []).map((image) => image.src)].map((image) => eventImageUrl(image)).filter(Boolean))) as string[];
   const offerUrl = isExternalHttpUrl(event.ticket.href) ? event.ticket.href : (isExternalHttpUrl(event.source_url) ? event.source_url : undefined);
   const offer = offerUrl ? {
     '@type': 'Offer',

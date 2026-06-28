@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
+import { eventImageUrl } from '../lib/assets';
 
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
@@ -10,11 +11,12 @@ const calendarHref = eventCalendarHref(event);
 const canAddToCalendar = isCalendarEligible(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const dateTimeLabel = displayDateTime(event);
+const imageUrl = eventImageUrl(event.image_url);
 ---
 <article class="listing-item">
   <a class="listing-item__media listing-item__media--cover" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
-    {event.image_url ? (
-      <img class="listing-item__image" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
+    {imageUrl ? (
+      <img class="listing-item__image" src={imageUrl} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
     ) : (
       <span class="listing-item__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
     )}

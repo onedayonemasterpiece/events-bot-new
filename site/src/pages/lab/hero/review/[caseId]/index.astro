@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../../../../layouts/EventLayout.astro';
 import EventHero, { type HeroComposition } from '../../../../../components/EventHero.astro';
+import { eventImageUrl } from '../../../../../lib/assets';
 import { HERO_REVIEW_CASES, type HeroReviewCase } from '../../../../../lib/heroReview';
 import { absoluteUrl, getEvents, withBase } from '../../../../../lib/events';
 
@@ -18,7 +19,7 @@ if (!event) {
 const title = `${reviewCase.variant} | Hero review`;
 const canonicalUrl = absoluteUrl(`/lab/hero/review/${reviewCase.caseId}/`);
 ---
-<EventLayout title={title} description={reviewCase.note} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={[]} heroChrome="immersive">
+<EventLayout title={title} description={reviewCase.note} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={[]} heroChrome="immersive">
   <main id="main">
     <div class="page-shell page-shell--event-impact">
       <article class="main-col section-card section-card--hero section-card--impact-hero">
