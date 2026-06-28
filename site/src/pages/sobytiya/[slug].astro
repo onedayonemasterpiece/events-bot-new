@@ -64,11 +64,10 @@ const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroCo
         <div class="section-card__inner">
           <h2>Описание</h2>
           <div class="prose" set:html={event.description_html} />
-          <h2 style="margin-top: 1.2rem;">Факты и источники</h2>
+          <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />
           <div class="source-links" aria-label="Источники данных">
             {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
-            {event.telegraph_url && <a href={event.telegraph_url} target="_blank" rel="noopener noreferrer nofollow">Telegraph</a>}
           </div>
         </div>
       </section>

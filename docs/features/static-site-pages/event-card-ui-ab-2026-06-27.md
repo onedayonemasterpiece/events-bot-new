@@ -4,9 +4,9 @@
 
 Проверить, помогает ли двухстрочная схема действий в мобильной ленте события сделать карточку менее перегруженной, вернуть `В календарь` для однодневных событий и сохранить главный продуктовый принцип: крупный лайк остаётся справа снизу, в зоне правого большого пальца.
 
-## v26 decision
+## v27 decision
 
-After product review and the v26 Opus fallback consultation, `split-actions` is accepted as the baseline for normal event-detail discovery feeds. `overlay-controls` remains a historical/rejected variant: it overloaded the image/card bottom area and made service actions too prominent. The under-card row must keep visible `Поделиться` text and a large like at the right-thumb end. Calendar appears for all calendar-eligible feed cards; `Не интересно` stays low-priority and should move toward an undo-safe destructive-action pattern before production.
+After product review and the v26 Opus fallback consultation, `split-actions` is accepted as the baseline for normal event-detail discovery feeds. `overlay-controls` remains a historical/rejected variant: it overloaded the image/card bottom area and made service actions too prominent. In v27 the under-card row keeps visible `Поделиться` text but clusters it near the large like at the right-thumb end instead of stretching share to the far left. Calendar appears for all calendar-eligible feed cards; `Не интересно` is visually demoted to a quiet utility action and should still move toward an undo-safe destructive-action pattern before production.
 
 ## Варианты
 

@@ -197,7 +197,7 @@ const FOOTER_SOCIAL_LINKS = [
       .section-card--hero { overflow: hidden; }
       .section-card--impact-hero { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
       .section-card__inner--hero { padding: 0; }
-      .event-hero { display: grid; overflow: hidden; border-radius: inherit; background: var(--surface-strong); }
+      .event-hero { position: relative; display: grid; overflow: hidden; border-radius: inherit; background: var(--surface-strong); }
       .event-hero__visual {
         --hero-bg: #1c1c1c;
         position: relative;
@@ -336,10 +336,10 @@ const FOOTER_SOCIAL_LINKS = [
       .event-card--split-actions:hover { border-color: transparent; box-shadow: none; }
       .event-card--split-actions .event-card__media-link { border: 1px solid rgba(121,48,20,0.13); border-bottom: 0; border-radius: 24px 24px 0 0; overflow: hidden; }
       .event-card--split-actions .event-card__body { background: #15110f; color: #fff; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); padding-bottom: 0.7rem; }
-      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: space-between; gap: 0.42rem; padding: 0 0.78rem 0.78rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
+      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
       .event-card--split-actions .event-card__utility-row .feedback-button { min-height: 44px; box-shadow: none; }
-      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: auto; color: rgba(255,255,255,0.72); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.13); font-size: 0.78rem; }
-      .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: space-between; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
+      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: 0; min-height: 36px; padding-inline: 0.22rem; color: rgba(255,255,255,0.56); background: transparent; border-color: transparent; font-size: 0.74rem; }
+      .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
       .event-card--split-actions .event-card__feedback .feedback-button { min-width: 44px; min-height: 44px; padding: 0 0.28rem; color: rgba(58,48,40,0.70); background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px; }
       .event-card--split-actions .event-card__feedback .feedback-button:hover { color: #2b211a; background: rgba(121,48,20,0.07); }
       .event-card--split-actions .event-card__feedback .feedback-button--share { min-width: 44px; }
@@ -424,8 +424,12 @@ const FOOTER_SOCIAL_LINKS = [
       .mobile-sticky-cta__title strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .mobile-sticky-cta__title span { display: block; color: var(--muted); font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       footer { position: relative; z-index: 1; border-top: 1px solid var(--line); padding: 2rem 0 6rem; color: var(--muted); }
-      .site-footer__inner { display: grid; gap: 0.7rem; }
+      .site-footer__inner { display: grid; gap: 0.8rem; }
+      .site-footer__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.8rem; }
       .site-footer__title { color: var(--text); font-size: 1rem; }
+      .site-footer__nav { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+      .site-footer__nav a { min-height: 38px; display: inline-flex; align-items: center; padding: 0.35rem 0.65rem; border: 1px solid rgba(121,48,20,0.12); border-radius: 999px; background: rgba(255,253,248,0.72); color: var(--primary-strong); text-decoration: none; font-weight: 760; }
+      .site-footer__nav a:hover { background: #fff; border-color: rgba(165,72,33,0.34); color: var(--text); }
       .site-footer__social { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.2rem; }
       .site-footer__social-link {
         min-height: 44px;
@@ -438,12 +442,14 @@ const FOOTER_SOCIAL_LINKS = [
         background: rgba(255, 253, 248, 0.86);
         color: var(--primary-strong);
         text-decoration: none;
-        font-weight: 820;
+        font-size: 0.95rem;
+        font-weight: 520;
         box-shadow: 0 8px 18px rgba(72,45,25,0.06);
       }
       .site-footer__social-link:hover { background: #fff; border-color: rgba(165,72,33,0.34); color: var(--text); }
-      .site-footer__social-network { color: var(--muted); font-size: 0.82rem; }
-      .site-footer__social-label { color: var(--text); }
+      .site-footer__social-network { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .site-footer__social-label { color: var(--text); font-weight: 520; }
+      .site-footer__note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.92rem; }
       .social-icon { width: 1.28rem; height: 1.28rem; flex: 0 0 auto; display: block; }
       .social-icon--max { color: #111; }
       .details-disclosure summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 900; font-size: 1.08rem; }
@@ -599,6 +605,11 @@ const FOOTER_SOCIAL_LINKS = [
           padding-top: 0;
           display: block;
         }
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu:not([open]) .mobile-discovery-menu__summary {
+          transform: translate3d(0, calc(-100% - 10px), 0);
+          opacity: 0;
+          pointer-events: none;
+        }
         body.hero-chrome-immersive main { padding-top: 0; }
         body.hero-chrome-immersive .page-shell--event-impact { width: min(100% - 24px, 1180px); }
         body.hero-chrome-immersive .event-grid {
@@ -660,8 +671,8 @@ const FOOTER_SOCIAL_LINKS = [
         }
         .event-hero--photo-cinematic-sheet.event-hero--photo-cover .event-hero__visual,
         .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__visual {
-          min-height: min(64dvh, 560px);
-          max-height: min(64dvh, 560px);
+          min-height: min(64svh, 560px);
+          max-height: min(64svh, 560px);
           aspect-ratio: auto;
         }
         .event-hero--photo-cinematic-sheet.event-hero--photo-cover .event-hero__image,
@@ -725,6 +736,15 @@ const FOOTER_SOCIAL_LINKS = [
           width: 100%;
           background: #fff;
           border-color: rgba(121,48,20,0.18);
+        }
+        .event-hero__actions .feedback-button--like {
+          gap: 0.34rem;
+          color: #c93434;
+          box-shadow: none;
+        }
+        .event-hero__actions .feedback-button--like[aria-pressed="true"] {
+          background: rgba(201,52,52,0.10);
+          border-color: rgba(201,52,52,0.18);
         }
         .event-hero__facts { gap: 0.45rem; }
         .event-hero__fact { padding: 0.58rem 0.65rem; }
@@ -814,7 +834,14 @@ const FOOTER_SOCIAL_LINKS = [
     <slot />
     <footer class="site-footer">
       <div class="page-shell site-footer__inner">
-        <strong class="site-footer__title">{SITE_NAME}</strong>
+        <div class="site-footer__top">
+          <strong class="site-footer__title">{SITE_NAME}</strong>
+          <nav class="site-footer__nav" aria-label="Навигация по афише">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/vyhodnye/')}>Выходные</a>
+            <a href={withBase('/__preview/')}>Все анонсы</a>
+          </nav>
+        </div>
         <nav class="site-footer__social" aria-label="Соцсети Полюбить Калининград Анонсы">
           {FOOTER_SOCIAL_LINKS.map((link) => (
             <a
@@ -830,8 +857,7 @@ const FOOTER_SOCIAL_LINKS = [
             </a>
           ))}
         </nav>
-        <p>Preview-сборка статических страниц событий. Роботам закрыто через meta robots и robots.txt.</p>
-        <p>Домен: {SITE_ORIGIN}. Все preview canonical URL содержат текущий prefix.</p>
+        <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
       </div>
     </footer>
 
@@ -1588,11 +1614,13 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
         function syncCardsFeedbackState(profile) {
-          document.querySelectorAll('[data-event-card]').forEach((card) => {
+          document.querySelectorAll('[data-event-card], [data-feedback-scope]').forEach((card) => {
             const eventId = card.dataset.eventId;
             const current = eventState(profile, eventId);
             card.classList.toggle('is-liked', Boolean(current.liked));
-            card.classList.toggle('is-not-interested', Boolean(current.not_interested) && !card.hidden);
+            if (card.matches('[data-event-card]')) {
+              card.classList.toggle('is-not-interested', Boolean(current.not_interested) && !card.hidden);
+            }
             card.querySelectorAll('[data-feedback-action="like"]').forEach((button) => {
               const base = Number(button.dataset.baseCount || '0');
               const localLike = current.liked ? 1 : 0;
@@ -1734,7 +1762,8 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
         async function handleFeedbackButton(button) {
-          const eventId = button.dataset.eventId;
+          const scope = button.closest('[data-event-card], [data-feedback-scope]');
+          const eventId = button.dataset.eventId || scope?.dataset.eventId;
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
           const feed = card?.closest('[data-discovery-feed]');
@@ -1746,7 +1775,7 @@ const FOOTER_SOCIAL_LINKS = [
           }
           const candidate = store ? candidateById(store, eventId) : null;
           const current = eventState(profile, eventId);
-          const title = button.dataset.eventTitle || card?.dataset.eventTitle || '';
+          const title = button.dataset.eventTitle || scope?.dataset.eventTitle || '';
           let action = null;
           let shouldShowSharePrompt = false;
           if (button.dataset.feedbackAction === 'like') {
@@ -1768,7 +1797,7 @@ const FOOTER_SOCIAL_LINKS = [
           appendLog(createStrongAction(action, item, context, { event_title: title, action }), next);
           await applyFeedbackState({ anchorEventId: eventId });
           if (action === 'like_event') {
-            animateLikeBurst(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
+            animateLikeBurst(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || scope);
           }
           if (shouldShowSharePrompt) {
             showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
@@ -1786,14 +1815,15 @@ const FOOTER_SOCIAL_LINKS = [
         });
 
         async function recordShare(button) {
-          const eventId = button.dataset.shareEventId || button.closest('[data-event-card]')?.dataset.eventId;
+          const scope = button.closest('[data-event-card], [data-feedback-scope]');
+          const eventId = button.dataset.shareEventId || scope?.dataset.eventId;
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
           const feed = card?.closest('[data-discovery-feed]');
           const store = feed ? await ensureDiscoveryStore(feed) : null;
           const profile = activeProfile(store?.manifest);
           if (!profile) return;
-          const title = button.dataset.shareEventTitle || button.dataset.shareTitle || card?.dataset.eventTitle || '';
+          const title = button.dataset.shareEventTitle || button.dataset.shareTitle || scope?.dataset.eventTitle || '';
           const candidate = store ? candidateById(store, eventId) : null;
           const next = updateProfileForAction(profile, eventId, 'share_event', candidate);
           saveProfile(next);

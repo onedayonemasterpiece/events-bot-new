@@ -1,19 +1,16 @@
 ---
 import type { PreviewEvent } from '../lib/types';
-import { displayDate } from '../lib/events';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
-const dateLabel = displayDate(event);
+const sourceCount = Number(event.source_engagement_sources_count || 0);
+const sourceViews = Number(event.source_views_count || 0);
 const rows = [
-  ['Дата', dateLabel],
-  ['Время', event.display_time ? `${event.display_time} (${event.timezone})` : `уточняется (${event.timezone})`],
-  ['Город', event.city],
-  ['Площадка', event.venue_name],
   ['Адрес', event.address],
-  ['Тип', event.event_type],
   ['Фестиваль', event.festival],
   ['Вход', event.ticket.price_label || event.status_label],
   ['Пушкинская карта', event.pushkin_card ? 'возможна' : null],
+  ['Источники', sourceCount > 0 ? String(sourceCount) : null],
+  ['Просмотры в источниках', sourceViews > 0 ? sourceViews.toLocaleString('ru-RU') : null],
 ].filter(([, value]) => Boolean(value));
 ---
 <dl class="details-list">

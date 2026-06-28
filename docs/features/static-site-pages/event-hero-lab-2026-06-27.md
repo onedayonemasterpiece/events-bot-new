@@ -22,11 +22,11 @@ Historic consultant artifacts for v19 are stored under `artifacts/codex/hero-con
 
 
 
-## v26 drawer mechanics, parallax hardening and gallery policy
+## v27 drawer mechanics, parallax hardening and gallery policy
 
-v26 corrects the v24 drawer mechanics and hardens the v25 public review: the terracotta service tag is the **handle of the drawer**, not an independent button above content. Closed state shows only the handle; open state slides a real 100vw navigation rail down from the top and moves the handle down by the same rail height. The handle has no chevron/up/down icon and is clamped to `y>=0` so the touch target is not clipped above the viewport. On mobile, the large after-hero logo-button header is removed; the drawer handle remains the single navigation trigger, while `body.is-past-hero` is kept only as a state contract for sticky CTA/other logic.
+v27 keeps the corrected v24/v26 drawer mechanics: the terracotta service tag is the **handle of the drawer**, not an independent button above content. Closed state shows only the handle; open state slides a real 100vw navigation rail down from the top and moves the handle down by the same rail height. The handle has no chevron/up/down icon and is clamped to `y>=0` so the touch target is not clipped above the viewport. On mobile, the large after-hero logo-button header is removed; when the user is past the hero, the closed handle is hidden so it does not cover the feed/content. `body.is-past-hero` remains the state contract for sticky CTA/header/drawer chrome.
 
-Parallax remains allowed only for `visual_only` photo-cover hero compositions. The transform uses constant scale and vertical translate only; no class threshold may change scale or switch contain/cover while scrolling. `prefers-reduced-motion` disables the transform.
+Parallax remains allowed only for `visual_only` photo-cover hero compositions. The transform uses constant scale and vertical translate only; no class threshold may change scale or switch contain/cover while scrolling. v27 uses stable `svh` sizing for mobile photo heroes to avoid dynamic browser chrome resize jumps after scroll. `prefers-reduced-motion` disables the transform.
 
 Multi-image events are P1, but the product contract is fixed now:
 
@@ -38,7 +38,7 @@ Multi-image events are P1, but the product contract is fixed now:
 
 Smart Update/image-preparation requirement: when OCR/media enrichment runs, it must emit `ocr_boxes`, `face_boxes`, `saliency_boxes`, `focal_point`, `recommended_object_position`, `recommended_hero_fit` and `safe_crop`/crop guards. Face boxes are normalized 0..1 rectangles; cover crops must not cut the top of detected faces. If safe crop is impossible, the renderer must fall back to contain/natural presentation.
 
-External review status for v26: Gemini Pro consultation was attempted only on approved models (`gemini-3.1-pro-preview`, `gemini-3-pro-preview`) and was blocked by free-tier quota `limit: 0` / HTTP `429 RESOURCE_EXHAUSTED`; Flash/Lite/Gemma were not substituted. The same brief was sent to `a-opus` as the allowed fallback consultant. Opus accepted `split-actions` as the correct feed-card baseline and flagged follow-up hardening: drawer handle must not be clipped (`y>=0`, fixed in v26), JSON-LD `validFrom` must be ISO 8601 with timezone (fixed in v26), `Не интересно` should move toward an undo pattern, and multi-image hero should prioritize tap-to-fullscreen gallery before any autoplay.
+External review status for v26/v27: Gemini Pro consultation was attempted only on approved models (`gemini-3.1-pro-preview`, `gemini-3-pro-preview`) and was blocked by free-tier quota `limit: 0` / HTTP `429 RESOURCE_EXHAUSTED`; Flash/Lite/Gemma were not substituted. The same brief was sent to `a-opus` as the allowed fallback consultant. Opus accepted `split-actions` as the correct feed-card baseline and flagged follow-up hardening: drawer handle must not be clipped (`y>=0`, fixed in v26), JSON-LD `validFrom` must be ISO 8601 with timezone (fixed in v26), `Не интересно` should move toward an undo pattern, and multi-image hero should prioritize tap-to-fullscreen gallery before any autoplay.
 
 ## v24 sliding discovery row correction
 
@@ -122,7 +122,7 @@ Default event mapping in the current preview:
 
 ## Mobile header and breadcrumbs
 
-For event pages v26 keeps `heroChrome="immersive"` and uses the menu-enabled drawer handle:
+For event pages v27 keeps `heroChrome="immersive"` and uses the menu-enabled drawer handle:
 
 - while the hero is visible on mobile, the full site header is replaced by the compact top brand tag; it is fixed over the image, but no longer reserves vertical space before the hero;
 - after the hero leaves the viewport, JS toggles `body.is-past-hero` and reveals the full fixed header with navigation;
@@ -152,13 +152,13 @@ Preview routes:
 - `/lab/hero/review/` — public noindex review route with live 390×844 iframe frames grouped by event. It compares several compositions on the same event: `5878 × {poster-billboard, poster-attached-card, compact-ticketing}`, `6322 × {photo-cinematic-sheet, photo-parallax-sheet, compact-ticketing}`, and `4913 × {photo-cinematic-sheet, poster-attached-card}`.
 - `/lab/hero/review/<case>/` — individual full-page review cases used by those iframes.
 
-Public v26 URLs:
+Public v27 URLs:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v26/__preview/>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v26/lab/hero/>
-- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v26/lab/hero/review/>
-- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v26/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v26/lab/hero/review/6322-photo-parallax-sheet/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v27/__preview/>
+- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/>
+- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/review/>
+- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v27/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/review/6322-photo-parallax-sheet/>
 
 ## Acceptance checks
 
@@ -177,4 +177,4 @@ Public v26 URLs:
 - visual-only cinematic/parallax heroes have a reduced-motion-aware parallax hydrator with constant scale, stronger vertical offset and no end-of-hero scale snap;
 - split-actions under-card share/like remain transparent icon-style controls, not pill buttons.
 
-Playwright smoke evidence for v26 is stored under `artifacts/codex/hero-impact-v26/` and checks: poster image bbox `x=0,width=390` on 390px viewport, the terracotta drawer handle, the no-JS drawer rail opening with real links and moving the handle down, no chevron icon, the 1px/mobile-grid stripe disabled over the hero, no large after-hero logo-button header, constant-scale parallax vertical transform change on a visual-only event, same-event review iframe count, and screenshots for control/drawer/parallax/card states.
+Playwright smoke evidence for v27 is stored under `artifacts/codex/event-pages-v27/` and checks: poster/photo hero bbox and stable visual height, current-event like count/action, source count without Telegraph link, right-clustered split-actions share/like row, compact footer nav/social links, no large after-hero logo-button header, and constant-scale parallax vertical transform change on a visual-only event.

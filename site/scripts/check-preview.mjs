@@ -56,6 +56,7 @@ if (!controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
+if (!controlHtml.includes('data-feedback-scope') || !/data-event-hero[\s\S]{0,3500}data-feedback-action="like"/u.test(controlHtml)) throw new Error('Event hero must expose a first-party like button/count for the current event');
 if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.45-4.8')) throw new Error('Share/repost icon must use the VK-like outline path, not the old arrow stroke');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
@@ -105,6 +106,8 @@ if (!controlHtml.includes('Смотрите дальше')) throw new Error('Con
 if (controlVisibleHtml.includes('Preview A/B:') || controlVisibleHtml.includes('В HTML сразу предзагружены')) throw new Error('Normal event page must not expose preview/A-B/debug discovery copy');
 if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
 if (controlHtml.includes('Уточнить регистрацию')) throw new Error('Ambiguous registration CTA leaked');
+if (controlVisibleHtml.includes('Telegraph')) throw new Error('Event pages must not expose Telegraph link as a user-facing source');
+if (!controlVisibleHtml.includes('Источники') || !controlVisibleHtml.includes('Просмотры в источниках')) throw new Error('Compact facts must include source count and source views when available');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
@@ -181,7 +184,7 @@ if (!/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*--drawer-handle-top:\s*max
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
-if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*space-between/iu.test(css)) throw new Error('Split-actions under-card row must separate share text and right-thumb like');
+if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*flex-end/iu.test(css)) throw new Error('Split-actions under-card row must cluster share text near the right-thumb like action');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button--share \.share-label\{[^}]*position:\s*static/iu.test(css)) throw new Error('Split-actions share must keep visible text under the card');
 if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual-only cover media must use vertical 4:5 ratio');
