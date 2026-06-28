@@ -222,6 +222,7 @@ features:
       - site/astro.config.mjs
       - site/src/pages/[preview]/index.astro
       - site/src/pages/segodnya/index.astro
+      - site/src/pages/zavtra/index.astro
       - site/src/pages/vyhodnye/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts

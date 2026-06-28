@@ -129,6 +129,7 @@ const FOOTER_SOCIAL_LINKS = [
       .mobile-discovery-menu { display: none; }
       .mobile-discovery-menu__summary { list-style: none; cursor: pointer; }
       .mobile-discovery-menu__summary::-webkit-details-marker { display: none; }
+      .mobile-discovery-menu__brand-icon { display: none; }
       .mobile-discovery-menu__panel { display: block; }
       .mobile-discovery-menu__nav { display: block; }
       .mobile-discovery-menu__links { display: flex; gap: 1rem; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
@@ -726,21 +727,24 @@ const FOOTER_SOCIAL_LINKS = [
       .like-burst span:nth-child(3) { color: #ffb7b7; animation-delay: 80ms; --x: 38px; --r: 14deg; }
       .like-burst span:nth-child(4) { color: #fff4f4; animation-delay: 120ms; --x: 4px; --r: 8deg; }
       @keyframes heart-fly { from { opacity: 0; transform: translate(-50%, -20%) scale(0.7) rotate(0deg); } 18% { opacity: 1; } to { opacity: 0; transform: translate(calc(-50% + var(--x, 0px)), -150px) scale(1.25) rotate(var(--r, 0deg)); } }
+      .listing-dayparts { display: grid; gap: 1.05rem; }
+      .listing-daypart { display: grid; gap: 0.7rem; }
+      .listing-daypart__header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: 0 0.15rem; }
+      .listing-daypart__header h3 { margin: 0; font-size: clamp(1.35rem, 5vw, 2rem); line-height: 1; letter-spacing: -0.055em; }
+      .listing-daypart__count { min-width: 2.2rem; min-height: 2.2rem; display: inline-grid; place-items: center; border: 1px solid rgba(121,48,20,0.12); border-radius: 999px; background: #fff7ea; color: var(--primary-strong); font-weight: 920; }
       .listing-stack { display: grid; gap: 0.85rem; }
-      .listing-item { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 0.85rem; align-items: stretch; padding: 0.75rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
-      .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
-      .listing-item__media--cover { position: relative; aspect-ratio: 4 / 5; background: linear-gradient(135deg, #8a3f23, #0f766e); }
+      .listing-item { display: grid; grid-template-columns: minmax(132px, 18%) minmax(0, 1fr); gap: 0; align-items: stretch; min-height: 168px; padding: 0; overflow: hidden; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
+      .listing-item__media { display: block; min-height: 100%; height: 100%; overflow: hidden; border-radius: 22px 0 0 22px; background: #15110f; text-decoration: none; align-self: stretch; }
+      .listing-item__media--cover { position: relative; min-height: 168px; background: linear-gradient(135deg, #8a3f23, #0f766e); }
       .listing-item__media--cover .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .listing-item__media--preserve { background: #15110f; }
-      .listing-item__media--preserve .listing-item__image { display: block; width: 100%; height: auto; }
-      .listing-item__fallback { width: 100%; height: 100%; min-height: 138px; display: grid; place-items: center; color: #fff; padding: 0.7rem; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.07em; }
-      .listing-item__body { min-width: 0; display: grid; gap: 0.42rem; align-content: center; }
+      .listing-item__fallback { width: 100%; height: 100%; min-height: 168px; display: grid; place-items: center; color: #fff; padding: 0.7rem; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.07em; }
+      .listing-item__body { min-width: 0; display: grid; gap: 0.42rem; align-content: center; padding: 0.85rem 0.95rem; border-left: 1px solid rgba(121,48,20,0.13); }
       .listing-item__meta { display: flex; flex-wrap: wrap; gap: 0.4rem; color: var(--muted); font-size: 0.84rem; font-weight: 800; }
       .listing-item__title { color: var(--text); text-decoration: none; font-size: clamp(1.08rem, 3.8vw, 1.35rem); line-height: 1.12; font-weight: 900; overflow-wrap: anywhere; }
       .listing-item__title:hover { text-decoration: underline; }
       .listing-item p { margin: 0; color: var(--muted); font-weight: 700; }
       .listing-item__actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.2rem; }
-      .listing-item__actions .cta-button, .listing-item__actions .secondary-button { min-height: 44px; padding: 0.55rem 0.75rem; font-size: 0.9rem; }
+      .listing-item__actions .secondary-button { min-height: 44px; padding: 0.55rem 0.75rem; font-size: 0.9rem; }
       .sponsor-card { border-style: dashed; background: linear-gradient(135deg, #fff, #fff4e6); }
       .source-links { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
       .source-links a, .source-links button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.45rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--primary-strong); background: #fff; font: inherit; font-weight: 850; }
@@ -884,12 +888,14 @@ const FOOTER_SOCIAL_LINKS = [
           left: var(--drawer-handle-left);
           top: calc(var(--drawer-rail-h) + env(safe-area-inset-top) - 7px);
           z-index: 2;
-          width: 7.7rem;
+          width: 8.15rem;
           min-height: 5.55rem;
           display: inline-flex;
           align-items: center;
           justify-content: end;
           gap: 0.42rem;
+          overflow: hidden;
+          isolation: isolate;
           padding: 1.45rem 0.76rem 0.58rem;
           border: 1px solid rgba(255,255,255,0.14);
           border-radius: 0 0 10px 10px;
@@ -903,6 +909,44 @@ const FOOTER_SOCIAL_LINKS = [
         }
         .mobile-discovery-menu[open] .mobile-discovery-menu__summary {
           box-shadow: 0 18px 38px rgba(72, 45, 25, 0.30), 0 1px 0 rgba(255,255,255,0.12) inset;
+        }
+        .mobile-discovery-menu__brand-icon {
+          position: absolute;
+          left: 0.52rem;
+          bottom: 0.48rem;
+          z-index: 2;
+          display: block;
+          width: 2.75rem;
+          height: 3.45rem;
+          color: #fff1df;
+          background: currentColor;
+          -webkit-mask: var(--brand-icon-mask) center / contain no-repeat;
+          mask: var(--brand-icon-mask) center / contain no-repeat;
+          transform: translate3d(-135%, 0, 0) scale(0.94);
+          opacity: 0;
+          will-change: transform, opacity;
+          animation: mobile-brand-icon-cycle 11s cubic-bezier(0.22, 0.86, 0.32, 1) 2.2s infinite;
+          pointer-events: none;
+        }
+        .mobile-discovery-menu__label {
+          position: relative;
+          z-index: 1;
+          min-width: 6.58rem;
+          transform-origin: left bottom;
+          will-change: transform, opacity;
+          animation: mobile-brand-text-cycle 11s cubic-bezier(0.22, 0.86, 0.32, 1) 2.2s infinite;
+        }
+        @keyframes mobile-brand-icon-cycle {
+          0%, 16% { opacity: 0; transform: translate3d(-135%, 0, 0) scale(0.94); }
+          24%, 58% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+          70%, 100% { opacity: 0; transform: translate3d(-135%, 0, 0) scale(0.96); }
+        }
+        @keyframes mobile-brand-text-cycle {
+          0%, 18% { opacity: 1; transform: translate3d(0, 0, 0); }
+          25%, 35% { opacity: 1; transform: translate3d(2.35rem, 0, 0); }
+          43%, 57% { opacity: 0; transform: translate3d(-4.35rem, 0, 0); }
+          69%, 78% { opacity: 1; transform: translate3d(2.1rem, 0, 0); }
+          88%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
         }
         .mobile-discovery-menu__kicker {
           font-size: 0.56rem;
@@ -1176,9 +1220,13 @@ const FOOTER_SOCIAL_LINKS = [
         .feedback-button--like { min-width: 82px; padding-inline: 0.5rem; }
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
-        .listing-item { grid-template-columns: 88px minmax(0, 1fr); gap: 0.65rem; padding: 0.65rem; }
-        .listing-item__fallback { min-height: 110px; }
-        .listing-item__actions .cta-button, .listing-item__actions .secondary-button { width: auto; flex: 1 1 120px; }
+        .listing-item { grid-template-columns: minmax(112px, 34vw) minmax(0, 1fr); min-height: 154px; border-radius: 20px; }
+        .listing-item__media { border-radius: 20px 0 0 20px; }
+        .listing-item__media--cover, .listing-item__fallback { min-height: 154px; }
+        .listing-item__body { padding: 0.72rem 0.76rem; }
+        .listing-item__meta { font-size: 0.76rem; gap: 0.28rem; }
+        .listing-item__title { font-size: clamp(1rem, 4.7vw, 1.17rem); }
+        .listing-item__actions .secondary-button { width: auto; flex: 1 1 112px; padding-inline: 0.58rem; }
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
@@ -1195,7 +1243,8 @@ const FOOTER_SOCIAL_LINKS = [
           <span class="brand__sub">афиша событий</span>
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
-          <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
+          <summary class="mobile-discovery-menu__summary" style={`--brand-icon-mask: url(${withBase('/favicon.svg')})`} aria-label="Открыть навигацию афиши">
+            <span class="mobile-discovery-menu__brand-icon" aria-hidden="true"></span>
             <span class="mobile-discovery-menu__label">
               <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
               <span class="mobile-discovery-menu__name">Анонсы</span>
@@ -1205,6 +1254,7 @@ const FOOTER_SOCIAL_LINKS = [
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
               <div class="mobile-discovery-menu__links">
                 <a href={withBase('/segodnya/')}>Сегодня</a>
+                <a href={withBase('/zavtra/')}>Завтра</a>
                 <a href={withBase('/vyhodnye/')}>Выходные</a>
                 <a href={withBase('/__preview/')}>Все анонсы</a>
               </div>
@@ -1213,6 +1263,7 @@ const FOOTER_SOCIAL_LINKS = [
         </details>
         <nav class="site-nav" aria-label="Основная навигация preview">
           <a href={withBase('/segodnya/')}>Сегодня</a>
+          <a href={withBase('/zavtra/')}>Завтра</a>
           <a href={withBase('/vyhodnye/')}>Выходные</a>
           <a href={withBase('/sitemap.xml')}>Sitemap</a>
         </nav>
@@ -1225,6 +1276,7 @@ const FOOTER_SOCIAL_LINKS = [
           <strong class="site-footer__title">{SITE_NAME}</strong>
           <nav class="site-footer__nav" aria-label="Навигация по афише">
             <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/zavtra/')}>Завтра</a>
             <a href={withBase('/vyhodnye/')}>Выходные</a>
             <a href={withBase('/__preview/')}>Все анонсы</a>
           </nav>

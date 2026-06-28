@@ -443,9 +443,31 @@ export function eventIntersectsDateRange(event: PreviewEvent, fromDate: string, 
   return starts <= toDate && ends >= fromDate;
 }
 
+export type EventDaypart = 'morning' | 'day' | 'evening' | 'night';
+
+export function getTomorrowDate(): string {
+  return toIsoDate(addDays(new Date(`${getCurrentDate()}T00:00:00Z`), 1));
+}
+
 export function getTodayEvents(): PreviewEvent[] {
   const current = getCurrentDate();
   return getEvents().filter((event) => eventIntersectsDateRange(event, current, current));
+}
+
+export function getTomorrowEvents(): PreviewEvent[] {
+  const tomorrow = getTomorrowDate();
+  return getEvents().filter((event) => eventIntersectsDateRange(event, tomorrow, tomorrow));
+}
+
+export function eventDaypart(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): EventDaypart {
+  const rawTime = event.start_time || event.display_time || '';
+  const match = /(\d{1,2}):(\d{2})/u.exec(rawTime);
+  if (!match) return 'day';
+  const hour = Number(match[1]);
+  if (hour >= 6 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'day';
+  if (hour >= 17 && hour < 22) return 'evening';
+  return 'night';
 }
 
 export function getWeekendRange(): { start: string; end: string; label: string } {

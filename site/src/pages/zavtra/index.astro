@@ -1,14 +1,14 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
-import { absoluteUrl, eventDaypart, getCurrentDate, getTodayEvents, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, eventDaypart, getTomorrowDate, getTomorrowEvents, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
-const events = getTodayEvents();
-const currentDate = getCurrentDate();
-const canonicalUrl = absoluteUrl('/segodnya/');
-const title = `События сегодня в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ${currentDate}: афиша по утру, дню, вечеру и ночи.`;
+const events = getTomorrowEvents();
+const tomorrowDate = getTomorrowDate();
+const canonicalUrl = absoluteUrl('/zavtra/');
+const title = `События завтра в Калининграде | ${SITE_NAME}`;
+const description = `Статический preview-листинг событий на завтра ${tomorrowDate}: афиша по утру, дню, вечеру и ночи.`;
 const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
   { key: 'morning', label: 'Утро', note: '06:00–11:59' },
   { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
@@ -24,15 +24,15 @@ const sections = dayparts
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={withBase('/__preview/')}>Афиша</a>
         <span aria-hidden="true">/</span>
-        <span>Сегодня</span>
+        <span>Завтра</span>
       </nav>
       <section class="section-card">
         <div class="section-card__inner">
-          <p class="eyebrow">Сегодня</p>
-          <h1 style="max-width: 14ch;">Что идёт сегодня</h1>
-          <p class="lead">События, которые начинаются или продолжаются {currentDate}. На мобильном листинг разбит на утро, день, вечер и ночь, чтобы быстрее выбрать время.</p>
+          <p class="eyebrow">Завтра</p>
+          <h1 style="max-width: 14ch;">Что идёт завтра</h1>
+          <p class="lead">События, которые начинаются или продолжаются {tomorrowDate}. Страница нужна, чтобы заранее выбрать планы без поиска по общей ленте.</p>
           <div class="source-links">
-            <a href={withBase('/zavtra/')}>Смотреть завтра</a>
+            <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
             <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
             <a href={withBase('/__preview/')}>Все тестовые страницы</a>
           </div>
@@ -41,15 +41,15 @@ const sections = dayparts
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <h2>{events.length ? `Найдено: ${events.length}` : 'На сегодня в fixture нет событий'}</h2>
+          <h2>{events.length ? `Найдено: ${events.length}` : 'На завтра в fixture нет событий'}</h2>
           {sections.length ? (
             <div class="listing-dayparts">
               {sections.map((section) => (
-                <section class="listing-daypart" aria-labelledby={`today-${section.key}`}>
+                <section class="listing-daypart" aria-labelledby={`tomorrow-${section.key}`}>
                   <div class="listing-daypart__header">
                     <div>
                       <p class="eyebrow">{section.note}</p>
-                      <h3 id={`today-${section.key}`}>{section.label}</h3>
+                      <h3 id={`tomorrow-${section.key}`}>{section.label}</h3>
                     </div>
                     <span class="listing-daypart__count">{section.events.length}</span>
                   </div>

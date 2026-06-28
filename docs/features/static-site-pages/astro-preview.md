@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v31`
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v31/__preview/>
+> **Build ID:** `preview-20260627-event-pages-v33`
+> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v33/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry persistence, no server-side personalization API and no LLM fragments in rendered HTML. The first discovery hydration is a static same-origin JSON manifest, not a live ranking service.
 
@@ -10,17 +10,18 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v31/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v31/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v31/vyhodnye/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v31/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v31/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v31/data/discovery/5878.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v31/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v31/robots.txt>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v31/lab/hero/>
-- Hero viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v31/lab/hero/review/>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v31/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v33/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v33/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260627-event-pages-v33/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v33/vyhodnye/>
+- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v33/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v33/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v33/data/discovery/5878.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v33/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v33/robots.txt>
+- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v33/lab/hero/>
+- Hero viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v33/lab/hero/review/>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v33/__preview/>
 
 ## Code layout
 
@@ -34,6 +35,7 @@ site/
   scripts/deploy-preview-yc.mjs
   src/pages/[preview]/index.astro        # emits /__preview/
   src/pages/segodnya/index.astro
+  src/pages/zavtra/index.astro
   src/pages/vyhodnye/index.astro
   src/pages/sobytiya/[slug].astro
   src/pages/sobytiya/[slug]/event.ics.ts
@@ -67,7 +69,7 @@ The preview uses 10 real production event rows exported read-only from Fly SQLit
 - long Russian title wrapping in main column;
 - no local image hero fallback;
 - weak/missing address fallback;
-- static `/segodnya/` and `/vyhodnye/` listing pages from the same fixture;
+- static `/segodnya/`, `/zavtra/` and `/vyhodnye/` listing pages from the same fixture;
 - related “Другие даты” pair `6437`/`6438`;
 - one static neutral `Смотрите дальше` discovery feed; diversification is an internal ranking constraint, not a separate user-facing block;
 - up to 10 preloaded discovery candidates in static HTML, plus a same-origin `/data/discovery/<event_id>.json` `event_detail_related` manifest (`schema_version=event-detail-related-v1`, `related_static[]`) for one automatic client hydration after JS applies a consented compatible local profile; further expansion is explicit through `Показать ещё`;
@@ -76,6 +78,7 @@ The preview uses 10 real production event rows exported read-only from Fly SQLit
 - detail-page calendar action links open `.ics` directly rather than forcing a download, but only for one-day/short events. If a short event is free and has no purchase/registration CTA, `В календарь` may become the primary CTA with a calendar icon; otherwise it remains secondary to the ticket/registration action. Feed/preview cards keep calendar out of the main right-thumb row and may expose it only as a quieter utility for eligible candidates.
 - `image_text_mode` (`ocr_text` / `visual_only` / `unknown`) is a required export field. This preview does **not** run OCR during Astro build; it consumes the fixture value that must be produced by the existing media/OCR pipeline in production export. If this field is missing, the safe default is `unknown` → natural-ratio no-crop rendering.
 - visible Russian dates omit the current year when both boundaries are in the build current year; cross-year ranges keep both years.
+- `/segodnya/` and `/zavtra/` are grouped into `Утро / День / Вечер / Ночь`; no-time events fall into `День`. Mobile list cards use a compact plaque: cropped left photo column at parent-card level, straight separator to the text column, no direct outbound ticket/source links. This keeps production listings indexable and pushes external actions to detail pages where context and `rel` can be controlled.
 
 No future active sold-out/cancelled/postponed event was present in the active export used for this slice, so that optional state is not represented yet.
 
@@ -89,7 +92,7 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v31/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260627-event-pages-v33/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD from visible event facts; for multi-image events, JSON-LD `image[]` includes the hero/gallery image assets even when the fullscreen gallery lazy-loads them after user action, so SEO/GEO crawlers can still tie the images to the event.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
 
@@ -98,16 +101,16 @@ Disallow: /
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v31 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v31 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v31 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v33 npm run build:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v33 npm run check:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v33 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
 
 ## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260627-event-pages-v31` keeps the event page mobile/feed-oriented and feedback-aware, and replaces the v19 safe image block with the v20 hero composition lab from `event-hero-lab-2026-06-27.md`:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260627-event-pages-v33` keeps the event page mobile/feed-oriented and feedback-aware, and replaces the v19 safe image block with the v20 hero composition lab from `event-hero-lab-2026-06-27.md`:
 
 The feed-card A/B has been resolved for normal event pages: `split-actions` is now the baseline for all event detail discovery feeds. The old overlay variant remains documented only as a rejected/historical comparison in `event-card-ui-ab-2026-06-27.md`.
 
@@ -121,7 +124,7 @@ The feed-card A/B has been resolved for normal event pages: `split-actions` is n
 - footer exposes compact social navigation and `mailto:info@kenigevents.ru`.
 
 
-After direct product review, `preview-20260627-event-pages-v31` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
+After direct product review, `preview-20260627-event-pages-v33` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
 
 - event description is visible HTML again, not hidden behind a collapsed `<details>` block;
 - event continuation is one vertical mobile-first discovery feed (`Смотрите дальше`), not two horizontal scroll blocks and not a visible “try something else” module;
@@ -142,9 +145,9 @@ After direct product review, `preview-20260627-event-pages-v31` rolls back the U
 - explicit-feedback rerank is viewport-stable: after a user action, the acted-on card and all cards above it keep their positions; only cards below the action anchor may be re-ordered.
 - same-year visible dates omit the year (`11 июля · 21:30`), while cross-year ranges keep the year on both sides (`12 июня 2026 — до 28 марта 2027`).
 
-After consultant review, `preview-20260627-event-pages-v31` additionally hardens the first discovery layer:
+After consultant review, `preview-20260627-event-pages-v33` additionally hardens the first discovery layer:
 
-- header links now open real static `/segodnya/` and `/vyhodnye/` pages, not QA anchors;
+- header links now open real static `/segodnya/`, `/zavtra/` and `/vyhodnye/` pages, not QA anchors;
 - related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot and direct page link; `.ics` calendar action is deliberately kept on the detail page, not in feed cards;
 - `6437`/`6438` same-occurrence duplicates are excluded from “Похожие события” and remain only in “Другие даты”;
 - source-only paid events use honest `Платный вход` copy instead of implying direct ticket purchase;
@@ -153,9 +156,9 @@ After consultant review, `preview-20260627-event-pages-v31` additionally hardens
 
 
 
-### v31 product/UI corrections
+### v33 product/UI corrections
 
-`preview-20260627-event-pages-v31` adds the current product corrections:
+`preview-20260627-event-pages-v33` adds the current product corrections:
 
 - public event pages show only an auth-gate notice for sources, mentions and extended stats; actual source lists/statistics are not rendered until registered-user access exists;
 - the event page now has one product-level facts block, not two: hero keeps only a compact date/place meta line, while `Коротко` is the single icon fact block with date, venue+address, entry/status, optional Pushkin card/festival;
@@ -163,13 +166,13 @@ After consultant review, `preview-20260627-event-pages-v31` additionally hardens
 - hero gallery has an on-image transparent `Фото N` CTA, lazy-loads gallery slides from `data-gallery-src` after open/navigation, shows the service tag in fullscreen, makes visual-only fullscreen photos cover 100% viewport height with no side fields, auto-pans right-to-left and then advances to the next photo, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in contain, and JSON-LD `image[]` lists the gallery assets for SEO/GEO;
 - the mobile top drawer is now one monolithic sliding object: rail and handle move together with no visible gap; the closed handle remains visible after scrolling, instead of disappearing;
 - the sources/mentions registered-user notice moved out of `Коротко` and is rendered as the bottom strip of the parent details section, so it no longer visually belongs to the compact facts block;
-- event `5370` is a documented fixture override: production currently marks the long-running exhibition «Точка и линия» free because a free curator round-table source was merged into it. The v31 fixture renders it as paid/ticketed for preview correctness, while production DB repair remains a separate source-of-truth task.
+- event `5370` is a documented fixture override: production currently marks the long-running exhibition «Точка и линия» free because a free curator round-table source was merged into it. The v33 fixture renders it as paid/ticketed for preview correctness, while production DB repair remains a separate source-of-truth task.
 
-`npm run check:preview` passed for v31. Additional Playwright smoke evidence is local-only under `artifacts/codex/event-pages-v31/`: `v31-smoke-result.json`, `5370-v31-mobile.png`, `5370-v31-gallery.png`.
+`npm run check:preview` passed for v33. Additional Playwright smoke evidence is local-only under `artifacts/codex/event-pages-v33/`: `listing-smoke-result.json`, `segodnya-mobile.png`, `zavtra-mobile.png`, `event-mobile-brand.png`.
 
 ## v16/v17 personalization-contract correction + v18 UI A/B + v20 hero composition lab
 
-`preview-20260627-event-pages-v31` keeps the discovery implementation aligned with the documented `event_detail_related` contract:
+`preview-20260627-event-pages-v33` keeps the discovery implementation aligned with the documented `event_detail_related` contract:
 
 - `/data/discovery/<event_id>.json` now returns `schema_version`, `feature_schema_version`, `taxonomy_version`, `surface`, `algorithm_id`, `current_event` and `related_static[]` candidates with `category`, `tags`, `audience_exclusion_tags`, `base_similarity`, `reason_codes` and nested display data.
 - Static HTML still preloads up to 10 cards (the compact 10-event fixture can yield fewer for the control page because the current event is excluded; production target is 10 when enough eligible future events exist).
@@ -179,7 +182,7 @@ After consultant review, `preview-20260627-event-pages-v31` additionally hardens
 
 ## Verified on 2026-06-28
 
-`npm run check:preview` passed for `preview-20260627-event-pages-v31`: the control discovery JSON is checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1`, `related_static[]`, display calendar fields, source/social counter consistency, footer social links/icons and `mailto:info@kenigevents.ru`, parseable Event-class JSON-LD with ISO 8601 `offers.validFrom`, current-event like/share controls, public source/extended-stat auth-gate notice without Telegraph/source links, the split-actions feed-card baseline, the hero lab/review routes, poster/photo hero modes, explicit composition markers, one-H1 contract, monolithic flat drawer rail/no-pill links, the non-disappearing closed handle, and the fullscreen hero gallery contract with lazy `data-gallery-src` slides, full-height visual-only cover, one-way auto-pan/auto-advance, backward-swipe pause, touch/pointer swipe and final similar-event CTA slide. Playwright smoke evidence for v31 is stored locally under `artifacts/codex/event-pages-v31/` (not committed): `5370-v31-mobile.png`, `5370-v31-gallery.png`, and `v31-smoke-result.json`. The smoke verifies that the 5370 hero is full viewport width, source links are hidden, email is present, gallery images are lazy-hydrated one-by-one, and the drawer opens with the handle attached to the rail, the photo CTA remains inside the viewport, touch swipe changes slides in both directions, forward auto-pan advances from `1 / 6` to `2 / 6`, backward swipe returns to `1 / 6` and does not auto-advance again, the gallery image bbox fills the mobile viewport (`390×844`), the parent-section source gate is in place, the duplicate hero facts block is absent, and the not-interested plate has a working undo without accidental navigation. Like/profile writes remain local-only preview behavior, not Supabase persistence.
+`npm run check:preview` passed for `preview-20260627-event-pages-v33`: the control discovery JSON is checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1`, `related_static[]`, display calendar fields, source/social counter consistency, footer social links/icons and `mailto:info@kenigevents.ru`, parseable Event-class JSON-LD with ISO 8601 `offers.validFrom`, current-event like/share controls, public source/extended-stat auth-gate notice without Telegraph/source links, the split-actions feed-card baseline, the hero lab/review routes, poster/photo hero modes, explicit composition markers, one-H1 contract, monolithic flat drawer rail/no-pill links, the non-disappearing closed handle, and the fullscreen hero gallery contract with lazy `data-gallery-src` slides, full-height visual-only cover, one-way auto-pan/auto-advance, backward-swipe pause, touch/pointer swipe and final similar-event CTA slide. Playwright smoke evidence for v33 is stored locally under `artifacts/codex/event-pages-v33/` (not committed): `listing-smoke-result.json`, `segodnya-mobile.png`, `zavtra-mobile.png`, and `event-mobile-brand.png`. The smoke verifies that `/segodnya/` and `/zavtra/` expose all four daypart sections, listing cards contain no direct external HTTP links, the first listing card uses a left cropped media column plus a `1px` separator, and the mobile discovery handle has the favicon-mask animation with the `Завтра` navigation link. Like/profile writes remain local-only preview behavior, not Supabase persistence.
 
 ## Counter freshness plan
 

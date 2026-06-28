@@ -11,6 +11,7 @@ const root = join(distDir, buildId);
 const required = [
   '__preview/index.html',
   'segodnya/index.html',
+  'zavtra/index.html',
   'vyhodnye/index.html',
   'sitemap.xml',
   'robots.txt',
@@ -69,6 +70,7 @@ if (!controlVisibleHtml.includes('<a class="hero-gallery__brand"') || !controlVi
 if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !controlVisibleHtml.includes('Открыть фото')) throw new Error('Event hero must expose a visible photo-view CTA over the image');
 if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
+if (!controlHtml.includes('mobile-discovery-menu__brand-icon') || !controlHtml.includes('--brand-icon-mask') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and animated favicon-mask brand icon contract');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
@@ -188,11 +190,25 @@ if (robots !== 'User-agent: *\nDisallow: /') throw new Error(`Unexpected robots.
 const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new Error('Sitemap misses preview index URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/zavtra/`)) throw new Error('Sitemap misses tomorrow listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) throw new Error('Sitemap misses hero viewport review URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
+
+const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
+const tomorrowHtml = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
+for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml]]) {
+  for (const label of ['Утро', 'День', 'Вечер', 'Ночь']) {
+    if (!html.includes(`>${label}</h3>`)) throw new Error(`${name} listing misses daypart section ${label}`);
+  }
+  if (!html.includes('listing-daypart') || !html.includes('listing-item__media listing-item__media--cover')) throw new Error(`${name} listing misses plaque/cropped media listing contract`);
+  const listingArticles = [...html.matchAll(/<article class="listing-item"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
+  if (!listingArticles.length) throw new Error(`${name} listing has no listing articles`);
+  if (listingArticles.some((article) => /<a[^>]+href="https?:\/\//iu.test(article))) throw new Error(`${name} listing card leaks direct external http link`);
+  if (listingArticles.some((article) => article.includes('Открыть пост организатора') || article.includes('Уточнить регистрацию'))) throw new Error(`${name} listing exposes source/ambiguous external CTA copy`);
+}
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
@@ -212,6 +228,8 @@ if (
   || !controlHtml.includes('closeMenu')
 ) throw new Error('Mobile discovery navigation must be a monolithic drawer: one root object slides down/up, with the handle attached to the panel and no transitional gap');
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
+if (!/mobile-discovery-menu__brand-icon\{[^}]*-webkit-mask:\s*var\(--brand-icon-mask\)[^}]*animation:\s*mobile-brand-icon-cycle/iu.test(css) || !/@keyframes\s+mobile-brand-text-cycle/iu.test(css)) throw new Error('Mobile discovery handle must animate favicon-mask icon/text swap in the site palette');
+if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
