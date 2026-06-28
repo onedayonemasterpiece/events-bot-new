@@ -15,6 +15,7 @@ sections:
     repository_workflow: docs/operations/repository-workflow.md
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
+    kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     scheduler_routing:
       docs: docs/operations/cron.md
       scheduler_defaults: scheduling.py
@@ -73,11 +74,14 @@ sections:
       guide_excursions_mvp: docs/backlog/features/guide-excursions-monitoring/mvp.md
       guide_excursions_monitoring: docs/backlog/features/guide-excursions-monitoring/README.md
       guide_excursions_opus_audit_brief: docs/backlog/features/guide-excursions-monitoring/opus-audit-brief.md
+      limeglow_requirements: docs/backlog/features/limeglow/requirements.md
       telegram_monitoring: docs/backlog/features/telegram-monitoring/README.md
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
+      poll_to_forward: docs/backlog/features/poll-to-forward/README.md
+      poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
       promo_campaigns: docs/backlog/features/promo-campaigns/README.md
       afishathumb: docs/features/afishathumb/README.md
       afishathumb_requirements: docs/backlog/features/afishathumb/afishathumb-requirements.md
@@ -91,6 +95,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_vk_story_forward_wall_first_2026_06_05: docs/reports/incidents/INC-2026-06-05-vk-story-forward-wall-first.md
     incident_vk_posts_personal_author_2026_05_19: docs/reports/incidents/INC-2026-05-19-vk-posts-personal-author.md
     incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
     incident_konb_cherryflash_render_lock_empty_selection_2026_05_18: docs/reports/incidents/INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection.md
@@ -143,6 +148,15 @@ features:
       - video_announce/scenario.py
       - kaggle/execute_crumple_test.py
       - kaggle/CrumpleVideo/crumple_video.ipynb
+  kaggle_status_framework:
+    status: implementing
+    docs: docs/features/kaggle-status-framework/README.md
+    entrypoints:
+      - kaggle_status.py
+      - kaggle/kaggle_status_client.py
+      - video_announce/scenario.py
+      - main_part2.py
+      - db.py
   source_parsing:
     status: implemented
     docs: docs/features/source-parsing/README.md
@@ -150,6 +164,22 @@ features:
       - source_parsing/commands.py
       - source_parsing/handlers.py
       - source_parsing/parser.py
+  afishaengagement:
+    status: mvp
+    docs: docs/features/afishaengagement/README.md
+    requirements: docs/features/afishaengagement/requirements.md
+    entrypoints:
+      - afishaengagement.py
+      - smart_event_update.py
+      - promo.py
+      - scripts/cleanup_afishaengagement_debug_vk.py
+  countur_svg_generator:
+    status: research
+    docs: docs/features/countur_svg_generator/README.md
+    requirements_dir: docs/features/countur_svg_generator/requirements/
+    samples:
+      input: docs/features/countur_svg_generator/samples/input/
+      output: docs/features/countur_svg_generator/samples/output/
   tourist_label:
     status: implemented
     docs: docs/features/tourist-label/README.md
@@ -193,12 +223,22 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  tg_publishing:
+    status: mvp
+    docs: docs/features/tg-publishing/README.md
+    requirements: docs/backlog/features/tg-publishing/requirements.md
+    entrypoints:
+      - main.py
+      - main_part2.py
+      - promo.py
+      - handlers/promo_cmd.py
   static_site_pages:
     status: preview
     docs: docs/features/static-site-pages/README.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md
+    interface_references: docs/features/static-site-pages/interface-references.md
     event_page_product_design: docs/features/static-site-pages/event-page-product-design.md
     event_page_opus_ui_ux_2026_06_27: docs/features/static-site-pages/opus-event-page-ui-ux-2026-06-27.md
     event_page_ui_ux_comparison_brief: docs/features/static-site-pages/event-page-ui-ux-comparison-brief.md
@@ -206,9 +246,10 @@ features:
     event_page_consultant_mvp_review_2026_06_27: docs/features/static-site-pages/consultant-event-page-mvp-review-2026-06-27.md
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
-    interface_references: docs/features/static-site-pages/interface-references.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
+    cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
@@ -216,13 +257,12 @@ features:
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v31/__preview/
+    preview_url: https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/__preview/
     entrypoints:
       - site/package.json
       - site/astro.config.mjs
       - site/src/pages/[preview]/index.astro
       - site/src/pages/segodnya/index.astro
-      - site/src/pages/zavtra/index.astro
       - site/src/pages/vyhodnye/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
@@ -238,38 +278,41 @@ features:
       - site/src/components/EventCard.astro
       - site/src/components/EventListItem.astro
       - site/src/components/CalendarLink.astro
+      - site/src/components/Icon.astro
       - site/src/data/preview-events.json
       - site/src/data/preview-related.json
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs
-      - reaction_counter_sync.py
-      - scripts/sync_reaction_counters_to_supabase.py
   unsigned_personalization:
     status: design
     docs: docs/features/unsigned-personalization/README.md
     research: docs/features/unsigned-personalization/alanytics.md
-    taxonomy: docs/features/unsigned-personalization/taxonomy.md
     model_selection: docs/features/unsigned-personalization/model-selection.md
     event_detail_related: docs/features/unsigned-personalization/event-detail-related.md
+    event_vector_related_chain: docs/features/unsigned-personalization/event-vector-related-chain.md
+    event_detail_related_probe: docs/features/unsigned-personalization/event-detail-related-probe.md
+    golden_interest_facets: docs/features/unsigned-personalization/golden-interest-facets.md
+    personal_feed_architecture: docs/features/unsigned-personalization/personal-feed-architecture.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md
     gemini_review_2026_06_26: docs/features/unsigned-personalization/gemini-review-2026-06-26.md
     gemini_review_2026_06_27: docs/features/unsigned-personalization/gemini-review-2026-06-27.md
     opus_review_2026_06_27: docs/features/unsigned-personalization/opus-review-2026-06-27.md
+    taxonomy: docs/features/unsigned-personalization/taxonomy.md
     neural_flow: docs/features/unsigned-personalization/neural-flow.md
     neural_flow_diagram: docs/features/unsigned-personalization/assets/neural-flow.svg
     database_design: docs/features/unsigned-personalization/database.md
     smart_update_contract: docs/features/unsigned-personalization/smart-update-contract.md
     llm_stress_scenarios: docs/features/unsigned-personalization/llm-stress-scenarios.md
-    event_detail_related_probe: docs/features/unsigned-personalization/event-detail-related-probe.md
-    event_detail_related_manifest_sample: docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json
-    event_detail_related_probe_script: scripts/probe_event_detail_related.py
-    related_static_site: docs/features/static-site-pages/README.md
+    llm_stress_pack_builder: scripts/build_personalization_llm_stress_pack.py
+    gherkin: tests/e2e/features/static_site_personalization.feature
+    playwright_contract: tests/playwright/static_personalization_contract.spec.ts
     reference_client: static_site/personalization/personalization.js
     reference_demo: static_site/personalization/demo.html
-    playwright_contract: tests/playwright/static_personalization_contract.spec.ts
-    gherkin: tests/e2e/features/static_site_personalization.feature
+    related_static_site: docs/features/static-site-pages/README.md
+    sample_manifest: docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json
+    probe_script: scripts/probe_event_detail_related.py
     entrypoints:
       - static_site/personalization/personalization.js
       - static_site/personalization/demo.html

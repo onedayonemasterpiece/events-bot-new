@@ -2,16 +2,23 @@
 import CalendarLink from './CalendarLink.astro';
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, eventAbsoluteUrl, eventTicketActionLabel, isCalendarEligible, isExternalHttpUrl, isTelephoneUrl } from '../lib/events';
+import { displayDate, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isCalendarEligible, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
+import { eventImageUrl } from '../lib/assets';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
-const href = event.ticket.href;
+const href = eventActionHref(event);
 const external = isExternalHttpUrl(href);
 const telephone = isTelephoneUrl(href);
 const absolute = eventAbsoluteUrl(event);
 const dateLabel = displayDate(event);
-const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
+const admissionLabel = eventAdmissionLabel(event);
+const imageUrl = eventImageUrl(event.image_url);
+const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), admissionLabel].filter(Boolean).join('\n');
+const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
+const shareFileName = `kenigevents-${event.slug}`;
 const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
+const soldOut = isTicketSoldOut(event);
+const admissionPriceHref = !soldOut && !event.ticket.is_free && event.ticket.price_label && href && !telephone ? href : null;
 const hasReliableMap = Boolean(event.address && event.map_query);
 const ctaLabel = eventTicketActionLabel(event);
 const canAddToCalendar = isCalendarEligible(event);
@@ -35,8 +42,12 @@ const calendarPrimary = canAddToCalendar && (!href || event.ticket.kind === 'fre
       )}
     </div>
     <div>
-      <p class="eyebrow">Статус</p>
-      <strong>{event.status_label}</strong>
+      <p class="eyebrow">Вход</p>
+      {admissionPriceHref ? (
+        <a class="cta-panel__admission-link" href={admissionPriceHref} target={external ? '_blank' : undefined} rel={ctaRel} data-nosnippet>{admissionLabel}</a>
+      ) : (
+        <strong>{admissionLabel}</strong>
+      )}
       {event.ticket.note && <p class="muted-note">{event.ticket.note}</p>}
     </div>
     <div class="action-grid">
@@ -44,10 +55,10 @@ const calendarPrimary = canAddToCalendar && (!href || event.ticket.kind === 'fre
       {href ? (
         <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{telephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>
       ) : (!calendarPrimary ? (
-        <span class="cta-button" aria-disabled="true">{ctaLabel}</span>
+        <span class={soldOut ? 'secondary-button cta-button--disabled' : 'cta-button cta-button--disabled'} aria-disabled="true">{ctaLabel}</span>
       ) : null)}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} />}
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} data-share-image={imageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={[dateLabel, event.display_time].filter(Boolean).join(' · ')} data-share-place={event.venue_name || event.city || ''} data-share-admission={admissionLabel}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
     <p class="muted-note">Если системное окно “Поделиться” недоступно в браузере или webview, ссылка копируется в буфер.</p>

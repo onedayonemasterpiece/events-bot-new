@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAdmissionLabel } from '../lib/events';
+import { displayDateTime, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
 interface Props { event: PreviewEvent }
 type FactIcon = 'pin' | 'ticket' | 'spark' | 'info';
 type FactVariant = 'default' | 'admission';
@@ -18,6 +18,12 @@ function admissionParts(currentEvent: PreviewEvent): { main: string; detail: str
 }
 
 const admission = admissionParts(event);
+const actionHref = eventActionHref(event);
+const admissionHref = !isTicketSoldOut(event) && !event.ticket.is_free && event.ticket.price_label && actionHref && !isTelephoneUrl(actionHref)
+  ? actionHref
+  : null;
+const admissionExternal = isExternalHttpUrl(admissionHref);
+const admissionRel = admissionExternal ? 'noopener noreferrer nofollow' : undefined;
 const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined; variant?: FactVariant }> = [
   { icon: 'info', label: 'Когда', value: displayDateTime(event) },
   { icon: 'pin', label: 'Где', value: placeLine },
@@ -33,7 +39,11 @@ const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefi
         <dd class={`event-info-value event-info-value--${item.variant || 'default'}`}>
           {item.variant === 'admission' ? (
             <span class="event-info-admission">
-              <span class="event-info-admission__main">{admission.main}</span>
+              {admissionHref ? (
+                <a class="event-info-admission__main" href={admissionHref} target={admissionExternal ? '_blank' : undefined} rel={admissionRel} data-nosnippet>{admission.main}</a>
+              ) : (
+                <span class="event-info-admission__main">{admission.main}</span>
+              )}
               {admission.detail && <span class="event-info-admission__detail">{admission.detail}</span>}
               {event.pushkin_card && <span class="event-info-chip event-info-chip--pushkin"><span aria-hidden="true">✓</span> Пушкинская карта</span>}
             </span>

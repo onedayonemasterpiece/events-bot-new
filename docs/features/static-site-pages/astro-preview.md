@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v39`
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v39/__preview/>
+> **Build ID:** latest checked/published Kaggle CPU build `preview-20260628-event-pages-v46d-vector-gemma-kaggle` (50 real events, tomorrow/future slice, vector related-chain v2 + Gemma 4 26B partial audit).
+> **Public preview index:** <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry persistence, no server-side personalization API and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest, not a live ranking service. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
@@ -10,18 +10,24 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v39/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v39/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260627-event-pages-v39/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v39/vyhodnye/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v39/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v39/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v39/data/discovery/5878.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v39/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v39/robots.txt>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v39/lab/hero/>
-- Hero viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v39/lab/hero/review/>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v39/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/vyhodnye/>
+- OCR/parallax control event: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Sold-out CTA regression event: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sobytiya/operomaniya-kaliningrad-5237/>
+- Gallery regression event: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sobytiya/drevnie-voiny-yantarnogo-kraya-kaliningrad-698/>
+- Same-day QA event: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sobytiya/vodnye-bitvy-s-animatorami-kaliningrad-6438/>
+- Stable control event calendar file: <https://static.kenigevents.ru/ics/5878.ics>
+- Build-scoped control event calendar fallback: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Control discovery JSON: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/data/discovery/5878.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/robots.txt>
+- Hero composition lab: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/lab/hero/>
+- Hero viewport review: <https://kenigevents.ru/preview-20260628-event-pages-v46d-vector-gemma-kaggle/lab/hero/review/>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260628-event-pages-v46d-vector-gemma-kaggle/__preview/>
+
+CDN media/ICS verification for this preview: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, and calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`.
 
 ## Code layout
 
@@ -60,11 +66,35 @@ site/
 ```
 
 
+## v46d regression and related-chain evidence
+
+`preview-20260628-event-pages-v46d-vector-gemma-kaggle` was generated on Kaggle CPU from the 2026-06-28 production SQLite snapshot with `--current-date 2026-06-29` and 50 real tomorrow/future events. Kaggle result: `ok=true`, event count `50`, archive `preview-20260628-event-pages-v46d-vector-gemma-kaggle.tar.gz`, runtime 19:40:00–20:07:18 UTC.
+
+UI fixes included in this preview:
+
+- personalization reset now records and displays `Последний сброс: DD.MM, HH:mm`;
+- sold-out/unavailable events render `Билеты закончились` and do not expose `Купить билет`;
+- hero `Фото` hint is positioned above the decision sheet and no longer overlaps the content below;
+- markdown-like source descriptions no longer become multi-paragraph bold blocks;
+- opened mobile tag/drawer closes automatically after the user scrolls/continues the page;
+- event pages display last update time in Kaliningrad time;
+- OCR/poster hero images keep parallax transforms instead of disabling parallax.
+
+Related/discovery changes:
+
+- related chains are built by `event_vector_related_chain_v2` with central offline vector retrieval (`local_tfidf_sparse_v1`) and deterministic business scoring;
+- Gemma 4 26B verification ran only through `GoogleAIClient` + Supabase limiter. The full Kaggle run audited 45 anchors with 45 provider calls and ended `partial` because 4 provider calls timed out at 45s and 1 response was malformed; those anchors fall back to vector chains. The persisted cache is nevertheless usable for rebuild stability; a rerun with the same cache reported `cache_hit_no_provider`, `provider_calls=0`, `cache_hits=50`;
+- Kaggle no longer relies on UI secrets for API-started runs: the runner attaches encrypted split secret datasets and deletes them after the waited run.
+
+Verification evidence: Kaggle `npm run check:preview` passed; public `curl -I` returned HTTP 200; `artifacts/codex/static-site-builder/playwright-v46d-public-check.cjs` passed against the published URL.
+
 ## Fixture coverage
 
-The preview uses 10 real production event rows exported read-only from Fly SQLite artifacts under `artifacts/codex/static-event-page-preview-2026-06-27/` and committed as a compact static fixture:
+The v43 preview uses 80 real production event rows exported read-only from the 2026-06-28 Fly SQLite snapshot under `artifacts/codex/static-site-builder/prod-db-20260628.sqlite` and committed as a bounded production-like static fixture. The export deliberately prioritizes the real same-day slice before long-running continuing events: `/segodnya/` now has 49 events starting on 2026-06-28 across 14 event types, so mobile QA is not limited to exhibitions.
 
 - `5878` — «Песни СССР», paid sale, control slug `pesni-sssr-svetlogorsk-5878`;
+- `698` — «Древние воины Янтарного края», multi-image fullscreen-gallery regression event;
+- `6438` — «Водные битвы с аниматорами», same-day listing/card/hero QA event;
 - free / registration with link;
 - registration/source-only without direct ticket link;
 - phone-only CTA;
@@ -82,9 +112,20 @@ The preview uses 10 real production event rows exported read-only from Fly SQLit
 - `image_text_mode` (`ocr_text` / `visual_only` / `unknown`) is a required export field. This preview does **not** run OCR during Astro build; it consumes the fixture value that must be produced by the existing media/OCR pipeline in production export. If this field is missing, the safe default is `unknown` → natural-ratio no-crop rendering.
 - visible Russian dates omit the current year when both boundaries are in the build current year; cross-year ranges keep both years.
 - `/segodnya/` and `/zavtra/` are grouped into `Утро / День / Вечер / Ночь`; no-time events fall into `День`. Mobile list cards use a compact plaque: cropped left photo column at parent-card level, straight separator to the text column, no direct outbound ticket/source links. This keeps production listings indexable and pushes external actions to detail pages where context and `rel` can be controlled.
-- v39 keeps property-label polish, restores the taller mobile drawer tag, limits the title sway to a two-state right-shift/back animation, restores the split-card lower rounding with `Не интересно` inside the card utility row and share/like under the card, adds hidden listing personal-feed slots with localStorage/RPC preparation, adds a local `Все / Для меня` static-list filter with `Скрыто N`, prepares CDN-aware asset URLs via `PUBLIC_ASSET_BASE_URL`, strengthens Open Graph image metadata and adds the temporary `Поделиться эксперимент` and `Поделиться эксперимент 2` Web Share payload test buttons plus `Скопировать HTML-пост` rich-clipboard test with generated 1080×1350 PNG fallback.
+- v43 keeps property-label polish, the taller mobile drawer tag, the split-card utility/action layout, hidden listing personal-feed slots, local `Все / Для меня` filter, CDN-aware `_astro/*` asset URLs and strengthened Open Graph metadata; temporary share lab controls are removed, the single production `Поделиться` action uses Web Share file + text + URL with generated 1080×1350 fallback, paid `price_label` chips can link directly to the ticket URL with `rel="nofollow"`, and the fullscreen gallery preloads/decodes adjacent slides before auto-advance to avoid black flicker.
 
-No future active sold-out/cancelled/postponed event was present in the active export used for this slice, so that optional state is not represented yet.
+No future active sold-out/cancelled/postponed event is intentionally showcased as a product state in this slice, so those optional states still need separate QA when the fixture/export includes reliable examples.
+
+## Build size and timing evidence
+
+Measured locally on 2026-06-28 with `PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru/{buildId}`:
+
+| Slice | Events | Static pages | Files | Output size | Build wall time | Max RSS |
+|---|---:|---:|---:|---:|---:|---:|
+| v43 focus preview | 80 | 95 | 261 | 28 MiB | 0:06.57 | ~387 MiB |
+| full active snapshot estimate | 386 | 403 | 1185 | 128 MiB | 0:20.16 | ~522 MiB |
+
+The full estimate was produced by exporting all active future/intersecting events from the same 2026-06-28 snapshot and building locally under a temporary `preview-20260628-event-pages-full-local-estimate` id. It excludes future media mirroring/CDN image transformations; bucket upload time will scale mostly with file count/bytes and is expected to dominate the Astro render time once full publication is enabled.
 
 ## SEO/GEO and preview safety
 
@@ -96,25 +137,55 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v39/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260628-event-pages-v43/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD from visible event facts; for multi-image events, JSON-LD `image[]` includes the hero/gallery image assets even when the fullscreen gallery lazy-loads them after user action, so SEO/GEO crawlers can still tie the images to the event.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
+
+
+## Kaggle CPU builder / Smart Update handoff
+
+The static-site production build path now has a Kaggle CPU runner that reuses the existing events-bot Kaggle infrastructure instead of inventing a separate execution path:
+
+```bash
+python scripts/run_static_site_builder_kaggle.py \
+  --db /data/db.sqlite \
+  --status-db /data/db.sqlite \
+  --status-callback-url https://events-bot-new-wngqia.fly.dev/internal/kaggle/run-event \
+  --limit 50 \
+  --current-date YYYY-MM-DD \
+  --build-id preview-YYYYMMDDHHMM-event-pages-prod50-kaggle \
+  --download-output
+```
+
+Contract:
+
+- input data is a unique per-run private Kaggle dataset, matching the CherryFlash/session-dataset pattern;
+- the site source is uploaded as `site_source.tarball` (gzip tar content with a neutral extension) because Kaggle dataset ingestion auto-extracts `.tar.gz` and can break Astro dynamic route filenames;
+- the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
+- Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
+- output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;
+- when `--status-db` and callback URL are provided, the launcher creates `kaggle_run.json` via `create_kaggle_run_config(...)`, uploads a status dataset via `create_kaggle_status_dataset(...)`, and adds it to `dataset_sources`; inside the kernel `kaggle_status_client` emits `kernel_started`, `preflight_ok`, `alive` progress, and `report_written`;
+- the resource lease key is `static_site:builder`, so a production status-aware run can block parallel static-site builds.
+
+Verified artifact on 2026-06-28: `preview-20260628-event-pages-prod50-kaggle-v44` built 50 real production-snapshot events on Kaggle CPU and passed `npm run check:preview`. This was a local manual run without production callback env, so status dataset creation was intentionally skipped; the production outbox path must pass `/data/db.sqlite` and the Fly callback to make it visible in `kaggle_run_ledger`/poller.
+
+Outbox integration: `schedule_event_update_tasks(...)` enqueues a coalesced `JobTask.static_site_build` with key `static_site_build:prod` for 15 minutes after the last Smart Update when `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`. The handler launches the runner with `/data/db.sqlite`, status DB/callback, and `--download-output`. CDN/object-storage publication is still a follow-up handoff after CDN is enabled; full page rebuilds are for content/lifecycle changes, not every counter tick.
 
 ## Build and deploy
 
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v39 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v39 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v39 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260628-event-pages-v43 PUBLIC_ASTRO_ASSET_BASE_URL='https://static.kenigevents.ru/{buildId}' npm run build:preview
+PREVIEW_BUILD_ID=preview-20260628-event-pages-v43 PUBLIC_ASTRO_ASSET_BASE_URL='https://static.kenigevents.ru/{buildId}' npm run check:preview
+PREVIEW_BUILD_ID=preview-20260628-event-pages-v43 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
 
 ## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260627-event-pages-v39` keeps the event page mobile/feed-oriented and feedback-aware, and replaces the v19 safe image block with the v20 hero composition lab from `event-hero-lab-2026-06-27.md`:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260628-event-pages-v43` keeps the event page mobile/feed-oriented and feedback-aware, and replaces the v19 safe image block with the v20 hero composition lab from `event-hero-lab-2026-06-27.md`:
 
 The feed-card A/B has been resolved for normal event pages: `split-actions` is now the baseline for all event detail discovery feeds. The old overlay variant remains documented only as a rejected/historical comparison in `event-card-ui-ab-2026-06-27.md`.
 
@@ -128,7 +199,7 @@ The feed-card A/B has been resolved for normal event pages: `split-actions` is n
 - footer exposes compact social navigation and `mailto:info@kenigevents.ru`.
 
 
-After direct product review, `preview-20260627-event-pages-v39` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
+After direct product review, `preview-20260628-event-pages-v43` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
 
 - event description is visible HTML again, not hidden behind a collapsed `<details>` block;
 - event continuation is one vertical mobile-first discovery feed (`Смотрите дальше`), not two horizontal scroll blocks and not a visible “try something else” module;
@@ -149,7 +220,7 @@ After direct product review, `preview-20260627-event-pages-v39` rolls back the U
 - explicit-feedback rerank is viewport-stable: after a user action, the acted-on card and all cards above it keep their positions; only cards below the action anchor may be re-ordered.
 - same-year visible dates omit the year (`11 июля · 21:30`), while cross-year ranges keep the year on both sides (`12 июня 2026 — до 28 марта 2027`).
 
-After consultant review, `preview-20260627-event-pages-v39` additionally hardens the first discovery layer:
+After consultant review, `preview-20260628-event-pages-v43` additionally hardens the first discovery layer:
 
 - header links now open real static `/segodnya/`, `/zavtra/` and `/vyhodnye/` pages, not QA anchors;
 - related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot and direct page link; `.ics` calendar action is deliberately kept on the detail page, not in feed cards;
@@ -162,7 +233,7 @@ After consultant review, `preview-20260627-event-pages-v39` additionally hardens
 
 ### v37 product/UI corrections
 
-`preview-20260627-event-pages-v39` adds the current product corrections:
+`preview-20260628-event-pages-v43` adds the current product corrections:
 
 - public event pages show only an auth-gate notice for sources, mentions and extended stats; actual source lists/statistics are not rendered until registered-user access exists;
 - the event page now has one product-level facts block, not two: hero keeps only a compact date/place meta line, while `Коротко` is the single icon fact block with date, venue+address, entry/status, optional Pushkin card/festival;
@@ -170,27 +241,42 @@ After consultant review, `preview-20260627-event-pages-v39` additionally hardens
 - hero gallery has an on-image transparent `Фото N` CTA, lazy-loads gallery slides from `data-gallery-src` after open/navigation, shows the service tag in fullscreen, makes visual-only fullscreen photos cover 100% viewport height with no side fields, auto-pans right-to-left and then advances to the next photo, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in contain, and JSON-LD `image[]` lists the gallery assets for SEO/GEO;
 - the mobile top drawer is now one monolithic sliding object: rail and handle move together with no visible gap; the closed handle remains visible after scrolling, instead of disappearing;
 - the sources/mentions registered-user notice moved out of `Коротко` and is rendered as the bottom strip of the parent details section, so it no longer visually belongs to the compact facts block;
-- event `5370` is a documented fixture override: production currently marks the long-running exhibition «Точка и линия» free because a free curator round-table source was merged into it. The v39 fixture renders it as paid/ticketed for preview correctness, while production DB repair remains a separate source-of-truth task.
+- event `5370` is a documented fixture override: production currently marks the long-running exhibition «Точка и линия» free because a free curator round-table source was merged into it. The v40 fixture renders it as paid/ticketed for preview correctness, while production DB repair remains a separate source-of-truth task.
 
-### v39 listing switch/share corrections
+### v44 CDN media/ICS and Kaggle-published preview
 
-`preview-20260627-event-pages-v39` keeps the v38 listing-switch fixes and corrects the share experiment boundary: `Поделиться эксперимент 2` now tests a markdown-style `[Открыть событие](URL)` caption without a separate `url` field, and `Скопировать HTML-пост` writes a `ClipboardItem` with `text/html` + `text/plain` for manual paste testing. This documents that formatted hidden hyperlinks are not a Web Share capability; production needs OG preview links, generated share images, clipboard/admin composer, or platform-side publishing for true formatted links.
+`preview-20260628-event-pages-v44-cdn-kaggle` is the first public preview built by the Kaggle StaticSiteBuilder after enabling the media CDN path. The run used the 2026-06-28 production SQLite snapshot, exported 80 real active events, passed `npm run check:preview` inside Kaggle, downloaded `static_site_build_result.json` + tar.gz, and was then deployed to Yandex Object Storage bucket `kenigevents.ru`. Before the build, legacy active media keys from `s3://kenigevents/p/...` were mirrored into `s3://kenigevents.ru/p/...`; verification found `957` needed active keys and `0` missing in the target bucket. Deploy also uploaded `80` stable calendar files to `s3://kenigevents.ru/ics/<event_id>.ics`.
 
-`npm run check:preview` passed for v39. Live HTTP smoke (`curl`) returned 200 for the preview index, today listing and control event page; Playwright screenshot capture was not rerun in this pass because the local Playwright browser binary is not installed.
+Local post-deploy checks on 2026-06-28:
+
+- `https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/__preview/` → `200`;
+- `https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/segodnya/` → `200`;
+- `https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/sobytiya/pesni-sssr-svetlogorsk-5878/` → `200`;
+- `https://static.kenigevents.ru/ics/5878.ics` → `200`, `content-type: text/calendar; charset=utf-8`;
+- sample CDN poster `https://static.kenigevents.ru/p/...webp` → `200`;
+- control event HTML contains CDN `/p/...` media and stable `/ics/5878.ics`, and does not contain old raw `storage.yandexcloud.net/kenigevents/` image URLs.
+
+### v43 share, carousel, price-link and today-fixture corrections
+
+`preview-20260628-event-pages-v43` closes the share experiment. Rich/markdown hidden links are not a Web Share capability, so temporary experiment buttons are removed. The main `Поделиться` action remains the tested production path: image file + plain text + separate URL, with generated 1080×1350 PNG fallback and text/URL copy fallback. Fullscreen visual-photo gallery pan is slowed by ~40% (`17.9s`) while auto-advance now fires after a shorter `8.88s` interval, keeping the slower leftward motion but removing the dead wait. Paid events with missing price must not render `Билеты` as an admission value; they show `Цена уточняется`/`Платный вход`, while real `price_label` values render the exact price or range and are also reflected in JSON-LD offers when possible.
+
+v43 adds two user-visible fixes on top: the event-page mobile brand tag now wraps exactly like the fullscreen-gallery tag (`Полюбить / Калининград` on the kicker lines instead of clipping the text), and gallery auto-advance preloads/decodes the next image slides before moving to them so the transition does not begin over a black empty slide. If a paid event has a real price/range and a ticket URL, the price chip in the compact `Вход` fact and CTA panel may itself be the ticket link (`rel="noopener noreferrer nofollow"`, `data-nosnippet`) instead of adding another noisy label. The production export now selects exact same-day events first, then upcoming short events, then continuing long-running events, so `/segodnya/` is diverse and testable.
+
+Local build verification (`npm run build:preview` + `npm run check:preview`) passed for v43; public bucket preview is v43.
 
 ## v16/v17 personalization-contract correction + v18 UI A/B + v20 hero composition lab
 
-`preview-20260627-event-pages-v39` keeps the discovery implementation aligned with the documented `event_detail_related` contract:
+`preview-20260628-event-pages-v43` keeps the discovery implementation aligned with the documented `event_detail_related` contract:
 
 - `/data/discovery/<event_id>.json` now returns `schema_version`, `feature_schema_version`, `taxonomy_version`, `surface`, `algorithm_id`, `current_event` and `related_static[]` candidates with `category`, `tags`, `audience_exclusion_tags`, `base_similarity`, `reason_codes` and nested display data.
-- Static HTML still preloads up to 10 cards (the compact 10-event fixture can yield fewer for the control page because the current event is excluded; production target is 10 when enough eligible future events exist).
+- Static HTML still preloads up to 10 cards; production target is 10 when enough eligible future events exist.
 - Without consent or without a compatible profile, the static order remains the fallback and no profile is created.
 - With consent and a compatible profile, browser JS runs the local `rankEventDetailRelated` formula: static related similarity remains dominant, explicit likes boost, `hidden_event_ids`/`not_interested_event_ids` hard-filter, strong `negative_interest_tags` remove unsuitable cards, and one same-origin JSON top-up restores the visible pool before the `Показать ещё` button takes over.
 - Browser strong actions carry `served_list_id` / `served_list_hash` in the compact local log, matching the future Supabase `personalization_served_list_summary` write path.
 
 ## Verified on 2026-06-28
 
-`npm run check:preview` passed for `preview-20260627-event-pages-v39`: the control discovery JSON is checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1`, `related_static[]`, display calendar fields, source/social counter consistency, footer social links/icons and `mailto:info@kenigevents.ru`, parseable Event-class JSON-LD with ISO 8601 `offers.validFrom`, current-event like/share controls, public source/extended-stat auth-gate notice without Telegraph/source links, the split-actions feed-card baseline, the hero lab/review routes, poster/photo hero modes, explicit composition markers, one-H1 contract, monolithic flat drawer rail/no-pill links, the non-disappearing closed handle, and the fullscreen hero gallery contract with lazy `data-gallery-src` slides, full-height visual-only cover, one-way auto-pan/auto-advance, backward-swipe pause, touch/pointer swipe and final similar-event CTA slide. The same preview check now also verifies hidden listing personal-feed slots, the localStorage/Supabase RPC feed contract, the local fixed mobile `Все / Для меня` listing switch with hidden-count gating/default personal mode, listing-card title-before-meta order, restored split-card utility row for `Не интересно`, CDN-aware event image rewriting under `PUBLIC_ASSET_BASE_URL`, no rejected brand icon/brand-mark handle markup, the taller two-state title-sway handle animation, the temporary `Поделиться эксперимент` / `Поделиться эксперимент 2` buttons, Web Share files/text/url and markdown-link code paths, rich HTML clipboard copy, and generated share-image fallback, and strengthened Open Graph image metadata. Live HTTP smoke returned 200 for the preview index, `/segodnya/` and the control event page, and verified that public HTML has personal-feed slots but no rejected brand icon. Like/profile writes remain local-only preview behavior, not Supabase persistence.
+`npm run check:preview` passed for `preview-20260628-event-pages-v43`: the control discovery JSON is checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1`, `related_static[]`, display calendar fields, source/social counter consistency, footer social links/icons and `mailto:info@kenigevents.ru`, parseable Event-class JSON-LD with ISO 8601 `offers.validFrom`, current-event like/share controls, public source/extended-stat auth-gate notice without Telegraph/source links, the split-actions feed-card baseline, the hero lab/review routes, poster/photo hero modes, explicit composition markers, one-H1 contract, monolithic flat drawer rail/no-pill links, the non-disappearing closed handle, and the fullscreen hero gallery contract with lazy `data-gallery-src` slides, adjacent preload/decode before auto-advance, full-height visual-only cover, one-way auto-pan/auto-advance, backward-swipe pause, touch/pointer swipe and final similar-event CTA slide. The same preview check now also verifies hidden listing personal-feed slots, the localStorage/Supabase RPC feed contract, the local fixed mobile `Все / Для меня` listing switch with hidden-count gating/default personal mode, listing-card title-before-meta order, restored split-card utility row for `Не интересно`, CDN-aware split between Astro code assets under `PUBLIC_ASTRO_ASSET_BASE_URL` and event-media rewriting under `PUBLIC_ASSET_BASE_URL`, no rejected brand icon/brand-mark handle markup, the wrapped/gallery-geometry mobile tag, no temporary share experiment controls, Web Share files/text/url, generated share-image fallback, ~40% slower fullscreen gallery pan, no user-facing bare `Билеты` admission label when price is absent, paid price chip nofollow links when a ticket URL exists, a diverse exact-today fixture for `/segodnya/`, and strengthened Open Graph image metadata. Like/profile writes remain local-only preview behavior, not Supabase persistence.
 
 ## Counter freshness plan
 

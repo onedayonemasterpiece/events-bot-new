@@ -1,0 +1,1204 @@
+#!/usr/bin/env python3
+"""Export a bounded real production event slice into Astro preview JSON fixtures.
+
+The script intentionally keeps the public preview contract small: event pages are
+static, discovery manifests are deterministic, and source engagement is already
+aggregated into compact counters.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import hashlib
+import html
+import json
+import math
+import os
+import re
+import sqlite3
+import sys
+import time
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+SCRIPT_PATH = Path(__file__).resolve()
+for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_PATH.parents) > 2 else SCRIPT_PATH.parents[1]):
+    if (_candidate / "google_ai").exists() and str(_candidate) not in sys.path:
+        sys.path.insert(0, str(_candidate))
+
+CURRENT_DATE_DEFAULT = "2026-06-28"
+CONTROL_EVENT_IDS = [5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698]
+RELATED_CACHE_SCHEMA_VERSION = "event_related_chain_v2_cache_20260628b"
+# Manual QA overrides from event-page media review: these posters contain either no
+# meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
+FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
+TZ = "Europe/Kaliningrad"
+
+TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y",
+    "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f",
+    "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+EVENT_TYPE_BY_TOPIC = {
+    "CONCERTS": "концерт",
+    "EXHIBITIONS": "выставка",
+    "THEATRE": "театр",
+    "MASTERCLASS": "мастер-класс",
+    "OPEN_AIR": "на открытом воздухе",
+    "FAMILY": "семейное",
+    "KIDS_SCHOOL": "детям",
+    "FESTIVAL": "фестиваль",
+    "KRAEVEDENIE_KALININGRAD_OBLAST": "краеведение",
+}
+
+TOPIC_CATEGORY = {
+    "CONCERTS": "music",
+    "EXHIBITIONS": "exhibition",
+    "THEATRE": "theatre",
+    "MASTERCLASS": "workshop",
+    "OPEN_AIR": "open_air",
+    "FAMILY": "family",
+    "KIDS_SCHOOL": "kids",
+    "FESTIVAL": "festival",
+    "KRAEVEDENIE_KALININGRAD_OBLAST": "local_history",
+}
+
+STOP_WORDS = {
+    "это", "как", "для", "или", "что", "при", "над", "под", "без", "уже", "будет", "будут", "можно",
+    "все", "всех", "где", "когда", "чтобы", "если", "также", "после", "перед", "между", "который",
+    "которая", "которые", "которых", "событие", "события", "мероприятие", "мероприятия", "калининград",
+    "калининграде", "калининградской", "области", "пройдет", "состоится", "начало", "вход", "билеты",
+}
+
+
+def log_stage(stage: str, **payload: Any) -> None:
+    """Emit compact structured logs for Kaggle/Fly investigations.
+
+    The static-site builder captures stdout/stderr in Kaggle logs, so JSON lines
+    with a stable prefix are enough for later grep by stage, event_id, model or
+    cache state.
+    """
+    record = {
+        "scope": "static_site.event_related_chain_v2",
+        "stage": stage,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        **payload,
+    }
+    print(json.dumps(record, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+
+
+def read_json(value: Any, fallback: Any) -> Any:
+    if not value:
+        return fallback
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        return fallback
+    return parsed if parsed is not None else fallback
+
+
+def clean_text(value: Any) -> str:
+    text = str(value or "")
+    text = re.sub(r"[\uFE0F\u200D]", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
+def strip_emoji_prefix(value: str) -> str:
+    value = re.sub(r"^[^\wА-Яа-яЁё0-9\"«]+", "", value or "").strip()
+    return clean_text(value)
+
+
+def clean_place(value: Any) -> str | None:
+    text = clean_text(value)
+    if not text:
+        return None
+    text = re.sub(r"(?:^|[\s,;])#[\wА-Яа-яЁё-]+", "", text).strip(" ,;–—")
+    return clean_text(text) or None
+
+
+def slugify(value: str, fallback: str = "event") -> str:
+    out = []
+    for ch in value.lower():
+        if ch in TRANSLIT:
+            out.append(TRANSLIT[ch])
+        elif ch.isascii() and ch.isalnum():
+            out.append(ch)
+        else:
+            out.append("-")
+    slug = re.sub(r"-+", "-", "".join(out)).strip("-")
+    return slug[:74].strip("-") or fallback
+
+
+def normalize_date(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text if re.fullmatch(r"20\d\d-\d\d-\d\d", text) else None
+
+
+def split_time(value: Any) -> tuple[str | None, str | None, str | None]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None, None, None
+    normalized = raw.replace("—", "..").replace("-", "..").replace("–", "..")
+    parts = [part.strip() for part in normalized.split("..") if part.strip()]
+    start = None
+    end = None
+    for part in parts[:2]:
+        match = re.search(r"(\d{1,2})[:.](\d{2})", part)
+        if match:
+            hh = max(0, min(23, int(match.group(1))))
+            mm = max(0, min(59, int(match.group(2))))
+            if start is None:
+                start = f"{hh:02d}:{mm:02d}"
+            else:
+                end = f"{hh:02d}:{mm:02d}"
+    display = raw if raw and not start else (f"{start}–{end}" if end else start)
+    return start, end, display
+
+
+def price_label(row: sqlite3.Row) -> str | None:
+    lo = row["ticket_price_min"]
+    hi = row["ticket_price_max"]
+    try:
+        lo = int(lo) if lo is not None else None
+        hi = int(hi) if hi is not None else None
+    except Exception:
+        return None
+    if lo is None and hi is None:
+        return None
+    if lo is not None and lo <= 0 and bool(row["is_free"]):
+        return None
+    if lo is not None and hi is not None and lo != hi:
+        return f"{lo}–{hi} ₽"
+    value = lo if lo is not None else hi
+    return f"{value} ₽" if value is not None else None
+
+
+def is_sold_out_status(status: str) -> bool:
+    return bool(re.search(r"sold|unavailable|not[_\s-]?available|нет\s+бил|законч|распрод", status or "", re.I))
+
+
+def ticket_info(row: sqlite3.Row) -> dict[str, Any]:
+    status = clean_text(row["ticket_status"])
+    status_l = status.lower()
+    href = clean_text(row["ticket_link"]) or None
+    free = bool(row["is_free"]) or bool(re.search(r"бесплат|free", status_l))
+    price = price_label(row)
+    if is_sold_out_status(status):
+        kind, label, href = "status", "Билеты закончились", None
+    elif href and href.startswith("tel:"):
+        kind, label = "phone", "Позвонить организатору"
+    elif free:
+        kind, label = "free", "Открыть условия"
+    elif re.search(r"регистрац|registration|запис", status_l):
+        kind, label = "registration", "Зарегистрироваться"
+    elif href:
+        kind, label = "ticket", "Купить билет"
+    else:
+        kind, label = "status", "Условия уточняются"
+    return {"kind": kind, "label": label, "href": href, "status": status or None, "is_free": free, "price_label": price, "note": None}
+
+
+def status_label(row: sqlite3.Row, ticket: dict[str, Any]) -> str:
+    status = clean_text(row["ticket_status"])
+    if is_sold_out_status(status):
+        return "Билеты закончились"
+    if ticket["is_free"]:
+        return "Бесплатно"
+    if ticket["price_label"]:
+        return ticket["price_label"]
+    if re.search(r"регистрац|registration", status, re.I):
+        return "Регистрация"
+    if re.search(r"sale|available|продаж|билет", status, re.I):
+        return "Платный вход"
+    return "Условия уточняются"
+
+
+def apply_preview_overrides(event_id: int, ticket: dict[str, Any], status: str) -> tuple[dict[str, Any], str]:
+    if event_id == 5370:
+        ticket = {**ticket, "kind": "ticket", "label": "Купить билет", "is_free": False, "status": "paid"}
+        if not ticket.get("price_label"):
+            status = "Платный вход"
+    return ticket, status
+
+
+def infer_event_type(row: sqlite3.Row, topics: list[str]) -> str | None:
+    value = clean_text(row["event_type"])
+    if value:
+        return value.lower()
+    for topic in topics:
+        if topic in EVENT_TYPE_BY_TOPIC:
+            return EVENT_TYPE_BY_TOPIC[topic]
+    title = clean_text(row["title"]).lower()
+    for pattern, label in [
+        (r"концерт|музык", "концерт"), (r"выстав", "выставка"), (r"спектак|театр", "театр"),
+        (r"лекц", "лекция"), (r"мастер", "мастер-класс"), (r"экскурс", "экскурсия"),
+        (r"фестив|маркет|ярмарк", "фестиваль"),
+    ]:
+        if re.search(pattern, title):
+            return label
+    return "событие"
+
+
+def markdownish_to_html(text: str) -> str:
+    text = str(text or "").replace("\ufe0f", "").replace("\u200d", "")
+    text = re.sub(r"\*\*(facts|факты(?:\s+о\s+событии)?)\*\*", "", text, flags=re.I)
+    text = re.sub(r"\*\*([^*\n]{1,180})\*\*", r"\1", text)
+    text = re.sub(r"__([^_\n]{1,180})__", r"\1", text)
+    text = text.replace("***", "").strip()
+    if not text:
+        return ""
+    blocks = [block.strip() for block in re.split(r"\n{2,}", text) if block.strip()]
+    out: list[str] = []
+    in_list = False
+    for block in blocks[:18]:
+        if block.startswith(">"):
+            if in_list:
+                out.append("</ul>"); in_list = False
+            out.append(f"<blockquote>{html.escape(block.lstrip('> ').strip())}</blockquote>")
+        elif block.startswith("###"):
+            if in_list:
+                out.append("</ul>"); in_list = False
+            lines = [line.strip() for line in block.splitlines() if line.strip()]
+            heading = re.sub(r"^#+\s*", "", lines[0] if lines else block).strip()
+            body_lines = lines[1:]
+            out.append(f"<h3>{html.escape(heading[:140]).strip()}</h3>")
+            if body_lines:
+                body = "\n".join(body_lines).strip()
+                if re.match(r"^[-•*]\s+", body):
+                    items = [
+                        html.escape(re.sub(r"^[-•*]\s+", "", line).strip())
+                        for line in body.splitlines()
+                        if line.strip()
+                    ]
+                    if items:
+                        out.append("<ul>")
+                        out.extend(f"<li>{item}</li>" for item in items[:12])
+                        out.append("</ul>")
+                else:
+                    out.append(f"<p>{html.escape(body).replace(chr(10), '<br />')}</p>")
+        elif re.match(r"^[-•*]\s+", block):
+            items = [html.escape(re.sub(r"^[-•*]\s+", "", line).strip()) for line in block.splitlines() if line.strip()]
+            if items:
+                out.append("<ul>")
+                out.extend(f"<li>{item}</li>" for item in items[:12])
+                out.append("</ul>")
+                in_list = False
+        else:
+            if in_list:
+                out.append("</ul>"); in_list = False
+            out.append(f"<p>{html.escape(block).replace(chr(10), '<br />')}</p>")
+    if in_list:
+        out.append("</ul>")
+    return "\n".join(out)
+
+
+def image_url_key(url: str) -> str:
+    return (url or "").split("?", 1)[0]
+
+
+def meaningful_ocr(value: Any) -> bool:
+    text = clean_text(value).lower()
+    if len(text) < 60:
+        return False
+    if "no readable text" in text or "no text" in text:
+        return False
+    letters = re.findall(r"[a-zа-яё]", text, flags=re.I)
+    return len(letters) >= 20
+
+
+def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, list[dict[str, Any]]]:
+    rows = con.execute(
+        "select supabase_url, catbox_url, ocr_text from eventposter where event_id=? order by id asc", (event_id,)
+    ).fetchall()
+    ocr_by_url: dict[str, str] = {}
+    poster_urls: list[str] = []
+    for row in rows:
+        for url in [row["supabase_url"], row["catbox_url"]]:
+            url = clean_text(url)
+            if not url:
+                continue
+            poster_urls.append(url)
+            if row["ocr_text"]:
+                ocr_by_url[image_url_key(url)] = str(row["ocr_text"] or "")
+    photo_urls = read_json(photo_urls_raw, [])
+    urls = []
+    seen = set()
+    for url in list(photo_urls or []) + poster_urls:
+        url = clean_text(url)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    primary = urls[0] if urls else None
+    assets: list[dict[str, Any]] = []
+    for url in urls[:12]:
+        ocr = ocr_by_url.get(image_url_key(url), "")
+        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
+        assets.append({
+            "src": url,
+            "width": 1080,
+            "height": 1350,
+            "alt": f"Афиша события «{title}»",
+            "image_text_mode": mode,
+            "image_kind": "poster" if mode == "ocr_text" else "photo",
+            "recommended_hero_fit": "contain" if mode == "ocr_text" else "cover",
+            "safe_crop": mode != "ocr_text",
+        })
+    primary_mode = assets[0]["image_text_mode"] if assets else "unknown"
+    return primary, primary_mode, assets
+
+
+def source_metrics(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> tuple[int, int, int, int]:
+    urls = set()
+    for value in [row["source_post_url"], row["source_vk_post_url"]]:
+        if clean_text(value):
+            urls.add(clean_text(value))
+    for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
+        if clean_text(src["source_url"]):
+            urls.add(clean_text(src["source_url"]))
+    likes = views = shares = sources = 0
+    for url in urls:
+        best = None
+        for table in ["telegram_post_metric", "vk_post_metric"]:
+            try:
+                metric = con.execute(
+                    f"select likes, views, reposts, collected_ts from {table} where source_url=? order by collected_ts desc limit 1", (url,)
+                ).fetchone()
+            except sqlite3.OperationalError:
+                metric = None
+            if metric and (best is None or str(metric["collected_ts"] or "") > str(best["collected_ts"] or "")):
+                best = metric
+        if best:
+            sources += 1
+            likes += int(best["likes"] or 0)
+            views += int(best["views"] or 0)
+            shares += int(best["reposts"] or 0)
+    return likes, views, shares, sources
+
+
+def event_active_where(current_date: str) -> str:
+    return (
+        "date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
+        "and coalesce(lifecycle_status,'active') not in ('cancelled','deleted','duplicate') "
+        f"and (date >= '{current_date}' or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
+    )
+
+
+def fetch_rows(con: sqlite3.Connection, limit: int, current_date: str, include_ids: list[int]) -> list[sqlite3.Row]:
+    rows_by_id: dict[int, sqlite3.Row] = {}
+    ordered_rows: list[sqlite3.Row] = []
+
+    def add_row(row: sqlite3.Row) -> bool:
+        if not normalize_date(row["date"]):
+            return False
+        event_id = int(row["id"])
+        if event_id in rows_by_id:
+            return False
+        rows_by_id[event_id] = row
+        ordered_rows.append(row)
+        return True
+
+    def add_query(query: str, params: tuple[Any, ...] = ()) -> None:
+        for row in con.execute(query, params):
+            add_row(row)
+            if len(ordered_rows) >= limit:
+                break
+
+    if include_ids:
+        placeholders = ",".join("?" for _ in include_ids)
+        for row in con.execute(f"select * from event where id in ({placeholders})", include_ids):
+            add_row(row)
+
+    active = event_active_where(current_date)
+    today_time_order = "coalesce(nullif(time,''),'23:59') asc, id asc"
+    # Preview/focus-group builds must be testable as a real "today" page.  The
+    # old date-ascending slice was quickly filled by long-running exhibitions,
+    # hiding same-day concerts/workshops/meetings from `/segodnya/`.
+    add_query(
+        f"select * from event where {active} and date = ? order by {today_time_order} limit ?",
+        (current_date, max(limit, 80)),
+    )
+    if len(ordered_rows) < limit:
+        add_query(
+            f"""
+            select * from event
+            where {active}
+              and date > ?
+              and (end_date is null or trim(end_date) = '' or end_date = date)
+            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+            limit ?
+            """,
+            (current_date, max(limit * 2, 80)),
+        )
+    if len(ordered_rows) < limit:
+        add_query(
+            f"""
+            select * from event
+            where {active}
+              and date < ?
+              and end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+              and end_date >= ?
+            order by end_date asc, date desc, coalesce(nullif(time,''),'23:59') asc, id asc
+            limit ?
+            """,
+            (current_date, current_date, max(limit * 2, 80)),
+        )
+    if len(ordered_rows) < limit:
+        add_query(
+            f"select * from event where {active} order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc limit ?",
+            (max(limit * 3, limit + len(include_ids) + 20),),
+        )
+    return ordered_rows[:limit]
+
+
+def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
+    event_id = int(row["id"])
+    title = strip_emoji_prefix(row["title"]) or f"Событие {event_id}"
+    topics = [str(item) for item in read_json(row["topics"], []) if str(item).strip()]
+    event_type = infer_event_type(row, topics)
+    city = clean_place(row["city"])
+    venue = clean_place(row["location_name"])
+    address = clean_place(row["location_address"])
+    start_date = normalize_date(row["date"]) or current_date
+    end_date = normalize_date(row["end_date"])
+    start_time, time_end, display_time = split_time(row["time"])
+    starts_at = f"{start_date}T{start_time}:00+02:00" if start_time else None
+    end_at = f"{end_date or start_date}T{time_end}:00+02:00" if time_end else None
+    ticket = ticket_info(row)
+    status = status_label(row, ticket)
+    ticket, status = apply_preview_overrides(event_id, ticket, status)
+    primary_image, image_mode, image_assets = collect_images(con, event_id, row["photo_urls"], title)
+    source_likes, source_views, source_shares, engagement_sources = source_metrics(con, event_id, row)
+    summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
+    description = str(row["description"] or row["source_text"] or summary or "").strip()
+    slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
+    slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
+    source_url = clean_text(row["source_post_url"]) or clean_text(row["source_vk_post_url"]) or None
+    return {
+        "id": event_id,
+        "source_prod_id": event_id,
+        "title": title,
+        "slug": slug,
+        "event_type": event_type,
+        "festival": clean_text(row["festival"]) or None,
+        "status_label": status,
+        "lifecycle_status": clean_text(row["lifecycle_status"]) or "active",
+        "starts_at": starts_at,
+        "start_date": start_date,
+        "start_time": start_time,
+        "end_date": end_date,
+        "end_at": end_at,
+        "time_range_end": time_end,
+        "timezone": TZ,
+        "display_date": start_date,
+        "display_time": display_time,
+        "city": city,
+        "venue_name": venue,
+        "address": address,
+        "map_query": ", ".join([part for part in [city, venue, address] if part]) or None,
+        "ticket": ticket,
+        "source_url": source_url,
+        "telegraph_url": clean_text(row["telegraph_url"]) or None,
+        "image_url": primary_image,
+        "image_alt": f"Афиша события «{title}»",
+        "image_text_mode": image_mode,
+        "image_assets": image_assets,
+        "face_boxes": [],
+        "ocr_boxes": [],
+        "focal_point": None,
+        "image_object_position": None,
+        "safe_crop": image_mode != "ocr_text",
+        "summary": summary,
+        "meta_description": clean_text(row["short_description"]) or summary,
+        "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
+        "topics": topics,
+        "pushkin_card": bool(row["pushkin_card"]),
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
+        "likes_count": source_likes,
+        "source_likes_count": source_likes,
+        "service_likes_count": 0,
+        "source_views_count": source_views,
+        "source_engagement_sources_count": engagement_sources,
+        "shares_count": source_shares,
+    }
+
+
+def category(event: dict[str, Any]) -> str:
+    topics = event.get("topics") or []
+    for topic in topics:
+        if topic in TOPIC_CATEGORY:
+            return TOPIC_CATEGORY[topic]
+    text = " ".join([str(event.get("event_type") or ""), event.get("title") or ""]).lower()
+    for pattern, cat in [(r"концерт|музык", "music"), (r"выстав", "exhibition"), (r"театр|спектак", "theatre"), (r"лекц", "lecture"), (r"мастер", "workshop"), (r"экскурс", "excursion"), (r"фестив|маркет", "festival")]:
+        if re.search(pattern, text):
+            return cat
+    return "event"
+
+
+def score_pair(left: dict[str, Any], right: dict[str, Any]) -> float:
+    score = 0.0
+    if category(left) == category(right):
+        score += 0.40
+    lt, rt = set(left.get("topics") or []), set(right.get("topics") or [])
+    if lt or rt:
+        score += 0.24 * (len(lt & rt) / max(1, len(lt | rt)))
+    if left.get("city") and left.get("city") == right.get("city"):
+        score += 0.12
+    if left.get("venue_name") and left.get("venue_name") == right.get("venue_name"):
+        score += 0.08
+    try:
+        delta = abs((datetime.fromisoformat(left["start_date"]) - datetime.fromisoformat(right["start_date"])).days)
+        score += 0.12 * (1 if delta <= 2 else 0.75 if delta <= 7 else 0.45 if delta <= 21 else 0.15)
+    except Exception:
+        pass
+    if bool(left.get("ticket", {}).get("is_free")) == bool(right.get("ticket", {}).get("is_free")):
+        score += 0.04
+    return round(min(score, 1.0), 4)
+
+
+def plain_from_html(value: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    return html.unescape(re.sub(r"\s+", " ", text)).strip()
+
+
+def event_embedding_document(event: dict[str, Any]) -> str:
+    """Canonical event text for offline vector retrieval.
+
+    Raw source text is intentionally not embedded verbatim: title/category/tags
+    are repeated to make short real-catalog rows comparable to rich descriptions.
+    """
+    topics = " ".join(str(item) for item in event.get("topics") or [])
+    admission = event.get("ticket", {}).get("price_label") or event.get("status_label") or ""
+    parts = [
+        event.get("title") or "",
+        event.get("title") or "",
+        event.get("event_type") or "",
+        event.get("event_type") or "",
+        category(event),
+        topics,
+        event.get("festival") or "",
+        event.get("summary") or "",
+        plain_from_html(event.get("description_html") or ""),
+        event.get("venue_name") or "",
+        event.get("city") or "",
+        admission,
+        "бесплатно" if event.get("ticket", {}).get("is_free") else "платно",
+    ]
+    return clean_text(" ".join(part for part in parts if part))
+
+
+def event_fingerprint(event: dict[str, Any]) -> str:
+    payload = {
+        "title": event.get("title"),
+        "event_type": event.get("event_type"),
+        "topics": event.get("topics") or [],
+        "summary": event.get("summary"),
+        "description_html": event.get("description_html"),
+        "city": event.get("city"),
+        "venue_name": event.get("venue_name"),
+        "start_date": event.get("start_date"),
+        "end_date": event.get("end_date"),
+        "ticket": event.get("ticket"),
+        "lifecycle_status": event.get("lifecycle_status"),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def tokenize_for_vector(text: str) -> list[str]:
+    tokens = re.findall(r"[a-zа-яё0-9]{3,}", text.lower(), flags=re.I)
+    return [token for token in tokens if token not in STOP_WORDS and not token.isdigit()]
+
+
+def build_sparse_tfidf_vectors(events: list[dict[str, Any]]) -> dict[int, dict[str, float]]:
+    docs = {int(event["id"]): tokenize_for_vector(event_embedding_document(event)) for event in events}
+    df: Counter[str] = Counter()
+    for tokens in docs.values():
+        df.update(set(tokens))
+    total = max(1, len(docs))
+    vectors: dict[int, dict[str, float]] = {}
+    for event_id, tokens in docs.items():
+        tf = Counter(tokens)
+        vec: dict[str, float] = {}
+        for token, count in tf.items():
+            idf = math.log((1 + total) / (1 + df[token])) + 1.0
+            vec[token] = (1.0 + math.log(count)) * idf
+        norm = math.sqrt(sum(value * value for value in vec.values())) or 1.0
+        vectors[event_id] = {token: value / norm for token, value in vec.items()}
+    return vectors
+
+
+def sparse_cosine(left: dict[str, float], right: dict[str, float]) -> float:
+    if not left or not right:
+        return 0.0
+    if len(left) > len(right):
+        left, right = right, left
+    return float(sum(value * right.get(token, 0.0) for token, value in left.items()))
+
+
+def eligible_related_pair(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if int(left["id"]) == int(right["id"]):
+        return False
+    if int(right["id"]) in [int(item) for item in left.get("other_date_ids", [])]:
+        return False
+    if int(left["id"]) in [int(item) for item in right.get("other_date_ids", [])]:
+        return False
+    if str(right.get("lifecycle_status") or "active") != "active":
+        return False
+    if is_sold_out_status(str(right.get("ticket", {}).get("status") or right.get("status_label") or "")):
+        # Sold-out rows may remain indexable as event pages, but should not be
+        # promoted as recommendations.
+        return False
+    return True
+
+
+def stable_jitter(left_id: int, right_id: int, salt: str) -> float:
+    raw = hashlib.sha1(f"{salt}:{left_id}:{right_id}".encode("utf-8")).hexdigest()[:8]
+    value = int(raw, 16) / 0xFFFFFFFF
+    return (value - 0.5) * 0.012
+
+
+def build_vector_chain(events: list[dict[str, Any]], *, cache_salt: str) -> dict[str, list[dict[str, Any]]]:
+    vectors = build_sparse_tfidf_vectors(events)
+    by_id = {int(event["id"]): event for event in events}
+    chains: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        event_id = int(event["id"])
+        scored: list[dict[str, Any]] = []
+        for candidate in events:
+            candidate_id = int(candidate["id"])
+            if not eligible_related_pair(event, candidate):
+                continue
+            vector_similarity = sparse_cosine(vectors.get(event_id, {}), vectors.get(candidate_id, {}))
+            deterministic = score_pair(event, candidate)
+            same_category = category(event) == category(candidate)
+            freshness_quality = min(0.08, math.log1p(float(candidate.get("likes_count") or 0)) / 100)
+            related_score = (
+                0.58 * vector_similarity
+                + 0.30 * deterministic
+                + (0.08 if same_category else 0.0)
+                + freshness_quality
+                + stable_jitter(event_id, candidate_id, cache_salt)
+            )
+            reason_codes = [
+                "vector:local_tfidf_sparse_v1",
+                f"category:{category(candidate)}",
+            ]
+            if same_category:
+                reason_codes.append("same_category")
+            if event.get("city") and event.get("city") == candidate.get("city"):
+                reason_codes.append("same_city")
+            if event.get("venue_name") and event.get("venue_name") == candidate.get("venue_name"):
+                reason_codes.append("same_venue")
+            scored.append({
+                "event_id": candidate_id,
+                "related_score": round(max(0.0, min(1.0, related_score)), 4),
+                "vector_similarity": round(max(0.0, min(1.0, vector_similarity)), 4),
+                "deterministic_score": round(deterministic, 4),
+                "similarity_class": "same_domain" if same_category else "adjacent_discovery",
+                "confidence": round(max(0.15, min(0.95, 0.42 + vector_similarity * 0.42 + (0.10 if same_category else 0.0))), 4),
+                "reason_codes": reason_codes,
+                "retrieval_sources": ["vector", "deterministic"],
+                "display_eligible": True,
+            })
+        scored.sort(key=lambda item: (-float(item["related_score"]), -float(item["vector_similarity"]), int(item["event_id"])))
+        chains[str(event_id)] = scored[:40]
+
+    # Mutual relinking: if a new/changed event is a strong candidate for an old
+    # anchor, make the reverse discoverable too. This keeps static pages coherent
+    # between nightly rebuilds and Smart Update-triggered refreshes.
+    for left_id, chain in list(chains.items()):
+        for item in chain[:18]:
+            right_id = str(item["event_id"])
+            reverse = chains.setdefault(right_id, [])
+            if any(str(existing["event_id"]) == left_id for existing in reverse):
+                continue
+            if left_id not in by_id or int(right_id) not in by_id:
+                continue
+            reverse.append({
+                **item,
+                "event_id": int(left_id),
+                "related_score": round(max(0.0, float(item["related_score"]) * 0.965), 4),
+                "reason_codes": list(dict.fromkeys([*(item.get("reason_codes") or []), "mutual_link"])),
+                "retrieval_sources": list(dict.fromkeys([*(item.get("retrieval_sources") or []), "mutual_link"])),
+            })
+            reverse.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("vector_similarity") or 0), int(entry["event_id"])))
+            del reverse[40:]
+    return chains
+
+
+def load_related_cache(path: Path | None) -> dict[str, Any] | None:
+    if not path or not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def save_related_cache(path: Path | None, payload: dict[str, Any]) -> None:
+    if not path:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def supabase_limiter_client():
+    url = (os.getenv("SUPABASE_URL") or "").strip()
+    key = (
+        os.getenv("SUPABASE_SERVICE_KEY")
+        or os.getenv("SUPABASE_KEY")
+        or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+        or ""
+    ).strip()
+    if not url or not key:
+        raise RuntimeError("Supabase limiter env is missing: need SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_KEY")
+    original_sys_path = list(sys.path)
+    try:
+        # The repository may contain a local `supabase/migrations/` directory,
+        # which is a namespace package and can shadow the real supabase-py
+        # package. Exclude such paths only for this import.
+        sys.path = [
+            item for item in sys.path
+            if not ((Path(item or ".") / "supabase").is_dir() and not (Path(item or ".") / "supabase" / "__init__.py").exists())
+        ]
+        cached = sys.modules.get("supabase")
+        if cached is not None and not getattr(cached, "__file__", None):
+            sys.modules.pop("supabase", None)
+        from supabase import create_client
+    except Exception as exc:
+        raise RuntimeError(f"supabase python client unavailable for limiter: {exc}") from exc
+    finally:
+        sys.path = original_sys_path
+    return create_client(url, key)
+
+
+async def call_gemma_related_audit_async(
+    *,
+    model: str,
+    key_env: str,
+    anchor: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    timeout_seconds: int = 45,
+) -> dict[int, dict[str, Any]]:
+    """Optional Gemma 4 audit/rerank for already-vectorized candidates.
+
+    The page-view path never calls this. Export/build can enable it for changed
+    anchors, and cache makes repeated rebuilds reuse the previous audit.
+
+    Important: provider access goes only through GoogleAIClient with Supabase
+    reserve/finalize. If limiter env/RPC is unavailable, this function fails
+    before a provider call instead of falling back to a direct API request.
+    """
+    if not os.getenv(key_env, "").strip():
+        raise RuntimeError(f"Gemma key env is missing: {key_env}")
+    from google_ai.client import GoogleAIClient
+
+    previous_env = {
+        "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": os.environ.get("GOOGLE_AI_ALLOW_RESERVE_FALLBACK"),
+        "GOOGLE_AI_LOCAL_LIMITER_FALLBACK": os.environ.get("GOOGLE_AI_LOCAL_LIMITER_FALLBACK"),
+        "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": os.environ.get("GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR"),
+        "GOOGLE_AI_PROVIDER_TIMEOUT_SEC": os.environ.get("GOOGLE_AI_PROVIDER_TIMEOUT_SEC"),
+        "GOOGLE_AI_FALLBACK_MODELS": os.environ.get("GOOGLE_AI_FALLBACK_MODELS"),
+    }
+    os.environ["GOOGLE_AI_ALLOW_RESERVE_FALLBACK"] = "0"
+    os.environ["GOOGLE_AI_LOCAL_LIMITER_FALLBACK"] = "0"
+    os.environ["GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR"] = "0"
+    os.environ["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"] = str(max(1, int(timeout_seconds)))
+    os.environ["GOOGLE_AI_FALLBACK_MODELS"] = ""
+    prompt = {
+        "task": "Оцени похожесть событий для статической афиши. Не добавляй новых event_id.",
+        "rules": [
+            "Похожие = пользователь, заинтересовавшийся anchor, сочтет candidate тематически близким.",
+            "Если это просто другое событие без тематической близости — reject=true.",
+            "Ответ только JSON по схеме.",
+        ],
+        "anchor": {
+            "event_id": anchor["id"],
+            "title": anchor.get("title"),
+            "type": anchor.get("event_type"),
+            "category": category(anchor),
+            "summary": anchor.get("summary"),
+            "venue": anchor.get("venue_name"),
+            "city": anchor.get("city"),
+            "date": anchor.get("start_date"),
+        },
+        "candidates": [
+            {
+                "event_id": item["id"],
+                "title": item.get("title"),
+                "type": item.get("event_type"),
+                "category": category(item),
+                "summary": item.get("summary"),
+                "venue": item.get("venue_name"),
+                "city": item.get("city"),
+                "date": item.get("start_date"),
+            }
+            for item in candidates[:24]
+        ],
+    }
+    schema = {
+        "type": "OBJECT",
+        "properties": {
+            "ranked": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "event_id": {"type": "INTEGER"},
+                        "llm_semantic_score": {"type": "NUMBER"},
+                        "similarity_class": {"type": "STRING"},
+                        "confidence": {"type": "NUMBER"},
+                        "reject": {"type": "BOOLEAN"},
+                        "reason_codes": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["event_id", "llm_semantic_score", "similarity_class", "confidence", "reject"],
+                },
+            }
+        },
+        "required": ["ranked"],
+    }
+    try:
+        client = GoogleAIClient(
+            supabase_client=supabase_limiter_client(),
+            consumer="static_site_related_builder",
+            account_name=os.getenv("STATIC_SITE_GEMMA_ACCOUNT_NAME") or "static-site-related",
+            default_env_var_name=key_env,
+            reserve_overflow_key_envs=[],
+        )
+        text, _usage = await client.generate_content_async(
+            model=model,
+            prompt=json.dumps(prompt, ensure_ascii=False),
+            generation_config={
+                "temperature": 0.1,
+                "max_output_tokens": 4096,
+                "response_mime_type": "application/json",
+                "response_schema": schema,
+                "thinking_config": {"include_thoughts": False, "thinking_level": "MINIMAL"},
+            },
+            max_output_tokens=4096,
+        )
+    finally:
+        for name, value in previous_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+    if not str(text or "").strip():
+        raise RuntimeError("Gemma related audit returned empty text after thought filtering")
+    parsed = json.loads(str(text).strip())
+    out: dict[int, dict[str, Any]] = {}
+    for item in parsed.get("ranked") or []:
+        try:
+            event_id = int(item.get("event_id"))
+        except Exception:
+            continue
+        out[event_id] = item
+    return out
+
+
+def call_gemma_related_audit(**kwargs: Any) -> dict[int, dict[str, Any]]:
+    return asyncio.run(call_gemma_related_audit_async(**kwargs))
+
+
+def maybe_apply_gemma_audit(
+    events: list[dict[str, Any]],
+    chains: dict[str, list[dict[str, Any]]],
+    *,
+    enabled: bool,
+    model: str,
+    key_env: str,
+    cache: dict[str, Any],
+    max_anchors: int,
+    changed_event_ids: set[int] | None = None,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    changed_event_ids = set(changed_event_ids or set())
+    meta = {
+        "enabled": enabled,
+        "model": model,
+        "key_env": key_env,
+        "status": "disabled",
+        "audited_anchors": 0,
+        "cache_hits": 0,
+        "provider_calls": 0,
+        "changed_event_ids": sorted(changed_event_ids),
+        "skipped_unchanged_without_cache": 0,
+        "errors": [],
+    }
+    if not enabled:
+        return chains, meta
+    if not os.getenv(key_env, "").strip():
+        meta["status"] = "skipped_missing_key"
+        return chains, meta
+    by_id = {int(event["id"]): event for event in events}
+    audit_cache = cache.setdefault("gemma_audit_cache", {})
+    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    audited = 0
+    for anchor in events:
+        if max_anchors > 0 and audited >= max_anchors:
+            break
+        anchor_id = str(anchor["id"])
+        chain = chains.get(anchor_id) or []
+        top_ids = [int(item["event_id"]) for item in chain[:24]]
+        if not top_ids:
+            continue
+        anchor_int_id = int(anchor["id"])
+        affected_by_change = (
+            not changed_event_ids
+            or anchor_int_id in changed_event_ids
+            or any(candidate_id in changed_event_ids for candidate_id in top_ids)
+        )
+        cache_key = hashlib.sha1(json.dumps({
+            "model": model,
+            "anchor": fingerprints.get(anchor_id),
+            "candidates": {str(cid): fingerprints.get(str(cid)) for cid in top_ids},
+        }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+        cached = audit_cache.get(cache_key)
+        if cached:
+            meta["cache_hits"] += 1
+            audit = {int(k): v for k, v in cached.items()}
+        elif not affected_by_change:
+            meta["skipped_unchanged_without_cache"] += 1
+            continue
+        else:
+            try:
+                candidates = [by_id[cid] for cid in top_ids if cid in by_id]
+                log_stage(
+                    "gemma_audit_call",
+                    anchor_event_id=anchor_int_id,
+                    candidate_count=len(candidates),
+                    model=model,
+                    key_env=key_env,
+                )
+                audit = call_gemma_related_audit(model=model, key_env=key_env, anchor=anchor, candidates=candidates)
+                audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
+                meta["provider_calls"] += 1
+                # Respect free-tier RPM without introducing a queue.
+                time.sleep(4.2)
+            except Exception as exc:
+                meta["errors"].append({"anchor_event_id": anchor_int_id, "error": str(exc)[:500]})
+                log_stage("gemma_audit_error", anchor_event_id=anchor_int_id, error=str(exc)[:500])
+                continue
+        for item in chain:
+            event_id = int(item["event_id"])
+            verdict = audit.get(event_id)
+            if not verdict:
+                continue
+            llm_score = max(0.0, min(1.0, float(verdict.get("llm_semantic_score") or 0)))
+            item["llm_semantic_score"] = round(llm_score, 4)
+            item["llm_confidence"] = round(max(0.0, min(1.0, float(verdict.get("confidence") or 0))), 4)
+            item["similarity_class"] = str(verdict.get("similarity_class") or item.get("similarity_class") or "unknown")
+            item["gemma_reject"] = bool(verdict.get("reject"))
+            if item["gemma_reject"]:
+                item["display_eligible"] = False
+            item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), *(verdict.get("reason_codes") or []), "gemma4_26b_audit"]))
+            item["related_score"] = round(
+                max(0.0, min(1.0, 0.45 * float(item.get("vector_similarity") or 0) + 0.25 * float(item.get("deterministic_score") or 0) + 0.25 * llm_score + 0.05 * float(item.get("related_score") or 0))),
+                4,
+            )
+        chain[:] = [item for item in chain if item.get("display_eligible", True)]
+        chain.sort(key=lambda entry: (-float(entry["related_score"]), -float(entry.get("vector_similarity") or 0), int(entry["event_id"])))
+        del chain[40:]
+        audited += 1
+    meta["audited_anchors"] = audited
+    meta["status"] = "ok" if audited > 0 and not meta["errors"] else ("partial" if audited > 0 else "failed")
+    return chains, meta
+
+
+def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = None, gemma_verify: bool = False, gemma_model: str = "models/gemma-4-26b-a4b-it", gemma_key_env: str = "GOOGLE_API_KEY4", gemma_max_anchors: int = 0) -> dict[str, Any]:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    event_ids = [int(event["id"]) for event in events]
+    cache = load_related_cache(cache_path) or {}
+    previous_fingerprints = cache.get("event_fingerprints") if isinstance(cache.get("event_fingerprints"), dict) else {}
+    previous_ids = [int(value) for value in (cache.get("event_ids") or []) if str(value).isdigit()]
+    previous_id_set = set(previous_ids)
+    current_id_set = set(event_ids)
+    changed_event_ids = {
+        int(event_id)
+        for event_id, fingerprint in fingerprints.items()
+        if previous_fingerprints.get(event_id) != fingerprint
+    }
+    changed_event_ids.update(previous_id_set - current_id_set)
+    cache_valid = (
+        cache.get("schema_version") == RELATED_CACHE_SCHEMA_VERSION
+        and cache.get("event_fingerprints") == fingerprints
+        and cache.get("event_ids") == event_ids
+        and isinstance(cache.get("chains"), dict)
+    )
+    gemma_cache_ready = bool(gemma_verify and cache.get("gemma_verified_model") == gemma_model)
+    log_stage(
+        "cache_check",
+        cache_path=str(cache_path) if cache_path else None,
+        cache_valid=cache_valid,
+        event_count=len(events),
+        previous_event_count=len(previous_ids),
+        changed_event_ids=sorted(changed_event_ids),
+        gemma_verify=gemma_verify,
+        gemma_model=gemma_model,
+    )
+    if cache_valid:
+        chains = cache["chains"]
+        cache_state = "hit"
+        if not gemma_verify or gemma_cache_ready:
+            gemma_meta = {
+                "enabled": gemma_verify,
+                "model": gemma_model,
+                "key_env": gemma_key_env,
+                "status": "cache_hit_no_provider" if gemma_verify else "disabled",
+                "audited_anchors": 0,
+                "cache_hits": len(events) if gemma_verify else 0,
+                "provider_calls": 0,
+                "changed_event_ids": [],
+                "skipped_unchanged_without_cache": 0,
+                "errors": [],
+            }
+        else:
+            log_stage("gemma_initial_audit_required", event_count=len(events), model=gemma_model)
+            chains, gemma_meta = maybe_apply_gemma_audit(
+                events,
+                chains,
+                enabled=gemma_verify,
+                model=gemma_model,
+                key_env=gemma_key_env,
+                cache=cache,
+                max_anchors=gemma_max_anchors,
+                changed_event_ids=set(),
+            )
+    else:
+        salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+        log_stage("vector_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids))
+        chains = build_vector_chain(events, cache_salt=salt)
+        cache_state = "miss_rebuilt"
+        chain_lengths = [len(value or []) for value in chains.values()]
+        log_stage(
+            "vector_rebuild_complete",
+            event_count=len(events),
+            min_chain=min(chain_lengths) if chain_lengths else 0,
+            max_chain=max(chain_lengths) if chain_lengths else 0,
+            avg_chain=round(sum(chain_lengths) / max(1, len(chain_lengths)), 2),
+        )
+        chains, gemma_meta = maybe_apply_gemma_audit(
+            events,
+            chains,
+            enabled=gemma_verify,
+            model=gemma_model,
+            key_env=gemma_key_env,
+            cache=cache,
+            max_anchors=gemma_max_anchors,
+            changed_event_ids=changed_event_ids,
+        )
+    log_stage("gemma_audit_complete", **gemma_meta)
+    cache_payload = {
+        "schema_version": RELATED_CACHE_SCHEMA_VERSION,
+        "algorithm": "event_vector_related_chain_v2",
+        "embedding_model": "local_tfidf_sparse_v1",
+        "embedding_document_version": "event_embedding_doc_v1",
+        "event_ids": event_ids,
+        "event_fingerprints": fingerprints,
+        "chains": chains,
+        "gemma_audit_cache": cache.get("gemma_audit_cache", {}),
+        "gemma_verification": gemma_meta,
+        "gemma_verified_model": (
+            gemma_model
+            if gemma_verify and (gemma_cache_ready or gemma_meta.get("status") in {"ok", "partial"})
+            else cache.get("gemma_verified_model")
+        ),
+        "updated_at": generated_at,
+    }
+    save_related_cache(cache_path, cache_payload)
+    related: dict[str, dict[str, Any]] = {}
+    for event in events:
+        chain = chains.get(str(event["id"]), [])
+        similar = [int(item["event_id"]) for item in chain[:30]]
+        explore = [int(item["event_id"]) for item in chain if item.get("similarity_class") == "adjacent_discovery"][:10]
+        if not explore:
+            explore = [int(item["event_id"]) for item in chain[10:20]]
+        related[str(event["id"])] = {
+            "similar": similar[:30],
+            "explore": explore[:10],
+            "chain": chain[:40],
+            "underfilled": len(chain) < min(20, max(0, len(events) - 1)),
+        }
+    return {
+        "schema_version": "event_related_chain_v2",
+        "generated_at": generated_at,
+        "algorithm": "event_vector_related_chain_v2",
+        "fallback_algorithm": "prod_sqlite_static_related_v1",
+        "embedding_model": "local_tfidf_sparse_v1",
+        "embedding_document_version": "event_embedding_doc_v1",
+        "gemma_verification": gemma_meta,
+        "cache": {"state": cache_state, "path": str(cache_path) if cache_path else None},
+        "related": related,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
+    parser.add_argument("--output-dir", default="site/src/data")
+    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
+    parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
+    parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_related_chain_v2")
+    parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
+    parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
+    parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
+    parser.add_argument("--gemma-related-max-anchors", type=int, default=0, help="0 = no cap for enabled audit")
+    args = parser.parse_args()
+
+    con = sqlite3.connect(args.db)
+    con.row_factory = sqlite3.Row
+    include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
+    rows = fetch_rows(con, args.limit, args.current_date, include_ids)
+    events = [build_event(con, row, args.current_date) for row in rows]
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    preview = {
+        "build": {
+            "generated_at": generated_at,
+            "source": "prod-sqlite-static-site-export-v1",
+            "current_date": args.current_date,
+            "notes": [
+                f"bounded production slice: {len(events)} real events",
+                "source social likes/views are compact latest-metric aggregates",
+                "service likes remain 0 until first-party backend ingest is enabled",
+            ],
+        },
+        "events": events,
+    }
+    related_cache = Path(args.related_cache) if args.related_cache else None
+    related_payload = build_related(
+        events,
+        cache_path=related_cache,
+        gemma_verify=bool(args.gemma_related_verify),
+        gemma_model=args.gemma_related_model,
+        gemma_key_env=args.gemma_related_key_env,
+        gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
+    )
+    (out_dir / "preview-events.json").write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Exported {len(events)} events to {out_dir}")
+    print("IDs:", ",".join(str(event["id"]) for event in events))
+    print("Related:", related_payload.get("algorithm"), related_payload.get("cache"), related_payload.get("gemma_verification"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

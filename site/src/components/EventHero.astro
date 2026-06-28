@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, withBase } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
@@ -44,29 +44,17 @@ const derivedComposition: HeroComposition = heroMode === 'fallback-art'
 const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
-const ctaHref = event.ticket.href;
+const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
+const soldOut = isTicketSoldOut(event);
 const canonicalUrl = eventAbsoluteUrl(event);
-const shareText = [dateTimeLabel, event.venue_name || event.city].filter(Boolean).join(' · ');
-const statusText = [event.event_type, event.ticket.price_label || event.status_label].filter(Boolean).join(' · ');
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;');
-}
-const shareExperimentBaseLines = [event.title, [dateTimeLabel, placeLabel].filter(Boolean).join(' · '), event.ticket.price_label || event.status_label].filter(Boolean);
-const shareExperimentText = shareExperimentBaseLines.join('\n');
-const shareExperimentMarkdownText = [...shareExperimentBaseLines, `[Открыть событие](${canonicalUrl})`].filter(Boolean).join('\n');
-const richSharePlainText = [...shareExperimentBaseLines, `Открыть событие: ${canonicalUrl}`].filter(Boolean).join('\n');
-const richShareHtml = [
-  `<p><strong>${escapeHtml(event.title)}</strong></p>`,
-  [dateTimeLabel, placeLabel].filter(Boolean).length ? `<p>${escapeHtml([dateTimeLabel, placeLabel].filter(Boolean).join(' · '))}</p>` : '',
-  event.ticket.price_label || event.status_label ? `<p>${escapeHtml(event.ticket.price_label || event.status_label || '')}</p>` : '',
-  `<p><a href="${escapeHtml(canonicalUrl)}">Открыть событие</a></p>`,
-].filter(Boolean).join('');
+const admissionLabel = eventAdmissionLabel(event);
+const heroAdmissionLabel = (() => {
+  if (event.ticket.is_free) return admissionLabel;
+  return null;
+})();
+const shareText = [event.title, [dateTimeLabel, placeLabel].filter(Boolean).join(' · '), admissionLabel].filter(Boolean).join('\n');
+const statusText = [event.event_type, heroAdmissionLabel].filter(Boolean).join(' · ');
 const shareImageType = primaryImageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : primaryImageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
 const canAddToCalendar = isCalendarEligible(event);
@@ -88,6 +76,16 @@ function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
 }
+function isReliableHeroGalleryImageUrl(value: string | null | undefined): boolean {
+  const src = String(value || '').trim();
+  if (!src) return false;
+  try {
+    const url = new URL(src, 'https://kenigevents.ru');
+    return url.hostname.toLowerCase() !== 'files.catbox.moe';
+  } catch {
+    return true;
+  }
+}
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const heroObjectPosition = heroMode === 'photo-cover' ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
@@ -99,6 +97,7 @@ const galleryImages = (() => {
   const push = (image: Partial<HeroGalleryImage> | null | undefined) => {
     const src = String(image?.src || '').trim();
     if (!src || seen.has(src)) return;
+    if (!isReliableHeroGalleryImageUrl(src)) return;
     seen.add(src);
     out.push({
       src,
@@ -173,8 +172,9 @@ const showTicketCta = Boolean(ctaHref);
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
       {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
+      {soldOut && !showTicketCta && <span class="secondary-button cta-button--disabled" aria-disabled="true">{ctaLabel}</span>}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel}>
         <Icon name="share" />
         <span data-share-label>Поделиться</span>
         <span class="feedback-count" data-share-count>{shareCountLabel}</span>
@@ -182,21 +182,6 @@ const showTicketCta = Boolean(ctaHref);
       <button type="button" class="secondary-button event-hero__like feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
         <Icon name="heart" />
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
-      </button>
-      <button type="button" class="secondary-button share-experiment-button" data-nosnippet data-share-experiment data-share-experiment-mode="files_url" data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-experiment-text={shareExperimentText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={event.ticket.price_label || event.status_label || ''} aria-label={`Поделиться экспериментально: картинка, текст и ссылка на событие ${event.title}`}>
-        <Icon name="share" />
-        <span data-share-experiment-label>Поделиться эксперимент</span>
-        <span class="share-experiment-button__status" data-share-experiment-status aria-live="polite"></span>
-      </button>
-      <button type="button" class="secondary-button share-experiment-button share-experiment-button--rich-link" data-nosnippet data-share-experiment data-share-experiment-mode="rich_text_link" data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-experiment-text={shareExperimentMarkdownText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={`${shareFileName}-rich-link`} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={event.ticket.price_label || event.status_label || ''} aria-label={`Поделиться экспериментально 2: картинка и markdown-ссылка на событие ${event.title}`}>
-        <Icon name="share" />
-        <span data-share-experiment-label>Поделиться эксперимент 2</span>
-        <span class="share-experiment-button__status" data-share-experiment-status aria-live="polite"></span>
-      </button>
-      <button type="button" class="secondary-button share-experiment-button share-experiment-button--copy-rich" data-nosnippet data-copy-rich-share data-rich-share-html={richShareHtml} data-rich-share-text={richSharePlainText} aria-label={`Скопировать форматированный пост со ссылкой под надписью для события ${event.title}`}>
-        <Icon name="share" />
-        <span data-copy-rich-share-label>Скопировать HTML-пост</span>
-        <span class="share-experiment-button__status" data-copy-rich-share-status aria-live="polite"></span>
       </button>
     </div>
     <p class="event-hero__meta-line">{[dateTimeLabel, placeLabel].filter(Boolean).join(' · ')}</p>
@@ -229,7 +214,7 @@ const showTicketCta = Boolean(ctaHref);
               data-event-title={event.title}
               style={image.recommended_object_position ? `object-position: ${image.recommended_object_position}` : undefined}
             />
-            <figcaption><span>Фото события</span><strong>{event.title}</strong></figcaption>
+            <figcaption class="sr-only">Фото события: {event.title}</figcaption>
           </figure>
         ))}
         {galleryCta && (
@@ -245,6 +230,7 @@ const showTicketCta = Boolean(ctaHref);
         )}
       </div>
     </div>
+    <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
     {gallerySlideCount > 1 && (
       <>
         <button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button>

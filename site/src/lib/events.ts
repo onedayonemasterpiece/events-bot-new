@@ -15,6 +15,10 @@ export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/u, '');
 export const PREVIEW_BUILD_ID = import.meta.env.PUBLIC_PREVIEW_BUILD_ID || 'local';
+export const ICS_BASE_URL = (
+  import.meta.env.PUBLIC_ICS_BASE_URL ||
+  (import.meta.env.PUBLIC_ASSET_BASE_URL ? `${String(import.meta.env.PUBLIC_ASSET_BASE_URL).replace(/\/+$/u, '')}/ics` : '')
+).replace(/\/+$/u, '');
 
 const data = previewData as PreviewData;
 const related = relatedData as RelatedData;
@@ -23,6 +27,7 @@ export const RELATED_SCHEMA_VERSION = 'event-detail-related-v1' as const;
 export const TAXONOMY_VERSION = 'event-taxonomy-v1' as const;
 export const RELATED_SURFACE = 'event_detail_related' as const;
 export const STATIC_RELATED_ALGORITHM_ID = 'static_related_v1' as const;
+export const VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2' as const;
 
 export function getPreviewBuild() {
   return data.build;
@@ -86,6 +91,27 @@ export function displayDateTime(event: Pick<PreviewEvent, 'start_date' | 'end_da
   return [displayDate(event), event.display_time].filter(Boolean).join(' · ');
 }
 
+export function displayUpdatedAtKaliningrad(value: string | null | undefined): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const sqliteLike = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?![zZ]|[+-]\d{2}:?\d{2})/u);
+  const normalized = sqliteLike
+    ? `${sqliteLike[1]}T${sqliteLike[2]}Z`
+    : (/^\d{4}-\d{2}-\d{2}T/u.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/u.test(raw)
+      ? `${raw}Z`
+      : raw);
+  const date = new Date(normalized);
+  if (!Number.isFinite(date.getTime())) return null;
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Kaliningrad',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
   return data.events.find((event) => event.slug === slug);
@@ -117,7 +143,8 @@ export function eventAbsoluteUrl(event: Pick<PreviewEvent, 'slug'>): string {
   return absoluteUrl(eventPath(event));
 }
 
-export function eventCalendarHref(event: Pick<PreviewEvent, 'slug'>): string {
+export function eventCalendarHref(event: Pick<PreviewEvent, 'id' | 'slug'>): string {
+  if (ICS_BASE_URL) return `${ICS_BASE_URL}/${event.id}.ics`;
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }
 
@@ -335,21 +362,55 @@ export function toRelatedManifestCandidate(current: PreviewEvent, candidate: Pre
   };
 }
 
+function vectorChainItemFor(event: PreviewEvent, candidate: PreviewEvent): Record<string, unknown> | null {
+  const chain = related.related[String(event.id)]?.chain || [];
+  const item = chain.find((entry) => Number(entry.event_id) === candidate.id);
+  return item || null;
+}
+
+function chainRelatedCandidate(event: PreviewEvent, candidate: PreviewEvent): RelatedManifestCandidate {
+  const base = toRelatedManifestCandidate(event, candidate);
+  const chainItem = vectorChainItemFor(event, candidate);
+  if (!chainItem) return base;
+  const score = Number(chainItem.related_score ?? chainItem.vector_similarity ?? base.base_similarity);
+  const vectorSimilarity = Number(chainItem.vector_similarity ?? score);
+  const deterministicScore = Number(chainItem.deterministic_score ?? base.static_score);
+  return {
+    ...base,
+    base_similarity: Number.isFinite(score) ? score : base.base_similarity,
+    static_score: Number.isFinite(score) ? score : base.static_score,
+    vector_similarity: Number.isFinite(vectorSimilarity) ? vectorSimilarity : undefined,
+    deterministic_score: Number.isFinite(deterministicScore) ? deterministicScore : undefined,
+    llm_semantic_score: Number.isFinite(Number(chainItem.llm_semantic_score)) ? Number(chainItem.llm_semantic_score) : undefined,
+    llm_confidence: Number.isFinite(Number(chainItem.llm_confidence)) ? Number(chainItem.llm_confidence) : undefined,
+    related_score: Number.isFinite(score) ? score : undefined,
+    similarity_class: typeof chainItem.similarity_class === 'string' ? chainItem.similarity_class : undefined,
+    retrieval_sources: Array.isArray(chainItem.retrieval_sources) ? chainItem.retrieval_sources.map(String) : undefined,
+    reason_codes: unique([...(base.reason_codes || []), ...(Array.isArray(chainItem.reason_codes) ? chainItem.reason_codes.map(String) : [])]),
+    exploration_candidate: base.exploration_candidate || chainItem.similarity_class === 'adjacent_discovery',
+  };
+}
+
 export function getStaticRelatedCandidates(event: PreviewEvent, limit = 30): RelatedManifestCandidate[] {
-  const seededIds = [
-    ...(related.related[String(event.id)]?.similar || []),
-    ...(related.related[String(event.id)]?.explore || []),
-  ];
+  const entry = related.related[String(event.id)];
+  const seededIds = entry?.chain?.length
+    ? entry.chain.map((item) => Number(item.event_id)).filter((id) => Number.isFinite(id))
+    : [
+        ...(entry?.similar || []),
+        ...(entry?.explore || []),
+      ];
   const byId = new Map<number, PreviewEvent>();
   for (const id of seededIds) {
     const candidate = getEventById(id);
     if (eligibleRelatedCandidate(event, candidate)) byId.set(candidate.id, candidate);
   }
-  for (const candidate of getEvents()) {
-    if (eligibleRelatedCandidate(event, candidate)) byId.set(candidate.id, candidate);
+  if (!entry?.chain?.length) {
+    for (const candidate of getEvents()) {
+      if (eligibleRelatedCandidate(event, candidate)) byId.set(candidate.id, candidate);
+    }
   }
   return [...byId.values()]
-    .map((candidate) => toRelatedManifestCandidate(event, candidate))
+    .map((candidate) => chainRelatedCandidate(event, candidate))
     .sort((left, right) => right.base_similarity - left.base_similarity || left.event_id - right.event_id)
     .slice(0, Math.max(0, limit));
 }
@@ -361,10 +422,10 @@ export function buildEventDetailRelatedManifest(event: PreviewEvent, limit = 30)
     feature_schema_version: RELATED_SCHEMA_VERSION,
     taxonomy_version: TAXONOMY_VERSION,
     surface: RELATED_SURFACE,
-    algorithm_id: STATIC_RELATED_ALGORITHM_ID,
+    algorithm_id: related.algorithm === VECTOR_RELATED_ALGORITHM_ID ? VECTOR_RELATED_ALGORITHM_ID : STATIC_RELATED_ALGORITHM_ID,
     generated_at: getPreviewBuild().generated_at,
     event_id: event.id,
-    strategy: 'static_related_manifest_v1',
+    strategy: related.algorithm === VECTOR_RELATED_ALGORITHM_ID ? 'event_related_chain_v2_manifest' : 'static_related_manifest_v1',
     preload_target: 10,
     page_size: 10,
     current_event: eventFeatureSummary(event),
@@ -444,6 +505,16 @@ export function eventIntersectsDateRange(event: PreviewEvent, fromDate: string, 
   return starts <= toDate && ends >= fromDate;
 }
 
+export function isMultiDayEvent(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): boolean {
+  return Boolean(event.end_date && event.end_date !== event.start_date);
+}
+
+export function isContinuingListingEvent(event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics' | 'start_date' | 'end_date'>): boolean {
+  if (!isMultiDayEvent(event)) return false;
+  const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
+  return /выстав|экспозиц|музей|галере|фестив|ярмарк|маркет|лагер/u.test(haystack);
+}
+
 export type EventDaypart = 'morning' | 'day' | 'evening' | 'night';
 
 export function getTomorrowDate(): string {
@@ -495,6 +566,20 @@ export function isTelephoneUrl(href: string | null | undefined): boolean {
   return Boolean(href && /^tel:/iu.test(href));
 }
 
+export function isTicketSoldOut(event: Pick<PreviewEvent, 'ticket' | 'status_label'>): boolean {
+  const ticket = event.ticket;
+  const statusText = [ticket.status, ticket.label, event.status_label, ticket.note]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return /sold|unavailable|not[_\s-]?available|нет\s+бил|законч|распрод/u.test(statusText);
+}
+
+export function eventActionHref(event: Pick<PreviewEvent, 'ticket' | 'status_label'>): string | null {
+  if (isTicketSoldOut(event)) return null;
+  return event.ticket.href || null;
+}
+
 export function formatDateMachine(date: string): string {
   return date;
 }
@@ -509,6 +594,7 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   const hasRegistration = /регистрац|registration|зарегистр/u.test(statusText);
   const hasBooking = /запис|phone|телефон|коммент/u.test(statusText);
   const hasDonation = /донат|пожертв/u.test(statusText);
+  if (isTicketSoldOut(event)) return 'Билеты закончились';
   if (ticket.is_free) {
     if (hasRegistration) return 'Бесплатно · регистрация';
     if (hasBooking) return 'Бесплатно · по записи';
@@ -517,11 +603,15 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   if (ticket.price_label) return ticket.price_label;
   if (hasDonation) return 'За донат';
   if (ticket.kind === 'phone') return 'Запись по телефону';
-  if (ticket.kind === 'ticket') return 'Билеты';
+  if (ticket.kind === 'ticket') return 'Платный вход';
+  if (/билет/u.test(statusText)) return 'Платный вход';
   return event.status_label || ticket.label || 'Условия уточняются';
 }
 
 export function eventTicketActionLabel(event: PreviewEvent): string {
+  if (isTicketSoldOut(event)) {
+    return 'Билеты закончились';
+  }
   if (event.ticket.kind === 'source') {
     return 'Открыть пост организатора';
   }

@@ -18,6 +18,8 @@ Canonical deploy target for this personalized static site: static HTML/CSS/JS/ma
 Итоговый флоу с нейросетями и стадиями внедрения: `docs/features/unsigned-personalization/neural-flow.md`.
 Картинка-схема флоу: `docs/features/unsigned-personalization/assets/neural-flow.svg`.
 Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
+Golden interest facets / multi-horizon retrieval contract: `docs/features/unsigned-personalization/golden-interest-facets.md`.
+Personal feed architecture / listing continuation contract: `docs/features/unsigned-personalization/personal-feed-architecture.md`.
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
@@ -581,3 +583,7 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 - Где будет backend endpoint для rate-limited recommendation RPC: Fly app, Supabase Edge Function или прямой PostgREST RPC?
 - Какой desktop layout выбираем для MVP: grid + filters, grid + right rail, или несколько персональных секций на главной?
 - Какой embedding provider выбираем после Russian/persona eval: OpenAI, Google, локальный open-source или staged fallback?
+
+## Документы
+
+- [Event vector related-chain v2](event-vector-related-chain.md) — offline vector retrieval + Gemma 4 26B cache/audit for static event discovery.

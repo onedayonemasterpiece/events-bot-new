@@ -250,7 +250,8 @@ const FOOTER_SOCIAL_LINKS = [
       .event-hero__gallery-hint {
         position: absolute;
         right: max(0.78rem, env(safe-area-inset-right));
-        bottom: max(0.8rem, env(safe-area-inset-bottom));
+        top: max(0.82rem, calc(env(safe-area-inset-top) + 0.82rem));
+        bottom: auto;
         z-index: 4;
         max-width: calc(100vw - 1.56rem);
         min-height: 40px;
@@ -272,7 +273,7 @@ const FOOTER_SOCIAL_LINKS = [
       .event-hero--photo-cinematic-sheet .event-hero__gallery-hint,
       .event-hero--photo-parallax-sheet .event-hero__gallery-hint,
       .event-hero--poster-attached-card .event-hero__gallery-hint {
-        bottom: max(5.1rem, calc(env(safe-area-inset-bottom) + 5.1rem));
+        top: max(0.82rem, calc(env(safe-area-inset-top) + 0.82rem));
       }
       .event-hero__gallery-hint .icon { width: 1.08rem; height: 1.08rem; }
       .hero-gallery[hidden] { display: none !important; }
@@ -411,10 +412,10 @@ const FOOTER_SOCIAL_LINKS = [
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
       .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
-        animation: gallery-pan-forward 9.2s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
+        animation: gallery-pan-forward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
-        animation: gallery-pan-backward 9.2s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
+        animation: gallery-pan-backward 17.9s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       @keyframes gallery-pan-forward {
         from { object-position: 38% center; }
@@ -424,7 +425,7 @@ const FOOTER_SOCIAL_LINKS = [
         from { object-position: 64% center; }
         to { object-position: 38% center; }
       }
-      .hero-gallery__slide figcaption {
+      .hero-gallery__caption {
         position: absolute;
         left: max(1rem, env(safe-area-inset-left));
         right: max(1rem, env(safe-area-inset-right));
@@ -438,7 +439,7 @@ const FOOTER_SOCIAL_LINKS = [
         text-shadow: 0 2px 10px rgba(0,0,0,0.58);
         pointer-events: none;
       }
-      .hero-gallery__slide figcaption span {
+      .hero-gallery__caption span {
         display: block;
         width: max-content;
         max-width: 100%;
@@ -452,7 +453,7 @@ const FOOTER_SOCIAL_LINKS = [
         letter-spacing: 0.08em;
         line-height: 1.25;
       }
-      .hero-gallery__slide figcaption strong {
+      .hero-gallery__caption strong {
         display: inline;
         padding: 0.08rem 0.42rem 0.12rem;
         background: linear-gradient(90deg, rgba(6,5,4,0.82), rgba(6,5,4,0.68));
@@ -548,6 +549,8 @@ const FOOTER_SOCIAL_LINKS = [
       .quick-fact span { display: block; overflow-wrap: anywhere; }
       .prose { margin-top: 1rem; color: #3b3029; max-width: 68ch; }
       .prose p { margin: 0 0 0.95rem; }
+      .prose strong, .prose b { font-weight: 650; }
+      .event-updated-at { margin: -0.35rem 0 0.85rem; color: var(--muted); font-size: 0.86rem; font-weight: 720; }
       .prose blockquote { margin: 0 0 1rem; padding: 1rem 1.1rem; border-left: 4px solid var(--primary); background: #fff4e6; border-radius: 0 18px 18px 0; color: #33251d; }
       .prose ul { margin: 0 0 1rem 1.2rem; padding: 0; }
       .details-list { display: grid; gap: 0.7rem; margin: 0; }
@@ -627,6 +630,19 @@ const FOOTER_SOCIAL_LINKS = [
         color: var(--primary-strong);
         font-weight: 900;
       }
+      a.event-info-admission__main {
+        color: var(--primary-strong);
+        text-decoration: underline;
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.16em;
+        transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+      }
+      a.event-info-admission__main:hover,
+      a.event-info-admission__main:focus-visible {
+        border-color: rgba(121,48,20,0.26);
+        background: #ffefd9;
+        color: #793014;
+      }
       .event-info-admission__detail { color: var(--muted); font-weight: 780; }
       .event-info-chip {
         display: inline-flex;
@@ -673,6 +689,13 @@ const FOOTER_SOCIAL_LINKS = [
       .cta-panel { padding: 1rem; }
       .cta-panel__top { display: grid; gap: 0.8rem; }
       .cta-panel__date { font-size: 1.35rem; font-weight: 850; letter-spacing: -0.03em; line-height: 1.12; }
+      .cta-panel__admission-link {
+        color: var(--primary-strong);
+        font-weight: 900;
+        text-decoration: underline;
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.16em;
+      }
       .cta-button, .secondary-button {
         min-height: 48px;
         display: inline-flex;
@@ -690,13 +713,20 @@ const FOOTER_SOCIAL_LINKS = [
       .cta-button:hover { background: var(--primary-strong); }
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
+      .cta-button--disabled,
+      .cta-button--disabled:hover {
+        cursor: not-allowed;
+        box-shadow: none;
+        opacity: 0.82;
+        background: #f1e8db;
+        border-color: rgba(121,48,20,0.14);
+        color: #725f50;
+      }
       .icon { width: 1.15em; height: 1.15em; flex: 0 0 auto; fill: currentColor; }
       .icon--share { fill: currentColor; stroke: none; }
       .icon--phone { fill: none; stroke: currentColor; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
       .native-share-button { cursor: pointer; }
-      .share-experiment-button { grid-column: 1 / -1; border-style: dashed; background: #fffaf1; color: #5f351f; }
-      .share-experiment-button .share-experiment-button__status { display: block; font-size: 0.72rem; font-weight: 700; opacity: 0.72; line-height: 1.1; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
       .share-list a { min-height: 44px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.45rem 0.75rem; border: 1px solid var(--line); background: #fff; color: var(--primary-strong); text-decoration: none; font-weight: 750; }
       .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
@@ -905,6 +935,16 @@ const FOOTER_SOCIAL_LINKS = [
         text-decoration: none;
       }
       .site-footer__contact:hover { text-decoration: underline; text-underline-offset: 0.22em; }
+      .site-footer__tools { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+      .personalization-reset-button { min-height: 34px; border: 0; border-bottom: 1px dotted rgba(121,48,20,0.38); background: transparent; color: rgba(121,48,20,0.78); padding: 0.16rem 0; font: inherit; font-size: 0.82rem; font-weight: 760; cursor: pointer; }
+      .personalization-reset-button:focus-visible { outline: 2px solid rgba(121,48,20,0.42); outline-offset: 3px; border-radius: 8px; }
+      .personalization-reset-status {
+        flex-basis: 100%;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 650;
+        line-height: 1.25;
+      }
       .site-footer__note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.92rem; }
       .social-icon { width: 1.28rem; height: 1.28rem; flex: 0 0 auto; display: block; }
       .social-icon--max { color: #111; }
@@ -964,15 +1004,16 @@ const FOOTER_SOCIAL_LINKS = [
           z-index: 2;
           --brand-tag-side-gap: 0.76rem;
           --brand-sway-x: 0px;
-          width: 8.8rem;
-          min-height: 5.55rem;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
+          width: 7.45rem;
+          min-height: calc(5.35rem + env(safe-area-inset-top));
+          display: inline-grid;
+          align-content: end;
+          justify-items: start;
+          gap: 0.04rem;
           overflow: hidden;
           isolation: isolate;
-          padding: 1.45rem 0.76rem 0.58rem;
-          border: 1px solid rgba(255,255,255,0.14);
+          padding: max(1.32rem, calc(env(safe-area-inset-top) + 0.92rem)) 0.72rem 0.58rem;
+          border: 0;
           border-radius: 0 0 10px 10px;
           background: linear-gradient(160deg, #793014 0%, #a54821 100%);
           color: #fffdf8;
@@ -990,9 +1031,10 @@ const FOOTER_SOCIAL_LINKS = [
           z-index: 1;
           display: grid;
           gap: 0.04rem;
-          width: max-content;
-          max-width: none;
-          margin-left: var(--brand-tag-side-gap);
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          margin-left: 0;
           justify-self: start;
           transform-origin: left center;
           will-change: transform;
@@ -1145,6 +1187,8 @@ const FOOTER_SOCIAL_LINKS = [
           object-position: center top;
           border-radius: 0;
           box-shadow: none;
+          transform: translate3d(0, var(--hero-parallax-y, 0px), 0);
+          will-change: transform;
         }
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
           min-height: 0;
@@ -1292,7 +1336,8 @@ const FOOTER_SOCIAL_LINKS = [
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
-        .event-hero--photo-cover .event-hero__image { transform: none !important; }
+        .event-hero--photo-cover .event-hero__image,
+        .event-hero--poster-stage .event-hero__image { transform: none !important; }
       }
     </style>
   </head>
@@ -1357,6 +1402,10 @@ const FOOTER_SOCIAL_LINKS = [
           ))}
         </nav>
         <a class="site-footer__contact" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
+        <div class="site-footer__tools" data-nosnippet>
+          <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
+          <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
+        </div>
         <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
       </div>
     </footer>
@@ -1366,6 +1415,7 @@ const FOOTER_SOCIAL_LINKS = [
         const PROFILE_KEY = 'ke_personalization_profile';
         const LOG_KEY = 'ke_event_feedback_log_v1';
         const SHARE_PROMPT_KEY = 'ke_like_share_prompt_count_v1';
+        const RESET_AT_KEY = 'ke_personalization_last_reset_at_v1';
         const PROFILE_VERSION = 'anon-profile-v1';
         const FEATURE_SCHEMA_VERSION = 'event-detail-related-v1';
         const TAXONOMY_VERSION = 'event-taxonomy-v1';
@@ -1417,6 +1467,36 @@ const FOOTER_SOCIAL_LINKS = [
           } catch (_) {
             return false;
           }
+        }
+
+        function formatLocalResetTime(value) {
+          const date = new Date(value);
+          if (!Number.isFinite(date.getTime())) return '';
+          try {
+            return new Intl.DateTimeFormat('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            }).format(date);
+          } catch (_) {
+            return date.toLocaleString();
+          }
+        }
+
+        function updatePersonalizationResetStatus() {
+          const node = document.querySelector('[data-personalization-reset-status]');
+          if (!node) return;
+          let value = '';
+          try { value = localStorage.getItem(RESET_AT_KEY) || ''; } catch (_) {}
+          const label = formatLocalResetTime(value);
+          if (!label) {
+            node.hidden = true;
+            node.textContent = '';
+            return;
+          }
+          node.hidden = false;
+          node.textContent = `Последний сброс: ${label}`;
         }
 
         function toArray(value) {
@@ -2267,7 +2347,8 @@ const FOOTER_SOCIAL_LINKS = [
           const likeCount = formatCount(likes);
           const shareCount = formatCount(shares);
           const status = data.price_label || data.status_label || '';
-          const shareText = [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · ');
+          const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
+          const shareImageType = data.image_url && String(data.image_url).toLowerCase().includes('.webp') ? 'image/webp' : data.image_url && String(data.image_url).toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
           const cardClass = `event-card event-card--${cardVariant}`;
           const feedbackClass = `event-card__feedback ${cardVariant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'}`;
           const dislikeIcon = '<svg class="icon icon--dislike" aria-hidden="true" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M335.003,63.091v278.283h93.308V63.091H335.003z M393.245,303.962h-21.439v-19.534h21.439V303.962z"></path><polygon points="459.307,105.002 459.307,316.643 512,316.643 512,105.002"></polygon><path d="M302.309,263.539V115.813l-67.165-27.147c0,0-22.86-7.855-47.864-7.855H30.249c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244H61.17v0.002H30.244C13.546,266.22,0,279.756,0,296.463v1.318c0,16.704,13.541,30.245,30.244,30.245h108.455l-45.595,74.1c-8.745,14.222-4.308,32.848,9.914,41.605l1.115,0.686c14.232,8.756,32.859,4.319,41.615-9.903l59.966-97.461c1.396-2.268,3.405-4.094,5.796-5.266l90.748-44.473l0.057-0.028v-23.746H302.309z"></path></svg>';
@@ -2275,7 +2356,7 @@ const FOOTER_SOCIAL_LINKS = [
           const heartIcon = '<svg class="icon icon--heart" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3z"></path></svg>';
           const calendarIcon = '<svg class="icon icon--calendar" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M21,30a8,8,0,1,1,8-8A8,8,0,0,1,21,30Zm0-14a6,6,0,1,0,6,6A6,6,0,0,0,21,16Z"></path><polygon points="22.59 25 20 22.41 20 18 22 18 22 21.59 24 23.59 22.59 25"></polygon><path d="M28,6a2,2,0,0,0-2-2H22V2H20V4H12V2H10V4H6A2,2,0,0,0,4,6V26a2,2,0,0,0,2,2h4V26H6V6h4V8h2V6h8V8h2V6h4v6h2Z"></path></svg>';
           const negativeButton = `<button type="button" class="feedback-button feedback-button--negative" data-nosnippet data-feedback-action="not_interested" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" aria-pressed="false" aria-label="${escapeHtml(`Не интересно: ${data.title}`)}">${dislikeIcon}<span>Не интересно</span></button>`;
-          const shareButton = `<button type="button" class="feedback-button feedback-button--share" data-nosnippet data-native-share data-share-event-id="${escapeHtml(data.id)}" data-share-event-title="${escapeHtml(data.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(data.title)}" data-share-text="${escapeHtml(shareText)}" data-share-url="${escapeHtml(data.absolute_url)}" aria-label="${escapeHtml(`Поделиться событием: ${data.title}`)}">${shareIcon}<span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>`;
+          const shareButton = `<button type="button" class="feedback-button feedback-button--share" data-nosnippet data-native-share data-share-event-id="${escapeHtml(data.id)}" data-share-event-title="${escapeHtml(data.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(data.title)}" data-share-text="${escapeHtml(shareText)}" data-share-url="${escapeHtml(data.absolute_url)}" data-share-image="${escapeHtml(data.image_url || '')}" data-share-image-type="${escapeHtml(shareImageType)}" data-share-file-name="${escapeHtml(`kenigevents-${data.id}`)}" data-share-date-time="${escapeHtml(data.display_date_time)}" data-share-place="${escapeHtml(data.venue_name || data.city || '')}" data-share-admission="${escapeHtml(status)}" aria-label="${escapeHtml(`Поделиться событием: ${data.title}`)}">${shareIcon}<span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>`;
           const likeButton = `<button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${data.title}. Сейчас ${likes}` : `Поставить лайк: ${data.title}`)}">${heartIcon}<span class="feedback-count" data-feedback-count>${likeCount}</span></button>`;
           const calendarButton = data.calendar_eligible && data.calendar_href
             ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span>В календарь</span></a>`
@@ -2666,96 +2747,32 @@ const FOOTER_SOCIAL_LINKS = [
           await applyFeedbackState({ anchorEventId: eventId });
         }
 
-        document.addEventListener('click', async (event) => {
-          const button = event.target.closest('[data-native-share]');
-          if (!button) return;
-          event.preventDefault();
-          hideLikeShareCallouts();
-          const url = button.dataset.shareUrl || location.href;
-          if ('share' in navigator) {
-            try {
-              await navigator.share({
-                title: button.dataset.shareTitle || document.title,
-                text: button.dataset.shareText || '',
-                url,
-              });
-              await recordShare(button);
-              return;
-            } catch (_) {
-              return;
-            }
+        function setNativeShareStatus(button, message = '', isBusy = false) {
+          const label = button.querySelector('[data-share-label]') || button.querySelector('span') || button;
+          const original = button.dataset.shareOriginalLabel || label.textContent || 'Поделиться';
+          button.dataset.shareOriginalLabel = original;
+          if (isBusy) {
+            label.textContent = message || 'Готовим картинку…';
+          } else {
+            label.textContent = message || original;
           }
-          try {
-            await navigator.clipboard.writeText(url);
-            const label = button.querySelector('[data-share-label]') || button.querySelector('span') || button;
-            const original = label.textContent;
-            label.textContent = 'Ссылка скопирована';
-            setTimeout(() => { label.textContent = original || 'Поделиться'; }, 1800);
-            await recordShare(button);
-          } catch (_) {
-            location.href = url;
-          }
-        });
-
-        function setShareExperimentStatus(button, message, isBusy = false) {
-          const status = button.querySelector('[data-share-experiment-status]');
-          const label = button.querySelector('[data-share-experiment-label]');
-          const defaultLabel = button.dataset.shareExperimentMode === 'rich_text_link' ? 'Поделиться эксперимент 2' : 'Поделиться эксперимент';
-          if (status) status.textContent = message || '';
-          if (label && isBusy) label.textContent = 'Готовим картинку…';
-          if (label && !isBusy) label.textContent = defaultLabel;
           button.disabled = Boolean(isBusy);
-        }
-
-        function shareExperimentText(button) {
-          const text = button.dataset.shareExperimentText || button.dataset.shareText || '';
-          const url = button.dataset.shareUrl || location.href;
-          if (button.dataset.shareExperimentMode === 'caption_url') {
-            return text.includes(url) ? text : [text, url].filter(Boolean).join('\n');
-          }
-          return text;
-        }
-
-        function shareExperimentPayload(button, files = null) {
-          const title = button.dataset.shareTitle || document.title;
-          const text = shareExperimentText(button);
-          const payload = { title, text };
-          if (files) payload.files = files;
-          if (button.dataset.shareExperimentMode === 'files_url') payload.url = button.dataset.shareUrl || location.href;
-          return payload;
-        }
-
-        async function copyRichShare(button) {
-          const html = button.dataset.richShareHtml || '';
-          const plain = button.dataset.richShareText || '';
-          const label = button.querySelector('[data-copy-rich-share-label]');
-          const status = button.querySelector('[data-copy-rich-share-status]');
-          const original = label?.textContent || 'Скопировать HTML-пост';
-          if (label) label.textContent = 'Копируем…';
-          button.disabled = true;
-          try {
-            if (navigator.clipboard?.write && window.ClipboardItem && html) {
-              const item = new ClipboardItem({
-                'text/html': new Blob([html], { type: 'text/html' }),
-                'text/plain': new Blob([plain], { type: 'text/plain' }),
-              });
-              await navigator.clipboard.write([item]);
-              if (status) status.textContent = 'HTML и текст скопированы';
-            } else {
-              await navigator.clipboard.writeText(plain || html.replace(/<[^>]+>/gu, ''));
-              if (status) status.textContent = 'Скопирован plain-text fallback';
-            }
-          } catch (_) {
-            await navigator.clipboard.writeText(plain || html.replace(/<[^>]+>/gu, ''));
-            if (status) status.textContent = 'Скопирован текст';
-          } finally {
-            if (label) label.textContent = 'Скопировано';
+          if (!isBusy && message) {
             window.setTimeout(() => {
-              if (label) label.textContent = original;
-              if (status) status.textContent = '';
-              button.disabled = false;
-            }, 2400);
+              label.textContent = button.dataset.shareOriginalLabel || 'Поделиться';
+            }, 2200);
           }
+        }
+
+        function sharePayload(button, files = null) {
+          const payload = {
+            title: button.dataset.shareTitle || document.title,
+            text: button.dataset.shareText || '',
+          };
+          if (files) payload.files = files;
+          const url = button.dataset.shareUrl || location.href;
+          if (url) payload.url = url;
+          return payload;
         }
 
         function shareFileName(button, blob) {
@@ -2840,7 +2857,6 @@ const FOOTER_SOCIAL_LINKS = [
           const facts = [dateTime, place, admission].filter(Boolean);
           ctx.font = '850 40px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
           facts.forEach((fact) => {
-            ctx.fillStyle = '#793014';
             ctx.beginPath();
             if (ctx.roundRect) ctx.roundRect(72, y - 42, 936, 64, 32);
             else ctx.rect(72, y - 42, 936, 64);
@@ -2859,78 +2875,67 @@ const FOOTER_SOCIAL_LINKS = [
           return canvasBlob(canvas, 'image/png', 0.92);
         }
 
-        async function shareBlobAsImage(button, blob, statusMessage) {
+        async function shareBlobAsImage(button, blob) {
           if (!blob || !window.File || !navigator.canShare || !('share' in navigator)) return false;
           const type = blob.type || 'image/png';
           const file = new File([blob], shareFileName(button, blob), { type });
-          const dataWithImage = shareExperimentPayload(button, [file]);
+          const dataWithImage = sharePayload(button, [file]);
           if (!navigator.canShare(dataWithImage)) return false;
           await navigator.share(dataWithImage);
           await recordShare(button);
-          setShareExperimentStatus(button, statusMessage || 'Отправили картинку + текст + ссылку');
+          setNativeShareStatus(button, 'Поделились');
           return true;
         }
 
-        async function fallbackShareExperiment(button, reason) {
-          const payload = shareExperimentPayload(button);
+        async function fallbackNativeShare(button, reason) {
+          const payload = sharePayload(button);
           const url = button.dataset.shareUrl || location.href;
           if ('share' in navigator) {
             await navigator.share(payload);
             await recordShare(button);
-            setShareExperimentStatus(button, reason ? `Отправили ссылку: ${reason}` : 'Отправили ссылку с Open Graph');
+            setNativeShareStatus(button, reason ? 'Поделились ссылкой' : 'Поделились');
             return;
           }
-          const copyText = payload.url ? [payload.text, payload.url].filter(Boolean).join('\n') : payload.text;
+          const copyText = [payload.text, url].filter(Boolean).join('\n');
           await navigator.clipboard.writeText(copyText || url);
           await recordShare(button);
-          setShareExperimentStatus(button, 'Текст и ссылка скопированы');
+          setNativeShareStatus(button, 'Ссылка скопирована');
         }
 
         document.addEventListener('click', async (event) => {
-          const button = event.target.closest('[data-share-experiment]');
+          const button = event.target.closest('[data-native-share]');
           if (!button) return;
           event.preventDefault();
           event.stopPropagation();
           hideLikeShareCallouts();
           const imageUrl = button.dataset.shareImage || '';
-          const busyMessage = button.dataset.shareExperimentMode === 'rich_text_link'
-            ? 'Пробуем markdown-ссылку в подписи'
-            : 'Пробуем отправить картинку + текст + ссылку';
-          setShareExperimentStatus(button, busyMessage, true);
+          setNativeShareStatus(button, 'Готовим картинку…', true);
           try {
             if (imageUrl && window.File && navigator.canShare) {
               const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
               if (response.ok) {
                 const blob = await response.blob();
-                if (await shareBlobAsImage(button, blob, 'Отправили исходную картинку + текст')) return;
+                if (await shareBlobAsImage(button, blob)) return;
               }
             }
             const generatedBlob = await createGeneratedShareImage(button);
-            if (generatedBlob && await shareBlobAsImage(button, generatedBlob, 'Отправили share-картинку + текст')) return;
-            await fallbackShareExperiment(button, imageUrl ? 'картинка недоступна как файл' : 'нет картинки');
+            if (generatedBlob && await shareBlobAsImage(button, generatedBlob)) return;
+            await fallbackNativeShare(button, imageUrl ? 'image-unshareable' : 'no-image');
           } catch (error) {
             if (error && error.name === 'AbortError') {
-              setShareExperimentStatus(button, 'Отменено');
+              setNativeShareStatus(button, 'Поделиться');
               return;
             }
             try {
               const generatedBlob = await createGeneratedShareImage(button);
-              if (generatedBlob && await shareBlobAsImage(button, generatedBlob, 'Отправили share-картинку + текст')) return;
-              await fallbackShareExperiment(button, 'файловый share не сработал');
+              if (generatedBlob && await shareBlobAsImage(button, generatedBlob)) return;
+              await fallbackNativeShare(button, 'file-share-failed');
             } catch (_) {
-              setShareExperimentStatus(button, 'Не удалось поделиться');
+              setNativeShareStatus(button, 'Не удалось');
             }
           } finally {
-            window.setTimeout(() => setShareExperimentStatus(button, ''), 3200);
+            window.setTimeout(() => setNativeShareStatus(button, ''), 2600);
           }
-        });
-
-        document.addEventListener('click', async (event) => {
-          const button = event.target.closest('[data-copy-rich-share]');
-          if (!button) return;
-          event.preventDefault();
-          event.stopPropagation();
-          await copyRichShare(button);
         });
 
         document.addEventListener('click', async (event) => {
@@ -3024,6 +3029,24 @@ const FOOTER_SOCIAL_LINKS = [
           }
         });
 
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-reset-personalization]');
+          if (!button) return;
+          event.preventDefault();
+          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY];
+          keys.forEach((key) => {
+            try { localStorage.removeItem(key); } catch (_) {}
+          });
+          try { localStorage.setItem(RESET_AT_KEY, new Date().toISOString()); } catch (_) {}
+          sessionPinnedNotInterested.clear();
+          hideLikeShareCallouts();
+          button.textContent = 'Персонализация сброшена';
+          updatePersonalizationResetStatus();
+          button.disabled = true;
+          await applyFeedbackState({ skipDiscoveryHydration: false });
+          window.setTimeout(() => { window.location.reload(); }, 650);
+        });
+
         const sticky = document.querySelector('[data-sticky-cta]');
         const marker = document.querySelector('[data-hide-sticky-after]');
         let stickyHiddenByFeed = false;
@@ -3100,6 +3123,7 @@ const FOOTER_SOCIAL_LINKS = [
           if (!menu) return;
           const summary = menu.querySelector('summary');
           let drawerTimer = 0;
+          let openedAtY = 0;
           const closeMenu = () => {
             if (!menu.hasAttribute('open')) return;
             window.clearTimeout(drawerTimer);
@@ -3112,6 +3136,7 @@ const FOOTER_SOCIAL_LINKS = [
           };
           const openMenu = () => {
             window.clearTimeout(drawerTimer);
+            openedAtY = window.scrollY || 0;
             menu.setAttribute('open', '');
             menu.classList.remove('is-closing');
             window.requestAnimationFrame(() => menu.classList.add('is-opening'));
@@ -3128,6 +3153,10 @@ const FOOTER_SOCIAL_LINKS = [
             if (!menu.hasAttribute('open')) return;
             if (!menu.contains(event.target)) closeMenu();
           });
+          document.addEventListener('scroll', () => {
+            if (!menu.hasAttribute('open')) return;
+            if (Math.abs((window.scrollY || 0) - openedAtY) > 24) closeMenu();
+          }, { passive: true });
           menu.querySelectorAll('a').forEach((link) => {
             link.addEventListener('click', closeMenu);
           });
@@ -3170,7 +3199,7 @@ const FOOTER_SOCIAL_LINKS = [
         }, { passive: true });
 
         function hydrateHeroParallax() {
-          const heroes = Array.from(document.querySelectorAll('.event-hero--photo-cover:is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual'));
+          const heroes = Array.from(document.querySelectorAll('.event-hero--photo-cover:is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'));
           if (!heroes.length) return;
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
           let ticking = false;
@@ -3213,9 +3242,10 @@ const FOOTER_SOCIAL_LINKS = [
           const loadGalleryMedia = (slide) => {
             if (!slide) return;
             slide.querySelectorAll('[data-gallery-src]').forEach((image) => {
-              if (image.getAttribute('src')) return;
               const src = image.getAttribute('data-gallery-src');
-              if (src) image.setAttribute('src', src);
+              if (!src) return;
+              if (!image.getAttribute('src')) image.setAttribute('src', src);
+              if (typeof image.decode === 'function') image.decode().catch(() => {});
             });
           };
 
@@ -3246,7 +3276,7 @@ const FOOTER_SOCIAL_LINKS = [
                 if (gallery.dataset.autoAdvance === 'false') return;
                 if (gallery.dataset.panToken !== token) return;
                 showSlide(gallery, nextImageIndex(gallery), { direction: 'forward' });
-              }, 7600);
+              }, 8880);
             });
           };
 
@@ -3259,6 +3289,25 @@ const FOOTER_SOCIAL_LINKS = [
               if (slides[idx]?.dataset.gallerySlideKind === 'image') return idx;
             }
             return current;
+          };
+
+          const preloadAdjacentGalleryMedia = (gallery) => {
+            const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
+            if (!slides.length) return;
+            let cursor = Number(gallery.dataset.activeIndex || 0);
+            for (let count = 0; count < Math.min(2, slides.length); count += 1) {
+              let found = cursor;
+              for (let step = 1; step <= slides.length; step += 1) {
+                const idx = (cursor + step) % slides.length;
+                if (slides[idx]?.dataset.gallerySlideKind === 'image') {
+                  found = idx;
+                  break;
+                }
+              }
+              if (found === cursor) return;
+              loadGalleryMedia(slides[found]);
+              cursor = found;
+            }
           };
 
           const showSlide = (gallery, index, options = {}) => {
@@ -3277,6 +3326,7 @@ const FOOTER_SOCIAL_LINKS = [
             });
             const counter = gallery.querySelector('[data-hero-gallery-counter]');
             if (counter) counter.textContent = `${next + 1} / ${slides.length}`;
+            preloadAdjacentGalleryMedia(gallery);
             scheduleGalleryPan(gallery, options.direction || 'forward');
           };
 
@@ -3421,6 +3471,7 @@ const FOOTER_SOCIAL_LINKS = [
         hydrateMobileBrandSway();
         hydrateMobileDiscoveryMenu();
         hydrateListingFilterFooterGuard();
+        updatePersonalizationResetStatus();
         hydrateHeroParallax();
         hydrateHeroGallery();
         applyFeedbackState();

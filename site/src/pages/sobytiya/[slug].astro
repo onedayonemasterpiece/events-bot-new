@@ -7,7 +7,7 @@ import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
-import { displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -35,7 +35,7 @@ const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
 const ogImage = eventImageUrl(event.image_url);
 const ogImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
 const ogImageType = ogImage?.toLowerCase().includes('.webp') ? 'image/webp' : ogImage?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : ogImage ? 'image/jpeg' : null;
-const ctaHref = event.ticket.href;
+const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
@@ -43,6 +43,7 @@ const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);
+const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
 const fallbackHeroComposition: HeroComposition = event.image_url
   ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
@@ -81,6 +82,7 @@ const galleryCta = galleryCtaEvent ? {
       <section class="section-card section-card--quiet section-card--event-details" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Описание</h2>
+          {updatedAtLabel && <p class="event-updated-at" data-nosnippet>Обновлено: {updatedAtLabel} (Калининград)</p>}
           <div class="prose" set:html={event.description_html} />
           <h2 style="margin-top: 1.2rem;">Коротко</h2>
           <EventFacts event={event} />

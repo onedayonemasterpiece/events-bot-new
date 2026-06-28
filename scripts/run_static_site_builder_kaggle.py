@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""Stage, push and optionally wait for the Kaggle CPU static-site builder.
+
+The notebook/kernel receives a bounded Astro site source tree with already
+exported `site/src/data/preview-*.json`. It builds and checks the static site on
+CPU, then returns a tar.gz artifact; publishing to Object Storage/CDN remains a
+single Fly-side step guarded by the outbox/coalescing lock.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import base64
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
+SITE_SRC = ROOT / 'site'
+ARTIFACT_ROOT = ROOT / 'artifacts' / 'codex' / 'static-site-builder'
+LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
+
+
+def copy_tree(src: Path, dst: Path, *, ignore_extra: list[str] | None = None) -> None:
+    ignore = shutil.ignore_patterns(
+        'node_modules', 'dist', '.astro', '.vercel', '__pycache__', '*.pyc', '.DS_Store',
+        *(ignore_extra or []),
+    )
+    shutil.copytree(src, dst, ignore=ignore, dirs_exist_ok=True)
+
+
+def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> None:
+    print(f"[static-site-kaggle] $ {' '.join(cmd)}", flush=True)
+    subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+
+
+def tar_site_source(site_dir: Path, archive_path: Path) -> None:
+    def tar_filter(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        parts = Path(info.name).parts
+        ignored = {'node_modules', 'dist', '.astro', '.vercel', '__pycache__'}
+        if any(part in ignored for part in parts):
+            return None
+        if info.name.endswith('.pyc') or info.name.endswith('.DS_Store'):
+            return None
+        return info
+
+    with tarfile.open(archive_path, 'w:gz') as tar:
+        tar.add(site_dir, arcname='site', filter=tar_filter)
+
+
+def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
+    staged_site = work_dir / 'site'
+    copy_tree(SITE_SRC, staged_site)
+    # The production related-chain audit must use the shared GoogleAIClient
+    # (Supabase limiter + thought filtering), so the Kaggle site payload includes
+    # the repo-local google_ai package instead of a direct provider shortcut.
+    copy_tree(ROOT / 'google_ai', staged_site / 'google_ai')
+    if args.db and not args.export_in_kaggle:
+        exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
+        cmd = [
+            sys.executable,
+            str(exporter),
+            '--db', str(Path(args.db).resolve()),
+            '--limit', str(args.limit),
+            '--current-date', args.current_date,
+            '--output-dir', str(staged_site / 'src' / 'data'),
+        ]
+        if args.related_cache:
+            cmd.extend(['--related-cache', str(Path(args.related_cache).resolve())])
+        if args.gemma_related_verify:
+            cmd.append('--gemma-related-verify')
+        cmd.extend([
+            '--gemma-related-model', args.gemma_related_model,
+            '--gemma-related-key-env', args.gemma_related_key_env,
+            '--gemma-related-max-anchors', str(args.gemma_related_max_anchors),
+        ])
+        run(cmd)
+    return staged_site
+
+
+def write_dataset_metadata(dataset_dir: Path, dataset_ref: str, title: str) -> None:
+    (dataset_dir / 'dataset-metadata.json').write_text(json.dumps({
+        'title': title,
+        'id': dataset_ref,
+        'licenses': [{'name': 'CC0-1.0'}],
+    }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def create_input_dataset(client, dataset_dir: Path, dataset_ref: str) -> None:
+    # CherryFlash/VideoAnnounce pattern: create a unique dataset per run instead of
+    # updating a fixed dataset. Fixed updates can race permissions/propagation and
+    # make kernels_push reject dataset_sources.
+    # Kaggle API 2.x keeps resumable-upload state in /tmp/.kaggle/uploads. In
+    # long-lived local/Fly processes a stale state file can break a later dataset
+    # upload with "KaggleObject.from_dict() got an unexpected keyword argument
+    # 'token'" and then make the freshly-created private dataset invisible to
+    # kernels_push. The cache is not credentials; it is safe to drop before a
+    # one-shot generated dataset upload.
+    shutil.rmtree(Path(tempfile.gettempdir()) / '.kaggle' / 'uploads', ignore_errors=True)
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            client.create_dataset(dataset_dir, public=False, quiet=True)
+            print(f'[static-site-kaggle] dataset created: {dataset_ref}', flush=True)
+            return
+        except Exception as exc:
+            last_error = exc
+            delay = 10 * attempt
+            detail = f'{exc}'
+            if getattr(exc, '__cause__', None) is not None:
+                detail += f' cause={exc.__cause__!r}'
+            print(f'[static-site-kaggle] dataset create retry {attempt}/3 after {delay}s: {detail}', flush=True)
+            time.sleep(delay)
+    raise RuntimeError(f'Kaggle dataset create failed for {dataset_ref}: {last_error!r}')
+
+
+def wait_dataset_ready(client, dataset_ref: str, *, expected_files: list[str], timeout_seconds: int = 180) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    last_status = ''
+    last_files: list[str] = []
+    while time.monotonic() < deadline:
+        try:
+            last_status = client.dataset_status(dataset_ref)
+            files = client.dataset_list_files(dataset_ref, page_size=max(20, len(expected_files) + 5))
+            last_files = [str(item.get('name') or '').strip() for item in files if str(item.get('name') or '').strip()]
+            ready = str(last_status).strip().lower() == 'ready' and all(name in last_files for name in expected_files)
+            print(f'[static-site-kaggle] dataset ready check status={last_status} files={last_files} ready={ready}', flush=True)
+            if ready:
+                return
+        except Exception as exc:
+            last_error = exc
+            print(f'[static-site-kaggle] dataset ready check error: {exc}', flush=True)
+        time.sleep(5)
+    details = f'status={last_status} files={last_files} expected={expected_files}'
+    if last_error is not None:
+        details += f' last_error={last_error}'
+    raise TimeoutError(f'Kaggle dataset did not become ready: {dataset_ref} {details}')
+
+
+def wait_kernel_dataset_sources(client, kernel_ref: str, expected_sources: list[str], *, timeout_seconds: int = 180) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_meta: dict | None = None
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            matched, meta = client.kernel_has_dataset_sources(kernel_ref, expected_sources)
+            last_meta = meta
+            print(
+                '[static-site-kaggle] kernel dataset source check '
+                f"matched={matched} actual={meta.get('dataset_sources')}",
+                flush=True,
+            )
+            if matched:
+                return
+        except Exception as exc:
+            last_error = exc
+            print(f'[static-site-kaggle] kernel dataset source check error: {exc}', flush=True)
+        time.sleep(10)
+    actual = (last_meta or {}).get('dataset_sources')
+    details = f'expected={expected_sources} actual={actual}'
+    if last_error is not None:
+        details += f' last_error={last_error}'
+    raise TimeoutError(f'Kaggle kernel did not bind dataset sources: {kernel_ref} {details}')
+
+
+def slugify(value: str, *, max_len: int = 48) -> str:
+    out = ''.join(ch.lower() if ch.isascii() and ch.isalnum() else '-' for ch in str(value or '').strip())
+    out = '-'.join(part for part in out.split('-') if part)
+    return (out or 'run')[:max_len].strip('-') or 'run'
+
+
+def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
+    if not args.gemma_related_verify:
+        return {}
+    key_env = (args.gemma_related_key_env or 'GOOGLE_API_KEY4').strip() or 'GOOGLE_API_KEY4'
+    names = [
+        key_env,
+        'SUPABASE_URL',
+        'SUPABASE_KEY',
+        'SUPABASE_SERVICE_KEY',
+        'SUPABASE_SERVICE_ROLE_KEY',
+        'SUPABASE_SCHEMA',
+        'GOOGLE_API_LOCALNAME',
+        'GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV',
+        'GOOGLE_AI_RESERVE_DIRECT_RETRY',
+        'GOOGLE_AI_RESERVE_DIRECT_SCHEMA',
+    ]
+    payload = {name: os.getenv(name, '').strip() for name in dict.fromkeys(names) if os.getenv(name, '').strip()}
+    missing = []
+    if not payload.get(key_env):
+        missing.append(key_env)
+    if not payload.get('SUPABASE_URL'):
+        missing.append('SUPABASE_URL')
+    if not any(payload.get(name) for name in ('SUPABASE_SERVICE_KEY', 'SUPABASE_KEY', 'SUPABASE_SERVICE_ROLE_KEY')):
+        missing.append('SUPABASE_KEY/SUPABASE_SERVICE_KEY')
+    if missing:
+        raise RuntimeError(
+            'Missing envs for encrypted Kaggle Gemma limiter dataset: '
+            + ', '.join(missing)
+        )
+    return payload
+
+
+def encrypt_secret_payload(payload: dict[str, str]) -> tuple[bytes, bytes]:
+    from cryptography.fernet import Fernet
+
+    key = Fernet.generate_key()
+    encrypted = Fernet(key).encrypt(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    return encrypted, key
+
+
+def create_secret_datasets_if_needed(
+    args: argparse.Namespace,
+    *,
+    client,
+    env_user: str,
+    build_id: str,
+    tmp_root: Path,
+) -> list[str]:
+    payload = build_runtime_secret_payload(args)
+    if not payload:
+        return []
+    encrypted, fernet_key = encrypt_secret_payload(payload)
+    digest = hashlib.sha1(build_id.encode('utf-8')).hexdigest()[:8]
+    run_suffix = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+    # Kaggle dataset slugs have tight length/charset constraints. Keep secret
+    # dataset slugs intentionally short; the build id is recoverable from the
+    # input dataset and from the hash suffix.
+    slug_base = f"{digest}-{run_suffix}"
+
+    cipher_dir = tmp_root / 'secret-cipher'
+    key_dir = tmp_root / 'secret-key'
+    cipher_dir.mkdir(parents=True, exist_ok=True)
+    key_dir.mkdir(parents=True, exist_ok=True)
+    (cipher_dir / 'secrets.enc').write_bytes(encrypted)
+    (cipher_dir / 'config.json').write_text(json.dumps({
+        'schema_version': 1,
+        'purpose': 'static-site-builder-runtime-secrets',
+        'secret_env_names': sorted(payload.keys()),
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+    }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    (key_dir / 'fernet.key').write_bytes(fernet_key)
+    # `fernet.keys` keeps compatibility with the shared google_ai.SecretsProvider;
+    # `fernet.key` keeps compatibility with older repo notebooks.
+    (key_dir / 'fernet.keys').write_text(fernet_key.decode('ascii') + '\n', encoding='utf-8')
+    (key_dir / 'config.json').write_text(json.dumps({
+        'schema_version': 1,
+        'purpose': 'static-site-builder-runtime-secret-key',
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+    }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+    cipher_ref = f'{env_user}/ssb-secrets-{slug_base}'
+    key_ref = f'{env_user}/ssb-key-{slug_base}'
+    write_dataset_metadata(cipher_dir, cipher_ref, f'SSB secrets {run_suffix}')
+    write_dataset_metadata(key_dir, key_ref, f'SSB key {run_suffix}')
+    create_input_dataset(client, cipher_dir, cipher_ref)
+    create_input_dataset(client, key_dir, key_ref)
+    wait_dataset_ready(client, cipher_ref, expected_files=['secrets.enc', 'config.json'])
+    wait_dataset_ready(client, key_ref, expected_files=['fernet.key', 'fernet.keys', 'config.json'])
+    print(
+        '[static-site-kaggle] encrypted secret datasets ready: '
+        f"cipher={cipher_ref} key={key_ref} envs={sorted(payload.keys())}",
+        flush=True,
+    )
+    return [cipher_ref, key_ref]
+
+
+def cleanup_secret_datasets(client, dataset_refs: list[str]) -> None:
+    for dataset_ref in dataset_refs:
+        try:
+            client.delete_dataset(dataset_ref, no_confirm=True)
+            print(f'[static-site-kaggle] encrypted secret dataset deleted: {dataset_ref}', flush=True)
+        except Exception as exc:
+            print(f'[static-site-kaggle] encrypted secret dataset cleanup failed: {dataset_ref}: {exc}', flush=True)
+
+
+def resolve_status_callback_url(args: argparse.Namespace) -> str | None:
+    explicit = (args.status_callback_url or os.getenv('KAGGLE_STATUS_CALLBACK_URL') or '').strip()
+    if explicit:
+        return explicit
+    webhook = (os.getenv('WEBHOOK_URL') or '').strip()
+    if webhook:
+        return webhook.rstrip('/') + '/internal/kaggle/run-event'
+    return None
+
+
+def create_status_dataset_if_configured(
+    args: argparse.Namespace,
+    client,
+    *,
+    env_user: str,
+    build_id: str,
+    kernel_ref: str,
+    dataset_ref: str,
+) -> str | None:
+    status_db = (args.status_db or os.getenv('STATIC_SITE_STATUS_DB') or '').strip()
+    callback_url = resolve_status_callback_url(args)
+    if not status_db or not callback_url:
+        print(
+            '[static-site-kaggle] status dataset skipped: '
+            f"status_db={'yes' if status_db else 'no'} callback_url={'yes' if callback_url else 'no'}",
+            flush=True,
+        )
+        return None
+    from db import Database
+    from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
+
+    run_id = f'static-site-builder:{build_id}'
+    db = Database(status_db)
+    config = asyncio.run(create_kaggle_run_config(
+        db,
+        run_id=run_id,
+        session_id=None,
+        kind='static_site_builder',
+        notebook='StaticSiteBuilder',
+        kernel_ref=kernel_ref,
+        dataset_ref=dataset_ref,
+        callback_url=callback_url,
+        resource_leases=['static_site:builder'],
+    ))
+    if not config:
+        return None
+    status_dataset = create_kaggle_status_dataset(
+        client,
+        username=env_user,
+        slug_prefix='status-static-site-builder',
+        run_id=build_id,
+        config=config,
+    )
+    if status_dataset:
+        wait_dataset_ready(client, status_dataset, expected_files=['kaggle_run.json', 'kaggle_status_client.py'])
+        print(f'[static-site-kaggle] status dataset ready: {status_dataset}', flush=True)
+    return status_dataset
+
+
+def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_dir: Path, client, env_user: str) -> tuple[str, str]:
+    if not KERNEL_SRC.exists():
+        raise FileNotFoundError(KERNEL_SRC)
+    copy_tree(KERNEL_SRC, staging)
+    build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
+    config = {
+        'build_id': build_id,
+        'current_date': args.current_date,
+        'limit': args.limit,
+        'public_site_origin': args.public_site_origin,
+        'asset_base_url': args.asset_base_url or None,
+        'astro_asset_base_url': args.astro_asset_base_url or None,
+        'ics_base_url': args.ics_base_url or None,
+        'export_in_kaggle': bool(args.export_in_kaggle),
+        'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
+        'related_cache_filename': 'event_related_chain_cache.json',
+        'gemma_related_verify': bool(args.gemma_related_verify),
+        'gemma_related_model': args.gemma_related_model,
+        'gemma_related_key_env': args.gemma_related_key_env,
+        'gemma_related_max_anchors': args.gemma_related_max_anchors,
+        'queued_at': datetime.now(timezone.utc).isoformat(),
+        'payload_mode': 'dataset_source',
+    }
+    staged_site = prepare_site_source(args, dataset_dir)
+    if args.db and args.export_in_kaggle:
+        shutil.copy2(Path(args.db).resolve(), dataset_dir / 'events.sqlite')
+    if args.related_cache and Path(args.related_cache).exists():
+        shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
+    (dataset_dir / 'build_config.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    # Deliberately avoid `.tar.gz` filename: Kaggle dataset ingestion auto-extracts
+    # archives and may reject/disappear datasets containing Astro dynamic route
+    # paths like `[slug].astro`. The file content is gzip tar; only the extension is
+    # neutral.
+    tar_site_source(staged_site, dataset_dir / 'site_source.tarball')
+    shutil.rmtree(staged_site)
+    run_suffix = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+    dataset_ref = f'{env_user}/static-site-builder-input-{run_suffix}'
+    write_dataset_metadata(dataset_dir, dataset_ref, f'static site builder input {run_suffix}')
+    create_input_dataset(client, dataset_dir, dataset_ref)
+    expected = ['site_source.tarball', 'build_config.json']
+    if args.db and args.export_in_kaggle:
+        expected.append('events.sqlite')
+    wait_dataset_ready(client, dataset_ref, expected_files=expected)
+    return build_id, dataset_ref
+
+def embed_site_payload(staging: Path, site_dir: Path, config: dict) -> None:
+    archive_path = staging / 'site_source.tarball'
+    tar_site_source(site_dir, archive_path)
+    encoded = base64.b64encode(archive_path.read_bytes()).decode('ascii')
+    script_path = staging / 'static_site_builder.py'
+    source = script_path.read_text(encoding='utf-8')
+    source = source.replace("EMBEDDED_SITE_SOURCE_B64 = ''", f"EMBEDDED_SITE_SOURCE_B64 = {encoded!r}")
+    source = source.replace("EMBEDDED_BUILD_CONFIG_JSON = ''", f"EMBEDDED_BUILD_CONFIG_JSON = {json.dumps(config, ensure_ascii=False)!r}")
+    script_path.write_text(source, encoding='utf-8')
+    archive_path.unlink(missing_ok=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--db', help='Optional SQLite snapshot; if set, export preview JSON before staging')
+    parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
+    parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', '2026-06-28'))
+    parser.add_argument('--build-id', default=os.getenv('STATIC_SITE_BUILD_ID'))
+    parser.add_argument('--public-site-origin', default=os.getenv('PUBLIC_SITE_ORIGIN', 'https://kenigevents.ru'))
+    parser.add_argument('--asset-base-url', default=os.getenv('PUBLIC_ASSET_BASE_URL', ''))
+    parser.add_argument('--astro-asset-base-url', default=os.getenv('PUBLIC_ASTRO_ASSET_BASE_URL', ''))
+    parser.add_argument('--ics-base-url', default=os.getenv('PUBLIC_ICS_BASE_URL', ''))
+    parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
+    parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
+    parser.add_argument('--gemma-related-verify', action='store_true', default=(os.getenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
+    parser.add_argument('--gemma-related-model', default=os.getenv('STATIC_SITE_GEMMA_RELATED_MODEL', 'models/gemma-4-26b-a4b-it'))
+    parser.add_argument('--gemma-related-key-env', default=os.getenv('STATIC_SITE_GEMMA_RELATED_KEY_ENV', 'GOOGLE_API_KEY4'))
+    parser.add_argument('--gemma-related-max-anchors', type=int, default=int(os.getenv('STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS', '0') or '0'))
+    parser.add_argument('--keep-secret-datasets', action='store_true', default=(os.getenv('STATIC_SITE_KEEP_SECRET_DATASETS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
+    parser.add_argument('--timeout-minutes', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_TIMEOUT_MINUTES', '45')))
+    parser.add_argument('--poll-interval', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_POLL_INTERVAL', '30')))
+    parser.add_argument('--status-db', default=os.getenv('STATIC_SITE_STATUS_DB', ''), help='SQLite DB that owns kaggle_run_ledger for callback validation')
+    parser.add_argument('--status-callback-url', default=os.getenv('KAGGLE_STATUS_CALLBACK_URL', ''), help='Override callback URL for kaggle status events')
+    parser.add_argument('--no-wait', action='store_true')
+    parser.add_argument('--download-output', action='store_true')
+    parser.add_argument('--keep-staging', action='store_true')
+    args = parser.parse_args()
+
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open('w') as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SystemExit('static-site Kaggle builder is already running locally')
+        with tempfile.TemporaryDirectory(prefix='static-site-kaggle-') as tmp:
+            tmp_root = Path(tmp)
+            staging = tmp_root / 'kernel'
+            dataset_dir = tmp_root / 'dataset'
+            staging.mkdir(parents=True)
+            dataset_dir.mkdir(parents=True)
+
+            # Import after --help parsing so optional Kaggle deps are not required for docs.
+            from video_announce.kaggle_client import KaggleClient
+
+            env_user = (os.getenv('KAGGLE_USERNAME') or '').strip()
+            if not env_user:
+                raise RuntimeError('KAGGLE_USERNAME is required')
+            client = KaggleClient()
+            build_id, dataset_ref = stage_kernel_and_dataset(args, staging, dataset_dir, client, env_user)
+            secret_dataset_refs = create_secret_datasets_if_needed(
+                args,
+                client=client,
+                env_user=env_user,
+                build_id=build_id,
+                tmp_root=tmp_root,
+            )
+            if args.keep_staging:
+                keep = ARTIFACT_ROOT / f'staging-{build_id}'
+                if keep.exists():
+                    shutil.rmtree(keep)
+                shutil.copytree(tmp_root, keep)
+                print(f"[static-site-kaggle] staging kept: {keep}", flush=True)
+
+            kernel_ref = f'{env_user}/kenigevents-static-site-builder'
+            try:
+                dataset_sources = [dataset_ref, *secret_dataset_refs]
+                status_dataset = create_status_dataset_if_configured(
+                    args,
+                    client,
+                    env_user=env_user,
+                    build_id=build_id,
+                    kernel_ref=kernel_ref,
+                    dataset_ref=dataset_ref,
+                )
+                if status_dataset:
+                    dataset_sources.append(status_dataset)
+                client.push_kernel(kernel_path=staging, dataset_sources=dataset_sources)
+                print(f"[static-site-kaggle] pushed {kernel_ref} build_id={build_id} datasets={dataset_sources}", flush=True)
+                wait_kernel_dataset_sources(client, kernel_ref, dataset_sources)
+                if args.no_wait:
+                    return 0
+                deadline = time.monotonic() + max(60, args.timeout_minutes * 60)
+                last_status = None
+                while time.monotonic() < deadline:
+                    time.sleep(max(5, args.poll_interval))
+                    status = client.get_kernel_status(kernel_ref)
+                    last_status = status
+                    raw = str(status.get('status') or '').upper()
+                    print(f"[static-site-kaggle] status={raw} raw={status}", flush=True)
+                    if raw == 'COMPLETE':
+                        if args.download_output:
+                            out_dir = ARTIFACT_ROOT / f'output-{build_id}'
+                            out_dir.mkdir(parents=True, exist_ok=True)
+                            files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
+                            print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
+                            cache_out = out_dir / 'event_related_chain_cache.json'
+                            if args.export_in_kaggle and args.related_cache and cache_out.exists():
+                                cache_target = Path(args.related_cache)
+                                cache_target.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(cache_out, cache_target)
+                                print(f"[static-site-kaggle] related cache persisted: {cache_target}", flush=True)
+                        return 0
+                    if raw in {'ERROR', 'FAILED', 'CANCELLED'}:
+                        raise RuntimeError(f'Kaggle static-site builder failed: {status}')
+                raise TimeoutError(f'Kaggle static-site builder timeout; last_status={last_status}')
+            finally:
+                if secret_dataset_refs and not args.no_wait and not args.keep_secret_datasets:
+                    cleanup_secret_datasets(client, secret_dataset_refs)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

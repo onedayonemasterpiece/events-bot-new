@@ -51,6 +51,7 @@ if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Vi
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/event-card__media-shell--preserve[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('OCR-safe card media must use natural image ratio, not contain over a fixed frame');
+if (/Вход[\s\S]{0,180}Билеты(?:\s+доступны)?/u.test(controlVisibleHtml)) throw new Error('Bare ticket availability must not be rendered as an admission value');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
 if (!controlVisibleHtml.includes('data-feed-card-variant="split-actions"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('Control event page must use split-actions baseline cards');
 if (controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Overlay-controls cards must not appear on normal event pages');
@@ -58,7 +59,8 @@ if (!controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
-if (!controlHtml.includes('data-share-experiment') || !controlHtml.includes('data-share-experiment-mode="rich_text_link"') || !controlHtml.includes('Поделиться эксперимент 2') || !controlHtml.includes('[Открыть событие]') || !controlHtml.includes('data-copy-rich-share') || !controlHtml.includes('ClipboardItem') || !controlHtml.includes('navigator.canShare') || !controlHtml.includes('shareExperimentPayload(button, [file])') || !controlHtml.includes('createGeneratedShareImage') || !controlHtml.includes('1080') || !controlHtml.includes('1350')) throw new Error('Control event page misses experimental Web Share file/text/url, markdown-link and rich-clipboard share tests with generated share-image fallback');
+if (controlHtml.includes('data-share-experiment') || controlHtml.includes('Поделиться эксперимент') || controlHtml.includes('data-copy-rich-share') || controlHtml.includes('Скопировать HTML-пост')) throw new Error('Temporary share experiment buttons must not leak into production-like event UI');
+if (!controlHtml.includes('data-native-share') || !controlHtml.includes('data-share-image=') || !controlHtml.includes('data-share-image-type=') || !controlHtml.includes('data-share-file-name=') || !controlHtml.includes('navigator.canShare') || !controlHtml.includes('sharePayload(button, [file])') || !controlHtml.includes('createGeneratedShareImage') || !controlHtml.includes('1080') || !controlHtml.includes('1350')) throw new Error('Control event page misses primary Web Share file/text/url path with generated 4:5 share-image fallback');
 if (!controlHtml.includes('og:image:secure_url') || !controlHtml.includes('og:image:type')) throw new Error('Control event page misses strengthened Open Graph image metadata for share previews');
 if (!controlHtml.includes('data-feedback-scope') || !/data-event-hero[\s\S]{0,6500}data-feedback-action="like"/u.test(controlHtml)) throw new Error('Event hero must expose a first-party like button/count for the current event');
 if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.45-4.8')) throw new Error('Share/repost icon must use the VK-like outline path, not the old arrow stroke');
@@ -68,8 +70,8 @@ if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prom
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
 if (!controlHtml.includes('data-event-hero') || !controlHtml.includes('data-hero-mode="poster-stage"') || !controlHtml.includes('data-hero-composition="poster-billboard"') || !controlHtml.includes('data-hero-image-text-mode="ocr_text"')) throw new Error('Control event must render OCR-safe poster-billboard decision hero');
 if (!controlHtml.includes('data-hero-gallery-open="hero-gallery-5878"') || !controlHtml.includes('data-hero-gallery') || !controlHtml.includes('hero-gallery__slide--cta') || !controlHtml.includes('Смотреть похожее')) throw new Error('Event hero must expose fullscreen image gallery with final similar-event CTA slide');
-if (!controlVisibleHtml.includes('<a class="hero-gallery__brand"') || !controlVisibleHtml.includes('Полюбить Калининград') || !controlVisibleHtml.includes('hero-gallery__slide') || !controlVisibleHtml.includes('Фото события')) throw new Error('Hero gallery must keep the service tag as a navigable link and a readable bottom title stripe');
-if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !controlVisibleHtml.includes('Открыть фото')) throw new Error('Event hero must expose a visible photo-view CTA over the image');
+if (!controlVisibleHtml.includes('<a class="hero-gallery__brand"') || !controlVisibleHtml.includes('Полюбить Калининград') || !controlVisibleHtml.includes('hero-gallery__slide') || !controlVisibleHtml.includes('hero-gallery__caption') || !controlVisibleHtml.includes('Фото события')) throw new Error('Hero gallery must keep the service tag as a navigable link and one fixed readable bottom title stripe');
+if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !/(Открыть фото|Фото \d+)/u.test(controlVisibleHtml)) throw new Error('Event hero must expose a visible photo-view CTA/count over the image');
 if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
 if (controlHtml.includes('mobile-discovery-menu__brand-icon') || controlHtml.includes('/brand-mark.svg')) throw new Error('Mobile discovery tag must not expose the rejected brand icon/brand-mark animation');
@@ -83,14 +85,31 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
   if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
 }
 const tretyakovEvent = eventsData.events.find((event) => event.id === 5370);
-if (!tretyakovEvent) throw new Error('Missing 5370 ticket/free regression event');
-if (tretyakovEvent.ticket.is_free || tretyakovEvent.ticket.kind !== 'ticket' || tretyakovEvent.status_label !== 'Билеты') throw new Error('Event 5370 must not be rendered as free/registration in the preview fixture');
+if (!tretyakovEvent) throw new Error('Missing 5370 ticket/paid regression event');
 if (!Array.isArray(tretyakovEvent.image_assets) || tretyakovEvent.image_assets.length < 5) throw new Error('Event 5370 must carry multi-image gallery assets for hero fullscreen review');
 const tretyakovHtml = readFileSync(join(root, `sobytiya/${tretyakovEvent.slug}/index.html`), 'utf8');
+const tretyakovVisibleHtml = stripGeneratedCode(tretyakovHtml);
+const tretyakovEyebrow = (tretyakovVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
+if (!tretyakovEvent.ticket.is_free && tretyakovEvent.ticket.kind === 'ticket' && !tretyakovEvent.ticket.price_label) {
+  if (/Билеты|Платный вход/u.test(tretyakovEyebrow)) throw new Error('Paid/generic admission copy must not be shown above the event title');
+  if (!tretyakovVisibleHtml.includes('Вход') || !tretyakovVisibleHtml.includes('Платный вход')) throw new Error('Paid/ticketed event without exported price must show admission as “Платный вход”, not “Вход Билеты”');
+}
+if (
+  tretyakovEvent.ticket.is_free
+  || /event-hero__eyebrow[^>]*>[^<]*Бесплатно/u.test(tretyakovVisibleHtml)
+  || /event-info-admission[\s\S]{0,180}Бесплатно/u.test(tretyakovVisibleHtml)
+) throw new Error('Event 5370 must remain paid/ticketed in the preview fixture, not inherit the false-free source merge');
 const tretyakovJsonLd = [...tretyakovHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1])).find((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'));
-if (tretyakovJsonLd?.isAccessibleForFree !== false) throw new Error('Event 5370 JSON-LD must expose paid/non-free accessibility');
+if (tretyakovJsonLd?.isAccessibleForFree !== Boolean(tretyakovEvent.ticket.is_free)) throw new Error('Event 5370 JSON-LD must expose the same free/paid state as exported production data');
 if (!Array.isArray(tretyakovJsonLd?.image) || tretyakovJsonLd.image.length < 5) throw new Error('Event 5370 JSON-LD must connect gallery images to the event for SEO/GEO');
-if (!tretyakovHtml.includes('Фото 5')) throw new Error('Event 5370 hero must show photo count CTA on the image');
+if (!tretyakovHtml.includes(`Фото ${tretyakovEvent.image_assets.length}`)) throw new Error('Event 5370 hero must show photo count CTA on the image');
+const warriorEvent = eventsData.events.find((event) => event.id === 698);
+if (!warriorEvent) throw new Error('Missing event 698 gallery regression event');
+const warriorHtml = readFileSync(join(root, `sobytiya/${warriorEvent.slug}/index.html`), 'utf8');
+const warriorVisibleHtml = stripGeneratedCode(warriorHtml);
+const warriorEyebrow = (warriorVisibleHtml.match(/<p class="event-hero__eyebrow">([^<]*)<\/p>/u) || [null, ''])[1];
+if (/Платный вход|Билеты/u.test(warriorEyebrow)) throw new Error('Event 698 hero eyebrow must not expose paid/generic admission copy above the title');
+if (/data-gallery-src="https:\/\/files\.catbox\.moe/iu.test(warriorHtml)) throw new Error('Hero fullscreen gallery must not emit unreliable catbox slides; mirror or skip them before publishing');
 const jsonLdItems = [...controlHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1]));
 if (!jsonLdItems.some((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'))) throw new Error('Control page must contain parseable Event-class JSON-LD');
 if (!jsonLdItems.some((item) => item['@type'] === 'BreadcrumbList')) throw new Error('Control page must contain parseable BreadcrumbList JSON-LD');
@@ -99,6 +118,7 @@ if (eventJsonLd?.offers?.validFrom && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\
   throw new Error(`Event JSON-LD offer validFrom must be ISO 8601 with timezone, got: ${eventJsonLd.offers.validFrom}`);
 }
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
+if (!controlHtml.includes('data-reset-personalization') || !controlHtml.includes('Персонализация сброшена')) throw new Error('Control page misses technical local personalization reset button/handler');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
 if (!controlHtml.includes('data-discovery-feed') || controlHtml.includes('data-personalized-feed') || !controlHtml.includes('data-discovery-src') || !controlHtml.includes('data-discovery-load-more') || !controlHtml.includes('hydrateDiscoveryFeeds')) throw new Error('Control page misses static-10 + personalization JSON discovery hydration contract');
@@ -143,7 +163,8 @@ if (controlHtml.includes('11 июля 2026')) throw new Error('Visible current-y
 const discoveryJson = JSON.parse(readFileSync(join(root, `data/discovery/${control.id}.json`), 'utf8'));
 if (discoveryJson.preload_target !== 10 || discoveryJson.page_size !== 10) throw new Error('Discovery JSON must declare 10-item preload/page contract');
 if (discoveryJson.schema_version !== 'event-detail-related-v1' || discoveryJson.feature_schema_version !== 'event-detail-related-v1') throw new Error('Discovery JSON must use event-detail-related schema contract');
-if (discoveryJson.taxonomy_version !== 'event-taxonomy-v1' || discoveryJson.surface !== 'event_detail_related' || discoveryJson.algorithm_id !== 'static_related_v1') throw new Error('Discovery JSON misses surface/taxonomy/algorithm contract');
+if (discoveryJson.taxonomy_version !== 'event-taxonomy-v1' || discoveryJson.surface !== 'event_detail_related' || !['static_related_v1', 'event_vector_related_chain_v2'].includes(discoveryJson.algorithm_id)) throw new Error('Discovery JSON misses surface/taxonomy/algorithm contract');
+if (discoveryJson.algorithm_id === 'event_vector_related_chain_v2' && (discoveryJson.strategy !== 'event_related_chain_v2_manifest' || !discoveryJson.related_static.some((item) => 'vector_similarity' in item))) throw new Error('Vector related chain must surface algorithm and vector candidate evidence in static manifests');
 if (!discoveryJson.current_event || discoveryJson.current_event.event_id !== control.id) throw new Error('Discovery JSON must include current_event summary');
 if (!Array.isArray(discoveryJson.related_static) || discoveryJson.related_static.length < 5) throw new Error('Discovery JSON must contain related_static candidate manifest for light client hydration');
 if ('events' in discoveryJson) throw new Error('Discovery JSON must expose related_static manifest, not legacy events payload');
@@ -157,7 +178,7 @@ for (const item of discoveryJson.related_static) {
   }
   if (!Array.isArray(item.tags) || !Array.isArray(item.audience_exclusion_tags) || !Array.isArray(item.reason_codes)) throw new Error('Discovery candidate tag/reason fields must be arrays');
   if (typeof item.base_similarity !== 'number' || item.base_similarity < 0 || item.base_similarity > 1) throw new Error('Discovery candidate base_similarity must be 0..1');
-  if (/2026\b/u.test(item.display?.display_date || '') && !/2027\b/u.test(item.display?.display_date || '')) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
+  if (/2026\b/u.test(item.display?.display_date || '') && !/2027\b/u.test(item.display?.display_date || '') && String(item.date || '').startsWith('2026-')) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
 }
 
 const splitControl = eventsData.events.find((event) => event.id === 6322);
@@ -213,6 +234,8 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) thr
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
+if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');
+if (!todayHtml.includes('listing-daypart--continuing') || !todayHtml.includes('Идут сейчас')) throw new Error('Today listing must separate continuing multi-day exhibitions when they would overcrowd the fast daypart list');
 const tomorrowHtml = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
 for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml]]) {
   for (const label of ['Утро', 'День', 'Вечер', 'Ночь']) {
@@ -224,7 +247,10 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml]]) {
   if (!listingArticles.length) throw new Error(`${name} listing has no listing articles`);
   if (listingArticles.some((article) => !article.includes('data-listing-item') || !article.includes('data-linked-event-ids'))) throw new Error(`${name} listing items must expose compact ids for local personalization filter`);
   if (listingArticles.some((article) => !/<a class="listing-item__title"[\s\S]*?<div class="listing-item__meta">/u.test(article))) throw new Error(`${name} listing cards must show title before date/admission meta`);
-  if (listingArticles.some((article) => /<a[^>]+href="https?:\/\//iu.test(article))) throw new Error(`${name} listing card leaks direct external http link`);
+  if (listingArticles.some((article) => {
+    const hrefs = [...article.matchAll(/<a[^>]+href="(https?:\/\/[^"]+)"/giu)].map((match) => match[1]);
+    return hrefs.some((href) => !href.startsWith('https://static.kenigevents.ru/ics/'));
+  })) throw new Error(`${name} listing card leaks direct external http link`);
   if (listingArticles.some((article) => article.includes('Открыть пост организатора') || article.includes('Уточнить регистрацию'))) throw new Error(`${name} listing exposes source/ambiguous external CTA copy`);
 }
 
@@ -236,11 +262,22 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml], ['
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
 if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count') || !controlHtml.includes("explicitMode || (hiddenCount > 0 ? 'personal' : 'all')") || !controlHtml.includes('hydrateListingFilterFooterGuard')) throw new Error('Layout misses local listing personalization switch/hide/footer-guard contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');
+const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || (assetBaseUrl ? `${assetBaseUrl}/ics` : '')).replace(/\/+$/u, '');
+const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
+  .replace(/\{buildId\}/g, buildId)
+  .replace(/\{BUILD_ID\}/g, buildId)
+  .replace(/\/+$/u, '');
 if (assetBaseUrl) {
   if (controlHtml.includes('https://storage.yandexcloud.net/kenigevents/')) throw new Error('CDN-enabled HTML must not emit raw Object Storage image URLs');
   if (!controlHtml.includes(`${assetBaseUrl}/p/`)) throw new Error('CDN-enabled event HTML must emit event image URLs through PUBLIC_ASSET_BASE_URL');
   if (!JSON.stringify(eventJsonLd?.image || []).includes(`${assetBaseUrl}/p/`)) throw new Error('CDN-enabled JSON-LD Event.image must use PUBLIC_ASSET_BASE_URL');
   if (controlHtml.includes(`rel="canonical" href="${assetBaseUrl}`)) throw new Error('Canonical URL must remain on kenigevents.ru, not asset CDN');
+  if (!controlHtml.includes(`href="${icsBaseUrl}/${control.id}.ics"`)) throw new Error('CDN-enabled pages must link calendar CTA to stable /ics/<event_id>.ics');
+}
+if (astroAssetBaseUrl) {
+  if (!controlHtml.includes(`href="${astroAssetBaseUrl}/_astro/`)) throw new Error('Astro CSS/JS assets must use PUBLIC_ASTRO_ASSET_BASE_URL when enabled');
+  if (controlHtml.includes(`rel="canonical" href="${astroAssetBaseUrl}`)) throw new Error('Canonical URL must remain on kenigevents.ru, not static asset CDN');
+  if (!assetBaseUrl && controlHtml.includes(`${astroAssetBaseUrl}/p/`)) throw new Error('PUBLIC_ASTRO_ASSET_BASE_URL must not rewrite event media images; use PUBLIC_ASSET_BASE_URL only for a media CDN');
 }
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
@@ -263,6 +300,7 @@ if (
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
 if (/mobile-discovery-menu__brand-icon|brand-icon-mask|mobile-brand-icon-cycle|mobile-brand-text-cycle/iu.test(css)) throw new Error('Rejected brand icon animation must not remain in mobile discovery CSS');
 if (!/mobile-discovery-menu__label\{[^}]*animation:\s*mobile-brand-title-sway/iu.test(css) || !/@keyframes\s+mobile-brand-title-sway/iu.test(css) || !/--brand-sway-x:\s*0px/iu.test(css) || !/translate3d\(var\(--brand-sway-x\),0,0\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery handle must keep only a calculated two-state title-sway animation');
+if (!/mobile-discovery-menu__label\{[^}]*width:\s*100%[^}]*max-width:\s*100%/iu.test(css) || !/mobile-discovery-menu__summary\{[^}]*min-height:\s*calc\(5\.35rem\+env\(safe-area-inset-top\)\)/iu.test(css.replace(/\s+/g, ''))) throw new Error('Mobile discovery tag must preserve the gallery tag geometry and wrap the two-line service kicker instead of clipping it');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
@@ -270,8 +308,8 @@ if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/h
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
 if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
 if (!/hero-gallery__topbar\{[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__brand\{[^}]*pointer-events:\s*auto/iu.test(css)) throw new Error('Fullscreen gallery brand tag must be top-flush and clickable');
-if (!/hero-gallery__slide figcaption\{[^}]*display:\s*block[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__slide figcaption span\{[^}]*display:\s*block/iu.test(css) || !/hero-gallery__slide figcaption strong\{[^}]*box-decoration-break:\s*clone/iu.test(css)) throw new Error('Fullscreen gallery caption must use separate-line inline/subline text stripes, not a full-width bottom slab');
-if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('galleryPanTimer') || !controlHtml.includes('7600') || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load slides and expose slower auto-forward pan with pre-stop transition plus pointer/touch swipe');
+if (!/hero-gallery__caption\{[^}]*display:\s*block[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__caption span\{[^}]*display:\s*block/iu.test(css) || !/hero-gallery__caption strong\{[^}]*box-decoration-break:\s*clone/iu.test(css)) throw new Error('Fullscreen gallery caption must be one fixed overlay with separate-line inline/subline text stripes, not per-slide flicker or a full-width bottom slab');
+if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('preloadAdjacentGalleryMedia') || !controlHtml.includes('.decode().catch') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('galleryPanTimer') || !controlHtml.includes('8880') || !/gallery-pan-forward 17\.9s/iu.test(css) || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load but pre-decode adjacent slides, keep ~40% slower pan, and auto-advance after the shorter non-dead viewing interval plus pointer/touch swipe');
 if (!controlHtml.includes('data-not-interested-plate') || !/event-card__not-interest-plate/iu.test(css)) throw new Error('Not-interested feedback must keep an explicit undo plate instead of turning the card into an accidental navigation target');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
 if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*flex-end/iu.test(css)) throw new Error('Split-actions under-card row must cluster share text near the right-thumb like action');
@@ -282,10 +320,19 @@ if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual
 if (/aspect-ratio:3\/4/u.test(css.replace(/\s+/g, ''))) throw new Error('Old 3:4 visual-only ratio leaked into CSS');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
+const currentDate = eventsData.build?.current_date;
+const exactTodayEvents = eventsData.events.filter((event) => event.start_date === currentDate);
+const exactTodayTypes = new Set(exactTodayEvents.map((event) => event.event_type || 'unknown'));
+if (exactTodayEvents.length < 5 || exactTodayTypes.size < 4) throw new Error(`Preview fixture must include a diverse real same-day slice for /segodnya/, got ${exactTodayEvents.length} events and ${exactTodayTypes.size} types`);
+const priceLinkedEvent = eventsData.events.find((event) => event.ticket?.price_label && /^https?:\/\//iu.test(event.ticket?.href || ''));
+if (priceLinkedEvent) {
+  const priceHtml = readFileSync(join(root, `sobytiya/${priceLinkedEvent.slug}/index.html`), 'utf8');
+  if (!priceHtml.includes('event-info-admission__main') || !priceHtml.includes(priceLinkedEvent.ticket.price_label) || !/rel="[^"]*nofollow[^"]*"/iu.test(priceHtml)) throw new Error(`Priced event ${priceLinkedEvent.id} must render its price as a nofollow ticket link, not extra CTA copy`);
+}
 for (const event of eventsData.events) {
   const related = relatedData.related[String(event.id)] || { similar: [], explore: [] };
   const excluded = new Set([event.id, ...event.other_date_ids]);
-  for (const [kind, ids] of Object.entries(related)) {
+  for (const [kind, ids] of Object.entries(related).filter(([, value]) => Array.isArray(value))) {
     for (const id of ids) {
       const candidate = eventsById.get(id);
       if (excluded.has(id)) throw new Error(`Related ${kind} for ${event.id} includes current/other-date ${id}`);
@@ -317,7 +364,7 @@ for (const event of eventsData.events) {
   if (!html.includes('data-hero-composition=')) throw new Error(`Event ${event.id} hero misses composition marker`);
   if (!html.includes(`data-hero-image-text-mode="${event.image_text_mode}"`)) throw new Error(`Event ${event.id} hero misses image_text_mode marker`);
   if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);
-  const ownCalendarHref = `sobytiya/${event.slug}/event.ics`;
+  const ownCalendarHref = icsBaseUrl ? `${icsBaseUrl}/${event.id}.ics` : `sobytiya/${event.slug}/event.ics`;
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !html.includes(ownCalendarHref)) throw new Error(`Short event ${event.id} misses own calendar link`);
   if (!calendarEligible && html.includes(ownCalendarHref)) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);

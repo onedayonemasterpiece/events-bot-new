@@ -2195,8 +2195,18 @@ FOUR_O_RESPONSE_LIMIT = int(os.getenv("FOUR_O_RESPONSE_LIMIT", "1000"))
 FOUR_O_EDITOR_MAX_TOKENS = int(os.getenv("FOUR_O_EDITOR_MAX_TOKENS", "2000"))
 FOUR_O_PITCH_MAX_TOKENS = int(os.getenv("FOUR_O_PITCH_MAX_TOKENS", "200"))
 
-# Track OpenAI usage against a daily budget.  OpenAI resets usage at midnight UTC.
+# Track OpenAI usage against a daily budget. OpenAI resets usage at midnight UTC.
 FOUR_O_DAILY_TOKEN_LIMIT = int(os.getenv("FOUR_O_DAILY_TOKEN_LIMIT", "1000000"))
+FOUR_O_GPT4O_DAILY_TOKEN_LIMIT = int(
+    os.getenv("FOUR_O_GPT4O_DAILY_TOKEN_LIMIT", "950000")
+)
+FOUR_O_GPT4O_FALLBACK_MODEL = (
+    os.getenv("FOUR_O_GPT4O_FALLBACK_MODEL", "gpt-4o-mini") or ""
+).strip()
+FOUR_O_GPT4O_BUDGET_MODELS = frozenset({"gpt-4o", "gpt-4o-2024-08-06"})
+FOUR_O_GPT4O_USAGE_CACHE_SECONDS = float(
+    os.getenv("FOUR_O_GPT4O_USAGE_CACHE_SECONDS", "10")
+)
 
 FOUR_O_TRACKED_MODELS: tuple[str, str] = ("gpt-4o", "gpt-4o-mini")
 
@@ -2220,6 +2230,11 @@ _four_o_usage_state = {
     "total": 0,
     "used": 0,
     "models": {model: 0 for model in FOUR_O_TRACKED_MODELS},
+}
+_gpt4o_daily_usage_cache: dict[str, Any] = {
+    "date": None,
+    "used": None,
+    "checked_at": 0.0,
 }
 _last_ask_4o_request_id: str | None = None
 _token_usage_log_disabled = os.getenv("DISABLE_TOKEN_USAGE_LOG", "").strip().lower() in {
@@ -2253,6 +2268,131 @@ def _get_four_o_usage_snapshot() -> dict[str, Any]:
         "used": _four_o_usage_state.get("used", 0),
         "models": models,
     }
+
+
+def _is_budgeted_gpt4o_model(model: str | None) -> bool:
+    return (model or "").strip().lower() in FOUR_O_GPT4O_BUDGET_MODELS
+
+
+def _estimate_openai_chat_tokens(
+    messages: Sequence[Mapping[str, Any]],
+    *,
+    max_tokens: int,
+) -> int:
+    text_bytes = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            text_bytes += len(content.encode("utf-8"))
+        elif content is not None:
+            text_bytes += len(str(content).encode("utf-8"))
+    prompt_estimate = math.ceil(text_bytes / 3) + (4 * len(messages)) + 16
+    return max(0, prompt_estimate) + max(0, int(max_tokens or 0))
+
+
+async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
+    client = get_supabase_client()
+    if client is None:
+        return None
+    start = datetime.combine(today, time.min, tzinfo=timezone.utc).isoformat()
+    end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=timezone.utc).isoformat()
+
+    def _fetch() -> int:
+        total = 0
+        offset = 0
+        page_size = 1000
+        while True:
+            response = (
+                client.table("token_usage")
+                .select("total_tokens,prompt_tokens,completion_tokens")
+                .in_("model", list(FOUR_O_GPT4O_BUDGET_MODELS))
+                .gte("at", start)
+                .lt("at", end)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            rows = getattr(response, "data", None) or []
+            for row in rows:
+                try:
+                    row_total = row.get("total_tokens")
+                    if row_total is None:
+                        row_total = int(row.get("prompt_tokens") or 0) + int(
+                            row.get("completion_tokens") or 0
+                        )
+                    total += max(int(row_total or 0), 0)
+                except Exception:
+                    continue
+            if len(rows) < page_size:
+                break
+            offset += page_size
+        return total
+
+    try:
+        return await asyncio.to_thread(_fetch)
+    except Exception as exc:
+        logging.warning("four_o.budget_supabase_usage_failed: %s", exc)
+        return None
+
+
+async def _get_gpt4o_daily_usage_total(today: date | None = None) -> int:
+    today = today or _current_utc_date()
+    _ensure_four_o_usage_state(today)
+    cache_date = _gpt4o_daily_usage_cache.get("date")
+    checked_at = float(_gpt4o_daily_usage_cache.get("checked_at") or 0.0)
+    cached_used = _gpt4o_daily_usage_cache.get("used")
+    now = _time.monotonic()
+    if (
+        cache_date == today
+        and cached_used is not None
+        and now - checked_at < max(0.0, FOUR_O_GPT4O_USAGE_CACHE_SECONDS)
+    ):
+        return max(int(cached_used or 0), 0)
+
+    used = await _fetch_gpt4o_daily_usage_from_supabase(today)
+    if used is None:
+        models = _four_o_usage_state.get("models") or {}
+        used = sum(
+            int(models.get(model_name, 0) or 0)
+            for model_name in FOUR_O_GPT4O_BUDGET_MODELS
+        )
+    _gpt4o_daily_usage_cache.update(
+        {"date": today, "used": max(int(used or 0), 0), "checked_at": now}
+    )
+    return max(int(used or 0), 0)
+
+
+async def _resolve_openai_model_for_budget(
+    requested_model: str,
+    *,
+    operation: str,
+    messages: Sequence[Mapping[str, Any]],
+    max_tokens: int,
+    meta: Mapping[str, Any] | None = None,
+) -> str:
+    model = (requested_model or "gpt-4o").strip() or "gpt-4o"
+    if not _is_budgeted_gpt4o_model(model):
+        return model
+    limit = max(FOUR_O_GPT4O_DAILY_TOKEN_LIMIT, 0)
+    if limit <= 0:
+        return model
+    fallback_model = FOUR_O_GPT4O_FALLBACK_MODEL
+    if not fallback_model or _is_budgeted_gpt4o_model(fallback_model):
+        return model
+    used = await _get_gpt4o_daily_usage_total()
+    estimate = _estimate_openai_chat_tokens(messages, max_tokens=max_tokens)
+    if used + estimate <= limit:
+        return model
+    logging.warning(
+        "four_o.budget_fallback op=%s requested_model=%s fallback_model=%s used=%d estimate=%d limit=%d meta=%s",
+        operation,
+        model,
+        fallback_model,
+        used,
+        estimate,
+        limit,
+        dict(meta or {}),
+    )
+    return fallback_model
 
 
 def get_last_ask_4o_request_id() -> str | None:
@@ -2311,6 +2451,12 @@ def _record_four_o_usage(
     models = _four_o_usage_state.setdefault("models", {})
     models.setdefault(model, 0)
     models[model] += spent
+    if _is_budgeted_gpt4o_model(model):
+        cache_date = _gpt4o_daily_usage_cache.get("date")
+        cached_used = _gpt4o_daily_usage_cache.get("used")
+        if cache_date == today and cached_used is not None:
+            _gpt4o_daily_usage_cache["used"] = max(int(cached_used or 0), 0) + spent
+            _gpt4o_daily_usage_cache["checked_at"] = _time.monotonic()
     new_total = _four_o_usage_state.get("total", 0) + spent
     _four_o_usage_state["total"] = new_total
     previous_used = _four_o_usage_state.get("used", 0)
@@ -3702,7 +3848,13 @@ async def _vk_api(
                     actor=kind,
                     token=redacted_token,
                 )
-            if code == 15 and "edit time expired" in msg_l:
+            if code == 15 and (
+                "edit time expired" in msg_l
+                or "post or comment deleted" in msg_l
+                or "post not found" in msg_l
+                or "deleted" in msg_l
+                or "access denied" in msg_l
+            ):
                 logging.info("vk no-retry error code=15: %s", msg)
                 break
             if kind == "user" and code in {5, 27}:
@@ -5646,6 +5798,8 @@ def strip_city_from_address(address: str | None, city: str | None) -> str | None
     addr = address.strip()
     if addr.lower().endswith(city_clean):
         addr = re.sub(r",?\s*#?%s$" % re.escape(city_clean), "", addr, flags=re.IGNORECASE)
+    if addr.lower().startswith(city_clean):
+        addr = re.sub(r"^#?%s\s*,?\s*" % re.escape(city_clean), "", addr, flags=re.IGNORECASE)
     # Compact common Russian address noise: "ул." prefix and comma separators.
     addr = addr.rstrip(", ")
     addr = re.sub(r"\s*,\s*", " ", addr)
@@ -9264,17 +9418,25 @@ async def _parse_event_via_4o(
     if poster_lines:
         user_msg += "\n" + "\n".join(poster_lines)
     user_msg += text
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": user_msg},
+    ]
+    model_name = await _resolve_openai_model_for_budget(
+        "gpt-4o",
+        operation="parse",
+        messages=messages,
+        max_tokens=FOUR_O_RESPONSE_LIMIT,
+        meta={key: extra[key] for key in ("feature", "version") if extra.get(key) is not None},
+    )
     payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_msg},
-        ],
+        "model": model_name,
+        "messages": messages,
         "temperature": 0,
     }
     # ensure we start the network request with as little memory as possible
     gc.collect()
-    logging.info("Sending 4o parse request to %s", url)
+    logging.info("Sending 4o parse request to %s model=%s", url, payload["model"])
     session = get_http_session()
     call_started = _time.monotonic()
     semaphore_acquired = False
@@ -9676,8 +9838,15 @@ async def ask_4o(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": text})
+    selected_model = await _resolve_openai_model_for_budget(
+        model or "gpt-4o",
+        operation="ask",
+        messages=messages,
+        max_tokens=max_tokens,
+        meta=meta,
+    )
     payload: dict[str, Any] = {
-        "model": model or "gpt-4o",
+        "model": selected_model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -13917,6 +14086,15 @@ async def schedule_event_update_tasks(
             results[JobTask.festival_pages] = await enqueue_job(
                 db, eid, JobTask.festival_pages
             )
+        if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+            results[JobTask.static_site_build] = await enqueue_job(
+                db,
+                eid,
+                JobTask.static_site_build,
+                payload={"reason": "smart_update", "event_id": eid},
+                coalesce_key="static_site_build:prod",
+                next_run_at=deferred_time,
+            )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
     if not skip_vk_sync:
@@ -15546,6 +15724,7 @@ JOB_TTL: dict[JobTask, int] = {
     JobTask.month_pages: 3600,
     JobTask.week_pages: 3600,
     JobTask.weekend_pages: 3600,
+    JobTask.static_site_build: 7200,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
@@ -15555,6 +15734,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.month_pages: 180,
     JobTask.week_pages: 180,
     JobTask.weekend_pages: 180,
+    JobTask.static_site_build: 5400,
 }
 
 DEFAULT_JOB_TTL = 3600
@@ -15718,6 +15898,7 @@ async def _run_due_jobs_once_locked(
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
         JobTask.vk_sync: 2,
+        JobTask.static_site_build: 3,
     }
     jobs.sort(key=lambda j: (priority.get(j.task, 99), j.id))
     processed = 0
@@ -18996,6 +19177,118 @@ festivals_nav_dedup = festivals_fix_nav
 rebuild_festival_pages_nav = festivals_fix_nav
 
 
+def _static_site_status_callback_url() -> str:
+    explicit = (
+        os.getenv("STATIC_SITE_STATUS_CALLBACK_URL")
+        or os.getenv("KAGGLE_STATUS_CALLBACK_URL")
+        or ""
+    ).strip()
+    if explicit:
+        return explicit
+    webhook = (os.getenv("WEBHOOK_URL") or "").strip()
+    if webhook:
+        return webhook.rstrip("/") + "/internal/kaggle/run-event"
+    fly_app = (os.getenv("FLY_APP_NAME") or "events-bot-new-wngqia").strip()
+    return f"https://{fly_app}.fly.dev/internal/kaggle/run-event"
+
+
+async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
+    """Coalesced static-site build after Smart Update.
+
+    Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
+    kernel and receives a tar.gz artifact. The Kaggle status dataset/ledger is
+    intentionally the same contract CherryFlash uses, so operators see
+    heartbeat/progress from inside the kernel instead of opaque failed runs.
+    """
+
+    enabled = (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
+        return False
+    limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "50").strip() or "50")
+    now_local = datetime.now(LOCAL_TZ)
+    current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
+    build_id = (
+        os.getenv("STATIC_SITE_BUILD_ID")
+        or f"preview-{now_local.strftime('%Y%m%d%H%M')}-event-pages-prod{limit}-kaggle"
+    ).strip()
+    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
+    cmd = [
+        sys.executable,
+        script_path,
+        "--db",
+        db.path,
+        "--status-db",
+        db.path,
+        "--status-callback-url",
+        _static_site_status_callback_url(),
+        "--limit",
+        str(limit),
+        "--current-date",
+        current_date,
+        "--build-id",
+        build_id,
+        "--export-in-kaggle",
+        "--related-cache",
+        (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
+        "--gemma-related-model",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip(),
+        "--gemma-related-key-env",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+        "--gemma-related-max-anchors",
+        str(int((os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS") or "0").strip() or "0")),
+        "--timeout-minutes",
+        str(int((os.getenv("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES") or "60").strip() or "60")),
+        "--poll-interval",
+        str(int((os.getenv("STATIC_SITE_KAGGLE_POLL_INTERVAL") or "30").strip() or "30")),
+        "--download-output",
+    ]
+    if (os.getenv("STATIC_SITE_GEMMA_RELATED_VERIFY") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        cmd.append("--gemma-related-verify")
+    logging.info(
+        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s",
+        event_id,
+        build_id,
+        limit,
+    )
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=os.path.dirname(__file__),
+        env=os.environ.copy(),
+    )
+    assert proc.stdout is not None
+    tail: list[str] = []
+    while True:
+        line = await proc.stdout.readline()
+        if not line:
+            break
+        text = line.decode("utf-8", errors="replace").rstrip()
+        if text:
+            logging.info("static_site_build: %s", text)
+            tail.append(text)
+            if len(tail) > 80:
+                tail.pop(0)
+    code = await proc.wait()
+    if code != 0:
+        raise RuntimeError(
+            f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
+        )
+    logging.info("static_site_build: done build_id=%s", build_id)
+    return True
+
+
 JOB_HANDLERS = {
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
@@ -19006,6 +19299,7 @@ JOB_HANDLERS = {
     "weekend_pages": job_weekend_pages_debounced,
     "festival_pages": update_festival_pages_for_event,
     "fest_nav:update_all": update_all_festival_nav,
+    "static_site_build": job_static_site_build_kaggle,
 }
 
 
