@@ -12,8 +12,9 @@ const canAddToCalendar = isCalendarEligible(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const dateTimeLabel = displayDateTime(event);
 const imageUrl = eventImageUrl(event.image_url);
+const linkedEventIds = event.other_date_ids.join(',');
 ---
-<article class="listing-item">
+<article class="listing-item" data-listing-item data-event-id={event.id} data-event-title={event.title} data-linked-event-ids={linkedEventIds} data-city={event.city || undefined} data-venue={event.venue_name || undefined}>
   <a class="listing-item__media listing-item__media--cover" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
       <img class="listing-item__image" src={imageUrl} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
@@ -22,11 +23,11 @@ const imageUrl = eventImageUrl(event.image_url);
     )}
   </a>
   <div class="listing-item__body">
+    <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     <div class="listing-item__meta">
       <span>{dateTimeLabel}</span>
       <span>{eventAdmissionLabel(event)}</span>
     </div>
-    <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     {place && <p>{place}</p>}
     <div class="listing-item__actions">
       {canAddToCalendar && <a class="secondary-button" href={calendarHref} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>}

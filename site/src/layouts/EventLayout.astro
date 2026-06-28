@@ -602,29 +602,44 @@ const FOOTER_SOCIAL_LINKS = [
       .event-info-item__icon .icon { width: 1.2rem; height: 1.2rem; }
       .event-info-value { min-width: 0; }
       .event-info-value--admission {
-        width: max-content;
+        width: fit-content;
         max-width: 100%;
         display: inline-flex;
         align-items: center;
-        padding: 0.16rem 0.52rem;
+        flex-wrap: wrap;
+        gap: 0.28rem;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        font-weight: inherit;
+      }
+      .event-info-admission { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; min-width: 0; }
+      .event-info-admission__main {
+        display: inline-flex;
+        align-items: center;
+        min-height: 1.74rem;
+        padding: 0.18rem 0.58rem;
         border: 1px solid rgba(121,48,20,0.14);
         border-radius: 999px;
         background: #fff7ea;
         color: var(--primary-strong);
         font-weight: 900;
       }
-      .event-info-value--check { display: inline-flex; align-items: center; }
-      .event-info-check {
-        width: 1.48rem;
-        height: 1.48rem;
-        display: inline-grid;
-        place-items: center;
+      .event-info-admission__detail { color: var(--muted); font-weight: 780; }
+      .event-info-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-height: 1.74rem;
+        padding: 0.16rem 0.5rem;
+        border: 1px solid rgba(15,122,69,0.16);
         border-radius: 999px;
         background: #dff5e7;
         color: #0f7a45;
-        font-size: 1.02rem;
-        font-weight: 950;
-        line-height: 1;
+        font-size: 0.82rem;
+        font-weight: 900;
         box-shadow: 0 0 0 1px rgba(15,122,69,0.10) inset;
       }
       .event-source-gate {
@@ -746,9 +761,9 @@ const FOOTER_SOCIAL_LINKS = [
       .event-card--split-actions:hover { border-color: transparent; box-shadow: none; }
       .event-card--split-actions .event-card__media-link { border: 1px solid rgba(121,48,20,0.13); border-bottom: 0; border-radius: 24px 24px 0 0; overflow: hidden; }
       .event-card--split-actions .event-card__body { background: #15110f; color: #fff; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); padding-bottom: 0.7rem; }
-      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); background: #15110f; }
+      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
       .event-card--split-actions .event-card__utility-row .feedback-button { min-height: 44px; box-shadow: none; }
-      .event-card--split-actions .event-card__feedback .feedback-button--negative { order: 2; margin-left: 0.15rem; min-height: 36px; min-width: 38px; padding-inline: 0.2rem; color: rgba(58,48,40,0.42); background: transparent; border-color: transparent; font-size: 0.72rem; }
+      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: 0; min-height: 36px; padding-inline: 0.22rem; color: rgba(255,255,255,0.56); background: transparent; border-color: transparent; font-size: 0.74rem; }
       .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
       .event-card--split-actions .event-card__feedback .feedback-button { min-width: 44px; min-height: 44px; padding: 0 0.28rem; color: rgba(58,48,40,0.70); background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px; }
       .event-card--split-actions .event-card__feedback .feedback-button:hover { color: #2b211a; background: rgba(121,48,20,0.07); }
@@ -773,6 +788,20 @@ const FOOTER_SOCIAL_LINKS = [
       .listing-daypart__header h3 { margin: 0; font-size: clamp(1.35rem, 5vw, 2rem); line-height: 1; letter-spacing: -0.055em; }
       .listing-daypart__count { min-width: 2.2rem; min-height: 2.2rem; display: inline-grid; place-items: center; border: 1px solid rgba(121,48,20,0.12); border-radius: 999px; background: #fff7ea; color: var(--primary-strong); font-weight: 920; }
       .listing-stack { display: grid; gap: 0.85rem; }
+      .listing-filter { display: none; align-items: center; justify-content: space-between; gap: 0.8rem; margin: 0 0 0.85rem; padding: 0.72rem 0.82rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 18px; background: #fff7ea; box-shadow: 0 10px 22px rgba(72,45,25,0.08); }
+      .listing-filter.is-visible { display: flex; }
+      .listing-filter__copy { display: grid; gap: 0.14rem; min-width: 0; }
+      .listing-filter__copy strong { color: var(--text); font-size: 0.96rem; line-height: 1.12; }
+      .listing-filter__copy span { color: var(--muted); font-size: 0.86rem; font-weight: 760; line-height: 1.22; }
+      .listing-filter__actions { display: inline-flex; gap: 0.24rem; padding: 0.18rem; border-radius: 999px; background: rgba(121,48,20,0.08); white-space: nowrap; }
+      .listing-filter__actions button,
+      .listing-filter-bar button { min-height: 38px; border: 0; border-radius: 999px; padding: 0.38rem 0.72rem; background: transparent; color: var(--primary-strong); font: inherit; font-size: 0.88rem; font-weight: 910; cursor: pointer; }
+      .listing-filter__actions button[aria-pressed="true"],
+      .listing-filter-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); box-shadow: 0 8px 18px rgba(121,48,20,0.16); }
+      .listing-filter-bar { position: fixed; left: 50%; bottom: calc(0.82rem + env(safe-area-inset-bottom)); z-index: 24; display: none; align-items: center; gap: 0.28rem; max-width: min(94vw, 520px); padding: 0.28rem; border: 1px solid rgba(121,48,20,0.14); border-radius: 999px; background: rgba(255,253,248,0.98); box-shadow: 0 18px 42px rgba(72,45,25,0.20); transform: translateX(-50%); }
+      .listing-filter-bar.is-visible { display: inline-flex; }
+      .listing-filter-bar [data-listing-hidden-count] { padding: 0 0.58rem; color: var(--muted); font-size: 0.82rem; font-weight: 850; white-space: nowrap; }
+      body.has-listing-filter-bar { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom)); }
       .personal-feed-section { margin-top: 1rem; }
       .personal-feed-section__status { margin: 0 0 0.85rem; }
       .personal-feed-section__refresh { margin-top: 0.9rem; }
@@ -932,13 +961,13 @@ const FOOTER_SOCIAL_LINKS = [
           top: calc(var(--drawer-rail-h) + env(safe-area-inset-top) - 7px);
           z-index: 2;
           width: 8.8rem;
-          min-height: 4.2rem;
+          min-height: 5.55rem;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
           isolation: isolate;
-          padding: 1.05rem 0.76rem 0.62rem;
+          padding: 1.45rem 0.76rem 0.58rem;
           border: 1px solid rgba(255,255,255,0.14);
           border-radius: 0 0 10px 10px;
           background: linear-gradient(160deg, #793014 0%, #a54821 100%);
@@ -963,10 +992,9 @@ const FOOTER_SOCIAL_LINKS = [
           animation: mobile-brand-title-sway 14s cubic-bezier(0.22, 0.86, 0.32, 1) 2.8s infinite;
         }
         @keyframes mobile-brand-title-sway {
-          0%, 20% { transform: translate3d(0, 0, 0); }
-          30%, 42% { transform: translate3d(0.62rem, 0, 0); }
-          54%, 66% { transform: translate3d(-0.42rem, 0, 0); }
-          78%, 100% { transform: translate3d(0, 0, 0); }
+          0%, 18% { transform: translate3d(0, 0, 0); }
+          30%, 48% { transform: translate3d(6.35rem, 0, 0); }
+          62%, 100% { transform: translate3d(0, 0, 0); }
         }
         .mobile-discovery-menu__kicker {
           font-size: 0.56rem;
@@ -1226,6 +1254,7 @@ const FOOTER_SOCIAL_LINKS = [
         .feedback-button--negative span { display: none; }
         .event-card__feedback { grid-template-columns: 48px minmax(118px, 1fr) 82px; gap: 0.28rem; left: 0.56rem; right: 0.56rem; }
         .event-card--split-actions .feedback-button--negative span { display: inline; }
+        .event-card--split-actions .event-card__utility-row .feedback-button--negative span { display: inline; }
         .event-card--split-actions .event-card__utility-row { padding-inline: 0.68rem; gap: 0.34rem; }
         .event-card--split-actions .event-card__utility-row .feedback-button--calendar { flex: 1 1 auto; }
         .event-card--split-actions .event-card__feedback { gap: 0.34rem; }
@@ -1243,6 +1272,11 @@ const FOOTER_SOCIAL_LINKS = [
         .listing-item__meta { font-size: 0.76rem; gap: 0.28rem; }
         .listing-item__title { font-size: clamp(1rem, 4.7vw, 1.17rem); }
         .listing-item__actions .secondary-button { width: auto; flex: 1 1 112px; padding-inline: 0.58rem; }
+        .listing-filter { align-items: stretch; flex-direction: column; }
+        .listing-filter__actions { width: 100%; }
+        .listing-filter__actions button { flex: 1 1 0; }
+        .listing-filter-bar { max-width: calc(100vw - 1rem); }
+        .listing-filter-bar button { padding-inline: 0.58rem; }
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
@@ -1335,6 +1369,7 @@ const FOOTER_SOCIAL_LINKS = [
         const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
         const PERSONAL_FEED_LIMIT = 30;
         const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
+        const LISTING_MODE_KEY = 'ke_listing_mode_v1';
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -1581,6 +1616,86 @@ const FOOTER_SOCIAL_LINKS = [
             ...toArray(profile && profile.hidden_event_ids).map(asId),
             ...toArray(profile && profile.not_interested_event_ids).map(asId),
           ]);
+        }
+
+        function readListingMode() {
+          try {
+            return localStorage.getItem(LISTING_MODE_KEY) === 'personal' ? 'personal' : 'all';
+          } catch (_) {
+            return 'all';
+          }
+        }
+
+        function writeListingMode(mode) {
+          try {
+            localStorage.setItem(LISTING_MODE_KEY, mode === 'personal' ? 'personal' : 'all');
+          } catch (_) {}
+        }
+
+        function listingItems() {
+          return Array.from(document.querySelectorAll('[data-listing-item]'));
+        }
+
+        function listingItemShouldHide(item, hiddenIds) {
+          const id = asId(item.dataset.eventId);
+          if (id && hiddenIds.has(id)) return true;
+          return String(item.dataset.linkedEventIds || '')
+            .split(',')
+            .map((value) => asId(value.trim()))
+            .filter(Boolean)
+            .some((linkedId) => hiddenIds.has(linkedId));
+        }
+
+        function syncListingPersonalFilter(options = {}) {
+          const items = listingItems();
+          const filters = Array.from(document.querySelectorAll('[data-listing-filter]'));
+          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
+          if (!items.length || (!filters.length && !bars.length)) return;
+          const profile = readProfile();
+          const validProfile = isCompatibleProfile(profile);
+          const hiddenIds = validProfile ? hiddenSet(profile) : new Set();
+          const mode = readListingMode();
+          const hiddenCandidates = items.filter((item) => listingItemShouldHide(item, hiddenIds));
+          const hiddenCount = hiddenCandidates.length;
+          const total = items.length;
+          const personalMode = mode === 'personal';
+          items.forEach((item) => {
+            const shouldHide = personalMode && listingItemShouldHide(item, hiddenIds);
+            item.hidden = shouldHide;
+            item.dataset.personalHidden = shouldHide ? 'true' : 'false';
+          });
+          document.querySelectorAll('[data-listing-daypart]').forEach((section) => {
+            const count = Array.from(section.querySelectorAll('[data-listing-item]')).filter((item) => !item.hidden).length;
+            const badge = section.querySelector('[data-listing-daypart-count]');
+            if (badge) badge.textContent = String(count);
+          });
+          const visible = items.filter((item) => !item.hidden).length;
+          const summaryText = personalMode
+            ? `Для вас · показано ${visible} из ${total}. Скрыто ${hiddenCount} по вашим отметкам.`
+            : hiddenCount > 0
+              ? `Показаны все ${total}. Режим «Для меня» скроет ${hiddenCount} отмеченных событий.`
+              : `Показаны все ${total}. Пока нечего скрывать по вашим отметкам.`;
+          const titleText = personalMode ? 'Для меня' : 'Все события';
+          [...filters, ...bars].forEach((root) => {
+            root.hidden = false;
+            root.classList.add('is-visible');
+            root.querySelectorAll('[data-listing-mode-button]').forEach((button) => {
+              const pressed = button.dataset.listingModeButton === mode;
+              button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            });
+            root.querySelectorAll('[data-listing-total-count]').forEach((node) => { node.textContent = String(total); });
+            root.querySelectorAll('[data-listing-visible-count]').forEach((node) => { node.textContent = String(visible); });
+            root.querySelectorAll('[data-listing-hidden-count]').forEach((node) => { node.textContent = `Скрыто ${hiddenCount}`; });
+            const title = root.querySelector('[data-listing-filter-title]');
+            const summary = root.querySelector('[data-listing-filter-summary]');
+            if (title) title.textContent = titleText;
+            if (summary) summary.textContent = summaryText;
+          });
+          document.body.classList.toggle('has-listing-filter-bar', bars.length > 0);
+          if (options.focusSummary) {
+            const focusTarget = filters[0]?.querySelector('[data-listing-filter-summary-focus]');
+            if (focusTarget) focusTarget.focus({ preventScroll: true });
+          }
         }
 
         function likedSet(profile) {
@@ -2139,7 +2254,7 @@ const FOOTER_SOCIAL_LINKS = [
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
             : '';
           const splitUtility = cardVariant === 'split-actions'
-            ? `${calendarButton ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${calendarButton}</div>` : ''}<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${negativeButton}${likeButton}</div>`
+            ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${negativeButton}${calendarButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
             : '';
           return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
             <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
@@ -2442,6 +2557,7 @@ const FOOTER_SOCIAL_LINKS = [
             await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
           await hydratePersonalFeedSlots({ force: false });
+          syncListingPersonalFilter();
           renderFeedbackReport();
         }
 
@@ -2566,6 +2682,113 @@ const FOOTER_SOCIAL_LINKS = [
           return `${raw}.jpg`;
         }
 
+        function wrapCanvasText(ctx, text, maxWidth, maxLines) {
+          const words = String(text || '').split(/\s+/u).filter(Boolean);
+          const lines = [];
+          let line = '';
+          for (const word of words) {
+            const test = line ? `${line} ${word}` : word;
+            if (ctx.measureText(test).width <= maxWidth || !line) {
+              line = test;
+            } else {
+              lines.push(line);
+              line = word;
+              if (lines.length >= maxLines) break;
+            }
+          }
+          if (line && lines.length < maxLines) lines.push(line);
+          if (lines.length === maxLines && words.length) {
+            const last = lines[maxLines - 1];
+            if (ctx.measureText(`${last}…`).width > maxWidth) {
+              let trimmed = last;
+              while (trimmed.length > 8 && ctx.measureText(`${trimmed}…`).width > maxWidth) trimmed = trimmed.slice(0, -1);
+              lines[maxLines - 1] = `${trimmed.trim()}…`;
+            }
+          }
+          return lines;
+        }
+
+        function canvasBlob(canvas, type = 'image/png', quality = 0.92) {
+          return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+        }
+
+        async function createGeneratedShareImage(button) {
+          if (!document.createElement('canvas').getContext) return null;
+          const canvas = document.createElement('canvas');
+          canvas.width = 1080;
+          canvas.height = 1350;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          const title = button.dataset.shareTitle || document.title;
+          const dateTime = button.dataset.shareDateTime || '';
+          const place = button.dataset.sharePlace || '';
+          const admission = button.dataset.shareAdmission || '';
+          const url = button.dataset.shareUrl || location.href;
+          ctx.fillStyle = '#fff7ea';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          gradient.addColorStop(0, '#793014');
+          gradient.addColorStop(0.58, '#a54821');
+          gradient.addColorStop(1, '#2f2118');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, 470);
+          ctx.fillStyle = 'rgba(255,253,248,0.15)';
+          ctx.beginPath();
+          ctx.arc(880, 130, 260, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fffdf8';
+          ctx.font = '900 54px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.fillText('Полюбить Калининград', 72, 112);
+          ctx.font = '950 104px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.fillText('Анонсы', 72, 220);
+          ctx.fillStyle = '#fff7ea';
+          ctx.font = '850 34px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.fillText('событие, которым можно поделиться', 76, 310);
+          ctx.fillStyle = '#30241b';
+          ctx.font = '950 76px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          const titleLines = wrapCanvasText(ctx, title, 936, 4);
+          let y = 590;
+          titleLines.forEach((line) => {
+            ctx.fillText(line, 72, y);
+            y += 88;
+          });
+          const facts = [dateTime, place, admission].filter(Boolean);
+          ctx.font = '850 40px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          facts.forEach((fact) => {
+            ctx.fillStyle = '#793014';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(72, y - 42, 936, 64, 32);
+            else ctx.rect(72, y - 42, 936, 64);
+            ctx.fillStyle = 'rgba(121,48,20,0.08)';
+            ctx.fill();
+            ctx.fillStyle = '#4a2e20';
+            ctx.fillText(fact, 104, y);
+            y += 86;
+          });
+          ctx.fillStyle = '#793014';
+          ctx.font = '900 34px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.fillText('Открыть страницу события:', 72, 1194);
+          ctx.fillStyle = '#2f2118';
+          ctx.font = '760 28px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          wrapCanvasText(ctx, url, 936, 2).forEach((line, index) => ctx.fillText(line, 72, 1242 + index * 38));
+          return canvasBlob(canvas, 'image/png', 0.92);
+        }
+
+        async function shareBlobAsImage(button, blob, statusMessage) {
+          if (!blob || !window.File || !navigator.canShare || !('share' in navigator)) return false;
+          const title = button.dataset.shareTitle || document.title;
+          const text = button.dataset.shareExperimentText || button.dataset.shareText || '';
+          const url = button.dataset.shareUrl || location.href;
+          const type = blob.type || 'image/png';
+          const file = new File([blob], shareFileName(button, blob), { type });
+          const dataWithImage = { title, text, url, files: [file] };
+          if (!navigator.canShare(dataWithImage)) return false;
+          await navigator.share(dataWithImage);
+          await recordShare(button);
+          setShareExperimentStatus(button, statusMessage || 'Отправили картинку + текст + ссылку');
+          return true;
+        }
+
         async function fallbackShareExperiment(button, reason) {
           const title = button.dataset.shareTitle || document.title;
           const text = button.dataset.shareExperimentText || button.dataset.shareText || '';
@@ -2598,19 +2821,11 @@ const FOOTER_SOCIAL_LINKS = [
               const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
               if (response.ok) {
                 const blob = await response.blob();
-                const type = blob.type || button.dataset.shareImageType || 'image/jpeg';
-                const file = new File([blob], shareFileName(button, blob), { type });
-                const dataWithImage = { title, text, url, files: [file] };
-                if (navigator.canShare(dataWithImage)) {
-                  await navigator.share(dataWithImage);
-                  await recordShare(button);
-                  setShareExperimentStatus(button, 'Отправили файл + текст + ссылку');
-                  return;
-                }
-                await fallbackShareExperiment(button, 'приложение не приняло файл');
-                return;
+                if (await shareBlobAsImage(button, blob, 'Отправили исходную картинку + текст')) return;
               }
             }
+            const generatedBlob = await createGeneratedShareImage(button);
+            if (generatedBlob && await shareBlobAsImage(button, generatedBlob, 'Отправили share-картинку + текст')) return;
             await fallbackShareExperiment(button, imageUrl ? 'картинка недоступна как файл' : 'нет картинки');
           } catch (error) {
             if (error && error.name === 'AbortError') {
@@ -2618,6 +2833,8 @@ const FOOTER_SOCIAL_LINKS = [
               return;
             }
             try {
+              const generatedBlob = await createGeneratedShareImage(button);
+              if (generatedBlob && await shareBlobAsImage(button, generatedBlob, 'Отправили share-картинку + текст')) return;
               await fallbackShareExperiment(button, 'файловый share не сработал');
             } catch (_) {
               setShareExperimentStatus(button, 'Не удалось поделиться');
@@ -2703,6 +2920,19 @@ const FOOTER_SOCIAL_LINKS = [
           if (!button) return;
           event.preventDefault();
           await hydratePersonalFeedSlots({ force: true });
+        });
+
+        document.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-listing-mode-button]');
+          if (!button) return;
+          event.preventDefault();
+          const mode = button.dataset.listingModeButton === 'personal' ? 'personal' : 'all';
+          writeListingMode(mode);
+          syncListingPersonalFilter({ focusSummary: true });
+          const firstList = document.querySelector('[data-listing-filter]');
+          if (firstList && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            firstList.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
         });
 
         const sticky = document.querySelector('[data-sticky-cta]');

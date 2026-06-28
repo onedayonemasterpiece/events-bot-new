@@ -166,7 +166,7 @@ const showTicketCta = Boolean(ctaHref);
         <Icon name="heart" />
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
-      <button type="button" class="secondary-button share-experiment-button" data-nosnippet data-share-experiment data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-experiment-text={shareExperimentText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} aria-label={`Поделиться экспериментально: картинка, текст и ссылка на событие ${event.title}`}>
+      <button type="button" class="secondary-button share-experiment-button" data-nosnippet data-share-experiment data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-experiment-text={shareExperimentText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={event.ticket.price_label || event.status_label || ''} aria-label={`Поделиться экспериментально: картинка, текст и ссылка на событие ${event.title}`}>
         <Icon name="share" />
         <span data-share-experiment-label>Поделиться эксперимент</span>
         <span class="share-experiment-button__status" data-share-experiment-status aria-live="polite"></span>

@@ -58,7 +58,7 @@ if (!controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
-if (!controlHtml.includes('data-share-experiment') || !controlHtml.includes('Поделиться эксперимент') || !controlHtml.includes('navigator.canShare') || !controlHtml.includes('files: [file]')) throw new Error('Control event page misses experimental Web Share file/text/url button');
+if (!controlHtml.includes('data-share-experiment') || !controlHtml.includes('Поделиться эксперимент') || !controlHtml.includes('navigator.canShare') || !controlHtml.includes('files: [file]') || !controlHtml.includes('createGeneratedShareImage') || !controlHtml.includes('1080') || !controlHtml.includes('1350')) throw new Error('Control event page misses experimental Web Share file/text/url button with generated share-image fallback');
 if (!controlHtml.includes('og:image:secure_url') || !controlHtml.includes('og:image:type')) throw new Error('Control event page misses strengthened Open Graph image metadata for share previews');
 if (!controlHtml.includes('data-feedback-scope') || !/data-event-hero[\s\S]{0,6500}data-feedback-action="like"/u.test(controlHtml)) throw new Error('Event hero must expose a first-party like button/count for the current event');
 if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.45-4.8')) throw new Error('Share/repost icon must use the VK-like outline path, not the old arrow stroke');
@@ -174,14 +174,14 @@ if (controlVisibleHtml.includes('>Sitemap</a>')) throw new Error('Sitemap must n
 const pushkinEvent = eventsData.events.find((event) => event.id === 4913);
 if (pushkinEvent) {
   const pushkinHtml = readFileSync(join(root, `sobytiya/${pushkinEvent.slug}/index.html`), 'utf8');
-  if (!pushkinHtml.includes('event-info-value--check') || !pushkinHtml.includes('event-info-check') || pushkinHtml.includes('>возможна</dd>')) throw new Error('Pushkin card fact must render as a property check mark, not value copy');
+  if (!pushkinHtml.includes('event-info-chip--pushkin') || !pushkinHtml.includes('✓') || pushkinHtml.includes('>возможна</dd>')) throw new Error('Pushkin card fact must render as a compact admission property check mark, not value copy');
 }
 const freeEvent = eventsData.events.find((event) => event.id === 4512);
 if (freeEvent) {
   const freeHtml = readFileSync(join(root, `sobytiya/${freeEvent.slug}/index.html`), 'utf8');
-  if (!freeHtml.includes('Свободный') || /<dd[^>]*>\s*Бесплатно\s*<\/dd>/u.test(freeHtml)) throw new Error('Free admission must render as a property label, not bare “Бесплатно”');
+  if (!freeHtml.includes('Бесплатно') || !freeHtml.includes('вход свободный') || /<dd[^>]*>\s*Бесплатно\s*<\/dd>/u.test(freeHtml)) throw new Error('Free admission must keep the word “Бесплатно” and render the free-entry subtype, not bare value copy');
 }
-if (!/event-card__feedback event-card__feedback--under[\s\S]*feedback-button--share[\s\S]*feedback-button--negative[\s\S]*feedback-button--like/u.test(splitVisibleHtml)) throw new Error('Split-actions order must keep share before subdued not-interested and right-thumb like last');
+if (!/event-card__utility-row[\s\S]*feedback-button--negative/u.test(splitVisibleHtml) || !/event-card__feedback event-card__feedback--under[\s\S]*feedback-button--share[\s\S]*feedback-button--like/u.test(splitVisibleHtml)) throw new Error('Split-actions must keep not-interested in the card utility row and share/like in the under-card row');
 
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
@@ -219,8 +219,11 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml]]) {
     if (!html.includes(`>${label}</h3>`)) throw new Error(`${name} listing misses daypart section ${label}`);
   }
   if (!html.includes('listing-daypart') || !html.includes('listing-item__media listing-item__media--cover')) throw new Error(`${name} listing misses plaque/cropped media listing contract`);
+  if (!html.includes('data-listing-filter') || !html.includes('data-listing-filter-bar') || !html.includes('data-listing-mode-button="personal"') || !html.includes('data-listing-hidden-count')) throw new Error(`${name} listing misses global All/For me personalization filter and hidden count UI`);
   const listingArticles = [...html.matchAll(/<article class="listing-item"[\s\S]*?<\/article>/giu)].map((match) => match[0]);
   if (!listingArticles.length) throw new Error(`${name} listing has no listing articles`);
+  if (listingArticles.some((article) => !article.includes('data-listing-item') || !article.includes('data-linked-event-ids'))) throw new Error(`${name} listing items must expose compact ids for local personalization filter`);
+  if (listingArticles.some((article) => !/<a class="listing-item__title"[\s\S]*?<div class="listing-item__meta">/u.test(article))) throw new Error(`${name} listing cards must show title before date/admission meta`);
   if (listingArticles.some((article) => /<a[^>]+href="https?:\/\//iu.test(article))) throw new Error(`${name} listing card leaks direct external http link`);
   if (listingArticles.some((article) => article.includes('Открыть пост организатора') || article.includes('Уточнить регистрацию'))) throw new Error(`${name} listing exposes source/ambiguous external CTA copy`);
 }
@@ -231,6 +234,7 @@ for (const [name, html] of [['today', todayHtml], ['tomorrow', tomorrowHtml], ['
   if (!html.includes('hidden') || !html.includes('Личная лента')) throw new Error(`${name} personal feed must be hidden until backend/cache returns cards`);
 }
 if (!controlHtml.includes('ke_listing_personal_feed_cache_v1') || !controlHtml.includes('get_listing_personal_feed_v1') || !controlHtml.includes('/rest/v1/rpc/')) throw new Error('Layout misses Supabase RPC/localStorage personal feed preparation');
+if (!controlHtml.includes('ke_listing_mode_v1') || !controlHtml.includes('syncListingPersonalFilter') || !controlHtml.includes('data-listing-hidden-count')) throw new Error('Layout misses local listing personalization filter mode/count contract');
 const assetBaseUrl = (process.env.PUBLIC_ASSET_BASE_URL || '').replace(/\/+$/u, '');
 if (assetBaseUrl) {
   if (controlHtml.includes('https://storage.yandexcloud.net/kenigevents/')) throw new Error('CDN-enabled HTML must not emit raw Object Storage image URLs');

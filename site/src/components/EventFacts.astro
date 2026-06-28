@@ -4,14 +4,24 @@ import type { PreviewEvent } from '../lib/types';
 import { displayDateTime, eventAdmissionLabel } from '../lib/events';
 interface Props { event: PreviewEvent }
 type FactIcon = 'pin' | 'ticket' | 'spark' | 'info';
-type FactVariant = 'default' | 'admission' | 'check';
+type FactVariant = 'default' | 'admission';
 const { event } = Astro.props;
 const placeLine = [event.venue_name, event.address].filter(Boolean).join(' · ') || event.city || null;
+
+function admissionParts(currentEvent: PreviewEvent): { main: string; detail: string | null } {
+  const label = eventAdmissionLabel(currentEvent);
+  if (!currentEvent.ticket.is_free) return { main: label, detail: null };
+  const haystack = [currentEvent.ticket.status, currentEvent.ticket.label, currentEvent.status_label, currentEvent.ticket.note].filter(Boolean).join(' ').toLowerCase();
+  if (/регистрац|registration|зарегистр/u.test(haystack)) return { main: 'Бесплатно', detail: 'нужна регистрация' };
+  if (/запис|phone|телефон|коммент/u.test(haystack)) return { main: 'Бесплатно', detail: 'по записи' };
+  return { main: 'Бесплатно', detail: 'вход свободный' };
+}
+
+const admission = admissionParts(event);
 const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined; variant?: FactVariant }> = [
   { icon: 'info', label: 'Когда', value: displayDateTime(event) },
   { icon: 'pin', label: 'Где', value: placeLine },
-  { icon: 'ticket', label: 'Вход', value: eventAdmissionLabel(event), variant: 'admission' },
-  { icon: 'spark', label: 'Пушкинская карта', value: event.pushkin_card ? 'доступна' : null, variant: 'check' },
+  { icon: 'ticket', label: 'Вход', value: admission.main, variant: 'admission' },
   { icon: 'info', label: 'Фестиваль', value: event.festival },
 ].filter((item) => Boolean(item.value));
 ---
@@ -21,8 +31,12 @@ const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefi
       <div class="event-info-item">
         <dt><span class="event-info-item__icon" aria-hidden="true"><Icon name={item.icon} /></span><span>{item.label}</span></dt>
         <dd class={`event-info-value event-info-value--${item.variant || 'default'}`}>
-          {item.variant === 'check' ? (
-            <><span class="event-info-check" aria-hidden="true">✓</span><span class="sr-only">{item.value}</span></>
+          {item.variant === 'admission' ? (
+            <span class="event-info-admission">
+              <span class="event-info-admission__main">{admission.main}</span>
+              {admission.detail && <span class="event-info-admission__detail">{admission.detail}</span>}
+              {event.pushkin_card && <span class="event-info-chip event-info-chip--pushkin"><span aria-hidden="true">✓</span> Пушкинская карта</span>}
+            </span>
           ) : item.value}
         </dd>
       </div>

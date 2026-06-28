@@ -2,6 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import { absoluteUrl, eventDaypart, getCurrentDate, getTodayEvents, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
@@ -42,17 +43,18 @@ const sections = dayparts
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
+          <ListingPersonalFilter total={events.length} label="сегодня" />
           <h2>{events.length ? `Найдено: ${events.length}` : 'На сегодня в fixture нет событий'}</h2>
           {sections.length ? (
             <div class="listing-dayparts">
               {sections.map((section) => (
-                <section class="listing-daypart" aria-labelledby={`today-${section.key}`}>
+                <section class="listing-daypart" data-listing-daypart aria-labelledby={`today-${section.key}`}>
                   <div class="listing-daypart__header">
                     <div>
                       <p class="eyebrow">{section.note}</p>
                       <h3 id={`today-${section.key}`}>{section.label}</h3>
                     </div>
-                    <span class="listing-daypart__count">{section.events.length}</span>
+                    <span class="listing-daypart__count" data-listing-daypart-count>{section.events.length}</span>
                   </div>
                   {section.events.length ? (
                     <div class="listing-stack">

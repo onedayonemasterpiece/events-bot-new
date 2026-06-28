@@ -512,7 +512,7 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   if (ticket.is_free) {
     if (hasRegistration) return 'Бесплатно · регистрация';
     if (hasBooking) return 'Бесплатно · по записи';
-    return 'Свободный';
+    return 'Бесплатно · вход свободный';
   }
   if (ticket.price_label) return ticket.price_label;
   if (hasDonation) return 'За донат';

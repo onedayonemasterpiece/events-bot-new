@@ -2,6 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
 
 const events = getWeekendEvents();
@@ -33,6 +34,7 @@ const description = `Статический preview-листинг событи�
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
+          <ListingPersonalFilter total={events.length} label="на выходных" />
           <h2>{events.length ? `Найдено: ${events.length}` : 'На эти выходные в fixture нет событий'}</h2>
           <div class="listing-stack">
             {events.map((event) => <EventListItem event={event} />)}
