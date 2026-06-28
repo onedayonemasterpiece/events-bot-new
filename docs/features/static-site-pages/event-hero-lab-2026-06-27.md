@@ -22,11 +22,18 @@ Historic consultant artifacts for v19 are stored under `artifacts/codex/hero-con
 
 
 
-## v27 drawer mechanics, parallax hardening and gallery policy
+## v28 implemented hero gallery and flat drawer rail
 
-v27 keeps the corrected v24/v26 drawer mechanics: the terracotta service tag is the **handle of the drawer**, not an independent button above content. Closed state shows only the handle; open state slides a real 100vw navigation rail down from the top and moves the handle down by the same rail height. The handle has no chevron/up/down icon and is clamped to `y>=0` so the touch target is not clipped above the viewport. On mobile, the large after-hero logo-button header is removed; when the user is past the hero, the closed handle is hidden so it does not cover the feed/content. `body.is-past-hero` remains the state contract for sticky CTA/header/drawer chrome.
+- The mobile drawer panel is now a flat full-width rail: `border-radius: 0`, plain text links, no pill/button styling inside the drawer. The terracotta brand tag remains the handle and moves down with the rail.
+- Tapping/clicking the hero visual opens a fixed fullscreen `hero-gallery` moved to `document.body` at open time so it is not clipped by the hero card. The first slide preserves the source image with `object-fit: contain`; the final slide is a clearly labeled CTA to a similar event (`Смотреть похожее`).
+- Manual controls are supported: next/prev buttons, swipe and `Esc` close. There is still no default hero autoplay and no pull-to-expand overscroll behavior; those stay future experiments because they need multi-image fixtures, reduced-motion controls and mobile pull-to-refresh conflict testing.
+- Playwright evidence for `preview-20260627-event-pages-v28` is under `artifacts/codex/event-pages-v28/`: hero 100vw bbox, fullscreen gallery open/CTA, flat drawer CSS, local-only like flow and same-browser related-card reflection.
 
-Parallax remains allowed only for `visual_only` photo-cover hero compositions. The transform uses constant scale and vertical translate only; no class threshold may change scale or switch contain/cover while scrolling. v27 uses stable `svh` sizing for mobile photo heroes to avoid dynamic browser chrome resize jumps after scroll. `prefers-reduced-motion` disables the transform.
+## v28 drawer mechanics, parallax hardening and gallery policy
+
+v28 keeps the corrected v24/v26 drawer mechanics: the terracotta service tag is the **handle of the drawer**, not an independent button above content. Closed state shows only the handle; open state slides a real 100vw navigation rail down from the top and moves the handle down by the same rail height. The handle has no chevron/up/down icon and is clamped to `y>=0` so the touch target is not clipped above the viewport. On mobile, the large after-hero logo-button header is removed; when the user is past the hero, the closed handle is hidden so it does not cover the feed/content. `body.is-past-hero` remains the state contract for sticky CTA/header/drawer chrome.
+
+Parallax remains allowed only for `visual_only` photo-cover hero compositions. The transform uses constant scale and vertical translate only; no class threshold may change scale or switch contain/cover while scrolling. v28 uses stable `svh` sizing for mobile photo heroes to avoid dynamic browser chrome resize jumps after scroll. `prefers-reduced-motion` disables the transform.
 
 Multi-image events are P1, but the product contract is fixed now:
 
@@ -122,7 +129,7 @@ Default event mapping in the current preview:
 
 ## Mobile header and breadcrumbs
 
-For event pages v27 keeps `heroChrome="immersive"` and uses the menu-enabled drawer handle:
+For event pages v28 keeps `heroChrome="immersive"` and uses the menu-enabled drawer handle:
 
 - while the hero is visible on mobile, the full site header is replaced by the compact top brand tag; it is fixed over the image, but no longer reserves vertical space before the hero;
 - after the hero leaves the viewport, JS toggles `body.is-past-hero` and reveals the full fixed header with navigation;
@@ -152,13 +159,13 @@ Preview routes:
 - `/lab/hero/review/` — public noindex review route with live 390×844 iframe frames grouped by event. It compares several compositions on the same event: `5878 × {poster-billboard, poster-attached-card, compact-ticketing}`, `6322 × {photo-cinematic-sheet, photo-parallax-sheet, compact-ticketing}`, and `4913 × {photo-cinematic-sheet, poster-attached-card}`.
 - `/lab/hero/review/<case>/` — individual full-page review cases used by those iframes.
 
-Public v27 URLs:
+Public v28 URLs:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v27/__preview/>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/>
-- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/review/>
-- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v27/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v27/lab/hero/review/6322-photo-parallax-sheet/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v28/__preview/>
+- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v28/lab/hero/>
+- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v28/lab/hero/review/>
+- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v28/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v28/lab/hero/review/6322-photo-parallax-sheet/>
 
 ## Acceptance checks
 
@@ -177,4 +184,4 @@ Public v27 URLs:
 - visual-only cinematic/parallax heroes have a reduced-motion-aware parallax hydrator with constant scale, stronger vertical offset and no end-of-hero scale snap;
 - split-actions under-card share/like remain transparent icon-style controls, not pill buttons.
 
-Playwright smoke evidence for v27 is stored under `artifacts/codex/event-pages-v27/` and checks: poster/photo hero bbox and stable visual height, current-event like count/action, source count without Telegraph link, right-clustered split-actions share/like row, compact footer nav/social links, no large after-hero logo-button header, and constant-scale parallax vertical transform change on a visual-only event.
+Playwright smoke evidence for v28 is stored under `artifacts/codex/event-pages-v28/` and checks: mobile hero visual bbox `x=0,width=viewport`, fullscreen hero gallery open/next/CTA/close, flat no-radius drawer rail with plain text links, current-event local like count/action, same-browser related-card like reflection, no server write request during static-preview like flow, and the earlier footer/split-actions/parallax gates through `check:preview`.

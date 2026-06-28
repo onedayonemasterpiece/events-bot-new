@@ -56,12 +56,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-06-10 17:08:21.268304",
-      "likes_count": 9,
+      "likes_count": 11,
       "image_text_mode": "ocr_text",
-      "source_likes_count": 9,
+      "source_likes_count": 11,
       "service_likes_count": 0,
-      "source_views_count": 393,
-      "source_engagement_sources_count": 1
+      "source_views_count": 533,
+      "source_engagement_sources_count": 2
     },
     {
       "id": 5370,
@@ -108,12 +108,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-27 09:00:22.114199",
-      "likes_count": 139,
+      "likes_count": 170,
       "image_text_mode": "visual_only",
-      "source_likes_count": 139,
+      "source_likes_count": 170,
       "service_likes_count": 0,
-      "source_views_count": 6615,
-      "source_engagement_sources_count": 3
+      "source_views_count": 10080,
+      "source_engagement_sources_count": 9
     },
     {
       "id": 6093,
@@ -164,12 +164,12 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-17 00:50:53.566675",
-      "likes_count": 1,
+      "likes_count": 6,
       "image_text_mode": "ocr_text",
-      "source_likes_count": 1,
+      "source_likes_count": 6,
       "service_likes_count": 0,
-      "source_views_count": 68,
-      "source_engagement_sources_count": 1
+      "source_views_count": 170,
+      "source_engagement_sources_count": 2
     },
     {
       "id": 6322,
@@ -283,8 +283,8 @@
       "image_text_mode": "visual_only",
       "source_likes_count": 13,
       "service_likes_count": 0,
-      "source_views_count": 601,
-      "source_engagement_sources_count": 3
+      "source_views_count": 806,
+      "source_engagement_sources_count": 5
     },
     {
       "id": 4512,
@@ -335,12 +335,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-02 23:51:01.674869",
-      "likes_count": 7,
+      "likes_count": 20,
       "image_text_mode": "visual_only",
-      "source_likes_count": 7,
+      "source_likes_count": 20,
       "service_likes_count": 0,
-      "source_views_count": 114,
-      "source_engagement_sources_count": 1
+      "source_views_count": 503,
+      "source_engagement_sources_count": 4
     },
     {
       "id": 5690,
@@ -390,12 +390,12 @@
         "no_local_image"
       ],
       "updated_at": "2026-06-04 23:33:21.476164",
-      "likes_count": 0,
+      "likes_count": 5,
       "image_text_mode": "unknown",
-      "source_likes_count": 0,
+      "source_likes_count": 5,
       "service_likes_count": 0,
-      "source_views_count": 0,
-      "source_engagement_sources_count": 0
+      "source_views_count": 205,
+      "source_engagement_sources_count": 1
     },
     {
       "id": 6437,

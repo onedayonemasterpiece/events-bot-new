@@ -5,7 +5,7 @@ import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, withBase } from '../../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -37,6 +37,14 @@ const fallbackHeroComposition: HeroComposition = event.image_url
   ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
   : 'compact-ticketing';
 const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroComposition;
+const galleryCtaEvent = discoveryFeed[0];
+const galleryCta = galleryCtaEvent ? {
+  title: galleryCtaEvent.title,
+  href: eventHref(galleryCtaEvent),
+  label: 'Смотреть похожее',
+  image_url: galleryCtaEvent.image_url,
+  meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
+} : undefined;
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData} heroChrome="immersive">
   <main id="main">
@@ -44,7 +52,7 @@ const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroCo
       <div class="event-grid">
         <article class="main-col section-card section-card--hero section-card--impact-hero">
           <div class="section-card__inner section-card__inner--hero">
-            <EventHero event={event} composition={heroComposition} />
+            <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} />
           </div>
         </article>
         <div class="side-col">

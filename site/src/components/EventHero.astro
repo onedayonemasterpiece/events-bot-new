@@ -1,19 +1,35 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
-import type { PreviewEvent } from '../lib/types';
+import type { EventImageAsset, PreviewEvent } from '../lib/types';
 import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible } from '../lib/events';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
 export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
+export interface HeroGalleryCta {
+  title: string;
+  href: string;
+  label?: string;
+  image_url?: string | null;
+  meta?: string | null;
+}
 interface Props {
   event: PreviewEvent;
   modeOverride?: HeroMode;
   composition?: HeroComposition;
   headingTag?: 'h1' | 'h2' | 'h3';
+  galleryCta?: HeroGalleryCta;
 }
 
-const { event, modeOverride, composition, headingTag = 'h1' } = Astro.props;
+type HeroGalleryImage = {
+  src: string;
+  alt: string;
+  image_text_mode: EventImageAsset['image_text_mode'];
+  recommended_hero_fit?: EventImageAsset['recommended_hero_fit'];
+  recommended_object_position?: string;
+};
+
+const { event, modeOverride, composition, headingTag = 'h1', galleryCta } = Astro.props;
 const HeadingTag = headingTag;
 const derivedMode: HeroMode = event.image_url ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
@@ -52,26 +68,76 @@ function normalizeObjectPosition(value: string | null | undefined) {
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const heroObjectPosition = heroMode === 'photo-cover' ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
+
+const galleryImages = (() => {
+  const seen = new Set<string>();
+  const out: HeroGalleryImage[] = [];
+  const push = (image: Partial<HeroGalleryImage> | null | undefined) => {
+    const src = String(image?.src || '').trim();
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    out.push({
+      src,
+      alt: image?.alt || heroAlt,
+      image_text_mode: image?.image_text_mode || event.image_text_mode || 'unknown',
+      recommended_hero_fit: image?.recommended_hero_fit,
+      recommended_object_position: normalizeObjectPosition(image?.recommended_object_position) || undefined,
+    });
+  };
+  if (event.image_url) {
+    push({
+      src: event.image_url,
+      alt: heroAlt,
+      image_text_mode: event.image_text_mode,
+      recommended_object_position: heroObjectPosition || undefined,
+      recommended_hero_fit: heroMode === 'photo-cover' ? 'cover' : 'contain',
+    });
+  }
+  for (const asset of event.image_assets || []) {
+    push({
+      src: asset.src,
+      alt: asset.alt || heroAlt,
+      image_text_mode: asset.image_text_mode || 'unknown',
+      recommended_object_position: asset.recommended_object_position,
+      recommended_hero_fit: asset.recommended_hero_fit,
+    });
+  }
+  return out;
+})();
+const hasGallery = galleryImages.length > 0;
+const heroGalleryId = `hero-gallery-${event.id}`;
+const heroGalleryTitleId = `${heroGalleryId}-title`;
+const gallerySlideCount = galleryImages.length + (galleryCta ? 1 : 0);
 ---
 <section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
-  <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
-    {event.image_url && heroMode !== 'fallback-art' ? (
-      <img
-        class="event-hero__image"
-        src={event.image_url}
-        alt={heroAlt}
-        loading="eager"
-        decoding="async"
-        fetchpriority="high"
-        style={heroObjectPosition ? `object-position: ${heroObjectPosition}` : undefined}
-      />
-    ) : (
+  {hasGallery ? (
+    <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
+      {event.image_url && heroMode !== 'fallback-art' ? (
+        <img
+          class="event-hero__image"
+          src={event.image_url}
+          alt={heroAlt}
+          loading="eager"
+          decoding="async"
+          fetchpriority="high"
+          style={heroObjectPosition ? `object-position: ${heroObjectPosition}` : undefined}
+        />
+      ) : (
+        <div class="event-hero__fallback" aria-hidden="true">
+          <span>{event.event_type || 'событие'}</span>
+          <strong>{event.title}</strong>
+        </div>
+      )}
+      <span class="event-hero__gallery-hint" aria-hidden="true">Открыть фото</span>
+    </button>
+  ) : (
+    <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
       <div class="event-hero__fallback" aria-hidden="true">
         <span>{event.event_type || 'событие'}</span>
         <strong>{event.title}</strong>
       </div>
-    )}
-  </div>
+    </div>
+  )}
 
   <div class="event-hero__decision">
     {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
@@ -96,3 +162,48 @@ const ctaIsExternal = isExternalHttpUrl(ctaHref);
     {event.summary && <p class="event-hero__summary">{event.summary}</p>}
   </div>
 </section>
+{hasGallery && (
+  <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
+    <div class="hero-gallery__chrome" aria-hidden="true"></div>
+    <div class="hero-gallery__topbar">
+      <h2 id={heroGalleryTitleId}>Фото события</h2>
+      <button type="button" class="hero-gallery__close" data-hero-gallery-close aria-label="Закрыть просмотр фото">×</button>
+    </div>
+    <div class="hero-gallery__viewport">
+      <div class="hero-gallery__track" data-hero-gallery-track>
+        {galleryImages.map((image, index) => (
+          <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} aria-hidden={index === 0 ? 'false' : 'true'}>
+            <img
+              class="hero-gallery__image"
+              src={image.src}
+              alt={image.alt}
+              loading={index === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              data-image-text-mode={image.image_text_mode}
+              style={image.recommended_object_position ? `object-position: ${image.recommended_object_position}` : undefined}
+            />
+            <figcaption>{event.title}</figcaption>
+          </figure>
+        ))}
+        {galleryCta && (
+          <article class="hero-gallery__slide hero-gallery__slide--cta" data-hero-gallery-slide data-gallery-slide-kind="cta" data-gallery-index={galleryImages.length} aria-hidden="true">
+            {galleryCta.image_url && <img class="hero-gallery__cta-image" src={galleryCta.image_url} alt="" loading="lazy" decoding="async" />}
+            <div class="hero-gallery__cta-card">
+              <span>Дальше можно похожее</span>
+              <h2>{galleryCta.title}</h2>
+              {galleryCta.meta && <p>{galleryCta.meta}</p>}
+              <a class="cta-button" href={galleryCta.href}>{galleryCta.label || 'Смотреть событие'}</a>
+            </div>
+          </article>
+        )}
+      </div>
+    </div>
+    {gallerySlideCount > 1 && (
+      <>
+        <button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button>
+        <button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото">›</button>
+      </>
+    )}
+    <div class="hero-gallery__counter" data-hero-gallery-counter>{gallerySlideCount > 0 ? `1 / ${gallerySlideCount}` : ''}</div>
+  </div>
+)}
