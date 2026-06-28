@@ -14405,18 +14405,61 @@ def _event_has_ended_before_today(ev: Event, *, now: datetime | None = None) -> 
     return end_date < today
 
 
+def _event_has_trusted_publish_span(ev: Event) -> bool:
+    """Return True only for source-grounded multi-day publication windows."""
+
+    date_raw = str(getattr(ev, "date", "") or "").strip()
+    if ".." in date_raw:
+        start = parse_iso_date(date_raw.split("..", 1)[0].strip())
+        end = parse_iso_date(date_raw.split("..", 1)[1].strip())
+        return bool(start and end and end > start)
+    end_raw = str(getattr(ev, "end_date", "") or "").strip()
+    if not end_raw:
+        return False
+    if bool(getattr(ev, "end_date_is_inferred", False)):
+        return False
+    start = parse_iso_date(date_raw.split("..", 1)[0].strip()) if date_raw else None
+    end = parse_iso_date(end_raw.split("..", 1)[-1].strip())
+    return bool(end and (start is None or end > start))
+
+
+
+def _event_publication_start_deadline_ts(ev: Event) -> int | None:
+    """Latest safe VK publish timestamp for timed one-day public fanout."""
+
+    if _event_has_trusted_publish_span(ev):
+        return None
+    date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
+    event_date = parse_iso_date(date_raw)
+    if event_date is None:
+        return None
+    time_raw = str(getattr(ev, "time", "") or "").strip()
+    match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", time_raw)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return int(
+        datetime.combine(event_date, time(hour, minute), tzinfo=LOCAL_TZ).timestamp()
+    )
+
+
 def _event_start_has_passed_for_publication(
     ev: Event, *, now: datetime | None = None
 ) -> bool:
-    """Return True when a timed one-day event already started locally.
+    """Return True when a timed event already started locally.
 
     Date-only same-day events are not treated as started because there is no
-    reliable time anchor. Multi-day/long-running events are handled by
-    ``_event_has_ended_before_today`` and remain publishable until their end
-    date.
+    reliable time anchor. Explicit multi-day/long-running events remain
+    publishable until their trusted end date. Inferred ``end_date`` values are
+    not trusted as a freshness exemption for public VK/Telegram fanout: a
+    one-day timed event with a guessed future end date must fail closed after
+    start.
     """
 
-    if getattr(ev, "end_date", None):
+    if _event_has_trusted_publish_span(ev):
         return False
     date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
     event_date = parse_iso_date(date_raw)

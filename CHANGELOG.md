@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Incident / VK stale event publication after start (INC-2026-06-28)**: managed VK/TG fanout now treats inferred `end_date` values as untrusted for timed-event freshness, so late Smart Update merges for one-day events cannot publish after start. `post_to_vk` also refuses postponed reservations that would publish at or after a timed event's start deadline.
 - **Incident / Google AI Gemma 4 RPM overrun (INC-2026-06-28)**: CherryFlash eco
   partner filters now construct a Supabase-backed `GoogleAIClient` with
   `consumer=video_partner_filter` instead of falling back to an untracked direct

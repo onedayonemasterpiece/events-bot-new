@@ -3857,6 +3857,7 @@ async def post_to_vk(
     source_publish_url: str | None = None,
     source_event_id: int | None = None,
     location_marker: Mapping[str, Any] | None = None,
+    latest_publish_ts: int | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -3933,6 +3934,26 @@ async def post_to_vk(
             source_url=source_publish_url,
             event_id=source_event_id,
         )
+    if latest_publish_ts is not None:
+        now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+        if publish_date and publish_date >= int(latest_publish_ts):
+            logging.info(
+                "post_to_vk skip stale scheduled publication owner_id=%s event_id=%s publish_date=%s latest_publish_ts=%s",
+                owner_id,
+                source_event_id,
+                publish_date,
+                latest_publish_ts,
+            )
+            return None
+        if not publish_date and now_ts >= int(latest_publish_ts):
+            logging.info(
+                "post_to_vk skip stale immediate publication owner_id=%s event_id=%s now_ts=%s latest_publish_ts=%s",
+                owner_id,
+                source_event_id,
+                now_ts,
+                latest_publish_ts,
+            )
+            return None
     if publish_date:
         params_base["publish_date"] = publish_date
     for idx, actor in enumerate(actors, start=1):
@@ -6498,6 +6519,7 @@ async def sync_vk_source_post(
                 source_publish_url=publish_source_url,
                 source_event_id=int(event.id) if event.id is not None else None,
                 location_marker=location_marker,
+                latest_publish_ts=_event_publication_start_deadline_ts(event),
             )
         if url:
             logging.info("sync_vk_source_post created %s", url)

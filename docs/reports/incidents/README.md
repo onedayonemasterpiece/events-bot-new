@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-28-vk-stale-event-publication.md`
+  - Scope: managed `klgdevents` VK/TG fanout freshness, inferred end-date handling, and VK postponed slot reservation for one-day timed events.
+  - Must not regress: inferred `end_date` must not let an already-started timed event publish; a VK postponed reservation at or after the event start must be refused; stale live/postponed managed VK posts for past timed events must be deleted or blocked before publication.
 - `INC-2026-06-28-google-ai-gemma4-rpm-overrun.md`
   - Scope: Google AI LLM gateway reserve behavior, no-Supabase/local limiter fallback, and CherryFlash/video partner-filter Gemma 4 client wiring.
   - Must not regress: server-side Google AI consumers must use Supabase-backed `GoogleAIClient` with a specific consumer name; any no-Supabase fallback must fail fast through the process-local limiter instead of making unlimited direct provider calls; Gemma 4 per-key bursts must not exceed the provider `15 RPM` limit.

@@ -1643,6 +1643,105 @@ async def test_schedule_event_update_tasks_skips_same_day_started_event(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_schedule_event_update_tasks_skips_started_event_with_inferred_end_date(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    local_now = main.datetime.now(main.LOCAL_TZ)
+    started_at = (local_now - main.timedelta(hours=1)).strftime("%H:%M")
+    event = _event(
+        id=None,
+        date=local_now.date().isoformat(),
+        time=started_at,
+        end_date=(local_now.date() + main.timedelta(days=30)).isoformat(),
+        end_date_is_inferred=True,
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert main.JobTask.vk_sync not in tasks
+    assert main.JobTask.tg_event_publish not in tasks
+
+
+@pytest.mark.asyncio
+async def test_schedule_event_update_tasks_allows_started_event_with_explicit_end_date(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    local_now = main.datetime.now(main.LOCAL_TZ)
+    started_at = (local_now - main.timedelta(hours=1)).strftime("%H:%M")
+    event = _event(
+        id=None,
+        date=local_now.date().isoformat(),
+        time=started_at,
+        end_date=(local_now.date() + main.timedelta(days=30)).isoformat(),
+        end_date_is_inferred=False,
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert main.JobTask.vk_sync in tasks
+    assert main.JobTask.tg_event_publish in tasks
+
+
+@pytest.mark.asyncio
+async def test_post_to_vk_skips_reserved_slot_after_start_deadline(monkeypatch):
+    async def fake_reserve(*args, **kwargs):
+        return 200
+
+    async def fail_vk_api(*args, **kwargs):  # pragma: no cover - must not be called
+        raise AssertionError("wall.post should not be called for stale scheduled slot")
+
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", True)
+    monkeypatch.setattr(
+        main,
+        "choose_vk_actor",
+        lambda owner_id, permission: [
+            SimpleNamespace(kind="group", token="token", label="test")
+        ],
+    )
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+    monkeypatch.setattr(main, "_vk_api", fail_vk_api)
+
+    url = await main.post_to_vk(
+        "231920894",
+        "message",
+        source_event_id=6346,
+        latest_publish_ts=100,
+    )
+
+    assert url is None
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_skips_ticket_giveaway_when_alternative_exists(
     tmp_path,
     monkeypatch,
