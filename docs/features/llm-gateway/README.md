@@ -29,6 +29,11 @@
     * при transient сетевых сбоях (`SSL handshake timeout`, `server disconnected`, `EOF`) reserve RPC сначала делает короткие retry и только затем переключается в local fallback:
       - `GOOGLE_AI_RESERVE_RPC_RETRY_ATTEMPTS` (по умолчанию `2`);
       - `GOOGLE_AI_RESERVE_RPC_RETRY_BASE_DELAY_MS` (по умолчанию `350` мс, exponential backoff + jitter).
+    * если клиент создан без Supabase (`supabase_client=None`), это больше не
+      считается unlimited local-dev режимом: по умолчанию включается тот же
+      process-local fail-fast limiter. Его дефолтный RPM равен `15`, чтобы
+      случайный server-side fallback не пробивал Gemma 4 free-tier лимит; для
+      локальных probes можно явно переопределить `GOOGLE_AI_LOCAL_RPM`.
 *   **Совместимость с legacy Supabase-проектами (без миграций):**
     * если отсутствует `google_ai_finalize`, клиент автоматически переключается на `finalize_google_ai_usage`;
     * fallback на legacy finalize применяется не только для первого запроса, а для всех следующих в процессе;
@@ -137,6 +142,9 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     * Для provider-side `429` это тоже правило: ждать/деферить должен вызывающий workflow (`event_parse`, `vk_auto_queue`, Smart Update), а не сам `GoogleAIClient`.
 *   **Structured Logging**: Все вызовы логируются в формате JSON Lines для анализа.
 *   **Operational visibility**: bypass reserve логируется отдельным событием `google_ai.reserve_fallback_no_rpc` — это сигнал, что RPC-схему нужно починить.
+    * `google_ai.reserve_ok` в production не должен иметь `api_key_id=null` /
+      `used_after=null`, кроме явно локальных probes; это regression signal для
+      `INC-2026-06-28-google-ai-gemma4-rpm-overrun`.
 *   **Incident alerts**: критические сбои LLM отправляются в админ-чат как инцидент (`notify_llm_incident`).
     * ENV `GOOGLE_AI_INCIDENT_NOTIFICATIONS=0` — выключить инцидент-алерты.
     * ENV `GOOGLE_AI_INCIDENT_COOLDOWN_SECONDS` — антиспам/дедуп уведомлений (по умолчанию 900 сек).

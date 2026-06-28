@@ -1805,19 +1805,25 @@ class VideoAnnounceScenario:
 
     def _gemma_client_for_partner_filters(self):
         try:
-            from google_ai import get_google_ai_client  # type: ignore
+            from google_ai import GoogleAIClient, SecretsProvider  # type: ignore
+            from main import get_supabase_client, notify_llm_incident
 
-            return get_google_ai_client()
-        except Exception:
-            try:
-                from google_ai.client import GoogleAIClient  # type: ignore
-
-                return GoogleAIClient()
-            except Exception:
-                logger.warning(
-                    "video_announce.partner_tracks: GoogleAI client unavailable; eco filter will mark events manual_review"
-                )
-                return None
+            return GoogleAIClient(
+                supabase_client=get_supabase_client(),
+                secrets_provider=SecretsProvider(),
+                consumer="video_partner_filter",
+                incident_notifier=notify_llm_incident,
+                reserve_overflow_key_envs=os.getenv(
+                    "VIDEO_PARTNER_FILTER_RESERVE_OVERFLOW_KEY_ENVS",
+                    os.getenv("GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS", ""),
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "video_announce.partner_tracks: GoogleAI client unavailable; eco filter will mark events manual_review: %s",
+                exc,
+            )
+            return None
 
     def _build_event_filter_for_partner_track(self, partner_track: PartnerTrack):
         if partner_track.geo_filter_id == "kaliningrad_region_east":

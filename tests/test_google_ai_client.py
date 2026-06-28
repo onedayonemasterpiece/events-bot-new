@@ -212,6 +212,37 @@ def test_requested_gemma_model_stays_first_in_model_chain():
 
 
 @pytest.mark.asyncio
+async def test_no_supabase_uses_local_rpm_limiter_by_default(monkeypatch):
+    monkeypatch.delenv("GOOGLE_AI_LOCAL_RPM", raising=False)
+    GoogleAIClient._local_limiter_minute_bucket = None
+    GoogleAIClient._local_limiter_used_rpm = 0
+    GoogleAIClient._local_limiter_used_tpm = 0
+    GoogleAIClient._local_limiter_day_bucket = None
+    GoogleAIClient._local_limiter_used_rpd = 0
+    client = GoogleAIClient(supabase_client=None, consumer="video_partner_filter")
+    ctx = RequestContext(
+        request_uid="req-local-rpm",
+        consumer="video_partner_filter",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="gemma-4-31b-it",
+        reserved_tpm=100,
+    )
+
+    ok_reserves = [
+        await client._reserve(ctx, attempt_no=i + 1, candidate_key_ids=None)
+        for i in range(15)
+    ]
+    blocked = await client._reserve(ctx, attempt_no=16, candidate_key_ids=None)
+
+    assert all(reserve.ok for reserve in ok_reserves)
+    assert ok_reserves[-1].key_alias == "local-fallback-no-supabase"
+    assert ok_reserves[-1].used_after["rpm"] == 15
+    assert blocked.ok is False
+    assert blocked.blocked_reason == "rpm"
+
+
+@pytest.mark.asyncio
 async def test_multimodal_prompt_passthrough_and_key3_alias(monkeypatch: pytest.MonkeyPatch):
     response = SimpleNamespace(text='{"ok":true}', usage_metadata={})
     fake_genai = _FakeGenAI(response)

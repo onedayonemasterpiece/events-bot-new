@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Incident / Google AI Gemma 4 RPM overrun (INC-2026-06-28)**: CherryFlash eco
+  partner filters now construct a Supabase-backed `GoogleAIClient` with
+  `consumer=video_partner_filter` instead of falling back to an untracked direct
+  `GOOGLE_API_KEY` client. No-Supabase Google AI clients now use the
+  process-local fail-fast limiter by default, with a conservative `15 RPM`
+  fallback cap to avoid provider-side Gemma 4 RPM overruns.
 - **Incident / VK past-post prune starvation (INC-2026-06-27)**: `vk_post_prune`
   now prioritizes the freshest ended events before applying `VK_POST_PRUNE_LIMIT`,
   so old missing/repost-protected managed VK URLs cannot starve newly-past live

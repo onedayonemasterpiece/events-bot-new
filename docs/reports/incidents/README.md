@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-28-google-ai-gemma4-rpm-overrun.md`
+  - Scope: Google AI LLM gateway reserve behavior, no-Supabase/local limiter fallback, and CherryFlash/video partner-filter Gemma 4 client wiring.
+  - Must not regress: server-side Google AI consumers must use Supabase-backed `GoogleAIClient` with a specific consumer name; any no-Supabase fallback must fail fast through the process-local limiter instead of making unlimited direct provider calls; Gemma 4 per-key bursts must not exceed the provider `15 RPM` limit.
 - `INC-2026-06-27-telegraph-footer-backfill-content-loss.md`
   - Scope: Telegraph event-page bulk maintenance/backfills, python-telegraph `get_page(..., return_html=True)` response handling, and social footer rollout.
   - Must not regress: existing Telegraph page body must never be treated as empty because HTML is in `content` instead of `content_html`; bulk footer/nav/image fixes require a canary plus public content-preservation smoke before editing all active/future pages.

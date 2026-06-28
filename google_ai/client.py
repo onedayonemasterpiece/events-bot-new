@@ -938,11 +938,22 @@ class GoogleAIClient:
     ) -> ReserveResult:
         """Reserve rate limit slot via Supabase RPC."""
         if not self.supabase:
-            # No Supabase = no rate limiting (for local dev)
-            logger.warning("No Supabase client, skipping rate limit reservation")
+            # No Supabase still must not become an unlimited production bypass:
+            # use the same process-local fail-fast limiter as the RPC-missing
+            # fallback unless a local caller explicitly disables it.
+            logger.warning("No Supabase client, using local rate limit reservation")
+            if self.allow_local_limiter_fallback:
+                return await self._local_reserve(
+                    ctx,
+                    attempt_no=attempt_no,
+                    key_alias="local-fallback-no-supabase",
+                    blocked_reason="supabase_unavailable",
+                )
             return ReserveResult(
                 ok=True,
                 env_var_name=self.default_env_var_name,
+                key_alias="reserve-fallback-no-supabase",
+                blocked_reason="supabase_unavailable",
             )
         was_cached_missing = self._reserve_rpc_missing
         if was_cached_missing:
@@ -1283,7 +1294,7 @@ class GoogleAIClient:
         blocked_reason: str,
     ) -> ReserveResult:
         """Process-local limiter used when Supabase reserve RPC is missing/flaky."""
-        rpm_limit = self._read_local_limit(self.LOCAL_RPM_ENV, 20)
+        rpm_limit = self._read_local_limit(self.LOCAL_RPM_ENV, 15)
         tpm_limit = self._read_local_limit(self.LOCAL_TPM_ENV, 12000)
         rpd_limit = self._read_local_limit(self.LOCAL_RPD_ENV, 5000)
 
