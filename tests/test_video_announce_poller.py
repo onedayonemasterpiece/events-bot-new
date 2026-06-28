@@ -257,6 +257,127 @@ async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
 
 
 @pytest.mark.asyncio
+async def test_publish_only_ledgers_do_not_resume_already_published_session(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_dataset="zigomaro/video-afisha-session-777",
+            test_chat_id=123,
+            video_url="crumple_video_final.mp4",
+            published_at=datetime.now(timezone.utc) - timedelta(minutes=90),
+            finished_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    now = datetime.now(timezone.utc).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at
+            )
+            VALUES(?, ?, 'crumple_story_publish_only', 'CrumpleStoryPublishOnly',
+                   'zigomaro/crumple-story-publish-only',
+                   'zigomaro/crumple-story-publish-session-777',
+                   'created', 'created', 'token', '{}', ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}:publish-only:1782671944",
+                session_id,
+                now,
+                now,
+            ),
+        )
+        await conn.commit()
+
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("publish-only ledger must not resume the source video poller")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+
+    assert await poller_module._live_video_ledger_session_ids(db) == set()
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 0
+    assert bot.messages == []
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+
+
+@pytest.mark.asyncio
+async def test_live_ledger_does_not_resume_done_session(monkeypatch, tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.DONE,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_dataset="zigomaro/video-afisha-session-777",
+            test_chat_id=123,
+            video_url="crumple_video_final.mp4",
+            finished_at=datetime.now(timezone.utc),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    heartbeat_at = datetime.now(timezone.utc).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at,
+                last_heartbeat_at
+            )
+            VALUES(?, ?, 'crumple_video', 'CrumpleVideo', ?, ?, 'alive', 'publish',
+                   'token', '{}', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                "zigomaro/crumple-video",
+                "zigomaro/video-afisha-session-777",
+                heartbeat_at,
+                heartbeat_at,
+                heartbeat_at,
+            ),
+        )
+        await conn.commit()
+
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("terminal source session must not resume even with a live ledger")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+
+    assert await poller_module._live_video_ledger_session_ids(db) == {session_id}
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 0
+    assert bot.messages == []
+
+
+@pytest.mark.asyncio
 async def test_kenigsberg_poller_clears_remote_telegram_registry(monkeypatch):
     removed: list[tuple[str, str]] = []
 

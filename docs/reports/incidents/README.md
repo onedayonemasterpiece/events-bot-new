@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-28-crumple-video-publish-only-storm.md`
+  - Scope: CrumpleVideo/CherryFlash source-session resume recovery, Kaggle status ledger liveness, and publish-only compensation ledgers.
+  - Must not regress: `videoannounce:<id>:publish-only:*` ledger rows must never resurrect the source render poller or repeat test/public Telegram mp4 delivery; terminal/published video sessions must not resume from fresh ledgers, while genuinely false-failed source sessions with fresh source heartbeats remain recoverable.
 - `INC-2026-06-28-opening-exhibition-range-duplicate.md`
   - Scope: Telegram Monitoring / Smart Update exhibition-opening semantics, inferred exhibition `end_date`, temporal location fragments, and duplicate active exhibition inventory.
   - Must not regress: opening-only exhibition titles without an explicit source run window must remain atomic and must not receive `date + 1 month`; a real exhibition range must be represented by the exhibition title itself or source-grounded `end_date`; active inventory must not retain duplicate opening/exhibition rows for the same real `Обход 2.0`-style event.

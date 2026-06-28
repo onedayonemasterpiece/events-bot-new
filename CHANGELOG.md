@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Incident / CrumpleVideo publish-only storm (INC-2026-06-28)**: publish-only Kaggle recovery ledgers are no longer treated as live source-video sessions during restart recovery, and already terminal/published video sessions cannot be resumed into repeated test-channel mp4 delivery.
 - **Incident / opening exhibition inferred range duplicate (INC-2026-06-28)**: Smart Update no longer applies the one-month exhibition fallback to opening-only titles such as `Открытие выставки...` when the source provides no explicit run window, preventing atomic openings from becoming month-long active cards.
 - **Incident / VK stale event publication after start (INC-2026-06-28)**: managed VK/TG fanout now treats inferred `end_date` values as untrusted for timed-event freshness, so late Smart Update merges for one-day events cannot publish after start. `post_to_vk` also refuses postponed reservations that would publish at or after a timed event's start deadline.
 - **Incident / Google AI Gemma 4 RPM overrun (INC-2026-06-28)**: CherryFlash eco

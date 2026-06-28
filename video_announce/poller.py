@@ -234,7 +234,8 @@ async def _live_video_ledger_session_ids(
         async with db.raw_conn() as conn:
             cur = await conn.execute(
                 """
-                SELECT session_id, status, last_heartbeat_at, updated_at, terminal_at
+                SELECT run_id, session_id, kind, notebook, status,
+                       last_heartbeat_at, updated_at, terminal_at
                 FROM kaggle_run_ledger
                 WHERE run_id LIKE 'videoannounce:%'
                   AND session_id IS NOT NULL
@@ -247,7 +248,21 @@ async def _live_video_ledger_session_ids(
         return set()
 
     live: set[int] = set()
-    for session_id, status_raw, heartbeat_raw, updated_raw, terminal_raw in rows:
+    for (
+        run_id_raw,
+        session_id,
+        kind_raw,
+        notebook_raw,
+        status_raw,
+        heartbeat_raw,
+        updated_raw,
+        terminal_raw,
+    ) in rows:
+        run_id = str(run_id_raw or "").strip()
+        kind = str(kind_raw or "").strip().casefold()
+        notebook = str(notebook_raw or "").strip().casefold()
+        if ":publish-only:" in run_id or kind.endswith("publish_only") or "publishonly" in notebook:
+            continue
         status = str(status_raw or "").strip().casefold()
         if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
             continue
@@ -2296,6 +2311,10 @@ async def run_kernel_poller(
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
     live_ledger_session_ids = await _live_video_ledger_session_ids(db)
+    resumable_live_statuses = {
+        VideoAnnounceSessionStatus.RENDERING,
+        VideoAnnounceSessionStatus.FAILED,
+    }
     async with db.get_session() as session:
         query = select(VideoAnnounceSession).where(
             VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
@@ -2303,7 +2322,10 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
         if live_ledger_session_ids:
             query = select(VideoAnnounceSession).where(
                 (VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING)
-                | (VideoAnnounceSession.id.in_(live_ledger_session_ids))
+                | (
+                    VideoAnnounceSession.id.in_(live_ledger_session_ids)
+                    & VideoAnnounceSession.status.in_(resumable_live_statuses)
+                )
             )
         res = await session.execute(query)
         sessions = res.scalars().all()

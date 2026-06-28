@@ -115,6 +115,11 @@ The framework must not silently suppress or deduplicate publication attempts.
 Any future "skip duplicate publication" policy is a separate product decision
 and must be approved explicitly.
 
+Publish-only compensation runs such as `videoannounce:<id>:publish-only:*` share
+source session ids for traceability, but they are not source render liveness
+evidence. Restart recovery must not use those ledgers to resurrect the source
+video poller or repeat source mp4/test-channel delivery.
+
 Critical resources such as Kaggle Telegram auth sessions must be leased before
 use. The canonical resource key is now based on the actual auth source, for
 example `telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY` or
