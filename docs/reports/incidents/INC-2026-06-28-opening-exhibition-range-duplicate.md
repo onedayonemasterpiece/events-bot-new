@@ -83,7 +83,7 @@ Production had an active duplicate event `5690` titled `Открытие выс�
 ## Immediate Mitigation
 
 - Canonical event chosen: `5694` (`ОБХОД 2.0`, `2026-06-05 19:00` to `2026-06-28`, `Каштановая аллея 1а`).
-- Duplicate event repaired: `5690` was backed up, set `lifecycle_status='cancelled'`, `silent=1`, cleared publication hashes that could fan it out, and its paused `vk_sync` row was completed as duplicate-cancelled.
+- Duplicate event repaired: `5690` was backed up (`codex_backup_opening_exhibition_range_20260628_1727_event`, `codex_backup_opening_exhibition_range_20260628_1727_joboutbox`), set `lifecycle_status='cancelled'`, `silent=1`, cleared publication hashes that could fan it out, and its paused `vk_sync` row was completed as duplicate-cancelled.
 - Duplicate Telegraph page rebuilt so it shows cancelled status instead of an active month-long opening.
 - No mass rewrite of old exhibition pages was run.
 
@@ -100,11 +100,19 @@ Production had an active duplicate event `5690` titled `Открытие выс�
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `bd1693477a878fdf5a804d114ac07e7a7f3daef5` (reachable from `origin/main`)
+- deploy path: clean linked worktree `/home/dev/projects/events-bot-new-worktrees/inc-exam-obhod-20260628`, branch `hotfix/inc-exam-obhod-20260628`, pushed to `origin/main`, `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KW7MH11QCZWR4FM8FTV8JZC4`, machine `683961db016e28` version `1514`.
 - regression checks:
   - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with-requirements requirements.txt python -m pytest -q -p pytest_asyncio.plugin tests/test_smart_event_update_non_event_guards.py::test_opening_only_exhibition_title_does_not_get_default_month_range tests/test_smart_event_update_non_event_guards.py::test_dated_exhibition_with_curator_excursions_is_not_course_promo tests/test_smart_event_update_non_event_guards.py::test_grounded_exhibition_date_corrects_inferred_legacy_range` — passed locally (`3 passed`).
-- post-deploy verification: pending
+  - `python3 -m py_compile smart_event_update.py tests/test_smart_event_update_non_event_guards.py` — passed locally.
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with-requirements requirements.txt python -m pytest -q -p pytest_asyncio.plugin tests/test_smart_event_update_non_event_guards.py tests/test_smart_event_update_duplicate_guards.py::test_smart_update_rejects_temporal_location_candidate` — passed locally (`26 passed`).
+- production repair verification:
+  - `PRAGMA quick_check` before/after repair returned `ok`.
+  - `event_id=5690` is `lifecycle_status='cancelled'`, `silent=1`; `event_id=5694` remains the only active `Обход 2.0` row.
+  - Public duplicate Telegraph page `https://telegra.ph/Otkrytie-vystavki-ehkzamena-Obhod-20-06-04` returns HTTP 200 and displays `❌ Отменено`; canonical page `https://telegra.ph/OBHOD-20-06-04` returns HTTP 200 with full content and `Источников:`.
+  - Active/current/future audit for `title like '%Открыти%выстав%' and end_date_is_inferred=1` returned `[]`.
+  - Runtime file mirror checked: enabled at `/data/runtime_logs/events-bot.log*`, original 2026-06-04 import logs expired, recent rebuild lines for `5690/5694` found.
+- post-deploy verification: Fly status machine `683961db016e28` version `1514` has `1 total, 1 passing`; in-machine `/healthz` returned HTTP 200 with `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`.
 
 ## Prevention
 
