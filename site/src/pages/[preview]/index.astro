@@ -8,8 +8,6 @@ export function getStaticPaths() {
 }
 
 const events = getEvents();
-const variantA = events.find((event) => event.id === 5878);
-const variantB = events.find((event) => event.id === 6322) || events.find((event) => event.id === 4913);
 const heroPoster = events.find((event) => event.id === 5878);
 const heroAttached = events.find((event) => event.id === 4913);
 const heroPhoto = events.find((event) => event.id === 6322);
@@ -72,23 +70,15 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <p class="muted-note">Сравнение привязано к разным event pages: можно открыть каждое событие и почувствовать первый экран, а не смотреть технический image-mode.</p>
           </div>
 
-          <div class="preview-ab" aria-label="A/B сравнение карточек ленты">
-            <h2>UI A/B для ленты события</h2>
+          <div class="preview-ab" aria-label="Решение по карточкам ленты">
+            <h2>Карточки ленты</h2>
             <div class="preview-ab__grid">
-              {variantA && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${variantA.slug}/`)}>
-                  <strong>A · одна строка поверх карточки</strong>
-                  <span>Контроль: лайк справа снизу, поделиться по центру, «не интересно» слева внутри карточки.</span>
-                </a>
-              )}
-              {variantB && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${variantB.slug}/`)}>
-                  <strong>B · две строки действий</strong>
-                  <span>Тест: внутри карточки — календарь/«не интересно», под карточкой справа — «Поделиться» и крупный лайк.</span>
-                </a>
-              )}
+              <a class="preview-ab__item" href={withBase('/sobytiya/pesni-sssr-svetlogorsk-5878/')}>
+                <strong>Baseline · действия под карточкой</strong>
+                <span>Для обычных страниц принят split-actions: внутри карточки остаются вторичные календарь/«не интересно», а под карточкой — текстовое «Поделиться» и лайк справа.</span>
+              </a>
             </div>
-            <p class="muted-note">Сравнение намеренно привязано к разным страницам событий: в каждой ленте все карточки используют один вариант, чтобы почувствовать поведение, а не смотреть смешанный макет.</p>
+            <p class="muted-note">Исторический overlay-вариант больше не используется на обычных event pages: он перегружал нижнюю часть карточки и начинал ленту со служебных действий.</p>
           </div>
         </div>
       </section>
@@ -116,7 +106,7 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <li>«Другие даты» для пары 6437/6438;</li>
             <li>единая статическая лента «Смотрите дальше» без API и без отдельного пользовательского блока для диверсификации.</li>
             <li>явные реакции: лайк с локальным увеличением счётчика, отмена лайка, “не интересно” и компактный локальный журнал явных действий для будущего Supabase ingest.</li>
-            <li>A/B UI: страница 5878 использует вариант A с одной строкой действий поверх карточки; страница 6322 использует вариант B с двумя строками и лайком справа под карточкой.</li>
+            <li>Карточки ленты используют baseline split-actions: «Поделиться» и лайк вынесены под карточку, календарь доступен для calendar-eligible событий.</li>
             <li>минимальные листинги /segodnya/ и /vyhodnye/.</li>
           </ul>
         </div>

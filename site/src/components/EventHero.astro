@@ -40,6 +40,12 @@ const tint = (() => {
 })();
 const heroClass = ['event-hero', `event-hero--${heroMode}`, `event-hero--${heroComposition}`].join(' ');
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
+function normalizeObjectPosition(value: string | null | undefined) {
+  const raw = (value || '').trim();
+  return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
+}
+const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
+const heroObjectPosition = heroMode === 'photo-cover' ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
 ---
 <section class={heroClass} data-event-hero data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
@@ -52,6 +58,7 @@ const ctaIsExternal = isExternalHttpUrl(ctaHref);
         loading="eager"
         decoding="async"
         fetchpriority="high"
+        style={heroObjectPosition ? `object-position: ${heroObjectPosition}` : undefined}
       />
     ) : (
       <div class="event-hero__fallback" aria-hidden="true">

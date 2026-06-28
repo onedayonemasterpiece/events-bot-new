@@ -1,5 +1,40 @@
 export type TicketKind = 'ticket' | 'registration' | 'free' | 'phone' | 'source' | 'status';
 
+export interface ImageBox {
+  /** Normalized 0..1 left coordinate. */
+  x: number;
+  /** Normalized 0..1 top coordinate. */
+  y: number;
+  /** Normalized 0..1 width. */
+  w: number;
+  /** Normalized 0..1 height. */
+  h: number;
+  confidence: number;
+}
+
+export interface ImageFocalPoint {
+  /** Normalized 0..1 x coordinate recommended for object-position. */
+  x: number;
+  /** Normalized 0..1 y coordinate recommended for object-position. */
+  y: number;
+}
+
+export interface EventImageAsset {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+  image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
+  image_kind?: 'poster' | 'photo' | 'mixed' | 'fallback';
+  ocr_boxes?: ImageBox[];
+  face_boxes?: ImageBox[];
+  saliency_boxes?: ImageBox[];
+  focal_point?: ImageFocalPoint;
+  recommended_object_position?: string;
+  recommended_hero_fit?: 'contain' | 'cover';
+  safe_crop?: boolean;
+}
+
 export interface TicketInfo {
   kind: TicketKind;
   label: string;
@@ -37,6 +72,13 @@ export interface PreviewEvent {
   image_url: string | null;
   image_alt: string;
   image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
+  /** Future multi-image/face-aware export contract; first item should match image_url when present. */
+  image_assets?: EventImageAsset[];
+  face_boxes?: ImageBox[];
+  ocr_boxes?: ImageBox[];
+  focal_point?: ImageFocalPoint;
+  image_object_position?: string | null;
+  safe_crop?: boolean;
   summary: string;
   meta_description: string;
   description_html: string;

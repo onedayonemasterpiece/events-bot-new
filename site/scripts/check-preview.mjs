@@ -50,8 +50,9 @@ if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdr
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/event-card__media-shell--preserve[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('OCR-safe card media must use natural image ratio, not contain over a fixed frame');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
-if (controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('Variant A control feed unexpectedly shows calendar buttons');
-if (!controlVisibleHtml.includes('data-feed-card-variant="overlay-controls"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Control page must expose A/B variant A overlay-controls cards');
+if (!controlVisibleHtml.includes('data-feed-card-variant="split-actions"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('Control event page must use split-actions baseline cards');
+if (controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Overlay-controls cards must not appear on normal event pages');
+if (!controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('Split-actions baseline must expose feed calendar buttons for eligible candidates');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
@@ -60,7 +61,8 @@ if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Er
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
 if (!controlHtml.includes('data-event-hero') || !controlHtml.includes('data-hero-mode="poster-stage"') || !controlHtml.includes('data-hero-composition="poster-billboard"') || !controlHtml.includes('data-hero-image-text-mode="ocr_text"')) throw new Error('Control event must render OCR-safe poster-billboard decision hero');
-if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile sliding discovery navigation and after-hero header transition');
+if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
+if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
 if (controlVisibleHtml.indexOf('data-event-hero') > controlVisibleHtml.indexOf('crumbs--after-hero')) throw new Error('Hero must render before mobile/after-hero breadcrumbs in event HTML');
@@ -71,6 +73,10 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
 const jsonLdItems = [...controlHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1]));
 if (!jsonLdItems.some((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'))) throw new Error('Control page must contain parseable Event-class JSON-LD');
 if (!jsonLdItems.some((item) => item['@type'] === 'BreadcrumbList')) throw new Error('Control page must contain parseable BreadcrumbList JSON-LD');
+const eventJsonLd = jsonLdItems.find((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'));
+if (eventJsonLd?.offers?.validFrom && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(eventJsonLd.offers.validFrom)) {
+  throw new Error(`Event JSON-LD offer validFrom must be ISO 8601 with timezone, got: ${eventJsonLd.offers.validFrom}`);
+}
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
@@ -96,7 +102,7 @@ for (const cls of ['site-footer__social', 'social-icon--telegram', 'social-icon-
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
 if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');
-if (!controlHtml.includes('Preview A/B:')) throw new Error('Control page misses visible A/B preview variant note');
+if (controlVisibleHtml.includes('Preview A/B:') || controlVisibleHtml.includes('В HTML сразу предзагружены')) throw new Error('Normal event page must not expose preview/A-B/debug discovery copy');
 if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
 if (controlHtml.includes('Уточнить регистрацию')) throw new Error('Ambiguous registration CTA leaked');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
@@ -125,14 +131,14 @@ for (const item of discoveryJson.related_static) {
 }
 
 const splitControl = eventsData.events.find((event) => event.id === 6322);
-if (!splitControl) throw new Error('Missing split-actions A/B event 6322');
+if (!splitControl) throw new Error('Missing split-actions regression event 6322');
 const splitHtml = readFileSync(join(root, `sobytiya/${splitControl.slug}/index.html`), 'utf8');
 const splitVisibleHtml = stripGeneratedCode(splitHtml);
-if (!splitVisibleHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('A/B variant B page must render split-actions cards');
-if (!splitVisibleHtml.includes('event-card__utility-row')) throw new Error('A/B variant B page misses utility row inside cards');
-if (!splitVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('A/B variant B page misses under-card right-aligned action row');
-if (!splitVisibleHtml.includes('feedback-button--calendar')) throw new Error('A/B variant B page must expose feed calendar buttons for one-day eligible cards');
-if (!splitHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('A/B variant B page must keep variant marker for hydrated JSON cards');
+if (!splitVisibleHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('Regression event 6322 must render split-actions cards');
+if (!splitVisibleHtml.includes('event-card__utility-row')) throw new Error('Split-actions page misses utility row inside cards');
+if (!splitVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('Split-actions page misses under-card action row');
+if (!splitVisibleHtml.includes('feedback-button--calendar')) throw new Error('Split-actions page must expose feed calendar buttons for one-day eligible cards');
+if (!splitHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('Split-actions page must keep variant marker for hydrated JSON cards');
 
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
@@ -170,12 +176,14 @@ if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/i
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
 if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
-if (!/mobile-discovery-menu__summary\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette discovery tag and transition to full header after hero');
-if (!/mobile-discovery-menu__panel\{[^}]*position:\s*fixed[^}]*width:\s*100vw[^}]*transform:\s*translate3d\(0,\s*-112%/iu.test(css) || !/(mobile-discovery-menu\[open\] \.mobile-discovery-menu__panel\{[^}]*transform:\s*(translate3d\(0,\s*0,\s*0\)|translateZ\(0\)))/iu.test(css) || !/@starting-style/iu.test(css)) throw new Error('Mobile discovery navigation must slide down as a full-width top row, not appear as a floating popover');
+if (!/mobile-discovery-menu__summary\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette discovery drawer handle and stable after-hero state');
+if (!/mobile-discovery-menu\{[^}]*--drawer-rail-h[^}]*--drawer-handle-top:\s*max\(0px,[^}]*position:\s*fixed/iu.test(css) || !/mobile-discovery-menu\[open\] \.mobile-discovery-menu__summary\{[^}]*transform:\s*translate3d\(0,\s*var\(--drawer-rail-h\),\s*0\)/iu.test(css) || !/mobile-discovery-menu__panel\{[^}]*position:\s*fixed[^}]*width:\s*100vw[^}]*transform:\s*translate3d\(0,\s*-105%/iu.test(css) || !/(mobile-discovery-menu\[open\] \.mobile-discovery-menu__panel\{[^}]*transform:\s*(translate3d\(0,\s*0,\s*0\)|translateZ\(0\)))/iu.test(css) || !/@starting-style/iu.test(css)) throw new Error('Mobile discovery navigation must be a drawer: rail slides down, handle moves down with it and handle top is clamped to the viewport');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
+if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*space-between/iu.test(css)) throw new Error('Split-actions under-card row must separate share text and right-thumb like');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');
+if (!/event-card--split-actions \.event-card__feedback \.feedback-button--share \.share-label\{[^}]*position:\s*static/iu.test(css)) throw new Error('Split-actions share must keep visible text under the card');
 if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual-only cover media must use vertical 4:5 ratio');
 if (/aspect-ratio:3\/4/u.test(css.replace(/\s+/g, ''))) throw new Error('Old 3:4 visual-only ratio leaked into CSS');
 

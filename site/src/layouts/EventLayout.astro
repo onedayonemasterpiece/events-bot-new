@@ -130,15 +130,15 @@ const FOOTER_SOCIAL_LINKS = [
       .mobile-discovery-menu__summary { list-style: none; cursor: pointer; }
       .mobile-discovery-menu__summary::-webkit-details-marker { display: none; }
       .mobile-discovery-menu__panel { display: block; }
-      .mobile-discovery-menu__nav { display: grid; gap: 0.7rem; }
-      .mobile-discovery-menu__prompt { color: var(--primary-strong); font-size: 0.78rem; font-weight: 900; letter-spacing: 0.095em; text-transform: uppercase; }
-      .mobile-discovery-menu__links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+      .mobile-discovery-menu__nav { display: block; }
+      .mobile-discovery-menu__links { display: flex; gap: 0.5rem; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
       .mobile-discovery-menu__links a {
         min-height: 44px;
+        flex: 1 0 max-content;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 0.52rem 0.68rem;
+        padding: 0.52rem 0.78rem;
         border-radius: 999px;
         border: 1px solid rgba(121, 48, 20, 0.16);
         background: #fff7eb;
@@ -339,11 +339,11 @@ const FOOTER_SOCIAL_LINKS = [
       .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: space-between; gap: 0.42rem; padding: 0 0.78rem 0.78rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
       .event-card--split-actions .event-card__utility-row .feedback-button { min-height: 44px; box-shadow: none; }
       .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: auto; color: rgba(255,255,255,0.72); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.13); font-size: 0.78rem; }
-      .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
+      .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: space-between; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
       .event-card--split-actions .event-card__feedback .feedback-button { min-width: 44px; min-height: 44px; padding: 0 0.28rem; color: rgba(58,48,40,0.70); background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px; }
       .event-card--split-actions .event-card__feedback .feedback-button:hover { color: #2b211a; background: rgba(121,48,20,0.07); }
       .event-card--split-actions .event-card__feedback .feedback-button--share { min-width: 44px; }
-      .event-card--split-actions .event-card__feedback .feedback-button--share .share-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .event-card--split-actions .event-card__feedback .feedback-button--share .share-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: nowrap; }
       .event-card--split-actions .event-card__feedback .feedback-button--like { color: #c93434; min-width: 44px; font-size: 0.98rem; }
       .event-card--split-actions .event-card__feedback .feedback-button--like[aria-pressed="true"] { color: #c93434; background: rgba(201,52,52,0.10); border-color: transparent; }
       .event-card--split-actions.is-share-prompt .feedback-button--share { color: #2b211a; background: rgba(121,48,20,0.08); }
@@ -472,28 +472,45 @@ const FOOTER_SOCIAL_LINKS = [
         body.hero-chrome-immersive::before { opacity: 0; }
         .brand--desktop { display: none; }
         .mobile-discovery-menu {
-          position: relative;
+          --drawer-rail-h: 4.45rem;
+          --drawer-handle-top: max(0px, calc(-1.15rem + env(safe-area-inset-top)));
+          --drawer-handle-left: max(0.85rem, env(safe-area-inset-left));
+          position: fixed;
+          inset: 0 0 auto 0;
+          z-index: 28;
           display: block;
-          pointer-events: auto;
+          height: calc(var(--drawer-rail-h) + 5.6rem + env(safe-area-inset-top));
+          color: #fff;
+          pointer-events: none;
         }
         .mobile-discovery-menu__summary {
-          position: relative;
+          position: absolute;
+          left: var(--drawer-handle-left);
+          top: var(--drawer-handle-top);
           z-index: 2;
-          min-height: 44px;
+          width: 7.7rem;
+          min-height: 5.55rem;
           display: inline-flex;
           align-items: center;
+          justify-content: end;
           gap: 0.42rem;
-          padding: 0.52rem 0.84rem;
+          padding: 1.45rem 0.76rem 0.58rem;
           border: 1px solid rgba(255,255,255,0.14);
-          border-radius: 999px;
+          border-radius: 0 0 10px 10px;
           background: linear-gradient(160deg, #793014 0%, #a54821 100%);
           color: #fffdf8;
-          box-shadow: 0 14px 30px rgba(121, 48, 20, 0.26), 0 1px 0 rgba(255,255,255,0.12) inset;
+          box-shadow: 0 20px 42px rgba(72, 45, 25, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
           text-decoration: none;
           touch-action: manipulation;
+          pointer-events: auto;
+          transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease;
+        }
+        .mobile-discovery-menu[open] .mobile-discovery-menu__summary {
+          transform: translate3d(0, var(--drawer-rail-h), 0);
+          box-shadow: 0 18px 38px rgba(72, 45, 25, 0.30), 0 1px 0 rgba(255,255,255,0.12) inset;
         }
         .mobile-discovery-menu__kicker {
-          font-size: 0.58rem;
+          font-size: 0.56rem;
           font-weight: 850;
           line-height: 1.05;
           letter-spacing: 0.055em;
@@ -501,37 +518,30 @@ const FOOTER_SOCIAL_LINKS = [
           opacity: 0.9;
         }
         .mobile-discovery-menu__name {
-          font-size: 1.08rem;
+          font-size: 1.24rem;
           font-weight: 950;
-          line-height: 0.92;
-          letter-spacing: -0.06em;
+          line-height: 0.9;
+          letter-spacing: -0.065em;
         }
         .mobile-discovery-menu__label {
           display: grid;
           gap: 0.04rem;
-        }
-        .mobile-discovery-menu__chevron {
-          font-size: 1.05rem;
-          line-height: 1;
-          transition: transform 180ms ease;
-        }
-        .mobile-discovery-menu[open] .mobile-discovery-menu__chevron {
-          transform: rotate(180deg);
         }
         .mobile-discovery-menu__panel {
           position: fixed;
           z-index: 1;
           inset: 0 0 auto 0;
           width: 100vw;
+          min-height: var(--drawer-rail-h);
           overflow: hidden;
-          padding: calc(env(safe-area-inset-top) + 4.85rem) max(0.85rem, env(safe-area-inset-right)) 0.86rem max(0.85rem, env(safe-area-inset-left));
+          padding: calc(env(safe-area-inset-top) + 0.62rem) max(0.85rem, env(safe-area-inset-right)) 0.72rem max(0.85rem, env(safe-area-inset-left));
           border: 0;
           border-bottom: 1px solid rgba(121, 48, 20, 0.14);
-          border-radius: 0 0 26px 26px;
+          border-radius: 0 0 22px 22px;
           background: linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(255, 247, 235, 0.97) 100%);
           color: var(--text);
-          box-shadow: 0 18px 46px rgba(34, 26, 20, 0.20);
-          transform: translate3d(0, -112%, 0);
+          box-shadow: 0 18px 46px rgba(34, 26, 20, 0.18);
+          transform: translate3d(0, -105%, 0);
           opacity: 0;
           pointer-events: none;
           transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease, box-shadow 280ms ease;
@@ -543,14 +553,18 @@ const FOOTER_SOCIAL_LINKS = [
         }
         @starting-style {
           .mobile-discovery-menu[open] .mobile-discovery-menu__panel {
-            transform: translate3d(0, -112%, 0);
+            transform: translate3d(0, -105%, 0);
             opacity: 0;
+          }
+          .mobile-discovery-menu[open] .mobile-discovery-menu__summary {
+            transform: translate3d(0, 0, 0);
           }
         }
         .mobile-discovery-menu__nav {
           width: min(100%, 520px);
           margin: 0 auto;
         }
+        .mobile-discovery-menu__links::-webkit-scrollbar { display: none; }
         body.hero-chrome-immersive .site-header {
           position: fixed;
           inset-inline: 0;
@@ -560,7 +574,6 @@ const FOOTER_SOCIAL_LINKS = [
           background: transparent;
           color: #fff;
           pointer-events: none;
-          transition: border-color 180ms ease, box-shadow 180ms ease;
         }
         body.hero-chrome-immersive .site-header__inner {
           width: 100%;
@@ -568,88 +581,23 @@ const FOOTER_SOCIAL_LINKS = [
           padding-top: 0;
           display: block;
         }
-        body.hero-chrome-immersive .mobile-discovery-menu {
-          position: absolute;
-          left: max(0.85rem, env(safe-area-inset-left));
-          top: calc(-1.15rem + env(safe-area-inset-top));
-          width: min(calc(100vw - 1.7rem), 390px);
-          pointer-events: auto;
-        }
-        body.hero-chrome-immersive .mobile-discovery-menu__summary {
-          width: 7.7rem;
-          min-height: 5.55rem;
-          padding: 1.45rem 0.76rem 0.58rem;
-          justify-content: end;
-          border-radius: 0 0 10px 10px;
-          box-shadow: 0 20px 42px rgba(72, 45, 25, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
-        }
-        body.hero-chrome-immersive .mobile-discovery-menu__kicker {
-          font-size: 0.56rem;
-        }
-        body.hero-chrome-immersive .mobile-discovery-menu__name {
-          font-size: 1.24rem;
-          line-height: 0.9;
-        }
-        body.hero-chrome-immersive .mobile-discovery-menu__chevron {
-          position: absolute;
-          right: 0.46rem;
-          bottom: 0.44rem;
-          width: 1.02rem;
-          height: 1.02rem;
-          display: grid;
-          place-items: center;
-          border-radius: 999px;
-          background: rgba(255, 253, 248, 0.16);
-          font-size: 0.88rem;
-          opacity: 0.86;
-        }
-        body.hero-chrome-immersive .site-nav {
+        body.hero-chrome-immersive .site-nav,
+        body.hero-chrome-immersive.is-past-hero .site-nav {
           display: none;
         }
         body.hero-chrome-immersive.is-past-hero .site-header {
-          border-bottom: 1px solid rgba(121, 48, 20, 0.12);
-          background: #fffdf8;
-          box-shadow: 0 10px 30px rgba(72,45,25,0.10);
-          color: var(--text);
-          pointer-events: auto;
+          border-bottom: 0;
+          background: transparent;
+          box-shadow: none;
+          color: #fff;
+          pointer-events: none;
         }
         body.hero-chrome-immersive.is-past-hero .site-header__inner {
-          width: min(100% - 24px, 1180px);
-          min-height: 64px;
-          margin: 0 auto;
-          padding-top: env(safe-area-inset-top);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu {
-          position: relative;
-          width: auto;
-        }
-        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__summary {
-          width: auto;
-          min-height: 44px;
-          padding: 0.48rem 0.75rem;
-          border-radius: 999px;
-          box-shadow: 0 10px 24px rgba(121, 48, 20, 0.18);
-        }
-        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__kicker {
-          font-size: 0.58rem;
-        }
-        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__name {
-          font-size: 1.05rem;
-        }
-        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__chevron {
-          position: static;
-        }
-        body.hero-chrome-immersive.is-past-hero .site-nav {
-          display: flex;
-        }
-        body.hero-chrome-immersive.is-past-hero .site-nav a {
-          color: var(--muted);
-          border-color: transparent;
-          background: transparent;
-          text-shadow: none;
+          width: 100%;
+          min-height: 0;
+          margin: 0;
+          padding-top: 0;
+          display: block;
         }
         body.hero-chrome-immersive main { padding-top: 0; }
         body.hero-chrome-immersive .page-shell--event-impact { width: min(100% - 24px, 1180px); }
@@ -845,11 +793,9 @@ const FOOTER_SOCIAL_LINKS = [
               <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
               <span class="mobile-discovery-menu__name">Анонсы</span>
             </span>
-            <span class="mobile-discovery-menu__chevron" aria-hidden="true">⌄</span>
           </summary>
           <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
-              <span class="mobile-discovery-menu__prompt">Куда пойти</span>
               <div class="mobile-discovery-menu__links">
                 <a href={withBase('/segodnya/')}>Сегодня</a>
                 <a href={withBase('/vyhodnye/')}>Выходные</a>
@@ -1486,7 +1432,7 @@ const FOOTER_SOCIAL_LINKS = [
           };
         }
 
-        function eventCardHtml(item, variant = 'overlay-controls') {
+        function eventCardHtml(item, variant = 'split-actions') {
           const data = normalizeDisplayCandidate(item);
           const cardVariant = variant === 'split-actions' ? 'split-actions' : 'overlay-controls';
           const preserve = data.image_text_mode !== 'visual_only';
@@ -1709,7 +1655,7 @@ const FOOTER_SOCIAL_LINKS = [
             const id = asId(item.event_id);
             if (!id || existingIds.has(id)) continue;
             if (!isEligibleCandidate(item.candidate, store.manifest, profile)) continue;
-            feed.insertAdjacentHTML('beforeend', eventCardHtml(item, feed.dataset.feedCardVariant || 'overlay-controls'));
+            feed.insertAdjacentHTML('beforeend', eventCardHtml(item, feed.dataset.feedCardVariant || 'split-actions'));
             existingIds.add(id);
             added += 1;
           }

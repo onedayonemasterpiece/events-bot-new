@@ -1,6 +1,19 @@
 import type { PreviewEvent } from './types';
 import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
 
+const KALININGRAD_TZ_OFFSET = '+02:00';
+
+function toJsonLdDateTime(value: string | null | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/u.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/u.test(raw)) {
+    return `${raw.replace(' ', 'T')}${KALININGRAD_TZ_OFFSET}`;
+  }
+  return raw;
+}
+
 export function eventTitle(event: PreviewEvent): string {
   const place = [displayDate(event), event.venue_name || event.city].filter(Boolean).join(', ');
   return `${event.title} — ${place} | ${SITE_NAME}`;
@@ -27,7 +40,7 @@ export function buildEventJsonLd(event: PreviewEvent) {
       : 'https://schema.org/InStock',
     price: event.ticket.is_free ? '0' : undefined,
     priceCurrency: event.ticket.is_free ? 'RUB' : undefined,
-    validFrom: event.updated_at || undefined,
+    validFrom: toJsonLdDateTime(event.updated_at),
   } : undefined;
 
   return {
@@ -35,8 +48,8 @@ export function buildEventJsonLd(event: PreviewEvent) {
     '@type': event.event_type === 'концерт' ? 'MusicEvent' : 'Event',
     name: event.title,
     description: event.meta_description || event.summary,
-    startDate: event.starts_at || event.start_date,
-    endDate: event.end_at || event.end_date || undefined,
+    startDate: toJsonLdDateTime(event.starts_at) || event.start_date,
+    endDate: toJsonLdDateTime(event.end_at) || event.end_date || undefined,
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     eventStatus: event.lifecycle_status === 'cancelled'
       ? 'https://schema.org/EventCancelled'
