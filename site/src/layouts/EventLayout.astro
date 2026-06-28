@@ -7,11 +7,14 @@ interface Props {
   description: string;
   canonicalUrl: string;
   ogImage?: string | null;
+  ogImageType?: string | null;
+  ogImageWidth?: number | null;
+  ogImageHeight?: number | null;
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
 }
 
-const { title, description, canonicalUrl, ogImage, structuredData = [], heroChrome = 'standard' } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard' } = Astro.props;
 const robots = 'noindex,nofollow,noarchive';
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
@@ -43,6 +46,10 @@ const FOOTER_SOCIAL_LINKS = [
     <meta property="og:description" content={safeDescription} />
     <meta property="og:url" content={canonicalUrl} />
     {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
+    {ogImageType && <meta property="og:image:type" content={ogImageType} />}
+    {ogImageWidth && <meta property="og:image:width" content={String(ogImageWidth)} />}
+    {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
     <meta name="theme-color" content="#f7efe3" />
@@ -673,6 +680,8 @@ const FOOTER_SOCIAL_LINKS = [
       .icon--phone { fill: none; stroke: currentColor; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
       .native-share-button { cursor: pointer; }
+      .share-experiment-button { grid-column: 1 / -1; border-style: dashed; background: #fffaf1; color: #5f351f; }
+      .share-experiment-button .share-experiment-button__status { display: block; font-size: 0.72rem; font-weight: 700; opacity: 0.72; line-height: 1.1; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
       .share-list a { min-height: 44px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.45rem 0.75rem; border: 1px solid var(--line); background: #fff; color: var(--primary-strong); text-decoration: none; font-weight: 750; }
       .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
@@ -2536,6 +2545,85 @@ const FOOTER_SOCIAL_LINKS = [
             await recordShare(button);
           } catch (_) {
             location.href = url;
+          }
+        });
+
+        function setShareExperimentStatus(button, message, isBusy = false) {
+          const status = button.querySelector('[data-share-experiment-status]');
+          const label = button.querySelector('[data-share-experiment-label]');
+          if (status) status.textContent = message || '';
+          if (label && isBusy) label.textContent = 'Готовим картинку…';
+          if (label && !isBusy) label.textContent = 'Поделиться эксперимент';
+          button.disabled = Boolean(isBusy);
+        }
+
+        function shareFileName(button, blob) {
+          const raw = String(button.dataset.shareFileName || 'kenigevents-event').replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '').slice(0, 80) || 'kenigevents-event';
+          const type = blob && blob.type || button.dataset.shareImageType || '';
+          if (/png/iu.test(type)) return `${raw}.png`;
+          if (/jpe?g/iu.test(type)) return `${raw}.jpg`;
+          if (/webp/iu.test(type)) return `${raw}.webp`;
+          return `${raw}.jpg`;
+        }
+
+        async function fallbackShareExperiment(button, reason) {
+          const title = button.dataset.shareTitle || document.title;
+          const text = button.dataset.shareExperimentText || button.dataset.shareText || '';
+          const url = button.dataset.shareUrl || location.href;
+          if ('share' in navigator) {
+            await navigator.share({ title, text, url });
+            await recordShare(button);
+            setShareExperimentStatus(button, reason ? `Отправили ссылку: ${reason}` : 'Отправили ссылку с Open Graph');
+            return;
+          }
+          const copyText = [text, url].filter(Boolean).join('\n');
+          await navigator.clipboard.writeText(copyText);
+          await recordShare(button);
+          setShareExperimentStatus(button, 'Текст и ссылка скопированы');
+        }
+
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-share-experiment]');
+          if (!button) return;
+          event.preventDefault();
+          event.stopPropagation();
+          hideLikeShareCallouts();
+          const imageUrl = button.dataset.shareImage || '';
+          const title = button.dataset.shareTitle || document.title;
+          const text = button.dataset.shareExperimentText || button.dataset.shareText || '';
+          const url = button.dataset.shareUrl || location.href;
+          setShareExperimentStatus(button, 'Пробуем отправить картинку + текст + ссылку', true);
+          try {
+            if (imageUrl && window.File && navigator.canShare) {
+              const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
+              if (response.ok) {
+                const blob = await response.blob();
+                const type = blob.type || button.dataset.shareImageType || 'image/jpeg';
+                const file = new File([blob], shareFileName(button, blob), { type });
+                const dataWithImage = { title, text, url, files: [file] };
+                if (navigator.canShare(dataWithImage)) {
+                  await navigator.share(dataWithImage);
+                  await recordShare(button);
+                  setShareExperimentStatus(button, 'Отправили файл + текст + ссылку');
+                  return;
+                }
+                await fallbackShareExperiment(button, 'приложение не приняло файл');
+                return;
+              }
+            }
+            await fallbackShareExperiment(button, imageUrl ? 'картинка недоступна как файл' : 'нет картинки');
+          } catch (error) {
+            if (error && error.name === 'AbortError') {
+              setShareExperimentStatus(button, 'Отменено');
+              return;
+            }
+            try {
+              await fallbackShareExperiment(button, 'файловый share не сработал');
+            } catch (_) {
+              setShareExperimentStatus(button, 'Не удалось поделиться');
+            }
+          } finally {
+            window.setTimeout(() => setShareExperimentStatus(button, ''), 3200);
           }
         });
 

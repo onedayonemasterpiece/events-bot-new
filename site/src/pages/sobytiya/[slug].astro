@@ -32,6 +32,9 @@ const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
 const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
+const ogImage = eventImageUrl(event.image_url);
+const ogImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
+const ogImageType = ogImage?.toLowerCase().includes('.webp') ? 'image/webp' : ogImage?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : ogImage ? 'image/jpeg' : null;
 const ctaHref = event.ticket.href;
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = displayDateTime(event);
@@ -53,7 +56,7 @@ const galleryCta = galleryCtaEvent ? {
   meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
 } : undefined;
 ---
-<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={structuredData} heroChrome="immersive">
+<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
   <main id="main">
     <div class="page-shell page-shell--event-impact">
       <div class="event-grid">
