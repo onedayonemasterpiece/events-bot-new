@@ -24,7 +24,10 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   caps/disclosure fields.
 - `promo_target`: either one real `event.id` or one existing `festival.name`.
 - `promo_activity`: where the campaign can act. MVP surfaces are
-  `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`.
+  `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`;
+  planned surface: `browser_notification` / Web Push. Web Push activity
+  parameters live in `promo_activity.config_json` alongside other
+  surface-specific settings.
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
@@ -70,6 +73,27 @@ Deterministic routing handles clear forms before LLM:
 - `/a покажи отчёт по промо` routes to `/promo report`.
 
 All `/a` actions still require operator confirmation.
+
+## Browser Notification Activity (planned)
+
+`browser_notification` is a planned Web Push promo surface for subscribed
+browsers on `kenigevents.ru`. It must be opt-in only: no permission prompt on
+first page load, no hidden subscription, and an explicit unsubscribe path.
+
+Planned `promo_activity.config_json` fields:
+
+- `trigger_kind`: `tomorrow_digest_ready`, `weekend_digest_friday_noon`,
+  `event_reminder`, or future campaign-specific trigger;
+- `target_url`: internal event/listing URL opened from the notification;
+- `title_template` / `body_template` / optional `image_url`;
+- `local_send_window`, `quiet_hours`, `daily_cap`, `weekly_cap`;
+- `audience_rule`: anonymous/local profile segment or future registered-user
+  segment;
+- `dedupe_key`: prevents repeated notification for the same event/list/date.
+
+Exposure/clicks must write normal `promo_exposure` rows so Web Push competes
+with other promo surfaces by caps and reports. Browser notification triggers are
+therefore a promo activity, not a separate ad-hoc scheduler.
 
 ## CherryFlash
 
