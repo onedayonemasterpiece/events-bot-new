@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
+import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
 
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
@@ -22,7 +22,7 @@ const dateTimeLabel = displayDateTime(event);
   <div class="listing-item__body">
     <div class="listing-item__meta">
       <span>{dateTimeLabel}</span>
-      <span>{event.ticket.price_label || event.status_label}</span>
+      <span>{eventAdmissionLabel(event)}</span>
     </div>
     <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     {place && <p>{place}</p>}

@@ -1,16 +1,17 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime } from '../lib/events';
+import { displayDateTime, eventAdmissionLabel } from '../lib/events';
 interface Props { event: PreviewEvent }
 type FactIcon = 'pin' | 'ticket' | 'spark' | 'info';
+type FactVariant = 'default' | 'admission' | 'check';
 const { event } = Astro.props;
 const placeLine = [event.venue_name, event.address].filter(Boolean).join(' · ') || event.city || null;
-const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined }> = [
+const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined; variant?: FactVariant }> = [
   { icon: 'info', label: 'Когда', value: displayDateTime(event) },
   { icon: 'pin', label: 'Где', value: placeLine },
-  { icon: 'ticket', label: 'Вход', value: event.ticket.price_label || event.status_label },
-  { icon: 'spark', label: 'Пушкинская карта', value: event.pushkin_card ? 'возможна' : null },
+  { icon: 'ticket', label: 'Вход', value: eventAdmissionLabel(event), variant: 'admission' },
+  { icon: 'spark', label: 'Пушкинская карта', value: event.pushkin_card ? 'доступна' : null, variant: 'check' },
   { icon: 'info', label: 'Фестиваль', value: event.festival },
 ].filter((item) => Boolean(item.value));
 ---
@@ -19,7 +20,11 @@ const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefi
     {rows.map((item) => (
       <div class="event-info-item">
         <dt><span class="event-info-item__icon" aria-hidden="true"><Icon name={item.icon} /></span><span>{item.label}</span></dt>
-        <dd>{item.value}</dd>
+        <dd class={`event-info-value event-info-value--${item.variant || 'default'}`}>
+          {item.variant === 'check' ? (
+            <><span class="event-info-check" aria-hidden="true">✓</span><span class="sr-only">{item.value}</span></>
+          ) : item.value}
+        </dd>
       </div>
     ))}
   </dl>

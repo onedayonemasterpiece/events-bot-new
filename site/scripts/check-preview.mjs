@@ -16,6 +16,7 @@ const required = [
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
+  'brand-mark.svg',
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
@@ -70,7 +71,7 @@ if (!controlVisibleHtml.includes('<a class="hero-gallery__brand"') || !controlVi
 if (!controlVisibleHtml.includes('event-hero__gallery-hint') || !controlVisibleHtml.includes('Открыть фото')) throw new Error('Event hero must expose a visible photo-view CTA over the image');
 if (!controlHtml.includes('data-gallery-src=') || /class="hero-gallery__image"[^>]*\ssrc=/u.test(controlHtml)) throw new Error('Fullscreen gallery images must be lazy hydrated from data-gallery-src, not eagerly loaded in hidden HTML');
 if (!controlHtml.includes('data-mobile-discovery-menu') || !controlHtml.includes('mobile-discovery-menu__panel') || !controlHtml.includes('mobile-discovery-menu__links') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile discovery drawer and stable after-hero state contract');
-if (!controlHtml.includes('mobile-discovery-menu__brand-icon') || !controlHtml.includes('--brand-icon-mask') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and animated favicon-mask brand icon contract');
+if (!controlHtml.includes('mobile-discovery-menu__brand-icon') || !controlHtml.includes('/brand-mark.svg') || !controlVisibleHtml.includes('/zavtra/')) throw new Error('Mobile discovery/navigation must expose tomorrow link and animated favicon-mask brand icon contract');
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
@@ -167,6 +168,18 @@ if (!splitVisibleHtml.includes('event-card__feedback event-card__feedback--under
 if (!splitVisibleHtml.includes('feedback-button--calendar')) throw new Error('Split-actions page must expose feed calendar buttons for one-day eligible cards');
 if (!splitHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('Split-actions page must keep variant marker for hydrated JSON cards');
 if (!splitHtml.includes('icon--phone') || !splitHtml.includes('M14.05 6c.98.19')) throw new Error('Phone CTA must use a clear vector phone/call icon');
+if (controlVisibleHtml.includes('>Sitemap</a>')) throw new Error('Sitemap must not be exposed in user-facing event navigation');
+const pushkinEvent = eventsData.events.find((event) => event.id === 4913);
+if (pushkinEvent) {
+  const pushkinHtml = readFileSync(join(root, `sobytiya/${pushkinEvent.slug}/index.html`), 'utf8');
+  if (!pushkinHtml.includes('event-info-value--check') || !pushkinHtml.includes('event-info-check') || pushkinHtml.includes('>возможна</dd>')) throw new Error('Pushkin card fact must render as a property check mark, not value copy');
+}
+const freeEvent = eventsData.events.find((event) => event.id === 4512);
+if (freeEvent) {
+  const freeHtml = readFileSync(join(root, `sobytiya/${freeEvent.slug}/index.html`), 'utf8');
+  if (!freeHtml.includes('Свободный') || /<dd[^>]*>\s*Бесплатно\s*<\/dd>/u.test(freeHtml)) throw new Error('Free admission must render as a property label, not bare “Бесплатно”');
+}
+if (!/event-card__feedback event-card__feedback--under[\s\S]*feedback-button--share[\s\S]*feedback-button--negative[\s\S]*feedback-button--like/u.test(splitVisibleHtml)) throw new Error('Split-actions order must keep share before subdued not-interested and right-thumb like last');
 
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
@@ -228,16 +241,16 @@ if (
   || !controlHtml.includes('closeMenu')
 ) throw new Error('Mobile discovery navigation must be a monolithic drawer: one root object slides down/up, with the handle attached to the panel and no transitional gap');
 if (!/mobile-discovery-menu__panel\{[^}]*border-radius:\s*0/iu.test(css) || !/mobile-discovery-menu__links a\{[^}]*border:\s*0[^}]*border-radius:\s*0[^}]*background:\s*transparent/iu.test(css)) throw new Error('Mobile discovery drawer menu must be a flat rail with plain text links, not rounded/pill buttons');
-if (!/mobile-discovery-menu__brand-icon\{[^}]*-webkit-mask:\s*var\(--brand-icon-mask\)[^}]*animation:\s*mobile-brand-icon-cycle/iu.test(css) || !/@keyframes\s+mobile-brand-text-cycle/iu.test(css)) throw new Error('Mobile discovery handle must animate favicon-mask icon/text swap in the site palette');
+if (!/mobile-discovery-menu__brand-icon\{[^}]*width:\s*4\.4rem[^}]*height:\s*5\.35rem[^}]*-webkit-mask:\s*var\(--brand-icon-mask\)[^}]*animation:\s*mobile-brand-icon-cycle/iu.test(css) || !/@keyframes\s+mobile-brand-text-cycle/iu.test(css)) throw new Error('Mobile discovery handle must animate a large cropped brand-mark icon/text swap in the site palette');
 if (!/listing-item\{[^}]*grid-template-columns:\s*minmax\(132px,18%\)minmax\(0,1fr\)[^}]*padding:\s*0[^}]*overflow:\s*hidden/iu.test(css.replace(/\s+/g, '')) || !/listing-item__body\{[^}]*border-left:\s*1px solid/iu.test(css) || !/listing-item__media--cover \.listing-item__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Date listing cards must use parent-level plaque media crop with a straight separator');
 if (!/event-hero--photo-cinematic-sheet\.event-hero--photo-cover \.event-hero__image[\s\S]*?event-hero--photo-parallax-sheet\.event-hero--photo-cover \.event-hero__image/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax must be enabled for visual-only cinematic/parallax heroes with reduced-motion-aware hydrator');
 if (!/--hero-parallax-y/iu.test(css) || !controlHtml.includes('const maxOffset = 64') || controlHtml.includes('--hero-parallax-scale')) throw new Error('Hero parallax must use stronger constant-scale vertical motion without dynamic zoom-scale jumps');
 if (!/hero-gallery\{[^}]*position:\s*fixed[^}]*z-index:\s*80/iu.test(css) || !/hero-gallery__image\{[^}]*height:\s*100%[^}]*object-fit:\s*contain/iu.test(css) || !controlHtml.includes('hydrateHeroGallery') || !controlHtml.includes('data-hero-gallery-next')) throw new Error('Hero fullscreen gallery must be fixed, full-height, controlled and preserve OCR/text images with the base contain mode');
 if (!/hero-gallery__image\[data-image-text-mode=["']?visual_only["']?\]\{[^}]*object-fit:\s*cover/iu.test(css) || !/hero-gallery\[data-auto-pan=forward\][^}]*gallery-pan-forward/iu.test(css) || !/hero-gallery\[data-auto-pan=backward\][^}]*gallery-pan-backward/iu.test(css) || !/hero-gallery__viewport,\s*\.hero-gallery__track\{[^}]*touch-action:\s*none/iu.test(css)) throw new Error('Hero fullscreen gallery must crop visual-only photos with cover, one-way forward pan and reverse pan for manual back gestures');
-if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:42%center\}to\{object-position:58%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:58%center\}to\{object-position:42%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 42%→58% (right-to-left visual motion) and backward 58%→42%');
+if (!/@keyframes\s*gallery-pan-forward\{(?:from|0%)\{object-position:38%center\}to\{object-position:64%center\}/u.test(css.replace(/\s+/g, '')) || !/@keyframes\s*gallery-pan-backward\{(?:from|0%)\{object-position:64%center\}to\{object-position:38%center\}/u.test(css.replace(/\s+/g, ''))) throw new Error('Fullscreen gallery pan direction must be forward 38%→64% (right-to-left visual motion) and backward 64%→38%');
 if (!/hero-gallery__topbar\{[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__brand\{[^}]*pointer-events:\s*auto/iu.test(css)) throw new Error('Fullscreen gallery brand tag must be top-flush and clickable');
-if (!/hero-gallery__slide figcaption\{[^}]*display:\s*block[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__slide figcaption strong\{[^}]*box-decoration-break:\s*clone/iu.test(css)) throw new Error('Fullscreen gallery caption must use inline/subline text stripes, not a full-width bottom slab');
-if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load slides and expose auto-forward pan plus pointer/touch swipe');
+if (!/hero-gallery__slide figcaption\{[^}]*display:\s*block[^}]*padding:\s*0/iu.test(css) || !/hero-gallery__slide figcaption span\{[^}]*display:\s*block/iu.test(css) || !/hero-gallery__slide figcaption strong\{[^}]*box-decoration-break:\s*clone/iu.test(css)) throw new Error('Fullscreen gallery caption must use separate-line inline/subline text stripes, not a full-width bottom slab');
+if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('galleryPanTimer') || !controlHtml.includes('7600') || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load slides and expose slower auto-forward pan with pre-stop transition plus pointer/touch swipe');
 if (!controlHtml.includes('data-not-interested-plate') || !/event-card__not-interest-plate/iu.test(css)) throw new Error('Not-interested feedback must keep an explicit undo plate instead of turning the card into an accidental navigation target');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
 if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*flex-end/iu.test(css)) throw new Error('Split-actions under-card row must cluster share text near the right-thumb like action');

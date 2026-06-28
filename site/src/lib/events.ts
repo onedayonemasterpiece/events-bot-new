@@ -311,7 +311,7 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     venue_name: event.venue_name,
     place: [event.city, event.venue_name].filter(Boolean).join(' · '),
     status_label: event.status_label,
-    price_label: event.ticket.price_label,
+    price_label: eventAdmissionLabel(event),
     likes_count: likesCount,
     shares_count: event.shares_count ?? 0,
     calendar_href: eventCalendarHref(event),
@@ -418,7 +418,7 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     venue_name: event.venue_name,
     place: [event.city, event.venue_name].filter(Boolean).join(' · '),
     status_label: event.status_label,
-    price_label: event.ticket.price_label,
+    price_label: eventAdmissionLabel(event),
     likes_count: likesCount,
     shares_count: event.shares_count ?? 0,
     calendar_href: eventCalendarHref(event),
@@ -500,6 +500,24 @@ export function formatDateMachine(date: string): string {
 
 export function getCtaLabel(event: PreviewEvent): string {
   return event.ticket.label;
+}
+
+export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status_label'>): string {
+  const ticket = event.ticket;
+  const statusText = [ticket.status, ticket.label, event.status_label, ticket.note].filter(Boolean).join(' ').toLowerCase();
+  const hasRegistration = /регистрац|registration|зарегистр/u.test(statusText);
+  const hasBooking = /запис|phone|телефон|коммент/u.test(statusText);
+  const hasDonation = /донат|пожертв/u.test(statusText);
+  if (ticket.is_free) {
+    if (hasRegistration) return 'Бесплатно · регистрация';
+    if (hasBooking) return 'Бесплатно · по записи';
+    return 'Свободный';
+  }
+  if (ticket.price_label) return ticket.price_label;
+  if (hasDonation) return 'За донат';
+  if (ticket.kind === 'phone') return 'Запись по телефону';
+  if (ticket.kind === 'ticket') return 'Билеты';
+  return event.status_label || ticket.label || 'Условия уточняются';
 }
 
 export function eventTicketActionLabel(event: PreviewEvent): string {

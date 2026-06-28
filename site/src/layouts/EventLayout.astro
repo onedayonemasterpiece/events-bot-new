@@ -397,23 +397,23 @@ const FOOTER_SOCIAL_LINKS = [
         max-height: none;
         min-height: 100%;
         object-fit: cover;
-        object-position: 42% center;
+        object-position: 38% center;
       }
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
       .hero-gallery[data-auto-pan="forward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
-        animation: gallery-pan-forward 6.8s ease-in-out 1 both;
+        animation: gallery-pan-forward 9.2s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       .hero-gallery[data-auto-pan="backward"] .hero-gallery__slide[aria-hidden="false"] .hero-gallery__image[data-image-text-mode="visual_only"] {
-        animation: gallery-pan-backward 6.8s ease-in-out 1 both;
+        animation: gallery-pan-backward 9.2s cubic-bezier(0.32, 0.02, 0.18, 1) 1 both;
       }
       @keyframes gallery-pan-forward {
-        from { object-position: 42% center; }
-        to { object-position: 58% center; }
+        from { object-position: 38% center; }
+        to { object-position: 64% center; }
       }
       @keyframes gallery-pan-backward {
-        from { object-position: 58% center; }
-        to { object-position: 42% center; }
+        from { object-position: 64% center; }
+        to { object-position: 38% center; }
       }
       .hero-gallery__slide figcaption {
         position: absolute;
@@ -430,7 +430,9 @@ const FOOTER_SOCIAL_LINKS = [
         pointer-events: none;
       }
       .hero-gallery__slide figcaption span {
-        display: inline-block;
+        display: block;
+        width: max-content;
+        max-width: 100%;
         margin-bottom: 0.24rem;
         padding: 0.16rem 0.42rem;
         background: rgba(6,5,4,0.62);
@@ -589,6 +591,33 @@ const FOOTER_SOCIAL_LINKS = [
         color: var(--primary-strong);
       }
       .event-info-item__icon .icon { width: 1.2rem; height: 1.2rem; }
+      .event-info-value { min-width: 0; }
+      .event-info-value--admission {
+        width: max-content;
+        max-width: 100%;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.16rem 0.52rem;
+        border: 1px solid rgba(121,48,20,0.14);
+        border-radius: 999px;
+        background: #fff7ea;
+        color: var(--primary-strong);
+        font-weight: 900;
+      }
+      .event-info-value--check { display: inline-flex; align-items: center; }
+      .event-info-check {
+        width: 1.48rem;
+        height: 1.48rem;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        background: #dff5e7;
+        color: #0f7a45;
+        font-size: 1.02rem;
+        font-weight: 950;
+        line-height: 1;
+        box-shadow: 0 0 0 1px rgba(15,122,69,0.10) inset;
+      }
       .event-source-gate {
         margin: 0;
         width: 100%;
@@ -706,15 +735,15 @@ const FOOTER_SOCIAL_LINKS = [
       .event-card--split-actions:hover { border-color: transparent; box-shadow: none; }
       .event-card--split-actions .event-card__media-link { border: 1px solid rgba(121,48,20,0.13); border-bottom: 0; border-radius: 24px 24px 0 0; overflow: hidden; }
       .event-card--split-actions .event-card__body { background: #15110f; color: #fff; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); padding-bottom: 0.7rem; }
-      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
+      .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); background: #15110f; }
       .event-card--split-actions .event-card__utility-row .feedback-button { min-height: 44px; box-shadow: none; }
-      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: 0; min-height: 36px; padding-inline: 0.22rem; color: rgba(255,255,255,0.56); background: transparent; border-color: transparent; font-size: 0.74rem; }
+      .event-card--split-actions .event-card__feedback .feedback-button--negative { order: 2; margin-left: 0.15rem; min-height: 36px; min-width: 38px; padding-inline: 0.2rem; color: rgba(58,48,40,0.42); background: transparent; border-color: transparent; font-size: 0.72rem; }
       .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
       .event-card--split-actions .event-card__feedback .feedback-button { min-width: 44px; min-height: 44px; padding: 0 0.28rem; color: rgba(58,48,40,0.70); background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px; }
       .event-card--split-actions .event-card__feedback .feedback-button:hover { color: #2b211a; background: rgba(121,48,20,0.07); }
-      .event-card--split-actions .event-card__feedback .feedback-button--share { min-width: 44px; }
+      .event-card--split-actions .event-card__feedback .feedback-button--share { order: 1; min-width: 44px; }
       .event-card--split-actions .event-card__feedback .feedback-button--share .share-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: nowrap; }
-      .event-card--split-actions .event-card__feedback .feedback-button--like { color: #c93434; min-width: 44px; font-size: 0.98rem; }
+      .event-card--split-actions .event-card__feedback .feedback-button--like { order: 3; color: #c93434; min-width: 44px; font-size: 0.98rem; }
       .event-card--split-actions .event-card__feedback .feedback-button--like[aria-pressed="true"] { color: #c93434; background: rgba(201,52,52,0.10); border-color: transparent; }
       .event-card--split-actions.is-share-prompt .feedback-button--share { color: #2b211a; background: rgba(121,48,20,0.08); }
       .event-card.is-not-interested::before { content: ""; position: absolute; inset: 0; z-index: 4; background: rgba(43,43,43,0.78); pointer-events: none; }
@@ -888,8 +917,8 @@ const FOOTER_SOCIAL_LINKS = [
           left: var(--drawer-handle-left);
           top: calc(var(--drawer-rail-h) + env(safe-area-inset-top) - 7px);
           z-index: 2;
-          width: 8.15rem;
-          min-height: 5.55rem;
+          width: 8.8rem;
+          min-height: 6.35rem;
           display: inline-flex;
           align-items: center;
           justify-content: end;
@@ -912,12 +941,12 @@ const FOOTER_SOCIAL_LINKS = [
         }
         .mobile-discovery-menu__brand-icon {
           position: absolute;
-          left: 0.52rem;
-          bottom: 0.48rem;
+          left: 0.38rem;
+          bottom: 0.2rem;
           z-index: 2;
           display: block;
-          width: 2.75rem;
-          height: 3.45rem;
+          width: 4.4rem;
+          height: 5.35rem;
           color: #fff1df;
           background: currentColor;
           -webkit-mask: var(--brand-icon-mask) center / contain no-repeat;
@@ -943,9 +972,9 @@ const FOOTER_SOCIAL_LINKS = [
         }
         @keyframes mobile-brand-text-cycle {
           0%, 18% { opacity: 1; transform: translate3d(0, 0, 0); }
-          25%, 35% { opacity: 1; transform: translate3d(2.35rem, 0, 0); }
-          43%, 57% { opacity: 0; transform: translate3d(-4.35rem, 0, 0); }
-          69%, 78% { opacity: 1; transform: translate3d(2.1rem, 0, 0); }
+          25%, 35% { opacity: 1; transform: translate3d(3.55rem, 0, 0); }
+          43%, 57% { opacity: 0; transform: translate3d(-5.65rem, 0, 0); }
+          69%, 78% { opacity: 1; transform: translate3d(3.2rem, 0, 0); }
           88%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
         }
         .mobile-discovery-menu__kicker {
@@ -1213,7 +1242,7 @@ const FOOTER_SOCIAL_LINKS = [
         .event-card--split-actions .event-card__utility-row { padding-inline: 0.68rem; gap: 0.34rem; }
         .event-card--split-actions .event-card__utility-row .feedback-button--calendar { flex: 1 1 auto; }
         .event-card--split-actions .event-card__feedback { gap: 0.34rem; }
-        .event-card--split-actions .event-card__feedback .feedback-button--share { min-width: 44px; }
+        .event-card--split-actions .event-card__feedback .feedback-button--share { order: 1; min-width: 44px; }
         .event-card--split-actions .event-card__feedback .feedback-button--like { min-width: 44px; }
         .feedback-button--share { padding-inline: 0.46rem; font-size: 0.82rem; }
         .feedback-button--share .icon { width: 1.18rem; height: 1.18rem; }
@@ -1243,7 +1272,7 @@ const FOOTER_SOCIAL_LINKS = [
           <span class="brand__sub">афиша событий</span>
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
-          <summary class="mobile-discovery-menu__summary" style={`--brand-icon-mask: url(${withBase('/favicon.svg')})`} aria-label="Открыть навигацию афиши">
+          <summary class="mobile-discovery-menu__summary" style={`--brand-icon-mask: url(${withBase('/brand-mark.svg')})`} aria-label="Открыть навигацию афиши">
             <span class="mobile-discovery-menu__brand-icon" aria-hidden="true"></span>
             <span class="mobile-discovery-menu__label">
               <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
@@ -1265,7 +1294,6 @@ const FOOTER_SOCIAL_LINKS = [
           <a href={withBase('/segodnya/')}>Сегодня</a>
           <a href={withBase('/zavtra/')}>Завтра</a>
           <a href={withBase('/vyhodnye/')}>Выходные</a>
-          <a href={withBase('/sitemap.xml')}>Sitemap</a>
         </nav>
       </div>
     </header>
@@ -1730,7 +1758,7 @@ const FOOTER_SOCIAL_LINKS = [
             date: item.date || item.display_date || '',
             status: item.status_label || 'available',
             lifecycle_status: 'active',
-            is_free: item.price_label === 'Бесплатно',
+            is_free: /бесплат|свободн/iu.test(item.price_label || ''),
             base_similarity: Math.max(0, 1 - index * 0.01),
             static_score: Math.max(0, 1 - index * 0.01),
             reason_codes: ['legacy_json_payload'],
@@ -1928,7 +1956,7 @@ const FOOTER_SOCIAL_LINKS = [
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
             : '';
           const splitUtility = cardVariant === 'split-actions'
-            ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${calendarButton}${negativeButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
+            ? `${calendarButton ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${calendarButton}</div>` : ''}<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${negativeButton}${likeButton}</div>`
             : '';
           return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
             <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
@@ -2560,6 +2588,12 @@ const FOOTER_SOCIAL_LINKS = [
           if (!openers.length) return;
           let activeGallery = null;
           let activeOpener = null;
+          let galleryPanTimer = 0;
+
+          const clearGalleryPanTimer = () => {
+            if (galleryPanTimer) window.clearTimeout(galleryPanTimer);
+            galleryPanTimer = 0;
+          };
 
           const loadGalleryMedia = (slide) => {
             if (!slide) return;
@@ -2582,11 +2616,22 @@ const FOOTER_SOCIAL_LINKS = [
           };
 
           const scheduleGalleryPan = (gallery, direction) => {
+            clearGalleryPanTimer();
             delete gallery.dataset.autoPan;
+            delete gallery.dataset.panToken;
             const mode = direction === 'backward' ? 'backward' : 'forward';
             if (!activeSlideIsVisualPhoto(gallery)) return;
             window.requestAnimationFrame(() => {
               gallery.dataset.autoPan = mode;
+              if (mode !== 'forward' || gallery.dataset.autoAdvance === 'false') return;
+              const token = `${Date.now()}-${Math.random()}`;
+              gallery.dataset.panToken = token;
+              galleryPanTimer = window.setTimeout(() => {
+                if (!gallery.classList.contains('is-open') || gallery.hidden) return;
+                if (gallery.dataset.autoAdvance === 'false') return;
+                if (gallery.dataset.panToken !== token) return;
+                showSlide(gallery, nextImageIndex(gallery), { direction: 'forward' });
+              }, 7600);
             });
           };
 
@@ -2605,7 +2650,9 @@ const FOOTER_SOCIAL_LINKS = [
             const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
             const track = gallery.querySelector('[data-hero-gallery-track]');
             if (!slides.length || !track) return;
+            clearGalleryPanTimer();
             delete gallery.dataset.autoPan;
+            delete gallery.dataset.panToken;
             const next = ((Number(index) % slides.length) + slides.length) % slides.length;
             loadGalleryMedia(slides[next]);
             gallery.dataset.activeIndex = String(next);
@@ -2622,7 +2669,9 @@ const FOOTER_SOCIAL_LINKS = [
             if (!activeGallery) return;
             const gallery = activeGallery;
             gallery.classList.remove('is-open');
+            clearGalleryPanTimer();
             delete gallery.dataset.autoPan;
+            delete gallery.dataset.panToken;
             document.body.classList.remove('has-hero-gallery-open');
             window.setTimeout(() => {
               if (!gallery.classList.contains('is-open')) gallery.hidden = true;
@@ -2671,6 +2720,7 @@ const FOOTER_SOCIAL_LINKS = [
               if (event.animationName !== 'gallery-pan-forward') return;
               if (!gallery.classList.contains('is-open') || gallery.hidden) return;
               if (gallery.dataset.autoAdvance === 'false') return;
+              if (gallery.dataset.panToken) return;
               showSlide(gallery, nextImageIndex(gallery), { direction: 'forward' });
             });
             const swipeSurface = gallery.querySelector('.hero-gallery__viewport') || gallery;
