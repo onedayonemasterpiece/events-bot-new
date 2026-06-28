@@ -158,7 +158,7 @@ All times are UTC.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `1004909a62f34d7f4138775c1af34179f3db8e49`, reachable from
+- deployed SHA: `1004909a6749fe3fd212efac81b05adedc958687`, reachable from
   `origin/main`.
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only`
   from clean branch `hotfix/inc-crumple-video-publish-only-storm-20260628`.
