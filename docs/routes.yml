@@ -229,6 +229,10 @@ features:
     status: draft
     docs: docs/features/subscriber-acquisition/README.md
     requirements: docs/features/subscriber-acquisition/requirements.md
+  recap:
+    status: draft
+    docs: docs/features/recap/README.md
+    requirements: docs/features/recap/requirements.md
   afishaengagement:
     status: debug_shadow
     docs: docs/features/afishaengagement/README.md
