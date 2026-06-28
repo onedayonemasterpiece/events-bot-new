@@ -2700,7 +2700,7 @@ const FOOTER_SOCIAL_LINKS = [
         function setShareExperimentStatus(button, message, isBusy = false) {
           const status = button.querySelector('[data-share-experiment-status]');
           const label = button.querySelector('[data-share-experiment-label]');
-          const defaultLabel = button.dataset.shareExperimentMode === 'caption_url' ? 'Поделиться эксперимент 2' : 'Поделиться эксперимент';
+          const defaultLabel = button.dataset.shareExperimentMode === 'rich_text_link' ? 'Поделиться эксперимент 2' : 'Поделиться эксперимент';
           if (status) status.textContent = message || '';
           if (label && isBusy) label.textContent = 'Готовим картинку…';
           if (label && !isBusy) label.textContent = defaultLabel;
@@ -2718,12 +2718,44 @@ const FOOTER_SOCIAL_LINKS = [
 
         function shareExperimentPayload(button, files = null) {
           const title = button.dataset.shareTitle || document.title;
-          const url = button.dataset.shareUrl || location.href;
           const text = shareExperimentText(button);
           const payload = { title, text };
           if (files) payload.files = files;
-          if (button.dataset.shareExperimentMode !== 'caption_url') payload.url = url;
+          if (button.dataset.shareExperimentMode === 'files_url') payload.url = button.dataset.shareUrl || location.href;
           return payload;
+        }
+
+        async function copyRichShare(button) {
+          const html = button.dataset.richShareHtml || '';
+          const plain = button.dataset.richShareText || '';
+          const label = button.querySelector('[data-copy-rich-share-label]');
+          const status = button.querySelector('[data-copy-rich-share-status]');
+          const original = label?.textContent || 'Скопировать HTML-пост';
+          if (label) label.textContent = 'Копируем…';
+          button.disabled = true;
+          try {
+            if (navigator.clipboard?.write && window.ClipboardItem && html) {
+              const item = new ClipboardItem({
+                'text/html': new Blob([html], { type: 'text/html' }),
+                'text/plain': new Blob([plain], { type: 'text/plain' }),
+              });
+              await navigator.clipboard.write([item]);
+              if (status) status.textContent = 'HTML и текст скопированы';
+            } else {
+              await navigator.clipboard.writeText(plain || html.replace(/<[^>]+>/gu, ''));
+              if (status) status.textContent = 'Скопирован plain-text fallback';
+            }
+          } catch (_) {
+            await navigator.clipboard.writeText(plain || html.replace(/<[^>]+>/gu, ''));
+            if (status) status.textContent = 'Скопирован текст';
+          } finally {
+            if (label) label.textContent = 'Скопировано';
+            window.setTimeout(() => {
+              if (label) label.textContent = original;
+              if (status) status.textContent = '';
+              button.disabled = false;
+            }, 2400);
+          }
         }
 
         function shareFileName(button, blob) {
@@ -2861,7 +2893,10 @@ const FOOTER_SOCIAL_LINKS = [
           event.stopPropagation();
           hideLikeShareCallouts();
           const imageUrl = button.dataset.shareImage || '';
-          setShareExperimentStatus(button, 'Пробуем отправить картинку + текст + ссылку', true);
+          const busyMessage = button.dataset.shareExperimentMode === 'rich_text_link'
+            ? 'Пробуем markdown-ссылку в подписи'
+            : 'Пробуем отправить картинку + текст + ссылку';
+          setShareExperimentStatus(button, busyMessage, true);
           try {
             if (imageUrl && window.File && navigator.canShare) {
               const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
@@ -2888,6 +2923,14 @@ const FOOTER_SOCIAL_LINKS = [
           } finally {
             window.setTimeout(() => setShareExperimentStatus(button, ''), 3200);
           }
+        });
+
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-copy-rich-share]');
+          if (!button) return;
+          event.preventDefault();
+          event.stopPropagation();
+          await copyRichShare(button);
         });
 
         document.addEventListener('click', async (event) => {
