@@ -225,6 +225,11 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  recap:
+    status: draft_requirements
+    docs: docs/features/recap/README.md
+    requirements: docs/features/recap/requirements.md
+    sources: docs/features/recap/source/
   subscriber_acquisition:
     status: draft
     docs: docs/features/subscriber-acquisition/README.md
