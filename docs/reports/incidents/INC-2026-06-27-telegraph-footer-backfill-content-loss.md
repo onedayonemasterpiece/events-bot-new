@@ -128,7 +128,7 @@ During the Max social-link rollout for Telegraph event footers, a production one
 - Required special checks:
   - event `5878` stayed on original URL `https://telegra.ph/Koncertnaya-programma-Pesni-SSSR-06-10` and final public text has event facts, `Источников: 1`, Max count `1`;
   - event `6473` remained full-content with event facts, `Источников: 1`, Max count `1`;
-  - latest 20 checked active Telegraph event pages had no footer-only pages and each had Max count `1` plus `Источников: 1`.
+  - latest 20 Telegram event posts (`tg_event_post_url` present, ordered by `tg_event_post_id`) had no footer-only Telegraph pages and each checked page had Max count `1` plus `Источников: 1`.
 - Production `/healthz`: OK after repair.
 - Restore/backfill process check after repair: no active Telegraph/backfill/restore helper process on Fly.
 - Scope note: no bulk Max rollout over intact old pages was run; only pages confirmed footer-only by the public audit were repaired.
