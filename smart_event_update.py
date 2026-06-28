@@ -7841,6 +7841,11 @@ _ONE_DAY_ACTION_HINT_RE = re.compile(
     r")\b"
 )
 
+_OPENING_EXHIBITION_TITLE_RE = re.compile(
+    r"(?iu)\bоткрыти[ея]\s+(?:персональн\w+\s+|нов\w+\s+)?"
+    r"(?:выставк\w*|экспозиц\w*)\b"
+)
+
 
 def _has_long_event_duration_signals(text: str | None) -> bool:
     raw = str(text or "").strip()
@@ -7890,6 +7895,14 @@ def _maybe_apply_default_end_date_for_long_event(candidate: EventCandidate) -> s
     if _ACTION_TITLE_RE.search(str(candidate.title or "")) and _ONE_DAY_ACTION_HINT_RE.search(hay):
         return None
     if hay and not (_LONG_EVENT_TEXT_HINT_RE.search(hay) or _has_long_event_duration_signals(hay)):
+        return None
+    # If the LLM has extracted an opening ceremony/card as the title and the
+    # source did not provide a run window, do not turn that opening into a
+    # month-long exhibition by applying the service fallback.  A true
+    # exhibition card should be titled as the exhibition itself (or carry an
+    # explicit end_date/duration signal), while an opening-only announcement is
+    # an atomic dated event.
+    if _OPENING_EXHIBITION_TITLE_RE.search(str(candidate.title or "")) and not _has_long_event_duration_signals(hay):
         return None
     start = _parse_iso_date(candidate.date)
     if not start:

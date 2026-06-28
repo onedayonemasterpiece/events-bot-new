@@ -614,6 +614,51 @@ async def test_dated_exhibition_with_curator_excursions_is_not_course_promo(tmp_
 
 
 @pytest.mark.asyncio
+async def test_opening_only_exhibition_title_does_not_get_default_month_range(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Завтра, 5 июня, в 19:00 состоится открытие выставки-экзамена "
+            "четвертого семестра первого в Калининграде курса художников-сценографов "
+            "«Обход 2.0».\n\n"
+            "Вход: 350 руб.\n"
+            "Билеты: на нашем сайте"
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/barn_kaliningrad/1033",
+            source_text=source_text,
+            title="Открытие выставки-экзамена «Обход 2.0»",
+            date="2026-06-05",
+            time="19:00",
+            location_name="Барн",
+            location_address="Каштановая аллея 1а",
+            city="Калининград",
+            ticket_price_min=350,
+            ticket_price_max=350,
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.date == "2026-06-05"
+            assert saved.time == "19:00"
+            assert saved.end_date is None
+            assert saved.end_date_is_inferred is False
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_grounded_exhibition_date_corrects_inferred_legacy_range(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-28-opening-exhibition-range-duplicate.md`
+  - Scope: Telegram Monitoring / Smart Update exhibition-opening semantics, inferred exhibition `end_date`, temporal location fragments, and duplicate active exhibition inventory.
+  - Must not regress: opening-only exhibition titles without an explicit source run window must remain atomic and must not receive `date + 1 month`; a real exhibition range must be represented by the exhibition title itself or source-grounded `end_date`; active inventory must not retain duplicate opening/exhibition rows for the same real `Обход 2.0`-style event.
 - `INC-2026-06-28-vk-stale-event-publication.md`
   - Scope: managed `klgdevents` VK/TG fanout freshness, inferred end-date handling, and VK postponed slot reservation for one-day timed events.
   - Must not regress: inferred `end_date` must not let an already-started timed event publish; a VK postponed reservation at or after the event start must be refused; stale live/postponed managed VK posts for past timed events must be deleted or blocked before publication.
