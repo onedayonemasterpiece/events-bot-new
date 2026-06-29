@@ -35,7 +35,7 @@
 
 ## Черновики требований
 
-- `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
+- `docs/features/subscriber-acquisition/README.md` — Subscriber Acquisition Discovery MVP: Telegram/VK-сообщества, manual review, conservative reach scoring и Telegraph-отчёт.
 
 ## Как добавлять новую фичу
 

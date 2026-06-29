@@ -1,6 +1,6 @@
 # Requirements: Subscriber Acquisition
 
-Status: reconciled draft
+Status: reconciled draft; Discovery MVP addendum 2026-06-29
 
 ## Product intent
 
@@ -48,12 +48,90 @@ Status: reconciled draft
 - Sticker generation should be treated as a follow-up feature until its content rules, brand safety, publication flow, and platform constraints are specified.
 - For major events, the system may eventually answer or promote via a sticker when a sticker is more natural than a text recommendation.
 
+## Discovery MVP addendum (2026-06-29)
+
+The first implementation slice is **Discovery-only shadow mode**. It should run
+on Kaggle through the existing Telegram Monitoring-style infrastructure, scan
+public Telegram chats/channel comment threads and VK community comment threads,
+discover additional public surfaces, and put both surface candidates and
+reply-opportunity candidates into manual review. Automatic replies, DMs, personal
+user harvesting, VK personal-wall crawling, and sticker generation are outside
+the first MVP.
+
+Initial Telegram seeds for MVP discovery:
+
+- `https://t.me/tg_kgd`
+- `https://t.me/chatkalin`
+- `https://t.me/kenig01chat`
+- `https://t.me/zhest_kaliningrada`
+- `https://t.me/pereezd_v_kaliningrad_legko`
+
+VK is included in MVP scope, but the initial VK seed list is empty until product
+seeds are selected. The schema, runtime config, review queue, and report must be
+VK-ready from the first MVP so VK communities can be added without redesign.
+
+For broadcast channels, discovery should inspect the linked discussion/comment
+chat where available and scan comments/replies, not only top-level channel
+posts. For groups/supergroups, discovery scans recent public chat messages
+directly. The detailed MVP design and work estimate are in
+[`mvp-discovery.md`](mvp-discovery.md).
+
+Storage/runtime decision for MVP:
+
+- Store acquisition discovery/review state in the existing core Fly SQLite DB,
+  because it is operational bot state tied to sources, events, scheduler runs,
+  review UI, and future publication safety.
+- Do not use the personalization Supabase/Postgres DB for this surface; that DB
+  owns anonymous site telemetry/profiles/recommendation caches.
+- Do not create a separate bot for MVP; revisit only if volume/policy boundaries
+  require separate credentials and deployment.
+- Reuse the existing Kaggle encrypted-dataset, `kaggle_status`,
+  `kaggle_registry`, `remote_telegram_session`, and `telegram_session:s22` lease
+  contracts. The job must run only in idle/free time relative to heavy Kaggle/LLM
+  runs and skip cleanly when the shared remote Telegram session is busy.
+
+Review UI requirement:
+
+- Add a separate operator menu (for example `/acq` or `/subs`) to list monitored
+  acquisition surfaces, approve/reject/pause candidates, add seeds manually, and
+  inspect key stats/evidence links.
+
+Product prioritization requirement:
+
+- Each opportunity and surface should include a conservative potential-reach
+  estimate: how many additional people may realistically still see a reply. This
+  estimate should use lower-bound public metrics where available (post views,
+  comment activity, recent engagement) and should never assume that all channel
+  subscribers/community members will see a comment. High reach cannot override
+  high spam or safety risk.
+
+Report requirement:
+
+- Every useful non-empty discovery run should publish a Telegraph report page
+  with direct Telegram/VK links, per-public monitoring-potential analytics,
+  evidence snippets, reach estimates, recommended actions, and sticker-strategy
+  observations. This page is the convenient artifact for manual/external review.
+
+Sticker strategy requirement:
+
+- Discovery should also report Telegram chats/threads where a sticker-based
+  strategy may be viable: whether stickers are common, whether ordinary users
+  can send them, whether the public reaction is tolerant, and whether a sticker
+  whose pack/title points to the announcements channel would be natural. The MVP
+  only analyzes suitability; it does not create or send stickers.
+
+LLM requirement:
+
+- Semantic classification of surfaces and recommendation opportunities remains
+  LLM-first. Use Google/Gemma through the existing quota/rate-limit layer; Lite
+  models can be a lower-confidence fallback/probe but not a replacement for
+  high-confidence review decisions.
+
 ## Open questions
 
-- Which surfaces should be MVP first: Telegram chats/comment threads, VK community comments, or both?
-- Should MVP responses be operator-reviewed before posting, or can any subset be published automatically after confidence/rate-limit gates?
-- What is the initial source allowlist and who approves additions/removals?
-- What exact rate limits and cooldown windows should apply per community, per thread, and globally?
+- Which VK communities should be used as the first approved MVP seeds?
+- What exact rate limits and cooldown windows should apply per community, per thread, and globally after the first live discovery calibration?
+- Who is the long-term owner for approving newly discovered acquisition surfaces after MVP shadow mode?
 - Which event-link surface is canonical when multiple links exist for the same event and platform context?
 - What safety policy should govern sticker generation before it becomes an implementation task?
 
@@ -63,6 +141,13 @@ Status: reconciled draft
 - 2026-06-27: Preserved anti-spam as a primary product constraint: sparse, precise recommendations across relevant communities are preferred over repeated posting in one community.
 - 2026-06-27: Treated sticker/sticker-pack generation as a related follow-up idea rather than part of the first implementation scope.
 - 2026-06-27: Reconciled the 21:10 voice-note intake as an operational request to review/check requirements; no new product requirement delta was found.
+- 2026-06-29: Selected Discovery-only shadow mode as the MVP slice: scan public Telegram chats/comment threads, discover new surfaces, and write manual-review candidates; no automatic posting/DMs/user harvesting.
+- 2026-06-29: Chose existing core Fly SQLite DB and existing bot UI for MVP acquisition review state; personalization Supabase/Postgres and a separate bot are out of scope for MVP.
+- 2026-06-29: Chose existing Kaggle Telegram Monitoring-style infrastructure with `TELEGRAM_AUTH_BUNDLE_S22`, `telegram_session:s22` lease, `kaggle_status`, `kaggle_registry`, remote-session guard, and heavy-job idle scheduling.
+- 2026-06-29: Added VK communities/comment threads to MVP scope while leaving the initial VK seed list empty until product seeds are selected.
+- 2026-06-29: Added conservative potential-reach scoring as a product-prioritization signal for opportunities and surfaces.
+- 2026-06-29: Added Telegraph report output as the primary link-heavy manual/external review artifact.
+- 2026-06-29: Added sticker-strategy suitability analysis as research-only MVP output; sticker creation/sending remains follow-up.
 
 ## Archived intake 2026-06-27T20:27:51+00:00
 
@@ -128,6 +213,111 @@ Compared with the canonical requirements above. The intake is an operational con
 
 - [source/voice_msg_1061-1.oga](source/voice_msg_1061-1.oga)
 - [source/voice_AgADVJ8AAkoWAAFK.oga](source/voice_AgADVJ8AAkoWAAFK.oga)
+
+### Reconciliation checklist
+
+- [x] Compare with previous requirements.
+- [x] If user notes include automatic voice transcripts, treat them as noisy input: recover likely context but ask about uncertain fragments instead of guessing.
+- [x] If there is a contradiction, ask which requirement wins: old, new, or another resolution.
+- [x] Move resolved statements into the canonical sections above and remove/close this pending intake.
+
+## Archived intake 2026-06-28T07:36:42+00:00
+
+Status: resolved / archived 2026-06-29
+
+### User notes
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+Также нужно, чтобы было отдельное меню, где можно просматривать все каналы, чаты сообщества, которые мониторятся. Чтобы там можно было добавлять эти чаты, которые мониторятся для продвижения, исключать их, чтобы можно было видеть ключевую статистику по ним.
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+Нужно провести анализ, делать ли это в рамках внутри имеющейся базы данных или делать отдельно, или вообще это сделать в формате отдельного небольшого бота. Нужно определить целесообразность, раздельно или внутри. То есть несколько вариантов провести тщательный анализ, спрогнозировать рост и так далее. Возможно, целесообразно наличие отдельной БД, но в рамках имеющегося бота.
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+Взаимодействие по анализу. Использовать в нейросети Google через контроль лимитов, скорее всего, ГЕМ-4. Можно 26B, например, для того, чтобы анализировать сообщения, принимать решения, как на них отвечать. Нужно проанализировать, сразу ли может эта нейросеть сформулировать ответ подходящий, или нужно делать через отдельный запрос. Как fallback и дополнительный вариант использовать нейросеть Google Lite.
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+Нужно также в ВК мониторить еще и личные стены людей. И возможно, если там большая активность и много людей приходит писать в комментарии, там тоже иногда планировать делать реплай на такие комментарии или...
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+Также нужен Discovery режим, то есть каждый день делать отдельный запуск, когда из имеющихся сообществ, ВК, стен, телеграм-чатов, телеграм-каналов, чатов, привязанных к каналам, выявлять ссылки на другие стены людей, на другие сообщества, на другие каналы, где открыты комментарии, и проводить автоматическое исследование целесообразности дальнейшего мониторинга этих чатов на предмет вопросов, на предмет продвижения. То есть автоматический Discovery должен отвечать на вопрос, добавлять ли сообщество чат или что это в постоянный мониторинг или не добавлять. Такой инструмент Discovery должен просматривать на приличную глубину.
+
+### Голосовое дополнение к требованиям
+
+Ниже автоматическая расшифровка голосового сообщения. Распознавание может быть неточным: при сверке требований восстанови вероятный контекст, а сомнительные места вынеси в вопросы пользователю.
+
+При этом должно быть хорошо продуманное ограничение, которое не позволит уходить слишком глубоко в работу по анализу страниц. То есть будет эффективно тратить ресурсы.
+
+### Resolution
+
+Resolved by the 2026-06-29 Discovery MVP addendum and `mvp-discovery.md`: separate operator menu, core-DB MVP, existing Kaggle runtime/limit control, LLM-first triage, VK/personal-wall follow-up, daily discovery with depth/budget limits.
+
+### Source files
+
+The transcript above is sufficient for requirements review. Raw 2026-06-28 voice
+artifacts are kept only as local intake materials unless they are explicitly
+needed for audit.
+
+### Reconciliation checklist
+
+- [x] Compare with previous requirements.
+- [x] If user notes include automatic voice transcripts, treat them as noisy input: recover likely context but ask about uncertain fragments instead of guessing.
+- [x] If there is a contradiction, ask which requirement wins: old, new, or another resolution.
+- [x] Move resolved statements into the canonical sections above and remove/close this pending intake.
+
+## Archived intake 2026-06-28T09:40:15+00:00
+
+Status: resolved / archived 2026-06-29
+
+### User notes
+
+Я думаю дискавери можно вынести как раз в MVP, проанализируй как это сделать. Т.е. основной механизм реализовать, но запустить в продакшн именно дискавери чтобы он периодически запускался, например раз в день и добавлял кандидатов, сначала ссылками на ручной отсмотр с прямыми ссылками на канал и на отдельные посты которые как раз были как кандидаты на реакцию.
+
+Можно сделать E2E дискавери, т.е. дать задачу Codex проводить дискавери, смотреть результаты и по результатам докручивать механизм дискавери, чтобы в итоге отладить его, т.е. отладку процесса переложить на Codex
+
+### Resolution
+
+Resolved by the 2026-06-29 Discovery MVP addendum and `mvp-discovery.md`: Discovery is the MVP, production rollout starts in shadow/manual-review mode, direct links to candidate surfaces/posts are required, and live E2E/Codex calibration is part of rollout.
+
+### Reconciliation checklist
+
+- [x] Compare with previous requirements.
+- [x] If user notes include automatic voice transcripts, treat them as noisy input: recover likely context but ask about uncertain fragments instead of guessing.
+- [x] If there is a contradiction, ask which requirement wins: old, new, or another resolution.
+- [x] Move resolved statements into the canonical sections above and remove/close this pending intake.
+
+## Archived intake 2026-06-28T09:52:43+00:00
+
+Status: resolved / archived 2026-06-29
+
+### User notes
+
+Я думаю дискавери можно вынести как раз в MVP, проанализируй как это сделать. Т.е. основной механизм реализовать, но запустить в продакшн именно дискавери чтобы он периодически запускался, например раз в день и добавлял кандидатов, сначала ссылками на ручной отсмотр с прямыми ссылками на канал и на отдельные посты которые как раз были как кандидаты на реакцию.
+
+Можно сделать E2E дискавери, т.е. дать задачу Codex проводить дискавери, смотреть результаты и по результатам докручивать механизм дискавери, чтобы в итоге отладить его, т.е. отладку процесса переложить на Codex
+
+Я думаю дискавери можно вынести как раз в MVP, проанализируй как это сделать. Т.е. основной механизм реализовать, но запустить в продакшн именно дискавери чтобы он периодически запускался, например раз в день и добавлял кандидатов, сначала ссылками на ручной отсмотр с прямыми ссылками на канал и на отдельные посты которые как раз были как кандидаты на реакцию.
+
+Можно сделать E2E дискавери, т.е. дать задачу Codex проводить дискавери, смотреть результаты и по результатам докручивать механизм дискавери, чтобы в итоге отладить его, т.е. отладку процесса переложить на Codex
+
+### Resolution
+
+Resolved by the 2026-06-29 Discovery MVP addendum and `mvp-discovery.md`: Discovery is the MVP, production rollout starts in shadow/manual-review mode, direct links to candidate surfaces/posts are required, and live E2E/Codex calibration is part of rollout.
 
 ### Reconciliation checklist
 

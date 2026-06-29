@@ -228,9 +228,11 @@ features:
       - main.py
       - main_part2.py
   subscriber_acquisition:
-    status: draft
+    status: discovery
     docs: docs/features/subscriber-acquisition/README.md
     requirements: docs/features/subscriber-acquisition/requirements.md
+    mvp_discovery: docs/features/subscriber-acquisition/mvp-discovery.md
+    source_materials: docs/features/subscriber-acquisition/source/
   afishaengagement:
     status: debug_shadow
     docs: docs/features/afishaengagement/README.md
