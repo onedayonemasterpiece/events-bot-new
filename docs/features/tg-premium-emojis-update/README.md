@@ -43,6 +43,28 @@ Env:
 - `TG_PREMIUM_EMOJI_TRETYAKOV_DOCUMENT_IDS` — опциональный comma-separated override для пары `🖼🖼`.
 - `TG_PREMIUM_EMOJI_ALLOW_E2E_FALLBACK=1` — только для локальных/ручных правок, разрешает `TELEGRAM_AUTH_BUNDLE_E2E` / `TELEGRAM_SESSION` fallback.
 
+## Compensation posts
+
+Компенсационные Telegram-публикации после incident repair должны проходить через
+обычный publisher event posts (`job_publish_tg_event_post` /
+`publish_tg_event_announcement`) либо через полностью эквивалентный путь. Это
+обязательное требование, потому что обычный publisher:
+
+- сохраняет каноническую билетную строку, включая direct registration/ticket
+  link;
+- соблюдает правило media group: у альбома нет inline-кнопки, поэтому CTA
+  должен быть ссылкой в caption/text;
+- планирует premium/custom emoji editor на отправленные message ids.
+
+Если компенсация запускается из короткого one-off процесса, нельзя полагаться
+только на background `asyncio.create_task()` из `_schedule_tg_premium_emoji_editor`:
+процесс может завершиться до задержки `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS`.
+Такой repair обязан либо дождаться `edit_messages_with_env(...,
+delay_seconds≈180)`, либо явно запустить
+`scripts/tg_premium_emoji_editor.py --chat <channel> --message-id <id>` после
+публикации. Closure evidence: Telethon reread с registration/ticket entity и
+ненулевым/ожидаемым набором `MessageEntityCustomEmoji` или явный blocker.
+
 ## Session control
 
 - Автоматизация не должна брать `TELEGRAM_AUTH_BUNDLE_S22`: эта сессия зарезервирована под Kaggle/remote monitoring.

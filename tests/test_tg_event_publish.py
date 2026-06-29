@@ -544,6 +544,7 @@ def test_build_tg_promo_event_publication_formats_markdown_body():
     assert "<b>Формат и темы</b>" in text
     assert "• Роль дирижёра как регулятора эмоционального поля." in text
     assert "Гость — Иван Никифорчин." in text
+    assert '🟡 Бесплатно, <a href="https://example.com/tickets">по регистрации</a>' in text
 
 
 def test_build_tg_promo_media_caption_prefers_media_over_bullet_dump():
@@ -571,7 +572,13 @@ def test_build_tg_promo_media_caption_prefers_media_over_bullet_dump():
 
 
 @pytest.mark.asyncio
-async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption_limit():
+async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption_limit(monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(
+        main,
+        "_schedule_tg_premium_emoji_editor",
+        lambda targets, *, context: scheduled.append((targets, context)),
+    )
     event = _event(
         title="Длинный промо-пост",
         description=(
@@ -607,6 +614,9 @@ async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption
     assert bot.reply_markup_edits
     assert bot.reply_markup_edits[0][1]["chat_id"] == "@kldevents"
     assert bot.reply_markup_edits[0][1]["message_id"] == 101
+    assert scheduled == [
+        ([("@kldevents", 101), ("@kldevents", 102)], "tg_promo_event_publish")
+    ]
 
 
 def test_tg_event_promo_details_move_to_inline_button():

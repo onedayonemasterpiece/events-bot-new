@@ -16,6 +16,12 @@
 
 ### Fixed
 
+- **Incident / Telegram promo compensation and repost repeat (INC-2026-06-29)**:
+  `tg_repost` now applies a 7-day same-title diversity cooldown on top of exact
+  source URL dedup, allowing a repeat only when no other forwardable candidate
+  exists. Promo direct Telegram posts reuse the canonical registration/ticket
+  line and schedule the premium emoji editor; compensation docs now require the
+  standard event publisher plus explicit premium-editor verification.
 - **Incident / 80 Stories Telegram promo gap (INC-2026-06-29)**: the built-in
   `80 историй о главном` campaign now seeds and repairs its Telegram promo
   activities in code: two daily `tg_event_publish` self-forward/new-post slots

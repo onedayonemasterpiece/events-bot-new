@@ -74,6 +74,21 @@ TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS=150
 
 The scheduler edits daily announcements and Telegram event posts 2–3 minutes after successful Bot API publication, with randomized jitter (`TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS`) and between-message pauses (`TG_PREMIUM_EMOJI_BETWEEN_EDITS_SECONDS`) for human-like timing. For event posts, keep searchability by ensuring free events carry `#бесплатно` before replacing visible `🟡 Бесплатно...`.
 
+## Compensation Telegram event posts
+
+- Incident/compensation publications for `@kldevents` must use the standard
+  Telegram event publisher (`job_publish_tg_event_post` /
+  `publish_tg_event_announcement`) or an equivalent path that preserves the
+  normal ticket/registration line and media-group rules.
+- A short-lived one-off script must not rely only on the fire-and-forget
+  `_schedule_tg_premium_emoji_editor()` task: the process can exit before the
+  2–3 minute delayed editor runs. Either keep the process alive and await
+  `edit_messages_with_env(..., delay_seconds≈180)` or run
+  `scripts/tg_premium_emoji_editor.py --message-id ...` after publication.
+- Compensation is complete only after a Telethon reread confirms the
+  registration/ticket link entities are present and the premium/custom emoji
+  replacement ran (or a documented blocker explains why it did not).
+
 ## References
 
 - Detailed operating notes live in `references/daily-free-label.md`; read it before changing replacement semantics or adding a new premium emoji composition.

@@ -42,6 +42,13 @@
   forwards or editorial daily blocks. A repost activity by itself must not
   change buttons on the source `@kldevents` post; button highlighting is
   controlled only by the separate `tg_button_highlight` marker activity.
+- Compensation/manual repair publications in `@kldevents` must use the ordinary
+  event-post publisher (`job_publish_tg_event_post` /
+  `publish_tg_event_announcement`) or a fully equivalent path. A repair is not
+  complete if it renders a promo-only body that drops the registration/ticket
+  link or bypasses the post-publication premium emoji editor. For media groups,
+  do not attach inline buttons; the registration/ticket CTA must be preserved
+  as a link entity inside the caption/text.
 
 ## Формат
 

@@ -4240,18 +4240,9 @@ def _tg_promo_message_sections(event: Event) -> tuple[list[str], list[str], str 
         header.append(f"📍 {html.escape(loc)}")
     if getattr(event, "pushkin_card", False):
         header.append(html.escape("✅ Пушкинская карта"))
-    if getattr(event, "is_free", False):
-        header.append(html.escape("🟡 Бесплатно"))
-    elif getattr(event, "ticket_status", None) == "sold_out":
-        header.append(html.escape("❌ Билеты все проданы"))
-    elif getattr(event, "ticket_price_min", None) is not None or getattr(event, "ticket_price_max", None) is not None:
-        if event.ticket_price_min is not None and event.ticket_price_max is not None and event.ticket_price_min != event.ticket_price_max:
-            price = f"от {event.ticket_price_min} до {event.ticket_price_max} руб."
-        else:
-            value = event.ticket_price_min if event.ticket_price_min is not None else event.ticket_price_max
-            price = f"{value} руб." if value is not None else ""
-        if price:
-            header.append(html.escape(f"🎟 Билеты {price}"))
+    ticket_line = _tg_event_ticket_line(event)
+    if ticket_line:
+        header.append(ticket_line)
 
     body = _tg_promo_body_to_html(_tg_promo_text_source(event)).strip()
     body_lines = body.splitlines() if body else []
@@ -4349,6 +4340,7 @@ async def publish_tg_promo_event_publication(
     message_text, message_entities = telegram_event_html_to_text_entities(message)
 
     photo_urls = [str(url).strip() for url in (getattr(event, "photo_urls", None) or []) if str(url).strip()]
+    sent_message_ids: list[int] = []
     async with TG_SEND_SEMAPHORE:
         if photo_urls:
             caption = build_tg_promo_event_publication_media_caption(event)
@@ -4361,6 +4353,7 @@ async def publish_tg_promo_event_publication(
                     caption_entities=caption_entities,
                     reply_markup=markup,
                 )
+                sent_message_ids.append(int(sent.message_id))
             else:
                 media = [
                     types.InputMediaPhoto(
@@ -4372,6 +4365,7 @@ async def publish_tg_promo_event_publication(
                 ]
                 group = await bot.send_media_group(target_chat, media)
                 sent = group[0]
+                sent_message_ids.extend(int(item.message_id) for item in group)
                 if markup:
                     await bot.edit_message_reply_markup(
                         chat_id=target_chat,
@@ -4386,6 +4380,12 @@ async def publish_tg_promo_event_publication(
                 reply_markup=markup,
                 disable_web_page_preview=True,
             )
+            sent_message_ids.append(int(sent.message_id))
+    if sent_message_ids:
+        _schedule_tg_premium_emoji_editor(
+            [(target_chat, message_id) for message_id in sent_message_ids],
+            context="tg_promo_event_publish",
+        )
     return _tg_channel_message_link(target_chat, int(sent.message_id))
 
 

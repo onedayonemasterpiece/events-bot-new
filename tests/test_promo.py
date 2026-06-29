@@ -2489,6 +2489,154 @@ async def test_tg_repost_weighted_popularity_uses_owned_vk_boost_and_tme_c_sourc
 
 
 @pytest.mark.asyncio
+async def test_tg_repost_weighted_popularity_prefers_diverse_title_within_week(
+    tmp_path, monkeypatch
+) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 29, 13, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        previous_alice = _event("Мюзикл «Алиса в Стране чудес»", "2026-07-08")
+        previous_alice.tg_event_post_url = "https://t.me/kldevents/420"
+        previous_alice.tg_event_post_id = 420
+        alice_again = _event("Мюзикл «Алиса в Стране чудес»", "2026-07-11")
+        alice_again.tg_event_post_url = "https://t.me/kldevents/421"
+        alice_again.tg_event_post_id = 421
+        different = _event("Концерт органной музыки", "2026-07-12")
+        different.tg_event_post_url = "https://t.me/kldevents/422"
+        different.tg_event_post_id = 422
+        session.add_all([previous_alice, alice_again, different])
+        await session.flush()
+        previous_id = int(previous_alice.id)
+        alice_again_id = int(alice_again.id)
+        different_id = int(different.id)
+        campaign = PromoCampaign(
+            title="Popular TG reposts",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 7, 30, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_REPOST,
+            profile_key="kldevents->kenigevents",
+            max_per_publish=1,
+            daily_cap=1,
+            selection_policy=PROMO_POLICY_WEIGHTED_POPULARITY,
+            config_json={
+                "source_chat": "@kldevents",
+                "target_chat": "@kenigevents",
+                "active_start_hour": 9,
+                "active_end_hour": 21,
+                "dedup_hours": 72,
+                "repeat_cooldown_days": 7,
+                "selection_policy": PROMO_POLICY_WEIGHTED_POPULARITY,
+                "popularity_window_days": 7,
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type=PROMO_TARGET_TYPE_ALL))
+        await session.flush()
+        activity_id = int(activity.id)
+        session.add(
+            PromoExposure(
+                campaign_id=int(campaign.id),
+                activity_id=activity_id,
+                event_id=previous_id,
+                surface=PROMO_SURFACE_TG_REPOST,
+                placement_kind="rolling_window_repost",
+                publish_status="TG_FORWARDED",
+                public_target_count=1,
+                public_targets_json=[{"type": "telegram_forward", "url": "https://t.me/kenigevents/1"}],
+                published_at=now_utc.replace(day=28),
+                details_json={
+                    "source_url": "https://t.me/kldevents/420",
+                    "target_url": "https://t.me/kenigevents/1",
+                },
+            )
+        )
+        for event_id, source_message_id in [(alice_again_id, 421), (different_id, 422)]:
+            session.add(
+                EventSource(
+                    event_id=event_id,
+                    source_type="telegram",
+                    source_url=f"https://t.me/weighted_source/{source_message_id}",
+                    source_chat_username="weighted_source",
+                    source_message_id=source_message_id,
+                )
+            )
+        await session.commit()
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "INSERT INTO telegram_source(username, title, enabled) VALUES(?,?,1)",
+            ("weighted_source", "Weighted Source"),
+        )
+        source_id = int(cur.lastrowid)
+        for message_id, views, likes in [
+            (421, 1000, 100),
+            (422, 20, 2),
+        ]:
+            await conn.execute(
+                """
+                INSERT INTO telegram_scanned_message(source_id, message_id, status, events_extracted, events_imported)
+                VALUES(?,?,?,?,?)
+                """,
+                (source_id, message_id, "imported", 1, 1),
+            )
+            await conn.execute(
+                """
+                INSERT INTO telegram_post_metric(source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    source_id,
+                    message_id,
+                    0,
+                    f"https://t.me/weighted_source/{message_id}",
+                    int(now_utc.timestamp()) - 3600,
+                    int(now_utc.timestamp()),
+                    views,
+                    likes,
+                ),
+            )
+        await conn.commit()
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.forwarded: list[tuple[str, str, int]] = []
+
+        async def forward_message(self, *, chat_id, from_chat_id, message_id):
+            self.forwarded.append((chat_id, from_chat_id, message_id))
+            return SimpleNamespace(message_id=5000 + int(message_id))
+
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", None, raising=False)
+    bot = DummyBot()
+
+    results = await run_promo_vk_activities(db, bot, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id) for item in results] == [
+        (PROMO_SURFACE_TG_REPOST, "published", different_id)
+    ]
+    assert bot.forwarded == [("@kenigevents", "@kldevents", 422)]
+    async with db.get_session() as session:
+        exposure = (
+            await session.execute(
+                select(PromoExposure).where(PromoExposure.event_id == different_id)
+            )
+        ).scalars().one()
+    assert exposure.details_json["repeat_key"] == "концерт органной музыки"
+    assert exposure.details_json["repeat_cooldown_bypassed"] is False
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_repost_uses_local_day_count_not_rolling_window(
     tmp_path, monkeypatch
 ) -> None:

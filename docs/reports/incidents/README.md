@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-tg-promo-compensation-repeat.md`
+  - Scope: broad Telegram `tg_repost` popular amplification diversity and incident compensation posts in `@kldevents`.
+  - Must not regress: `@kenigevents` popular reposts must not repeat the same normalized title inside 7 days while another forwardable candidate exists; compensation Telegram event posts must preserve direct registration/ticket links, respect media-group no-button limits, and explicitly run/verify the premium emoji editor after the standard event publisher path.
 - `INC-2026-06-29-80-stories-telegram-promo-gap.md`
   - Scope: built-in `80 историй о главном` promo campaign Telegram companion activities, `tg_event_publish` self-forward/new-post behavior for `@kldevents`, `tg_repost` amplification to `@kenigevents`, and drift between VK 80 Stories refreshes and Telegram campaign coverage.
   - Must not regress: the built-in 80 Stories campaign must seed and repair code-owned `tg_event_publish`/`tg_repost` activities; `@kldevents` gets two daily self-forward-or-new-post slots aligned with VK visibility, and production-only manual activity rows must not be the only source of truth.

@@ -436,6 +436,12 @@ a large extra button. It looks at the promoted event's stored
 future events: when an event has a concrete start time, the repost is eligible
 only before the `min_lead_hours` cutoff (`4` hours by default), so daily/digest
 channels do not amplify events that have already started or are about to start.
+To keep broad amplification diverse, `tg_repost` also applies a same-title
+repeat cooldown. `dedup_hours` still protects the exact source URL, while
+`repeat_cooldown_days` / `repeat_cooldown_hours` (default: `7` days) suppresses
+another event with the same normalized title if a non-repeat forwardable
+candidate exists. A repeat is allowed only as a fail-open fallback when the
+activity has no other forwardable candidate for the due slot.
 For broad editorial amplification, a `tg_repost` activity may use
 `selection_policy='weighted_popularity'` with an `all` target. In that mode the
 candidate is the event, not the source post: the selector sums
@@ -450,7 +456,10 @@ signals still count. The forwarded post itself is still taken from the event's
 `tg_event_publish` exposure). If a highly ranked event has no forwardable
 `@kldevents`/`t.me/c/...` post yet, the activity skips it and tries the next
 ranked event; it does not create a new source post just to satisfy the repost
-slot.
+slot. Diversity cooldown is evaluated after ranking: a lower-scored different
+title beats a repeated title within the cooldown window, but if every
+forwardable candidate is a repeat the highest-ranked repeat may be used and is
+recorded with `details_json.repeat_cooldown_bypassed=true`.
 
 The initial `80 историй о главном` campaign now includes:
 

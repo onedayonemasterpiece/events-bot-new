@@ -2522,6 +2522,47 @@ def _tg_message_id_from_url(url: str | None) -> int | None:
         return None
 
 
+def _promo_repeat_key(ev: Event) -> str:
+    title = _norm_text(getattr(ev, "title", None))
+    return " ".join(re.sub(r"[^\w\s]+", " ", title, flags=re.UNICODE).split())
+
+
+async def _recent_activity_event_repeat_keys(
+    db: Database,
+    *,
+    campaign_id: int,
+    activity_id: int,
+    surface: str,
+    since_utc: datetime,
+    until_utc: datetime,
+) -> set[str]:
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(PromoExposure)
+            .where(PromoExposure.campaign_id == campaign_id)
+            .where(PromoExposure.activity_id == activity_id)
+            .where(PromoExposure.surface == surface)
+        )
+        exposures = list(res.scalars().all())
+    filtered: list[PromoExposure] = []
+    for exposure in exposures:
+        published_at = exposure.published_at
+        if published_at is None:
+            continue
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
+        if since_utc <= published_at <= until_utc:
+            filtered.append(exposure)
+    exposures = filtered
+    event_ids = sorted({int(exposure.event_id) for exposure in exposures if exposure.event_id is not None})
+    if not event_ids:
+        return set()
+    async with db.get_session() as session:
+        res = await session.execute(select(Event).where(Event.id.in_(event_ids)))
+        events = list(res.scalars().all())
+    return {key for key in (_promo_repeat_key(ev) for ev in events) if key}
+
+
 def _tg_url_matches_chat(url: str | None, chat: str | None) -> bool:
     text = str(url or "").strip().lower()
     if not text:
@@ -5630,6 +5671,45 @@ async def run_promo_vk_activities(
                 for exposure in prior
                 if isinstance(exposure.details_json, dict)
             }
+            repeat_cooldown_raw = cfg.get("repeat_cooldown_hours")
+            try:
+                repeat_cooldown_hours = int(repeat_cooldown_raw)
+            except (TypeError, ValueError):
+                try:
+                    repeat_cooldown_hours = int(cfg.get("repeat_cooldown_days", 7)) * 24
+                except (TypeError, ValueError):
+                    repeat_cooldown_hours = 7 * 24
+            recent_repeat_keys: set[str] = set()
+            if repeat_cooldown_hours > 0:
+                recent_repeat_keys = await _recent_activity_event_repeat_keys(
+                    db,
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
+                    surface=PROMO_SURFACE_TG_REPOST,
+                    since_utc=now_utc - timedelta(hours=repeat_cooldown_hours),
+                    until_utc=now_utc,
+                )
+                repeat_prior = await _recent_activity_exposures(
+                    db,
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
+                    surface=PROMO_SURFACE_TG_REPOST,
+                    since_utc=now_utc - timedelta(hours=repeat_cooldown_hours),
+                )
+                repeat_source_urls = {
+                    str((exposure.details_json or {}).get("source_url") or "").strip()
+                    for exposure in repeat_prior
+                    if isinstance(exposure.details_json, dict)
+                }
+                recent_repeat_keys.update(
+                    key
+                    for key in (
+                        _promo_repeat_key(candidate[0])
+                        for candidate in source_candidates
+                        if candidate[1] in repeat_source_urls
+                    )
+                    if key
+                )
             picked: tuple[Event, str, datetime] | None = None
             popularity_scores: dict[int, PromoPopularityScore] = {}
             selection_policy = str(cfg.get("selection_policy") or activity.selection_policy or "").strip()
@@ -5653,20 +5733,28 @@ async def run_promo_vk_activities(
                     )
 
                 ranked_candidates = [
-                    item
-                    for item in sorted(source_candidates, key=weighted_key, reverse=True)
-                    if popularity_scores.get(int(item[0].id or 0)) is not None
+                    item for item in sorted(source_candidates, key=weighted_key, reverse=True)
                 ]
             else:
                 ranked_candidates = sorted(source_candidates, key=lambda item: (item[2], int(item[0].id or 0)))
+            eligible_ranked_candidates = [
+                candidate for candidate in ranked_candidates if candidate[1] not in forwarded_source_urls
+            ]
             for candidate in ranked_candidates:
-                if candidate[1] not in forwarded_source_urls:
+                repeat_key = _promo_repeat_key(candidate[0])
+                if candidate[1] not in forwarded_source_urls and repeat_key not in recent_repeat_keys:
                     picked = candidate
                     break
+            if picked is None:
+                # Diversity is preferred, but if the campaign genuinely has no
+                # other forwardable candidate, allow a repeat rather than
+                # dropping the slot completely.
+                picked = eligible_ranked_candidates[0] if eligible_ranked_candidates else None
             if picked is None:
                 continue
             ev, source_url, source_at = picked
             selected_popularity = popularity_scores.get(int(ev.id or 0)) if popularity_scores else None
+            repeat_key = _promo_repeat_key(ev)
             try:
                 url = await _publish_tg_repost(
                     bot,
@@ -5698,6 +5786,9 @@ async def run_promo_vk_activities(
                         "owned_vk_popularity_score": selected_popularity.owned_vk_score if selected_popularity else None,
                         "source_popularity_count": selected_popularity.source_count if selected_popularity else None,
                         "owned_vk_popularity_count": selected_popularity.owned_vk_count if selected_popularity else None,
+                        "repeat_key": repeat_key or None,
+                        "repeat_cooldown_hours": repeat_cooldown_hours,
+                        "repeat_cooldown_bypassed": repeat_key in recent_repeat_keys,
                     },
                     target_type="telegram_forward",
                 )
