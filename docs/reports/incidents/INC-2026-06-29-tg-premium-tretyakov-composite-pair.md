@@ -1,10 +1,10 @@
 # INC-2026-06-29-tg-premium-tretyakov-composite-pair Daily Tretyakov premium marker used the wrong emoji pair
 
-Status: closed
+Status: mitigated pending final deploy
 Severity: sev3
 Service: Telegram `@kenigevents` / daily premium emoji editor
 Opened: 2026-06-29
-Closed: 2026-06-29
+Closed: —
 Owners: events-bot
 Related incidents: `INC-2026-06-29-tg-premium-ticket-calendar-icon.md`
 Related docs: `docs/features/tg-premium-emojis-update/README.md`, `.codex/skills/tg-premium-emojis-update/SKILL.md`
@@ -29,12 +29,15 @@ The daily premium emoji editor used the wrong `lovekenigofficial` document ids f
 - 2026-06-29: operator reported the duplicated-thumbnail visual regression.
 - 2026-06-29: local pack contact sheet confirmed document ids `5188445640325099838` and `5188470637034758005` are the adjacent two-part composite after small thumbnail `5188683852096234620`.
 - 2026-06-29: live `@kenigevents/4210` repaired to the composite ids; second dry-run reported `remaining_replacements=0`.
+- 2026-06-29 13:00 UTC: recurrence detected: visible text was correct, but title-level ordinary `🖼️` retained a stale Tretyakov custom entity and the compact `🖼🖼` pair regressed to duplicated small-thumbnail ids.
+- 2026-06-29 13:07 UTC: live `@kenigevents/4210` repaired again: title-level `🖼️` has no Tretyakov custom entity; compact row uses ids `5188445640325099838,5188470637034758005`; second dry-run reported `remaining_replacements=0`.
 
 ## Root Cause
 
 1. The emoji pack has multiple consecutive `🖼` custom emoji with the same fallback text, but different visual roles.
 2. The implementation selected ids by fallback order without distinguishing the standalone thumbnail from the two-part composite.
 3. Tests asserted only membership/equality through the default tuple and did not encode the intended visual sequence.
+4. The editor did not explicitly clean stale title-level `🖼️` custom entities after the visible title text had already been corrected.
 
 ## Contributing Factors
 
@@ -59,6 +62,7 @@ The daily premium emoji editor used the wrong `lovekenigofficial` document ids f
 ### Mandatory checks before closure or deploy
 
 - Unit test / smoke proving the Tretyakov pair ids are `5188445640325099838,5188470637034758005`.
+- Unit test proving title-level ordinary `👉 🖼️ ...` drops stale Tretyakov custom-emoji entities and remains ordinary picture text.
 - Live verification on `@kenigevents/4210` or latest daily announcement that the visible `🖼🖼` pair uses these two ids and a second dry-run reports `remaining_replacements=0`.
 - Production code smoke after deploy returning the same ids.
 - Production `/healthz` after deploy.
@@ -72,31 +76,21 @@ The daily premium emoji editor used the wrong `lovekenigofficial` document ids f
 
 ## Immediate Mitigation
 
-- Repaired `@kenigevents/4210`: compact row `03.07 🖼🖼 🎹 Концерт Ильи Папояна` now has document ids `5188445640325099838,5188470637034758005`; title row remains ordinary `👉 🖼️ Александр Дейнека...`; second dry-run reported `remaining_replacements=0`.
+- Repaired `@kenigevents/4210`: compact row `03.07 🖼🖼 🎹 Концерт Ильи Папояна` now has document ids `5188445640325099838,5188470637034758005`; title row remains ordinary `👉 🖼️ Александр Дейнека...` with no Tretyakov custom entity; second dry-run reported `remaining_replacements=0`.
 
 ## Corrective Actions
 
 - Changed default Tretyakov pair ids to `5188445640325099838,5188470637034758005`.
 - Updated feature docs, skill notes, and changelog to clarify that the intended pair is the two adjacent composite parts after the small standalone thumbnail.
+- Added cleanup for stale title-level `🖼️` custom emoji entities so title pictures cannot retain a Tretyakov premium entity after visible-text cleanup.
 
 ## Follow-up Actions
 
-- [x] Closed after final deploy and post-deploy verification were recorded below.
+- [ ] Close after final deploy and post-deploy verification are recorded below.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `2d5ce945b54a8ab74bf6259c072ff37e203c6bc9` (reachable from `origin/main`).
-- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree, HEAD equal to `origin/main`.
-- Fly image: `deployment-01KW9CFE5KW5G3G8TBTB0JEVPT`; machine `683961db016e28`, version `1522`, checks passing.
-- regression checks:
-  - `pytest -q tests/test_tg_premium_emojis.py tests/test_daily_format.py::test_format_event_daily_marks_tretyakov_with_picture_pair tests/test_daily_format.py::test_format_event_daily_does_not_mark_tretyakov_by_title_only tests/test_tg_event_publish.py::test_build_tg_event_announcement_formats_links_hashtags_and_footer tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send tests/test_remote_telegram_session.py` → `25 passed`.
-  - `py_compile tg_premium_emojis.py main.py main_part2.py scripts/tg_premium_emoji_editor.py` → passed.
-  - `git diff --check` → passed.
-  - live `@kenigevents/4210` after repair: `03.07 🖼🖼 🎹 Концерт Ильи Папояна` has document ids `5188445640325099838,5188470637034758005`; `remaining_replacements=0`.
-- post-deploy verification:
-  - `/healthz` returned `200`, `ready=true`.
-  - Production env check: `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1`, dedicated `TG_PREMIUM_EMOJI_AUTH_BUNDLE` present.
-  - Production code smoke: `DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS` is `[5188445640325099838, 5188470637034758005]`; sample compact and venue lines receive custom ids `[5188445640325099838, 5188470637034758005]`.
+Pending final deploy for recurrence hardening. Previous release evidence remains in git history.
 
 ## Prevention
 

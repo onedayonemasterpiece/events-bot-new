@@ -187,6 +187,25 @@ def test_daily_tretyakov_title_pair_is_cleaned_up_because_pair_is_venue_only():
     assert custom_ids == [DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["👉"]]
 
 
+def test_daily_tretyakov_title_single_picture_drops_wrong_custom_entity():
+    text = "👉 🖼️ Александр Дейнека. Картины советской эпохи"
+    picture_offset = add_surrogate(text).index(add_surrogate("🖼️"))
+    entities = [
+        MessageEntityCustomEmoji(
+            offset=picture_offset,
+            length=len(add_surrogate("🖼️")),
+            document_id=5188683852096234620,
+        )
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
+
+    assert new_text == text
+    assert count == 2  # drop title picture custom entity plus regular `👉` premiumization
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert custom_ids == [DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["👉"]]
+
+
 def test_daily_tretyakov_added_row_does_not_infer_venue_from_title_text():
     text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🚩 🖼️ Александр Дейнека"
 
@@ -199,8 +218,17 @@ def test_daily_tretyakov_added_row_does_not_infer_venue_from_title_text():
 
 def test_daily_tretyakov_existing_added_row_pair_gets_composite_entities():
     text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🖼🖼 Лекция в галерее"
+    pair_offset = add_surrogate(text).index(add_surrogate("🖼🖼"))
+    entities = [
+        MessageEntityCustomEmoji(offset=pair_offset, length=len(add_surrogate("🖼")), document_id=5188683852096234620),
+        MessageEntityCustomEmoji(
+            offset=pair_offset + len(add_surrogate("🖼")),
+            length=len(add_surrogate("🖼")),
+            document_id=5188683852096234620,
+        ),
+    ]
 
-    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
 
     assert new_text == text
     assert count == 1

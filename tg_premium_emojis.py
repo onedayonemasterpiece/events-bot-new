@@ -361,6 +361,20 @@ def _tretyakov_title_cleanup_op(start: int) -> _SubstitutionOp:
     return _SubstitutionOp(start, len(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK)), "🖼️", ())
 
 
+def _custom_emoji_ranges(entities: Sequence[Any] | None) -> list[tuple[int, int]]:
+    return [
+        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
+        for entity in (entities or [])
+        if isinstance(entity, MessageEntityCustomEmoji)
+    ]
+
+
+def _tretyakov_title_single_cleanup_op(start: int, marker: str) -> _SubstitutionOp:
+    # A regular picture emoji in the title is not a Tretyakov venue marker.
+    # Replace with itself to drop any old custom-emoji entity bound to it.
+    return _SubstitutionOp(start, len(add_surrogate(marker)), marker, ())
+
+
 def _tretyakov_pair_already_expected(
     start: int,
     entities: Sequence[Any] | None,
@@ -395,6 +409,7 @@ def _maybe_tretyakov_pair_entity_op(start: int, entities: Sequence[Any] | None) 
 def _find_daily_tretyakov_ops(text: str, entities: Sequence[Any] | None = None) -> list[_SubstitutionOp]:
     ops: list[_SubstitutionOp] = []
     sur_offset = 0
+    custom_ranges = _custom_emoji_ranges(entities)
     for line in text.splitlines(keepends=True):
         visible_line = line.rstrip("\r\n")
         stripped = visible_line.strip()
@@ -403,6 +418,15 @@ def _find_daily_tretyakov_ops(text: str, entities: Sequence[Any] | None = None) 
             start = sur_offset + line_sur.find(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK))
             if start >= sur_offset:
                 ops.append(_tretyakov_title_cleanup_op(start))
+        elif stripped.startswith("👉 "):
+            for marker in ("🖼️", "🖼"):
+                marker_pos = visible_line.find(marker)
+                if marker_pos >= 0 and visible_line[:marker_pos].strip() == "👉":
+                    start = sur_offset + len(add_surrogate(visible_line[:marker_pos]))
+                    end = start + len(add_surrogate(marker))
+                    if _ranges_overlap(start, end, custom_ranges):
+                        ops.append(_tretyakov_title_single_cleanup_op(start, marker))
+                    break
 
         date_location_match = re.match(
             r"^(\s*\d{1,2}\s+[а-яё]+(?:\s+\d{1,2}:\d{2})?\s+)(.+)$",
