@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import random
+import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -30,6 +31,9 @@ DEFAULT_FREE_EMOJI_DOCUMENT_IDS: tuple[int, ...] = (
 DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
     "🎭": 5390961951150988955,
     "👉": 5204036388789445008,
+    "💰": 5305700407874449437,
+    "📗": 5339143926638996892,
+    "🏰": 5305794630866989617,
 }
 DAILY_ADDED_HEADING = "ДОБАВИЛИ В АНОНС"
 
@@ -202,6 +206,10 @@ def _apply_substitution_ops(
                 next_entities.append(entity)
             elif ent_start >= end:
                 next_entities.append(_clone_entity_with_offset(entity, ent_start + delta))
+            elif old_len == 0 and delta > 0 and ent_start < start < ent_end:
+                cloned = copy.copy(entity)
+                cloned.length = ent_len + delta
+                next_entities.append(cloned)
             elif delta == 0 and not isinstance(entity, MessageEntityCustomEmoji):
                 # Single-emoji premiumization keeps the visible text unchanged.
                 # Preserve surrounding title/link formatting even when it covers
@@ -287,6 +295,55 @@ def _find_daily_single_emoji_ops(
     return sorted(ops, key=lambda item: item.start)
 
 
+def _plain_prefix_is_daily_venue_context(prefix: str) -> bool:
+    stripped = prefix.strip()
+    if not stripped:
+        return False
+    if stripped.endswith("📍"):
+        return True
+    return bool(
+        re.search(
+            r"(?:^|\s)\d{1,2}\s+[а-яё]+(?:\s+\d{1,2}:\d{2})?$",
+            stripped,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _find_daily_insert_emoji_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
+    ops: list[_SubstitutionOp] = []
+    money_id = mapping.get("💰")
+    if money_id:
+        sur_text = add_surrogate(text)
+        money_sur = add_surrogate("💰")
+        price_pattern = re.compile(
+            rf"(Билеты в источнике\s+)(?!{re.escape(money_sur)}\s)(\d[\d\s]*(?:[.,]\d+)?)"
+        )
+        for match in price_pattern.finditer(sur_text):
+            ops.append(_SubstitutionOp(match.start(2), 0, "💰 ", (int(money_id),)))
+
+    venue_specs = (
+        ("Научная библиотека", "📗"),
+        ("Замок Ноухайзен", "🏰"),
+    )
+    sur_offset = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        for venue, icon in venue_specs:
+            document_id = mapping.get(icon)
+            if not document_id:
+                continue
+            pos = visible_line.find(venue)
+            while pos >= 0:
+                prefix = visible_line[:pos]
+                if not prefix.endswith(f"{icon} ") and _plain_prefix_is_daily_venue_context(prefix):
+                    start = sur_offset + len(add_surrogate(prefix))
+                    ops.append(_SubstitutionOp(start, 0, f"{icon} ", (int(document_id),)))
+                pos = visible_line.find(venue, pos + len(venue))
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
+
 def apply_daily_free_premium_emojis(
     text: str,
     entities: Sequence[Any] | None = None,
@@ -299,9 +356,11 @@ def apply_daily_free_premium_emojis(
     if len(ids) != len(DEFAULT_FREE_EMOJI_FALLBACK):
         raise ValueError("daily free premium label must contain exactly 4 custom emoji document ids")
     single_ids = single_emoji_document_ids if single_emoji_document_ids is not None else parse_daily_single_emoji_document_ids()
+    single_mapping = dict(single_ids)
     ops = [
         *_find_daily_free_label_ops(text, ids),
-        *_find_daily_single_emoji_ops(text, entities, dict(single_ids)),
+        *_find_daily_insert_emoji_ops(text, single_mapping),
+        *_find_daily_single_emoji_ops(text, entities, single_mapping),
     ]
     return _apply_substitution_ops(text, entities, ops)
 
