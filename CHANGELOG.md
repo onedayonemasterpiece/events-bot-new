@@ -36,6 +36,11 @@
   exists. Promo direct Telegram posts reuse the canonical registration/ticket
   line and schedule the premium emoji editor; compensation docs now require the
   standard event publisher plus explicit premium-editor verification.
+- **Incident / Telegram event publish restart backlog (INC-2026-06-29)**:
+  fresh Telegram event announcements now ignore stale pending catch-up anchors
+  when choosing their initial `next_run_at`, so deploy/restart backlog replay
+  cannot push new VK-imported events to the next day before the worker's
+  freshness lane can run.
 - **Incident / 80 Stories Telegram promo gap (INC-2026-06-29)**: the built-in
   `80 историй о главном` campaign now seeds and repairs its Telegram promo
   activities in code: two daily `tg_event_publish` self-forward/new-post slots

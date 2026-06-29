@@ -29,7 +29,7 @@
   - Must not regress: the built-in 80 Stories campaign must seed and repair code-owned `tg_event_publish`/`tg_repost` activities; `@kldevents` gets two daily self-forward-or-new-post slots aligned with VK visibility, and production-only manual activity rows must not be the only source of truth.
 - `INC-2026-06-29-tg-event-publish-fresh-import-starvation.md`
   - Scope: `joboutbox` due ordering and `tg_event_publish` spacing/catch-up for Smart Update imports into `@kldevents`.
-  - Must not regress: fresh Smart Update event announcements must not be starved behind old `tg_event_publish` catch-up/backlog rows; Telegram spacing may still enforce one post per interval, but newly imported events with completed dependencies need a freshness lane and public VK/TG divergence must be visible in evidence.
+  - Must not regress: fresh Smart Update event announcements must not be starved behind old `tg_event_publish` catch-up/backlog rows either at initial `next_run_at` scheduling or at due-job execution; Telegram spacing may still enforce one post per interval, but newly imported events with completed dependencies need a freshness lane and public VK/TG divergence must be visible in evidence.
 - `INC-2026-06-29-tg-premium-rock-emoji-wrong-id.md`
   - Scope: Telegram premium emoji editor for rock-concert title/category icons in `@kldevents` and daily announcements, especially the `lovekenigofficial` `🤘` document id.
   - Must not regress: rock `🤘` must use document id `5404517529362128309` (rock/guitarist symbol), not neighboring id `5393556708398225048`; existing wrong custom entities for visible `🤘` must be corrected in-place.

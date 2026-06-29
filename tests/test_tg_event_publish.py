@@ -1638,6 +1638,56 @@ async def test_next_tg_event_publish_run_at_uses_open_gap_before_late_same_day_b
 
 
 @pytest.mark.asyncio
+async def test_next_tg_event_publish_run_at_fresh_import_ignores_old_same_day_backlog(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    original_tz = main.LOCAL_TZ
+    main.LOCAL_TZ = main.timezone.utc
+    monkeypatch.setenv("TG_EVENT_PUBLISH_START_HOUR", "7")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_END_HOUR", "23")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS", "3")
+    try:
+        now = main.datetime(2026, 6, 29, 17, 3, tzinfo=main.timezone.utc)
+        async with db.get_session() as session:
+            session.add(
+                main.JobOutbox(
+                    event_id=1000,
+                    task=main.JobTask.tg_event_publish,
+                    status=main.JobStatus.done,
+                    updated_at=main.datetime(2026, 6, 29, 16, 57, tzinfo=main.timezone.utc),
+                    next_run_at=main.datetime(2026, 6, 29, 16, 57, tzinfo=main.timezone.utc),
+                )
+            )
+            for offset_min in range(7, 247, 10):
+                event = _event(id=None, added_at=now - main.timedelta(days=14))
+                session.add(event)
+                await session.flush()
+                session.add(
+                    main.JobOutbox(
+                        event_id=int(event.id),
+                        task=main.JobTask.tg_event_publish,
+                        status=main.JobStatus.pending,
+                        updated_at=now - main.timedelta(hours=1),
+                        next_run_at=now + main.timedelta(minutes=offset_min),
+                    )
+                )
+            await session.commit()
+
+        scheduled = await main.next_tg_event_publish_run_at(
+            db,
+            now=now,
+            prefer_fresh=True,
+        )
+
+        assert scheduled == main.datetime(2026, 6, 29, 17, 7, tzinfo=main.timezone.utc)
+    finally:
+        main.LOCAL_TZ = original_tz
+
+
+@pytest.mark.asyncio
 async def test_enqueue_tg_publish_rearm_replaces_stale_next_day_slot(tmp_path):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

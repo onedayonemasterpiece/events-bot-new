@@ -13,6 +13,8 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 
 29 июня 2026 Smart Update успешно создал события `6491` и `6492`, построил Telegraph/ICS и опубликовал managed VK-посты, но `@kldevents` не получил event announcements. Причина была не в отсутствии `tg_event_publish` jobs: они существовали и имели выполненные зависимости, но попадали в один throttled backlog слот вместе со старыми catch-up rows и из-за сортировки `joboutbox.id` постоянно откладывались за более старыми pending jobs.
 
+Вечером 29 июня обнаружена повторная форма того же класса: после очередного релиза/restart worker был жив (`/healthz` OK), VK продолжал публиковаться, но новые `tg_event_publish` jobs для событий `6500–6507` получили initial `next_run_at` на следующее утро (`2026-06-30 05:00 UTC`). Предыдущая freshness lane работала только для уже-due jobs; она не могла помочь, если `next_tg_event_publish_run_at()` ещё при enqueue посчитал старые pending catch-up rows полноценными anchors и вынес свежие импорты за текущий день.
+
 ## User / Business Impact
 
 - Новые события из Smart Update выглядели опубликованными в отчёте и VK, но отсутствовали в основном Telegram-канале `@kldevents`.
@@ -50,6 +52,9 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 2. `tg_event_publish` catch-up/backlog rows from older imports and repair waves were repeatedly due at the same throttled timestamp as fresh Smart Update rows.
 3. `_defer_tg_event_publish_if_spacing_blocked()` correctly enforces one Telegram event post per interval, but after each publish it defers every other due `tg_event_publish` row to the same next anchor. With `id` ordering, fresh high-id Smart Update jobs stayed behind older rows and were re-deferred every cycle.
 4. VK publication has a separate postponed cadence and therefore continued successfully, creating the observed VK/TG divergence.
+5. Evening recurrence: `schedule_event_update_tasks()` called `next_tg_event_publish_run_at()` while old catch-up rows already occupied same-day pending anchors.
+6. `next_tg_event_publish_run_at()` considered those old pending anchors before the new job became due; once its search crossed the local publish window end it normalized fresh imports to next morning. The worker freshness sort only applies after `next_run_at <= now`, so the fresh lane was bypassed.
+7. A deploy/restart made the failure visible because the queue resumed old catch-up/no-op rows and created dense pending anchors, while newly imported VK events remained scheduled for tomorrow.
 
 ## Contributing Factors
 
@@ -97,6 +102,8 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 - Added `TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS` (default 3h) and due-job sorting that ranks fresh `tg_event_publish` rows ahead of stale catch-up rows, with newest fresh imports first.
 - Preserved Telegram spacing: even fresh rows still pass `_defer_tg_event_publish_if_spacing_blocked()`, so the fix changes ordering, not rate limits.
 - Added regression coverage in `tests/test_job_due_filter.py` for a fresh Smart Update event behind an older due backlog row.
+- Added fresh-aware initial scheduling: when a just-imported event is assigned `tg_event_publish.next_run_at`, stale pending catch-up anchors from old events are ignored unless they are from the same source. The execution-time spacing gate still enforces one Telegram post per interval. The default freshness horizon is now 8h so releases/restarts cannot age same-day imports out of the freshness lane before recovery.
+- Added regression coverage in `tests/test_tg_event_publish.py` for old same-day pending anchors that previously pushed a fresh import to the next morning.
 
 ## Follow-up Actions
 

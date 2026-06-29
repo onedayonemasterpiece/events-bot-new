@@ -14515,9 +14515,9 @@ def _tg_event_publish_fresh_queue_horizon() -> timedelta:
     """How long new imports outrank old Telegram announcement catch-up rows."""
 
     try:
-        hours = float(str(os.getenv("TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS", "3")).strip())
+        hours = float(str(os.getenv("TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS", "8")).strip())
     except (TypeError, ValueError):
-        hours = 3.0
+        hours = 8.0
     return timedelta(hours=max(1.0, hours))
 
 
@@ -14764,6 +14764,7 @@ async def next_tg_event_publish_run_at(
     now: datetime | None = None,
     source_url: str | None = None,
     exclude_event_id: int | None = None,
+    prefer_fresh: bool = False,
 ) -> datetime:
     now_utc = _ensure_utc(now or datetime.now(timezone.utc))
     candidate = _normalize_tg_event_publish_run_at(now_utc)
@@ -14776,7 +14777,14 @@ async def next_tg_event_publish_run_at(
     async with db.get_session() as session:
         rows = (
             await session.execute(
-                select(JobOutbox.event_id, JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+                select(
+                    JobOutbox.event_id,
+                    JobOutbox.status,
+                    JobOutbox.next_run_at,
+                    JobOutbox.updated_at,
+                    Event.added_at,
+                )
+                .outerjoin(Event, Event.id == JobOutbox.event_id)
                 .where(JobOutbox.task == JobTask.tg_event_publish)
                 .order_by(JobOutbox.id.desc())
                 .limit(200)
@@ -14792,7 +14800,8 @@ async def next_tg_event_publish_run_at(
     now_local_date = now_utc.astimezone(LOCAL_TZ).date()
     candidate_local = candidate.astimezone(LOCAL_TZ)
     backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
-    for _event_id, status, next_run_at, updated_at in rows:
+    fresh_cutoff = now_utc - _tg_event_publish_fresh_queue_horizon()
+    for _event_id, status, next_run_at, updated_at, event_added_at in rows:
         anchor = None
         if status in {JobStatus.pending, JobStatus.running}:
             anchor = _ensure_utc(next_run_at)
@@ -14800,6 +14809,21 @@ async def next_tg_event_publish_run_at(
             anchor = _ensure_utc(updated_at)
         if not anchor:
             continue
+        if (
+            prefer_fresh
+            and status == JobStatus.pending
+            and _event_id not in source_event_ids
+        ):
+            added_at = _ensure_utc(event_added_at)
+            if added_at and added_at < fresh_cutoff:
+                logging.info(
+                    "TG_EVENT spacing ignoring stale pending backlog anchor for fresh import event_id=%s anchor=%s added_at=%s cutoff=%s",
+                    _event_id,
+                    anchor.isoformat(),
+                    added_at.isoformat(),
+                    fresh_cutoff.isoformat(),
+                )
+                continue
         # A stale next-day pending announcement should not push a fresh manual
         # import/re-arm out of the current publish window. Same-day pending
         # anchors still space posts normally.
@@ -15094,10 +15118,16 @@ async def schedule_event_update_tasks(
         if vk_dep:
             tg_event_deps.append(vk_dep)
         publish_source_url = await _event_primary_publish_source_url(db, ev)
+        ev_added_at = _ensure_utc(getattr(ev, "added_at", None))
+        prefer_fresh_tg_slot = bool(
+            ev_added_at
+            and ev_added_at >= datetime.now(timezone.utc) - _tg_event_publish_fresh_queue_horizon()
+        )
         tg_event_next_run_at = await next_tg_event_publish_run_at(
             db,
             source_url=publish_source_url,
             exclude_event_id=eid,
+            prefer_fresh=prefer_fresh_tg_slot,
         )
         results[JobTask.tg_event_publish] = await enqueue_job(
             db,
