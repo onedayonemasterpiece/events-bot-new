@@ -113,15 +113,21 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 ## Release And Closure Evidence
 
 - deployed SHA: `1353511e` (`fix(tg): prioritize fresh event publish jobs`).
+- recurrence deployed SHA: `44bb8ba8` (`fix(tg): keep fresh event publish slots ahead of backlog`), Fly image `deployment-01KWA9MPJ3BFFZ3RQ8KJAEBWVM`, machine version `1538`.
 - deploy path: clean linked worktree `hotfix/inc-tg-publish-gap-20260629` → `fly deploy -a events-bot-new-wngqia --remote-only`.
 - regression checks:
   - `uv run --with-requirements requirements.txt pytest -q tests/test_job_due_filter.py -q` → pass (`6 passed`).
   - `tests/test_tg_event_publish.py` full run was attempted but existing date-sensitive tests using `2026-06-20` now fail on 2026-06-29 because the events are treated as past; this is unrelated to the queue-ordering change and needs separate test-date maintenance.
+  - recurrence targeted regression: `uv run --with-requirements requirements.txt python -m pytest -q tests/test_job_due_filter.py tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_spreads_same_source_afisha tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_ignores_far_future_cancelled_backlog tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_ignores_next_day_pending_anchor_when_window_open tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_ignores_late_next_day_backlog_after_window tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_uses_open_gap_before_late_same_day_backlog tests/test_tg_event_publish.py::test_next_tg_event_publish_run_at_fresh_import_ignores_old_same_day_backlog tests/test_tg_event_publish.py::test_enqueue_tg_publish_rearm_replaces_stale_next_day_slot` → `14 passed`.
+  - recurrence compile smoke: `python3 -m py_compile main.py main_part2.py` → pass.
 - post-deploy verification:
   - production DB: `6492` `tg_event_post_url=https://t.me/c/3954607218/1608`, `tg_event_publish` done at `2026-06-29 10:15:21 UTC`; `6491` `tg_event_post_url=https://t.me/c/3954607218/1609`, `tg_event_publish` done at `2026-06-29 10:25:27 UTC`.
   - public Telegram fallback: `https://t.me/s/kldevents` showed `kldevents/1608` and `kldevents/1609` with full event facts/descriptions.
   - `/healthz`: OK at `2026-06-29 10:26 UTC`, including `job_outbox_worker=ok` and `job_outbox_worker_loop=ok`.
   - managed VK remains present: `6491` `https://vk.com/wall-231920894_4998`; `6492` `https://vk.com/wall-231920894_4999`.
+  - recurrence `/healthz`: OK at `2026-06-29 18:19 UTC`, including `job_outbox_worker=ok` and `job_outbox_worker_loop=ok`.
+  - recurrence queue repair: backed up touched rows to `codex_backup_tg_publish_requeue_20260629_6499_6507`, then rearmed only `tg_event_publish` rows for active no-TG events `6499–6507` whose dependencies were already done; no direct Telegram bypass was used.
+  - recurrence public Telegram: normal worker published `6507` as `https://t.me/kldevents/1621` at `2026-06-29 18:28:42 UTC`; remaining rearmed rows moved to the next standard 10-minute slot (`2026-06-29 18:38:42 UTC`).
 
 ## Prevention
 
