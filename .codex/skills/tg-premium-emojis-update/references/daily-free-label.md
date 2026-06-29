@@ -19,7 +19,7 @@
 - For venue/date lines, insert `📗 ` before `Научная библиотека` and `🏰 ` before `Замок Ноухайзен`; do not insert in free prose/title lines.
 - For Tretyakov events, use `🖼🖼`: replace the generic full-card title marker `🖼️` for visible Tretyakov markers such as `Дейнека`; insert before `Третьяков...` in venue/date lines; render future added-section Tretyakov rows with `🖼🖼` instead of `🚩`.
 - For rock-concert events, use `🤘`: the formatter emits visible `🤘` from event data, and the Telethon editor can replace visible music/category title icons (`🎸`, `🎵`, etc.) when the post/row text indicates a rock concert.
-- Convert visible `📅` in Telegram event posts to custom `🎟`, preserving date text and text-url links such as “Добавить в календарь”.
+- Keep visible `📅` date/calendar lines unchanged in Telegram event posts. Premiumize `🎟` only when it is already ticket/registration context. For paid ticket lines, convert `🎟 Билеты 1000 руб.` to `🎟 Билеты 💰 1000`, attaching the `💰` custom emoji and removing textual `руб.`.
 
 ## Validation evidence to collect
 

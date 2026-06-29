@@ -33,7 +33,7 @@ Load/override them with `TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS` as a comma-separate
    - `🟡 Бесплатно по регистрации` becomes `🆓🆓🆓🆓 по регистрации` with custom emoji entities.
    - `🟡 Бесплатно` becomes only the custom emoji label.
 3. In the `ДОБАВИЛИ В АНОНС` block, replace compact marker `🚩 🟡` with the same four custom emoji label to save space.
-4. Replace regular `👉`, `🎭`, `🤘`, and `🎟` with custom emoji entities where present; convert `📅` to `🎟`; keep same-character replacements visually unchanged. Insert `💰` before daily price values after `Билеты в источнике`, insert `📗` before `Научная библиотека` venue lines, insert `🏰` before `Замок Ноухайзен` venue lines, use pair `🖼🖼` for Tretyakov events (full cards and added-section marker replacement), and use `🤘` for rock-concert event title/category icons.
+4. Replace regular `👉`, `🎭`, `🤘`, and ticket-context `🎟` with custom emoji entities where present; keep date/calendar `📅` visible and unchanged. Insert `💰` before daily price values after `Билеты в источнике` and before Telegram event-post ticket prices while removing textual `руб.`, insert `📗` before `Научная библиотека` venue lines, insert `🏰` before `Замок Ноухайзен` venue lines, use pair `🖼🖼` for Tretyakov events (full cards and added-section marker replacement), and use `🤘` for rock-concert event title/category icons.
 5. Preserve existing Telegram entities: links, bold/italic, hashtags, and buttons/reply markup.
 6. Verify by rereading the post and checking:
    - no `🟡 Бесплатно` remains;

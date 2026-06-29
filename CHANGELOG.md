@@ -12,10 +12,11 @@
 - Extended the Telegram premium emoji editor beyond daily announcements to post-publication Telegram event posts, added human-like randomized edit delays, and added `#бесплатно` to free event hashtag lines so search remains available after visible free labels become custom emoji.
 - Added `MostVKenig` premium emoji insertions for daily announcements: `💰` before source ticket prices, `📗` before `Научная библиотека` venue lines, and `🏰` before `Замок Ноухайзен` venue lines.
 - Added Tretyakov daily announcement premium markers: `🖼🖼` before Tretyakov full-card entries and `🖼🖼` instead of `🚩` for future Tretyakov rows in `ДОБАВИЛИ В АНОНС`.
-- Added `lovekenigofficial` `🤘`/`🎟` Telegram premium emoji updates: rock-concert title/category icons become `🤘`, visible `📅` in Telegram event posts becomes custom `🎟`, and future rock event announcements render `🤘` before the Telethon editor premiumizes it.
+- Added `lovekenigofficial` `🤘`/`🎟` Telegram premium emoji updates: rock-concert title/category icons become `🤘`, ticket-context `🎟` is premiumized, paid ticket prices gain `💰` before the number with textual `руб.` removed, and future rock event announcements render `🤘` before the Telethon editor premiumizes it.
 
 ### Fixed
 
+- **Incident / Telegram premium ticket-calendar icon regression (INC-2026-06-29)**: removed the broad `📅` → `🎟` event-post replacement so date rows stay calendar-marked; paid ticket rows now use `💰` before the numeric price and drop textual `руб.`.
 - **Incident / CrumpleVideo publish-only storm (INC-2026-06-28)**: publish-only Kaggle recovery ledgers are no longer treated as live source-video sessions during restart recovery, and already terminal/published video sessions cannot be resumed into repeated test-channel mp4 delivery.
 - **Incident / opening exhibition inferred range duplicate (INC-2026-06-28)**: Smart Update no longer applies the one-month exhibition fallback to opening-only titles such as `Открытие выставки...` when the source provides no explicit run window, preventing atomic openings from becoming month-long active cards.
 - **Incident / VK stale event publication after start (INC-2026-06-28)**: managed VK/TG fanout now treats inferred `end_date` values as untrusted for timed-event freshness, so late Smart Update merges for one-day events cannot publish after start. `post_to_vk` also refuses postponed reservations that would publish at or after a timed event's start deadline.

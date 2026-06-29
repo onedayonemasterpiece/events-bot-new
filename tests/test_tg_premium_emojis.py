@@ -179,8 +179,8 @@ def test_daily_tretyakov_added_row_replaces_flag_when_visible_marker_present():
     assert 5188445640325099838 in custom_ids
 
 
-def test_tg_event_calendar_icon_becomes_ticket_custom_emoji_and_keeps_link():
-    text = "🎸 Концерт\n\n📅 30 июня 19:00\n\n📅 Добавить в календарь"
+def test_tg_event_calendar_icon_stays_calendar_and_ticket_price_gets_money():
+    text = "🎸 Концерт\n\n📅 30 июня 19:00\n\n🎟 Билеты 1000 руб.\n\n📅 Добавить в календарь"
     link_offset = add_surrogate(text).rindex(add_surrogate("📅"))
     entities = [
         MessageEntityTextUrl(
@@ -192,22 +192,31 @@ def test_tg_event_calendar_icon_becomes_ticket_custom_emoji_and_keeps_link():
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
 
-    assert "📅" not in new_text
-    assert "🎟 30 июня 19:00" in new_text
-    assert "🎟 Добавить в календарь" in new_text
-    assert count == 2
+    assert "📅 30 июня 19:00" in new_text
+    assert "📅 Добавить в календарь" in new_text
+    assert "🎟 30 июня" not in new_text
+    assert "🎟 Билеты 💰 1000" in new_text
+    assert "руб" not in new_text
+    assert count == 3  # premiumize 🎟, insert 💰, remove textual руб.
     ticket_entities = [
         entity
         for entity in new_entities
         if isinstance(entity, MessageEntityCustomEmoji)
         and entity.document_id == DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🎟"]
     ]
-    assert len(ticket_entities) == 2
+    money_entities = [
+        entity
+        for entity in new_entities
+        if isinstance(entity, MessageEntityCustomEmoji)
+        and entity.document_id == DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["💰"]
+    ]
+    assert len(ticket_entities) == 1
+    assert len(money_entities) == 1
     shifted_link = next(e for e in new_entities if isinstance(e, MessageEntityTextUrl))
     sur_new_text = add_surrogate(new_text)
     assert (
         del_surrogate(sur_new_text[shifted_link.offset : shifted_link.offset + shifted_link.length])
-        == "🎟 Добавить в календарь"
+        == "📅 Добавить в календарь"
     )
     assert shifted_link.url == "https://example.org/calendar.ics"
 

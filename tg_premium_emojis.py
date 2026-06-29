@@ -465,25 +465,34 @@ def _find_rock_concert_icon_ops(text: str, mapping: dict[str, int]) -> list[_Sub
     return sorted(ops, key=lambda item: item.start)
 
 
-def _find_calendar_ticket_ops(text: str, entities: Sequence[Any] | None, mapping: dict[str, int]) -> list[_SubstitutionOp]:
-    document_id = mapping.get("🎟")
-    if not document_id:
+def _find_event_ticket_price_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
+    """Convert event-post ticket prices from `Билеты 1000 руб.` to `Билеты 💰 1000`.
+
+    Calendar/date lines must stay `📅`; only ticket price lines receive the
+    ruble/money custom emoji before the numeric price, with the textual
+    `руб.` suffix removed.
+    """
+    money_id = mapping.get("💰")
+    if not money_id:
         return []
-    sur_text = add_surrogate(text)
-    calendar_sur = add_surrogate("📅")
-    existing_ticket_ranges = [
-        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
-        for entity in (entities or [])
-        if isinstance(entity, MessageEntityCustomEmoji) and int(getattr(entity, "document_id", 0)) == int(document_id)
-    ]
     ops: list[_SubstitutionOp] = []
-    pos = sur_text.find(calendar_sur)
-    while pos >= 0:
-        end = pos + len(calendar_sur)
-        if not _ranges_overlap(pos, end, existing_ticket_ranges):
-            ops.append(_SubstitutionOp(pos, len(calendar_sur), "🎟", (int(document_id),)))
-        pos = sur_text.find(calendar_sur, pos + 1)
-    return ops
+    sur_offset = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        match = re.search(
+            r"(Билеты\s+(?:от\s+)?)(?!💰\s)(\d[\d\s]*(?:[.,]\d+)?(?:\s+до\s+\d[\d\s]*(?:[.,]\d+)?)?)(\s*руб\.?)",
+            visible_line,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            number_start = sur_offset + len(add_surrogate(visible_line[: match.start(2)]))
+            number_text = match.group(2).rstrip()
+            rub_start = number_start + len(add_surrogate(number_text))
+            rub_end = sur_offset + len(add_surrogate(visible_line[: match.end(3)]))
+            ops.append(_SubstitutionOp(number_start, 0, "💰 ", (int(money_id),)))
+            ops.append(_SubstitutionOp(rub_start, rub_end - rub_start, "", ()))
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
 
 def _find_daily_insert_emoji_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
     ops: list[_SubstitutionOp] = []
@@ -537,7 +546,7 @@ def apply_daily_free_premium_emojis(
         *_find_daily_insert_emoji_ops(text, single_mapping),
         *_find_daily_tretyakov_ops(text),
         *_find_rock_concert_icon_ops(text, single_mapping),
-        *_find_calendar_ticket_ops(text, entities, single_mapping),
+        *_find_event_ticket_price_ops(text, single_mapping),
         *_find_daily_single_emoji_ops(text, entities, single_mapping),
     ]
     return _apply_substitution_ops(text, entities, ops)

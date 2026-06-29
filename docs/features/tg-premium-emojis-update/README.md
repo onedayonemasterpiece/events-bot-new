@@ -17,7 +17,8 @@ Status: MVP.
   - `👉` → custom emoji `👉` из того же набора;
   - `🎭` → custom emoji `🎭` из того же набора;
   - rock-concert title/category icon → `🤘` from the same set;
-  - `📅` in Telegram event posts → `🎟` from the same set;
+  - `📅` date/calendar lines in Telegram event posts stay `📅`; `🎟` is premiumized only in ticket/registration context;
+  - paid Telegram event-post ticket lines: `🎟 Билеты 1000 руб.` → `🎟 Билеты 💰 1000`;
   - `Билеты в источнике 2200` / linked `Билеты в источнике` + price → `Билеты в источнике 💰 2200`;
   - in venue/date lines, `Научная библиотека` → `📗 Научная библиотека`;
   - in venue/date lines, `Замок Ноухайзен` → `🏰 Замок Ноухайзен`;
