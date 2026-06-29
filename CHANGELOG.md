@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added the canonical `event-reference-enrichment` feature spec for Smart Update-called sparse event enrichment, with Wikipedia/Wikidata as the first strict reference provider, source-role separation (`event_source` vs `reference_source`), sparse/giveaway gates, writer coverage rules, and a required Smart Update bot-report line whenever Wikipedia facts are accepted or used.
 - Telegram post metrics now store available open-discussion comment counts, and Telegram daily `ДОБАВИЛИ В АНОНС` can show audience labels for popular events using summed Telegram+VK source metrics.
 - Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
 

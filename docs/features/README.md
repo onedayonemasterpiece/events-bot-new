@@ -35,6 +35,7 @@
 
 ## Черновики требований
 
+- `docs/features/event-reference-enrichment/README.md` — справочное дообогащение sparse-событий из Smart Update (Wikipedia/Wikidata как первый provider, строгие source-role и writer coverage gates).
 - `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
 
 ## Как добавлять новую фичу

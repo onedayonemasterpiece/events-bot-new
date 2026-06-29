@@ -321,6 +321,15 @@ features:
       - smart_event_update.py
       - models.py
       - db.py
+  event_reference_enrichment:
+    status: design
+    docs: docs/features/event-reference-enrichment/README.md
+    caller: docs/features/smart-event-update/README.md
+    provider_mvp: wikipedia_wikidata
+    entrypoints:
+      - smart_event_update.py
+      - models.py
+      - db.py
   linked_events:
     status: implemented
     docs: docs/features/linked-events/README.md
