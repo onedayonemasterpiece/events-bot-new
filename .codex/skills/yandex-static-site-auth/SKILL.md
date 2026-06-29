@@ -147,6 +147,9 @@ For `event-search`, prefer direct `fetch` over `supabase.functions.invoke` when 
 
 Even if an Edge Function is deployed with `--no-verify-jwt` for CORS/manual auth reasons, it must manually require and validate the Bearer token via `supabase.auth.getUser(accessToken)` before doing user-specific work.
 
+
+Quota rule: ordinary search quota and optional LLM-rerank quota are different. Use `reserve_event_search_quota_v2`; if it returns `llm_reserved=false` while search quota is reserved, the Edge Function must still return pgvector results and mark the response/audit as `llm_status=llm_quota_exhausted`. Do not turn exhausted LLM verifier quota into a user-facing “search limit ended” error.
+
 ## Input validation and UX recovery
 
 Search/query inputs need both client-side and Edge Function validation. Client validation is for UX only; server validation is authoritative.

@@ -443,6 +443,16 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
 
+            cards = page.locator("[data-search-results] [data-event-card]")
+            card_count = await cards.count()
+            last_card = cards.nth(card_count - 1)
+            await last_card.scroll_into_view_if_needed()
+            await expect(last_card).to_be_visible()
+            scrolled_event_id = await last_card.get_attribute("data-event-id")
+            scroll_y = await page.evaluate("() => window.scrollY")
+            if scroll_y <= 0:
+                raise AssertionError("result feed did not scroll to rendered cards")
+
             if not calls:
                 raise AssertionError("event-search function was not called")
             body = calls[0]
@@ -454,7 +464,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await browser.close()
     print(
         "authorized_search_ui_smoke=ok "
-        f"dist={dist.name} cards=2 first_event=6310 request_calls={len(calls)}"
+        f"dist={dist.name} cards={card_count} first_event=6310 "
+        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} request_calls={len(calls)}"
     )
     return 0
 
@@ -571,11 +582,19 @@ async def run_real_edge_smoke(args: argparse.Namespace) -> int:
                 timeout=5000,
             )
 
-            card_count = await page.locator("[data-search-results] [data-event-card]").count()
+            cards = page.locator("[data-search-results] [data-event-card]")
+            card_count = await cards.count()
             first_event_id = await first_card.get_attribute("data-event-id")
             status_text = await page.locator("[data-search-status]").first.text_content()
             if card_count < 1:
                 raise AssertionError("real Edge search returned no rendered event cards")
+            last_card = cards.nth(card_count - 1)
+            await last_card.scroll_into_view_if_needed()
+            await expect(last_card).to_be_visible()
+            scrolled_event_id = await last_card.get_attribute("data-event-id")
+            scroll_y = await page.evaluate("() => window.scrollY")
+            if scroll_y <= 0:
+                raise AssertionError("real Edge result feed did not scroll to rendered cards")
             if console_errors:
                 raise AssertionError(f"browser console errors during real Edge smoke: {console_errors[:3]}")
 
@@ -584,6 +603,7 @@ async def run_real_edge_smoke(args: argparse.Namespace) -> int:
     print(
         "authorized_search_real_edge_smoke=ok "
         f"dist={dist.name} cards={card_count} first_event={first_event_id} "
+        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} "
         f"status={json.dumps(status_text, ensure_ascii=False)}"
     )
     return 0

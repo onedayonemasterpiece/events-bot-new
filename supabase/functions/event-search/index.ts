@@ -546,7 +546,7 @@ async function runEventSearch(
   await progress?.({ stage: "quota", progress: 16, label: "Проверяю лимит поиска" });
   const quotaStartedAt = performance.now();
   const { data: quotaRows, error: quotaError } = await supabase.rpc(
-    "reserve_event_search_quota_v1",
+    "reserve_event_search_quota_v2",
     {
       p_plan_id: "registered",
       p_use_llm: useLlmVerifier,
@@ -584,6 +584,9 @@ async function runEventSearch(
     };
   }
 
+  const quotaState = Array.isArray(quotaRows) ? quotaRows[0] : quotaRows;
+  const llmQuotaReserved = Boolean((quotaState as Record<string, unknown> | null)?.llm_reserved);
+
   try {
     const embeddingModel = googleModelId(
       env("EVENT_SEARCH_EMBEDDING_MODEL"),
@@ -617,11 +620,20 @@ async function runEventSearch(
     if (searchError) throw new Error(`db_search:${searchError.message}`);
     let items = (Array.isArray(rows) ? rows : []).map(normalizeCandidate);
 
-    await progress?.({ stage: "llm_verify", progress: 72, label: "Проверяю релевантность" });
-    const llmStartedAt = performance.now();
-    const llmResult = await llmVerify(query, items);
-    timings.llm_ms = nowMs() - Math.round(llmStartedAt);
-    items = llmResult.items;
+    let llmResult: { items: Candidate[]; status: string; used: boolean } = {
+      items,
+      status: useLlmVerifier ? "llm_quota_exhausted" : "disabled",
+      used: false,
+    };
+    if (useLlmVerifier && llmQuotaReserved) {
+      await progress?.({ stage: "llm_verify", progress: 72, label: "Проверяю релевантность" });
+      const llmStartedAt = performance.now();
+      llmResult = await llmVerify(query, items);
+      timings.llm_ms = nowMs() - Math.round(llmStartedAt);
+      items = llmResult.items;
+    } else {
+      timings.llm_ms = 0;
+    }
 
     let fallbackItems: Candidate[] = [];
     if (includeFallback && items.length < limit) {
@@ -668,6 +680,8 @@ async function runEventSearch(
         embedding_model: embeddingModel,
         query_facets: queryFacets,
         llm_status: llmResult.status,
+        llm_quota_reserved: llmQuotaReserved,
+        quota: quotaState,
         timings_ms: timings,
       },
     });
@@ -685,6 +699,7 @@ async function runEventSearch(
       fallback_count: fallbackItems.length,
       llm_status: llmResult.status,
       llm_used: llmResult.used,
+      llm_quota_reserved: llmQuotaReserved,
       timings_ms: timings,
     });
 
@@ -701,7 +716,7 @@ async function runEventSearch(
         served_list_hash: servedHash,
         query_hash: queryHash,
         query_facets: queryFacets,
-        quota: Array.isArray(quotaRows) ? quotaRows[0] : quotaRows,
+        quota: quotaState,
         items,
         fallback_items: fallbackItems,
         has_more: items.length === limit,

@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v55 hardens the authorized search UX/test gate: account actions are hidden behind an avatar menu, the frontend returns as soon as streamed `result` is received, and the smoke suite can run against the real deployed `event-search` with a fake static PKCE session.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the frontend returns as soon as streamed `result` is received, the smoke suite proves scrollable cards against the real deployed `event-search`, and exhausted optional LLM-rerank quota no longer blocks pgvector search results.
 
 ## Product contract
 
@@ -179,7 +179,7 @@ Default registered plan:
 - search: `5/day`, `30/month`;
 - LLM verifier: `2/day`, `10/month`.
 
-Quota is reserved **before** Gemini embedding/LLM provider calls. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
+Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still return pgvector results with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 
 ## Frontend integration
 
@@ -543,3 +543,22 @@ Verification evidence on 2026-06-29:
 - real Edge browser smoke passed: `authorized_search_real_edge_smoke=ok dist=preview-20260629-event-pages-v55-auth-search-smoke cards=16 first_event=5201 status="Осталось поисков: 4 сегодня, 29 в этом месяце."`;
 - readiness probe passed with Auth URL config, `custom:yandex` provider redirect, userinfo adapter and Edge Function OPTIONS;
 - live audit rows after the smoke show `event_search_requests.status=ok`, `request_kind=llm_rerank`, `result_count=8`, `llm_used=true`, with total backend time about `2.7–3.1s` for `query_length=16`.
+
+## LLM quota fallback hotfix, 2026-06-29
+
+Observed user-visible failure: the page showed ordinary search quota still available (`3` searches today), but the next request returned **«Лимит поисков на сегодня закончился»** and no cards. Supabase audit showed the same anonymized user had two successful LLM-reranked searches (`llm_request_count=2`) and then a `quota_exceeded` row for the third query while `request_count=2`. Root cause: the Edge Function reserved search quota with `p_use_llm=true`, so the smaller optional LLM verifier quota (`2/day`) blocked the whole search even though the main search quota (`5/day`) was not exhausted.
+
+Fix:
+
+- added `reserve_event_search_quota_v2(...)` in `supabase/migrations/20260629_event_search_llm_quota_fallback.sql`;
+- the RPC always enforces ordinary search quota, but returns `llm_reserved=false` instead of raising when only the optional LLM quota is exhausted;
+- `event-search` now skips `llmVerify(...)` when `llm_reserved=false`, returns trusted pgvector cards, and records `llm_status=llm_quota_exhausted` / `request_kind=vector_search`;
+- deployed the updated `event-search` Edge Function to the personalization Supabase project.
+
+Verification evidence:
+
+- reproduced the original user pattern in audit rows: successful LLM search at `2026-06-29T14:01:10Z`, then pre-fix `quota_exceeded` at `2026-06-29T14:02:11Z` for the same anonymized user while ordinary quota remained;
+- after the fix, a same-user-smoke performed three searches with one auth user: first two used LLM rerank, third succeeded as pgvector-only with `llm_status=llm_quota_exhausted`, `result_count=12`, `day_remaining=2`, `llm_day_remaining=0`;
+- local real-Edge Playwright smoke now proves scrollability, not only first-card render: `cards=12 first_event=5237 scrolled_event=6310 scroll_y=6073` on the third search after LLM quota exhaustion;
+- public-page real-Edge Playwright smoke on <https://kenigevents.ru/preview-20260629-event-pages-v55-auth-search-smoke/poisk/> rendered and scrolled through cards: `cards=16 first_event=5201 scrolled_event=698 scroll_y=9143`; screenshot artifact: `artifacts/codex/authorized-search-public-smoke-20260629/public-v55-scrolled-results.png`;
+- readiness probe and `npm --prefix site run check:preview` stayed green.
