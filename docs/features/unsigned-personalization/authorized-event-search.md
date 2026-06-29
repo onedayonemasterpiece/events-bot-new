@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v51 has passed static checks, mocked PKCE browser UI search, public mocked PKCE callback smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v52 has passed static checks, mocked PKCE browser UI search including missing-verifier callback handling, public missing-verifier callback smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
 
 ## Product contract
 
@@ -34,7 +34,14 @@ Configured in the personalization Supabase project on 2026-06-29. Manual/Dashboa
 10. Add Supabase callback URL shown by the provider form to the Yandex app redirect URLs.
 11. Add site redirect URLs such as `https://kenigevents.ru/*` and current preview prefixes to Supabase Auth URL allow-list.
 
-Frontend uses Supabase Auth PKCE, not implicit-hash parsing. On login it sends the cleaned current URL as `redirectTo` (same page, without stale `code/error/state` params); on return it explicitly calls `exchangeCodeForSession(code)`, persists the session, cleans the callback URL with `history.replaceState`, and then unlocks the search form. This prevents the UX regression where the browser returned to `/poisk/` but the page still looked anonymous because the OAuth `code` had not been exchanged into a Supabase session.
+Frontend uses Supabase Auth PKCE, not implicit-hash parsing. The page is static HTML, so all auth work is done by browser JavaScript against Supabase Auth: login calls `/auth/v1/authorize`, callback handling exchanges the one-time `code` through `/auth/v1/token?grant_type=pkce`, then authenticated search calls the `event-search` Edge Function. On login it sends the cleaned current URL as `redirectTo` (same page, without stale `code/error/state` params); on return it explicitly calls `exchangeCodeForSession(code)`, persists the session, cleans the callback URL with `history.replaceState`, and then unlocks the search form. This prevents the UX regression where the browser returned to `/poisk/` but the page still looked anonymous because the OAuth `code` had not been exchanged into a Supabase session.
+
+Static PKCE hardening in v52:
+
+- the Supabase client still uses browser-side `flowType: 'pkce'`;
+- the short-lived PKCE `*-code-verifier` is stored by Supabase in browser storage and mirrored by our custom storage adapter into a `Secure; SameSite=Lax; Path=/; Max-Age=900` cookie on `kenigevents.ru`; this is only for the one-time verifier, not for access/refresh tokens;
+- after `exchangeCodeForSession(code)` returns a session, the UI explicitly calls `setSession(...)` as a belt-and-suspenders write before rendering the authorized state;
+- callback errors are no longer overwritten by the initial `onAuthStateChange(null)` emission; if the code verifier is missing/expired, the user sees a clear retry message instead of the plain login button.
 
 ```ts
 const supabase = createClient(url, publishableKey, {
@@ -433,4 +440,22 @@ Verification evidence on 2026-06-29:
 - deployed public preview smoke passed with mocked Supabase PKCE callback on `https://kenigevents.ru/preview-20260629-event-pages-v51-auth-pkce/poisk/?code=...`: the page switched to `is-authorized`, displayed the search form, submitted a query and rendered a split-action event card.
 - after a real Yandex attempt returned `Error getting user email from external provider`, `custom:yandex` was reconfigured to the `yandex-userinfo` adapter and the new adapter readiness probe passed.
 
+## v52 static PKCE hardening canary
 
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v52-auth-static-pkce/poisk/>.
+
+Why this exists: a real Yandex login attempt reached the static page with `?code=...`, and Supabase created a real authenticated user/session in the personalization project, but the mobile UI still fell back to the anonymous state. This confirmed that the server-side OAuth/userinfo part was fixed, while the static-page browser callback needed stronger client-side handling and diagnostics.
+
+Fix:
+
+- custom Supabase auth storage mirrors only the short-lived PKCE code verifier into a SameSite=Lax Secure cookie so a mobile OAuth round-trip has a second same-origin verifier source;
+- after successful `exchangeCodeForSession(code)`, the page explicitly calls `setSession` before unlocking the search form;
+- callback handling marks the page as “auth callback in progress” before waiting for Supabase, so the initial anonymous auth-state event cannot overwrite the callback status;
+- failed/expired verifier callbacks clean the stale `code` from the URL and show a clear retry message.
+
+Verification evidence on 2026-06-29:
+
+- Supabase Auth DB showed the previous real attempt created user/session/identity for `custom:yandex`, proving the Yandex adapter and provider callback were no longer the blocker;
+- `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v52-auth-static-pkce`;
+- `scripts/smoke_authorized_search_ui.py` passed against the v52 build with the real personalization Supabase URL mocked at network layer; the smoke now covers both missing-verifier error UX and a successful mocked PKCE callback/search;
+- public smoke for `https://kenigevents.ru/preview-20260629-event-pages-v52-auth-static-pkce/poisk/?code=missing-verifier-code` returns to clean `/poisk/` and shows the explicit “сессия входа устарела…” retry message.

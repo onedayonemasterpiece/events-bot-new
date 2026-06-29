@@ -1,6 +1,6 @@
 # Anonymous Personalization for Static Event Pages
 
-> **Status:** MVP-0 design hardened; pgvector authorized-search infrastructure added; v51 Yandex/Supabase PKCE callback canary is published and custom:yandex now uses the Yandex userinfo adapter, final manual live OAuth retry remains
+> **Status:** MVP-0 design hardened; pgvector authorized-search infrastructure added; v52 static PKCE hardening canary is published after the Yandex userinfo adapter; final manual live OAuth retry remains
 > **MVP:** anonymous-only, no auth, consent/banner with “OK” before personalization telemetry  
 > **Primary product goal:** пользователь быстрее находит интересное событие, чем у конкурентов.
 

@@ -279,6 +279,13 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if await page.locator("[data-event-card]").count() != 0:
                 raise AssertionError("dedicated search page must not show prefilled event-result cards before a query")
 
+            await page.goto(f"{base_url}{preview_path}?auth-smoke=1&code=missing-verifier-code", wait_until="networkidle")
+            await expect(page.locator("[data-search-login]").first).to_be_visible()
+            await expect(page.locator("[data-search-form]").first).to_be_hidden()
+            await expect(page.locator("[data-search-status]").first).to_contain_text("сессия входа устарела")
+            if "code=" in page.url:
+                raise AssertionError("failed PKCE callback must remove stale code from the visible URL")
+
             storage_key = storage_key_for_supabase_url(supabase_url)
             await page.add_init_script(
                 f"""

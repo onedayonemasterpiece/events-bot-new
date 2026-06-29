@@ -382,11 +382,9 @@ for (const event of eventsData.events) {
   const ownCalendarHrefCandidates = [
     icsBaseUrl ? `${icsBaseUrl}/${event.id}.ics` : null,
     `https://static.kenigevents.ru/ics/${event.id}.ics`,
-    `sobytiya/${event.slug}/event.ics`,
-    `./event.ics`,
-    `event.ics`,
+    `/sobytiya/${event.slug}/event.ics`,
   ].filter(Boolean);
-  const ownCalendarHrefPattern = new RegExp(`href=\"[^\"]*(?:/ics/${event.id}\\.ics|/sobytiya/${event.slug}/event\\.ics|event\\.ics)(?:[?#][^\"]*)?\"`, 'u');
+  const ownCalendarHrefPattern = new RegExp(`href=\"[^\"]*(?:/ics/${event.id}\\.ics|/sobytiya/${event.slug}/event\\.ics)(?:[?#][^\"]*)?\"`, 'u');
   const hasOwnCalendarLink = ownCalendarHrefCandidates.some((href) => html.includes(href)) || ownCalendarHrefPattern.test(html);
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !hasOwnCalendarLink) throw new Error(`Short event ${event.id} misses own calendar link`);
