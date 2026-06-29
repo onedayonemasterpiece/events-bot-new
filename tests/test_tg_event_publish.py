@@ -669,12 +669,34 @@ def test_tg_event_promo_details_move_to_inline_button():
     assert "🔎 Подробнее" in normal
     assert normal_markup.inline_keyboard[0][0].text == "📅 20 июня 19:00 · Добавить в календарь"
     assert "Подробнее" not in promo
-    assert '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' in promo
-    assert '<a href="https://vk.ru/im/channels/-239844596">Вконтакте</a>' in promo
+    assert "Max" not in promo
+    assert "Вконтакте" not in promo
     assert promo_markup.inline_keyboard[0][0].text == "✨ Подробнее"
     assert promo_markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
     assert promo_markup.inline_keyboard[1][0].text == "📅 20 июня 19:00 · Добавить в календарь"
     assert promo_markup.inline_keyboard[1][0].url == "https://example.com/event.ics"
+
+
+def test_tg_event_button_highlight_suppresses_social_footer_even_without_promo_intro():
+    event = _event()
+
+    text = main.build_tg_event_announcement(
+        event,
+        "Описание.",
+        promo_highlight=False,
+        details_button_highlight=True,
+    )
+    markup = main.build_tg_event_reply_markup(
+        event,
+        promo_highlight=False,
+        details_button_highlight=True,
+    )
+
+    assert "Подробнее" not in text
+    assert "Max" not in text
+    assert "Вконтакте" not in text
+    assert markup.inline_keyboard[0][0].text == "✨ Подробнее"
+    assert markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
 
 
 def test_tg_event_calendar_url_keeps_public_telegram_post_url():

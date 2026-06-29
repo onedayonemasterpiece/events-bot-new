@@ -5717,15 +5717,16 @@ def build_tg_event_announcement(
         footer_links.append(
             f'<a href="{html.escape(calendar_url, quote=True)}">📅 Добавить в календарь</a>'
         )
-    social_links = _tg_event_social_links_html()
+    social_links_allowed = not (promo_highlight or details_button_highlight)
+    social_links = _tg_event_social_links_html() if social_links_allowed else ""
     if footer_links:
         footer_line = " · ".join(footer_links)
-        if details_url and not details_button_highlight:
+        if social_links and details_url and not details_button_highlight:
             footer_line += " " * 12 + social_links
-        else:
+        elif social_links:
             footer_line += " · " + social_links
         lines.append(footer_line)
-    else:
+    elif social_links:
         lines.append(social_links)
     return "\n".join(lines).strip()
 
@@ -5938,7 +5939,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_v4",
+                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_no_promo_social_v5",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
