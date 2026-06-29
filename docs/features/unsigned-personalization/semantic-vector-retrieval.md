@@ -28,6 +28,7 @@ Migrations:
 - `supabase/migrations/20260628_event_search_pgvector.sql` — base pgvector/search/quota/audit schema and authenticated search RPCs.
 - `supabase/migrations/20260628_event_search_weekday_and_related_rpc.sql` — weekday facets and service-role-only related RPC for builders.
 - `supabase/migrations/20260628_event_search_public_fields_and_model_filter.sql` — public/searchable/card fields, model/dimension-scoped search RPC and safer fallback filtering.
+- `supabase/migrations/20260629_event_search_query_facets.sql` — explicit-query facet boost for weekday/time/admission words in authorized search.
 
 Main tables:
 
@@ -39,6 +40,7 @@ Main RPCs:
 
 - `event_related_candidates_by_event_id_v1(...)` — backend/static-builder only, granted to `service_role`, revoked from `public`, `anon`, `authenticated`.
 - `search_events_by_embedding_v1(...)` — authenticated search RPC, filters `is_public`, `is_searchable`, active lifecycle and model/dimension.
+  For explicit user search it also accepts optional `p_weekday_iso`, `p_time_of_day_filter` and `p_admission_filter` facets; these facets are extracted from the query by the Edge Function and used only as a small post-retrieval boost over the nearest pgvector candidates, not as a separate broad keyword search.
 - `event_search_fallback_cards_v1(...)`, `get_event_search_quota_v1(...)`, `reserve_event_search_quota_v1(...)`, `record_event_search_request_v1(...)`.
 
 RLS is enabled; browser roles have no direct raw-table grants.
@@ -109,6 +111,7 @@ Evidence from 2026-06-29 UTC:
 - Kaggle CPU canary: `preview-20260628-event-pages-v48-pgvector-gemma-kaggle`, `ok=true`, `event_count=70`, vector sync `provider_calls=0` because vectors were already current, `npm run check:preview` passed inside the notebook;
 - live public smoke: `/data/discovery/6447.json` returns `algorithm_id=event_pgvector_related_chain_v1`, `strategy=event_pgvector_related_chain_v1_manifest`, first candidate `6310`, `llm_semantic_score=0.92`.
 - authorized RPC smoke: temporary Supabase Auth user + real JWT + quota reservation + Gemini Embedding 2 query vector + `search_events_by_embedding_v1`; query `урбанистика будущее города` returns `6310` in top-3 and cleanup removes smoke rows/user.
+- authorized facet RPC smoke after `20260629_event_search_query_facets.sql`: query `урбанистика в четверг вечером по регистрации` with facets `weekday_iso=4`, `time_of_day=evening`, `admission=registration_required` returns event `6310` top-1 (`similarity≈0.9255`) while preserving the pgvector nearest-candidate path.
 - production handoff command test: `main._static_site_build_kaggle_command` now passes `--related-mode pgvector`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, CDN asset/ICS bases, status callback args and browser-safe AuthorizedEventSearch public env (`PUBLIC_PERSONALIZATION_SUPABASE_URL`, publishable key, `custom:yandex`) into the Kaggle runner.
 - deploy/browser readiness check: `scripts/check_authorized_search_readiness.py --env-file .env` reports static rendering/vector sync ready, but Yandex credentials and Supabase deploy token/project ref missing.
 
@@ -134,6 +137,7 @@ Evidence from 2026-06-29 UTC:
 - **Для меня**: local/profile-aware personalization on top of static manifests; no online pgvector call on ordinary page view.
 - **Умный поиск**: authorized explicit search with quota; results are rendered by the shared `KenigEventsRenderEventCard` feed-card renderer, so like, share, “не интересно”, calendar/detail actions and local personalization feedback stay identical to `Смотрите дальше`.
   The authorized-results container carries `request_id`, `served_list_id`, `served_list_hash` and `algorithm_id`; strong actions inherit this context for investigation.
+  Query words like “пятница”, “вечером”, “бесплатно” are parsed into compact facets and logged as facet metadata only; the raw query is still not persisted.
 - When exact search results are exhausted, UI starts a clearly separate **«Возможно, вам будет интересно»** section.
 
 ## Quality gates

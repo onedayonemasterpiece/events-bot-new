@@ -40,6 +40,52 @@ function normalizeQuery(value: unknown): string {
     .slice(0, 500);
 }
 
+type QueryFacets = {
+  weekday_iso: number | null;
+  weekday_ru: string | null;
+  time_of_day: "morning" | "day" | "evening" | "night" | null;
+  admission: "free" | "registration_required" | "paid" | null;
+};
+
+const WEEKDAY_ALIASES: Array<[RegExp, number, string]> = [
+  [/(^|[^а-яa-z0-9])(пн|понедельник[аеу]?|понедельникам)(?=$|[^а-яa-z0-9])/u, 1, "понедельник"],
+  [/(^|[^а-яa-z0-9])(вт|вторник[аеу]?|вторникам)(?=$|[^а-яa-z0-9])/u, 2, "вторник"],
+  [/(^|[^а-яa-z0-9])(ср|сред[ауые]?|средам)(?=$|[^а-яa-z0-9])/u, 3, "среда"],
+  [/(^|[^а-яa-z0-9])(чт|четверг[аеу]?|четвергам)(?=$|[^а-яa-z0-9])/u, 4, "четверг"],
+  [/(^|[^а-яa-z0-9])(пт|пятниц[аеуы]?|пятницам)(?=$|[^а-яa-z0-9])/u, 5, "пятница"],
+  [/(^|[^а-яa-z0-9])(сб|суббот[аеуы]?|субботам)(?=$|[^а-яa-z0-9])/u, 6, "суббота"],
+  [/(^|[^а-яa-z0-9])(вс|воскресень[еяю]|воскресеньям)(?=$|[^а-яa-z0-9])/u, 7, "воскресенье"],
+];
+
+function parseQueryFacets(query: string): QueryFacets {
+  const normalized = ` ${query.toLowerCase().replace(/ё/g, "е")} `;
+  const weekday = WEEKDAY_ALIASES.find(([pattern]) => pattern.test(normalized));
+  const timeOfDay = /(^|[^а-яa-z0-9])(утро|утром|утренн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(normalized)
+    ? "morning"
+    : /(^|[^а-яa-z0-9])(день|днем|дневн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(normalized)
+      ? "day"
+      : /(^|[^а-яa-z0-9])(вечер|вечером|вечерн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(normalized)
+        ? "evening"
+        : /(^|[^а-яa-z0-9])(ночь|ночью|ночн[а-яa-z0-9_-]*)(?=$|[^а-яa-z0-9])/u.test(normalized)
+          ? "night"
+          : null;
+  const admission = /(^|[^а-яa-z0-9])(бесплатн[а-яa-z0-9_-]*|свободн[а-яa-z0-9_-]+\s+вход|без\s+оплаты)(?=$|[^а-яa-z0-9])/u.test(
+      normalized,
+    )
+    ? "free"
+    : /(^|[^а-яa-z0-9])(регистрац[а-яa-z0-9_-]*|запис[ьи][а-яa-z0-9_-]*|по\s+записи)(?=$|[^а-яa-z0-9])/u.test(normalized)
+      ? "registration_required"
+      : /(^|[^а-яa-z0-9])(билет[а-яa-z0-9_-]*|платн[а-яa-z0-9_-]*|купить)(?=$|[^а-яa-z0-9])/u.test(normalized)
+        ? "paid"
+        : null;
+  return {
+    weekday_iso: weekday ? weekday[1] : null,
+    weekday_ru: weekday ? weekday[2] : null,
+    time_of_day: timeOfDay,
+    admission,
+  };
+}
+
 function clampInt(
   value: unknown,
   fallback: number,
@@ -339,6 +385,7 @@ Deno.serve(async (request) => {
   }
 
   const query = normalizeQuery(body.query);
+  const queryFacets = parseQueryFacets(query);
   const limit = clampInt(body.limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
   const offset = clampInt(body.offset, 0, 0, 500);
   const includeFallback = body.include_fallback !== false;
@@ -374,13 +421,14 @@ Deno.serve(async (request) => {
       p_llm_used: useLlmVerifier,
       p_status: "quota_exceeded",
       p_error_code: quotaError.code || "quota_error",
-      p_metadata: {},
+      p_metadata: { query_facets: queryFacets },
     });
     logEvent("event_search_quota_exceeded", {
       request_id: requestId,
       user_hash: userHash,
       query_hash: shortHash(queryHash),
       query_length: query.length,
+      query_facets: queryFacets,
       use_llm_verifier: useLlmVerifier,
       error_code: quotaError.code || "quota_error",
       timings_ms: timings,
@@ -416,6 +464,9 @@ Deno.serve(async (request) => {
         p_category_filter: null,
         p_embedding_model: embeddingModel,
         p_embedding_dim: EMBEDDING_DIM,
+        p_weekday_iso: queryFacets.weekday_iso,
+        p_time_of_day_filter: queryFacets.time_of_day,
+        p_admission_filter: queryFacets.admission,
       },
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
@@ -467,6 +518,7 @@ Deno.serve(async (request) => {
         offset,
         fallback_count: fallbackItems.length,
         embedding_model: embeddingModel,
+        query_facets: queryFacets,
         llm_status: llmResult.status,
         timings_ms: timings,
       },
@@ -480,6 +532,7 @@ Deno.serve(async (request) => {
       query_hash: shortHash(queryHash),
       query_length: query.length,
       embedding_model: embeddingModel,
+      query_facets: queryFacets,
       result_count: items.length,
       fallback_count: fallbackItems.length,
       llm_status: llmResult.status,
@@ -497,6 +550,7 @@ Deno.serve(async (request) => {
       served_list_id: servedListId,
       served_list_hash: servedHash,
       query_hash: queryHash,
+      query_facets: queryFacets,
       quota: Array.isArray(quotaRows) ? quotaRows[0] : quotaRows,
       items,
       fallback_items: fallbackItems,
@@ -517,7 +571,7 @@ Deno.serve(async (request) => {
       p_llm_used: false,
       p_status: "provider_error",
       p_error_code: String(error?.message || error).slice(0, 120),
-      p_metadata: {},
+      p_metadata: { query_facets: queryFacets },
     });
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
     logEvent("event_search_failed", {
@@ -525,6 +579,7 @@ Deno.serve(async (request) => {
       user_hash: userHash,
       query_hash: shortHash(queryHash),
       query_length: query.length,
+      query_facets: queryFacets,
       error_code: String(error?.message || error).slice(0, 120),
       timings_ms: timings,
     });

@@ -61,7 +61,10 @@ Fly SQLite / static export
 
 ### pgvector schema
 
-Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus hardening migrations `20260628_event_search_weekday_and_related_rpc.sql` and `20260628_event_search_public_fields_and_model_filter.sql`.
+Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus hardening migrations
+`20260628_event_search_weekday_and_related_rpc.sql`,
+`20260628_event_search_public_fields_and_model_filter.sql` and
+`20260629_event_search_query_facets.sql`.
 
 Tables:
 
@@ -73,7 +76,7 @@ Tables:
 
 RPCs:
 
-- `search_events_by_embedding_v1(...)` — authenticated vector retrieval through `SECURITY DEFINER`, no direct table reads;
+- `search_events_by_embedding_v1(...)` — authenticated vector retrieval through `SECURITY DEFINER`, no direct table reads; it accepts optional query facets `p_weekday_iso`, `p_time_of_day_filter` and `p_admission_filter` and applies them as small boosts after the nearest pgvector candidate set is retrieved;
 - `event_search_fallback_cards_v1(...)` — authenticated fallback cards for “Возможно вам будет интересно”;
 - `get_event_search_quota_v1(...)` — visible quota state;
 - `reserve_event_search_quota_v1(...)` — atomic quota reservation before provider calls;
@@ -114,6 +117,16 @@ Env gate:
 - `EVENT_SEARCH_LLM_MODEL` defaults to `gemma-4-26b-a4b-it` for product reranking. This verifier is an operational reranker over already retrieved IDs, not an external consultant review.
 
 If the LLM call fails, results fall back to vector order and the request remains usable.
+
+## Query facets
+
+The event documents embed weekday/time/admission fields in the deterministic search text. In addition, the Edge Function extracts a very small set of explicit query facets so words like “пятница”, “вечером”, “утром”, “бесплатно” or “по регистрации” can improve ordering without introducing a separate keyword-search path:
+
+- weekday: ISO `1..7` plus Russian weekday label for logs/metadata;
+- time of day: `morning`, `day`, `evening`, `night`;
+- admission: `free`, `registration_required`, `paid`.
+
+The facets are not used to store raw query text. They are passed to `search_events_by_embedding_v1` and written only as compact metadata in Edge logs / audit rows. The RPC first asks pgvector for the nearest semantic candidates and only then applies a bounded boost (`weekday` > `admission` > `time_of_day`); therefore a facet cannot create events outside the trusted `card_snapshot` catalogue and cannot replace semantic retrieval with broad deterministic filtering.
 
 ## Quotas and privacy
 
@@ -168,6 +181,7 @@ actions with the exact served search list.
 - `request_id` — per-call UUID;
 - `served_list_id` — UUID for the returned list;
 - `served_list_hash` — SHA-256 over `query_hash`, returned event ids and fallback ids;
+- `query_facets` — compact parsed facets (`weekday_iso`, `weekday_ru`, `time_of_day`, `admission`), never raw query text;
 - `timings_ms` — quota, embedding provider, pgvector RPC, optional LLM verifier, fallback RPC and total latency;
 - `llm_verifier` — `{requested, used, status}` so a search can be distinguished between pure pgvector and verified/reranked results.
 
@@ -236,6 +250,21 @@ Result:
 - smoke quota/audit rows and the temporary user were removed after the run.
 
 This proves the authenticated pgvector RPC path and quota/audit path. It does not claim the Yandex OAuth browser UX or deployed Edge Function is complete.
+
+Additional facet smoke after `20260629_event_search_query_facets.sql`:
+
+```bash
+python3 scripts/smoke_authorized_event_search_rpc.py \
+  --env-file .env \
+  --query "урбанистика в четверг вечером по регистрации" \
+  --weekday-iso 4 \
+  --time-of-day evening \
+  --admission registration_required \
+  --expected-event-id 6310 \
+  --expected-top-n 3
+```
+
+Result: authenticated pgvector RPC returned `6310` as top-1 with boosted similarity `≈0.9255`, proving that explicit weekday/time/admission facets influence order while still searching through `gemini-embedding-2/vector(768)` candidates and trusted snapshots.
 
 ## Deploy/browser readiness check
 

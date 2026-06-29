@@ -152,6 +152,9 @@ def main() -> int:
     parser.add_argument("--expected-top-n", type=int, default=3)
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--date-from", default="2026-06-29")
+    parser.add_argument("--weekday-iso", type=int, default=None, help="Optional query weekday facet, ISO 1..7")
+    parser.add_argument("--time-of-day", choices=["morning", "day", "evening", "night"], default=None)
+    parser.add_argument("--admission", choices=["free", "registration_required", "paid"], default=None)
     parser.add_argument("--embedding-model", default=os.getenv("EVENT_SEARCH_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--google-key-env", default="GOOGLE_API_KEY4")
     parser.add_argument("--keep-user", action="store_true")
@@ -194,6 +197,9 @@ def main() -> int:
                 "p_category_filter": None,
                 "p_embedding_model": args.embedding_model.replace("models/", ""),
                 "p_embedding_dim": EMBEDDING_DIM,
+                "p_weekday_iso": args.weekday_iso,
+                "p_time_of_day_filter": args.time_of_day,
+                "p_admission_filter": args.admission,
             },
         )
         if not isinstance(rows, list):
