@@ -22,3 +22,9 @@
 - Boolean evidence that `🚩 🟡` is absent in the added block.
 - The first free-label replacement's four document ids match the saved sample.
 - `👉` and `🎭` custom entities use the same-pack ids above, and a second dry-run reports `replacements=0`.
+
+## Event-post extension
+
+- Apply the same custom emoji editor to `@kldevents` Telegram event posts after Bot API send/edit.
+- Keep free-event searchability by adding `#бесплатно` to the event hashtag line before replacing visible `🟡 Бесплатно...`.
+- Use human-like timing: base delay plus random jitter and per-message random pauses.

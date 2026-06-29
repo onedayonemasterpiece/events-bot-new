@@ -9,6 +9,7 @@
 ### Changed
 
 - Extended the Telegram daily premium emoji editor to also replace regular `👉` and `🎭` with same-pack custom emoji entities while preserving the visible characters and title formatting.
+- Extended the Telegram premium emoji editor beyond daily announcements to post-publication Telegram event posts, added human-like randomized edit delays, and added `#бесплатно` to free event hashtag lines so search remains available after visible free labels become custom emoji.
 
 ### Fixed
 

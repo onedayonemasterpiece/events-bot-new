@@ -5016,6 +5016,8 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
     festival_tag = normalize_vk_festival_hashtag(
         getattr(festival, "name", None) if festival else getattr(event, "festival", None)
     )
+    if getattr(event, "is_free", False):
+        tags.append("#бесплатно")
     if festival_tag:
         tags.append(festival_tag)
     return format_vk_hashtag_line(dedupe_vk_hashtags(tags))
@@ -5526,6 +5528,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
+                "tg_event_format=free_hashtag_premium_editor_v1",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
@@ -5756,6 +5759,10 @@ async def publish_tg_event_announcement(
                 )
             else:
                 raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
+            _schedule_tg_premium_emoji_editor(
+                [(target, int(existing_id))],
+                context="tg_event_publish_edit",
+            )
             return (
                 (getattr(event, "tg_event_post_url", None) or "").strip() or None,
                 int(existing_id),
@@ -5851,6 +5858,12 @@ async def publish_tg_event_announcement(
                 sent_mode,
                 exc_info=True,
             )
+
+    if sent_id is not None:
+        _schedule_tg_premium_emoji_editor(
+            [(target, int(sent_id))],
+            context="tg_event_publish_send",
+        )
 
     logging.info(
         "publish_tg_event_announcement done event_id=%s url=%s media=%d mode=%s",
@@ -6843,46 +6856,10 @@ async def send_daily_announcement(
         except Exception:
             logging.warning("daily promo recommendation exposure record failed", exc_info=True)
     if record and sent_message_ids:
-        try:
-            from tg_premium_emojis import (
-                edit_daily_messages_with_env,
-                premium_emoji_editor_delay_seconds,
-                premium_emoji_editor_enabled,
-            )
-
-            if premium_emoji_editor_enabled():
-                targets = [(channel_id, message_id) for message_id in sent_message_ids]
-                delay_seconds = premium_emoji_editor_delay_seconds()
-
-                async def _run_premium_emoji_editor() -> None:
-                    try:
-                        results = await edit_daily_messages_with_env(
-                            targets,
-                            delay_seconds=delay_seconds,
-                        )
-                        logging.info(
-                            "tg_premium_emoji.daily_edit_done channel=%s results=%s",
-                            channel_id,
-                            [
-                                {
-                                    "message_id": item.message_id,
-                                    "edited": item.edited,
-                                    "replacements": item.replacements,
-                                    "error": item.error,
-                                }
-                                for item in results
-                            ],
-                        )
-                    except Exception:
-                        logging.exception(
-                            "tg_premium_emoji.daily_edit_failed channel=%s messages=%s",
-                            channel_id,
-                            sent_message_ids,
-                        )
-
-                asyncio.create_task(_run_premium_emoji_editor())
-        except Exception:
-            logging.warning("daily premium emoji editor scheduling failed", exc_info=True)
+        _schedule_tg_premium_emoji_editor(
+            [(channel_id, message_id) for message_id in sent_message_ids],
+            context="daily_announcement",
+        )
     # 3) Отмечаем только если что-то реально ушло
     if record and now is None and sent > 0:
         try:
@@ -6897,6 +6874,57 @@ async def send_daily_announcement(
     if pending_error and raise_on_error:
         raise pending_error
     return sent
+
+
+
+def _schedule_tg_premium_emoji_editor(
+    targets: Sequence[tuple[str | int, int]],
+    *,
+    context: str,
+) -> None:
+    if not targets:
+        return
+    try:
+        from tg_premium_emojis import (
+            edit_messages_with_env,
+            premium_emoji_editor_delay_seconds,
+            premium_emoji_editor_enabled,
+        )
+
+        if not premium_emoji_editor_enabled():
+            return
+        delay_seconds = premium_emoji_editor_delay_seconds()
+
+        async def _run_premium_emoji_editor() -> None:
+            try:
+                results = await edit_messages_with_env(
+                    targets,
+                    delay_seconds=delay_seconds,
+                )
+                logging.info(
+                    "tg_premium_emoji.edit_done context=%s results=%s",
+                    context,
+                    [
+                        {
+                            "chat": item.chat,
+                            "message_id": item.message_id,
+                            "edited": item.edited,
+                            "replacements": item.replacements,
+                            "error": item.error,
+                        }
+                        for item in results
+                    ],
+                )
+            except Exception:
+                logging.exception(
+                    "tg_premium_emoji.edit_failed context=%s targets=%s",
+                    context,
+                    targets,
+                )
+
+        asyncio.create_task(_run_premium_emoji_editor())
+    except Exception:
+        logging.warning("premium emoji editor scheduling failed context=%s", context, exc_info=True)
 
 
 async def _run_daily_scheduler_send(

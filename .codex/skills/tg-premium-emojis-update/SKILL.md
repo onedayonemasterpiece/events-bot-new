@@ -72,7 +72,7 @@ TG_PREMIUM_EMOJI_AUTH_BUNDLE=<dedicated urlsafe-base64 bundle>
 TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS=150
 ```
 
-The scheduler edits daily announcement messages 2–3 minutes after successful Bot API publication.
+The scheduler edits daily announcements and Telegram event posts 2–3 minutes after successful Bot API publication, with randomized jitter (`TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS`) and between-message pauses (`TG_PREMIUM_EMOJI_BETWEEN_EDITS_SECONDS`) for human-like timing. For event posts, keep searchability by ensuring free events carry `#бесплатно` before replacing visible `🟡 Бесплатно...`.
 
 ## References
 

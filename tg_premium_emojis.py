@@ -8,6 +8,7 @@ import copy
 import json
 import logging
 import os
+import random
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -381,21 +382,50 @@ async def edit_latest_daily_announcement(
     return results
 
 
-async def edit_daily_messages_with_env(
+def premium_emoji_editor_jitter_seconds() -> int:
+    raw = _env("TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS")
+    if not raw:
+        return 45
+    try:
+        return max(0, int(raw))
+    except Exception:
+        logger.warning("invalid TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS=%r; using 45", raw)
+        return 45
+
+
+def premium_emoji_between_edits_range() -> tuple[float, float]:
+    raw = _env("TG_PREMIUM_EMOJI_BETWEEN_EDITS_SECONDS")
+    if not raw:
+        return 3.0, 12.0
+    try:
+        left, right = raw.replace(";", ",").split(",", 1)
+        minimum = max(0.0, float(left.strip()))
+        maximum = max(minimum, float(right.strip()))
+        return minimum, maximum
+    except Exception:
+        logger.warning("invalid TG_PREMIUM_EMOJI_BETWEEN_EDITS_SECONDS=%r; using 3,12", raw)
+        return 3.0, 12.0
+
+
+async def edit_messages_with_env(
     targets: Sequence[tuple[str | int, int]],
     *,
     delay_seconds: float = 0,
     dry_run: bool = False,
 ) -> list[PremiumEmojiEditResult]:
+    rng = random.SystemRandom()
     if delay_seconds > 0:
-        await asyncio.sleep(delay_seconds)
+        await asyncio.sleep(delay_seconds + rng.uniform(0.0, float(premium_emoji_editor_jitter_seconds())))
     cfg = load_telethon_config_from_env()
     await raise_if_session_busy(cfg.auth_scope)
     ids = parse_document_ids()
     single_ids = parse_daily_single_emoji_document_ids()
+    between_min, between_max = premium_emoji_between_edits_range()
     async with telethon_client_from_config(cfg) as client:
         results: list[PremiumEmojiEditResult] = []
-        for chat, message_id in targets:
+        for index, (chat, message_id) in enumerate(targets):
+            if index > 0 and not dry_run:
+                await asyncio.sleep(rng.uniform(between_min, between_max))
             try:
                 results.append(
                     await edit_message_daily_free_labels(
@@ -413,6 +443,15 @@ async def edit_daily_messages_with_env(
                     PremiumEmojiEditResult(chat, int(message_id), False, 0, "", "", f"{type(exc).__name__}: {exc}")
                 )
         return results
+
+
+async def edit_daily_messages_with_env(
+    targets: Sequence[tuple[str | int, int]],
+    *,
+    delay_seconds: float = 0,
+    dry_run: bool = False,
+) -> list[PremiumEmojiEditResult]:
+    return await edit_messages_with_env(targets, delay_seconds=delay_seconds, dry_run=dry_run)
 
 
 def premium_emoji_editor_enabled() -> bool:

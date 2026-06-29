@@ -145,6 +145,48 @@ def test_build_tg_event_announcement_formats_multiday_cross_month_range():
 
 
 
+
+def test_build_tg_event_announcement_free_event_keeps_search_hashtag():
+    event = _event(ticket_link=None, ticket_price_min=None, ticket_price_max=None, is_free=True)
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert "🟡 Бесплатно" in text
+    assert "#бесплатно" in text
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_schedules_premium_editor_after_send(monkeypatch):
+    event = _event(ticket_link=None, ticket_price_min=None, ticket_price_max=None, is_free=True)
+    scheduled = []
+
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
+        return "Описание события."
+
+    def fake_schedule(targets, *, context):
+        scheduled.append((targets, context))
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    monkeypatch.setattr(main, "_schedule_tg_premium_emoji_editor", fake_schedule)
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "source text",
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "text"
+    assert source_hash
+    assert scheduled == [([("@kldevents", 101)], "tg_event_publish_send")]
+    message_text = bot.messages[0][1]
+    assert "🟡 Бесплатно" in message_text
+    assert "#бесплатно" in message_text
+
+
 def test_build_tg_event_announcement_uses_original_ticket_link_not_vk_short():
     event = _event(
         ticket_link="https://example.com/register",

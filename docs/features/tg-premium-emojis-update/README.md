@@ -4,7 +4,7 @@ Status: MVP.
 
 ## Цель
 
-Добавлять к Telegram-публикациям полезные Premium/custom emoji без изменения исходного Bot API форматтера. Первый регулярный сценарий — заменить бесплатные метки в ежедневном анонсе на компактный premium-label `Бесплатно` из четырёх custom emoji.
+Добавлять к Telegram-публикациям полезные Premium/custom emoji без изменения исходного Bot API форматтера. Первый регулярный сценарий — заменить бесплатные метки в ежедневном анонсе на компактный premium-label `Бесплатно` из четырёх custom emoji. Следующий сценарий — применять тот же редактор к Telegram event posts (`@kldevents`) после публикации/редактирования.
 
 ## Текущий контракт
 
@@ -17,15 +17,18 @@ Status: MVP.
   - `👉` → custom emoji `👉` из того же набора;
   - `🎭` → custom emoji `🎭` из того же набора.
 - Существующие entity поста (жирный/курсив, ссылки, хештеги, кнопки) сохраняются; для одиночных emoji видимый текст не меняется, добавляется только custom-emoji entity.
+- Для Telegram event posts бесплатность остаётся поисковой через `#бесплатно` в hashtag line; видимая строка `🟡 Бесплатно...` после публикации может быть заменена на premium-label без потери поиска.
 
 ## Runtime
 
-Публикация ежедневного анонса остаётся Bot API-задачей. После успешной отправки `send_daily_announcement` может запланировать Telethon-редактор на отправленные message ids.
+Публикация ежедневного анонса и event posts остаётся Bot API-задачей. После успешной отправки/редактирования `send_daily_announcement` и `publish_tg_event_announcement` могут запланировать Telethon-редактор на отправленные message ids.
 
 Env:
 
 - `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1` — включает автоматический редактор после daily send.
-- `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS=150` — задержка перед правкой; по умолчанию 150 секунд (2–3 минуты).
+- `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS=150` — базовая задержка перед правкой; по умолчанию 150 секунд (2–3 минуты).
+- `TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS=45` — случайная добавка к базовой задержке для human-like поведения.
+- `TG_PREMIUM_EMOJI_BETWEEN_EDITS_SECONDS=3,12` — случайный диапазон паузы между несколькими правками в одном запуске.
 - `TG_PREMIUM_EMOJI_AUTH_BUNDLE` / `TG_PREMIUM_EMOJI_SESSION` — выделенная Telethon-сессия для редактора.
 - `TG_PREMIUM_EMOJI_API_ID` / `TG_PREMIUM_EMOJI_API_HASH` — опциональные API credentials; если не заданы, используются `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` или `TG_API_ID`/`TG_API_HASH`.
 - `TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS` — опциональный comma-separated override для free-label document ids.
