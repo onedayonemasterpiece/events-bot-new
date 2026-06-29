@@ -2527,6 +2527,19 @@ const FOOTER_SOCIAL_LINKS = [
         function contextForCard(card) {
           const feed = card?.closest('[data-discovery-feed]');
           const summary = feed ? servedListByFeed.get(feed) : null;
+          const searchResults = !feed ? card?.closest('[data-search-results]') : null;
+          if (searchResults) {
+            return {
+              servedListId: searchResults.dataset.servedListId || null,
+              servedListHash: searchResults.dataset.servedListHash || null,
+              viewportClass: viewportClass(window.innerWidth || 1024),
+              layoutMode: searchResults.dataset.layoutMode || 'authorized_search_feed',
+              presentationMode: searchResults.dataset.presentationMode || 'feed',
+              algorithmId: searchResults.dataset.effectiveAlgorithmId || 'authorized_event_search_pgvector_v1',
+              surface: searchResults.dataset.surface || 'authorized_event_search',
+              requestId: searchResults.dataset.requestId || null,
+            };
+          }
           return {
             servedListId: summary?.served_list_id || null,
             servedListHash: summary?.served_list_hash || null,

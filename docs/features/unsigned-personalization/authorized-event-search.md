@@ -152,6 +152,15 @@ and `--public-yandex-auth-provider`. In production Smart Update handoff these ar
 key envs. Only URL + publishable key are exposed to Astro; Supabase secret/service keys remain
 backend-only for vector sync and Edge Function deployment.
 
+Search results are rendered through the same global `window.KenigEventsRenderEventCard`
+renderer used by dynamic discovery/personal feeds. This is part of the acceptance
+contract: cards returned by authorized search must keep detail-link navigation,
+like/unlike, share, “не интересно” and calendar actions instead of using a separate
+minimal search-result layout. The results container stores `request_id`,
+`served_list_id`, `served_list_hash`, `algorithm_id` and `surface=authorized_event_search`;
+feedback/share actions read that context so later investigation can connect strong
+actions with the exact served search list.
+
 ## Edge Function response/log contract
 
 `supabase/functions/event-search` returns and logs investigation IDs for every successful request:

@@ -36,8 +36,10 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
 <script>
   import { createClient } from '@supabase/supabase-js';
 
-  const root = document.querySelector('[data-authorized-search]');
-  if (root) {
+  const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
+  for (const root of roots) {
+    if (root.dataset.searchBound === 'true') continue;
+    root.dataset.searchBound = 'true';
     const enabled = root.dataset.searchEnabled === 'true';
     const status = root.querySelector('[data-search-status]');
     const login = root.querySelector('[data-search-login]');
@@ -56,10 +58,10 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
       if (status) status.textContent = message || '';
     }
 
-    function renderCards(items) {
+    function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
       if (typeof renderer === 'function') {
-        return items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: offset + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).join('');
+        return items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).join('');
       }
       return items.map((candidate) => {
         const display = candidate.display || candidate;
@@ -79,6 +81,17 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
       heading.className = 'authorized-search__fallback-title';
       heading.textContent = text;
       results.appendChild(heading);
+    }
+
+    function setResultContext(data) {
+      if (!results) return;
+      results.dataset.surface = 'authorized_event_search';
+      results.dataset.requestId = data?.request_id || '';
+      results.dataset.servedListId = data?.served_list_id || '';
+      results.dataset.servedListHash = data?.served_list_hash || '';
+      results.dataset.effectiveAlgorithmId = data?.algorithm_id || 'pgvector_gemini_embedding_2_v1';
+      results.dataset.layoutMode = 'authorized_search_feed';
+      results.dataset.presentationMode = 'feed';
     }
 
     async function refreshQuota() {
@@ -115,7 +128,10 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
         currentQuery = query;
         offset = 0;
         fallbackStarted = false;
-        if (results) results.innerHTML = '';
+        if (results) {
+          results.innerHTML = '';
+          setResultContext({});
+        }
       }
       const { data, error } = await supabase.functions.invoke('event-search', {
         body: { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
@@ -127,7 +143,11 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
       }
       const items = Array.isArray(data?.items) ? data.items : [];
       if (results) {
-        const html = renderCards(items);
+        setResultContext(data);
+        if (!append && items.length > 0 && results.children.length === 0) {
+          appendSectionHeading('Результаты поиска');
+        }
+        const html = renderCards(items, offset);
         if (html) results.insertAdjacentHTML('beforeend', html);
         if (items.length === 0 && !fallbackStarted) {
           appendSectionHeading('Возможно, вам будет интересно');
@@ -138,7 +158,7 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
             appendSectionHeading('Возможно, вам будет интересно');
             fallbackStarted = true;
           }
-          results.insertAdjacentHTML('beforeend', renderCards(data.fallback_items));
+          results.insertAdjacentHTML('beforeend', renderCards(data.fallback_items, offset + items.length));
         }
         results.hidden = !results.children.length;
       }

@@ -132,7 +132,8 @@ Evidence from 2026-06-29 UTC:
 
 - **Похожие / Смотрите дальше** on event detail pages: static related chain from `event_pgvector_related_chain_v1`; mobile is feed-like, desktop can be grid/list.
 - **Для меня**: local/profile-aware personalization on top of static manifests; no online pgvector call on ordinary page view.
-- **Умный поиск**: authorized explicit search with quota; results are the same cards with like, share, “не интересно”, calendar/detail actions.
+- **Умный поиск**: authorized explicit search with quota; results are rendered by the shared `KenigEventsRenderEventCard` feed-card renderer, so like, share, “не интересно”, calendar/detail actions and local personalization feedback stay identical to `Смотрите дальше`.
+  The authorized-results container carries `request_id`, `served_list_id`, `served_list_hash` and `algorithm_id`; strong actions inherit this context for investigation.
 - When exact search results are exhausted, UI starts a clearly separate **«Возможно, вам будет интересно»** section.
 
 ## Quality gates
