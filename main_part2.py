@@ -5048,6 +5048,7 @@ async def publish_vk_channel_promo_event_publication(
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
 TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.com/klgdevents"
+TG_EVENT_MAX_URL = "https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
@@ -5436,6 +5437,14 @@ def _tg_event_details_url(event: Event) -> str | None:
     return None
 
 
+def _tg_event_social_links_html() -> str:
+    return (
+        f'<a href="{html.escape(TG_EVENT_MAX_URL, quote=True)}">Max</a>'
+        " · "
+        f'<a href="{html.escape(TG_EVENT_VK_URL, quote=True)}">ВК</a>'
+    )
+
+
 def _tg_event_calendar_post_url(event: Event) -> str | None:
     return _tg_event_public_calendar_url(event)
 
@@ -5676,8 +5685,16 @@ def build_tg_event_announcement(
         footer_links.append(
             f'<a href="{html.escape(calendar_url, quote=True)}">📅 Добавить в календарь</a>'
         )
+    social_links = _tg_event_social_links_html()
     if footer_links:
-        lines.append(" · ".join(footer_links))
+        footer_line = " · ".join(footer_links)
+        if details_url and not details_button_highlight:
+            footer_line += " " * 12 + social_links
+        else:
+            footer_line += " · " + social_links
+        lines.append(footer_line)
+    else:
+        lines.append(social_links)
     return "\n".join(lines).strip()
 
 
@@ -5889,7 +5906,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_v1",
+                "tg_event_format=free_hashtag_premium_editor_social_footer_v2",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
