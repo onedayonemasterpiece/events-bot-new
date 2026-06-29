@@ -62,6 +62,8 @@ const RU_MONTHS = [
   'декабря',
 ];
 
+const RU_WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
 function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value || '');
   if (!match) return null;
@@ -89,8 +91,20 @@ export function displayDate(event: Pick<PreviewEvent, 'start_date' | 'end_date'>
   return formatRuDate(event.start_date, includeStartYear);
 }
 
+export function displayDateWithWeekday(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): string {
+  const parts = parseIsoDateParts(event.start_date);
+  if (!parts) return displayDate(event);
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  const weekday = RU_WEEKDAYS_SHORT[date.getUTCDay()];
+  return weekday ? `${weekday}, ${displayDate(event)}` : displayDate(event);
+}
+
 export function displayDateTime(event: Pick<PreviewEvent, 'start_date' | 'end_date' | 'display_time'>): string {
   return [displayDate(event), event.display_time].filter(Boolean).join(' · ');
+}
+
+export function displayDateTimeWithWeekday(event: Pick<PreviewEvent, 'start_date' | 'end_date' | 'display_time'>): string {
+  return [displayDateWithWeekday(event), event.display_time].filter(Boolean).join(' · ');
 }
 
 export function displayUpdatedAtKaliningrad(value: string | null | undefined): string | null {

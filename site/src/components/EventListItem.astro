@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
+import { displayDateTimeWithWeekday, eventAdmissionLabel, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { event: PreviewEvent }
@@ -10,7 +10,8 @@ const href = eventHref(event);
 const calendarHref = eventCalendarHref(event);
 const canAddToCalendar = isCalendarEligible(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
-const dateTimeLabel = displayDateTime(event);
+const dateTimeLabel = displayDateTimeWithWeekday(event);
+const eventTypeLabel = String(event.event_type || '').trim();
 const imageUrl = eventImageUrl(event.image_url);
 const linkedEventIds = event.other_date_ids.join(',');
 ---
@@ -26,6 +27,7 @@ const linkedEventIds = event.other_date_ids.join(',');
     <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     <div class="listing-item__meta">
       <span>{dateTimeLabel}</span>
+      {eventTypeLabel && <span>{eventTypeLabel}</span>}
       <span>{eventAdmissionLabel(event)}</span>
     </div>
     {place && <p>{place}</p>}

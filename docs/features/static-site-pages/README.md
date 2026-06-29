@@ -54,7 +54,7 @@ Preview `v40` closes the share experiment: temporary `Поделиться эк�
 
 Preview fixture note: production row `5370` («Точка и линия») currently has a false-free state (`is_free=1`, `ticket_status=бесплатно по регистрации`) because a free curator round-table source was merged into the long-running paid exhibition. The v40 fixture intentionally overrides the preview event to `ticket / paid / is_free=false` and attaches five real exhibition photos for gallery testing; production source-of-truth repair remains a separate event-quality task under the existing false-free incident family.
 
-Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`.
+Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`. Event-page medallions / quick-read tokens: `docs/features/static-site-pages/event-token-medallions.md`.
 
 ## Share / Open Graph
 
@@ -78,6 +78,10 @@ Production must replace the same-page canvas fallback with a stable server/offli
 - emit deterministic filenames/cache keys tied to event id + updated timestamp, and QA Telegram/VK/Max behavior on Android/iOS.
 
 Admin backlog: add a one-click “prepare detailed event post” function that creates a richer ready-to-paste post package for Max/VK/Telegram (share image + caption + URL) for an operator, without changing public page SEO.
+
+## Event-page medallions
+
+A separate event-detail surface will add large quick-read **medallions** after the hero/title area on `/sobytiya/<slug>/`. These are medallions of the concrete event, not a card-list badge row. P0 examples: organizer avatar, `Пушкинская карта`, charity, kids/family and video/recording status. Listing/search cards keep only the metadata formatting change: show a short weekday and render event type as plain text without `#`. Canonical contract: `docs/features/static-site-pages/event-token-medallions.md`.
 
 ## Listing personalization on static lists
 

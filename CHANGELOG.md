@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
+
 ### Fixed
 
 - **Personalization / authorized search verifier quota policy**: changed `event-search` to use Gemma 4 26B as the primary high-match verifier with bounded retries/backoff, kept `gemini-3.1-flash-lite` as a protected fallback only for onboarding/late rescue paths, exposed verifier model/policy/attempts in responses and audit metadata, and documented that static related generation must retry Gemma instead of burning Lite quota.

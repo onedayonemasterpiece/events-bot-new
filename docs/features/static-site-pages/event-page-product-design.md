@@ -146,6 +146,12 @@ Typography:
    - primary CTA;
    - secondary actions: add to calendar, share, copy link/save.
 
+2a. **Event medallion row**
+   - large quick-read medallions of this concrete event, immediately after the title/summary area;
+   - P0 examples: organizer avatar, `Пушкинская карта`, charity, kids/family, video/recording status;
+   - canonical contract: [event-token-medallions.md](event-token-medallions.md);
+   - this is not a listing-card badge row; cards only need weekday + event type formatting unless separately redesigned.
+
 3. **Trust/provenance strip**
    - source/organizer if known;
    - last updated;
