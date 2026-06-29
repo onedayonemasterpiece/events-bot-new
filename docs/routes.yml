@@ -272,6 +272,13 @@ features:
       - main.py
       - main_part2.py
       - models.py
+  tg_premium_emojis_update:
+    status: mvp
+    docs: docs/features/tg-premium-emojis-update/README.md
+    entrypoints:
+      - tg_premium_emojis.py
+      - scripts/tg_premium_emoji_editor.py
+      - main_part2.py
   kenigsberg_stories:
     status: mvp
     docs: docs/features/kenigsberg-stories/README.md

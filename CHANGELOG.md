@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
+
 ### Fixed
 
 - **Incident / CrumpleVideo publish-only storm (INC-2026-06-28)**: publish-only Kaggle recovery ledgers are no longer treated as live source-video sessions during restart recovery, and already terminal/published video sessions cannot be resumed into repeated test-channel mp4 delivery.

@@ -6803,12 +6803,13 @@ async def send_daily_announcement(
         return 0
     # 2) Отправляем с «узким» шлюзом TG, чтобы не блокировать систему целиком
     sent = 0
+    sent_message_ids: list[int] = []
     pending_error: Exception | None = None
     for text, markup in posts:
         try:
             async with TG_SEND_SEMAPHORE:
                 async with span("tg-send"):
-                    await bot.send_message(
+                    sent_message = await bot.send_message(
                         channel_id,
                         text,
                         reply_markup=markup,
@@ -6816,6 +6817,8 @@ async def send_daily_announcement(
                         disable_web_page_preview=True,
                     )
             sent += 1
+            if getattr(sent_message, "message_id", None) is not None:
+                sent_message_ids.append(int(sent_message.message_id))
         except Exception as e:
             # In local/dev/E2E the bot often doesn't have access to prod channels
             # from the DB snapshot. Treat these as "skip" to avoid retries/flood.
@@ -6839,6 +6842,47 @@ async def send_daily_announcement(
             )
         except Exception:
             logging.warning("daily promo recommendation exposure record failed", exc_info=True)
+    if record and sent_message_ids:
+        try:
+            from tg_premium_emojis import (
+                edit_daily_messages_with_env,
+                premium_emoji_editor_delay_seconds,
+                premium_emoji_editor_enabled,
+            )
+
+            if premium_emoji_editor_enabled():
+                targets = [(channel_id, message_id) for message_id in sent_message_ids]
+                delay_seconds = premium_emoji_editor_delay_seconds()
+
+                async def _run_premium_emoji_editor() -> None:
+                    try:
+                        results = await edit_daily_messages_with_env(
+                            targets,
+                            delay_seconds=delay_seconds,
+                        )
+                        logging.info(
+                            "tg_premium_emoji.daily_edit_done channel=%s results=%s",
+                            channel_id,
+                            [
+                                {
+                                    "message_id": item.message_id,
+                                    "edited": item.edited,
+                                    "replacements": item.replacements,
+                                    "error": item.error,
+                                }
+                                for item in results
+                            ],
+                        )
+                    except Exception:
+                        logging.exception(
+                            "tg_premium_emoji.daily_edit_failed channel=%s messages=%s",
+                            channel_id,
+                            sent_message_ids,
+                        )
+
+                asyncio.create_task(_run_premium_emoji_editor())
+        except Exception:
+            logging.warning("daily premium emoji editor scheduling failed", exc_info=True)
     # 3) Отмечаем только если что-то реально ушло
     if record and now is None and sent > 0:
         try:
