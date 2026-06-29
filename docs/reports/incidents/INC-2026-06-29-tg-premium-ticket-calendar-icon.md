@@ -1,10 +1,10 @@
 # INC-2026-06-29-tg-premium-ticket-calendar-icon Telegram premium editor changed date calendars into ticket icons
 
-Status: mitigated pending final deploy
+Status: closed
 Severity: sev2
 Service: Telegram `@kldevents` / premium emoji editor
 Opened: 2026-06-29
-Closed: —
+Closed: 2026-06-29
 Owners: events-bot
 Related incidents: —
 Related docs: `docs/features/tg-premium-emojis-update/README.md`, `.codex/skills/tg-premium-emojis-update/SKILL.md`
@@ -85,16 +85,23 @@ The Telegram premium emoji rollout reused the same visible/custom icon semantics
 
 ## Follow-up Actions
 
-- [ ] Close after final deploy and post-deploy live verification are recorded below.
+- [x] Closed after final deploy and post-deploy live verification were recorded below.
 
 ## Release And Closure Evidence
 
-Pending final deploy for the current corrected contract. Pre-deploy evidence collected locally on 2026-06-29:
-
-- targeted pytest: `27 passed` for `tests/test_tg_premium_emojis.py`, Tretyakov/rock daily-format tests, Telegram event-publish premium-editor tests, and `tests/test_remote_telegram_session.py`.
-- `py_compile tg_premium_emojis.py main_part2.py main.py scripts/tg_premium_emoji_editor.py` → passed.
-- live `@kldevents` posts `1606…1597` reread with the local fixed editor → `remaining_replacements=0`, date rows use custom `🎟`, ticket rows use `🎫`, `1606` has `🎫 Билеты 💰 1000` and no textual `руб.`.
-- live daily `@kenigevents/4210` repaired before deploy: title-level `👉 🖼🖼 Александр Дейнека...` collapsed to ordinary `👉 🖼️ ...`; compact `03.07 🖼🖼 ...` uses stable same-document pair `5188683852096234620,5188683852096234620`; second dry-run `remaining_replacements=0`.
+- deployed code SHA: `d6681191d0485406d085d48178f36da33917226d` (reachable from `origin/main`; docs-only closure commit may be newer).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree, HEAD equal to `origin/main`.
+- Fly image: `deployment-01KW9BRXCHGMAFZ2BH4MHD9JJR`; machine `683961db016e28`, version `1521`, checks passing.
+- regression checks:
+  - `pytest -q tests/test_tg_premium_emojis.py tests/test_daily_format.py::test_format_event_daily_marks_tretyakov_with_picture_pair tests/test_daily_format.py::test_format_event_daily_does_not_mark_tretyakov_by_title_only tests/test_daily_format.py::test_format_event_daily_inline_replaces_recent_flag_for_tretyakov tests/test_daily_format.py::test_format_event_daily_marks_rock_concert_with_horns_icon tests/test_tg_event_publish.py::test_build_tg_event_announcement_formats_links_hashtags_and_footer tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send tests/test_remote_telegram_session.py` → `27 passed`.
+  - `py_compile tg_premium_emojis.py main_part2.py main.py scripts/tg_premium_emoji_editor.py` → passed.
+  - `git diff --check` → passed.
+  - live `@kldevents` posts `1606…1597` reread with the local fixed editor → `remaining_replacements=0`, date rows use custom `🎟`, ticket rows use `🎫`, `1606` has `🎫 Билеты 💰 1000` and no textual `руб.`.
+  - live daily `@kenigevents/4210` repaired before deploy: title-level `👉 🖼🖼 Александр Дейнека...` collapsed to ordinary `👉 🖼️ ...`; compact `03.07 🖼🖼 ...` uses stable same-document pair `5188683852096234620,5188683852096234620`; second dry-run `remaining_replacements=0`.
+- post-deploy verification:
+  - `/healthz` returned `200`, `ready=true`.
+  - Production env check: `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1`, dedicated `TG_PREMIUM_EMOJI_AUTH_BUNDLE` present, delay/jitter/between-edits configured as `150` / `45` / `3,12`.
+  - Production code smoke: sample generator/editor text becomes `🎟 30 июня 19:00`, `🎫 Билеты 💰 1000`, `🎫 Билеты 💰 1500`, Tretyakov venue line `🖼🖼 Филиал Третьяковской галереи...`, and title-level `👉 🖼🖼 Александр Дейнека` is cleaned to `👉 🖼️ Александр Дейнека`; custom ids include date `5267071016747690521`, money `5305700407874449437`, Tretyakov pair `5188683852096234620,5188683852096234620`.
 
 ## Prevention
 
