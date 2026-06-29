@@ -106,13 +106,32 @@ A future scan found the same failure family on event `6467` (`4 ЭТАЖ ЛЕК�
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending manual `flyctl deploy` from clean worktree after tests and `origin/main` sync
+- deployed SHA: `0ef3eefe183fafcb849ae79f78fc4f804ae721db` (pushed to `origin/main`).
+- deploy path: clean worktree `agent/T-000056`, manual
+  `flyctl deploy --app events-bot-new-wngqia --remote-only`.
+- Fly image/machine: `registry.fly.io/events-bot-new-wngqia:deployment-01KWAM8N9Y1XAVMDEVJ8KZ4614`,
+  machine `683961db016e28`, Fly version `1541`.
+- health: post-deploy in-machine `GET http://127.0.0.1:8080/healthz` returned
+  `200` with `ok=true`, `ready=true`, scheduler watchdogs `ok`.
 - regression checks:
-  - pending `pytest -q tests/test_smart_event_update_location_aliases.py tests/test_vk_auto_queue_gemma4.py -k 'konb_room_location or prompt_mentions_poster_datetime_conflict_rule'`
-- post-deploy verification:
-  - pending production scan for KОНБ room/floor rows;
-  - pending Telethon/VK/Telegraph verification after repair/deploy.
+  - `python -m py_compile smart_event_update.py vk_intake.py` — passed;
+  - `pytest -q tests/test_smart_event_update_location_aliases.py tests/test_vk_auto_queue_gemma4.py -k 'konb_room_location or prompt_mentions_poster_datetime_conflict_rule'`
+    — `3 passed, 19 deselected`.
+- production repair evidence:
+  - backups: `codex_backup_20260629_konb_room_venue_event`,
+    `..._event_source`, `..._eventposter`, `..._joboutbox`;
+  - DB rows `6404`, `6467`, `6488` now use
+    `Научная библиотека, Мира 9, Калининград`;
+  - KОНБ future scan after repair: `problem_count=0` for six active/future
+    `wall-30777579_*`/KОНБ rows.
+- public-surface verification:
+  - Telethon verified `@kldevents/1322` and `@kldevents/1455` now show
+    `📍 Научная библиотека, Мира 9, #Калининград`;
+  - Telegraph pages for `6404`, `6467`, `6488` now show
+    `📍 Научная библиотека, Мира 9, Калининград`;
+  - authenticated VK API verified new managed posts
+    `wall-231920894_5108`, `5109`, `5110` with the corrected location line and
+    `text_contains_bad=false` for the old room/floor strings.
 
 ## Prevention
 
