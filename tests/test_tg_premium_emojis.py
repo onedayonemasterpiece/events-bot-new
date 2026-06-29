@@ -177,13 +177,14 @@ def test_daily_tretyakov_added_row_does_not_infer_venue_from_title_text():
     assert count == 0
 
 
-def test_daily_tretyakov_existing_added_row_pair_gets_stable_repeated_entity():
+def test_daily_tretyakov_existing_added_row_pair_gets_composite_entities():
     text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🖼🖼 Лекция в галерее"
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
 
     assert new_text == text
     assert count == 1
+    assert DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS == (5188445640325099838, 5188470637034758005)
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
     assert custom_ids == list(DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS)
 

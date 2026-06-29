@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-tg-premium-tretyakov-composite-pair.md`
+  - Scope: Telegram premium emoji editor for daily Tretyakov venue markers in `@kenigevents`, especially the `lovekenigofficial` `🖼🖼` document-id pair.
+  - Must not regress: Tretyakov `🖼🖼` must use the two-part composite ids `5188445640325099838,5188470637034758005`, not the small standalone thumbnail id `5188683852096234620` and not duplicated thumbnails; marker scope remains venue-only, not title/description-inferred.
 - `INC-2026-06-29-tg-premium-ticket-calendar-icon.md`
   - Scope: Telegram premium emoji editor for `@kldevents` event posts, especially date rows, ticket/registration rows, and ruble/money price formatting.
   - Must not regress: generator fallback must keep date/calendar and ticket semantics distinct (`📅` date, `🎫` tickets/registration); the premium editor may convert only date/calendar `📅` to custom `🎟`; paid ticket rows must become `🎫 Билеты 💰 <number>` (or the existing ticket label/link plus `💰 <number>`) and must not keep textual `руб.`.

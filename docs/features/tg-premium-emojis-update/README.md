@@ -9,7 +9,7 @@ Status: MVP.
 ## Текущий контракт
 
 - Сохранённая композиция free-label: четыре custom emoji с fallback `🆓🆓🆓🆓`.
-- Free-label document ids: `5406749623865857008`, `5407072545276973461`, `5406815783542085177`, `5406927577245833438`. Single emoji ids: `👉` → `5204036388789445008`, `🎭` → `5390961951150988955`, `🤘` → `5393556708398225048`, date/calendar `🎟` → `5267071016747690521` from `Полюбить Калининград`; Tretyakov pair `🖼🖼` → `5188683852096234620`, `5188683852096234620` from `https://t.me/addemoji/lovekenigofficial`; `💰` → `5305700407874449437`, `📗` → `5339143926638996892`, `🏰` → `5305794630866989617` from `https://t.me/addemoji/MostVKenig`.
+- Free-label document ids: `5406749623865857008`, `5407072545276973461`, `5406815783542085177`, `5406927577245833438`. Single emoji ids: `👉` → `5204036388789445008`, `🎭` → `5390961951150988955`, `🤘` → `5393556708398225048`, date/calendar `🎟` → `5267071016747690521` from `Полюбить Калининград`; Tretyakov pair `🖼🖼` → `5188445640325099838`, `5188470637034758005` from `https://t.me/addemoji/lovekenigofficial` (the two adjacent emoji parts after the small standalone Tretyakov building thumbnail); `💰` → `5305700407874449437`, `📗` → `5339143926638996892`, `🏰` → `5305794630866989617` from `https://t.me/addemoji/MostVKenig`.
 - В ежедневном анонсе заменяются:
   - `🟡 Бесплатно` → premium-label;
   - `🟡 Бесплатно по регистрации` → premium-label + ` по регистрации`;
