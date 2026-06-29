@@ -177,3 +177,59 @@ def test_daily_tretyakov_added_row_replaces_flag_when_visible_marker_present():
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
     assert 5188683852096234620 in custom_ids
     assert 5188445640325099838 in custom_ids
+
+
+def test_tg_event_calendar_icon_becomes_ticket_custom_emoji_and_keeps_link():
+    text = "🎸 Концерт\n\n📅 30 июня 19:00\n\n📅 Добавить в календарь"
+    link_offset = add_surrogate(text).rindex(add_surrogate("📅"))
+    entities = [
+        MessageEntityTextUrl(
+            offset=link_offset,
+            length=len(add_surrogate("📅 Добавить в календарь")),
+            url="https://example.org/calendar.ics",
+        )
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
+
+    assert "📅" not in new_text
+    assert "🎟 30 июня 19:00" in new_text
+    assert "🎟 Добавить в календарь" in new_text
+    assert count == 2
+    ticket_entities = [
+        entity
+        for entity in new_entities
+        if isinstance(entity, MessageEntityCustomEmoji)
+        and entity.document_id == DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🎟"]
+    ]
+    assert len(ticket_entities) == 2
+    shifted_link = next(e for e in new_entities if isinstance(e, MessageEntityTextUrl))
+    sur_new_text = add_surrogate(new_text)
+    assert (
+        del_surrogate(sur_new_text[shifted_link.offset : shifted_link.offset + shifted_link.length])
+        == "🎟 Добавить в календарь"
+    )
+    assert shifted_link.url == "https://example.org/calendar.ics"
+
+
+def test_rock_concert_title_icon_becomes_horns_custom_emoji_from_body_signal():
+    text = "🎸 Большой концерт\n\nЛучшие рок-хиты города\n\n🎟 30 июня"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert new_text.startswith("🤘 Большой концерт")
+    assert count == 2  # title icon plus existing plain ticket emoji premiumization
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"] in custom_ids
+    assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🎟"] in custom_ids
+
+
+def test_daily_added_rock_row_replaces_music_icon_not_recent_flag():
+    text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🚩 🎸 Рок-концерт во дворе"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert "01.07 🚩 🤘 Рок-концерт во дворе" in new_text
+    assert count == 1
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"] in custom_ids

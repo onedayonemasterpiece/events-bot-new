@@ -24,7 +24,7 @@ The free-attendance label is four custom emoji with fallback text `🆓🆓🆓�
 3. `5406815783542085177`
 4. `5406927577245833438`
 
-Load/override them with `TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS` as a comma-separated list when the composition changes. Also replace/insert emoji by default: `👉` → `5204036388789445008`, `🎭` → `5390961951150988955`, Tretyakov `🖼🖼` → `5188683852096234620,5188445640325099838`, `💰` → `5305700407874449437`, `📗` → `5339143926638996892`, `🏰` → `5305794630866989617`; override singles with `TG_PREMIUM_EMOJI_DAILY_SINGLE_DOCUMENT_IDS_JSON` and Tretyakov pair with `TG_PREMIUM_EMOJI_TRETYAKOV_DOCUMENT_IDS` if needed.
+Load/override them with `TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS` as a comma-separated list when the composition changes. Also replace/insert emoji by default: `👉` → `5204036388789445008`, `🎭` → `5390961951150988955`, rock `🤘` → `5393556708398225048`, ticket `🎟` → `5267071016747690521`, Tretyakov `🖼🖼` → `5188683852096234620,5188445640325099838`, `💰` → `5305700407874449437`, `📗` → `5339143926638996892`, `🏰` → `5305794630866989617`; override singles with `TG_PREMIUM_EMOJI_DAILY_SINGLE_DOCUMENT_IDS_JSON` and Tretyakov pair with `TG_PREMIUM_EMOJI_TRETYAKOV_DOCUMENT_IDS` if needed.
 
 ## Daily announcement workflow
 
@@ -33,13 +33,13 @@ Load/override them with `TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS` as a comma-separate
    - `🟡 Бесплатно по регистрации` becomes `🆓🆓🆓🆓 по регистрации` with custom emoji entities.
    - `🟡 Бесплатно` becomes only the custom emoji label.
 3. In the `ДОБАВИЛИ В АНОНС` block, replace compact marker `🚩 🟡` with the same four custom emoji label to save space.
-4. Replace regular `👉` and `🎭` with custom emoji entities while keeping the visible characters unchanged. Insert `💰` before daily price values after `Билеты в источнике`, insert `📗` before `Научная библиотека` venue lines, insert `🏰` before `Замок Ноухайзен` venue lines, and use pair `🖼🖼` for Tretyakov events (full cards and added-section marker replacement).
+4. Replace regular `👉`, `🎭`, `🤘`, and `🎟` with custom emoji entities where present; convert `📅` to `🎟`; keep same-character replacements visually unchanged. Insert `💰` before daily price values after `Билеты в источнике`, insert `📗` before `Научная библиотека` venue lines, insert `🏰` before `Замок Ноухайзен` venue lines, use pair `🖼🖼` for Tretyakov events (full cards and added-section marker replacement), and use `🤘` for rock-concert event title/category icons.
 5. Preserve existing Telegram entities: links, bold/italic, hashtags, and buttons/reply markup.
 6. Verify by rereading the post and checking:
    - no `🟡 Бесплатно` remains;
    - no `🚩 🟡` remains in the added block;
    - four `MessageEntityCustomEmoji` entities exist per free-label replacement, with the expected document ids;
-   - `👉`, `🎭`, `🖼🖼`, `💰`, `📗`, and `🏰` have their configured custom emoji document ids.
+   - `👉`, `🎭`, `🤘`, `🎟`, `🖼🖼`, `💰`, `📗`, and `🏰` have their configured custom emoji document ids.
 
 ## Project tooling
 

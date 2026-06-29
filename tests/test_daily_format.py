@@ -95,6 +95,21 @@ def test_format_event_daily_inline_replaces_recent_flag_for_tretyakov() -> None:
     assert "🚩" not in rendered
 
 
+def test_format_event_daily_marks_rock_concert_with_horns_icon() -> None:
+    event = make_event(
+        title="Концерт группы «Крематорий»",
+        emoji="🎸",
+        description="Концерт рок-группы.",
+        search_digest="Легендарная рок-группа исполняет юбилейную программу.",
+    )
+
+    rendered = main.format_event_daily(event)
+    inline = main.format_event_daily_inline(event)
+
+    assert rendered.startswith("<b>🚩 🤘 Концерт группы «Крематорий»</b>")
+    assert inline.startswith("01.01 🚩 🤘 Концерт группы «Крематорий»")
+
+
 def test_format_event_daily_handles_timezone_aware_added_at() -> None:
     event = make_event(
         added_at=datetime(2024, 1, 2, 12, tzinfo=timezone.utc),

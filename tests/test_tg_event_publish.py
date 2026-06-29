@@ -143,6 +143,19 @@ def test_build_tg_event_announcement_formats_multiday_cross_month_range():
     assert "📅 30 июня–2 июля" in text
 
 
+def test_build_tg_event_announcement_marks_rock_concert_with_horns_icon():
+    event = _event(
+        title="Концерт группы «Крематорий»",
+        emoji="🎸",
+        description="Концерт рок-группы «Крематорий».",
+        search_digest="Легендарная рок-группа играет юбилейную программу.",
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert text.startswith("<b>🤘 Концерт группы «Крематорий»</b>")
+
+
 
 
 

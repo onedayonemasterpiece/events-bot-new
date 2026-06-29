@@ -12,6 +12,7 @@
 - Extended the Telegram premium emoji editor beyond daily announcements to post-publication Telegram event posts, added human-like randomized edit delays, and added `#бесплатно` to free event hashtag lines so search remains available after visible free labels become custom emoji.
 - Added `MostVKenig` premium emoji insertions for daily announcements: `💰` before source ticket prices, `📗` before `Научная библиотека` venue lines, and `🏰` before `Замок Ноухайзен` venue lines.
 - Added Tretyakov daily announcement premium markers: `🖼🖼` before Tretyakov full-card entries and `🖼🖼` instead of `🚩` for future Tretyakov rows in `ДОБАВИЛИ В АНОНС`.
+- Added `lovekenigofficial` `🤘`/`🎟` Telegram premium emoji updates: rock-concert title/category icons become `🤘`, visible `📅` in Telegram event posts becomes custom `🎟`, and future rock event announcements render `🤘` before the Telethon editor premiumizes it.
 
 ### Fixed
 

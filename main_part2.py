@@ -5244,6 +5244,27 @@ async def resolve_tg_event_button_highlight(event: Event, db: Database | None) -
     return int(event_id) in highlight_ids
 
 
+_ROCK_CONCERT_EVENT_RE = re.compile(
+    r"(?:\brock\b|(?<![а-яё])рок(?![а-яё])|метал(?:л)?|\bmetal\b|панк|\bpunk\b|хардкор|\bhardcore\b|крематор)",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_tg_rock_concert_event(event: Event) -> bool:
+    haystack = "\n".join(
+        str(value or "")
+        for value in (
+            getattr(event, "title", None),
+            getattr(event, "emoji", None),
+            getattr(event, "description", None),
+            getattr(event, "short_description", None),
+            getattr(event, "search_digest", None),
+            getattr(event, "source_text", None),
+        )
+    ).casefold()
+    return bool(_ROCK_CONCERT_EVENT_RE.search(haystack))
+
+
 def build_tg_event_announcement(
     event: Event,
     text: str,
@@ -5256,6 +5277,8 @@ def build_tg_event_announcement(
     if details_button_highlight is None:
         details_button_highlight = promo_highlight
     title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    if _is_tg_rock_concert_event(event):
+        emoji_part = "🤘 "
     lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
 
     if festival:

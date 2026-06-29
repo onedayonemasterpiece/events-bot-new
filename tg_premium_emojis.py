@@ -31,6 +31,8 @@ DEFAULT_FREE_EMOJI_DOCUMENT_IDS: tuple[int, ...] = (
 DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
     "🎭": 5390961951150988955,
     "👉": 5204036388789445008,
+    "🤘": 5393556708398225048,
+    "🎟": 5267071016747690521,
     "💰": 5305700407874449437,
     "📗": 5339143926638996892,
     "🏰": 5305794630866989617,
@@ -383,6 +385,106 @@ def _find_daily_tretyakov_ops(text: str) -> list[_SubstitutionOp]:
     return sorted(ops, key=lambda item: item.start)
 
 
+
+_ROCK_CONCERT_RE = re.compile(
+    r"(?:\brock\b|(?<![а-яё])рок(?![а-яё])|метал(?:л)?|\bmetal\b|панк|\bpunk\b|хардкор|\bhardcore\b|крематор)",
+    flags=re.IGNORECASE,
+)
+_ROCK_TITLE_ICON_VARIANTS = (
+    "🎸",
+    "🎵",
+    "🎶",
+    "🎤",
+    "🎙️",
+    "🎙",
+    "🎧",
+    "🎼",
+    "🎷",
+    "🎺",
+    "🥁",
+)
+
+
+def _mentions_rock_concert(text: str) -> bool:
+    return bool(_ROCK_CONCERT_RE.search(text.casefold()))
+
+
+def _rock_replacement_op(start: int, old_len: int, mapping: dict[str, int]) -> _SubstitutionOp | None:
+    document_id = mapping.get("🤘")
+    if not document_id:
+        return None
+    return _SubstitutionOp(start, old_len, "🤘", (int(document_id),))
+
+
+def _find_rock_concert_icon_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
+    if not mapping.get("🤘"):
+        return []
+    ops: list[_SubstitutionOp] = []
+    sur_offset = 0
+    global_rock = _mentions_rock_concert(text)
+    first_non_empty_seen = False
+
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        stripped = visible_line.strip()
+        if not stripped:
+            sur_offset += len(add_surrogate(line))
+            continue
+
+        is_first_non_empty = not first_non_empty_seen
+        first_non_empty_seen = True
+        line_rock = _mentions_rock_concert(visible_line)
+        # Event posts often mention genre in the body, not in the bold title;
+        # for channel posts only the first title line should inherit the
+        # message-level rock-concert signal. Daily rows require a line-level
+        # signal to avoid changing unrelated events in the same announcement.
+        should_consider = line_rock or (is_first_non_empty and global_rock)
+        if should_consider and not stripped.startswith("🤘") and "🤘" not in visible_line[:8]:
+            for icon in _ROCK_TITLE_ICON_VARIANTS:
+                pos = visible_line.find(icon)
+                if pos < 0:
+                    continue
+                prefix = visible_line[:pos]
+                # Replace only title/category icons near the beginning of a row:
+                # event title, `👉 ...` full card, or `DD.MM ...` added row.
+                if len(prefix.strip()) <= 18 and (
+                    is_first_non_empty
+                    or stripped.startswith("👉")
+                    or re.match(r"^\d{1,2}\.\d{1,2}\b", stripped)
+                ):
+                    op = _rock_replacement_op(
+                        sur_offset + len(add_surrogate(prefix)),
+                        len(add_surrogate(icon)),
+                        mapping,
+                    )
+                    if op:
+                        ops.append(op)
+                    break
+
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
+
+def _find_calendar_ticket_ops(text: str, entities: Sequence[Any] | None, mapping: dict[str, int]) -> list[_SubstitutionOp]:
+    document_id = mapping.get("🎟")
+    if not document_id:
+        return []
+    sur_text = add_surrogate(text)
+    calendar_sur = add_surrogate("📅")
+    existing_ticket_ranges = [
+        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
+        for entity in (entities or [])
+        if isinstance(entity, MessageEntityCustomEmoji) and int(getattr(entity, "document_id", 0)) == int(document_id)
+    ]
+    ops: list[_SubstitutionOp] = []
+    pos = sur_text.find(calendar_sur)
+    while pos >= 0:
+        end = pos + len(calendar_sur)
+        if not _ranges_overlap(pos, end, existing_ticket_ranges):
+            ops.append(_SubstitutionOp(pos, len(calendar_sur), "🎟", (int(document_id),)))
+        pos = sur_text.find(calendar_sur, pos + 1)
+    return ops
+
 def _find_daily_insert_emoji_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
     ops: list[_SubstitutionOp] = []
     money_id = mapping.get("💰")
@@ -434,6 +536,8 @@ def apply_daily_free_premium_emojis(
         *_find_daily_free_label_ops(text, ids),
         *_find_daily_insert_emoji_ops(text, single_mapping),
         *_find_daily_tretyakov_ops(text),
+        *_find_rock_concert_icon_ops(text, single_mapping),
+        *_find_calendar_ticket_ops(text, entities, single_mapping),
         *_find_daily_single_emoji_ops(text, entities, single_mapping),
     ]
     return _apply_substitution_ops(text, entities, ops)

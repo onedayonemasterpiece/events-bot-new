@@ -21883,6 +21883,27 @@ def _is_tretyakov_daily_event(e: Event) -> bool:
     return "третьяков" in haystack or "tretyakov" in haystack
 
 
+_ROCK_CONCERT_EVENT_RE = re.compile(
+    r"(?:\brock\b|(?<![а-яё])рок(?![а-яё])|метал(?:л)?|\bmetal\b|панк|\bpunk\b|хардкор|\bhardcore\b|крематор)",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_rock_concert_event(e: Event) -> bool:
+    haystack = "\n".join(
+        str(value or "")
+        for value in (
+            getattr(e, "title", None),
+            getattr(e, "emoji", None),
+            getattr(e, "description", None),
+            getattr(e, "short_description", None),
+            getattr(e, "search_digest", None),
+            getattr(e, "source_text", None),
+        )
+    ).casefold()
+    return bool(_ROCK_CONCERT_EVENT_RE.search(haystack))
+
+
 def format_event_daily(
     e: Event,
     highlight: bool = False,
@@ -21957,6 +21978,8 @@ def format_event_daily(
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
     if _is_tretyakov_daily_event(e):
         emoji_part = "🖼🖼 "
+    elif _is_rock_concert_event(e):
+        emoji_part = "🤘 "
 
     partner_creator_ids = partner_creator_ids or ()
     title = html.escape(title_text)
@@ -22081,6 +22104,7 @@ def format_event_daily_inline(
     if promo_highlight:
         markers.append("✨")
     tretyakov_daily_event = _is_tretyakov_daily_event(e)
+    rock_concert_event = _is_rock_concert_event(e)
     if is_recent(e):
         markers.append("🖼🖼" if tretyakov_daily_event else "\U0001f6a9")
     if e.is_free:
@@ -22090,6 +22114,8 @@ def format_event_daily_inline(
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
     if tretyakov_daily_event and emoji_part.strip() in {"🖼", "🖼️"}:
         emoji_part = ""
+    elif rock_concert_event:
+        emoji_part = "🤘 "
 
     partner_creator_ids = partner_creator_ids or ()
     title = html.escape(title_text)
