@@ -5441,7 +5441,7 @@ def _tg_event_social_links_html() -> str:
     return (
         f'<a href="{html.escape(TG_EVENT_MAX_URL, quote=True)}">Max</a>'
         " · "
-        f'<a href="{html.escape(TG_EVENT_VK_URL, quote=True)}">ВК</a>'
+        f'<a href="{html.escape(TG_EVENT_VK_URL, quote=True)}">Вконтакте</a>'
     )
 
 
@@ -5906,7 +5906,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_social_footer_v2",
+                "tg_event_format=free_hashtag_premium_editor_social_footer_vkontakte_v3",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),

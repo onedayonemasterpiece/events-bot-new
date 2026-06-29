@@ -115,10 +115,9 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert (
         '<a href="https://telegra.ph/event">🔎 Подробнее</a>            '
         '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a> · '
-        '<a href="https://vk.com/klgdevents">ВК</a>'
+        '<a href="https://vk.com/klgdevents">Вконтакте</a>'
     ) in text
     assert "Подписаться" not in text
-    assert "Вконтакте" not in text
 
 
 def test_build_tg_event_announcement_formats_multiday_range():
@@ -646,7 +645,7 @@ def test_tg_event_promo_details_move_to_inline_button():
     assert normal_markup.inline_keyboard[0][0].text == "📅 20 июня 19:00 · Добавить в календарь"
     assert "Подробнее" not in promo
     assert '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' in promo
-    assert '<a href="https://vk.com/klgdevents">ВК</a>' in promo
+    assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in promo
     assert promo_markup.inline_keyboard[0][0].text == "✨ Подробнее"
     assert promo_markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
     assert promo_markup.inline_keyboard[1][0].text == "📅 20 июня 19:00 · Добавить в календарь"
@@ -947,7 +946,7 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert main._tg_html_visible_len(message_text) <= 1000
     assert "Подробнее" in message_text
     assert "Подписаться" not in message_text
-    assert "Вконтакте" not in message_text
+    assert "Вконтакте" in message_text
     assert "#20июня" in message_text
     assert "#Калининград" in message_text
     assert "#афишакалининград" in message_text

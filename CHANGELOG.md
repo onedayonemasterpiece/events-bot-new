@@ -10,7 +10,7 @@
 ### Changed
 
 - Telegram event posts now keep permanent footer links to Max and VK next to
-  the `🔎 Подробнее` Telegraph link (`Max · ВК` with a 12-space visual offset).
+  the `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual offset).
 - Daily `ДОБАВИЛИ В АНОНС` audience labels now adapt their own score
   threshold: if strict `likes + 5*reposts >= 20` labels are below the minimum
   share, the daily renderer lowers only this daily threshold to a conservative
