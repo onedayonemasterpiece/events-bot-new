@@ -238,7 +238,12 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-po
 
 
 const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
+const searchVisibleHtml = stripGeneratedCode(searchHtml);
 if (!searchHtml.includes('data-authorized-search') || !searchHtml.includes('data-search-login') || !searchHtml.includes('custom:yandex') || !searchHtml.includes('data-supabase-url')) throw new Error('Authorized search page must render Yandex/Supabase search UI when public env is provided');
+const bundledCss = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
+if (!/\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/iu.test(bundledCss)) throw new Error('Authorized search build must include a strong hidden rule so unauthenticated form/results/buttons stay hidden');
+if (!searchVisibleHtml.includes('authorized-search__yandex-icon') || !searchVisibleHtml.includes('>Я</span>') || !searchVisibleHtml.includes('Войти через Яндекс')) throw new Error('Authorized search login button must expose recognizable Yandex branding/icon text');
+if (searchVisibleHtml.includes('Пока без запроса') || searchVisibleHtml.includes('cards-grid') || /<article class="event-card/u.test(searchVisibleHtml)) throw new Error('Dedicated search page must not show prefilled static result cards before a query');
 if (!controlHtml.includes('/poisk/')) throw new Error('Mobile/desktop navigation must expose the authorized search page link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
@@ -372,10 +377,18 @@ for (const event of eventsData.events) {
   if (!html.includes('data-hero-composition=')) throw new Error(`Event ${event.id} hero misses composition marker`);
   if (!html.includes(`data-hero-image-text-mode="${event.image_text_mode}"`)) throw new Error(`Event ${event.id} hero misses image_text_mode marker`);
   if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);
-  const ownCalendarHref = icsBaseUrl ? `${icsBaseUrl}/${event.id}.ics` : `sobytiya/${event.slug}/event.ics`;
+  const ownCalendarHrefCandidates = [
+    icsBaseUrl ? `${icsBaseUrl}/${event.id}.ics` : null,
+    `https://static.kenigevents.ru/ics/${event.id}.ics`,
+    `sobytiya/${event.slug}/event.ics`,
+    `./event.ics`,
+    `event.ics`,
+  ].filter(Boolean);
+  const ownCalendarHrefPattern = new RegExp(`href=\"[^\"]*(?:/ics/${event.id}\\.ics|/sobytiya/${event.slug}/event\\.ics|event\\.ics)(?:[?#][^\"]*)?\"`, 'u');
+  const hasOwnCalendarLink = ownCalendarHrefCandidates.some((href) => html.includes(href)) || ownCalendarHrefPattern.test(html);
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
-  if (calendarEligible && !html.includes(ownCalendarHref)) throw new Error(`Short event ${event.id} misses own calendar link`);
-  if (!calendarEligible && html.includes(ownCalendarHref)) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
+  if (calendarEligible && !hasOwnCalendarLink) throw new Error(`Short event ${event.id} misses own calendar link`);
+  if (!calendarEligible && hasOwnCalendarLink) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
   for (const [label, pattern] of badHtmlPatterns) {
     if (pattern.test(visibleHtml)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }

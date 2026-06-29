@@ -1,33 +1,39 @@
 ---
 interface Props {
   compact?: boolean;
+  standalone?: boolean;
+  headingLevel?: 'h1' | 'h2';
 }
-const { compact = false } = Astro.props;
+const { compact = false, standalone = false, headingLevel = 'h2' } = Astro.props;
 const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
 const enabled = Boolean(supabaseUrl && supabaseKey);
+const HeadingTag = headingLevel;
 ---
 {enabled && (
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
-    <div>
+    <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
-      <h2>Найти событие по описанию</h2>
-      <p class="muted-note">Векторный поиск доступен после входа через Яндекс. Результаты показываются такими же карточками: лайк, «не интересно», поделиться и календарь сохраняются.</p>
+      <HeadingTag>Найти событие по описанию</HeadingTag>
+      <p class="muted-note">Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.</p>
     </div>
     <div class="authorized-search__auth">
-      <button type="button" class="secondary-button" data-search-login>Войти через Яндекс</button>
-      <button type="button" class="secondary-button" data-search-logout hidden>Выйти</button>
+      <button type="button" class="secondary-button authorized-search__login" data-search-login>
+        <span class="authorized-search__yandex-icon" aria-hidden="true">Я</span>
+        <span>Войти через Яндекс</span>
+      </button>
+      <button type="button" class="secondary-button authorized-search__logout" data-search-logout hidden>Выйти</button>
     </div>
   </div>
   {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
   <form class="authorized-search__form" data-search-form hidden>
     <label class="sr-only" for="authorized-event-search-input">Что хочется найти</label>
-    <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: урбанистика, детский мастер-класс, джаз вечером" autocomplete="off" />
-    <button type="submit" class="cta-button">Искать</button>
+    <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
+    <button type="submit" class="cta-button" data-search-submit>Искать</button>
   </form>
-  <p class="authorized-search__status" data-search-status>{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
+  <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
   <div class="authorized-search__results" data-search-results hidden></div>
   <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
 </section>
@@ -54,8 +60,11 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
     let loading = false;
     let fallbackStarted = false;
 
-    function setStatus(message) {
-      if (status) status.textContent = message || '';
+    function setStatus(message, kind = 'info') {
+      if (!status) return;
+      status.textContent = message || '';
+      if (kind === 'error') status.setAttribute('role', 'alert');
+      else status.removeAttribute('role');
     }
 
     function renderCards(items, rankBase = offset) {
@@ -103,26 +112,41 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
     }
 
     async function updateAuth() {
-      if (!supabase) return;
+      if (!supabase) return false;
       const { data } = await supabase.auth.getSession();
       const signedIn = Boolean(data?.session?.user);
-      login.hidden = signedIn;
-      logout.hidden = !signedIn;
-      form.hidden = !signedIn;
+      if (login) login.hidden = signedIn;
+      if (logout) logout.hidden = !signedIn;
+      if (form) form.hidden = !signedIn;
       root.classList.toggle('is-authorized', signedIn);
       if (signedIn) await refreshQuota();
-      else setStatus('Войдите, чтобы включить поиск.');
+      else setStatus('Войдите через Яндекс, чтобы включить поиск.');
+      return signedIn;
+    }
+
+    function clearResults() {
+      if (results) { results.innerHTML = ''; results.hidden = true; setResultContext({}); }
+      if (more) more.hidden = true;
+      offset = 0;
+      fallbackStarted = false;
     }
 
     async function runSearch({ append = false } = {}) {
       if (!supabase || loading) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.user) {
+        clearResults();
+        await updateAuth();
+        setStatus('Сначала войдите через Яндекс.', 'error');
+        return;
+      }
       const query = String(input?.value || '').trim();
       if (query.length < 3) {
-        setStatus('Введите хотя бы 3 символа.');
+        setStatus('Введите хотя бы 3 символа.', 'error');
         return;
       }
       loading = true;
-      more.hidden = true;
+      if (more) more.hidden = true;
       setStatus('Ищу события…');
       if (!append || query !== currentQuery) {
         currentQuery = query;
@@ -138,7 +162,15 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
       });
       loading = false;
       if (error) {
-        setStatus(error.message || 'Поиск не сработал. Попробуйте позже.');
+        const statusCode = Number(error?.context?.status || error?.status || 0);
+        if (statusCode === 401 || statusCode === 403) {
+          await supabase.auth.signOut();
+          clearResults();
+          await updateAuth();
+          setStatus('Сессия закончилась. Войдите через Яндекс ещё раз.', 'error');
+        } else {
+          setStatus('Поиск сейчас не сработал. Попробуйте ещё раз чуть позже.', 'error');
+        }
         return;
       }
       const items = Array.isArray(data?.items) ? data.items : [];
@@ -163,7 +195,7 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
         results.hidden = !results.children.length;
       }
       offset += items.length;
-      more.hidden = !data?.has_more;
+      if (more) more.hidden = !data?.has_more;
       const quota = data?.quota;
       if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
       else await refreshQuota();
@@ -173,12 +205,12 @@ const enabled = Boolean(supabaseUrl && supabaseKey);
     if (enabled) {
       supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
       login?.addEventListener('click', async () => {
+        setStatus('Открываю вход через Яндекс…');
         await supabase.auth.signInWithOAuth({ provider: root.dataset.yandexProvider || 'custom:yandex', options: { redirectTo: window.location.href } });
       });
       logout?.addEventListener('click', async () => {
         await supabase.auth.signOut();
-        if (results) { results.innerHTML = ''; results.hidden = true; }
-        more.hidden = true;
+        clearResults();
         await updateAuth();
       });
       form?.addEventListener('submit', async (event) => {

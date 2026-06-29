@@ -19,6 +19,7 @@ import argparse
 import base64
 import contextlib
 import json
+import mimetypes
 import os
 import socket
 import sys
@@ -202,11 +203,29 @@ async def run_smoke(args: argparse.Namespace) -> int:
     calls: list[dict[str, Any]] = []
 
     server_root = dist.parent if dist.name.startswith("preview-") else dist
-    preview_path = f"/{dist.name}/__preview/" if dist.name.startswith("preview-") else "/__preview/"
+    preview_path = f"/{dist.name}/poisk/" if dist.name.startswith("preview-") else "/poisk/"
     with static_server(server_root) as base_url:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page(viewport={"width": 390, "height": 844})
+
+            async def route_static_cdn_assets(route):
+                request = route.request
+                url = request.url
+                marker = f"/{dist.name}/"
+                if marker not in url:
+                    await route.fulfill(status=404, body="unexpected static CDN asset path")
+                    return
+                rel = url.split(marker, 1)[1].split("?", 1)[0]
+                path = dist / rel
+                if not path.is_file():
+                    await route.fulfill(status=404, body=f"missing local asset: {rel}")
+                    return
+                content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+                await route.fulfill(status=200, content_type=content_type, body=path.read_bytes())
+
+            if dist.name.startswith("preview-"):
+                await page.route(f"https://static.kenigevents.ru/{dist.name}/**", route_static_cdn_assets)
 
             async def route_supabase(route):
                 request = route.request
@@ -241,17 +260,28 @@ async def run_smoke(args: argparse.Namespace) -> int:
                 await route.fulfill(status=404, body="unexpected supabase call")
 
             await page.route(f"{supabase_url}/**", route_supabase)
-            await page.goto(f"{base_url}{preview_path}#{implicit_auth_hash()}", wait_until="networkidle")
+            await page.goto(f"{base_url}{preview_path}", wait_until="networkidle")
 
+            root = page.locator("[data-authorized-search]").first
+            await expect(root).to_be_visible()
+            await expect(page.locator("[data-search-login]").first).to_be_visible()
+            await expect(page.locator("[data-search-logout]").first).to_be_hidden()
+            await expect(page.locator("[data-search-form]").first).to_be_hidden()
+            await expect(page.locator("[data-search-results]").first).to_be_hidden()
+            await expect(page.locator("[data-search-more]").first).to_be_hidden()
+            if await page.locator("[data-event-card]").count() != 0:
+                raise AssertionError("dedicated search page must not show prefilled event-result cards before a query")
+
+            await page.goto(f"{base_url}{preview_path}?auth-smoke=1#{implicit_auth_hash()}", wait_until="networkidle")
             root = page.locator("[data-authorized-search]").first
             await expect(root).to_be_visible()
             await page.wait_for_function(
                 "() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized')",
                 timeout=5000,
             )
+            await expect(page.locator("[data-search-login]").first).to_be_hidden()
+            await expect(page.locator("[data-search-logout]").first).to_be_visible()
             await expect(page.locator("[data-search-form]").first).to_be_visible()
-            if await page.locator("[data-search-login]").first.get_attribute("hidden") is None:
-                raise AssertionError("login button should be hidden after mocked auth")
 
             await page.locator("[data-search-input]").first.fill("урбанистика в четверг вечером по регистрации")
             await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")

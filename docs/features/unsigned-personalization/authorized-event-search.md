@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed; the remaining gate is live browser OAuth/search E2E on the preview site.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v50 has passed static checks, mocked browser UI search, public preview UI smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
 
 ## Product contract
 
@@ -341,3 +341,26 @@ On 2026-06-29 UTC, readiness is green for static public env, Yandex credentials,
 
 1. Pass live browser auth/search E2E on mobile: preview page → login through Yandex → return to preview URL → quota visible → search → cards render → like/share/not-interested still work.
 2. Enable automatic Smart Update → Kaggle artifact → CDN promotion after artifact checks. The Smart Update → Kaggle command handoff already passes pgvector/vector-sync/search public envs; publishing the checked artifact to CDN remains a separate release gate.
+
+## v50 search UX hardening canary
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v50-search-ux/poisk/>.
+
+Changes from v49:
+
+- `/poisk/` is now a dedicated search surface only: it does **not** render sample/static event cards, “Пока без запроса” copy, or a “Показать ещё” button before an actual authenticated query.
+- The unauthenticated state is explicit and non-confusing: only the Yandex login CTA and explanatory text are visible; the search form, result feed and load-more control stay hidden.
+- A global `[hidden] { display: none !important; }` regression guard is part of the static layout because component-level grid/flex CSS can otherwise override browser hidden semantics.
+- The Yandex login CTA is full-width in the search card, uses a recognizable red `Я` icon, and is separated from logout state.
+- On the dedicated page the input and search submit button are full-width/large controls; results appear below only after a query and use the shared split-action event cards.
+- The mobile terracotta tag drawer wraps navigation links to additional rows instead of horizontal scrolling; the `Поиск` link remains available in the drawer/header/footer.
+- If a user submits without a valid Supabase Auth session, the component does not call `event-search`; it clears stale results and asks to sign in. Non-2xx Edge Function errors are converted to product copy instead of leaking raw provider/Supabase errors.
+
+Verification evidence on 2026-06-29:
+
+- `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v50-search-ux`.
+- `scripts/smoke_authorized_search_ui.py` now covers both states: unauthenticated hidden form/results/no prefilled cards, then a mocked Supabase Auth callback and mocked `event-search` response rendered as split-action cards.
+- Public Playwright smoke on <https://kenigevents.ru/preview-20260629-event-pages-v50-search-ux/poisk/> passed: unauthenticated controls hidden correctly, authenticated mocked query rendered event `6310`, and the mobile drawer had no horizontal overflow.
+- Readiness probe passed: `OPTIONS /functions/v1/event-search = 200`, Yandex provider authorize redirect `302`.
+- Live Supabase RPC smoke with a temporary authenticated user passed for query `урбанистика будущее города`: pgvector top-3 included `6447`, `6310`, `5690`.
+- Live Edge Function smoke with a temporary authenticated user returned `200`, algorithm `pgvector_gemini_embedding_2_llm_verify_v1`, ids `[6447, 6310]`, `llm_verifier.status=ok`; temporary user/quota/audit rows were cleaned up.
