@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v54 hardens cross-preview saved-session restore, auth-intent markers and non-blocking PKCE callback handling after a real mobile callback stalled on “Завершаю вход через Яндекс…”.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v55 hardens the authorized search UX/test gate: account actions are hidden behind an avatar menu, the frontend returns as soon as streamed `result` is received, and the smoke suite can run against the real deployed `event-search` with a fake static PKCE session.
 
 ## Product contract
 
@@ -219,6 +219,18 @@ minimal search-result layout. The results container stores `request_id`,
 feedback/share actions read that context so later investigation can connect strong
 actions with the exact served search list.
 
+Signed-in identity is shown as a compact avatar/account control, not as a large
+always-visible logout button near the query field. The avatar uses Yandex picture
+metadata when Supabase returns a safe HTTPS avatar URL, otherwise a user initial,
+otherwise a neutral inline SVG fallback. Logout is available only inside the
+account popover and the popover closes on outside click/Escape; this avoids an
+accidental logout tap while typing/searching on mobile.
+
+The browser reads `event-search` as NDJSON and renders immediately after the
+streamed `result` event. It cancels the reader after that result so a slow/hung
+stream close cannot leave the static UI at “Ищу...” after the backend has already
+written a successful `event_search_requests` row.
+
 ## Edge Function response/log contract
 
 `supabase/functions/event-search` returns and logs investigation IDs for every successful request:
@@ -383,7 +395,7 @@ On 2026-06-29 UTC, readiness is green for static public env, Yandex credentials,
 
 ## Remaining gates before production UX claim
 
-1. Pass live browser auth/search E2E on mobile: preview page → login through Yandex → return to preview URL → quota visible → search → cards render → like/share/not-interested still work.
+1. Re-run live browser auth/search E2E on mobile against the latest preview after each auth/search UI change: preview page → login through Yandex → return to preview URL → quota visible → search → cards render → like/share/not-interested still work. The v55 fake-PKCE real-Edge smoke proves the static UI + deployed Edge path without consuming a real Yandex round-trip, but it does not replace the final real-device Yandex acceptance check.
 2. Enable automatic Smart Update → Kaggle artifact → CDN promotion after artifact checks. The Smart Update → Kaggle command handoff already passes pgvector/vector-sync/search public envs; publishing the checked artifact to CDN remains a separate release gate.
 
 ## v50 search UX hardening canary
@@ -508,3 +520,26 @@ Verification evidence on 2026-06-29:
 
 - `scripts/smoke_authorized_search_ui.py` now verifies that after a mocked successful PKCE callback, navigating to a fresh preview URL without `?code=` restores the same signed-in UI from stored Supabase session/local auth state;
 - readiness probe still covers Auth URL config, `custom:yandex` provider redirect, userinfo adapter and Edge Function OPTIONS.
+
+## v55 avatar account menu and real-Edge search smoke
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v55-auth-search-smoke/poisk/>.
+
+Why this exists: after v54 the backend could complete real searches in about 3 seconds and write `event_search_requests(status=ok)`, while the mobile UI could still show a timeout/dead search state. Separately, the visible full-width “Выйти из аккаунта” button sat directly above the query input and created a high-risk accidental logout target.
+
+Fix:
+
+- signed-in state now uses a compact avatar/account menu in the search card header; the user identity is visible, while logout is hidden inside the popover instead of being a primary page action;
+- avatar fallback order is Yandex/Supabase HTTPS picture URL → first initial → neutral inline user SVG;
+- account popover closes on outside click and Escape;
+- NDJSON handling returns as soon as the `result` event is received and cancels the reader, so a completed Edge Function response cannot be lost while waiting for stream EOF;
+- `scripts/smoke_authorized_search_ui.py --real-edge` now performs a browser smoke with a real Supabase Auth session and real deployed `event-search`, while only the static PKCE token exchange is mocked. This is intentionally opt-in because it consumes live search quota and creates a temporary auth user.
+
+Verification evidence on 2026-06-29:
+
+- Gemini Pro UI consultation (`gemini-3.1-pro-preview`) agreed that the visible logout button near search is a UX antipattern and recommended the avatar/dropdown pattern; artifact: `artifacts/codex/authorized-search-ui-review-20260629/`;
+- `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v55-auth-search-smoke`;
+- mocked browser smoke passed: `authorized_search_ui_smoke=ok dist=preview-20260629-event-pages-v55-auth-search-smoke cards=2 first_event=6310 request_calls=1`;
+- real Edge browser smoke passed: `authorized_search_real_edge_smoke=ok dist=preview-20260629-event-pages-v55-auth-search-smoke cards=16 first_event=5201 status="Осталось поисков: 4 сегодня, 29 в этом месяце."`;
+- readiness probe passed with Auth URL config, `custom:yandex` provider redirect, userinfo adapter and Edge Function OPTIONS;
+- live audit rows after the smoke show `event_search_requests.status=ok`, `request_kind=llm_rerank`, `result_count=8`, `llm_used=true`, with total backend time about `2.7–3.1s` for `query_length=16`.

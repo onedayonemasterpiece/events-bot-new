@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import base64
 import contextlib
+import hashlib
 import json
 import mimetypes
 import os
@@ -26,6 +27,8 @@ import socket
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -183,6 +186,86 @@ def fake_search_response() -> dict[str, Any]:
     }
 
 
+def http_json(
+    url: str,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        method=method,
+        headers=headers or {},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode())
+
+
+def ensure_real_edge_session(args: argparse.Namespace) -> dict[str, Any]:
+    """Create/reuse a dedicated smoke user and return a real Supabase session.
+
+    This is intentionally opt-in (`--real-edge`) because it calls the live
+    personalization Supabase Auth and the live `event-search` Edge Function.
+    Secrets are read from env/args but never printed.
+    """
+
+    supabase_url = args.supabase_url.rstrip("/")
+    publishable_key = args.supabase_publishable_key or os.getenv(
+        "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+        "",
+    )
+    secret_key = args.supabase_secret_key or os.getenv(
+        "PERSONALIZATION_SUPABASE_SECRET_KEY",
+        "",
+    )
+    if not publishable_key or not secret_key:
+        raise RuntimeError(
+            "--real-edge requires PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY "
+            "and PERSONALIZATION_SUPABASE_SECRET_KEY (or explicit args).",
+        )
+
+    email = args.real_edge_email or f"authorized-search-smoke-{int(time.time())}@example.invalid"
+    password = args.real_edge_password or (
+        "AuthSearchSmoke!" + hashlib.sha256(secret_key.encode()).hexdigest()[:24]
+    )
+    admin_headers = {
+        "apikey": secret_key,
+        "Authorization": f"Bearer {secret_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        http_json(
+            f"{supabase_url}/auth/v1/admin/users",
+            method="POST",
+            headers=admin_headers,
+            body={
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+                "user_metadata": {"preferred_username": "auth-search-smoke"},
+            },
+        )
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")
+        if error.code not in {400, 422, 409} or not re_search_duplicate_user(detail):
+            raise RuntimeError(f"smoke user creation failed with HTTP {error.code}") from error
+
+    return http_json(
+        f"{supabase_url}/auth/v1/token?grant_type=password",
+        method="POST",
+        headers={"apikey": publishable_key, "Content-Type": "application/json"},
+        body={"email": email, "password": password},
+    )
+
+
+def re_search_duplicate_user(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(token in lowered for token in ["already", "registered", "exists", "duplicate"])
+
+
 async def run_smoke(args: argparse.Namespace) -> int:
     try:
         from playwright.async_api import async_playwright, expect
@@ -310,9 +393,13 @@ async def run_smoke(args: argparse.Namespace) -> int:
                 timeout=5000,
             )
             await expect(page.locator("[data-search-login]").first).to_be_hidden()
-            await expect(page.locator("[data-search-logout]").first).to_be_visible()
             await expect(page.locator("[data-search-user]").first).to_be_visible()
             await expect(page.locator("[data-search-user-name]").first).to_contain_text("ui-smoke-user")
+            await expect(page.locator("[data-search-logout]").first).to_be_hidden()
+            await page.locator("[data-search-account-toggle]").first.click()
+            await expect(page.locator("[data-search-logout]").first).to_be_visible()
+            await page.keyboard.press("Escape")
+            await expect(page.locator("[data-search-logout]").first).to_be_hidden()
             await expect(page.locator("[data-search-form]").first).to_be_visible()
 
             await page.goto(f"{base_url}{preview_path}?new-link-smoke=1", wait_until="networkidle")
@@ -372,13 +459,163 @@ async def run_smoke(args: argparse.Namespace) -> int:
     return 0
 
 
+async def run_real_edge_smoke(args: argparse.Namespace) -> int:
+    """Browser smoke with fake Yandex callback but real Supabase Auth/Edge search."""
+
+    try:
+        from playwright.async_api import async_playwright, expect
+    except ModuleNotFoundError as exc:  # pragma: no cover - operator guidance
+        raise RuntimeError(
+            "Python Playwright is not installed. Install in an artifact venv, "
+            "for example: python -m pip install playwright && python -m playwright install chromium"
+        ) from exc
+
+    dist = Path(args.dist).resolve() if args.dist else latest_preview_dist(Path("site/dist"))
+    supabase_url = args.supabase_url.rstrip("/")
+    real_session = ensure_real_edge_session(args)
+    real_user = real_session.get("user") or {}
+    storage_key = storage_key_for_supabase_url(supabase_url)
+
+    server_root = dist.parent if dist.name.startswith("preview-") else dist
+    preview_path = f"/{dist.name}/poisk/" if dist.name.startswith("preview-") else "/poisk/"
+    with static_server(server_root) as base_url:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(viewport={"width": 390, "height": 844})
+            console_errors: list[str] = []
+            page.on(
+                "console",
+                lambda message: console_errors.append(message.text[:500])
+                if message.type == "error"
+                else None,
+            )
+
+            async def route_static_cdn_assets(route):
+                request = route.request
+                url = request.url
+                marker = f"/{dist.name}/"
+                if marker not in url:
+                    await route.fulfill(status=404, body="unexpected static CDN asset path")
+                    return
+                rel = url.split(marker, 1)[1].split("?", 1)[0]
+                path = dist / rel
+                if not path.is_file():
+                    await route.fulfill(status=404, body=f"missing local asset: {rel}")
+                    return
+                content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+                await route.fulfill(status=200, content_type=content_type, body=path.read_bytes())
+
+            if dist.name.startswith("preview-"):
+                await page.route(f"https://static.kenigevents.ru/{dist.name}/**", route_static_cdn_assets)
+
+            async def route_auth_only(route):
+                url = route.request.url
+                if "/auth/v1/token?grant_type=pkce" in url:
+                    await route.fulfill(
+                        status=200,
+                        content_type="application/json; charset=utf-8",
+                        body=json.dumps(real_session, ensure_ascii=False),
+                    )
+                    return
+                if url.endswith("/auth/v1/user"):
+                    await route.fulfill(
+                        status=200,
+                        content_type="application/json; charset=utf-8",
+                        body=json.dumps(real_user, ensure_ascii=False),
+                    )
+                    return
+                await route.continue_()
+
+            await page.route(f"{supabase_url}/**", route_auth_only)
+
+            # Seed the PKCE verifier on the same local origin first. This mimics a
+            # static-page OAuth roundtrip without opening Yandex and without
+            # bypassing Supabase Auth/Edge Function validation.
+            await page.goto(f"{base_url}{preview_path}", wait_until="networkidle")
+            await page.evaluate(
+                """([key]) => {
+                  localStorage.setItem(`${key}-code-verifier`, JSON.stringify('real-edge-smoke-verifier'));
+                }""",
+                [storage_key],
+            )
+            await page.goto(
+                f"{base_url}{preview_path}?auth-smoke=real-edge&code=real-edge-smoke-code",
+                wait_until="networkidle",
+            )
+            await page.wait_for_function(
+                "() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized')",
+                timeout=10000,
+            )
+            await expect(page.locator("[data-search-form]").first).to_be_visible()
+            await expect(page.locator("[data-search-login]").first).to_be_hidden()
+            await expect(page.locator("[data-search-user]").first).to_be_visible()
+            await expect(page.locator("[data-search-logout]").first).to_be_hidden()
+            await page.locator("[data-search-account-toggle]").first.click()
+            await expect(page.locator("[data-search-logout]").first).to_be_visible()
+            await page.keyboard.press("Escape")
+            await expect(page.locator("[data-search-logout]").first).to_be_hidden()
+
+            await page.locator("[data-search-input]").first.fill(args.real_edge_query)
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+
+            results = page.locator("[data-search-results]").first
+            await expect(results).to_be_visible(timeout=args.real_edge_timeout_ms)
+            first_card = page.locator("[data-search-results] [data-event-card]").first
+            await expect(first_card).to_be_visible(timeout=5000)
+            await expect(first_card.locator("[data-feedback-action='like']").first).to_be_visible()
+            await expect(first_card.locator("[data-native-share]").first).to_be_visible()
+            await expect(first_card.locator("[data-feedback-action='not_interested']").first).to_be_visible()
+            await page.wait_for_function(
+                "() => document.querySelector('[data-search-submit]')?.getAttribute('aria-busy') === 'false'",
+                timeout=5000,
+            )
+
+            card_count = await page.locator("[data-search-results] [data-event-card]").count()
+            first_event_id = await first_card.get_attribute("data-event-id")
+            status_text = await page.locator("[data-search-status]").first.text_content()
+            if card_count < 1:
+                raise AssertionError("real Edge search returned no rendered event cards")
+            if console_errors:
+                raise AssertionError(f"browser console errors during real Edge smoke: {console_errors[:3]}")
+
+            await browser.close()
+
+    print(
+        "authorized_search_real_edge_smoke=ok "
+        f"dist={dist.name} cards={card_count} first_event={first_event_id} "
+        f"status={json.dumps(status_text, ensure_ascii=False)}"
+    )
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", help="Path to site/dist/<preview-id>. Defaults to latest preview-* build.")
     parser.add_argument("--supabase-url", default="https://example.supabase.co")
+    parser.add_argument(
+        "--real-edge",
+        action="store_true",
+        help=(
+            "Use a fake Yandex callback but a real Supabase Auth session and "
+            "real event-search Edge Function. Calls live Supabase and consumes search quota."
+        ),
+    )
+    parser.add_argument("--supabase-publishable-key", default=os.getenv("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY", ""))
+    parser.add_argument("--supabase-secret-key", default=os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY", ""))
+    parser.add_argument(
+        "--real-edge-email",
+        default="",
+        help="Optional fixed smoke user email. Defaults to a unique example.invalid email to avoid quota collisions.",
+    )
+    parser.add_argument("--real-edge-password", default="")
+    parser.add_argument("--real-edge-query", default="джаз на выходных")
+    parser.add_argument("--real-edge-timeout-ms", type=int, default=70000)
     args = parser.parse_args()
     import asyncio
 
+    if args.real_edge:
+        return asyncio.run(run_real_edge_smoke(args))
     return asyncio.run(run_smoke(args))
 
 

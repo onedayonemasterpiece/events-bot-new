@@ -143,7 +143,7 @@ fetch(`${supabaseUrl}/functions/v1/event-search`, {
 })
 ```
 
-For `event-search`, prefer direct `fetch` over `supabase.functions.invoke` when streaming backend progress is needed. The current contract uses NDJSON progress events: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then `result` or `error`.
+For `event-search`, prefer direct `fetch` over `supabase.functions.invoke` when streaming backend progress is needed. The current contract uses NDJSON progress events: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then `result` or `error`. The frontend should render immediately after `result` and cancel/stop reading the stream; do not wait for EOF before unblocking the search UI.
 
 Even if an Edge Function is deployed with `--no-verify-jwt` for CORS/manual auth reasons, it must manually require and validate the Bearer token via `supabase.auth.getUser(accessToken)` before doing user-specific work.
 
@@ -163,7 +163,8 @@ UI must always recover:
 - non-2xx / streamed `error` / timeout should show product copy;
 - input and submit button must be re-enabled in `finally`;
 - if the session expired, sign out locally and ask the user to log in again;
-- do not show stale result cards before the first real query on `/poisk/`.
+- do not show stale result cards before the first real query on `/poisk/`;
+- signed-in account actions should use a compact avatar/account menu. Avoid a large always-visible logout button near the query input; it is too easy to hit accidentally on mobile. Prefer Yandex HTTPS avatar URL, then first initial, then a neutral SVG fallback, and keep logout inside the popover.
 
 ## Debugging playbook
 
@@ -206,6 +207,18 @@ Run mocked browser UI smoke:
 python3 scripts/smoke_authorized_search_ui.py \
   --dist site/dist/<preview-build-id> \
   --supabase-url "$PERSONALIZATION_SUPABASE_URL"
+```
+
+Run opt-in browser smoke against the real deployed Edge Function while mocking only the static PKCE callback/session handoff. This consumes live quota and may create a temporary Supabase Auth smoke user:
+
+```bash
+python3 scripts/smoke_authorized_search_ui.py \
+  --real-edge \
+  --dist site/dist/<preview-build-id> \
+  --supabase-url "$PERSONALIZATION_SUPABASE_URL" \
+  --supabase-publishable-key "$PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY" \
+  --supabase-secret-key "$PERSONALIZATION_SUPABASE_SECRET_KEY" \
+  --real-edge-query "джаз на выходных"
 ```
 
 Deploy relevant Edge Functions:

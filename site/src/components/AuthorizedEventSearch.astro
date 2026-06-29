@@ -24,11 +24,24 @@ const HeadingTag = headingLevel;
         <span class="authorized-search__yandex-icon" aria-hidden="true">Я</span>
         <span>Войти через Яндекс</span>
       </button>
-      <div class="authorized-search__account" data-search-user hidden>
-        <span>Вошли как</span>
-        <strong data-search-user-name></strong>
-      </div>
-      <button type="button" class="secondary-button authorized-search__logout" data-search-logout hidden>Выйти из аккаунта</button>
+      <details class="authorized-search__account-menu" data-search-user data-search-account hidden>
+        <summary class="authorized-search__account-toggle" data-search-account-toggle aria-label="Профиль пользователя">
+          <span class="authorized-search__avatar" data-search-avatar aria-hidden="true">
+            <img data-search-avatar-img alt="" hidden />
+            <span class="authorized-search__avatar-initial" data-search-avatar-initial hidden></span>
+            <svg class="authorized-search__avatar-icon" data-search-avatar-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 12.2c2.5 0 4.5-2 4.5-4.5S14.5 3.2 12 3.2s-4.5 2-4.5 4.5 2 4.5 4.5 4.5Zm0 2.1c-3.7 0-7.2 1.9-8.8 4.8-.4.7.1 1.7 1 1.7h15.6c.9 0 1.4-1 1-1.7-1.6-2.9-5.1-4.8-8.8-4.8Z" fill="currentColor"></path>
+            </svg>
+          </span>
+        </summary>
+        <div class="authorized-search__account-popover" data-search-account-popover>
+          <div class="authorized-search__account-info">
+            <span>Вошли как</span>
+            <strong data-search-user-name></strong>
+          </div>
+          <button type="button" class="authorized-search__logout" data-search-logout>Выйти из аккаунта</button>
+        </div>
+      </details>
     </div>
   </div>
   {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
@@ -62,6 +75,10 @@ const HeadingTag = headingLevel;
     const submitLabel = root.querySelector('[data-search-submit-label]');
     const userBadge = root.querySelector('[data-search-user]');
     const userName = root.querySelector('[data-search-user-name]');
+    const accountMenu = root.querySelector('[data-search-account]');
+    const avatarImg = root.querySelector('[data-search-avatar-img]');
+    const avatarInitial = root.querySelector('[data-search-avatar-initial]');
+    const avatarIcon = root.querySelector('[data-search-avatar-icon]');
     const results = root.querySelector('[data-search-results]');
     const more = root.querySelector('[data-search-more]');
     let supabase = null;
@@ -159,6 +176,40 @@ const HeadingTag = headingLevel;
       return metadata.preferred_username || metadata.name || metadata.full_name || user?.email || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
     }
 
+    function userAvatarUrl(user) {
+      const metadata = user?.user_metadata || {};
+      const value = metadata.avatar_url || metadata.picture || metadata.avatar || metadata.photo_url || '';
+      if (typeof value !== 'string') return '';
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' ? url.toString() : '';
+      } catch (_error) {
+        return '';
+      }
+    }
+
+    function userInitial(name) {
+      const normalized = String(name || '').trim();
+      const match = normalized.match(/[\p{L}\p{N}]/u);
+      return match ? match[0].toLocaleUpperCase('ru-RU') : '';
+    }
+
+    function renderAvatar(user) {
+      const name = displayUserName(user);
+      const picture = userAvatarUrl(user);
+      if (avatarImg) {
+        avatarImg.hidden = !picture;
+        if (picture) avatarImg.setAttribute('src', picture);
+        else avatarImg.removeAttribute('src');
+      }
+      const initial = picture ? '' : userInitial(name);
+      if (avatarInitial) {
+        avatarInitial.textContent = initial;
+        avatarInitial.hidden = !initial;
+      }
+      if (avatarIcon) avatarIcon.hidden = Boolean(picture || initial);
+    }
+
     function readJsonStorage(key) {
       try {
         const value = window.localStorage.getItem(key);
@@ -231,6 +282,8 @@ const HeadingTag = headingLevel;
       if (form) form.hidden = !signedIn;
       if (userBadge) userBadge.hidden = !signedIn;
       if (userName && signedIn) userName.textContent = displayUserName(session.user);
+      if (signedIn) renderAvatar(session.user);
+      else if (accountMenu) accountMenu.open = false;
       root.classList.toggle('is-authorized', signedIn);
       root.classList.toggle('is-auth-checking', checking);
       if (signedIn) {
@@ -410,6 +463,17 @@ const HeadingTag = headingLevel;
       let buffer = '';
       let finalData = null;
       let finalError = null;
+      async function finishWithResult(event) {
+        finalData = event.data;
+        setSearchProgress(100, event.label || 'Готово');
+        try {
+          await reader.cancel();
+        } catch (_error) {
+          // Some browsers throw when cancelling an already closed stream. The
+          // result event is authoritative, so the UI should not wait for EOF.
+        }
+        return { data: finalData, error: null };
+      }
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -425,8 +489,7 @@ const HeadingTag = headingLevel;
           if (event.type === 'progress') {
             setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
           } else if (event.type === 'result') {
-            finalData = event.data;
-            setSearchProgress(100, event.label || 'Готово');
+            return await finishWithResult(event);
           } else if (event.type === 'error') {
             finalError = event;
           }
@@ -436,7 +499,10 @@ const HeadingTag = headingLevel;
       if (tail) {
         try {
           const event = JSON.parse(tail);
-          if (event.type === 'result') finalData = event.data;
+          if (event.type === 'result') {
+            finalData = event.data;
+            setSearchProgress(100, event.label || 'Готово');
+          }
           else if (event.type === 'error') finalError = event;
           else if (event.type === 'progress') setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
         } catch (_error) {
@@ -655,6 +721,14 @@ const HeadingTag = headingLevel;
         clearAuthIntent();
         authCallbackHadError = false;
         renderAuthState(null);
+      });
+      document.addEventListener('click', (event) => {
+        if (!accountMenu || !accountMenu.open) return;
+        if (accountMenu.contains(event.target)) return;
+        accountMenu.open = false;
+      });
+      accountMenu?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') accountMenu.open = false;
       });
       form?.addEventListener('submit', async (event) => {
         event.preventDefault();
