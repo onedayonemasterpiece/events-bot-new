@@ -72,9 +72,12 @@ const HeadingTag = headingLevel;
     let authCallbackHadError = false;
     let progressValue = 0;
     const searchTimeoutMs = 60000;
+    const authSessionTimeoutMs = 8000;
+    const authCallbackTimeoutMs = 20000;
     const maxQueryLength = 180;
 
     const pkceCookiePrefix = 'ke_pkce_';
+    const authIntentKey = 'ke_yandex_auth_intent_v1';
 
     function isPkceCodeVerifierKey(key) {
       return typeof key === 'string' && key.endsWith('-code-verifier');
@@ -154,6 +157,90 @@ const HeadingTag = headingLevel;
     function displayUserName(user) {
       const metadata = user?.user_metadata || {};
       return metadata.preferred_username || metadata.name || metadata.full_name || user?.email || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
+    }
+
+    function readJsonStorage(key) {
+      try {
+        const value = window.localStorage.getItem(key);
+        return value ? JSON.parse(value) : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function writeJsonStorage(key, value) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch (_error) {
+        // localStorage can be unavailable in hardened browser modes. Auth still
+        // relies on Supabase in-memory state for the current page load.
+      }
+    }
+
+    function removeJsonStorage(key) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (_error) {
+        // Ignore cleanup failures.
+      }
+    }
+
+    function markAuthIntent(state, extra = {}) {
+      writeJsonStorage(authIntentKey, {
+        state,
+        provider: root.dataset.yandexProvider || 'custom:yandex',
+        updated_at: new Date().toISOString(),
+        ...extra,
+      });
+    }
+
+    function clearAuthIntent() {
+      removeJsonStorage(authIntentKey);
+    }
+
+    function supabaseProjectRef() {
+      try {
+        return new URL(root.dataset.supabaseUrl).host.split('.', 1)[0];
+      } catch (_error) {
+        return '';
+      }
+    }
+
+    function hasStoredSupabaseSession() {
+      const ref = supabaseProjectRef();
+      if (!ref) return false;
+      try {
+        return Boolean(window.localStorage.getItem(`sb-${ref}-auth-token`));
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    function hasLocalAuthSignal() {
+      return Boolean(readJsonStorage(authIntentKey)) || hasStoredSupabaseSession();
+    }
+
+    function renderAuthState(session, options = {}) {
+      const { preserveError = false, checking = false } = options;
+      const signedIn = Boolean(session?.user);
+      if (login) {
+        login.hidden = signedIn || checking;
+        login.disabled = checking;
+      }
+      if (logout) logout.hidden = !signedIn;
+      if (form) form.hidden = !signedIn;
+      if (userBadge) userBadge.hidden = !signedIn;
+      if (userName && signedIn) userName.textContent = displayUserName(session.user);
+      root.classList.toggle('is-authorized', signedIn);
+      root.classList.toggle('is-auth-checking', checking);
+      if (signedIn) {
+        markAuthIntent('signed_in', { user_hint: displayUserName(session.user) });
+      } else if (checking) {
+        markAuthIntent('checking');
+      } else if (!preserveError) {
+        setStatus('Войдите через Яндекс, чтобы включить поиск.');
+      }
+      return signedIn;
     }
 
     function normalizeSearchInput(value) {
@@ -269,17 +356,26 @@ const HeadingTag = headingLevel;
 
     async function updateAuth(options = {}) {
       if (!supabase) return false;
-      const { preserveError = false, session = null } = options;
-      const sessionData = session ? { session } : (await supabase.auth.getSession()).data;
-      const signedIn = Boolean(sessionData?.session?.user);
-      if (login) login.hidden = signedIn;
-      if (logout) logout.hidden = !signedIn;
-      if (form) form.hidden = !signedIn;
-      if (userBadge) userBadge.hidden = !signedIn;
-      if (userName && signedIn) userName.textContent = displayUserName(sessionData.session.user);
-      root.classList.toggle('is-authorized', signedIn);
-      if (signedIn) await refreshQuota();
-      else if (!preserveError) setStatus('Войдите через Яндекс, чтобы включить поиск.');
+      const { preserveError = false, session = null, checking = false } = options;
+      let activeSession = session;
+      if (!activeSession) {
+        try {
+          const result = await withTimeout(supabase.auth.getSession(), authSessionTimeoutMs, 'auth_session_timeout');
+          activeSession = result?.data?.session || null;
+        } catch (_error) {
+          renderAuthState(null, { preserveError: true, checking: false });
+          setStatus('Не удалось проверить сохранённый вход. Перезагрузите страницу или войдите ещё раз.', 'error');
+          return false;
+        }
+      }
+      const signedIn = renderAuthState(activeSession, { preserveError, checking });
+      if (signedIn) {
+        try {
+          await refreshQuota();
+        } catch (_error) {
+          // Quota text is informational; the actual search endpoint enforces quota.
+        }
+      }
       return signedIn;
     }
 
@@ -445,15 +541,27 @@ const HeadingTag = headingLevel;
 
     function cleanAuthRedirectUrl() {
       const url = new URL(window.location.href);
-      for (const key of ['code', 'error', 'error_code', 'error_description', 'state']) url.searchParams.delete(key);
+      for (const key of ['code', 'error', 'error_code', 'error_description', 'state', 'sb']) url.searchParams.delete(key);
       url.hash = '';
       return url.toString();
     }
 
+    function authCallbackParams() {
+      const merged = new URLSearchParams(window.location.search);
+      if (window.location.hash && window.location.hash.length > 1) {
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        for (const [key, value] of hashParams.entries()) {
+          if (!merged.has(key)) merged.set(key, value);
+        }
+      }
+      return merged;
+    }
+
     function showAuthCallbackError() {
-      const params = new URLSearchParams(window.location.search);
+      const params = authCallbackParams();
       if (!params.has('error') && !params.has('error_code') && !params.has('error_description')) return false;
       const errorCode = params.get('error_code') || params.get('error') || '';
+      cleanAuthCallbackHistory();
       setStatus(errorCode ? `Вход через Яндекс не завершён: ${errorCode}. Попробуйте ещё раз.` : 'Вход через Яндекс не завершён. Попробуйте ещё раз.', 'error');
       return true;
     }
@@ -465,17 +573,23 @@ const HeadingTag = headingLevel;
 
     async function handleAuthCallback() {
       if (!supabase) return { attempted: false, signedIn: false };
-      const params = new URLSearchParams(window.location.search);
+      const params = authCallbackParams();
       const code = params.get('code');
       if (!code) return { attempted: false, signedIn: false };
       // A PKCE callback is a transient state on a fully static page. Protect the
       // callback status from the initial onAuthStateChange(null) emission while
       // the browser exchanges the one-time code with Supabase.
       authCallbackHadError = true;
+      markAuthIntent('callback_started', { redirect_to: cleanAuthRedirectUrl() });
+      renderAuthState(null, { preserveError: true, checking: true });
       setStatus('Завершаю вход через Яндекс…');
       let exchangeResult;
       try {
-        exchangeResult = await supabase.auth.exchangeCodeForSession(code);
+        exchangeResult = await withTimeout(
+          supabase.auth.exchangeCodeForSession(code),
+          authCallbackTimeoutMs,
+          'auth_callback_timeout',
+        );
       } catch (caughtError) {
         exchangeResult = { data: null, error: caughtError };
       }
@@ -483,9 +597,18 @@ const HeadingTag = headingLevel;
       if (error) {
         cleanAuthCallbackHistory();
         const rawMessage = String(error.message || error.name || error);
-        const message = /code verifier|flow state|auth code|invalid|pkce/i.test(rawMessage)
-          ? 'Вход через Яндекс не завершён: сессия входа устарела или открыта не в той вкладке. Нажмите «Войти через Яндекс» ещё раз с этой страницы.'
-          : 'Вход через Яндекс не завершён. Попробуйте ещё раз.';
+        const message = rawMessage === 'auth_callback_timeout'
+          ? 'Вход через Яндекс не завершён: браузер не получил ответ от Supabase. Перезагрузите страницу или нажмите «Войти через Яндекс» ещё раз.'
+          : /code verifier|flow state|auth code|invalid|pkce/i.test(rawMessage)
+            ? 'Вход через Яндекс не завершён: сессия входа устарела или открыта не в той вкладке. Нажмите «Войти через Яндекс» ещё раз с этой страницы.'
+            : 'Вход через Яндекс не завершён. Попробуйте ещё раз.';
+        const existingSignedIn = hasLocalAuthSignal() ? await updateAuth({ preserveError: true }) : false;
+        if (existingSignedIn) {
+          authCallbackHadError = false;
+          return { attempted: true, signedIn: true };
+        }
+        renderAuthState(null, { preserveError: true });
+        markAuthIntent('callback_failed', { reason: rawMessage.slice(0, 120) });
         setStatus(message, 'error');
         return { attempted: true, signedIn: false };
       }
@@ -499,6 +622,7 @@ const HeadingTag = headingLevel;
       cleanAuthCallbackHistory();
       const signedIn = await updateAuth({ session, preserveError: true });
       if (!signedIn) {
+        markAuthIntent('callback_no_browser_session');
         setStatus('Вход через Яндекс завершился на сервере, но браузер не сохранил сессию. Нажмите «Войти через Яндекс» ещё раз.', 'error');
       } else {
         authCallbackHadError = false;
@@ -511,26 +635,54 @@ const HeadingTag = headingLevel;
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce', storage: authStorage },
       });
       login?.addEventListener('click', async () => {
+        const redirectTo = cleanAuthRedirectUrl();
+        markAuthIntent('login_started', { redirect_to: redirectTo });
+        renderAuthState(null, { preserveError: true, checking: true });
         setStatus('Открываю вход через Яндекс…');
-        await supabase.auth.signInWithOAuth({
+        const { error } = await supabase.auth.signInWithOAuth({
           provider: root.dataset.yandexProvider || 'custom:yandex',
-          options: { redirectTo: cleanAuthRedirectUrl() },
+          options: { redirectTo },
         });
+        if (error) {
+          markAuthIntent('login_start_failed', { reason: String(error.message || error).slice(0, 120) });
+          renderAuthState(null, { preserveError: true });
+          setStatus('Не удалось открыть вход через Яндекс. Попробуйте ещё раз.', 'error');
+        }
       });
       logout?.addEventListener('click', async () => {
         await supabase.auth.signOut();
         clearResults();
+        clearAuthIntent();
         authCallbackHadError = false;
-        await updateAuth();
+        renderAuthState(null);
       });
       form?.addEventListener('submit', async (event) => {
         event.preventDefault();
         await runSearch({ append: false });
       });
       more?.addEventListener('click', async () => runSearch({ append: true }));
-      supabase.auth.onAuthStateChange(() => updateAuth({ preserveError: authCallbackHadError }));
+      supabase.auth.onAuthStateChange((_event, session) => {
+        // Supabase warns against awaiting Supabase calls inside this callback.
+        // Render from the callback payload and defer any follow-up RPCs.
+        window.setTimeout(() => {
+          const signedIn = renderAuthState(session, { preserveError: authCallbackHadError });
+          if (signedIn) {
+            authCallbackHadError = false;
+            refreshQuota().catch(() => {});
+          }
+        }, 0);
+      });
+      if (hasLocalAuthSignal()) {
+        renderAuthState(null, { preserveError: true, checking: true });
+        setStatus('Проверяю сохранённый вход через Яндекс…');
+      }
       handleAuthCallback()
-        .then((callback) => (callback.signedIn ? true : updateAuth({ preserveError: authCallbackHadError })))
+        .then((callback) => {
+          if (callback.signedIn) return true;
+          if (callback.attempted || hasLocalAuthSignal()) return updateAuth({ preserveError: authCallbackHadError });
+          renderAuthState(null);
+          return false;
+        })
         .then((signedIn) => { if (!signedIn && !authCallbackHadError) showAuthCallbackError(); });
     }
   }

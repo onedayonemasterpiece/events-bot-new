@@ -115,6 +115,10 @@ Required behavior:
 6. Clean the visible URL with `history.replaceState` before rendering the authorized UI.
 7. On callback errors, remove stale callback params and show product copy; do not silently show the anonymous button.
 8. Show who is signed in using `preferred_username`, `name`, `full_name`, email, or a short user id.
+9. Persist a small auth-intent marker such as `ke_yandex_auth_intent_v1` when the user clicks login, and update it on callback/signed-in/failure states. Use it only as a UX hint; the Supabase session remains the real auth source.
+10. On new static/preview links under the same `kenigevents.ru` origin, restore the saved Supabase session before showing the login CTA. A new preview path must not log the user out.
+11. Bound callback exchange with a timeout and always clean stale `code/error/sb` params so the UI cannot stay forever at “Завершаю вход…”.
+12. Do not await Supabase calls inside `onAuthStateChange`; render from the callback `session` payload and defer follow-up RPCs with `setTimeout`.
 
 PKCE verifier hardening:
 

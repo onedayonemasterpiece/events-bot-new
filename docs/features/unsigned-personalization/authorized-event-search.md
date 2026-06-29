@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v53 has passed static checks, mocked PKCE browser UI search including missing-verifier callback handling, streamed backend-progress search UI smoke, live Edge Function NDJSON progress smoke and authenticated Edge Function search smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v54 hardens cross-preview saved-session restore, auth-intent markers and non-blocking PKCE callback handling after a real mobile callback stalled on “Завершаю вход через Яндекс…”.
 
 ## Product contract
 
@@ -488,3 +488,23 @@ Verification evidence on 2026-06-29:
 - `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v53-search-progress`;
 - `scripts/smoke_authorized_search_ui.py` passed for v53 and now covers signed-in identity display, client-side unsafe-query rejection without calling `event-search`, NDJSON progress/result handling and final button reset;
 - readiness probe passed for static env, Yandex provider redirect, userinfo adapter and Edge Function OPTIONS.
+
+## v54 saved-session restore and callback non-blocking hardening
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v54-auth-restore/poisk/>.
+
+Why this exists: after v53 a real mobile flow could return to the static `/poisk/` page and stay stuck with visible “Войти через Яндекс” plus status “Завершаю вход через Яндекс…”. A new preview URL on the same `kenigevents.ru` origin also did not reliably show the saved authenticated state. The intended product contract is: preview path changes must not log the user out; Supabase session storage is origin/project based, not preview-path based.
+
+Fix:
+
+- the page now writes a compact `ke_yandex_auth_intent_v1` marker to `localStorage` when the user starts Yandex login and updates it on callback/signed-in/failure states;
+- on every static page load the UI first checks local auth signals (Supabase session key or our intent marker) and only then performs the saved-session check, avoiding blind auth rechecks for anonymous users;
+- existing Supabase sessions are restored across new preview links on the same `kenigevents.ru` origin before asking the user to log in again;
+- the PKCE callback exchange is bounded by a 20s timeout and always cleans stale `code/error/sb` URL params, so the page cannot stay forever at “Завершаю вход…”;
+- the Supabase `onAuthStateChange` callback no longer awaits Supabase calls inside the callback. It renders from the callback session payload and defers quota RPCs with `setTimeout`, following Supabase JS guidance and avoiding callback deadlocks;
+- while auth is being checked, the Yandex login CTA is hidden/disabled instead of showing a contradictory login button next to “Завершаю вход…”.
+
+Verification evidence on 2026-06-29:
+
+- `scripts/smoke_authorized_search_ui.py` now verifies that after a mocked successful PKCE callback, navigating to a fresh preview URL without `?code=` restores the same signed-in UI from stored Supabase session/local auth state;
+- readiness probe still covers Auth URL config, `custom:yandex` provider redirect, userinfo adapter and Edge Function OPTIONS.

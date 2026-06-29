@@ -315,6 +315,16 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(page.locator("[data-search-user-name]").first).to_contain_text("ui-smoke-user")
             await expect(page.locator("[data-search-form]").first).to_be_visible()
 
+            await page.goto(f"{base_url}{preview_path}?new-link-smoke=1", wait_until="networkidle")
+            await page.wait_for_function(
+                "() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized')",
+                timeout=5000,
+            )
+            await expect(page.locator("[data-search-login]").first).to_be_hidden()
+            await expect(page.locator("[data-search-user]").first).to_be_visible()
+            await expect(page.locator("[data-search-user-name]").first).to_contain_text("ui-smoke-user")
+            await expect(page.locator("[data-search-form]").first).to_be_visible()
+
             await page.locator("[data-search-input]").first.fill("<script>alert(1)</script>")
             await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
             await expect(page.locator("[data-search-status]").first).to_contain_text("техническую команду")
