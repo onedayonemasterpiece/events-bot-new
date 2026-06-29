@@ -108,6 +108,7 @@ Evidence from 2026-06-29 UTC:
 - Gemma 4 26B verifier local canary: `status=ok`, `audited_anchors=15`, `provider_calls=7`, `cache_hits=8`, `errors=[]`;
 - Kaggle CPU canary: `preview-20260628-event-pages-v48-pgvector-gemma-kaggle`, `ok=true`, `event_count=70`, vector sync `provider_calls=0` because vectors were already current, `npm run check:preview` passed inside the notebook;
 - live public smoke: `/data/discovery/6447.json` returns `algorithm_id=event_pgvector_related_chain_v1`, `strategy=event_pgvector_related_chain_v1_manifest`, first candidate `6310`, `llm_semantic_score=0.92`.
+- authorized RPC smoke: temporary Supabase Auth user + real JWT + quota reservation + Gemini Embedding 2 query vector + `search_events_by_embedding_v1`; query `урбанистика будущее города` returns `6310` in top-3 and cleanup removes smoke rows/user.
 
 ## Job sequence after Smart Update
 

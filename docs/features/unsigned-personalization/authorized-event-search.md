@@ -145,6 +145,24 @@ PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex
 
 The component uses `@supabase/supabase-js` and invokes Supabase Edge Function `event-search`. If public env is missing, the component renders nothing and the static pages stay unchanged.
 
+## Edge Function response/log contract
+
+`supabase/functions/event-search` returns and logs investigation IDs for every successful request:
+
+- `request_id` — per-call UUID;
+- `served_list_id` — UUID for the returned list;
+- `served_list_hash` — SHA-256 over `query_hash`, returned event ids and fallback ids;
+- `timings_ms` — quota, embedding provider, pgvector RPC, optional LLM verifier, fallback RPC and total latency;
+- `llm_verifier` — `{requested, used, status}` so a search can be distinguished between pure pgvector and verified/reranked results.
+
+Structured logs are emitted as JSON lines:
+
+- `event_search_completed`;
+- `event_search_quota_exceeded`;
+- `event_search_failed`.
+
+Logs and audit rows use `query_hash`/length and a short `user_hash`; raw search text and access tokens are not logged or stored.
+
 ## Current verification evidence
 
 Applied to the personalization Supabase project on 2026-06-28:
@@ -176,6 +194,32 @@ Evidence from 2026-06-29 UTC:
 - Gemma 4 26B verifier: local canary `status=ok`, `audited_anchors=15`, `provider_calls=7`, `cache_hits=8`, `errors=[]`; the subsequent Kaggle run used the persisted verifier cache (`cache_hit_no_provider`, `provider_calls=0`);
 - Kaggle CPU canary: `preview-20260628-event-pages-v48-pgvector-gemma-kaggle`, `ok=true`, `event_count=70`, `npm run check:preview` passed inside the notebook;
 - live public smoke: `/data/discovery/6447.json` returns `algorithm_id=event_pgvector_related_chain_v1` and first candidate `6310` with `vector_similarity≈0.8592`, `llm_semantic_score=0.92`.
+
+## Authorized RPC smoke evidence
+
+Because the Supabase Edge Function is not deployable without `SUPABASE_ACCESS_TOKEN` and `PERSONALIZATION_SUPABASE_PROJECT_REF`, the currently executable live-auth proof is the protected PostgREST/RPC path used by the Edge Function.
+
+Script: `scripts/smoke_authorized_event_search_rpc.py`.
+
+Verified on 2026-06-29 UTC against the live personalization Supabase project:
+
+```bash
+python3 scripts/smoke_authorized_event_search_rpc.py   --env-file .env   --query "урбанистика будущее города"   --expected-event-id 6310   --expected-top-n 3
+```
+
+Result:
+
+- temporary Supabase Auth user created and signed in with a real authenticated JWT;
+- `reserve_event_search_quota_v1` succeeded (`day_remaining=4` for the temp user);
+- Gemini Embedding 2 returned `768` dimensions;
+- authenticated `search_events_by_embedding_v1` returned top results:
+  1. `6447` “Как договориться о будущем города” (`similarity≈0.7426`),
+  2. `6310` “Архитектурно-урбанистическая студия...” (`similarity≈0.7055`),
+  3. `5690` “Открытие выставки-экзамена «Обход 2.0»” (`similarity≈0.6127`);
+- compact audit RPC succeeded;
+- smoke quota/audit rows and the temporary user were removed after the run.
+
+This proves the authenticated pgvector RPC path and quota/audit path. It does not claim the Yandex OAuth browser UX or deployed Edge Function is complete.
 
 ## Remaining gates before production UX claim
 
