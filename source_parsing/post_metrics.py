@@ -121,6 +121,8 @@ def popularity_marks(
     views: int | None,
     likes: int | None,
     baseline: PopularityBaseline | None,
+    views_mult: float | None = None,
+    likes_mult: float | None = None,
 ) -> PopularityMarks:
     if not baseline or baseline.sample <= 0:
         return PopularityMarks()
@@ -132,8 +134,16 @@ def popularity_marks(
 
     # Default: compare against the channel median (multiplier=1.0). Operators can
     # raise multipliers to highlight only "significantly above median" posts.
-    views_mult = _env_float("POST_POPULARITY_VIEWS_MULT", 1.0)
-    likes_mult = _env_float("POST_POPULARITY_LIKES_MULT", 1.0)
+    views_mult = (
+        float(views_mult)
+        if views_mult is not None
+        else _env_float("POST_POPULARITY_VIEWS_MULT", 1.0)
+    )
+    likes_mult = (
+        float(likes_mult)
+        if likes_mult is not None
+        else _env_float("POST_POPULARITY_LIKES_MULT", 1.0)
+    )
     max_level = max(1, _env_int("POST_POPULARITY_MAX_LEVEL", 4))
     views_step = max(0.0, _env_float("POST_POPULARITY_VIEWS_STEP", 0.5))
     likes_step = max(0.0, _env_float("POST_POPULARITY_LIKES_STEP", 0.5))
