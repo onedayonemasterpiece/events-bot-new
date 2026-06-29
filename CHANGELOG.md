@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+- Hardened authorized event search relevance for audience-sensitive queries: pgvector still retrieves candidates, but the LLM verifier now receives compact event facts, treats `ordered_event_ids` as the final exact-result set, verifies even single late candidates, and no longer lets omitted urban/professional false positives re-enter results such as “интересно детям”.
 - **Personalization / authorized search LLM verifier hardening**: re-enabled bounded LLM verification for the JSON `/poisk/` path, switched the verifier to Gemini `responseJsonSchema`, set live `EVENT_SEARCH_LLM_TIMEOUT_MS=3500`, and fixed pagination to use `retrieved_count`/`next_offset` so filtered pages can still continue into more exact results before the fallback feed.
 - **Personalization / v57 authorized search reliability**: disabled inline LLM verification for the user-facing `/poisk/` request so visible mobile search returns pgvector cards without waiting on Gemma, added provider deadlines (`EVENT_SEARCH_EMBEDDING_TIMEOUT_MS`, `EVENT_SEARCH_LLM_TIMEOUT_MS`) in `event-search`, and updated the Playwright smoke to assert the public search path does not send `use_llm_verifier=true`.
 - **Personalization / v56 authorized search result delivery and dynamic quotas**: published `preview-20260629-event-pages-v56-search-json`, switched the mobile search frontend from streamed final-result delivery to one JSON response after live audit rows proved backend success while Chrome/WebView still timed out, added `refresh_registered_search_quota_v1(...)` to calculate registered-user limits from current Auth user count plus documented Gemini Embedding/Gemma 4 RPD reserves, and applied the current plan (`50/day`, `500/month`, `40/day` LLM reranks, `400/month` LLM reranks). Verified mocked UI smoke, real deployed Edge Function smoke and public Playwright scroll-through of rendered cards.

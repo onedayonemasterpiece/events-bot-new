@@ -164,6 +164,16 @@ Env gate:
 
 The verifier uses native Gemini structured output in `generateContent` (`responseMimeType: application/json` + `responseJsonSchema`) so parsing is constrained by provider-side JSON Schema rather than by post-hoc free-text parsing only. If the LLM call fails, results fall back to vector order and the request remains usable.
 
+2026-06-29 relevance hardening for audience-sensitive queries:
+
+- pgvector remains the retrieval layer; no deterministic audience/category guard was added for queries like “интересно детям”;
+- the Edge Function fetches compact `search_digest` facts for the retrieved candidate IDs server-side with the Supabase service role and passes only short factual snippets to the LLM verifier;
+- `ordered_event_ids` is now interpreted as the **final exact-result set**, not as a weak rerank hint; omitted or rejected candidates do not re-enter exact search results;
+- the verifier prompt is fail-closed for explicit audience/scenario requests: for children/family queries it must keep only candidates whose facts are explicitly compatible with that audience and reject adult professional/urbanistic/lecture-style candidates when compatibility is not evident;
+- the verifier also runs for a single candidate, so a late lone pgvector hit can still be rejected and the UI can move to the separate fallback/discovery section.
+
+Incident example that drove the correction: query `Чтобы было интересно детям` previously surfaced `Архитектурно-урбанистическая студия` and `Как договориться о будущем города` because the LLM prompt was permissive and the code appended candidates omitted by the LLM. After the fix, direct Edge probes return exact results without those urban-planning cards, with `llm_verifier.candidate_fact_count=12` on full pages.
+
 ## Query facets
 
 The event documents embed weekday/time/admission fields in the deterministic search text. In addition, the Edge Function extracts a very small set of explicit query facets so words like “пятница”, “вечером”, “утром”, “бесплатно” or “по регистрации” can improve ordering without introducing a separate keyword-search path:

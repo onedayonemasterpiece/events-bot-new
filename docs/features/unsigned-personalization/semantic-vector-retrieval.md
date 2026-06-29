@@ -11,6 +11,15 @@ The static site needs two different retrieval modes:
 
 The old `local_tfidf_sparse_v1` layer could rank “Музыка нашего города” near an urban-planning event because of the lexical token “город”. Semantic retrieval must use real embeddings and must prove on golden anchors that architectural/urban candidates outrank lexical false positives.
 
+## Relevance contract for authorized search
+
+Authorized search is a two-stage semantic pipeline, not a deterministic keyword gate:
+
+1. **pgvector retrieval** returns nearest event candidates from `gemini-embedding-2` vectors over compact event search documents.
+2. **LLM verifier** receives only the retrieved candidate IDs plus compact public facts and decides which candidates are exact matches for the user query. It may return fewer than the requested limit, including zero.
+
+For audience-sensitive queries such as “интересно детям”, relevance must be decided by the LLM from event facts rather than by regex filters. Adult/professional urban-planning events are rejected by the verifier when the facts do not support child/family suitability; they can still appear later only under the separately headed fallback/discovery section, not as exact search results.
+
 ## Layer boundaries
 
 - **Fly SQLite / Smart Update** remains the canonical event/source/publication DB.
