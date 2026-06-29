@@ -80,10 +80,10 @@ def check_env() -> list[Check]:
         ),
         Check(
             "supabase_deploy_credentials",
-            present("SUPABASE_ACCESS_TOKEN") and present("PERSONALIZATION_SUPABASE_PROJECT_REF"),
+            bool(first_env("PERSONALIZATION_SUPABASE_ACCESS_TOKEN", "SUPABASE_ACCESS_TOKEN")) and present("PERSONALIZATION_SUPABASE_PROJECT_REF"),
             "Supabase CLI/API deploy credentials are present"
-            if present("SUPABASE_ACCESS_TOKEN") and present("PERSONALIZATION_SUPABASE_PROJECT_REF")
-            else "Need SUPABASE_ACCESS_TOKEN and PERSONALIZATION_SUPABASE_PROJECT_REF to deploy/configure Edge Function",
+            if bool(first_env("PERSONALIZATION_SUPABASE_ACCESS_TOKEN", "SUPABASE_ACCESS_TOKEN")) and present("PERSONALIZATION_SUPABASE_PROJECT_REF")
+            else "Need PERSONALIZATION_SUPABASE_ACCESS_TOKEN (or SUPABASE_ACCESS_TOKEN) and PERSONALIZATION_SUPABASE_PROJECT_REF to deploy/configure Edge Function",
         ),
         Check(
             "edge_function_runtime_env",

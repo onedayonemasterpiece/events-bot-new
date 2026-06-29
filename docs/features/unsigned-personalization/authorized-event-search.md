@@ -227,7 +227,7 @@ Evidence from 2026-06-29 UTC:
 
 ## Authorized RPC smoke evidence
 
-Because the Supabase Edge Function is not deployable without `SUPABASE_ACCESS_TOKEN` and `PERSONALIZATION_SUPABASE_PROJECT_REF`, the currently executable live-auth proof is the protected PostgREST/RPC path used by the Edge Function.
+Because the Supabase Edge Function is not deployable without `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` (or legacy `SUPABASE_ACCESS_TOKEN`) and `PERSONALIZATION_SUPABASE_PROJECT_REF`, the currently executable live-auth proof is the protected PostgREST/RPC path used by the Edge Function.
 
 Script: `scripts/smoke_authorized_event_search_rpc.py`.
 
@@ -316,7 +316,7 @@ The checker is redacted: it prints only `OK`/`MISSING` and never prints secret v
 - Edge runtime env has Supabase Auth/RPC + Gemini embedding access;
 - backend vector sync env has service/secret access.
 
-On 2026-06-29 UTC, current local env is ready for static rendering + vector sync but still lacks `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `SUPABASE_ACCESS_TOKEN` and `PERSONALIZATION_SUPABASE_PROJECT_REF`, so browser Yandex login + deployed Edge Function E2E remains an external gate.
+On 2026-06-29 UTC, current local env is ready for static rendering + vector sync but still lacks `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` (or legacy `SUPABASE_ACCESS_TOKEN`) and `PERSONALIZATION_SUPABASE_PROJECT_REF`, so browser Yandex login + deployed Edge Function E2E remains an external gate.
 
 ## Remaining gates before production UX claim
 
