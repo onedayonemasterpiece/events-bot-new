@@ -343,6 +343,14 @@ async def run_smoke(args: argparse.Namespace) -> int:
                         calls.append(json.loads(request.post_data or "{}"))
                     except json.JSONDecodeError:
                         calls.append({"bad_json": request.post_data})
+                    accept = request.headers.get("accept", "")
+                    if "application/x-ndjson" not in accept:
+                        await route.fulfill(
+                            status=200,
+                            content_type="application/json; charset=utf-8",
+                            body=json.dumps(fake_search_response(), ensure_ascii=False),
+                        )
+                        return
                     progress = [
                         {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
                         {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},

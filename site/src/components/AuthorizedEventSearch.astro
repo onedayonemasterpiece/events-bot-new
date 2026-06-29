@@ -441,13 +441,18 @@ const HeadingTag = headingLevel;
 
     async function invokeEventSearch(body, session) {
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
+      // Mobile Chrome/WebView proved unreliable with the streamed final payload:
+      // progress events reached 96%, the backend wrote a successful audit row,
+      // but the browser sometimes never delivered the terminal `result` event.
+      // For the MVP, reliability is more important than backend-stage streaming,
+      // so the browser requests one JSON response and renders cards from it.
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           apikey: root.dataset.supabaseKey,
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/x-ndjson',
+          Accept: 'application/json',
         },
         body: JSON.stringify(body),
       });
@@ -455,6 +460,7 @@ const HeadingTag = headingLevel;
       if (!contentType.includes('application/x-ndjson')) {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
+        setSearchProgress(100, 'Готово');
         return { data: payload, error: null };
       }
       const reader = response.body?.getReader();
@@ -531,6 +537,11 @@ const HeadingTag = headingLevel;
       if (input) input.value = query;
       setSearchLoading(true);
       setSearchProgress(1, 'Запускаю поиск…');
+      const progressTimers = [
+        window.setTimeout(() => { if (loading) setSearchProgress(28, 'Понимаю смысл запроса'); }, 500),
+        window.setTimeout(() => { if (loading) setSearchProgress(55, 'Ищу события'); }, 1200),
+        window.setTimeout(() => { if (loading) setSearchProgress(88, 'Собираю карточки'); }, 2500),
+      ];
       if (more) more.hidden = true;
       try {
         if (!append || query !== currentQuery) {
@@ -598,6 +609,7 @@ const HeadingTag = headingLevel;
         if (message === 'search_timeout') setStatus('Поиск занял слишком много времени. Попробуйте ещё раз — кнопка снова активна.', 'error');
         else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
       } finally {
+        for (const timer of progressTimers) window.clearTimeout(timer);
         setSearchLoading(false);
         window.setTimeout(() => {
           if (!loading) resetSearchProgress();

@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the frontend returns as soon as streamed `result` is received, the smoke suite proves scrollable cards against the real deployed `event-search`, and exhausted optional LLM-rerank quota no longer blocks pgvector search results.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
 
 ## Product contract
 
@@ -174,10 +174,29 @@ The facets are not used to store raw query text. They are passed to `search_even
 
 ## Quotas and privacy
 
-Default registered plan:
+Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
+`20260629_event_search_quota_plan_dynamic.sql` adds service-role RPC
+`refresh_registered_search_quota_v1(...)`, which recalculates
+`search_quota_plans.registered` from:
 
-- search: `5/day`, `30/month`;
-- LLM verifier: `2/day`, `10/month`.
+- current Supabase Auth user count (`auth.users`);
+- documented current provider project limits:
+  - `gemini-embedding-2`: `100 RPM / 30k TPM / 1000 RPD`;
+  - `gemma-4-26b-a4b-it`: `15 RPM / unlimited TPM / 1500 RPD`;
+- reserves for static generation/backfill (`400` embedding RPD, `500` LLM RPD by default);
+- abuse caps for the still-private canary (`max 50` searches/day and `max 40` LLM reranks/day per registered user).
+
+Current applied plan after the 2026-06-29 recalculation:
+
+- search: `50/day`, `500/month`;
+- LLM verifier: `40/day`, `400/month`.
+
+Important boundary: the Edge Function currently uses a direct Google key path
+(`GOOGLE_API_KEY4 || GOOGLE_API_KEY || GEMINI_API_KEY`) rather than the shared
+Python `GoogleAIClient` limiter/key-rotation stack. Therefore the dynamic plan
+conservatively counts one available provider lane plus reserves. If/when
+`event-search` is routed through a central multi-key limiter, the same RPC can be
+called with higher effective RPD inputs instead of hardcoding a new plan.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still return pgvector results with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 
@@ -226,10 +245,18 @@ otherwise a neutral inline SVG fallback. Logout is available only inside the
 account popover and the popover closes on outside click/Escape; this avoids an
 accidental logout tap while typing/searching on mobile.
 
-The browser reads `event-search` as NDJSON and renders immediately after the
-streamed `result` event. It cancels the reader after that result so a slow/hung
-stream close cannot leave the static UI at “Ищу...” after the backend has already
-written a successful `event_search_requests` row.
+The browser currently calls `event-search` with `Accept: application/json` and
+renders cards from the single JSON response. This is an intentional v56 rollback
+from NDJSON result delivery: live mobile evidence at `2026-06-29T14:28Z` and
+`14:29Z` showed the backend wrote successful `event_search_requests` rows with
+`12` results in `<1s`, but Chrome/WebView did not deliver/render the terminal
+stream result and the user saw a timeout after the progress UI reached
+“Собираю карточки”. Until the feature has job/polling progress, reliability of
+the result feed is more important than streamed backend-stage progress.
+
+The Edge Function still supports NDJSON when requested with
+`Accept: application/x-ndjson`; use that for controlled diagnostics only. The
+production mobile UX should not depend on streamed final payload delivery.
 
 ## Edge Function response/log contract
 
@@ -249,6 +276,22 @@ Structured logs are emitted as JSON lines:
 - `event_search_failed`.
 
 Logs and audit rows use `query_hash`/length and a short `user_hash`; raw search text and access tokens are not logged or stored.
+
+### Mobile search failure evidence, 2026-06-29
+
+The user-visible “no result / timeout” reports around 16:28–16:30 local browser
+time were checked against `event_search_requests`. For the same anonymized user
+hash, the backend was healthy:
+
+- `2026-06-29T14:28:05Z`: `status=ok`, `kind=vector_search`,
+  `result_count=12`, `llm_status=llm_quota_exhausted`, total `≈939ms`;
+- `2026-06-29T14:29:35Z`: `status=ok`, `kind=vector_search`,
+  `result_count=12`, `llm_status=llm_quota_exhausted`, total `≈914ms`.
+
+That proves the failure was the browser/static delivery path after the Edge
+Function response, not pgvector retrieval, not authorization, and not ordinary
+search quota. v56 changes the public page to JSON response mode and was verified
+with a public Playwright smoke that scrolled through the rendered cards.
 
 ## Current verification evidence
 

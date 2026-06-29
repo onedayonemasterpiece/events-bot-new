@@ -137,18 +137,31 @@ fetch(`${supabaseUrl}/functions/v1/event-search`, {
     apikey: publishableKey,
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
-    Accept: 'application/x-ndjson',
+    Accept: 'application/json',
   },
   body: JSON.stringify(payload),
 })
 ```
 
-For `event-search`, prefer direct `fetch` over `supabase.functions.invoke` when streaming backend progress is needed. The current contract uses NDJSON progress events: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then `result` or `error`. The frontend should render immediately after `result` and cancel/stop reading the stream; do not wait for EOF before unblocking the search UI.
+For `event-search`, prefer direct `fetch` over `supabase.functions.invoke`.
+The current production mobile path requests **JSON**, not NDJSON, because a real
+Chrome/WebView canary reached backend success and audit rows but did not deliver
+the terminal streamed `result` event to the static UI. NDJSON remains available
+only for diagnostics (`Accept: application/x-ndjson`) with progress events
+`accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`,
+`llm_verify`, `fallback`, `finalize`, then `result` or `error`.
 
 Even if an Edge Function is deployed with `--no-verify-jwt` for CORS/manual auth reasons, it must manually require and validate the Bearer token via `supabase.auth.getUser(accessToken)` before doing user-specific work.
 
 
 Quota rule: ordinary search quota and optional LLM-rerank quota are different. Use `reserve_event_search_quota_v2`; if it returns `llm_reserved=false` while search quota is reserved, the Edge Function must still return pgvector results and mark the response/audit as `llm_status=llm_quota_exhausted`. Do not turn exhausted LLM verifier quota into a user-facing “search limit ended” error.
+
+Limit sizing rule: do not hardcode small canary quotas without checking the
+current registered-user count and documented provider limits. Use
+`refresh_registered_search_quota_v1(...)` to recalculate the registered plan
+from `auth.users`, `gemini-embedding-2` RPD, Gemma 4 RPD and static-generation
+reserves. As of the 2026-06-29 canary this produced `50/day`, `500/month`
+searches and `40/day`, `400/month` optional LLM reranks per registered user.
 
 ## Input validation and UX recovery
 
@@ -174,7 +187,7 @@ UI must always recover:
 - **After Yandex consent the browser opens `localhost:3000`**: Supabase Auth URL Configuration is wrong. Fix `site_url` and redirect allow-list; run readiness probe with `--probe-auth-config`.
 - **Callback contains `Error getting user email from external provider`**: direct Yandex userinfo is incompatible or email is required. Configure the `yandex-userinfo` adapter and `email_optional=true`; run `--probe-yandex-userinfo-adapter`.
 - **Browser returns to `/poisk/?code=...` but still shows login**: static page did not exchange the PKCE code or lost the code verifier. Check `detectSessionInUrl:false`, explicit `exchangeCodeForSession`, custom storage/cookie fallback, and URL cleanup.
-- **Auth UI appears but search hangs or returns no cards**: check whether `event_search_requests` rows were created. No row means the browser request did not reach the Edge Function; inspect fetch headers, CORS, network errors, and NDJSON parser.
+- **Auth UI appears but search hangs or returns no cards**: check whether `event_search_requests` rows were created. No row means the browser request did not reach the Edge Function; inspect fetch headers/CORS/session. If rows exist with `status=ok` and positive `result_count`, the backend worked and the bug is the static browser delivery/render path; use JSON response mode or implement job/polling progress instead of depending on a streamed final payload.
 - **Raw `Edge Function returned a non-2xx status code` leaks into UI**: map backend errors to product text and re-enable controls.
 - **Readiness passes but live mobile still fails**: capture final URL, visible status text, approximate UTC time, and then compare Supabase Auth users/sessions plus `event_search_requests`/Edge logs for that interval.
 
