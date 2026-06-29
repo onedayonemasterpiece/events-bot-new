@@ -1,6 +1,6 @@
 # INC-2026-06-29 80 Stories Telegram Promo Gap
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Promo campaign / `80 историй о главном` Telegram companion publishing
 Opened: 2026-06-29
@@ -60,8 +60,11 @@ Telegram event post.
 - 2026-06-29 10:47 UTC: production DB showed no same-day `tg_event_publish` or
   `tg_repost` exposures for the 80 Stories campaign; only VK story/video rows
   existed for 2026-06-29.
-- 2026-06-29 investigation: code/docs updated so the built-in 80 Stories
-  campaign seeds and repairs the Telegram activities durably.
+- 2026-06-29 11:01 UTC: deployed `862d0491` to Fly machine version `1526`.
+- 2026-06-29 11:05 UTC: same-day compensation published event `5077` to
+  `https://t.me/kldevents/1611` (album continuation `1612`) and event `4417`
+  to `https://t.me/kldevents/1613`; `promo_exposure` rows `585` and `586`
+  recorded the compensation.
 
 ## Root Cause
 
@@ -133,6 +136,11 @@ Telegram event post.
   row, while old event outbox rows remained terminal-contained.
 - Same-day compensation target is limited to 2026-06-29 80 Stories VK posts that
   are still future events and have no matching `@kldevents` current post.
+- Backed up touched production rows into
+  `codex_backup_80_tg_gap_20260629_event`,
+  `codex_backup_80_tg_gap_20260629_joboutbox`,
+  `codex_backup_80_tg_gap_20260629_promo_activity`, and
+  `codex_backup_80_tg_gap_20260629_promo_exposure`.
 
 ## Corrective Actions
 
@@ -155,11 +163,33 @@ Telegram event post.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `862d0491` (`fix(promo): seed 80 stories telegram slots`)
+- deploy path:
+  - committed and pushed `862d0491` to `origin/main`;
+  - `flyctl deploy --remote-only --app events-bot-new-wngqia`;
+  - Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KW9GKEDTXQ3KZDSXDEZ3TV60`;
+  - Fly machine `683961db016e28`, version `1526`, region `iad`.
 - regression checks:
-  - pending
-- post-deploy verification: pending
+  - `python3 -m py_compile promo.py tests/test_promo.py`
+  - `uv run --with-requirements requirements.txt python -m pytest -q tests/test_promo.py` -> `55 passed`
+- post-deploy verification:
+  - `/healthz` returned HTTP 200, `ok=true`, `ready=true`, `issues=[]`,
+    scheduler `promo_vk=ok`.
+  - Production campaign `#1` Telegram activities after deploy/ensure:
+    `tg_event_publish` activity `#37`, `profile_key=kldevents:80stories`,
+    `max_per_publish=2`, `daily_cap=2`, `window_hours=24`;
+    `tg_repost` activity `#35`, `profile_key=kldevents->kenigevents:80stories`,
+    `max_per_publish=1`, `daily_cap=1`, `window_hours=72`.
+  - Compensated Telegram posts:
+    `event_id=5077` -> `https://t.me/kldevents/1611`
+    (album continuation `https://t.me/kldevents/1612`);
+    `event_id=4417` -> `https://t.me/kldevents/1613`.
+  - Production `promo_exposure`: rows `585` and `586`,
+    `surface='tg_event_publish'`, `publish_status='TG_PUBLISHED'`,
+    `placement_kind='manual_incident_compensation'`, linked to the incident id.
+  - Authenticated VK evidence for same-day source posts:
+    `https://vk.com/wall-231920894_5012` and
+    `https://vk.com/wall-231920894_5013`.
 
 ## Prevention
 
