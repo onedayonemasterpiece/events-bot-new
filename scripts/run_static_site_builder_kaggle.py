@@ -196,6 +196,14 @@ def slugify(value: str, *, max_len: int = 48) -> str:
     return (out or 'run')[:max_len].strip('-') or 'run'
 
 
+def first_env(*names: str, default: str = '') -> str:
+    for name in names:
+        value = (os.getenv(name) or '').strip()
+        if value:
+            return value
+    return default
+
+
 def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
     needs_runtime_secrets = bool(args.gemma_related_verify or args.related_mode == 'pgvector' or args.sync_pgvector_vectors)
     if not needs_runtime_secrets:
@@ -386,6 +394,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'asset_base_url': args.asset_base_url or None,
         'astro_asset_base_url': args.astro_asset_base_url or None,
         'ics_base_url': args.ics_base_url or None,
+        'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
+        'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,
+        'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
@@ -445,6 +456,29 @@ def main() -> int:
     parser.add_argument('--asset-base-url', default=os.getenv('PUBLIC_ASSET_BASE_URL', ''))
     parser.add_argument('--astro-asset-base-url', default=os.getenv('PUBLIC_ASTRO_ASSET_BASE_URL', ''))
     parser.add_argument('--ics-base-url', default=os.getenv('PUBLIC_ICS_BASE_URL', ''))
+    parser.add_argument(
+        '--public-personalization-supabase-url',
+        default=first_env(
+            'STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL',
+            'PUBLIC_PERSONALIZATION_SUPABASE_URL',
+            'PERSONALIZATION_SUPABASE_URL',
+        ),
+        help='Browser-safe Supabase project URL for AuthorizedEventSearch in the static build.',
+    )
+    parser.add_argument(
+        '--public-personalization-supabase-publishable-key',
+        default=first_env(
+            'STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
+            'PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
+            'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
+        ),
+        help='Browser-safe Supabase publishable key for AuthorizedEventSearch in the static build.',
+    )
+    parser.add_argument(
+        '--public-yandex-auth-provider',
+        default=first_env('STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER', 'PUBLIC_YANDEX_AUTH_PROVIDER', default='custom:yandex'),
+        help='Supabase Auth provider id for Yandex OAuth in AuthorizedEventSearch.',
+    )
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
     parser.add_argument('--related-mode', choices=['sparse', 'pgvector'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))

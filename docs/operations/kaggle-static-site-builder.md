@@ -52,7 +52,7 @@ Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_buck
 
 `preview-20260628-event-pages-v48-pgvector-gemma-kaggle` verifies the CDN-enabled pgvector preview path on real production-snapshot data: 70 events, `npm run check:preview` passed inside Kaggle CPU, live public smoke passed for `/data/discovery/6447.json`, 76 compact search documents and 76 `gemini-embedding-2/vector(768)` embeddings exist in the personalization Supabase project, and the 6447 golden anchor puts `6310` “Архитектурно-урбанистическая студия...” first after pgvector+Gemma verification.
 
-Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback and CDN asset/ICS bases. This means the coalesced `static_site_build` job can reproduce the v48-style vector sync/retrieval process from `/data/db.sqlite` after Smart Update.
+Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, and browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`). This means the coalesced `static_site_build` job can reproduce the v48-style vector sync/retrieval process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
 
 This still does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
 
@@ -65,7 +65,15 @@ For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secret
 
 Only the minimal runtime env is encrypted: the selected Google key env (default `GOOGLE_API_KEY4`) and Supabase limiter env (`SUPABASE_URL` plus `SUPABASE_KEY`/service key). The Kaggle kernel loads these envs in memory before running the exporter. A waited run deletes the secret datasets in `finally`; `--no-wait` keeps them because the kernel still needs them.
 
-The build must still fail/skip loudly if limiter env is missing. Direct provider calls or local limiter fallback are not allowed for the related-chain Gemma audit. For pgvector related mode the encrypted runtime payload also carries the personalization Supabase URL/secret and selected embedding key env, because the Kaggle exporter must upsert changed search documents/vectors before calling the backend-only related RPC.
+The build must still fail/skip loudly if limiter env is missing. Direct provider calls or local limiter fallback are not allowed for the related-chain Gemma audit. For pgvector related mode the encrypted runtime payload also carries the personalization Supabase URL/secret and selected embedding key env, because the Kaggle exporter must upsert changed search documents/vectors before calling the backend-only related RPC. The kernel copies only browser-safe URL/publishable-key values into `PUBLIC_*` for Astro; it must never expose `PERSONALIZATION_SUPABASE_SECRET_KEY` or service-role keys to the static bundle.
+
+Before claiming the authorized-search browser gate, run:
+
+```bash
+python3 scripts/check_authorized_search_readiness.py --env-file .env --probe-edge --probe-yandex-provider --strict
+```
+
+Without probes it gives a redacted env-only status and is safe in local operator shells.
 
 ## Release manifest contract
 

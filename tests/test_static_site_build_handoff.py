@@ -22,6 +22,8 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     monkeypatch.setenv("STATIC_SITE_ASSET_BASE_URL", "https://static.kenigevents.ru")
     monkeypatch.setenv("STATIC_SITE_ASTRO_ASSET_BASE_URL", "https://static.kenigevents.ru/{buildId}")
     monkeypatch.setenv("STATIC_SITE_ICS_BASE_URL", "https://static.kenigevents.ru/ics")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
 
     cmd = main._static_site_build_kaggle_command(
         db_path="/data/db.sqlite",
@@ -46,6 +48,9 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert _arg_after(cmd, "--asset-base-url") == "https://static.kenigevents.ru"
     assert _arg_after(cmd, "--astro-asset-base-url") == "https://static.kenigevents.ru/{buildId}"
     assert _arg_after(cmd, "--ics-base-url") == "https://static.kenigevents.ru/ics"
+    assert _arg_after(cmd, "--public-personalization-supabase-url") == "https://example.supabase.co"
+    assert _arg_after(cmd, "--public-personalization-supabase-publishable-key") == "sb_publishable_test"
+    assert _arg_after(cmd, "--public-yandex-auth-provider") == "custom:yandex"
     assert "--export-in-kaggle" in cmd
     assert "--download-output" in cmd
 

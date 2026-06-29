@@ -145,6 +145,13 @@ PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex
 
 The component uses `@supabase/supabase-js` and invokes Supabase Edge Function `event-search`. If public env is missing, the component renders nothing and the static pages stay unchanged.
 
+Kaggle StaticSiteBuilder handoff also accepts the same public values through
+`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`
+and `--public-yandex-auth-provider`. In production Smart Update handoff these are filled from
+`STATIC_SITE_PUBLIC_*`, then `PUBLIC_*`, then the browser-safe personalization URL/publishable
+key envs. Only URL + publishable key are exposed to Astro; Supabase secret/service keys remain
+backend-only for vector sync and Edge Function deployment.
+
 ## Edge Function response/log contract
 
 `supabase/functions/event-search` returns and logs investigation IDs for every successful request:
@@ -220,6 +227,27 @@ Result:
 - smoke quota/audit rows and the temporary user were removed after the run.
 
 This proves the authenticated pgvector RPC path and quota/audit path. It does not claim the Yandex OAuth browser UX or deployed Edge Function is complete.
+
+## Deploy/browser readiness check
+
+Script: `scripts/check_authorized_search_readiness.py`.
+
+Use it before claiming the browser/Yandex UX gate:
+
+```bash
+python3 scripts/check_authorized_search_readiness.py --env-file .env
+python3 scripts/check_authorized_search_readiness.py --env-file .env --probe-edge --probe-yandex-provider --strict
+```
+
+The checker is redacted: it prints only `OK`/`MISSING` and never prints secret values. It verifies:
+
+- static/Kaggle build can expose only browser-safe public Supabase URL + publishable key;
+- Yandex OAuth app credentials are available for `custom:yandex`;
+- Supabase deploy credentials are available for Edge Function deployment/configuration;
+- Edge runtime env has Supabase Auth/RPC + Gemini embedding access;
+- backend vector sync env has service/secret access.
+
+On 2026-06-29 UTC, current local env is ready for static rendering + vector sync but still lacks `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `SUPABASE_ACCESS_TOKEN` and `PERSONALIZATION_SUPABASE_PROJECT_REF`, so browser Yandex login + deployed Edge Function E2E remains an external gate.
 
 ## Remaining gates before production UX claim
 

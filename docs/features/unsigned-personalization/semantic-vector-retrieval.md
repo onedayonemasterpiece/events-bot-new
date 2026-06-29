@@ -109,7 +109,8 @@ Evidence from 2026-06-29 UTC:
 - Kaggle CPU canary: `preview-20260628-event-pages-v48-pgvector-gemma-kaggle`, `ok=true`, `event_count=70`, vector sync `provider_calls=0` because vectors were already current, `npm run check:preview` passed inside the notebook;
 - live public smoke: `/data/discovery/6447.json` returns `algorithm_id=event_pgvector_related_chain_v1`, `strategy=event_pgvector_related_chain_v1_manifest`, first candidate `6310`, `llm_semantic_score=0.92`.
 - authorized RPC smoke: temporary Supabase Auth user + real JWT + quota reservation + Gemini Embedding 2 query vector + `search_events_by_embedding_v1`; query `урбанистика будущее города` returns `6310` in top-3 and cleanup removes smoke rows/user.
-- production handoff command test: `main._static_site_build_kaggle_command` now passes `--related-mode pgvector`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, CDN asset/ICS bases and status callback args from env into the Kaggle runner.
+- production handoff command test: `main._static_site_build_kaggle_command` now passes `--related-mode pgvector`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, CDN asset/ICS bases, status callback args and browser-safe AuthorizedEventSearch public env (`PUBLIC_PERSONALIZATION_SUPABASE_URL`, publishable key, `custom:yandex`) into the Kaggle runner.
+- deploy/browser readiness check: `scripts/check_authorized_search_readiness.py --env-file .env` reports static rendering/vector sync ready, but Yandex credentials and Supabase deploy token/project ref missing.
 
 ## Job sequence after Smart Update
 
@@ -121,6 +122,9 @@ Evidence from 2026-06-29 UTC:
 6. Related graph is recomputed for the whole active/future set, not only changed anchors: a new event can become the best related candidate for older events.
 7. Optional Gemma 4 26B verifier reranks/rejects already retrieved candidates; malformed/timeout responses fall back to vector order.
 8. Astro builds HTML/JSON/ICS from the static manifest.
+   For focus-group/auth previews, the Kaggle kernel maps only browser-safe public values into Astro:
+   `PUBLIC_PERSONALIZATION_SUPABASE_URL`, `PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and `PUBLIC_YANDEX_AUTH_PROVIDER`.
+   Backend-only Supabase secret/service keys are used only for vector sync/RPC and are never copied to `PUBLIC_*`.
 9. Preview/public checks run before publishing. Last-good static build remains fallback.
 10. CDN/Object Storage promotion is a separate release gate from successful Kaggle artifact creation.
 

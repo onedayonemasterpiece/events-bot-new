@@ -256,6 +256,38 @@ def ensure_node22(env: dict[str, str]) -> dict[str, str]:
     return new_env
 
 
+def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> None:
+    """Expose only browser-safe auth/search values to Astro.
+
+    Runtime secrets are loaded into ``os.environ`` by the encrypted dataset
+    path. Astro, however, receives the explicit ``env`` dict below, so we must
+    copy the public Supabase URL/publishable key into that build environment.
+    The service/secret key is intentionally never copied to a PUBLIC_* name.
+    """
+
+    public_url = (
+        str(config.get('public_personalization_supabase_url') or '').strip()
+        or os.environ.get('PUBLIC_PERSONALIZATION_SUPABASE_URL', '').strip()
+        or os.environ.get('PERSONALIZATION_SUPABASE_URL', '').strip()
+    )
+    public_key = (
+        str(config.get('public_personalization_supabase_publishable_key') or '').strip()
+        or os.environ.get('PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY', '').strip()
+        or os.environ.get('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY', '').strip()
+    )
+    yandex_provider = (
+        str(config.get('public_yandex_auth_provider') or '').strip()
+        or os.environ.get('PUBLIC_YANDEX_AUTH_PROVIDER', '').strip()
+        or 'custom:yandex'
+    )
+    if public_url:
+        env['PUBLIC_PERSONALIZATION_SUPABASE_URL'] = public_url
+    if public_key:
+        env['PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'] = public_key
+    if yandex_provider:
+        env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
+
+
 def main() -> int:
     init_status()
     started = datetime.now(timezone.utc).isoformat()
@@ -278,7 +310,9 @@ def main() -> int:
             env['PUBLIC_ASTRO_ASSET_BASE_URL'] = str(config['astro_asset_base_url'])
         if config.get('ics_base_url'):
             env['PUBLIC_ICS_BASE_URL'] = str(config['ics_base_url'])
+        apply_public_authorized_search_env(env, config)
         export_preview_data_if_configured(config)
+        apply_public_authorized_search_env(env, config)
         env = ensure_node22(env)
 
         status_event('preflight_ok', phase='preflight', status='done', progress={'phase': 'preflight', 'progress_percent': 15, 'progress_label': 'окружение готово'})
