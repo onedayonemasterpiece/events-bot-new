@@ -540,7 +540,8 @@ const HeadingTag = headingLevel;
       const progressTimers = [
         window.setTimeout(() => { if (loading) setSearchProgress(28, 'Понимаю смысл запроса'); }, 500),
         window.setTimeout(() => { if (loading) setSearchProgress(55, 'Ищу события'); }, 1200),
-        window.setTimeout(() => { if (loading) setSearchProgress(88, 'Собираю карточки'); }, 2500),
+        window.setTimeout(() => { if (loading) setSearchProgress(74, 'Проверяю, что подходит лучше'); }, 1800),
+        window.setTimeout(() => { if (loading) setSearchProgress(92, 'Собираю карточки'); }, 3200),
       ];
       if (more) more.hidden = true;
       try {
@@ -555,10 +556,9 @@ const HeadingTag = headingLevel;
         }
         const { data, error } = await withTimeout(
           invokeEventSearch(
-            // User-facing mobile search must return the vector feed reliably.
-            // The optional LLM verifier stays available for controlled Edge
-            // diagnostics, but it is not allowed to block the visible result.
-            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: false },
+            // JSON response path stays reliable; LLM verifier is bounded on the Edge side
+            // and falls back to vector order on timeout/provider failure.
+            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
             session,
           ),
           searchTimeoutMs,
@@ -600,7 +600,8 @@ const HeadingTag = headingLevel;
           }
           results.hidden = !results.children.length;
         }
-        offset += items.length;
+        const nextOffset = Number(data?.next_offset);
+        offset = Number.isFinite(nextOffset) && nextOffset >= offset ? nextOffset : offset + items.length;
         if (more) more.hidden = !data?.has_more;
         const quota = data?.quota;
         if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);

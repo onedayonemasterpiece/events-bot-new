@@ -162,7 +162,7 @@ Env gate:
 - `EVENT_SEARCH_LLM_TIMEOUT_MS` defaults to `3500`; timeout/failure must return vector order, not block the user-facing feed.
 - `EVENT_SEARCH_EMBEDDING_TIMEOUT_MS` defaults to `8000`; embedding timeout is a hard search-provider failure because pgvector query embedding is required.
 
-If the LLM call fails, results fall back to vector order and the request remains usable.
+The verifier uses native Gemini structured output in `generateContent` (`responseMimeType: application/json` + `responseJsonSchema`) so parsing is constrained by provider-side JSON Schema rather than by post-hoc free-text parsing only. If the LLM call fails, results fall back to vector order and the request remains usable.
 
 ## Query facets
 
@@ -247,10 +247,10 @@ otherwise a neutral inline SVG fallback. Logout is available only inside the
 account popover and the popover closes on outside click/Escape; this avoids an
 accidental logout tap while typing/searching on mobile.
 
-The browser currently calls `event-search` with `Accept: application/json`,
-`use_llm_verifier=false`, and renders cards from the single JSON response. This
-is an intentional v57 production-safety rollback: live mobile evidence showed
-two different failure modes:
+The browser currently calls `event-search` with `Accept: application/json` and
+renders cards from the single JSON response. v57 temporarily used
+`use_llm_verifier=false` as a production-safety rollback after live mobile
+evidence showed two different failure modes:
 
 1. at `2026-06-29T14:28Z` and `14:29Z` the backend wrote successful
    `event_search_requests` rows with `12` results in `<1s`, but Chrome/WebView
@@ -259,12 +259,22 @@ two different failure modes:
    “Собираю карточки” progress state and timed out with no audit row, which is
    consistent with a provider/Edge request stuck before completion.
 
-Therefore the visible product path no longer asks the optional LLM verifier to
-run inline. The Edge Function still supports `use_llm_verifier=true` for
-controlled diagnostics/admin canaries, but that path is bounded by
-`EVENT_SEARCH_LLM_TIMEOUT_MS` and must fall back to vector order on timeout.
-Until the feature has job/polling progress, reliability of the result feed is
-more important than streamed or inline-LLM backend-stage progress.
+After hardening, the visible path can request `use_llm_verifier=true` again:
+LLM verification is bounded by `EVENT_SEARCH_LLM_TIMEOUT_MS`, uses provider-side
+JSON schema, and must fall back to vector order on timeout/provider failure. The
+frontend must not calculate pagination from the filtered result count: the Edge
+Function returns `retrieved_count` and `next_offset`, so a page where LLM keeps
+8 of 12 candidates can still expose “Показать ещё” without overlapping the next
+vector page. Fallback/personal-feed cards are emitted only after the raw vector
+candidate stream is exhausted, not merely because LLM filtered the current page.
+Until the feature has job/polling progress, the progress bar is a bounded
+browser-stage indicator rather than a true backend-stage feed.
+
+2026-06-29 diagnostic timings on the live Edge Function after schema/timeout hardening:
+
+- pgvector-only: roughly `0.65–1.12s` total in backend timings for tested queries;
+- pgvector + LLM verifier: roughly `2.74–2.87s` backend total, with `llm_ms≈1.98–2.00s`;
+- examples: `джаз на выходных` kept 8 verified items, `выставка куда можно пойти с детьми` kept 5, `урбанистика будущее города` kept 2.
 
 The Edge Function still supports NDJSON when requested with
 `Accept: application/x-ndjson`; use that for controlled diagnostics only. The

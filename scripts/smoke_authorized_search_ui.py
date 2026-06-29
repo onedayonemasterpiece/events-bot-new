@@ -161,7 +161,7 @@ def fake_search_response() -> dict[str, Any]:
     return {
         "schema_version": "event-search-results-v1",
         "surface": "authorized_event_search",
-        "algorithm_id": "pgvector_gemini_embedding_2_v1",
+        "algorithm_id": "pgvector_gemini_embedding_2_llm_verify_v1",
         "request_id": "00000000-0000-4000-8000-000000000001",
         "served_list_id": "00000000-0000-4000-8000-000000000002",
         "served_list_hash": "ui-smoke-served-list-hash",
@@ -180,8 +180,10 @@ def fake_search_response() -> dict[str, Any]:
         },
         "items": [item],
         "fallback_items": [fallback],
-        "has_more": False,
-        "llm_verifier": {"requested": False, "used": False, "status": "disabled"},
+        "has_more": True,
+        "next_offset": 12,
+        "retrieved_count": 12,
+        "llm_verifier": {"requested": True, "used": True, "status": "ok"},
         "timings_ms": {"total_ms": 42},
     }
 
@@ -436,7 +438,7 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(results).to_have_attribute("data-request-id", "00000000-0000-4000-8000-000000000001")
             await expect(results).to_have_attribute("data-served-list-id", "00000000-0000-4000-8000-000000000002")
             await expect(results).to_have_attribute("data-served-list-hash", "ui-smoke-served-list-hash")
-            await expect(results).to_have_attribute("data-effective-algorithm-id", "pgvector_gemini_embedding_2_v1")
+            await expect(results).to_have_attribute("data-effective-algorithm-id", "pgvector_gemini_embedding_2_llm_verify_v1")
 
             first_card = page.locator("[data-search-results] [data-event-card]").first
             await expect(first_card).to_be_visible()
@@ -447,7 +449,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(first_card.locator("[data-native-share]")).to_be_visible()
             await expect(first_card.locator("[data-feedback-action='not_interested']")).to_be_visible()
             await expect(first_card.locator(".feedback-button--calendar")).to_be_visible()
-            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_visible()
+            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_hidden()
+            await expect(page.locator("[data-search-more]").first).to_be_visible()
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
 
@@ -466,8 +469,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             body = calls[0]
             if body.get("query") != "урбанистика в четверг вечером по регистрации":
                 raise AssertionError(f"unexpected query payload: {body}")
-            if body.get("use_llm_verifier") is not False:
-                raise AssertionError(f"user-facing search must not block on optional LLM verifier: {body}")
+            if body.get("use_llm_verifier") is not True:
+                raise AssertionError(f"user-facing search must request bounded LLM verifier: {body}")
 
             await browser.close()
     print(

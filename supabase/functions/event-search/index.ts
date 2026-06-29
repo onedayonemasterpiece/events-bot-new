@@ -308,6 +308,7 @@ const LLM_VERIFIER_RESPONSE_SCHEMA = {
     },
   },
   required: ["ordered_event_ids", "rejected_event_ids"],
+  additionalProperties: false,
 };
 
 type Candidate = Record<string, unknown>;
@@ -420,7 +421,7 @@ async function llmVerify(
           generationConfig: {
             temperature: 0,
             responseMimeType: "application/json",
-            responseSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
+            responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
           },
         }),
       },
@@ -645,6 +646,8 @@ async function runEventSearch(
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
     if (searchError) throw new Error(`db_search:${searchError.message}`);
     let items = (Array.isArray(rows) ? rows : []).map(normalizeCandidate);
+    const retrievedCount = items.length;
+    const nextOffset = offset + retrievedCount;
 
     let llmResult: { items: Candidate[]; status: string; used: boolean } = {
       items,
@@ -662,7 +665,7 @@ async function runEventSearch(
     }
 
     let fallbackItems: Candidate[] = [];
-    if (includeFallback && items.length < limit) {
+    if (includeFallback && retrievedCount < limit && items.length < limit) {
       await progress?.({ stage: "fallback", progress: 88, label: "Подбираю запасные варианты" });
       const fallbackStartedAt = performance.now();
       const { data: fallbackRows } = await supabase.rpc(
@@ -703,6 +706,8 @@ async function runEventSearch(
         limit,
         offset,
         fallback_count: fallbackItems.length,
+        retrieved_count: retrievedCount,
+        next_offset: nextOffset,
         embedding_model: embeddingModel,
         query_facets: queryFacets,
         llm_status: llmResult.status,
@@ -722,6 +727,7 @@ async function runEventSearch(
       embedding_model: embeddingModel,
       query_facets: queryFacets,
       result_count: items.length,
+      retrieved_count: retrievedCount,
       fallback_count: fallbackItems.length,
       llm_status: llmResult.status,
       llm_used: llmResult.used,
@@ -745,7 +751,9 @@ async function runEventSearch(
         quota: quotaState,
         items,
         fallback_items: fallbackItems,
-        has_more: items.length === limit,
+        has_more: retrievedCount === limit,
+        next_offset: nextOffset,
+        retrieved_count: retrievedCount,
         llm_verifier: {
           requested: useLlmVerifier,
           used: llmResult.used,
