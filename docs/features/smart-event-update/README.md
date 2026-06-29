@@ -34,9 +34,10 @@ Required order:
 2. block giveaway/promo-only без независимого `event_source`;
 3. extract facts with `claim_class` / `render_policy` / `source_role`;
 4. classify sparse/rich по event-specific content facts (не по date/time/venue anchors);
-5. generate dry sparse text and run coverage-check;
-6. remove unsupported existing public claims on rerender;
-7. only then call reference enrichment for eligible `publish_sparse` events.
+5. run Sparse Event Safety pre-check/remediation;
+6. for `publish_sparse`, optionally call reference enrichment before the final writer;
+7. run final coverage-check on the complete public text after reference enrichment;
+8. publish only if every public sentence passes final coverage-check.
 
 Инварианты:
 
@@ -47,6 +48,7 @@ Required order:
 - Публичный счётчик `Источников: N` считает только event-specific источники; reference-source не должен выглядеть как подтверждение события.
 - Writer может использовать reference facts только для разрешённых v1 фактов (`identity`, `occupation`) и не может выводить event-specific claims (`сет-лист`, `хиты`, `новые композиции`, `live-бэнд`, `гости`, `программа`) без поддержки в event-source facts.
 - Если reference facts приняты/использованы, заблокированы или если sparse safety удалил неподтверждённые claims, операторский Smart Update отчёт в боте обязан явно показать это компактной строкой.
+- `publicly_counted_as_event_source=true` fail-closed: только `source.role=event`; `reference/giveaway/promo/repost/unclear` не считаются публичными источниками события.
 
 ## Что реализовано
 

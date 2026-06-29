@@ -1,7 +1,7 @@
 # Event Reference Enrichment (справочное дообогащение события)
 
 > **Status:** design / implementation contract, **not provider-first**  
-> **Caller:** Smart Update (`smart_event_update.py`) after source-role validation, sparse safety and writer coverage checks.  
+> **Caller:** Smart Update (`smart_event_update.py`) after source-role validation and sparse safety pre-check; final public writer coverage runs after any reference enrichment.  
 > **Primary goal:** first stop unsupported sparse/giveaway descriptions; only then add at most one safe reference sentence for already valid sparse events.
 
 ## P0: do not implement Wikimedia provider first
@@ -55,7 +55,7 @@ Hard rule:
 
 ## Required implementation order
 
-This order is mandatory, not advisory:
+This order is mandatory, not advisory. Reference enrichment must not bypass final writer coverage.
 
 ```text
 1. classify source_role
@@ -63,12 +63,20 @@ This order is mandatory, not advisory:
 3. block giveaway/promo-only without independent event_source
 4. extract event facts with claim_class and render_policy
 5. classify sparse/rich from event-specific content facts
-6. generate dry sparse text for publish_sparse
-7. coverage-check every public sentence by claim_class/source_role
-8. remove unsupported existing description claims on rerender
-9. only then run reference enrichment for eligible publish_sparse events
+6. run Sparse Event Safety pre-check and existing-description remediation
+7. if event_status=needs_event_source or skip:
+   - do not call reference enrichment
+   - do not call the public writer for a new full card
+   - handle existing public surfaces according to remediation policy
+8. if event_status=publish_sparse:
+   - optionally run reference enrichment
+   - pass event facts + allowed entity_reference facts to the public writer
+   - run final coverage-check on the complete rendered text
+9. publish only if every public sentence passes final coverage-check
 10. include enrichment/safety decisions in the Smart Update bot report
 ```
+
+The coverage-check before enrichment is only a sparse-safety/remediation pre-check. The final public text must always be coverage-checked after reference enrichment, including the reference sentence.
 
 `WIKIMEDIA_REFERENCE_ENRICHMENT=1` must not be enabled unless all are implemented and enabled:
 
@@ -86,6 +94,22 @@ This order is mandatory, not advisory:
 | `publish_sparse` | Valid event source, but description is empty/poor/generic. | Short dry description; may add at most one safe inline reference sentence. | Allowed if all gates pass. |
 | `needs_event_source` | Giveaway/promo/repost/unclear source needs an independent event source. | Do not auto-publish a full public card. Existing unsupported public text must be removed if rerendering. | Forbidden. |
 | `skip` | Not a valid event or required anchors missing. | Do not create/update public event. | Forbidden. |
+
+### Public-surface policy for `needs_event_source`
+
+For a new event with `event_status=needs_event_source`:
+
+- do not create a public Telegraph/static page;
+- do not publish Telegram/VK event posts;
+- do not count the event as publishable until an independent `event` source is attached.
+
+For an existing public event that reruns into `needs_event_source`:
+
+- mark it as `needs_event_source` / `manual_review`;
+- remove unsupported public claims;
+- do not republish/promote the page as a valid event;
+- suppress from public feeds where the platform supports it;
+- if automatic unpublish/delete is not available, keep the event out of publishable selections until an independent `event` source is attached.
 
 ## v1 scope
 
@@ -132,6 +156,39 @@ If one source contains both giveaway mechanics and direct event assertion, class
 - giveaway mechanics -> `source.role=giveaway`, `fact.scope=giveaway_fact`, `render_policy=never_render`;
 - date/time/venue/title from a non-authoritative giveaway post -> `claim_class=weak_event_signal`;
 - date/time/venue/title from official venue/organizer/artist post -> may be `event_anchor` with `source.role=event`.
+
+### Deterministic authority allowlists
+
+Authority must be determined by deterministic config where possible, not invented by the LLM.
+
+Required inputs:
+
+- `trusted_event_source_domains` — known concrete-event aggregators;
+- `trusted_ticket_domains` — ticket operators that expose concrete event pages;
+- `official_source_owner_hints` — known artist/venue/organizer accounts/domains;
+- venue/artist/organizer account mappings where available.
+
+The LLM may classify source semantics, but must not grant authority to an unknown domain/account. Unknown aggregator-like sources cannot exceed the `local unofficial direct announcement` cap unless allowlisted or manually approved.
+
+### Independent event source
+
+`independent event_source` means a separately fetched source with its own URL/source id/source owner that directly confirms the concrete event.
+
+Not independent:
+
+- the same giveaway post;
+- a repost/copy of the same giveaway text;
+- a screenshot without a fetchable event source;
+- a source discovered only through Wikipedia/Wikidata/reference lookup;
+- a derived candidate row without separately stored source evidence.
+
+Independent:
+
+- official artist/venue/organizer/ticket page;
+- trusted concrete event aggregator page;
+- official social post from venue/artist/organizer that directly announces the event.
+
+If a giveaway post contains a link, the link may seed lookup, but validation requires fetching/storing that linked event page or official post as a separate `source.role=event` record.
 
 ## Event validity score caps
 
@@ -194,10 +251,10 @@ event_source.page_id           text nullable
 event_source.revision_id       text nullable
 event_source.fetched_at        timestamp nullable
 event_source.entity_match_confidence real nullable
-event_source.publicly_counted_as_event_source boolean default true
+event_source.publicly_counted_as_event_source boolean default false
 ```
 
-For `role=reference`, `publicly_counted_as_event_source=false` is mandatory.
+`publicly_counted_as_event_source=true` is allowed only when `source.role=event`. For all other roles (`reference`, `giveaway`, `promo`, `repost`, `unclear`) it must stay false.
 
 ### Fact fields
 
@@ -260,6 +317,17 @@ Denylist terms are a safety net, not the only guard:
 - `живое исполнение`, `специальная программа`, `сюрпризы`, `гости`;
 - `презентация альбома`, `туровая программа`, `live-бэнд`.
 
+### If final coverage fails
+
+Final coverage-check is a publish gate, not just a report.
+
+If any public sentence is rejected:
+
+1. remove or rewrite the rejected sentence;
+2. rerun final coverage-check once;
+3. if coverage still fails, publish dry anchors-only sparse text or mark `manual_review`;
+4. never publish text with rejected sentences.
+
 ## Existing bad-description remediation
 
 When Smart Update reruns on an existing event, unsupported existing public claims must be removed, not preserved.
@@ -295,6 +363,26 @@ Allowed v1 fact types:
 
 - `identity` — e.g. stage name / real name relation;
 - `occupation` — e.g. rapper, musician, actor, writer.
+
+### Wikidata field/property whitelist
+
+Allowed public fields/properties in v1:
+
+- labels / aliases: entity matching only, not public narrative by themselves;
+- occupation claim: render only after mapping through an approved occupation allowlist;
+- birth/real name or stage-name/pseudonym relation only when represented as structured data and confidence is high.
+
+Do not render:
+
+- Wikidata free-text description directly;
+- sitelink article extract;
+- `known for` / notable-work style claims;
+- discography/work lists;
+- awards;
+- personal-life properties;
+- date of birth/death unless explicitly approved in a later version.
+
+Occupation labels must be normalized through a small allowlist (`rapper`, `musician`, `singer`, `actor`, `writer`, `band`, `musical group`, etc.). Unknown occupations are `admin_only`, not `public_allowed`.
 
 Forbidden v1 facts:
 
@@ -400,7 +488,8 @@ Expected:
 - `event_status=needs_event_source`;
 - Wikimedia not called;
 - full public writer not called for a new full card;
-- no Telegraph page created, or existing bad text is removed on rerender;
+- for a new event, no Telegraph/static page and no TG/VK event post are created;
+- for an existing public event, it is marked `needs_event_source` / `manual_review`, unsupported claims are removed, and the event is suppressed from publishable feeds/selections until an independent `event` source is attached;
 - no `хиты`, `сет-лист`, `новые композиции`, `свежий материал`, `живое исполнение`, `программа выступления`.
 
 ### T2. SQWOZ BAB valid sparse event_source
@@ -463,8 +552,10 @@ Implementation is not done until:
 1. Sparse Event Safety is implemented and enabled;
 2. SQWOZ BAB/event `6501` replay passes through the production import boundary or a faithful shadow equivalent;
 3. coverage-check rejects semantic programme claims, not just denylist words;
-4. source/fact role fields are persisted and used by renderer/report/coverage;
-5. public source count excludes reference sources;
-6. Smart Update report includes enrichment and blocked/removed-claim decisions;
-7. Wikimedia provider uses structured Wikidata facts only for public rendering in v1;
-8. all tests in the matrix pass.
+4. final coverage-check runs after reference enrichment and gates the complete public text;
+5. source/fact role fields are persisted and used by renderer/report/coverage;
+6. `publicly_counted_as_event_source=true` is fail-closed to `source.role=event` only;
+7. trusted source/aggregator authority uses deterministic allowlists or manual approval, not LLM authority invention;
+8. Smart Update report includes enrichment and blocked/removed-claim decisions;
+9. Wikimedia provider uses structured Wikidata facts only for public rendering in v1 and only from the v1 property/occupation allowlist;
+10. all tests in the matrix pass.
