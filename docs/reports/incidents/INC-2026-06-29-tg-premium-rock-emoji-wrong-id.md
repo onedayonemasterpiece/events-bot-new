@@ -1,10 +1,10 @@
 # INC-2026-06-29-tg-premium-rock-emoji-wrong-id Rock premium emoji used the wrong custom symbol
 
-Status: mitigated pending final deploy
+Status: closed
 Severity: sev3
 Service: Telegram `@kldevents` / premium emoji editor
 Opened: 2026-06-29
-Closed: —
+Closed: 2026-06-29
 Owners: events-bot
 Related incidents: `INC-2026-06-29-tg-premium-ticket-calendar-icon.md`, `INC-2026-06-29-tg-premium-tretyakov-composite-pair.md`
 Related docs: `docs/features/tg-premium-emojis-update/README.md`, `.codex/skills/tg-premium-emojis-update/SKILL.md`
@@ -83,11 +83,22 @@ The Telegram premium emoji editor mapped rock-concert `🤘` to the wrong `lovek
 
 ## Follow-up Actions
 
-- [ ] Close after final deploy and post-deploy verification are recorded below.
+- [x] Closed after final deploy and post-deploy verification were recorded below.
 
 ## Release And Closure Evidence
 
-Pending final deploy.
+- deployed SHA: `52ab7e4177e3d261e687e2cd8a4d7ab996e97c92` (reachable from `origin/main`; docs-only closure commits may be newer).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree after rebasing on current `origin/main`.
+- Fly image: `deployment-01KW9JTTE8055N1WRYRWB6KVFW`; machine `683961db016e28`, version `1528`, checks passing.
+- regression checks:
+  - `pytest -q tests/test_tg_premium_emojis.py tests/test_daily_format.py::test_format_event_daily_marks_rock_concert_with_horns_icon tests/test_tg_event_publish.py::test_build_tg_event_announcement_formats_links_hashtags_and_footer tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send tests/test_remote_telegram_session.py` → `25 passed`.
+  - `py_compile tg_premium_emojis.py main.py main_part2.py scripts/tg_premium_emoji_editor.py` → passed.
+  - `git diff --check` → passed.
+  - live `@kldevents/1614` after repair: first line remains `🤘 Трибьют группы «АРИЯ»`; custom emoji entity at offset `0` has document id `5404517529362128309`; date/money ids remain correct; `remaining_replacements=0`.
+- post-deploy verification:
+  - `/healthz` returned `200`, `ready=true`.
+  - Production env check: `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1`, dedicated `TG_PREMIUM_EMOJI_AUTH_BUNDLE` present.
+  - Production code smoke: `DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"]` is `5404517529362128309`; a sample visible `🤘` with old wrong entity id `5393556708398225048` is corrected to custom id `5404517529362128309`.
 
 ## Prevention
 
