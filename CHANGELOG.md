@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- **Incident / Telegram event publish fresh import starvation (INC-2026-06-29)**: `tg_event_publish` due-job ordering now gives fresh Smart Update imports a bounded freshness lane ahead of old catch-up backlog rows while keeping the existing Telegram spacing gate, preventing new `@kldevents` announcements from being repeatedly deferred behind stale pending jobs.
 - **Incident / Telegram premium ticket-calendar icon regression (INC-2026-06-29)**: scoped the `📅` → custom `🎟` event-post replacement to date/calendar rows only, moved ticket rows to distinct `🎫`, and made paid ticket rows use `💰` before the numeric price while dropping textual `руб.`.
 - Fixed Tretyakov daily premium venue marker scope: `🖼🖼` now uses the two-part composite building emoji pair (not the small single-building thumbnail and not duplicated thumbnails), is not inferred from titles/descriptions such as `Александр Дейнека`, and old title-level pairs are cleaned back to the ordinary picture emoji.
 - **Incident / CrumpleVideo publish-only storm (INC-2026-06-28)**: publish-only Kaggle recovery ledgers are no longer treated as live source-video sessions during restart recovery, and already terminal/published video sessions cannot be resumed into repeated test-channel mp4 delivery.

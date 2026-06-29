@@ -14511,6 +14511,16 @@ def _tg_event_publish_spacing_horizon() -> timedelta:
     return timedelta(hours=max(1, hours))
 
 
+def _tg_event_publish_fresh_queue_horizon() -> timedelta:
+    """How long new imports outrank old Telegram announcement catch-up rows."""
+
+    try:
+        hours = float(str(os.getenv("TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS", "3")).strip())
+    except (TypeError, ValueError):
+        hours = 3.0
+    return timedelta(hours=max(1.0, hours))
+
+
 def _same_source_event_publish_interval() -> timedelta:
     """Minimum gap between event posts created from the same source post."""
 
@@ -17143,7 +17153,40 @@ async def _run_due_jobs_once_locked(
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
     }
-    jobs.sort(key=lambda j: (priority.get(j.task, 99), j.id))
+    tg_event_added_at: dict[int, datetime | None] = {}
+    tg_event_ids = sorted(
+        {
+            int(j.event_id)
+            for j in jobs
+            if j.task == JobTask.tg_event_publish and j.event_id is not None
+        }
+    )
+    if tg_event_ids:
+        async with db.get_session() as session:
+            rows = await session.execute(
+                select(Event.id, Event.added_at).where(Event.id.in_(tg_event_ids))
+            )
+            tg_event_added_at = {
+                int(event_id): _ensure_utc(added_at) for event_id, added_at in rows.all()
+            }
+    fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
+
+    def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
+        task_priority = priority.get(j.task, 99)
+        if j.task == JobTask.tg_event_publish and j.event_id is not None:
+            added_at = tg_event_added_at.get(int(j.event_id))
+            # When an old catch-up/backfill backlog is being throttled one post at
+            # a time, fresh Smart Update imports must not be starved behind rows
+            # that can be safely announced later. Within the fresh lane, newest
+            # imports go first so a live Smart Update does not wait behind an
+            # hours-old mini-backlog. Spacing is still enforced by
+            # _defer_tg_event_publish_if_spacing_blocked before every send.
+            if added_at and added_at >= fresh_cutoff:
+                return (task_priority, 1, -int(added_at.timestamp()), j.id)
+            return (task_priority, 2, j.id, 0)
+        return (task_priority, 0, j.id, 0)
+
+    jobs.sort(key=_job_due_sort_key)
     processed = 0
     for job in jobs:
         async with db.get_session() as session:
