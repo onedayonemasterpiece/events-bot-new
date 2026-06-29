@@ -202,11 +202,51 @@ const HeadingTag = headingLevel;
       if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
     }
 
+    function cleanAuthRedirectUrl() {
+      const url = new URL(window.location.href);
+      for (const key of ['code', 'error', 'error_code', 'error_description', 'state']) url.searchParams.delete(key);
+      url.hash = '';
+      return url.toString();
+    }
+
+    function showAuthCallbackError() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has('error') && !params.has('error_code') && !params.has('error_description')) return false;
+      const errorCode = params.get('error_code') || params.get('error') || '';
+      setStatus(errorCode ? `Вход через Яндекс не завершён: ${errorCode}. Попробуйте ещё раз.` : 'Вход через Яндекс не завершён. Попробуйте ещё раз.', 'error');
+      return true;
+    }
+
+    function cleanAuthCallbackHistory() {
+      const cleanUrl = cleanAuthRedirectUrl();
+      if (cleanUrl !== window.location.href) window.history.replaceState(window.history.state, '', cleanUrl);
+    }
+
+    async function handleAuthCallback() {
+      if (!supabase) return false;
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (!code) return false;
+      setStatus('Завершаю вход через Яндекс…');
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      cleanAuthCallbackHistory();
+      if (error) {
+        setStatus('Вход через Яндекс не завершён. Попробуйте ещё раз.', 'error');
+        return false;
+      }
+      return true;
+    }
+
     if (enabled) {
-      supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+      supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce' },
+      });
       login?.addEventListener('click', async () => {
         setStatus('Открываю вход через Яндекс…');
-        await supabase.auth.signInWithOAuth({ provider: root.dataset.yandexProvider || 'custom:yandex', options: { redirectTo: window.location.href } });
+        await supabase.auth.signInWithOAuth({
+          provider: root.dataset.yandexProvider || 'custom:yandex',
+          options: { redirectTo: cleanAuthRedirectUrl() },
+        });
       });
       logout?.addEventListener('click', async () => {
         await supabase.auth.signOut();
@@ -219,7 +259,7 @@ const HeadingTag = headingLevel;
       });
       more?.addEventListener('click', async () => runSearch({ append: true }));
       supabase.auth.onAuthStateChange(() => updateAuth());
-      updateAuth();
+      handleAuthCallback().then(() => updateAuth()).then((signedIn) => { if (!signedIn) showAuthCallbackError(); });
     }
   }
 </script>

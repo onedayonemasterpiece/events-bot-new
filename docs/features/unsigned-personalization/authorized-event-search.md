@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v50 has passed static checks, mocked browser UI search, public preview UI smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v51 has passed static checks, mocked PKCE browser UI search, public mocked PKCE callback smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
 
 ## Product contract
 
@@ -33,13 +33,25 @@ Configured in the personalization Supabase project on 2026-06-29. Manual/Dashboa
 9. Add Supabase callback URL shown by the provider form to the Yandex app redirect URLs.
 10. Add site redirect URLs such as `https://kenigevents.ru/*` and current preview prefixes to Supabase Auth URL allow-list.
 
-Frontend uses:
+Frontend uses Supabase Auth PKCE, not implicit-hash parsing. On login it sends the cleaned current URL as `redirectTo` (same page, without stale `code/error/state` params); on return it explicitly calls `exchangeCodeForSession(code)`, persists the session, cleans the callback URL with `history.replaceState`, and then unlocks the search form. This prevents the UX regression where the browser returned to `/poisk/` but the page still looked anonymous because the OAuth `code` had not been exchanged into a Supabase session.
 
 ```ts
-supabase.auth.signInWithOAuth({
-  provider: 'custom:yandex',
-  options: { redirectTo: window.location.href },
+const supabase = createClient(url, publishableKey, {
+  auth: {
+    flowType: 'pkce',
+    detectSessionInUrl: false,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
 })
+
+await supabase.auth.signInWithOAuth({
+  provider: 'custom:yandex',
+  options: { redirectTo: cleanAuthRedirectUrl() },
+})
+
+// On return to the same page:
+await supabase.auth.exchangeCodeForSession(code)
 ```
 
 As of 2026-06-29 the local/private environment contains the Yandex client credentials and the Supabase provider `custom:yandex` is configured. These secrets are not committed; readiness is checked by `scripts/check_authorized_search_readiness.py --probe-yandex-provider`.
@@ -306,7 +318,7 @@ python3 scripts/smoke_authorized_search_ui.py \
 
 Result:
 
-- simulated a Supabase implicit auth callback in the browser URL hash and mocked `/auth/v1/user`;
+- simulated a Supabase PKCE OAuth callback with `?code=...`, mocked `/auth/v1/token?grant_type=pkce` plus `/auth/v1/user`;
 - verified the root switches to authenticated state, hides the Yandex login button and shows the one-line search form;
 - submitted query `урбанистика в четверг вечером по регистрации`;
 - verified the UI calls `event-search` with `use_llm_verifier=true`;
@@ -374,4 +386,25 @@ Fixed through Supabase Management API:
 - `uri_allow_list=https://kenigevents.ru/**,https://www.kenigevents.ru/**`.
 
 Regression guard: `scripts/check_authorized_search_readiness.py --probe-auth-config --probe-yandex-provider --probe-edge --strict` now checks the Auth URL Configuration and verifies the authorize redirect points to Yandex without `localhost` in the redirect chain.
+
+## v51 PKCE callback fix canary
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v51-auth-pkce/poisk/>.
+
+Why this exists: after the localhost redirect fix, a real mobile flow returned to the same `/poisk/` URL but the UI still stayed anonymous. Root cause: the frontend relied on automatic implicit callback detection; the actual Supabase/Yandex return path used an authorization `code`, so no session was available when the UI checked `getSession()`.
+
+Fix:
+
+- `AuthorizedEventSearch.astro` now creates the Supabase client with `flowType: 'pkce'` and `detectSessionInUrl: false`;
+- login uses a cleaned same-page `redirectTo`, preserving the page the user started from;
+- on return, the component explicitly calls `supabase.auth.exchangeCodeForSession(code)`, then removes `code/error/state` params from the URL and only then updates the auth-dependent UI;
+- auth callback errors are shown as product copy instead of leaving the user on a silent anonymous page.
+
+Verification evidence on 2026-06-29:
+
+- `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v51-auth-pkce`;
+- `scripts/smoke_authorized_search_ui.py` passed with mocked PKCE token exchange and mocked `event-search`: `authorized_search_ui_smoke=ok`, first card `6310`, `request_calls=1`;
+- readiness probe passed: `scripts/check_authorized_search_readiness.py --env-file .env --probe-auth-config --probe-yandex-provider --probe-edge --strict`;
+- deployed public preview smoke passed with mocked Supabase PKCE callback on `https://kenigevents.ru/preview-20260629-event-pages-v51-auth-pkce/poisk/?code=...`: the page switched to `is-authorized`, displayed the search form, submitted a query and rendered a split-action event card.
+
 

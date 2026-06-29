@@ -240,6 +240,8 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-po
 const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
 const searchVisibleHtml = stripGeneratedCode(searchHtml);
 if (!searchHtml.includes('data-authorized-search') || !searchHtml.includes('data-search-login') || !searchHtml.includes('custom:yandex') || !searchHtml.includes('data-supabase-url')) throw new Error('Authorized search page must render Yandex/Supabase search UI when public env is provided');
+const bundledJs = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.js')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
+if (!bundledJs.includes('flowType:"pkce"') || !bundledJs.includes('detectSessionInUrl:!1') || !bundledJs.includes('exchangeCodeForSession') || !bundledJs.includes('error_description') || !/searchParams\.delete\([^)]*\)/u.test(bundledJs) || !bundledJs.includes('hash=""')) throw new Error('Authorized search must use PKCE OAuth and clean same-page redirect URLs before Yandex login');
 const bundledCss = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (!/\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/iu.test(bundledCss)) throw new Error('Authorized search build must include a strong hidden rule so unauthenticated form/results/buttons stay hidden');
 if (!searchVisibleHtml.includes('authorized-search__yandex-icon') || !searchVisibleHtml.includes('>Я</span>') || !searchVisibleHtml.includes('Войти через Яндекс')) throw new Error('Authorized search login button must expose recognizable Yandex branding/icon text');

@@ -114,7 +114,7 @@ Evidence from 2026-06-29 UTC:
 - authorized facet RPC smoke after `20260629_event_search_query_facets.sql`: query `урбанистика в четверг вечером по регистрации` with facets `weekday_iso=4`, `time_of_day=evening`, `admission=registration_required` returns event `6310` top-1 (`similarity≈0.9255`) while preserving the pgvector nearest-candidate path.
 - mocked browser UI smoke: `scripts/smoke_authorized_search_ui.py` renders the static preview with public Supabase env, simulates a Supabase Auth callback, calls a mocked `event-search`, and verifies authorized search cards keep the shared feed-card actions plus investigation metadata (`request_id`, `served_list_id`, `served_list_hash`, `surface=authorized_event_search`). This is frontend regression evidence only, not the final Yandex OAuth/deployed Edge E2E.
 - production handoff command test: `main._static_site_build_kaggle_command` now passes `--related-mode pgvector`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, CDN asset/ICS bases, status callback args and browser-safe AuthorizedEventSearch public env (`PUBLIC_PERSONALIZATION_SUPABASE_URL`, publishable key, `custom:yandex`) into the Kaggle runner.
-- deploy/browser readiness check: `scripts/check_authorized_search_readiness.py --env-file .env` reports static rendering/vector sync ready, but Yandex credentials and Supabase deploy token/project ref missing.
+- deploy/browser readiness check: `scripts/check_authorized_search_readiness.py --env-file .env --probe-auth-config --probe-yandex-provider --probe-edge --strict` is green for the current personalization Supabase/Yandex canary; v51 additionally verifies the browser PKCE callback path with a mocked public preview smoke.
 
 ## Job sequence after Smart Update
 

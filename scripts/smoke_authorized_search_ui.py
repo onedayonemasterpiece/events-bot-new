@@ -29,7 +29,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlparse
 
 
 def latest_preview_dist(site_dist: Path) -> Path:
@@ -96,17 +96,10 @@ def fake_user() -> dict[str, Any]:
     }
 
 
-def implicit_auth_hash() -> str:
-    user_id = fake_user()["id"]
-    return urlencode(
-        {
-            "access_token": fake_jwt(str(user_id)),
-            "expires_in": "86400",
-            "refresh_token": "ui-smoke-refresh-token",
-            "token_type": "bearer",
-            "type": "signup",
-        }
-    )
+def storage_key_for_supabase_url(supabase_url: str) -> str:
+    host = urlparse(supabase_url).netloc
+    project_ref = host.split(".", 1)[0]
+    return f"sb-{project_ref}-auth-token"
 
 
 def fake_search_response() -> dict[str, Any]:
@@ -230,6 +223,20 @@ async def run_smoke(args: argparse.Namespace) -> int:
             async def route_supabase(route):
                 request = route.request
                 url = request.url
+                if "/auth/v1/token?grant_type=pkce" in url:
+                    await route.fulfill(
+                        status=200,
+                        content_type="application/json; charset=utf-8",
+                        body=json.dumps({
+                            "access_token": fake_jwt(fake_user()["id"]),
+                            "refresh_token": "ui-smoke-refresh-token",
+                            "expires_in": 86400,
+                            "expires_at": int(time.time()) + 86400,
+                            "token_type": "bearer",
+                            "user": fake_user(),
+                        }, ensure_ascii=False),
+                    )
+                    return
                 if url.endswith("/auth/v1/user"):
                     await route.fulfill(
                         status=200,
@@ -272,7 +279,15 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if await page.locator("[data-event-card]").count() != 0:
                 raise AssertionError("dedicated search page must not show prefilled event-result cards before a query")
 
-            await page.goto(f"{base_url}{preview_path}?auth-smoke=1#{implicit_auth_hash()}", wait_until="networkidle")
+            storage_key = storage_key_for_supabase_url(supabase_url)
+            await page.add_init_script(
+                f"""
+                try {{
+                  localStorage.setItem('{storage_key}-code-verifier', JSON.stringify('ui-smoke-code-verifier'));
+                }} catch (_) {{}}
+                """
+            )
+            await page.goto(f"{base_url}{preview_path}?auth-smoke=1&code=ui-smoke-auth-code", wait_until="networkidle")
             root = page.locator("[data-authorized-search]").first
             await expect(root).to_be_visible()
             await page.wait_for_function(
