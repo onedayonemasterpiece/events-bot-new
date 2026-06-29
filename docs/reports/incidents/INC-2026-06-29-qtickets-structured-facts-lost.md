@@ -1,10 +1,10 @@
 # INC-2026-06-29 Qtickets Structured Facts Lost To Poster OCR
 
-Status: open
+Status: closed
 Severity: sev2
 Service: source parsing / Smart Update / public event fanout
 Opened: 2026-06-29
-Closed: —
+Closed: 2026-06-29
 Owners: events-bot operators
 Related incidents: `INC-2026-06-24-future-event-date-default-venue-regressions`, `INC-2026-06-18-vk-title-shortlink-public-regression`, `INC-2026-06-18-tg-location-prose-still-extracted`, `INC-2026-06-16-vk-quality-duplicates-non-events`
 Related docs: `docs/features/source-parsing/sources/qtickets/README.md`, `docs/llm/request-guide.md`, `docs/operations/incident-management.md`
@@ -87,11 +87,12 @@ Reported by operator on 2026-06-29 after comparing the public event with the Qti
 
 ## Immediate Mitigation
 
-Pending: repair event `6114` canonical DB row and republish/edit public surfaces through standard event fanout paths after the prevention fix is in code.
+- Production DB event `6114` was repaired in place from the Qtickets source facts.
+- Telegraph page was rebuilt through `update_telegraph_event_page(6114, ...)`.
+- Existing managed VK post `https://vk.com/wall-231920894_4975` was edited through the VK source-post sync helper with `append_text=False` so the old `VALERA` body was replaced, not appended.
+- Existing Telegram post `@kldevents/1410` was edited in place; the standard event renderer and explicit premium emoji editor were used/verified after the repair.
 
 ## Corrective Actions
-
-Pending implementation:
 
 - Parse and preserve Qtickets JSON-LD `location.address` and `endDate` as structured source facts.
 - Preserve structured parser source text as `EventCandidate.source_text` instead of replacing it with sparse descriptions.
@@ -103,10 +104,20 @@ Pending implementation:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `fe8fd8ead369f0aa4931c2ce5ba1bebb07130c4f`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --detach`
+  - image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWARM65EA3CXGZJP68XFE4WK`
+  - machine version: `1542`
+- regression checks:
+  - `uv run --with pytest --with-requirements requirements.txt pytest -q tests/test_qtickets_structured_facts.py tests/test_source_parsing.py tests/test_ticket_sites_queue.py` → `35 passed`
+  - replay fixture: `tests/replays/INC-2026-06-29-qtickets-structured-facts-lost/qtickets_events.json`
+  - Smart Update shadow replay test: `test_qtickets_replay_keeps_structured_text_through_smart_update`
+- post-deploy verification:
+  - `/healthz` OK after deploy and after repair.
+  - Production DB event `6114` now has title `FLAVA INTENSIVE (VALERA & LERA VOYNITS)`, `end_date=2026-07-07`, venue `КОНЦЕПТ`, address `ул. Ленинский проспект, 42Б`, source URL and ticket URL equal to the Qtickets page.
+  - Telegram `@kldevents/1410` edited in place: full title, `4–7 июля`, `КОНЦЕПТ, Ленинский проспект 42Б`, direct Qtickets ticket link entity, Telegraph/Max/VK footer, and premium emoji editor result `edited=True`, `replacements=2`.
+  - VK `https://vk.com/wall-231920894_4975` edited in place: full title, corrected venue/address, direct ticket shortlink `vk.cc/cYRjrS`, old `VALERA`-only body removed.
+  - Telegraph `https://telegra.ph/Master-klass--KONCEPT-06-17` rebuilt: full title, corrected address, source count/footer present, no generated “работа с материалами” master-class boilerplate.
 
 ## Prevention
 
