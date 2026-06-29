@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-80-stories-telegram-promo-gap.md`
+  - Scope: built-in `80 историй о главном` promo campaign Telegram companion activities, `tg_event_publish` self-forward/new-post behavior for `@kldevents`, `tg_repost` amplification to `@kenigevents`, and drift between VK 80 Stories refreshes and Telegram campaign coverage.
+  - Must not regress: the built-in 80 Stories campaign must seed and repair code-owned `tg_event_publish`/`tg_repost` activities; `@kldevents` gets two daily self-forward-or-new-post slots aligned with VK visibility, and production-only manual activity rows must not be the only source of truth.
 - `INC-2026-06-29-tg-event-publish-fresh-import-starvation.md`
   - Scope: `joboutbox` due ordering and `tg_event_publish` spacing/catch-up for Smart Update imports into `@kldevents`.
   - Must not regress: fresh Smart Update event announcements must not be starved behind old `tg_event_publish` catch-up/backlog rows; Telegram spacing may still enforce one post per interval, but newly imported events with completed dependencies need a freshness lane and public VK/TG divergence must be visible in evidence.

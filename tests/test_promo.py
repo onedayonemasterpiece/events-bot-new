@@ -333,6 +333,7 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
                         ]
                     ),
                 )
+                .order_by(PromoActivity.id)
             )
         ).scalars().all()
     assert [activity.surface for activity in vk_activities] == [
@@ -346,6 +347,31 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
         "klgdevents:story",
         "klgdevents->kenigeventsofficial:story",
     }
+    async with db.get_session() as session:
+        tg_activities = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign.id,
+                    PromoActivity.surface.in_(
+                        [
+                            PROMO_SURFACE_TG_EVENT_PUBLISH,
+                            PROMO_SURFACE_TG_REPOST,
+                        ]
+                    ),
+                )
+            )
+        ).scalars().all()
+    tg_by_surface = {activity.surface: activity for activity in tg_activities}
+    assert {
+        surface: (activity.profile_key, activity.max_per_publish, activity.daily_cap)
+        for surface, activity in tg_by_surface.items()
+    } == {
+        PROMO_SURFACE_TG_REPOST: ("kldevents->kenigevents:80stories", 1, 1),
+        PROMO_SURFACE_TG_EVENT_PUBLISH: ("kldevents:80stories", 2, 2),
+    }
+    tg_publish = tg_by_surface[PROMO_SURFACE_TG_EVENT_PUBLISH]
+    assert tg_publish.config_json["target_chat"] == "@kldevents"
+    assert tg_publish.config_json["mode"] == "self_forward_existing_event_post"
     async with db.get_session() as session:
         afisha_activity = (
             await session.execute(
@@ -421,6 +447,25 @@ async def test_initial_80_stories_campaign_updates_existing_afishaengagement_act
                 },
             )
         )
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+                profile_key="kldevents:80stories",
+                max_per_publish=1,
+                daily_cap=1,
+                selection_policy="diverse_shuffle",
+                enabled=True,
+                config_json={
+                    "target_chat": "@kldevents",
+                    "window_hours": 72,
+                    "active_start_hour": 9,
+                    "active_end_hour": 21,
+                    "campaign_scope": "80stories",
+                    "mode": "self_forward_existing_event_post",
+                },
+            )
+        )
         await session.commit()
 
     updated = await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
@@ -437,6 +482,15 @@ async def test_initial_80_stories_campaign_updates_existing_afishaengagement_act
                 )
             )
         ).scalars().one()
+        tg_publish = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == updated.id,
+                    PromoActivity.surface == PROMO_SURFACE_TG_EVENT_PUBLISH,
+                    PromoActivity.profile_key == "kldevents:80stories",
+                )
+            )
+        ).scalars().one()
     assert stored is not None
     assert stored.priority == 1
     assert stored.ends_at.replace(tzinfo=timezone.utc) == datetime(2026, 7, 18, 23, 59, 59, tzinfo=timezone.utc)
@@ -446,6 +500,9 @@ async def test_initial_80_stories_campaign_updates_existing_afishaengagement_act
     assert activity.config_json["cta_templates"]["by_event_type"]["*"]["likes"] == [
         "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
     ]
+    assert tg_publish.max_per_publish == 2
+    assert tg_publish.daily_cap == 2
+    assert tg_publish.config_json["window_hours"] == 24
     await db.close()
 
 
@@ -1505,7 +1562,8 @@ async def test_promo_vk_publication_records_no_media_candidate_as_failed(tmp_pat
 
     results = await run_promo_vk_activities(db, None, now_utc=now_utc)
 
-    assert [item.status for item in results] == ["failed", "scheduled"]
+    vk_results = [item for item in results if item.surface == PROMO_SURFACE_VK_PUBLICATION]
+    assert [item.status for item in vk_results] == ["failed", "scheduled"]
     async with db.get_session() as session:
         exposures = (await session.execute(select(PromoExposure).order_by(PromoExposure.id))).scalars().all()
     assert [row.publish_status for row in exposures] == ["FAILED_NO_MEDIA", "VK_SCHEDULED"]

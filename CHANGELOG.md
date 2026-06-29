@@ -16,6 +16,12 @@
 
 ### Fixed
 
+- **Incident / 80 Stories Telegram promo gap (INC-2026-06-29)**: the built-in
+  `80 историй о главном` campaign now seeds and repairs its Telegram promo
+  activities in code: two daily `tg_event_publish` self-forward/new-post slots
+  for `@kldevents`, plus the existing `@kldevents` → `@kenigevents` repost
+  slot, so VK-only 80 Stories promo/event refreshes do not remain a
+  production-only manual DB configuration.
 - **Incident / Telegram event publish fresh import starvation (INC-2026-06-29)**: `tg_event_publish` due-job ordering now gives fresh Smart Update imports a bounded freshness lane ahead of old catch-up backlog rows while keeping the existing Telegram spacing gate, preventing new `@kldevents` announcements from being repeatedly deferred behind stale pending jobs.
 - **Incident / Telegram premium ticket-calendar icon regression (INC-2026-06-29)**: scoped the `📅` → custom `🎟` event-post replacement to date/calendar rows only, moved ticket rows to distinct `🎫`, and made paid ticket rows use `💰` before the numeric price while dropping textual `руб.`.
 - Fixed Tretyakov daily premium venue marker scope: `🖼🖼` now uses the two-part composite building emoji pair (not the small single-building thumbnail and not duplicated thumbnails), is not inferred from titles/descriptions such as `Александр Дейнека`, and old title-level pairs are cleaned back to the ordinary picture emoji.

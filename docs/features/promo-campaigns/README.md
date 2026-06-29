@@ -473,6 +473,14 @@ The initial `80 историй о главном` campaign now includes:
 - `vk_story` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=2`, `daily_cap=2`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
+- `tg_event_publish` to `https://t.me/kldevents`, `max_per_publish=2`,
+  `daily_cap=2`, 24-hour window, active window 09:00-21:00. For each selected
+  event it first reuses a forwardable existing `@kldevents` event post by
+  self-forwarding it into the same channel; if no source post exists, it
+  publishes a new full Telegram event post.
+- `tg_repost` from `https://t.me/kldevents` to `https://t.me/kenigevents`,
+  `max_per_publish=1`, `daily_cap=1`, 72-hour source/dedup window, active
+  window 09:00-21:00.
 - `afishaengagement` for `https://vk.com/klgdevents`, public canary enabled
   through a higher-priority public activity and a lower-priority shadow
   fallback. The initial public rollout rate is `0.50`, with shadow fallback

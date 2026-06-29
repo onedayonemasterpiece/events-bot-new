@@ -70,6 +70,8 @@ PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
+PROMO_TG_80_EVENT_PUBLISH_PROFILE = "kldevents:80stories"
+PROMO_TG_80_REPOST_PROFILE = "kldevents->kenigevents:80stories"
 PROMO_TG_BUTTON_HIGHLIGHT_PROFILE = "kldevents:details-button"
 PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES = {
     "klgdevents:motivation:80stories",
@@ -1218,6 +1220,47 @@ def _initial_80_vk_story_activity(
     )
 
 
+def _initial_80_tg_event_publish_activity(campaign_id: int) -> PromoActivity:
+    return PromoActivity(
+        campaign_id=campaign_id,
+        surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+        profile_key=PROMO_TG_80_EVENT_PUBLISH_PROFILE,
+        max_per_publish=2,
+        daily_cap=2,
+        selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+        enabled=True,
+        config_json={
+            "target_chat": "@kldevents",
+            "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
+            "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
+            "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
+            "campaign_scope": "80stories",
+            "mode": "self_forward_existing_event_post",
+        },
+    )
+
+
+def _initial_80_tg_repost_activity(campaign_id: int) -> PromoActivity:
+    return PromoActivity(
+        campaign_id=campaign_id,
+        surface=PROMO_SURFACE_TG_REPOST,
+        profile_key=PROMO_TG_80_REPOST_PROFILE,
+        max_per_publish=1,
+        daily_cap=1,
+        selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+        enabled=True,
+        config_json={
+            "source_chat": "@kldevents",
+            "target_chat": "@kenigevents",
+            "window_hours": 72,
+            "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
+            "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
+            "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
+            "campaign_scope": "80stories",
+        },
+    )
+
+
 def _initial_80_afishaengagement_activity(campaign_id: int) -> PromoActivity:
     return PromoActivity(
         campaign_id=campaign_id,
@@ -1259,6 +1302,27 @@ def _initial_80_afishaengagement_activity(campaign_id: int) -> PromoActivity:
 
 
 def _sync_initial_80_afishaengagement_activity(
+    current: PromoActivity,
+    required: PromoActivity,
+) -> bool:
+    changed = False
+    for attr in (
+        "profile_key",
+        "max_per_publish",
+        "daily_cap",
+        "selection_policy",
+        "enabled",
+    ):
+        if getattr(current, attr) != getattr(required, attr):
+            setattr(current, attr, getattr(required, attr))
+            changed = True
+    if (current.config_json or {}) != (required.config_json or {}):
+        current.config_json = dict(required.config_json or {})
+        changed = True
+    return changed
+
+
+def _sync_required_promo_activity(
     current: PromoActivity,
     required: PromoActivity,
 ) -> bool:
@@ -1349,6 +1413,8 @@ async def ensure_initial_80_stories_campaign(
                     target_group="kenigeventsofficial",
                 ),
                 _initial_80_afishaengagement_activity(int(existing.id)),
+                _initial_80_tg_event_publish_activity(int(existing.id)),
+                _initial_80_tg_repost_activity(int(existing.id)),
                 _default_tg_button_highlight_activity(int(existing.id)),
             ):
                 key = (str(required.surface or ""), str(required.profile_key or ""))
@@ -1369,6 +1435,10 @@ async def ensure_initial_80_stories_campaign(
                             legacy_duplicate.enabled = False
                             changed = True
                         session.add(legacy_duplicate)
+                elif required.surface in {PROMO_SURFACE_TG_EVENT_PUBLISH, PROMO_SURFACE_TG_REPOST}:
+                    if _sync_required_promo_activity(current, required):
+                        changed = True
+                    session.add(current)
             if changed:
                 existing.updated_at = now_utc
                 session.add(existing)
@@ -1467,6 +1537,8 @@ async def ensure_initial_80_stories_campaign(
                     target_group="kenigeventsofficial",
                 ),
                 _initial_80_afishaengagement_activity(int(campaign.id)),
+                _initial_80_tg_event_publish_activity(int(campaign.id)),
+                _initial_80_tg_repost_activity(int(campaign.id)),
                 _default_tg_button_highlight_activity(int(campaign.id)),
             ]
         )

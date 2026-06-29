@@ -144,7 +144,12 @@
   `https://vk.com/kenigeventsofficial` when a source post exists in the same
   window. It also publishes two story cards per day from recent `klgdevents`
   festival event posts into each target community:
-  `https://vk.com/klgdevents` and `https://vk.com/kenigeventsofficial`.
+  `https://vk.com/klgdevents` and `https://vk.com/kenigeventsofficial`. The
+  same built-in campaign has a Telegram companion on `https://t.me/kldevents`:
+  two daily `tg_event_publish` slots self-forward an existing channel post for
+  the selected event when one exists, otherwise create a new event-flow post,
+  and the optional `@kldevents` → `@kenigevents` repost slot amplifies one
+  forwardable source post per day.
 
 ## Operational Checks
 
