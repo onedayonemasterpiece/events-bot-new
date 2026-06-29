@@ -4,7 +4,7 @@
 
 ## Product contract
 
-Authenticated users get a one-line **Умный поиск** on listing/index pages. The user can type a natural-language intent, for example “урбанистика”, “детский мастер-класс” or “джаз вечером”. Results are rendered as the same event cards used in `Смотрите дальше`:
+Authenticated users get a one-line **Умный поиск** on a dedicated `/poisk/` page and, for the preview canary, on listing/index pages. The mobile terracotta tag drawer, desktop header and footer expose a plain navigation link **Поиск** to `/poisk/`; the search form itself is not placed inside the drawer so the header remains compact. The user can type a natural-language intent, for example “урбанистика”, “детский мастер-класс” or “джаз вечером”. Results are rendered as the same event cards used in `Смотрите дальше`:
 
 - card opens the event detail page;
 - like / unlike updates local personalization state;
@@ -42,7 +42,7 @@ supabase.auth.signInWithOAuth({
 })
 ```
 
-Current local `.env` does **not** contain `YANDEX_CLIENT_ID` / `YANDEX_CLIENT_SECRET`, so provider creation cannot be completed automatically by Codex without those credentials.
+As of 2026-06-29 the local/private environment contains the Yandex client credentials and the Supabase provider `custom:yandex` is configured. These secrets are not committed; readiness is checked by `scripts/check_authorized_search_readiness.py --probe-yandex-provider`.
 
 ## Retrieval architecture
 
@@ -143,6 +143,7 @@ Component: `site/src/components/AuthorizedEventSearch.astro`.
 
 Inserted on:
 
+- `/poisk/` — dedicated search entry point linked from the mobile tag drawer / desktop nav / footer;
 - `/__preview/`;
 - `/segodnya/`;
 - `/zavtra/`;
@@ -211,6 +212,24 @@ Golden semantic smoke for event `6447` (“Как договориться о б
 
 This fixes the specific lexical failure where “Музыка нашего города” outranked the urban-planning studio solely because of the token “город”.
 
+
+
+## v49 auth/search navigation canary
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v49-auth-pgvector/poisk/>.
+
+Evidence from 2026-06-29 UTC:
+
+- v48 had pgvector/Gemma related-event data, but no visible auth/search UI because the static build was produced without browser-safe `PUBLIC_PERSONALIZATION_SUPABASE_*` envs;
+- v49 republishes the same 70-event real-data canary with public Supabase URL/publishable key and `PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex`;
+- the mobile tag drawer and desktop/footer navigation now include **Поиск** → `/poisk/`;
+- public `/poisk/` contains `data-authorized-search`, `custom:yandex`, `data-supabase-url` and the “Войти через Яндекс” button;
+- `npm run check:preview` passed for `preview-20260629-event-pages-v49-auth-pgvector`;
+- mocked browser smoke passed: `authorized_search_ui_smoke=ok`, first rendered search card `6310`, `request_calls=1`;
+- live Edge Function smoke with a temporary Supabase Auth user passed: query `урбанистика будущее города` returned `[6447, 6310]`, `algorithm_id=pgvector_gemini_embedding_2_llm_verify_v1`, `llm_verifier.status=ok`, duplicate ids absent;
+- readiness probe passed: static public auth env, Yandex OAuth credentials/provider redirect, Edge Function OPTIONS and vector-sync backend env are all present.
+
+Gemma verifier hardening in the Edge Function uses Google structured output (`responseMimeType=application/json` + `responseSchema`) and a fallback JSON-object extractor. The rejected `responseFormat` field was removed after a provider `400` probe; this keeps the deployed `generateContent` call compatible with the current v1beta endpoint.
 
 ## v48 canary evidence
 

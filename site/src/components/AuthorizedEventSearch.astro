@@ -9,7 +9,7 @@ const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:ya
 const enabled = Boolean(supabaseUrl && supabaseKey);
 ---
 {enabled && (
-<section class:list={["authorized-search", compact && "authorized-search--compact"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div>
       <p class="eyebrow">Умный поиск</p>

@@ -13,6 +13,7 @@ const required = [
   'segodnya/index.html',
   'zavtra/index.html',
   'vyhodnye/index.html',
+  'poisk/index.html',
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
@@ -229,10 +230,16 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/zavtra/`)) throw new Error('Sitemap misses tomorrow listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/poisk/`)) throw new Error('Sitemap misses authorized search URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) throw new Error('Sitemap misses hero viewport review URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
+
+
+const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
+if (!searchHtml.includes('data-authorized-search') || !searchHtml.includes('data-search-login') || !searchHtml.includes('custom:yandex') || !searchHtml.includes('data-supabase-url')) throw new Error('Authorized search page must render Yandex/Supabase search UI when public env is provided');
+if (!controlHtml.includes('/poisk/')) throw new Error('Mobile/desktop navigation must expose the authorized search page link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

@@ -175,6 +175,68 @@ async function embedQuery(query: string): Promise<number[]> {
   return values.map((value: unknown) => Number(value));
 }
 
+
+function extractGeminiText(payload: Record<string, unknown>): string {
+  const parts = (((payload?.candidates as Candidate[] | undefined)?.[0]?.content as Candidate | undefined)?.parts as Candidate[] | undefined) || [];
+  return parts
+    .map((part) => typeof part?.text === "string" ? part.text : "")
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function extractJsonObjectText(text: string): string {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) throw new Error("llm_empty_response");
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "")
+    .trim();
+  if (unfenced.startsWith("{") && unfenced.endsWith("}")) return unfenced;
+  const start = unfenced.indexOf("{");
+  if (start < 0) throw new Error(`llm_json_object_missing:${unfenced.slice(0, 60)}`);
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < unfenced.length; index += 1) {
+    const ch = unfenced[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return unfenced.slice(start, index + 1);
+    }
+  }
+  throw new Error(`llm_json_object_unclosed:${unfenced.slice(0, 60)}`);
+}
+
+function parseLlmJson(text: string): Record<string, unknown> {
+  return JSON.parse(extractJsonObjectText(text));
+}
+
+const LLM_VERIFIER_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    ordered_event_ids: {
+      type: "array",
+      items: { type: "integer" },
+      description: "Event ids from the provided candidates, ordered by usefulness for the query.",
+    },
+    rejected_event_ids: {
+      type: "array",
+      items: { type: "integer" },
+      description: "Provided candidate event ids that are clearly irrelevant.",
+    },
+  },
+  required: ["ordered_event_ids", "rejected_event_ids"],
+};
+
 type Candidate = Record<string, unknown>;
 
 function candidateId(candidate: Candidate): number | null {
@@ -267,7 +329,7 @@ async function llmVerify(
   const prompt = [
     "Ты проверяешь результаты поиска событий. Нельзя добавлять новые события.",
     "Оставь только релевантные ID из списка и переупорядочь их по полезности для запроса.",
-    'Если сомневаешься — оставь исходный порядок. Ответь только JSON: {"ordered_event_ids":[123],"rejected_event_ids":[456]}',
+    'Если сомневаешься — оставь исходный порядок. Ответь только валидным JSON без Markdown. Первый символ ответа — { . Формат: {"ordered_event_ids":[123],"rejected_event_ids":[456]}',
     `Запрос пользователя: ${query}`,
     `Кандидаты: ${JSON.stringify(compact, null, 2)}`,
   ].join("\n\n");
@@ -285,6 +347,7 @@ async function llmVerify(
           generationConfig: {
             temperature: 0,
             responseMimeType: "application/json",
+            responseSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
           },
         }),
       },
@@ -296,18 +359,24 @@ async function llmVerify(
         used: false,
       };
     const payload = await response.json();
-    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const parsed = JSON.parse(text);
+    const text = extractGeminiText(payload);
+    const parsed = parseLlmJson(text);
     const allowed = new Map(
       candidates.map((candidate) => [candidateId(candidate), candidate]),
     );
+    const rejectedIds = new Set(
+      (Array.isArray(parsed.rejected_event_ids) ? parsed.rejected_event_ids : [])
+        .map((rawId) => Number(rawId))
+        .filter((id) => Number.isFinite(id)),
+    );
     const ordered: Candidate[] = [];
+    const orderedIds = new Set<number>();
     for (const rawId of Array.isArray(parsed.ordered_event_ids)
       ? parsed.ordered_event_ids
       : []) {
       const id = Number(rawId);
       const candidate = allowed.get(id);
-      if (candidate && !ordered.includes(candidate))
+      if (candidate && !orderedIds.has(id) && !rejectedIds.has(id)) {
         ordered.push({
           ...candidate,
           reason_codes: [
@@ -315,11 +384,17 @@ async function llmVerify(
             "llm:verified",
           ],
         });
+        orderedIds.add(id);
+      }
     }
     for (const candidate of candidates) {
-      if (!ordered.includes(candidate)) ordered.push(candidate);
+      const id = candidateId(candidate);
+      if (id !== null && !orderedIds.has(id) && !rejectedIds.has(id)) {
+        ordered.push(candidate);
+        orderedIds.add(id);
+      }
     }
-    return { items: ordered, status: "ok", used: true };
+    return { items: ordered.length ? ordered : candidates, status: "ok", used: true };
   } catch (error) {
     return {
       items: candidates,

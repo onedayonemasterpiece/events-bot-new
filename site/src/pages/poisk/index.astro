@@ -1,0 +1,47 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
+import EventCard from '../../components/EventCard.astro';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../lib/events';
+
+const events = getEvents();
+const sampleEvents = events.slice(0, 6);
+const canonicalUrl = absoluteUrl('/poisk/');
+const title = `Умный поиск событий | ${SITE_NAME}`;
+const description = 'Поиск событий по естественному запросу через авторизацию Яндекс, pgvector и проверку нейросетью.';
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Поиск</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Поиск</p>
+          <h1 style="max-width: 13ch;">Умный поиск событий</h1>
+          <p class="lead">Опишите, что хочется найти: «урбанистика вечером», «детский мастер-класс завтра», «бесплатная лекция». После входа через Яндекс результаты появятся лентой с теми же карточками, лайками и «не интересно».</p>
+          <div class="source-links">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/zavtra/')}>Завтра</a>
+            <a href={withBase('/vyhodnye/')}>Выходные</a>
+          </div>
+        </div>
+      </section>
+
+      <AuthorizedEventSearch />
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Пока без запроса</h2>
+          <p class="muted-note">Если не входить в Яндекс, страница остаётся обычной статической навигацией: ниже несколько событий из текущей preview-сборки.</p>
+          <div class="cards-grid">
+            {sampleEvents.map((event) => <EventCard event={event} />)}
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
