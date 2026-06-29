@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yandex Static Site Auth"
+  short_description: "Yandex OAuth via Supabase Auth for static KenigEvents pages."
+  default_prompt: "Use this skill to implement or debug Yandex login on the static KenigEvents site through Supabase Auth."
