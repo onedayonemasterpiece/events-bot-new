@@ -460,6 +460,10 @@ def _build_parser_source_text(
     if date_text:
         lines.append(f"Дата: {date_text}")
 
+    end_date_text = str(theatre_event.end_date or "").strip()
+    if end_date_text and end_date_text != date_text:
+        lines.append(f"Дата окончания: {end_date_text}")
+
     time_text = str(theatre_event.parsed_time or "").strip()
     if time_text and time_text != "00:00":
         lines.append(f"Время: {time_text}")
@@ -467,6 +471,10 @@ def _build_parser_source_text(
     venue_text = str(location_name or theatre_event.location or "").strip()
     if venue_text:
         lines.append(f"Площадка: {venue_text}")
+
+    address_text = str(theatre_event.location_address or "").strip()
+    if address_text:
+        lines.append(f"Адрес: {address_text}")
 
     age_text = str(theatre_event.age_restriction or "").strip()
     if age_text:
@@ -490,6 +498,22 @@ def _build_parser_source_text(
     body = str(full_description or "").strip()
     if body:
         lines.extend(["", "Описание:", body])
+
+    if str(theatre_event.source_type or "").strip().lower() == "qtickets":
+        lines.extend(
+            [
+                "",
+                "Контракт источника:",
+                (
+                    "Это структурированная билетная страница Qtickets: "
+                    "название, площадка, адрес и даты выше являются "
+                    "каноническими полями страницы. OCR афиши используй "
+                    "только как дополнительный источник фактов; не заменяй "
+                    "название страницы отдельными словами с афиши, если "
+                    "каноническое название уже указано."
+                ),
+            ]
+        )
 
     return "\n".join(lines)
 
@@ -1109,14 +1133,14 @@ async def add_new_event_via_queue(
             candidate = EventCandidate(
                 source_type=f"parser:{theatre_event.source_type}",
                 source_url=source_url,
-                source_text=full_description or draft.source_text or draft.title,
+                source_text=source_text or draft.source_text or final_description or draft.title,
                 title=draft.title,
                 date=draft.date or datetime.now(timezone.utc).date().isoformat(),
                 time=draft.time or "00:00",
-                end_date=draft.end_date or None,
+                end_date=draft.end_date or theatre_event.end_date or None,
                 festival=(draft.festival or None),
                 location_name=draft.venue or "",
-                location_address=draft.location_address or None,
+                location_address=draft.location_address or theatre_event.location_address or None,
                 city=draft.city or None,
                 # Site/parser sources are canonical: in conflicts they should override
                 # lower-trust sources like Telegram.

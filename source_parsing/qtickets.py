@@ -323,6 +323,20 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     (item.get("parsed_time") or "").strip()
                     or (item.get("time") or "").strip()
                 )
+                end_date = (item.get("end_date") or "").strip() or None
+                if end_date:
+                    try:
+                        end_date = datetime.strptime(end_date, "%Y-%m-%d").date().isoformat()
+                    except ValueError:
+                        try:
+                            end_date = datetime.fromisoformat(end_date).date().isoformat()
+                        except ValueError:
+                            logger.warning(
+                                "qtickets_parse: invalid end_date=%r title=%s",
+                                end_date,
+                                title[:80],
+                            )
+                            end_date = None
 
                 if not parsed_date and date_raw:
                     try:
@@ -387,11 +401,13 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     description=(item.get("description") or "").strip(),
                     pushkin_card=False,
                     location=location,
+                    location_address=(item.get("location_address") or "").strip(),
                     age_restriction=age_restriction,
                     scene="",  # Qtickets events may not have scene info
                     source_type="qtickets",
                     parsed_date=parsed_date,
                     parsed_time=parsed_time,
+                    end_date=end_date,
                     ticket_price_min=price_min,
                     ticket_price_max=price_max,
                 )

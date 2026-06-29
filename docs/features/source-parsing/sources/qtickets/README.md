@@ -14,6 +14,23 @@ Qtickets для Калининграда: `https://kaliningrad.qtickets.events/`
 - The fragile point was downstream draft extraction: some Qtickets cards have sparse descriptions, so `/parse` now passes explicit structured facts (`date`, `time`, `venue`, `ticket status`, `price`, `url`) to the LLM together with the raw description.
 - Qtickets currently runs via its own Kaggle kernel `ParseQtickets` / `zigomaro/parse-qtickets` and is not bundled into `ParseTheatres`.
 
+## Regression Note: June 29, 2026 (`INC-2026-06-29-qtickets-structured-facts-lost`)
+
+- Qtickets pages can have empty `description`, but strong JSON-LD facts:
+  `name`, `startDate`, `endDate`, `location.name`, `location.address`,
+  `offers.price`, and canonical `url`.
+- These structured facts must survive both parser stages:
+  `kaggle/ParseQtickets/parse_qtickets.py` → `qtickets_events.json` →
+  `source_parsing/qtickets.py` → `TheatreEvent` →
+  `EventCandidate.source_text`.
+- The Smart Update / writer boundary is **LLM-first**: do not add broad
+  deterministic title rewriting for Qtickets. Instead, pass the page facts and
+  a narrow instruction that poster OCR is secondary evidence when the ticket
+  page already has a canonical title.
+- Specifically, a page titled `FLAVA INTENSIVE (VALERA & LERA VOYNITS)` must
+  not become public title `VALERA` solely because OCR saw a schedule block on
+  the poster.
+
 Парсер должен извлекать события (и, если есть, расписание по датам/времени) и прогонять их через стандартный пайплайн `source_parsing`:
 
 - нормализация/обогащение через LLM (единый формат, `search_digest`, `event_type`, `topics`);
@@ -49,6 +66,8 @@ Qtickets для Калининграда: `https://kaliningrad.qtickets.events/`
 - `ticket_price_min`
 - `ticket_price_max`
 - `ticket_status`
+- `location_address` (when present in JSON-LD or visible address block)
+- `end_date` (when `endDate` exists on the ticket page)
 
 Backend parser держит backward compatibility со старым форматом (`date/time/image_url/price_min/price_max`), но новым notebook-выгрузкам нужно придерживаться именно этого контракта.
 
@@ -82,6 +101,8 @@ Backend parser держит backward compatibility со старым форма�
 | `ticket_price_min/max` | `int` | диапазон цен |
 | `age_restriction` | `str` | добавляется в описание/карточку |
 | `scene` | `str` | зал/сцена (входит в `normalize_location_name`) |
+| `location_address` | `str` | адрес из билетной страницы; передаётся в LLM/Smart Update как источник, а не восстанавливается из OCR |
+| `end_date` | `YYYY-MM-DD` | окончание диапазона из JSON-LD `endDate`; не должно теряться при многодневных билетных страницах |
 | `source_type` | `str` | метка источника (предлагается: `qtickets`) |
 
 ### Правило “одно событие = одна дата+время”

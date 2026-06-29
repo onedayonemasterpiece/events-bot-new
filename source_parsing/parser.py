@@ -131,6 +131,7 @@ class TheatreEvent:
     description: str = ""
     pushkin_card: bool = False
     location: str = ""
+    location_address: str = ""
     age_restriction: str = ""
     scene: str = ""
     source_type: str = ""  # 'main', 'sobor', etc.
@@ -138,6 +139,7 @@ class TheatreEvent:
     # Parsed date/time
     parsed_date: Optional[str] = None  # ISO format YYYY-MM-DD
     parsed_time: Optional[str] = None  # HH:MM format
+    end_date: Optional[str] = None  # ISO format YYYY-MM-DD
     
     # Prices
     ticket_price_min: Optional[int] = None

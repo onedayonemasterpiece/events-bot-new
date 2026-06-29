@@ -28,6 +28,11 @@
 
 ### Fixed
 
+- **Incident / Qtickets structured facts lost to poster OCR (INC-2026-06-29)**:
+  Qtickets imports now preserve ticket-page address and end-date fields and keep
+  the structured page facts as Smart Update `source_text`, with a narrow
+  LLM-first prompt contract that poster OCR is secondary to the canonical page
+  title/venue/address/dates.
 - Fixed the Telegram premium emoji editor so daily audience `❤️/🔂` rows keep
   `@kenigevents adaptive pack` custom emoji entities after Telethon edits
   instead of falling back to ordinary Unicode emoji.

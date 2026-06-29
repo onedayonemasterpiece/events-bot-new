@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-qtickets-structured-facts-lost.md`
+  - Scope: Qtickets/ticket-site parser structured fact handoff, `TheatreEvent` source text preservation, poster OCR priority, and public Telegram/VK/Telegraph fanout for parser-backed events.
+  - Must not regress: ticket-page JSON-LD title, venue, address, date/end-date, price and URL must remain visible to the LLM/Smart Update boundary; poster OCR remains secondary and must not replace canonical page titles such as `FLAVA INTENSIVE (VALERA & LERA VOYNITS)` with fragments like `VALERA`.
 - `INC-2026-06-29-konb-room-venue-drift.md`
   - Scope: VK auto-import/Smart Update source-grounded location handling for KОНБ (`konb39`/`wall-30777579_*`) room/floor labels and public `@kldevents`/`klgdevents`/Telegraph event surfaces.
   - Must not regress: `читальный зал`, `2 этаж`, or `4 этаж лекционный зал` from KОНБ at `Мира 9` must publish as `Научная библиотека, Мира 9, Калининград` while remaining only hall/room detail; the same generic room without KОНБ source grounding and `Дом китобоя, Мира 9` must not be auto-rewritten.

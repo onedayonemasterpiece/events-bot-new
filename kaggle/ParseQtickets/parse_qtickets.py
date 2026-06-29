@@ -294,13 +294,34 @@ def parse_event_detail(url):
 
     # Dates
     start_date = json_ld.get("startDate") if json_ld else None
+    end_date = json_ld.get("endDate") if json_ld else None
 
     # Location
     location = "Калининград"
+    location_address = None
     if json_ld and "location" in json_ld:
         loc_data = json_ld["location"]
         if isinstance(loc_data, dict):
             location = loc_data.get("name", location)
+            address = loc_data.get("address")
+            if isinstance(address, dict):
+                location_address = ", ".join(
+                    str(address.get(key) or "").strip()
+                    for key in (
+                        "streetAddress",
+                        "addressLocality",
+                        "addressRegion",
+                        "addressCountry",
+                    )
+                    if str(address.get(key) or "").strip()
+                )
+            elif address:
+                location_address = str(address).strip()
+
+    if not location_address:
+        address_el = soup.find(class_=lambda x: x and "address" in str(x).lower())
+        if address_el:
+            location_address = address_el.get_text(" ", strip=True)
 
     location = normalize_location(location)
 
@@ -340,6 +361,13 @@ def parse_event_detail(url):
         except:
             pass
 
+    parsed_end_date = None
+    if end_date:
+        try:
+            parsed_end_date = datetime.fromisoformat(end_date).date().isoformat()
+        except Exception:
+            pass
+
     # Ticket Status
     ticket_status = "unknown"
     if json_ld and "offers" in json_ld:
@@ -372,7 +400,9 @@ def parse_event_detail(url):
         "date_raw": start_date,
         "parsed_date": parsed_date,
         "parsed_time": parsed_time,
+        "end_date": parsed_end_date,
         "location": location,
+        "location_address": location_address,
         "url": url,
         "photos": [image] if image else [],
         "ticket_price_min": int(price_min) if price_min is not None else None,
