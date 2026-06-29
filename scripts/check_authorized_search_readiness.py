@@ -207,12 +207,56 @@ def probe_yandex_provider() -> Check:
     )
 
 
+
+def probe_yandex_userinfo_adapter() -> Check:
+    base_url = first_env("PERSONALIZATION_SUPABASE_URL").rstrip("/")
+    admin_key = first_env("PERSONALIZATION_SUPABASE_SECRET_KEY", "PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+    if not base_url or not admin_key:
+        return Check("yandex_userinfo_adapter_probe", False, "Skipped: missing personalization Supabase URL/service key")
+    expected_url = f"{base_url}/functions/v1/yandex-userinfo"
+    status, body, _headers = http_response(
+        f"{base_url}/auth/v1/admin/custom-providers/custom:yandex",
+        headers={"apikey": admin_key, "Authorization": f"Bearer {admin_key}", "Accept": "application/json"},
+        timeout=30,
+        read_limit=200000,
+    )
+    if not (200 <= status < 300):
+        return Check("yandex_userinfo_adapter_probe", False, f"Custom provider fetch failed, status={status}, body={body[:120]!r}")
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return Check("yandex_userinfo_adapter_probe", False, "Custom provider fetch returned non-JSON payload")
+    scopes = data.get("scopes") or []
+    userinfo_url = str(data.get("userinfo_url") or "")
+    email_optional = data.get("email_optional") is True
+    ok = (
+        data.get("identifier") == "custom:yandex"
+        and data.get("enabled") is True
+        and userinfo_url == expected_url
+        and email_optional
+        and "login:email" in scopes
+        and "login:info" in scopes
+    )
+    if ok:
+        # Runtime smoke: the adapter is public for Supabase Auth server-to-server calls,
+        # but it must not succeed without an OAuth token.
+        smoke_status, smoke_body = http_status(expected_url, headers={"Accept": "application/json"}, timeout=20)
+        if smoke_status == 401 and "missing_yandex_token" in smoke_body:
+            return Check("yandex_userinfo_adapter_probe", True, "custom:yandex uses the Yandex userinfo adapter and the adapter rejects missing tokens")
+        return Check("yandex_userinfo_adapter_probe", False, f"Adapter smoke failed, status={smoke_status}, body={smoke_body[:120]!r}")
+    return Check(
+        "yandex_userinfo_adapter_probe",
+        False,
+        f"Need custom:yandex userinfo_url={expected_url} and email_optional=true with login:email/login:info scopes; current userinfo_url={userinfo_url!r}, email_optional={email_optional}",
+    )
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--probe-edge", action="store_true")
     parser.add_argument("--probe-auth-config", action="store_true")
     parser.add_argument("--probe-yandex-provider", action="store_true")
+    parser.add_argument("--probe-yandex-userinfo-adapter", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero if any check fails.")
     args = parser.parse_args()
@@ -225,6 +269,8 @@ def main() -> int:
         checks.append(probe_auth_config())
     if args.probe_yandex_provider:
         checks.append(probe_yandex_provider())
+    if args.probe_yandex_userinfo_adapter:
+        checks.append(probe_yandex_userinfo_adapter())
 
     if args.json:
         print(json.dumps({"ok": all(check.ok for check in checks), "checks": [check.to_json() for check in checks]}, ensure_ascii=False, indent=2))

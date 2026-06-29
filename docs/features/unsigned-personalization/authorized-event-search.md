@@ -28,10 +28,11 @@ Configured in the personalization Supabase project on 2026-06-29. Manual/Dashboa
 4. Client ID / Client Secret: from the Yandex OAuth application.
 5. Authorization URL: `https://oauth.yandex.ru/authorize`.
 6. Token URL: `https://oauth.yandex.ru/token`.
-7. UserInfo URL: `https://login.yandex.ru/info?format=json`.
+7. UserInfo URL: `https://<project-ref>.supabase.co/functions/v1/yandex-userinfo`, not direct Yandex JSON.
 8. Scopes: `login:email login:info` (adjust if Yandex app requires a different minimal set).
-9. Add Supabase callback URL shown by the provider form to the Yandex app redirect URLs.
-10. Add site redirect URLs such as `https://kenigevents.ru/*` and current preview prefixes to Supabase Auth URL allow-list.
+9. `email_optional=true`: email is useful if Yandex returns it, but the product needs a stable authenticated Yandex identity first.
+10. Add Supabase callback URL shown by the provider form to the Yandex app redirect URLs.
+11. Add site redirect URLs such as `https://kenigevents.ru/*` and current preview prefixes to Supabase Auth URL allow-list.
 
 Frontend uses Supabase Auth PKCE, not implicit-hash parsing. On login it sends the cleaned current URL as `redirectTo` (same page, without stale `code/error/state` params); on return it explicitly calls `exchangeCodeForSession(code)`, persists the session, cleans the callback URL with `history.replaceState`, and then unlocks the search form. This prevents the UX regression where the browser returned to `/poisk/` but the page still looked anonymous because the OAuth `code` had not been exchanged into a Supabase session.
 
@@ -55,6 +56,30 @@ await supabase.auth.exchangeCodeForSession(code)
 ```
 
 As of 2026-06-29 the local/private environment contains the Yandex client credentials and the Supabase provider `custom:yandex` is configured. These secrets are not committed; readiness is checked by `scripts/check_authorized_search_readiness.py --probe-yandex-provider`.
+
+### Yandex userinfo adapter
+
+Direct `https://login.yandex.ru/info?format=json` is **not** a compatible Supabase custom OAuth2 userinfo endpoint for our flow. Yandex JSON returns non-standard keys such as `id` and `default_email`, while Supabase Auth's generic OAuth2 provider expects OIDC-like claims, especially `sub` for provider identity and `email` when email is not optional. The observed callback URL was:
+
+```text
+?error=server_error&error_code=unexpected_failure&error_description=Error+getting+user+email+from+external+provider
+```
+
+Implemented adapter: `supabase/functions/yandex-userinfo/index.ts`, deployed with `--no-verify-jwt` because it is called server-to-server by Supabase Auth with the Yandex access token. The adapter:
+
+- accepts `Authorization: Bearer <token>` or `Authorization: OAuth <token>` from Supabase Auth;
+- calls Yandex with `Authorization: OAuth <token>` and a Bearer fallback;
+- maps Yandex JSON to Supabase/OIDC-like JSON: `id -> sub`, `default_email/emails[0] -> email`, `real_name/display_name/login -> name`, plus optional avatar/name fields;
+- returns `Cache-Control: no-store` and never logs or returns the OAuth token;
+- rejects missing tokens with `401 {"error":"missing_yandex_token"}` for readiness smoke.
+
+Current production-like provider config on 2026-06-29:
+
+- `custom:yandex.userinfo_url = https://epyznmylqmchteykjsqj.supabase.co/functions/v1/yandex-userinfo`;
+- `email_optional = true`;
+- scopes still include `login:email` and `login:info`.
+
+Regression guard: `scripts/check_authorized_search_readiness.py --probe-yandex-userinfo-adapter` fetches the live custom provider config and checks both the adapter URL and the adapter's missing-token 401 smoke.
 
 ## Retrieval architecture
 
@@ -336,7 +361,7 @@ Use it before claiming the browser/Yandex UX gate:
 
 ```bash
 python3 scripts/check_authorized_search_readiness.py --env-file .env
-python3 scripts/check_authorized_search_readiness.py --env-file .env --probe-edge --probe-yandex-provider --strict
+python3 scripts/check_authorized_search_readiness.py --env-file .env --probe-edge --probe-yandex-provider --probe-yandex-userinfo-adapter --strict
 ```
 
 The checker is redacted: it prints only `OK`/`MISSING` and never prints secret values. It verifies:
@@ -404,7 +429,8 @@ Verification evidence on 2026-06-29:
 
 - `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v51-auth-pkce`;
 - `scripts/smoke_authorized_search_ui.py` passed with mocked PKCE token exchange and mocked `event-search`: `authorized_search_ui_smoke=ok`, first card `6310`, `request_calls=1`;
-- readiness probe passed: `scripts/check_authorized_search_readiness.py --env-file .env --probe-auth-config --probe-yandex-provider --probe-edge --strict`;
+- readiness probe passed: `scripts/check_authorized_search_readiness.py --env-file .env --probe-auth-config --probe-yandex-provider --probe-yandex-userinfo-adapter --probe-edge --strict`;
 - deployed public preview smoke passed with mocked Supabase PKCE callback on `https://kenigevents.ru/preview-20260629-event-pages-v51-auth-pkce/poisk/?code=...`: the page switched to `is-authorized`, displayed the search form, submitted a query and rendered a split-action event card.
+- after a real Yandex attempt returned `Error getting user email from external provider`, `custom:yandex` was reconfigured to the `yandex-userinfo` adapter and the new adapter readiness probe passed.
 
 
