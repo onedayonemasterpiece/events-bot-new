@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest.
+
 ### Changed
 
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.

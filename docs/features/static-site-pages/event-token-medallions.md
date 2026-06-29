@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + first listing-card formatting slice prepared on branch `docs/site-personalization-tokens-20260629`.
+> **Status:** design + first listing-card formatting slice + starter organizer avatar assets prepared on branch `docs/site-personalization-tokens-20260629`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -100,14 +100,22 @@ Overflow:
 
 ### Starter organizer avatars
 
-Start with four locally stored, optimized assets:
+The first four organizer avatars are saved as local medallion-ready assets. Runtime code should prefer the WebP path and keep the PNG as fallback/QA.
 
-| Organization | Suggested slug | Asset rule |
-| --- | --- | --- |
-| Музей Мирового океана | `world-ocean-museum` | official logo/avatar, cropped into a 1:1 transparent/safe square |
-| Историко-художественный музей | `history-art-museum` | official logo/avatar; do not redraw from memory |
-| Калининградская филармония | `kaliningrad-philharmonic` | official logo/avatar |
-| Остров Канта | `kant-island` | official mark if available; otherwise a deterministic SVG cathedral/island mark designed in-repo, not AI-generated |
+| Organization | Slug | Runtime asset | Source/provenance |
+| --- | --- | --- | --- |
+| Музей Мирового океана | `world-ocean-museum` | `/assets/organizers/world-ocean-museum.webp` (`.png` fallback) | official mobile SVG logo from `world-ocean.ru`, cropped to the large `ММО` mark |
+| Историко-художественный музей | `history-art-museum` | `/assets/organizers/history-art-museum.webp` (`.png` fallback) | official white KOIHM PNG from `koihm.ru`, left building/`КОИХМ` mark on a contrast circle |
+| Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.webp` (`.png` fallback) | official black SVG logo from `filarmonia39.ru` |
+| Остров Канта | `kant-island` | `/assets/organizers/kant-island.webp` (`.png` fallback) | official `sobor39.ru` SVG logo, cropped to the cathedral mark |
+
+Asset inventory:
+
+- runtime optimized assets: `site/public/assets/organizers/`;
+- source originals + provenance README: `site/src/assets/organizers/source/`;
+- browser-facing manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`.
+
+No OpenAI image generation/editing was used for these assets; they were produced by local SVG/PNG rendering, source-faithful cropping and alpha-preserving PNG/WebP export.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
@@ -223,7 +231,7 @@ Acceptance examples:
 
 1. Keep the weekday/type card formatting from this branch.
 2. Add `EventTokenRow.astro` / `EventBadgeRow.astro` with empty-state no-op rendering.
-3. Add local asset folders and starter organizer avatar manifest.
+3. Add local asset folders and starter organizer avatar manifest. **Done for the four starter organizers above.**
 4. Build Pushkin-card medallion asset through the local pipeline and visual QA.
 5. Render detail-page token row from existing safe facts (`organizer`, `pushkin_card`, `is_free`, `event_type`) plus curated manual token overrides only.
 6. Add preview checks for: no `#` event type in cards, weekday present, token row does not horizontal-scroll, `aria-label`s present.

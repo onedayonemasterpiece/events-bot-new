@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "organizer_medallion_assets_v1",
+  "generatedAt": "2026-06-29T00:00:00Z",
+  "usage": "Event-detail organizer medallions. Use avatarUrl in the organizer token; fallbackPngUrl is for older clients or QA.",
+  "items": [
+    {
+      "slug": "world-ocean-museum",
+      "name": "Музей Мирового океана",
+      "shortName": "ММО",
+      "aliases": [
+        "Музей Мирового океана",
+        "ММО",
+        "World Ocean Museum"
+      ],
+      "sourcePage": "https://www.world-ocean.ru/",
+      "sourceUrl": "https://www.world-ocean.ru/images/main/logo_new_mobile_v2.svg",
+      "sourceFile": "world-ocean-museum.logo_new_mobile_v2.svg",
+      "background": "#F6F0E6",
+      "ring": "#D9CAB6",
+      "logoCrop": "top-symbol-from-mobile-logo",
+      "fitBox": [
+        196,
+        114
+      ],
+      "ariaLabel": "Организатор: Музей Мирового океана",
+      "renderNote": "Из официального мобильного SVG-логотипа использован крупный знак ММО без мелкой подписи, чтобы медальон читался на 44–56 px.",
+      "avatarUrl": "/assets/organizers/world-ocean-museum.webp",
+      "fallbackPngUrl": "/assets/organizers/world-ocean-museum.png",
+      "sourcePath": "site/src/assets/organizers/source/world-ocean-museum.logo_new_mobile_v2.svg",
+      "retrievedAt": "2026-06-29"
+    },
+    {
+      "slug": "history-art-museum",
+      "name": "Историко-художественный музей",
+      "shortName": "КОИХМ",
+      "aliases": [
+        "Историко-художественный музей",
+        "Калининградский областной историко-художественный музей",
+        "КОИХМ"
+      ],
+      "sourcePage": "https://koihm.ru/",
+      "sourceUrl": "https://koihm.ru/wp-content/uploads/2026/03/logo_koihm_white.png",
+      "sourceFile": "history-art-museum.logo_koihm_white.png",
+      "background": "#65463D",
+      "ring": "#8E6D61",
+      "logoCrop": "left-building-and-koihm-from-official-white-logo",
+      "fitBox": [
+        182,
+        142
+      ],
+      "ariaLabel": "Организатор: Историко-художественный музей",
+      "renderNote": "Из официального белого PNG-логотипа использована левая часть со зданием и подписью КОИХМ; тёмный круг нужен для контраста.",
+      "avatarUrl": "/assets/organizers/history-art-museum.webp",
+      "fallbackPngUrl": "/assets/organizers/history-art-museum.png",
+      "sourcePath": "site/src/assets/organizers/source/history-art-museum.logo_koihm_white.png",
+      "retrievedAt": "2026-06-29"
+    },
+    {
+      "slug": "kaliningrad-philharmonic",
+      "name": "Калининградская филармония",
+      "shortName": "Филармония",
+      "aliases": [
+        "Калининградская филармония",
+        "Филармония",
+        "Калининградская областная филармония"
+      ],
+      "sourcePage": "https://filarmonia39.ru/",
+      "sourceUrl": "https://filarmonia39.ru/local/templates/filarmonia/images/logo_black.svg",
+      "sourceFile": "kaliningrad-philharmonic.logo_black.svg",
+      "background": "#F7F1E8",
+      "ring": "#D9CAB6",
+      "logoCrop": "full-official-symbol",
+      "fitBox": [
+        186,
+        154
+      ],
+      "ariaLabel": "Организатор: Калининградская филармония",
+      "renderNote": "Официальный чёрный SVG-знак вписан в тёплый круг без перерисовки.",
+      "avatarUrl": "/assets/organizers/kaliningrad-philharmonic.webp",
+      "fallbackPngUrl": "/assets/organizers/kaliningrad-philharmonic.png",
+      "sourcePath": "site/src/assets/organizers/source/kaliningrad-philharmonic.logo_black.svg",
+      "retrievedAt": "2026-06-29"
+    },
+    {
+      "slug": "kant-island",
+      "name": "Остров Канта",
+      "shortName": "Остров Канта",
+      "aliases": [
+        "Остров Канта",
+        "Кафедральный собор",
+        "ГАУКО Остров Канта"
+      ],
+      "sourcePage": "https://sobor39.ru/",
+      "sourceUrl": "https://sobor39.ru/images/logo.svg",
+      "sourceFile": "kant-island.sobor-logo.svg",
+      "background": "#344C42",
+      "ring": "#5D776B",
+      "logoCrop": "cathedral-mark-from-official-horizontal-logo",
+      "fitBox": [
+        165,
+        205
+      ],
+      "ariaLabel": "Организатор: Остров Канта",
+      "renderNote": "Из официального горизонтального SVG-логотипа взят знак Кафедрального собора — самая узнаваемая часть для круглого медальона.",
+      "avatarUrl": "/assets/organizers/kant-island.webp",
+      "fallbackPngUrl": "/assets/organizers/kant-island.png",
+      "sourcePath": "site/src/assets/organizers/source/kant-island.sobor-logo.svg",
+      "retrievedAt": "2026-06-29"
+    }
+  ]
+}
