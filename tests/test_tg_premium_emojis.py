@@ -2,6 +2,7 @@ from telethon.helpers import add_surrogate, del_surrogate
 from telethon.tl.types import MessageEntityBold, MessageEntityTextUrl, MessageEntityCustomEmoji
 
 from tg_premium_emojis import (
+    DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS,
     DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS,
     DEFAULT_FREE_EMOJI_DOCUMENT_IDS,
     DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS,
@@ -66,6 +67,46 @@ def test_existing_single_custom_emoji_is_not_replaced_again():
             length=2,
             document_id=DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["👉"],
         )
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
+
+    assert new_text == text
+    assert count == 0
+    assert new_entities == entities
+
+
+def test_daily_audience_line_gets_adaptive_pack_custom_emoji_entities():
+    text = "02.07 🚩 🎤 Концерт\n                        ❤️ 5  🔂 2\n"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert new_text == text
+    assert count == 2
+    custom = [entity for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert [entity.document_id for entity in custom] == [
+        DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS["❤️"],
+        DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS["🔂"],
+    ]
+    sur_text = add_surrogate(new_text)
+    assert [del_surrogate(sur_text[e.offset : e.offset + e.length]) for e in custom] == ["❤️", "🔂"]
+
+
+def test_daily_audience_line_is_idempotent_when_entities_are_already_correct():
+    text = "                        ❤️ 25  🔂 16\n"
+    heart_offset = add_surrogate(text).index(add_surrogate("❤️"))
+    repost_offset = add_surrogate(text).index(add_surrogate("🔂"))
+    entities = [
+        MessageEntityCustomEmoji(
+            offset=heart_offset,
+            length=len(add_surrogate("❤️")),
+            document_id=DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS["❤️"],
+        ),
+        MessageEntityCustomEmoji(
+            offset=repost_offset,
+            length=len(add_surrogate("🔂")),
+            document_id=DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS["🔂"],
+        ),
     ]
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)

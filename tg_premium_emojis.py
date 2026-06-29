@@ -37,6 +37,10 @@ DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
     "📗": 5339143926638996892,
     "🏰": 5305794630866989617,
 }
+DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
+    "❤️": 5339188899241570417,
+    "🔂": 5336998942661975661,
+}
 DEFAULT_TRETYAKOV_EMOJI_FALLBACK = "🖼🖼"
 DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS: tuple[int, int] = (
     5188445640325099838,
@@ -671,6 +675,54 @@ def _find_daily_insert_emoji_ops(text: str, mapping: dict[str, int]) -> list[_Su
     return sorted(ops, key=lambda item: item.start)
 
 
+def _custom_emoji_entity_matches(
+    entities: Sequence[Any] | None,
+    *,
+    start: int,
+    emoji: str,
+    document_id: int,
+) -> bool:
+    expected_len = len(add_surrogate(emoji))
+    return any(
+        isinstance(entity, MessageEntityCustomEmoji)
+        and int(getattr(entity, "offset", 0)) == int(start)
+        and int(getattr(entity, "length", 0)) == expected_len
+        and int(getattr(entity, "document_id", 0)) == int(document_id)
+        for entity in (entities or [])
+    )
+
+
+def _find_daily_audience_emoji_ops(text: str, entities: Sequence[Any] | None) -> list[_SubstitutionOp]:
+    """Ensure daily `❤️ N  🔂 N` rows use the `kenigeventsadaptivepack` custom emoji."""
+
+    ops: list[_SubstitutionOp] = []
+    sur_offset = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        if re.match(r"^\s*❤️\s+\d+\s+🔂\s+\d+\s*$", visible_line):
+            for emoji, document_id in DEFAULT_DAILY_AUDIENCE_EMOJI_DOCUMENT_IDS.items():
+                pos = visible_line.find(emoji)
+                if pos < 0:
+                    continue
+                start = sur_offset + len(add_surrogate(visible_line[:pos]))
+                if not _custom_emoji_entity_matches(
+                    entities,
+                    start=start,
+                    emoji=emoji,
+                    document_id=int(document_id),
+                ):
+                    ops.append(
+                        _SubstitutionOp(
+                            start,
+                            len(add_surrogate(emoji)),
+                            emoji,
+                            (int(document_id),),
+                        )
+                    )
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
+
 def apply_daily_free_premium_emojis(
     text: str,
     entities: Sequence[Any] | None = None,
@@ -688,6 +740,7 @@ def apply_daily_free_premium_emojis(
         *_find_daily_free_label_ops(text, ids),
         *_find_daily_insert_emoji_ops(text, single_mapping),
         *_find_daily_tretyakov_ops(text, entities),
+        *_find_daily_audience_emoji_ops(text, entities),
         *_find_rock_concert_icon_ops(text, single_mapping),
         *_find_event_calendar_ops(text, entities, single_mapping),
         *_find_event_ticket_icon_ops(text),
