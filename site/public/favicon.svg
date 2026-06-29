@@ -1,21 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="title desc">
-  <title id="title">Calendar, heart and cathedral silhouette</title>
-  <desc id="desc">Two-color SVG: black vector objects on a transparent background, based on the supplied yellow calendar and cathedral icon reference.</desc>
-  <g id="black-objects" fill="#000000" stroke="#000000">
-    <path id="calendar-page" fill-rule="evenodd" stroke="none" d="M267 278 H365 V326 H388 V278 H626 L608 360 H281 V817 Q281 833 297 833 H676 Q699 833 716 816 L804 728 Q820 712 820 689 V360 H749 V326 H772 V278 H800 Q833 278 833 311 V704 Q833 735 811 757 L730 838 Q707 861 675 861 H267 Q236 861 236 830 V311 Q236 278 267 278 Z M331 306 A38 38 0 1 0 407 306 A38 38 0 1 0 331 306 Z M696 306 A38 38 0 1 0 772 306 A38 38 0 1 0 696 306 Z"/>
-    <rect id="left-binder" x="346" y="232" width="45" height="90" rx="22.5" stroke="none"/>
-    <rect id="right-binder" x="701" y="232" width="45" height="90" rx="22.5" stroke="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" role="img" aria-labelledby="title desc">
+  <title id="title">Полюбить Калининград Анонсы — логотип</title>
+  <desc id="desc">Двухцветный знак с монограммой, буквой К, сердцем и сигнальными полосами в графитовом и терракотовом цветах.</desc>
+  <defs>
+    <style>
+      .ink { fill: #2d3035; }
+      .brand { fill: #af481f; }
+    </style>
+  </defs>
+  <rect x="54" y="54" width="1146" height="1146" rx="172" fill="#fff6ea"/>
+  <path id="left-monogram" class="ink" d="
+    M 209 254
+    H 642
+    V 782
+    H 579
+    C 557 782 540 765 540 743
+    V 392
+    C 540 383 533 376 524 376
+    H 319
+    C 310 376 303 383 303 392
+    V 743
+    C 303 765 285 782 263 782
+    H 182
+    V 281
+    C 182 266 194 254 209 254
+    Z"/>
 
-    <path id="heart-ribbon-left" fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"
-      d="M440 470 C410 414 360 391 314 420 C267 449 263 522 310 579 C342 618 377 641 378 684 C379 712 361 744 344 772"/>
-    <path id="heart-ribbon-right" fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"
-      d="M440 470 C472 410 529 389 568 426 C615 471 592 540 539 601 C491 656 456 700 449 751"/>
+  <path id="brand-k-mark" class="brand" d="
+    M 642 254
+    H 711
+    C 724 254 735 265 735 278
+    V 421
+    L 843 278
+    C 854 263 871 254 890 254
+    H 991
+    C 999 254 1003 263 998 270
+    L 819 499
+    L 998 768
+    C 1004 776 999 782 990 782
+    H 864
+    C 847 782 831 773 821 759
+    L 735 553
+    V 758
+    C 735 771 724 782 711 782
+    H 642
+    Z"/>
 
-    <path id="building-left" fill-rule="evenodd" stroke="none" d="M349 845 H507 V671 H481 L455 606 H419 L392 671 H349 Z M455 690 L489 626 L525 690 H525 V845 H455 Z M418.0 692.0 V658.0 A11.0 18.0 0 0 1 440.0 658.0 V692.0 Z M374.0 766.0 V722.0 A11.5 17.0 0 0 1 397.0 722.0 V766.0 Z M410.0 766.0 V722.0 A11.5 17.0 0 0 1 433.0 722.0 V766.0 Z M446.0 766.0 V722.0 A11.5 17.0 0 0 1 469.0 722.0 V766.0 Z M374.0 845.0 V807.0 A11.5 17.0 0 0 1 397.0 807.0 V845.0 Z M410.0 845.0 V807.0 A11.5 17.0 0 0 1 433.0 807.0 V845.0 Z M446.0 845.0 V807.0 A11.5 17.0 0 0 1 469.0 807.0 V845.0 Z M498.0 785.0 V740.0 A12.0 18.0 0 0 1 522.0 740.0 V785.0 Z"/>
-    <path id="building-middle" fill-rule="evenodd" stroke="none" d="M497 845 H617 V690 H596 L557 621 L516 690 H497 Z M530.0 795.0 V753.0 A12.0 18.0 0 0 1 554.0 753.0 V795.0 Z M498.0 845.0 V807.0 A11.5 17.0 0 0 1 521.0 807.0 V845.0 Z M568.0 845.0 V807.0 A11.5 17.0 0 0 1 591.0 807.0 V845.0 Z"/>
-    <path id="building-right" fill-rule="evenodd" stroke="none" d="M589 845 H705 V701 H679 L644 636 L608 701 H589 Z M625.0 785.0 V735.0 A14.0 20.0 0 0 1 653.0 735.0 V785.0 Z M590.0 845.0 V807.0 A11.5 17.0 0 0 1 613.0 807.0 V845.0 Z M668.0 845.0 V807.0 A11.5 17.0 0 0 1 691.0 807.0 V845.0 Z"/>
-    <path id="cathedral-tower" fill-rule="evenodd" stroke="none" d="M600 845 H735 V536 L746 525 C712 467 690 391 673 284 L660 188 C659 177 650 170 640 174 C632 178 629 186 631 196 L619 284 C604 392 581 468 547 525 L559 537 V845 Z M639 525 A18 18 0 1 0 675 525 A18 18 0 1 0 639 525 Z M600.0 647.0 V598.0 A12.0 19.0 0 0 1 624.0 598.0 V647.0 Z M635.0 647.0 V610.0 A12.0 18.0 0 0 1 659.0 610.0 V647.0 Z M670.0 647.0 V598.0 A12.0 19.0 0 0 1 694.0 598.0 V647.0 Z M600.0 785.0 V738.0 A12.0 18.0 0 0 1 624.0 738.0 V785.0 Z M635.0 785.0 V738.0 A12.0 18.0 0 0 1 659.0 738.0 V785.0 Z M670.0 785.0 V738.0 A12.0 18.0 0 0 1 694.0 738.0 V785.0 Z M612.0 845.0 V811.0 A11.5 17.0 0 0 1 635.0 811.0 V845.0 Z M651.0 845.0 V811.0 A11.5 17.0 0 0 1 674.0 811.0 V845.0 Z M690.0 845.0 V811.0 A11.5 17.0 0 0 1 713.0 811.0 V845.0 Z"/>
-    <path id="spire-ornament" fill-rule="evenodd" stroke="none" d="M648 177 C646 162 647 153 650 146 C654 138 665 139 668 147 C672 156 666 163 657 165 C666 164 676 166 682 171 C689 177 698 175 704 168 C707 181 693 190 680 186 C673 184 668 181 663 177 C662 184 660 190 656 195 C652 193 649 187 648 177 Z M632 147 A10 10 0 1 0 652 147 A10 10 0 1 0 632 147 Z M625 165 A8 8 0 1 0 641 165 A8 8 0 1 0 625 165 Z"/>
-  </g>
+  <rect id="signal-bar-low" class="brand" x="947" y="552" width="40" height="232" rx="20"/>
+  <rect id="signal-bar-mid" class="brand" x="1006" y="506" width="40" height="278" rx="20"/>
+  <rect id="signal-bar-high" class="brand" x="1065" y="421" width="40" height="363" rx="20"/>
+
+  <path id="bottom-left-block" class="ink" d="
+    M 219 815
+    H 276
+    C 288 815 295 805 310 805
+    H 429
+    C 448 805 461 821 457 840
+    L 424 1004
+    C 420 1020 405 1032 388 1032
+    H 229
+    C 203 1032 182 1011 182 985
+    V 856
+    C 182 833 196 815 219 815
+    Z"/>
+
+  <path id="heart-block" class="brand" fill-rule="evenodd" d="
+    M 516 806
+    H 753
+    C 769 806 781 818 784 834
+    L 811 994
+    C 815 1015 799 1032 777 1032
+    H 476
+    C 454 1032 439 1015 443 994
+    L 476 834
+    C 479 818 492 806 516 806
+    Z
+    M 626 993
+    C 614 979 554 941 548 895
+    C 544 866 566 848 591 855
+    C 609 860 620 875 626 892
+    C 633 875 644 860 662 855
+    C 687 848 709 866 704 895
+    C 699 941 638 979 626 993
+    Z"/>
+
+  <path id="bottom-right-block" class="ink" d="
+    M 820 806
+    H 956
+    C 971 806 978 817 993 817
+    H 1033
+    C 1056 817 1072 833 1072 856
+    V 986
+    C 1072 1011 1052 1032 1027 1032
+    H 869
+    C 850 1032 834 1019 830 1000
+    L 798 839
+    C 794 821 805 806 820 806
+    Z"/>
 </svg>

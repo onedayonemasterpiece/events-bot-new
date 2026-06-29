@@ -128,7 +128,7 @@ if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankE
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
 const faviconSvg = readFileSync(join(root, 'favicon.svg'), 'utf8');
-if (!faviconSvg.includes('cathedral-tower') || !faviconSvg.includes('calendar-page') || !faviconSvg.includes('heart-ribbon-left') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the two-color calendar/church vector SVG without embedded raster');
+if (!faviconSvg.includes('brand-k-mark') || !faviconSvg.includes('signal-bar-high') || !faviconSvg.includes('heart-block') || !faviconSvg.includes('#2d3035') || !faviconSvg.includes('#af481f') || /<image\b|data:image\//iu.test(faviconSvg)) throw new Error('Favicon must use the warm two-color PK monogram vector SVG without embedded raster');
 const footerSocialUrls = [
   'https://t.me/kenigevents',
   'https://t.me/kldevents',
