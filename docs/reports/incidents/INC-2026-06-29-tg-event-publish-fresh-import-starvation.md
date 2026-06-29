@@ -1,10 +1,10 @@
 # INC-2026-06-29 Telegram event publish fresh import starvation
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: events-bot publication outbox / `@kldevents`
 Opened: 2026-06-29
-Closed: —
+Closed: 2026-06-29
 Owners: Codex / events-bot
 Related incidents: `INC-2026-06-25-outbox-unknown-jobtask-publication-outage.md`, `INC-2026-06-16-tg-event-publish-timeout-duplicate.md`, `INC-2026-06-07-tg-event-publishing-media-calendar-dedup.md`
 Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -39,6 +39,10 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 - `2026-06-29 10:00:17 UTC` — prod DB confirmed both events had `tg_event_post_url=NULL`, `tg_event_publish` pending with dependencies done.
 - `2026-06-29 10:03:45 UTC` — old code deferred both again to `10:13:44 UTC`; no public post yet.
 - `2026-06-29 10:05 UTC` — hotfix prepared: due `tg_event_publish` ordering now prioritizes fresh Smart Update imports over old catch-up backlog while preserving the 10-minute spacing gate.
+- `2026-06-29 10:12 UTC` — deployed code SHA `1353511e` to Fly after narrowing the freshness lane to 3h and ordering newest fresh imports first.
+- `2026-06-29 10:15 UTC` — `E6492` published to `@kldevents` as `https://t.me/kldevents/1608` (`tg_event_post_id=1608`, DB internal URL `https://t.me/c/3954607218/1608`).
+- `2026-06-29 10:25 UTC` — `E6491` published to `@kldevents` as `https://t.me/kldevents/1609` (`tg_event_post_id=1609`, DB internal URL `https://t.me/c/3954607218/1609`).
+- `2026-06-29 10:26 UTC` — public `https://t.me/s/kldevents` and production DB verified both posts; `/healthz` returned OK.
 
 ## Root Cause
 
@@ -86,7 +90,7 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 ## Immediate Mitigation
 
 - Built and tested a narrow queue ordering fix in a clean worktree `hotfix/inc-tg-publish-gap-20260629`.
-- Planned production repair is limited to `tg_event_publish` rows for events `6491` and `6492`: after deploy, rearm them through `joboutbox.next_run_at` if needed so the fixed worker can publish them in the fresh lane. No bulk old backlog rewrite is allowed by this incident.
+- Deployed the fix and let the existing `tg_event_publish` jobs drain through the normal worker path; no direct Telegram post bypass and no bulk old backlog rewrite were used.
 
 ## Corrective Actions
 
@@ -101,12 +105,16 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `1353511e` (`fix(tg): prioritize fresh event publish jobs`).
+- deploy path: clean linked worktree `hotfix/inc-tg-publish-gap-20260629` → `fly deploy -a events-bot-new-wngqia --remote-only`.
 - regression checks:
   - `uv run --with-requirements requirements.txt pytest -q tests/test_job_due_filter.py -q` → pass (`6 passed`).
   - `tests/test_tg_event_publish.py` full run was attempted but existing date-sensitive tests using `2026-06-20` now fail on 2026-06-29 because the events are treated as past; this is unrelated to the queue-ordering change and needs separate test-date maintenance.
-- post-deploy verification: pending
+- post-deploy verification:
+  - production DB: `6492` `tg_event_post_url=https://t.me/c/3954607218/1608`, `tg_event_publish` done at `2026-06-29 10:15:21 UTC`; `6491` `tg_event_post_url=https://t.me/c/3954607218/1609`, `tg_event_publish` done at `2026-06-29 10:25:27 UTC`.
+  - public Telegram fallback: `https://t.me/s/kldevents` showed `kldevents/1608` and `kldevents/1609` with full event facts/descriptions.
+  - `/healthz`: OK at `2026-06-29 10:26 UTC`, including `job_outbox_worker=ok` and `job_outbox_worker_loop=ok`.
+  - managed VK remains present: `6491` `https://vk.com/wall-231920894_4998`; `6492` `https://vk.com/wall-231920894_4999`.
 
 ## Prevention
 
