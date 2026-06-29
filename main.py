@@ -21865,19 +21865,18 @@ def format_event_vk_daily_inline(
     return body
 
 
-def _is_tretyakov_daily_event(e: Event) -> bool:
+def _is_tretyakov_daily_venue(e: Event) -> bool:
+    """Return whether the event's structured venue is Tretyakov Gallery.
+
+    The daily `🖼🖼` marker is a venue-recognition marker, not a title/topic
+    marker. Do not infer it from event names or descriptions such as
+    "Александр Дейнека".
+    """
     haystack = "\n".join(
         str(value or "")
         for value in (
             getattr(e, "location_name", None),
             getattr(e, "location_address", None),
-            getattr(e, "title", None),
-            getattr(e, "description", None),
-            getattr(e, "short_description", None),
-            getattr(e, "search_digest", None),
-            getattr(e, "source_text", None),
-            getattr(e, "telegraph_path", None),
-            getattr(e, "telegraph_url", None),
         )
     ).casefold()
     return "третьяков" in haystack or "tretyakov" in haystack
@@ -21976,9 +21975,7 @@ def format_event_daily(
     if is_recent(e):
         prefix += "\U0001f6a9 "
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
-    if _is_tretyakov_daily_event(e):
-        emoji_part = "🖼🖼 "
-    elif _is_rock_concert_event(e):
+    if _is_rock_concert_event(e):
         emoji_part = "🤘 "
 
     partner_creator_ids = partner_creator_ids or ()
@@ -22058,6 +22055,8 @@ def format_event_daily(
         city_hashtag=True,
     )
     loc_html = html.escape(loc) if loc else ""
+    if loc_html and _is_tretyakov_daily_venue(e):
+        loc_html = f"🖼🖼 {loc_html}"
     date_part = e.date.split("..", 1)[0]
     d = parse_iso_date(date_part)
     if d:
@@ -22103,7 +22102,7 @@ def format_event_daily_inline(
     markers: list[str] = []
     if promo_highlight:
         markers.append("✨")
-    tretyakov_daily_event = _is_tretyakov_daily_event(e)
+    tretyakov_daily_event = _is_tretyakov_daily_venue(e)
     rock_concert_event = _is_rock_concert_event(e)
     if is_recent(e):
         markers.append("🖼🖼" if tretyakov_daily_event else "\U0001f6a9")

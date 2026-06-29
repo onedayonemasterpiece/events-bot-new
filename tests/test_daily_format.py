@@ -78,7 +78,25 @@ def test_format_event_daily_marks_tretyakov_with_picture_pair() -> None:
 
     rendered = main.format_event_daily(event, highlight=True)
 
-    assert rendered.startswith("<b>👉 🚩 🖼🖼 Александр Дейнека</b>")
+    assert rendered.startswith("<b>👉 🚩 🖼️ Александр Дейнека</b>")
+    assert "<i>1 января 18:00 🖼🖼 Филиал Третьяковской галереи</i>" in rendered
+
+
+def test_format_event_daily_does_not_mark_tretyakov_by_title_only() -> None:
+    event = make_event(
+        title="Александр Дейнека",
+        emoji="🖼️",
+        description="Лекция о художниках Третьяковской галереи.",
+        location_name="Другая площадка",
+        added_at=datetime.now(timezone.utc),
+    )
+
+    rendered = main.format_event_daily(event, highlight=True)
+    inline = main.format_event_daily_inline(event)
+
+    assert rendered.startswith("<b>👉 🚩 🖼️ Александр Дейнека</b>")
+    assert "🖼🖼 Другая площадка" not in rendered
+    assert inline.startswith("01.01 🚩 🖼️ Александр Дейнека")
 
 
 def test_format_event_daily_inline_replaces_recent_flag_for_tretyakov() -> None:

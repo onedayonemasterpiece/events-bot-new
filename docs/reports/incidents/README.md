@@ -20,7 +20,7 @@
 
 - `INC-2026-06-29-tg-premium-ticket-calendar-icon.md`
   - Scope: Telegram premium emoji editor for `@kldevents` event posts, especially date rows, ticket/registration rows, and ruble/money price formatting.
-  - Must not regress: date/calendar rows must keep visible `📅`; `🎟` may premiumize only ticket/registration context; paid ticket rows must become `🎟 Билеты 💰 <number>` (or the existing ticket label/link plus `💰 <number>`) and must not keep textual `руб.`.
+  - Must not regress: generator fallback must keep date/calendar and ticket semantics distinct (`📅` date, `🎫` tickets/registration); the premium editor may convert only date/calendar `📅` to custom `🎟`; paid ticket rows must become `🎫 Билеты 💰 <number>` (or the existing ticket label/link plus `💰 <number>`) and must not keep textual `руб.`.
 - `INC-2026-06-28-crumple-video-publish-only-storm.md`
   - Scope: CrumpleVideo/CherryFlash source-session resume recovery, Kaggle status ledger liveness, and publish-only compensation ledgers.
   - Must not regress: `videoannounce:<id>:publish-only:*` ledger rows must never resurrect the source render poller or repeat test/public Telegram mp4 delivery; terminal/published video sessions must not resume from fresh ledgers, while genuinely false-failed source sessions with fresh source heartbeats remain recoverable.

@@ -4,6 +4,7 @@ from telethon.tl.types import MessageEntityBold, MessageEntityTextUrl, MessageEn
 from tg_premium_emojis import (
     DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS,
     DEFAULT_FREE_EMOJI_DOCUMENT_IDS,
+    DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS,
     apply_daily_free_premium_emojis,
 )
 
@@ -155,31 +156,50 @@ def test_daily_venue_icon_insertion_extends_covering_format_entity():
     assert bold.length == len(add_surrogate(new_text))
 
 
-def test_daily_tretyakov_title_picture_is_replaced_with_custom_pair():
-    text = "👉 🖼️ Александр Дейнека. Картины советской эпохи"
+def test_daily_tretyakov_title_pair_is_cleaned_up_because_pair_is_venue_only():
+    text = "👉 🖼🖼 Александр Дейнека. Картины советской эпохи"
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
 
-    assert new_text == "👉 🖼🖼 Александр Дейнека. Картины советской эпохи"
-    assert count == 2
+    assert new_text == "👉 🖼️ Александр Дейнека. Картины советской эпохи"
+    assert count == 2  # title cleanup plus regular `👉` premiumization
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
-    assert 5188683852096234620 in custom_ids
-    assert 5188445640325099838 in custom_ids
+    assert custom_ids == [DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["👉"]]
 
 
-def test_daily_tretyakov_added_row_replaces_flag_when_visible_marker_present():
+def test_daily_tretyakov_added_row_does_not_infer_venue_from_title_text():
     text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🚩 🖼️ Александр Дейнека"
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
 
-    assert "01.07 🖼🖼 🖼️ Александр Дейнека" in new_text
-    assert count >= 1
+    assert new_text == text
+    assert new_entities == []
+    assert count == 0
+
+
+def test_daily_tretyakov_existing_added_row_pair_gets_stable_repeated_entity():
+    text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🖼🖼 Лекция в галерее"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert new_text == text
+    assert count == 1
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
-    assert 5188683852096234620 in custom_ids
-    assert 5188445640325099838 in custom_ids
+    assert custom_ids == list(DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS)
 
 
-def test_tg_event_calendar_icon_stays_calendar_and_ticket_price_gets_money():
+def test_daily_tretyakov_venue_line_gets_picture_pair_before_location():
+    text = "26 июня 19:00 Филиал Третьяковской галереи, Парадная наб. 3"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert new_text == "26 июня 19:00 🖼🖼 Филиал Третьяковской галереи, Парадная наб. 3"
+    assert count == 1
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert custom_ids == list(DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS)
+
+
+def test_tg_event_calendar_gets_custom_icon_and_ticket_row_uses_distinct_icon():
     text = "🎸 Концерт\n\n📅 30 июня 19:00\n\n🎟 Билеты 1000 руб.\n\n📅 Добавить в календарь"
     link_offset = add_surrogate(text).rindex(add_surrogate("📅"))
     entities = [
@@ -192,12 +212,12 @@ def test_tg_event_calendar_icon_stays_calendar_and_ticket_price_gets_money():
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
 
-    assert "📅 30 июня 19:00" in new_text
-    assert "📅 Добавить в календарь" in new_text
-    assert "🎟 30 июня" not in new_text
-    assert "🎟 Билеты 💰 1000" in new_text
+    assert "🎟 30 июня 19:00" in new_text
+    assert "🎟 Добавить в календарь" in new_text
+    assert "📅" not in new_text
+    assert "🎫 Билеты 💰 1000" in new_text
     assert "руб" not in new_text
-    assert count == 3  # premiumize 🎟, insert 💰, remove textual руб.
+    assert count == 5  # two calendar icons, ticket icon migration, insert 💰, remove textual руб.
     ticket_entities = [
         entity
         for entity in new_entities
@@ -210,24 +230,24 @@ def test_tg_event_calendar_icon_stays_calendar_and_ticket_price_gets_money():
         if isinstance(entity, MessageEntityCustomEmoji)
         and entity.document_id == DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["💰"]
     ]
-    assert len(ticket_entities) == 1
+    assert len(ticket_entities) == 2
     assert len(money_entities) == 1
     shifted_link = next(e for e in new_entities if isinstance(e, MessageEntityTextUrl))
     sur_new_text = add_surrogate(new_text)
     assert (
         del_surrogate(sur_new_text[shifted_link.offset : shifted_link.offset + shifted_link.length])
-        == "📅 Добавить в календарь"
+        == "🎟 Добавить в календарь"
     )
     assert shifted_link.url == "https://example.org/calendar.ics"
 
 
 def test_rock_concert_title_icon_becomes_horns_custom_emoji_from_body_signal():
-    text = "🎸 Большой концерт\n\nЛучшие рок-хиты города\n\n🎟 30 июня"
+    text = "🎸 Большой концерт\n\nЛучшие рок-хиты города\n\n📅 30 июня"
 
     new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
 
     assert new_text.startswith("🤘 Большой концерт")
-    assert count == 2  # title icon plus existing plain ticket emoji premiumization
+    assert count == 2  # title icon plus date/calendar premiumization
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
     assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"] in custom_ids
     assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🎟"] in custom_ids

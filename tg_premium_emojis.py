@@ -40,7 +40,7 @@ DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
 DEFAULT_TRETYAKOV_EMOJI_FALLBACK = "🖼🖼"
 DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS: tuple[int, int] = (
     5188683852096234620,
-    5188445640325099838,
+    5188683852096234620,
 )
 DAILY_ADDED_HEADING = "ДОБАВИЛИ В АНОНС"
 
@@ -340,46 +340,116 @@ def _tretyakov_replacement_op(start: int, old_len: int) -> _SubstitutionOp:
     )
 
 
-def _find_daily_tretyakov_ops(text: str) -> list[_SubstitutionOp]:
+def _tretyakov_pair_entity_op(start: int) -> _SubstitutionOp:
+    return _tretyakov_replacement_op(start, len(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK)))
+
+
+def _tretyakov_insert_before_location_op(start: int) -> _SubstitutionOp:
+    return _SubstitutionOp(
+        start,
+        0,
+        f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ",
+        _daily_tretyakov_emoji_ids(),
+    )
+
+
+def _tretyakov_title_cleanup_op(start: int) -> _SubstitutionOp:
+    # Tretyakov picture pairs are venue markers only. If an older editor placed
+    # the pair in a daily card title, collapse it back to the ordinary picture
+    # emoji and drop overlapping custom-emoji entities.
+    return _SubstitutionOp(start, len(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK)), "🖼️", ())
+
+
+def _tretyakov_pair_already_expected(
+    start: int,
+    entities: Sequence[Any] | None,
+    document_ids: tuple[int, int],
+) -> bool:
+    expected = {
+        start: int(document_ids[0]),
+        start + len(add_surrogate("🖼")): int(document_ids[1]),
+    }
+    found: dict[int, int] = {}
+    for entity in entities or []:
+        if not isinstance(entity, MessageEntityCustomEmoji):
+            continue
+        offset = int(getattr(entity, "offset", 0))
+        if offset in expected and int(getattr(entity, "length", 0)) == len(add_surrogate("🖼")):
+            found[offset] = int(getattr(entity, "document_id", 0))
+    return found == expected
+
+
+def _maybe_tretyakov_pair_entity_op(start: int, entities: Sequence[Any] | None) -> _SubstitutionOp | None:
+    document_ids = _daily_tretyakov_emoji_ids()
+    if _tretyakov_pair_already_expected(start, entities, document_ids):
+        return None
+    return _SubstitutionOp(
+        start,
+        len(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK)),
+        DEFAULT_TRETYAKOV_EMOJI_FALLBACK,
+        document_ids,
+    )
+
+
+def _find_daily_tretyakov_ops(text: str, entities: Sequence[Any] | None = None) -> list[_SubstitutionOp]:
     ops: list[_SubstitutionOp] = []
     sur_offset = 0
-    picture_variants = ("🖼️", "🖼")
     for line in text.splitlines(keepends=True):
         visible_line = line.rstrip("\r\n")
         stripped = visible_line.strip()
-        # Full daily cards for Tretyakov/gallery-type events often start with
-        # the generic picture emoji. Replace it with the curated pair.
-        if (
-            stripped.startswith("👉 ")
-            and not stripped.startswith(f"👉 {DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ")
-            and re.search(r"(?:Дейнека|Петрова-Водкина|Третьяков)", stripped, flags=re.IGNORECASE)
-        ):
-            line_sur = add_surrogate(visible_line)
-            for variant in picture_variants:
-                marker = f"👉 {variant} "
-                if stripped.startswith(marker):
-                    start = sur_offset + line_sur.find(add_surrogate(variant))
-                    if start >= sur_offset:
-                        ops.append(_tretyakov_replacement_op(start, len(add_surrogate(variant))))
-                    break
+        line_sur = add_surrogate(visible_line)
+        if stripped.startswith(f"👉 {DEFAULT_TRETYAKOV_EMOJI_FALLBACK} "):
+            start = sur_offset + line_sur.find(add_surrogate(DEFAULT_TRETYAKOV_EMOJI_FALLBACK))
+            if start >= sur_offset:
+                ops.append(_tretyakov_title_cleanup_op(start))
+
+        date_location_match = re.match(
+            r"^(\s*\d{1,2}\s+[а-яё]+(?:\s+\d{1,2}:\d{2})?\s+)(.+)$",
+            visible_line,
+            flags=re.IGNORECASE,
+        )
+        if date_location_match and re.search(r"Третьяков", date_location_match.group(2), flags=re.IGNORECASE):
+            location_prefix = date_location_match.group(1)
+            location_text = date_location_match.group(2)
+            start = sur_offset + len(add_surrogate(location_prefix))
+            if location_text.startswith(f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} "):
+                op = _maybe_tretyakov_pair_entity_op(start, entities)
+                if op:
+                    ops.append(op)
+            else:
+                ops.append(_tretyakov_insert_before_location_op(start))
 
         for venue_marker in ("Третьяков",):
             pos = visible_line.find(venue_marker)
             while pos >= 0:
                 prefix = visible_line[:pos]
-                if not prefix.endswith(f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ") and _plain_prefix_is_daily_venue_context(prefix):
-                    start = sur_offset + len(add_surrogate(prefix))
-                    ops.append(_tretyakov_replacement_op(start, 0))
+                if _plain_prefix_is_daily_venue_context(prefix):
+                    if prefix.endswith(f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} "):
+                        pair_start = len(prefix) - len(f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ")
+                        op = _maybe_tretyakov_pair_entity_op(
+                            sur_offset + len(add_surrogate(visible_line[:pair_start])),
+                            entities,
+                        )
+                        if op:
+                            ops.append(op)
+                    else:
+                        start = sur_offset + len(add_surrogate(prefix))
+                        ops.append(_tretyakov_insert_before_location_op(start))
                 pos = visible_line.find(venue_marker, pos + len(venue_marker))
 
-        # Added-announcement rows can be premarked by the daily formatter for
-        # Tretyakov events as `🖼🖼`; older rows remain unchanged unless the
-        # visible text itself names Tretyakov/gallery-specific content.
-        if re.search(r"(?:Дейнека|Петрова-Водкина|Третьяков)", visible_line, flags=re.IGNORECASE):
-            flag_pos = visible_line.find("🚩")
-            if flag_pos >= 0:
-                start = sur_offset + len(add_surrogate(visible_line[:flag_pos]))
-                ops.append(_tretyakov_replacement_op(start, len(add_surrogate("🚩"))))
+        # Added-announcement rows are one-line compact records. The generator,
+        # not the editor, decides from structured venue data whether `🚩` should
+        # become the Tretyakov venue marker; the editor only attaches/fixes the
+        # custom-emoji entities when the visible pair is already present.
+        if re.match(r"\s*\d{1,2}\.\d{1,2}\s+", visible_line):
+            pair_pos = visible_line.find(DEFAULT_TRETYAKOV_EMOJI_FALLBACK)
+            if pair_pos >= 0:
+                op = _maybe_tretyakov_pair_entity_op(
+                    sur_offset + len(add_surrogate(visible_line[:pair_pos])),
+                    entities,
+                )
+                if op:
+                    ops.append(op)
 
         sur_offset += len(add_surrogate(line))
     return sorted(ops, key=lambda item: item.start)
@@ -465,12 +535,60 @@ def _find_rock_concert_icon_ops(text: str, mapping: dict[str, int]) -> list[_Sub
     return sorted(ops, key=lambda item: item.start)
 
 
+
+
+def _find_event_calendar_ops(text: str, entities: Sequence[Any] | None, mapping: dict[str, int]) -> list[_SubstitutionOp]:
+    """Premiumize event-post calendar/date row icons.
+
+    Only calendar/date rows keep the curated `🎟` custom emoji. Ticket rows use
+    the product-distinct ordinary `🎫` icon to avoid showing two calendar-like
+    icons in one post.
+    """
+    document_id = mapping.get("🎟")
+    if not document_id:
+        return []
+    existing_calendar_ranges = [
+        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
+        for entity in (entities or [])
+        if isinstance(entity, MessageEntityCustomEmoji) and int(getattr(entity, "document_id", 0)) == int(document_id)
+    ]
+    ops: list[_SubstitutionOp] = []
+    sur_offset = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        stripped = visible_line.lstrip()
+        if stripped.startswith("📅"):
+            start = sur_offset + len(add_surrogate(visible_line[: len(visible_line) - len(stripped)]))
+            end = start + len(add_surrogate("📅"))
+            if not _ranges_overlap(start, end, existing_calendar_ranges):
+                ops.append(_SubstitutionOp(start, len(add_surrogate("📅")), "🎟", (int(document_id),)))
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
+
+def _find_event_ticket_icon_ops(text: str) -> list[_SubstitutionOp]:
+    """Move legacy event-post ticket rows from `🎟` to `🎫`.
+
+    `🎟` is reserved for the custom calendar/date marker. Ticket and registration
+    rows use `🎫` so date and ticket semantics stay visually distinct.
+    """
+    ops: list[_SubstitutionOp] = []
+    sur_offset = 0
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        stripped = visible_line.lstrip()
+        if stripped.startswith("🎟") and re.search(r"(?:Билеты|по регистрации)", stripped, flags=re.IGNORECASE):
+            start = sur_offset + len(add_surrogate(visible_line[: len(visible_line) - len(stripped)]))
+            ops.append(_SubstitutionOp(start, len(add_surrogate("🎟")), "🎫", ()))
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
 def _find_event_ticket_price_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
     """Convert event-post ticket prices from `Билеты 1000 руб.` to `Билеты 💰 1000`.
 
-    Calendar/date lines must stay `📅`; only ticket price lines receive the
-    ruble/money custom emoji before the numeric price, with the textual
-    `руб.` suffix removed.
+    Ticket rows use visible `🎫`; date/calendar rows are handled separately.
+    Only ticket price lines receive the ruble/money custom emoji before the
+    numeric price, with the textual `руб.` suffix removed.
     """
     money_id = mapping.get("💰")
     if not money_id:
@@ -544,10 +662,16 @@ def apply_daily_free_premium_emojis(
     ops = [
         *_find_daily_free_label_ops(text, ids),
         *_find_daily_insert_emoji_ops(text, single_mapping),
-        *_find_daily_tretyakov_ops(text),
+        *_find_daily_tretyakov_ops(text, entities),
         *_find_rock_concert_icon_ops(text, single_mapping),
+        *_find_event_calendar_ops(text, entities, single_mapping),
+        *_find_event_ticket_icon_ops(text),
         *_find_event_ticket_price_ops(text, single_mapping),
-        *_find_daily_single_emoji_ops(text, entities, single_mapping),
+        *_find_daily_single_emoji_ops(
+            text,
+            entities,
+            {emoji: document_id for emoji, document_id in single_mapping.items() if emoji != "🎟"},
+        ),
     ]
     return _apply_substitution_ops(text, entities, ops)
 

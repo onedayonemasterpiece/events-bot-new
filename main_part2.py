@@ -5029,6 +5029,18 @@ def _tg_event_city_hashtag(city: str | None) -> str | None:
     return normalize_vk_hashtag(city)
 
 
+def _format_tg_event_price_with_money(event: Event) -> str:
+    if event.ticket_price_min is not None and event.ticket_price_max is not None:
+        if event.ticket_price_min != event.ticket_price_max:
+            return f"от 💰 {event.ticket_price_min} до 💰 {event.ticket_price_max}"
+        return f"💰 {event.ticket_price_min}"
+    if event.ticket_price_min is not None:
+        return f"💰 {event.ticket_price_min}"
+    if event.ticket_price_max is not None:
+        return f"💰 {event.ticket_price_max}"
+    return ""
+
+
 def _tg_event_ticket_line(event: Event) -> str:
     ticket_link = (getattr(event, "ticket_link", None) or "").strip()
     # Telegram posts must use the original event/registration link. vk.cc links are
@@ -5057,21 +5069,12 @@ def _tg_event_ticket_line(event: Event) -> str:
                 )
             return f"🟡 Бесплатно, запись: {html.escape(ticket_link_display)}"
         return "🟡 Бесплатно"
-    price = ""
-    if event.ticket_price_min is not None and event.ticket_price_max is not None:
-        if event.ticket_price_min != event.ticket_price_max:
-            price = f"от {event.ticket_price_min} до {event.ticket_price_max} руб."
-        else:
-            price = f"{event.ticket_price_min} руб."
-    elif event.ticket_price_min is not None:
-        price = f"{event.ticket_price_min} руб."
-    elif event.ticket_price_max is not None:
-        price = f"{event.ticket_price_max} руб."
+    price = _format_tg_event_price_with_money(event)
     if ticket_link_display and ticket_is_http:
         if not price:
             ticket_label = "по регистрации"
         return (
-            f'🎟 <a href="{html.escape(ticket_link_display, quote=True)}">'
+            f'🎫 <a href="{html.escape(ticket_link_display, quote=True)}">'
             f"{html.escape(ticket_label)}</a>"
             + (f" {html.escape(price)}" if price else "")
         )
@@ -5079,12 +5082,12 @@ def _tg_event_ticket_line(event: Event) -> str:
         label = "по регистрации" if not price else f"Билеты {price}"
         if phone_href:
             return (
-                f"🎟 {html.escape(label)}: "
+                f"🎫 {html.escape(label)}: "
                 f'<a href="{html.escape(phone_href, quote=True)}">{html.escape(ticket_link_display)}</a>'
             )
-        return f"🎟 {html.escape(label)}: {html.escape(ticket_link_display)}"
+        return f"🎫 {html.escape(label)}: {html.escape(ticket_link_display)}"
     if price:
-        return f"🎟 Билеты {html.escape(price)}"
+        return f"🎫 Билеты {html.escape(price)}"
     return ""
 
 

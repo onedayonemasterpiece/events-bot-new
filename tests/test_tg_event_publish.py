@@ -102,7 +102,8 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
 
     assert text.startswith("<b>Камерный концерт</b>")
     assert "КАМЕРНЫЙ КОНЦЕРТ" not in text
-    assert '<a href="https://example.com/tickets">Билеты</a>' in text
+    assert '🎫 <a href="https://example.com/tickets">Билеты</a> 💰 500' in text
+    assert "руб." not in text
     assert "Калининград" in text
     assert "Ленинский проспект 155, #Калининград" in text
     assert text.count("#Калининград") == 1
