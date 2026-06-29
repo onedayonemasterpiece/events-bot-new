@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest.
+- **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest; the филармония medallion uses the yellow harp background seen in its Telegram profile avatar.
 
 ### Changed
 

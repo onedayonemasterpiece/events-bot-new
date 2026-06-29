@@ -67,19 +67,21 @@
       "sourcePage": "https://filarmonia39.ru/",
       "sourceUrl": "https://filarmonia39.ru/local/templates/filarmonia/images/logo_black.svg",
       "sourceFile": "kaliningrad-philharmonic.logo_black.svg",
-      "background": "#F7F1E8",
-      "ring": "#D9CAB6",
+      "background": "#FAB534",
+      "ring": "#D19B38",
       "logoCrop": "full-official-symbol",
       "fitBox": [
         186,
         154
       ],
       "ariaLabel": "Организатор: Калининградская филармония",
-      "renderNote": "Официальный чёрный SVG-знак вписан в тёплый круг без перерисовки.",
+      "renderNote": "Официальный чёрный SVG-знак вписан в жёлтый круг #FAB534, как в текущем аватаре Telegram-канала филармонии; знак не перерисовывался.",
       "avatarUrl": "/assets/organizers/kaliningrad-philharmonic.webp",
       "fallbackPngUrl": "/assets/organizers/kaliningrad-philharmonic.png",
       "sourcePath": "site/src/assets/organizers/source/kaliningrad-philharmonic.logo_black.svg",
-      "retrievedAt": "2026-06-29"
+      "retrievedAt": "2026-06-29",
+      "brandBackgroundSource": "https://t.me/filarmonia_39",
+      "backgroundEvidence": "Telegram profile OG image uses yellow harp background; dominant sampled color #FAB534 on 2026-06-29."
     },
     {
       "slug": "kant-island",

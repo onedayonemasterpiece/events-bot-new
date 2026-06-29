@@ -106,7 +106,7 @@ The first four organizer avatars are saved as local medallion-ready assets. Runt
 | --- | --- | --- | --- |
 | Музей Мирового океана | `world-ocean-museum` | `/assets/organizers/world-ocean-museum.webp` (`.png` fallback) | official mobile SVG logo from `world-ocean.ru`, cropped to the large `ММО` mark |
 | Историко-художественный музей | `history-art-museum` | `/assets/organizers/history-art-museum.webp` (`.png` fallback) | official white KOIHM PNG from `koihm.ru`, left building/`КОИХМ` mark on a contrast circle |
-| Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.webp` (`.png` fallback) | official black SVG logo from `filarmonia39.ru` |
+| Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.webp` (`.png` fallback) | official black SVG logo from `filarmonia39.ru`; yellow background `#FAB534` matched to the current Telegram profile avatar at `t.me/filarmonia_39` |
 | Остров Канта | `kant-island` | `/assets/organizers/kant-island.webp` (`.png` fallback) | official `sobor39.ru` SVG logo, cropped to the cathedral mark |
 
 Asset inventory:
