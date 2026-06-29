@@ -412,18 +412,22 @@ function chainRelatedCandidate(event: PreviewEvent, candidate: PreviewEvent): Re
 
 export function getStaticRelatedCandidates(event: PreviewEvent, limit = 30): RelatedManifestCandidate[] {
   const entry = related.related[String(event.id)];
-  const seededIds = entry?.chain?.length
+  const strictVerified = Boolean(related.strict_verified_related || entry?.strict_verified);
+  const verifiedSimilarIds = strictVerified ? (entry?.similar || []) : [];
+  const seededIds = verifiedSimilarIds.length
+    ? verifiedSimilarIds
+    : entry?.chain?.length && !strictVerified
     ? entry.chain.map((item) => Number(item.event_id)).filter((id) => Number.isFinite(id))
     : [
         ...(entry?.similar || []),
-        ...(entry?.explore || []),
+        ...(!strictVerified ? (entry?.explore || []) : []),
       ];
   const byId = new Map<number, PreviewEvent>();
   for (const id of seededIds) {
     const candidate = getEventById(id);
     if (eligibleRelatedCandidate(event, candidate)) byId.set(candidate.id, candidate);
   }
-  if (!entry?.chain?.length) {
+  if (!entry?.chain?.length && !strictVerified) {
     for (const candidate of getEvents()) {
       if (eligibleRelatedCandidate(event, candidate)) byId.set(candidate.id, candidate);
     }

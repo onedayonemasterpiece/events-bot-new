@@ -80,6 +80,12 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--current-date', args.current_date,
             '--output-dir', str(staged_site / 'src' / 'data'),
         ]
+        if args.current_datetime:
+            cmd.extend(['--current-datetime', args.current_datetime])
+        if args.focus_date_from:
+            cmd.extend(['--focus-date-from', args.focus_date_from])
+        if args.focus_date_to:
+            cmd.extend(['--focus-date-to', args.focus_date_to])
         if args.related_cache:
             cmd.extend(['--related-cache', str(Path(args.related_cache).resolve())])
         cmd.extend([
@@ -389,6 +395,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     config = {
         'build_id': build_id,
         'current_date': args.current_date,
+        'current_datetime': args.current_datetime or None,
+        'focus_date_from': args.focus_date_from or None,
+        'focus_date_to': args.focus_date_to or None,
         'limit': args.limit,
         'public_site_origin': args.public_site_origin,
         'asset_base_url': args.asset_base_url or None,
@@ -451,6 +460,9 @@ def main() -> int:
     parser.add_argument('--db', help='Optional SQLite snapshot; if set, export preview JSON before staging')
     parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
     parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', '2026-06-28'))
+    parser.add_argument('--current-datetime', default=os.getenv('STATIC_SITE_CURRENT_DATETIME', ''))
+    parser.add_argument('--focus-date-from', default=os.getenv('STATIC_SITE_FOCUS_DATE_FROM', ''))
+    parser.add_argument('--focus-date-to', default=os.getenv('STATIC_SITE_FOCUS_DATE_TO', ''))
     parser.add_argument('--build-id', default=os.getenv('STATIC_SITE_BUILD_ID'))
     parser.add_argument('--public-site-origin', default=os.getenv('PUBLIC_SITE_ORIGIN', 'https://kenigevents.ru'))
     parser.add_argument('--asset-base-url', default=os.getenv('PUBLIC_ASSET_BASE_URL', ''))

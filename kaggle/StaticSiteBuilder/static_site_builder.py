@@ -226,6 +226,12 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--gemma-related-key-env', key_env,
         '--gemma-related-max-anchors', str(config.get('gemma_related_max_anchors') or 0),
     ]
+    if config.get('current_datetime'):
+        cmd.extend(['--current-datetime', str(config.get('current_datetime'))])
+    if config.get('focus_date_from'):
+        cmd.extend(['--focus-date-from', str(config.get('focus_date_from'))])
+    if config.get('focus_date_to'):
+        cmd.extend(['--focus-date-to', str(config.get('focus_date_to'))])
     if config.get('sync_pgvector_vectors'):
         cmd.append('--sync-pgvector-vectors')
     if config.get('gemma_related_verify'):

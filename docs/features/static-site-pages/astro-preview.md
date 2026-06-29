@@ -1,35 +1,27 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** latest checked/published focus preview `preview-20260628-event-pages-v48-pgvector-gemma-kaggle` (70 real events, Supabase pgvector semantic related-chain, Gemma 4 verifier cache, CDN media/ICS).
-> **Public preview index:** <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/__preview/>
+> **Build ID:** latest checked/published focus preview `preview-20260629-event-pages-v59-related-gemma50` (50 real events, Supabase pgvector semantic related-chain, strict Gemma 4 26B verifier/reranker cache, CDN media/ICS).
+> **Public preview index:** <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/__preview/>
 
-This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v48 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI source is present but remains gated by Supabase/Yandex/Edge deployment. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
+This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI source is present but remains gated by Supabase/Yandex/Edge deployment. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
 ## Public URLs
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/vyhodnye/>
-- OCR/parallax control event: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Semantic related golden event: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
-- Sold-out CTA regression event: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/operomaniya-kaliningrad-5237/>
-- Gallery regression event: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/drevnie-voiny-yantarnogo-kraya-kaliningrad-698/>
-- Same-day QA event: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/vodnye-bitvy-s-animatorami-kaliningrad-6438/>
-- Stable control event calendar file: <https://static.kenigevents.ru/ics/5878.ics>
-- Build-scoped control event calendar fallback: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Control discovery JSON: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/data/discovery/5878.json>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/data/discovery/6447.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/robots.txt>
-- Hero composition lab: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/lab/hero/>
-- Hero viewport review: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/lab/hero/review/>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/poisk/>
+- Semantic related golden event: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
+- Golden related discovery JSON: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/data/discovery/6447.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260629-event-pages-v59-related-gemma50/__preview/>
 
-CDN media/ICS verification for this preview: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`, and discovery JSON uses `event_pgvector_related_chain_v1` for v48.
+CDN media/ICS verification for this preview: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`, and discovery JSON uses `event_pgvector_related_chain_v1` with `strict_verified_related=true` for v59.
 
 ## Code layout
 
@@ -92,7 +84,7 @@ Verification evidence: Kaggle `npm run check:preview` passed; public `curl -I` r
 
 ## v48 Supabase pgvector semantic related canary
 
-`preview-20260628-event-pages-v48-pgvector-gemma-kaggle` is the current focus preview for the 2026-06-28/29 data slice. It was built on Kaggle CPU from a production SQLite snapshot with 70 real events, synced compact search documents/vectors into the separate personalization Supabase project, built related chains through Supabase pgvector and deployed the checked artifact to the `kenigevents.ru` bucket/CDN path.
+`preview-20260628-event-pages-v48-pgvector-gemma-kaggle` was the first pgvector focus preview for the 2026-06-28/29 data slice. It was built on Kaggle CPU from a production SQLite snapshot with 70 real events, synced compact search documents/vectors into the separate personalization Supabase project, built related chains through Supabase pgvector and deployed the checked artifact to the `kenigevents.ru` bucket/CDN path.
 
 Retrieval contract:
 
@@ -111,7 +103,41 @@ Evidence from 2026-06-29 UTC:
 - Kaggle CPU run `preview-20260628-event-pages-v48-pgvector-gemma-kaggle` completed with `ok=true`, `event_count=70`, vector sync `provider_calls=0` because the Supabase vectors were already current, and `npm run check:preview` passed inside the notebook;
 - live public smoke for `/data/discovery/6447.json` returns `6310` “Архитектурно-урбанистическая студия...” as first candidate with `vector_similarity≈0.8592`, `llm_semantic_score=0.92`, fixing the earlier “Музыка нашего города” lexical false-positive.
 
-Remaining production gates: enable Yandex OAuth provider, deploy `supabase/functions/event-search`, run live browser login/search E2E, and enable automatic Smart Update → Kaggle → CDN promotion after artifact checks.
+Remaining production gate after v48 was automatic Smart Update → Kaggle → CDN promotion after artifact checks; v59 below supersedes v48 for strict related-quality review.
+
+## v59 strict pgvector + Gemma 4 related preview
+
+`preview-20260629-event-pages-v59-related-gemma50` is the current strict related-events canary. It was generated from a read-only production SQLite snapshot on 2026-06-29 with `--current-datetime 2026-06-29T21:30`, prioritising events starting on 2026-06-30 and 2026-07-01. The two-day focus window contained 21 eligible one-day/short events, so the exporter supplemented later active future events to reach a 50-event review slice.
+
+Related/publication contract:
+
+- event-to-event retrieval starts with Supabase `pgvector` over `gemini-embedding-2/vector(768)` search documents;
+- Gemma 4 26B (`models/gemma-4-26b-a4b-it`) then sees the top retrieved candidates, rejects unrelated events and returns the final order;
+- public `similar[]` / `related_static[]` contain only candidates explicitly accepted by Gemma with `llm_semantic_score >= 0.72`; weak 0.55–0.71 candidates may remain only as adjacent/explore metadata, not as “similar” cards;
+- the raw pgvector chain is still stored in the manifest for audit/debug, but Astro consumes the strict verified list when `strict_verified_related=true`;
+- already-started same-day events and past/cancelled/deleted/duplicate events are excluded during export, so a related card disappears from new builds when it is no longer actionable.
+
+Performance evidence from the v59 local canary:
+
+| Step | Result |
+|---|---:|
+| Focus export | 50 events |
+| Pgvector/vector sync | 44 new/changed embeddings, 6 unchanged; 32.59s wall |
+| Pgvector chains | 50 anchors, 40 raw candidates per anchor |
+| Gemma strict audit | 50 successful anchors, 60 total attempts after retries |
+| Gemma wall time | 22m53s first pass + 3m53s fill-missing |
+| Gemma timings | p50 ≈ 18.3s, avg ≈ 17.0s for successful first-pass calls |
+| Final cached export | 0 provider calls, 0.47s |
+| Astro build | 66 pages, ≈5.7s |
+
+Golden check: event `6447` («Как договориться о будущем города») now shows only event `6310` («Архитектурно-урбанистическая студия...») as strict similar in the first slot (`llm_semantic_score=0.88`), instead of letting a lexical “город” music false-positive into the related feed.
+
+Verification evidence:
+
+- `npm run check:preview` passed for a non-control focused build and verifies strict Gemma score metadata;
+- public HTTP checks returned 200 for `__preview/`, event `6447` and `/data/discovery/6447.json`;
+- Playwright mobile smoke against the public URL verified that the first visible related card for `6447` is `6310` and that the discovery JSON carries `llm_semantic_score=0.88`.
+
 
 ## v47 sparse terminology, related-order and CDN verification
 

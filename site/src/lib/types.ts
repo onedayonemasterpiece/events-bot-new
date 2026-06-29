@@ -185,6 +185,7 @@ export interface RelatedData {
   semantic_embeddings?: boolean;
   embedding_model?: string;
   gemma_verification?: unknown;
+  strict_verified_related?: boolean;
   cache?: unknown;
-  related: Record<string, { similar: number[]; pure_related?: number[]; explore: number[]; adjacent_discovery?: number[]; chain?: Array<Record<string, unknown>>; underfilled?: boolean }>;
+  related: Record<string, { similar: number[]; pure_related?: number[]; explore: number[]; adjacent_discovery?: number[]; chain?: Array<Record<string, unknown>>; underfilled?: boolean; strict_verified?: boolean }>;
 }

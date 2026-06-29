@@ -48,11 +48,19 @@ The current verified path produces a checked tarball artifact. CDN host `static.
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
 
 
-## Current v48 pgvector evidence and open gate
+## Current v59 strict pgvector evidence and open gate
 
-`preview-20260628-event-pages-v48-pgvector-gemma-kaggle` verifies the CDN-enabled pgvector preview path on real production-snapshot data: 70 events, `npm run check:preview` passed inside Kaggle CPU, live public smoke passed for `/data/discovery/6447.json`, 76 compact search documents and 76 `gemini-embedding-2/vector(768)` embeddings exist in the personalization Supabase project, and the 6447 golden anchor puts `6310` “Архитектурно-урбанистическая студия...” first after pgvector+Gemma verification.
+`preview-20260629-event-pages-v59-related-gemma50` is the current strict related canary on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
 
-Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, and browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`). This means the coalesced `static_site_build` job can reproduce the v48-style vector sync/retrieval process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
+Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`) and the date-focus controls `--current-datetime`, `--focus-date-from`, `--focus-date-to`. This means the coalesced `static_site_build` job can reproduce the v59-style vector sync/retrieval/Gemma strict-verification process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
+
+Static related publication policy:
+
+- Astro generation consumes cached strict related manifests and does not call Supabase/LLM on page view;
+- a related cache is reusable only when the event id set, search fingerprints and Gemma policy signature match;
+- if new/changed events are present, recompute the active/future related graph because the new event can be a candidate for old pages;
+- same-day events that already started, past events and cancelled/deleted/duplicate rows are excluded at export/generation time;
+- static related generation retries Gemma 4 26B with backoff and does not fall back to Gemini/Flash-Lite, preserving Lite quota for runtime flows.
 
 This still does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
 

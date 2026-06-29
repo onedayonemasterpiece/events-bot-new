@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **Static site pages / v59 strict related canary**: generated and published `preview-20260629-event-pages-v59-related-gemma50` from a production snapshot with 50 tomorrow/near-future events, using Supabase pgvector retrieval plus strict Gemma 4 26B verifier/reranker so public related cards contain only `llm_semantic_score >= 0.72` candidates; added focus-date/current-datetime export controls, strict related cache validation, non-control preview checks and Playwright/public smoke evidence for the 6447→6310 urban-planning golden case.
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed

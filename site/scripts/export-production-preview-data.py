@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import hashlib
 import html
 import json
@@ -44,7 +45,7 @@ SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
 PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v1"
 PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v1"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v1_cache_20260628c"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v1_cache_20260629a"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
@@ -422,15 +423,43 @@ def source_metrics(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> 
     return likes, views, shares, sources
 
 
-def event_active_where(current_date: str) -> str:
+def split_current_datetime(value: str | None, current_date: str) -> tuple[str, str | None]:
+    raw = str(value or "").strip()
+    if not raw:
+        return current_date, None
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?", raw)
+    if not match:
+        return current_date, None
+    return match.group(1), match.group(2)
+
+
+def event_active_where(current_date: str, current_time: str | None = None) -> str:
+    start_not_elapsed = f"date > '{current_date}'"
+    if current_time:
+        start_not_elapsed = (
+            f"({start_not_elapsed} or (date = '{current_date}' and "
+            "(time is null or trim(time) = '' or substr(time, 1, 5) >= "
+            f"'{current_time}')))"
+        )
+    else:
+        start_not_elapsed = f"(date >= '{current_date}')"
     return (
         "date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
         "and coalesce(lifecycle_status,'active') not in ('cancelled','deleted','duplicate') "
-        f"and (date >= '{current_date}' or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
+        f"and ({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
     )
 
 
-def fetch_rows(con: sqlite3.Connection, limit: int, current_date: str, include_ids: list[int]) -> list[sqlite3.Row]:
+def fetch_rows(
+    con: sqlite3.Connection,
+    limit: int,
+    current_date: str,
+    include_ids: list[int],
+    *,
+    current_time: str | None = None,
+    focus_date_from: str | None = None,
+    focus_date_to: str | None = None,
+) -> list[sqlite3.Row]:
     rows_by_id: dict[int, sqlite3.Row] = {}
     ordered_rows: list[sqlite3.Row] = []
 
@@ -450,13 +479,40 @@ def fetch_rows(con: sqlite3.Connection, limit: int, current_date: str, include_i
             if len(ordered_rows) >= limit:
                 break
 
+    active = event_active_where(current_date, current_time)
+
     if include_ids:
         placeholders = ",".join("?" for _ in include_ids)
-        for row in con.execute(f"select * from event where id in ({placeholders})", include_ids):
+        for row in con.execute(f"select * from event where {active} and id in ({placeholders})", include_ids):
             add_row(row)
 
-    active = event_active_where(current_date)
     today_time_order = "coalesce(nullif(time,''),'23:59') asc, id asc"
+    focus_from = normalize_date(focus_date_from)
+    focus_to = normalize_date(focus_date_to)
+    if focus_from and focus_to:
+        add_query(
+            f"""
+            select * from event
+            where {active}
+              and date between ? and ?
+              and (end_date is null or trim(end_date) = '' or end_date = date)
+            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+            limit ?
+            """,
+            (focus_from, focus_to, max(limit * 2, 80)),
+        )
+    elif focus_from:
+        add_query(
+            f"""
+            select * from event
+            where {active}
+              and date >= ?
+              and (end_date is null or trim(end_date) = '' or end_date = date)
+            order by date asc, coalesce(nullif(time,''),'23:59') asc, id asc
+            limit ?
+            """,
+            (focus_from, max(limit * 2, 80)),
+        )
     # Preview/focus-group builds must be testable as a real "today" page.  The
     # old date-ascending slice was quickly filled by long-running exhibitions,
     # hiding same-day concerts/workshops/meetings from `/segodnya/`.
@@ -1069,6 +1125,7 @@ async def call_gemma_related_audit_async(
     anchor: dict[str, Any],
     candidates: list[dict[str, Any]],
     timeout_seconds: int = 45,
+    candidate_limit: int = 18,
 ) -> dict[int, dict[str, Any]]:
     """Optional Gemma 4 audit/rerank for already-ranked sparse candidates.
 
@@ -1095,11 +1152,15 @@ async def call_gemma_related_audit_async(
     os.environ["GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR"] = "0"
     os.environ["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"] = str(max(1, int(timeout_seconds)))
     os.environ["GOOGLE_AI_FALLBACK_MODELS"] = ""
+    fact_max_chars = max(160, int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "520") or "520"))
+    candidate_limit = max(6, min(24, int(candidate_limit or 18)))
     prompt = {
         "task": "Оцени похожесть событий для статической афиши. Не добавляй новых event_id.",
         "rules": [
             "Похожие = пользователь, заинтересовавшийся anchor, сочтет candidate тематически близким.",
             "Если это просто другое событие без тематической близости — reject=true.",
+            "Отсортируй ranked от наиболее похожих к наименее похожим.",
+            "llm_semantic_score: 0.90+ почти тот же интерес, 0.72+ можно показать как похожее, 0.55-0.71 только слабая/смежная рекомендация, <0.55 reject=true.",
             "Ответ только JSON по схеме.",
         ],
         "anchor": {
@@ -1107,7 +1168,8 @@ async def call_gemma_related_audit_async(
             "title": anchor.get("title"),
             "type": anchor.get("event_type"),
             "category": category(anchor),
-            "summary": anchor.get("summary"),
+            "summary": str(anchor.get("summary") or "")[:fact_max_chars],
+            "description": clean_text(anchor.get("description_html") or "")[:fact_max_chars],
             "venue": anchor.get("venue_name"),
             "city": anchor.get("city"),
             "date": anchor.get("start_date"),
@@ -1118,12 +1180,13 @@ async def call_gemma_related_audit_async(
                 "title": item.get("title"),
                 "type": item.get("event_type"),
                 "category": category(item),
-                "summary": item.get("summary"),
+                "summary": str(item.get("summary") or "")[:fact_max_chars],
+                "description": clean_text(item.get("description_html") or "")[:fact_max_chars],
                 "venue": item.get("venue_name"),
                 "city": item.get("city"),
                 "date": item.get("start_date"),
             }
-            for item in candidates[:24]
+            for item in candidates[:candidate_limit]
         ],
     }
     schema = {
@@ -1153,19 +1216,19 @@ async def call_gemma_related_audit_async(
             consumer="static_site_related_builder",
             account_name=os.getenv("STATIC_SITE_GEMMA_ACCOUNT_NAME") or "static-site-related",
             default_env_var_name=key_env,
-            reserve_overflow_key_envs=[],
         )
+        max_output_tokens = max(768, int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_OUTPUT_TOKENS", "2048") or "2048"))
         text, _usage = await client.generate_content_async(
             model=model,
             prompt=json.dumps(prompt, ensure_ascii=False),
             generation_config={
                 "temperature": 0.1,
-                "max_output_tokens": 4096,
+                "max_output_tokens": max_output_tokens,
                 "response_mime_type": "application/json",
                 "response_schema": schema,
                 "thinking_config": {"include_thoughts": False, "thinking_level": "MINIMAL"},
             },
-            max_output_tokens=4096,
+            max_output_tokens=max_output_tokens,
         )
     finally:
         for name, value in previous_env.items():
@@ -1214,6 +1277,28 @@ def parse_gemma_json_object(text: str) -> dict[str, Any]:
     return parsed
 
 
+def gemma_related_policy_signature(*, model: str) -> str:
+    """Stable cache signature for Gemma related rerank contract.
+
+    A cache hit must represent the same prompt budget and candidate fan-in, not
+    just the same model id. Otherwise a smoke run over one anchor can
+    accidentally mark the whole related cache as verified.
+    """
+    payload = {
+        "model": model,
+        "candidate_limit": max(
+            6,
+            min(24, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "18") or "18")),
+        ),
+        "fact_max_chars": max(
+            160,
+            int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "520") or "520"),
+        ),
+        "prompt_version": "related_gemma4_schema_v2_strict_pure",
+    }
+    return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def maybe_apply_gemma_audit(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
@@ -1232,11 +1317,13 @@ def maybe_apply_gemma_audit(
         "key_env": key_env,
         "status": "disabled",
         "audited_anchors": 0,
+        "attempted_anchors": 0,
         "cache_hits": 0,
         "provider_calls": 0,
         "changed_event_ids": sorted(changed_event_ids),
         "skipped_unchanged_without_cache": 0,
         "errors": [],
+        "verified_event_ids": [],
         "retry_policy": {
             "fallback_models": [],
             "max_attempts": max(
@@ -1247,7 +1334,19 @@ def maybe_apply_gemma_audit(
                 0.0,
                 float(os.getenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "20") or "20"),
             ),
+            "timeout_seconds": max(
+                5,
+                int(os.getenv("STATIC_SITE_GEMMA_RELATED_TIMEOUT_SEC", "45") or "45"),
+            ),
+            "candidate_limit": max(
+                6,
+                min(
+                    24,
+                    int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "18") or "18"),
+                ),
+            ),
         },
+        "attempts": [],
     }
     if not enabled:
         return chains, meta
@@ -1257,13 +1356,16 @@ def maybe_apply_gemma_audit(
     by_id = {int(event["id"]): event for event in events}
     audit_cache = cache.setdefault("gemma_audit_cache", {})
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    candidate_limit = int(meta["retry_policy"]["candidate_limit"])
+    policy_signature = gemma_related_policy_signature(model=model)
     audited = 0
+    attempted_anchors = 0
     for anchor in events:
-        if max_anchors > 0 and audited >= max_anchors:
+        if max_anchors > 0 and attempted_anchors >= max_anchors:
             break
         anchor_id = str(anchor["id"])
         chain = chains.get(anchor_id) or []
-        top_ids = [int(item["event_id"]) for item in chain[:24]]
+        top_ids = [int(item["event_id"]) for item in chain[:candidate_limit]]
         if not top_ids:
             continue
         anchor_int_id = int(anchor["id"])
@@ -1274,6 +1376,7 @@ def maybe_apply_gemma_audit(
         )
         cache_key = hashlib.sha1(json.dumps({
             "model": model,
+            "policy_signature": policy_signature,
             "anchor": fingerprints.get(anchor_id),
             "candidates": {str(cid): fingerprints.get(str(cid)) for cid in top_ids},
         }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
@@ -1281,10 +1384,12 @@ def maybe_apply_gemma_audit(
         if cached:
             meta["cache_hits"] += 1
             audit = {int(k): v for k, v in cached.items()}
+            meta["verified_event_ids"].append(anchor_int_id)
         elif not affected_by_change:
             meta["skipped_unchanged_without_cache"] += 1
             continue
         else:
+            attempted_anchors += 1
             try:
                 candidates = [by_id[cid] for cid in top_ids if cid in by_id]
                 max_attempts = int(meta["retry_policy"]["max_attempts"])
@@ -1296,19 +1401,49 @@ def maybe_apply_gemma_audit(
                             "gemma_audit_call",
                             anchor_event_id=anchor_int_id,
                             candidate_count=len(candidates),
+                            candidate_limit=candidate_limit,
                             model=model,
                             key_env=key_env,
                             attempt=attempt,
                             max_attempts=max_attempts,
                         )
+                        started = time.monotonic()
                         audit = call_gemma_related_audit(
                             model=model,
                             key_env=key_env,
                             anchor=anchor,
                             candidates=candidates,
+                            timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
+                            candidate_limit=candidate_limit,
+                        )
+                        elapsed_ms = int((time.monotonic() - started) * 1000)
+                        meta["attempts"].append({
+                            "anchor_event_id": anchor_int_id,
+                            "attempt": attempt,
+                            "model": model,
+                            "status": "ok",
+                            "elapsed_ms": elapsed_ms,
+                            "candidate_count": len(candidates),
+                            "candidate_limit": candidate_limit,
+                        })
+                        log_stage(
+                            "gemma_audit_call_complete",
+                            anchor_event_id=anchor_int_id,
+                            model=model,
+                            attempt=attempt,
+                            elapsed_ms=elapsed_ms,
                         )
                         break
                     except Exception as exc:
+                        elapsed_ms = int((time.monotonic() - started) * 1000) if "started" in locals() else None
+                        meta["attempts"].append({
+                            "anchor_event_id": anchor_int_id,
+                            "attempt": attempt,
+                            "model": model,
+                            "status": "error",
+                            "elapsed_ms": elapsed_ms,
+                            "error": str(exc)[:200],
+                        })
                         last_exc = exc
                         if attempt >= max_attempts:
                             raise
@@ -1327,6 +1462,7 @@ def maybe_apply_gemma_audit(
                     raise RuntimeError(str(last_exc) if last_exc else "Gemma related audit failed")
                 audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                 meta["provider_calls"] += 1
+                meta["verified_event_ids"].append(anchor_int_id)
                 # Respect free-tier RPM without introducing a queue.
                 time.sleep(4.2)
             except Exception as exc:
@@ -1350,6 +1486,8 @@ def maybe_apply_gemma_audit(
             if llm_score < 0.35:
                 item["slot_type"] = "adjacent_discovery"
                 item["similarity_class"] = "adjacent_discovery"
+            if llm_score < 0.55:
+                item["display_eligible"] = False
             item["related_score"] = round(
                 max(0.0, min(1.0, 0.55 * llm_score + 0.20 * float(item.get("lexical_similarity") or item.get("vector_similarity") or 0) + 0.20 * float(item.get("deterministic_score") or 0) + 0.05 * float(item.get("related_score") or 0))),
                 4,
@@ -1359,6 +1497,8 @@ def maybe_apply_gemma_audit(
         del chain[40:]
         audited += 1
     meta["audited_anchors"] = audited
+    meta["verified_event_ids"] = sorted(set(int(item) for item in meta["verified_event_ids"]))
+    meta["attempted_anchors"] = attempted_anchors
     meta["status"] = "ok" if audited > 0 and not meta["errors"] else ("partial" if audited > 0 else "failed")
     return chains, meta
 
@@ -1403,7 +1543,18 @@ def build_related(
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
     )
-    gemma_cache_ready = bool(gemma_verify and cache.get("gemma_verified_model") == gemma_model)
+    gemma_policy_signature = gemma_related_policy_signature(model=gemma_model) if gemma_verify else None
+    cached_verified_event_ids = {
+        int(value)
+        for value in (cache.get("gemma_verified_event_ids") or [])
+        if str(value).isdigit()
+    }
+    gemma_cache_ready = bool(
+        gemma_verify
+        and cache.get("gemma_verified_model") == gemma_model
+        and cache.get("gemma_policy_signature") == gemma_policy_signature
+        and current_id_set.issubset(cached_verified_event_ids)
+    )
     log_stage(
         "cache_check",
         cache_path=str(cache_path) if cache_path else None,
@@ -1416,34 +1567,43 @@ def build_related(
         related_mode=related_mode,
         algorithm=algorithm,
     )
-    if cache_valid:
+    raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
+    cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
+    if cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
+        raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         cache_state = "hit"
-        if not gemma_verify or gemma_cache_ready:
-            gemma_meta = {
-                "enabled": gemma_verify,
-                "model": gemma_model,
-                "key_env": gemma_key_env,
-                "status": "cache_hit_no_provider" if gemma_verify else "disabled",
-                "audited_anchors": 0,
-                "cache_hits": len(events) if gemma_verify else 0,
-                "provider_calls": 0,
-                "changed_event_ids": [],
-                "skipped_unchanged_without_cache": 0,
-                "errors": [],
-            }
-        else:
-            log_stage("gemma_initial_audit_required", event_count=len(events), model=gemma_model)
-            chains, gemma_meta = maybe_apply_gemma_audit(
-                events,
-                chains,
-                enabled=gemma_verify,
-                model=gemma_model,
-                key_env=gemma_key_env,
-                cache=cache,
-                max_anchors=gemma_max_anchors,
-                changed_event_ids=set(),
-            )
+        gemma_meta = {
+            "enabled": gemma_verify,
+            "model": gemma_model,
+            "key_env": gemma_key_env,
+            "status": "cache_hit_no_provider" if gemma_verify else "disabled",
+            "audited_anchors": 0,
+            "cache_hits": len(events) if gemma_verify else 0,
+            "provider_calls": 0,
+            "changed_event_ids": [],
+            "skipped_unchanged_without_cache": 0,
+            "verified_event_ids": sorted(current_id_set) if gemma_verify else [],
+            "errors": [],
+        }
+    elif cache_valid and cached_raw_chains:
+        # Previous runs may contain partially Gemma-filtered display chains.
+        # Always apply the verifier to the unfiltered pgvector chains so a
+        # smoke/partial run cannot permanently hide candidate events.
+        chains = copy.deepcopy(cached_raw_chains)
+        raw_chains_for_cache = copy.deepcopy(cached_raw_chains)
+        cache_state = "hit"
+        log_stage("gemma_initial_audit_required", event_count=len(events), model=gemma_model)
+        chains, gemma_meta = maybe_apply_gemma_audit(
+            events,
+            chains,
+            enabled=gemma_verify,
+            model=gemma_model,
+            key_env=gemma_key_env,
+            cache=cache,
+            max_anchors=gemma_max_anchors,
+            changed_event_ids=set(),
+        )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
@@ -1451,6 +1611,7 @@ def build_related(
             chains = build_pgvector_related_chain(events, current_date=current_date, embedding_model=embedding_model)
         else:
             chains = build_sparse_related_chain(events, cache_salt=salt)
+        raw_chains_for_cache = copy.deepcopy(chains)
         cache_state = "miss_rebuilt"
         chain_lengths = [len(value or []) for value in chains.values()]
         log_stage(
@@ -1481,23 +1642,53 @@ def build_related(
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
+        "raw_chains": raw_chains_for_cache or copy.deepcopy(chains),
         "gemma_audit_cache": cache.get("gemma_audit_cache", {}),
         "gemma_verification": gemma_meta,
         "gemma_verified_model": (
             gemma_model
-            if gemma_verify and (gemma_cache_ready or gemma_meta.get("status") in {"ok", "partial"})
+            if gemma_verify and current_id_set.issubset(set(int(value) for value in (gemma_meta.get("verified_event_ids") or [])))
             else cache.get("gemma_verified_model")
         ),
+        "gemma_policy_signature": (
+            gemma_policy_signature
+            if gemma_verify and current_id_set.issubset(set(int(value) for value in (gemma_meta.get("verified_event_ids") or [])))
+            else cache.get("gemma_policy_signature")
+        ),
+        "gemma_verified_event_ids": sorted(set(int(value) for value in (gemma_meta.get("verified_event_ids") or [])))
+        if gemma_verify
+        else [],
         "updated_at": generated_at,
     }
     save_related_cache(cache_path, cache_payload)
     related: dict[str, dict[str, Any]] = {}
     for event in events:
         chain = chains.get(str(event["id"]), [])
-        pure = [int(item["event_id"]) for item in chain if item.get("slot_type") == "pure_related"][:30]
-        similar = pure or [int(item["event_id"]) for item in chain[:30]]
-        explore = [int(item["event_id"]) for item in chain if item.get("slot_type") == "adjacent_discovery" or item.get("similarity_class") == "adjacent_discovery"][:10]
-        if not explore:
+        if gemma_verify:
+            # In strict Gemma mode the public "similar" list must contain only
+            # candidates actually scored by the LLM as strong semantic matches.
+            # Raw pgvector/deterministic candidates remain in `chain` for audit,
+            # but are not rendered as "Похожие" on static event pages.
+            pure = [
+                int(item["event_id"])
+                for item in chain
+                if not item.get("gemma_reject")
+                and item.get("llm_semantic_score") is not None
+                and float(item.get("llm_semantic_score") or 0) >= 0.72
+            ][:30]
+            similar = pure
+            explore = [
+                int(item["event_id"])
+                for item in chain
+                if not item.get("gemma_reject")
+                and item.get("llm_semantic_score") is not None
+                and 0.55 <= float(item.get("llm_semantic_score") or 0) < 0.72
+            ][:10]
+        else:
+            pure = [int(item["event_id"]) for item in chain if item.get("slot_type") == "pure_related"][:30]
+            similar = pure or [int(item["event_id"]) for item in chain[:30]]
+            explore = [int(item["event_id"]) for item in chain if item.get("slot_type") == "adjacent_discovery" or item.get("similarity_class") == "adjacent_discovery"][:10]
+        if not gemma_verify and not explore:
             explore = [int(item["event_id"]) for item in chain[10:20]]
         related[str(event["id"])] = {
             "similar": similar[:30],
@@ -1506,6 +1697,7 @@ def build_related(
             "adjacent_discovery": explore[:10],
             "chain": chain[:40],
             "underfilled": len(chain) < min(20, max(0, len(events) - 1)),
+            "strict_verified": bool(gemma_verify),
         }
     return {
         "schema_version": schema_version,
@@ -1517,6 +1709,7 @@ def build_related(
         "embedding_model": embedding_model if related_mode == "pgvector" else None,
         "embedding_document_version": embedding_doc_version,
         "gemma_verification": gemma_meta,
+        "strict_verified_related": bool(gemma_verify),
         "cache": {"state": cache_state, "path": str(cache_path) if cache_path else None},
         "related": related,
     }
@@ -1528,6 +1721,9 @@ def main() -> int:
     parser.add_argument("--output-dir", default="site/src/data")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
+    parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
+    parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
+    parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
@@ -1547,8 +1743,17 @@ def main() -> int:
     con = sqlite3.connect(args.db)
     con.row_factory = sqlite3.Row
     include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
-    rows = fetch_rows(con, args.limit, args.current_date, include_ids)
-    events = [build_event(con, row, args.current_date) for row in rows]
+    effective_date, effective_time = split_current_datetime(args.current_datetime, args.current_date)
+    rows = fetch_rows(
+        con,
+        args.limit,
+        effective_date,
+        include_ids,
+        current_time=effective_time,
+        focus_date_from=args.focus_date_from,
+        focus_date_to=args.focus_date_to,
+    )
+    events = [build_event(con, row, effective_date) for row in rows]
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -1557,6 +1762,11 @@ def main() -> int:
             "generated_at": generated_at,
             "source": "prod-sqlite-static-site-export-v1",
             "current_date": args.current_date,
+            "current_datetime": args.current_datetime or None,
+            "effective_current_date": effective_date,
+            "effective_current_time": effective_time,
+            "focus_date_from": args.focus_date_from or None,
+            "focus_date_to": args.focus_date_to or None,
             "notes": [
                 f"bounded production slice: {len(events)} real events",
                 "source social likes/views are compact latest-metric aggregates",
@@ -1580,7 +1790,7 @@ def main() -> int:
     related_cache = Path(args.related_cache) if args.related_cache else None
     related_payload = build_related(
         events,
-        current_date=args.current_date,
+        current_date=effective_date,
         related_mode=args.related_mode,
         cache_path=related_cache,
         gemma_verify=bool(args.gemma_related_verify),

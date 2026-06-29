@@ -1,6 +1,6 @@
 # Semantic vector retrieval for events
 
-> Status: **P0 pgvector semantic retrieval implemented and canary-published in v48**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`). The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
+> Status: **P0 pgvector semantic retrieval implemented; strict Gemma-verified static related canary published in v59**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`). The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
 
 ## Why this document exists
 
@@ -103,8 +103,13 @@ interactive `/poisk/` policy:
   `STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC`) because static rebuild speed is
   less important than preserving the scarce `gemini-3.1-flash-lite` quota for
   online rescue and other critical flows;
-- if all Gemma attempts fail for an anchor, the builder records the error and
-  keeps the pgvector order for that anchor rather than burning Lite quota.
+- strict production/canary builds must publish “similar” cards only when Gemma
+  explicitly accepted the candidate (`llm_semantic_score >= 0.72`); weak
+  0.55–0.71 candidates are adjacent/explore material only;
+- if all Gemma attempts fail for an anchor, the builder records the error. A
+  release/canary gate may either fail the build or publish the anchor without a
+  strict similar block, but it must not silently label raw pgvector order as
+  Gemma-verified related.
 
 ### Authorized search
 
@@ -116,6 +121,40 @@ Implemented source pieces:
 - `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, Gemini query embedding, pgvector RPC, optional Gemma verifier/rerank and fallback cards.
 
 Remaining external gates: Supabase custom OAuth provider `custom:yandex`, Yandex app credentials and Edge Function deployment/env configuration.
+
+
+## v59 strict static-related process and evidence
+
+The current accepted process for event-page bottom recommendations is **offline strict related generation**:
+
+```text
+Smart Update changed event/source facts
+  -> coalesced static-site job after update quiet period
+  -> export active/future event slice from Fly SQLite
+  -> upsert changed public search documents + changed/missing embeddings in Supabase
+  -> pgvector RPC returns nearest event-to-event candidates
+  -> Gemma 4 26B verifies/reorders only retrieved IDs
+  -> static JSON/HTML publishes only Gemma-approved similar candidates
+```
+
+Recompute policy:
+
+- do not recompute if event ids, event search fingerprints and the Gemma policy signature are unchanged;
+- if a new event appears or an existing event’s factual search document changes, recompute the active/future graph, not only the changed anchor, because a new event can become the best related item for older pages;
+- static related can run less often than Astro page rendering: Astro can reuse a valid related cache, while lifecycle/date changes are still applied at export/generation time;
+- when generating pages, exclude events that already started today, ended, were cancelled, deleted or duplicated, so related cards remain actionable.
+
+v59 strict canary (`preview-20260629-event-pages-v59-related-gemma50`) used 50 real production events focused on 2026-06-30/2026-07-01 and supplements later active future events when the two-day window has fewer than 50 events. Metrics:
+
+- pgvector sync: 44 new/changed `gemini-embedding-2/vector(768)` embeddings, 6 unchanged, 32.59s wall;
+- pgvector retrieval: 50 anchors, 40 raw candidates per anchor;
+- Gemma verification: 50 successful anchors, 60 total attempts after retries, first-pass wall 22m53s plus 3m53s fill-missing;
+- successful Gemma calls first-pass timing: min 6.0s, p50 18.3s, avg 17.0s, max 27.1s;
+- final cache-hit export: 0 provider calls, 0.47s;
+- strict similar lengths: min 1, max 8, avg 3.02;
+- golden `6447` now publishes `6310` as the only strict first related candidate (`llm_semantic_score=0.88`) and does not let the earlier music false-positive into the similar block.
+
+Artifacts for this canary are under `artifacts/codex/static-site-related-20260629/` and are intentionally not committed. The committed preview fixture keeps the generated `preview-events.json` and `preview-related.json` so reviewers can inspect the public output without re-running provider calls.
 
 ## v48 canary evidence
 
@@ -146,7 +185,7 @@ Evidence from 2026-06-29 UTC:
 4. Static exporter emits compact preview events and search documents.
 5. Vector sync upserts changed `event_search_documents` and only changed/missing `event_embeddings` into personalization Supabase.
 6. Related graph is recomputed for the whole active/future set, not only changed anchors: a new event can become the best related candidate for older events.
-7. Optional Gemma 4 26B verifier reranks/rejects already retrieved candidates; malformed/timeout responses fall back to vector order.
+7. Gemma 4 26B verifier reranks/rejects already retrieved candidates; strict publication must not label raw pgvector candidates as similar when Gemma verification fails.
 8. Astro builds HTML/JSON/ICS from the static manifest.
    For focus-group/auth previews, the Kaggle kernel maps only browser-safe public values into Astro:
    `PUBLIC_PERSONALIZATION_SUPABASE_URL`, `PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and `PUBLIC_YANDEX_AUTH_PROVIDER`.
