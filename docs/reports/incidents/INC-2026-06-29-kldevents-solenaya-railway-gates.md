@@ -89,6 +89,7 @@ Investigation found the same defect on the whole weekly `Солёная воро
 - Backed up production rows before repair in `codex_backup_20260629_solenaya_railway_gates_*` tables.
 - Repaired canonical production rows to `Театральная гостиная Солёная ворона`, `Железнодорожная 1`, `Зеленоградск` and invalidated content/publication hashes for regenerated surfaces.
 - Rebuilt/edited Telegraph, Telegram, VK, and calendar/ICS surfaces for the four future events.
+- Deleted stale wrong VK postponed duplicates `wall-231920894_4945` and `wall-231920894_4946` after owner/text/location verification; canonical managed VK URLs are now `4978`, `5003`, `5055`, and `5057`.
 
 ## Corrective Actions
 
@@ -103,10 +104,15 @@ Investigation found the same defect on the whole weekly `Солёная воро
 
 ## Release And Closure Evidence
 
-- deployed SHA: `pending`
-- deploy path: `pending` manual Fly deploy from clean branch/worktree
-- regression checks: `pending`
-- post-deploy verification: `pending`
+- deployed SHA: `70bba736` (`fix(smart-update): preserve Solenaya Vorona railway street`), pushed to `origin/main` and deployed to Fly app `events-bot-new-wngqia`.
+- deploy path: manual `flyctl deploy --remote-only --app events-bot-new-wngqia` from clean `agent/T-000055`; image `events-bot-new-wngqia:deployment-01KW9SZJF9BY7BBC9X06BMMVYW`; Fly machine `683961db016e28` reached `started`, version `1530`, checks `1 total, 1 passing`.
+- regression checks: `uv run --with-requirements requirements.txt python -m py_compile smart_event_update.py tests/test_smart_event_update_location_aliases.py`; `uv run --with-requirements requirements.txt pytest -q tests/test_smart_event_update_location_aliases.py` → `7 passed`.
+- post-deploy health: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`.
+- production DB repair evidence: events `6478`, `6479`, `6480`, `6481` now have `location_name='Театральная гостиная Солёная ворона'`, `location_address='Железнодорожная 1'`, `city='Зеленоградск'`; backup tables `codex_backup_20260629_solenaya_railway_gates_{event,event_source,eventposter,joboutbox}` were created before writes.
+- public Telegram verification: Telethon reads of `@kldevents/1616`..`1619` show the corrected Зеленоградск venue/address and no media-group mismatch.
+- public VK verification: VK API shows `wall-231920894_4978`, `5003`, `5055`, and `5057` with the corrected Зеленоградск venue; stale wrong postponed duplicates `4945` and `4946` were deleted (`wall.delete response=1`).
+- Telegraph verification: all four event pages render `Театральная гостиная Солёная ворона, Железнодорожная 1, Зеленоградск` and no `Железнодорожные ворота` text.
+- future-pattern scan: active future `Солёная ворона` / `zelenogradsk.qtickets.events` rows are limited to events `6478`..`6481`, all corrected; remaining Railway Gates future rows use non-Zelenogradsk sources/ticket hosts.
 
 ## Prevention
 
