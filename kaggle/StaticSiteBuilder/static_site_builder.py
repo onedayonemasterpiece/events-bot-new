@@ -171,10 +171,13 @@ def load_encrypted_secrets_to_env() -> None:
 
 
 def ensure_python_deps_for_gemma(config: dict) -> None:
-    if not config.get('gemma_related_verify'):
+    if not (config.get('gemma_related_verify') or config.get('related_mode') == 'pgvector' or config.get('sync_pgvector_vectors')):
         return
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 16, 'progress_label': 'python deps для Gemma limiter'})
-    run(['python3', '-m', 'pip', 'install', '--quiet', 'supabase==2.16.0', 'google-genai>=1.75.0', 'cryptography>=42.0.0'], cwd=WORKING, env=os.environ.copy())
+    packages = ['cryptography>=42.0.0']
+    if config.get('gemma_related_verify'):
+        packages.extend(['supabase==2.16.0', 'google-genai>=1.75.0'])
+    run(['python3', '-m', 'pip', 'install', '--quiet', *packages], cwd=WORKING, env=os.environ.copy())
 
 
 def export_preview_data_if_configured(config: dict) -> None:
@@ -197,9 +200,10 @@ def export_preview_data_if_configured(config: dict) -> None:
     if input_cache and not cache_path.exists():
         shutil.copy2(input_cache, cache_path)
     key_env = (config.get('gemma_related_key_env') or 'GOOGLE_API_KEY4').strip()
-    if config.get('gemma_related_verify'):
+    if config.get('gemma_related_verify') or config.get('related_mode') == 'pgvector' or config.get('sync_pgvector_vectors'):
         ensure_python_deps_for_gemma(config)
         load_encrypted_secrets_to_env()
+    if config.get('gemma_related_verify'):
         load_kaggle_secret_to_env(key_env)
         for secret_name in ['SUPABASE_URL', 'SUPABASE_KEY', 'SUPABASE_SERVICE_KEY', 'SUPABASE_SERVICE_ROLE_KEY']:
             load_kaggle_secret_to_env(secret_name)
@@ -211,10 +215,19 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--current-date', str(config.get('current_date') or os.environ.get('STATIC_SITE_CURRENT_DATE') or '2026-06-28'),
         '--output-dir', str(SITE_DIR / 'src/data'),
         '--related-cache', str(cache_path),
+        '--related-mode', str(config.get('related_mode') or 'sparse'),
+        '--pgvector-embedding-model', str(config.get('pgvector_embedding_model') or 'gemini-embedding-2'),
+        '--pgvector-embedding-key-env', str(config.get('pgvector_embedding_key_env') or 'GOOGLE_API_KEY4'),
+        '--pgvector-max-provider-calls', str(config.get('pgvector_max_provider_calls') or 1000),
+        '--site-origin', str(config.get('public_site_origin') or 'https://kenigevents.ru'),
+        '--base-path', str(config.get('build_id') or ''),
+        '--ics-base-url', str(config.get('ics_base_url') or ''),
         '--gemma-related-model', str(config.get('gemma_related_model') or 'models/gemma-4-26b-a4b-it'),
         '--gemma-related-key-env', key_env,
         '--gemma-related-max-anchors', str(config.get('gemma_related_max_anchors') or 0),
     ]
+    if config.get('sync_pgvector_vectors'):
+        cmd.append('--sync-pgvector-vectors')
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})

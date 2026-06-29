@@ -67,6 +67,9 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     # (Supabase limiter + thought filtering), so the Kaggle site payload includes
     # the repo-local google_ai package instead of a direct provider shortcut.
     copy_tree(ROOT / 'google_ai', staged_site / 'google_ai')
+    sync_script = ROOT / 'scripts' / 'sync_event_search_vectors_to_supabase.py'
+    if sync_script.exists():
+        shutil.copy2(sync_script, staged_site / 'scripts' / 'sync_event_search_vectors_to_supabase.py')
     if args.db and not args.export_in_kaggle:
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
@@ -79,6 +82,17 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
         ]
         if args.related_cache:
             cmd.extend(['--related-cache', str(Path(args.related_cache).resolve())])
+        cmd.extend([
+            '--related-mode', args.related_mode,
+            '--pgvector-embedding-model', args.pgvector_embedding_model,
+            '--pgvector-embedding-key-env', args.pgvector_embedding_key_env,
+            '--pgvector-max-provider-calls', str(args.pgvector_max_provider_calls),
+            '--site-origin', args.public_site_origin,
+            '--base-path', args.build_id or '',
+            '--ics-base-url', args.ics_base_url,
+        ])
+        if args.sync_pgvector_vectors:
+            cmd.append('--sync-pgvector-vectors')
         if args.gemma_related_verify:
             cmd.append('--gemma-related-verify')
         cmd.extend([
@@ -183,16 +197,23 @@ def slugify(value: str, *, max_len: int = 48) -> str:
 
 
 def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
-    if not args.gemma_related_verify:
+    needs_runtime_secrets = bool(args.gemma_related_verify or args.related_mode == 'pgvector' or args.sync_pgvector_vectors)
+    if not needs_runtime_secrets:
         return {}
     key_env = (args.gemma_related_key_env or 'GOOGLE_API_KEY4').strip() or 'GOOGLE_API_KEY4'
+    embedding_key_env = (args.pgvector_embedding_key_env or 'GOOGLE_API_KEY4').strip() or 'GOOGLE_API_KEY4'
     names = [
         key_env,
+        embedding_key_env,
         'SUPABASE_URL',
         'SUPABASE_KEY',
         'SUPABASE_SERVICE_KEY',
         'SUPABASE_SERVICE_ROLE_KEY',
         'SUPABASE_SCHEMA',
+        'PERSONALIZATION_SUPABASE_URL',
+        'PERSONALIZATION_SUPABASE_SECRET_KEY',
+        'PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY',
+        'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
         'GOOGLE_API_LOCALNAME',
         'GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV',
         'GOOGLE_AI_RESERVE_DIRECT_RETRY',
@@ -200,12 +221,18 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
     ]
     payload = {name: os.getenv(name, '').strip() for name in dict.fromkeys(names) if os.getenv(name, '').strip()}
     missing = []
-    if not payload.get(key_env):
+    if args.gemma_related_verify and not payload.get(key_env):
         missing.append(key_env)
-    if not payload.get('SUPABASE_URL'):
+    if args.sync_pgvector_vectors and not payload.get(embedding_key_env):
+        missing.append(embedding_key_env)
+    if args.gemma_related_verify and not payload.get('SUPABASE_URL'):
         missing.append('SUPABASE_URL')
-    if not any(payload.get(name) for name in ('SUPABASE_SERVICE_KEY', 'SUPABASE_KEY', 'SUPABASE_SERVICE_ROLE_KEY')):
+    if args.gemma_related_verify and not any(payload.get(name) for name in ('SUPABASE_SERVICE_KEY', 'SUPABASE_KEY', 'SUPABASE_SERVICE_ROLE_KEY')):
         missing.append('SUPABASE_KEY/SUPABASE_SERVICE_KEY')
+    if args.related_mode == 'pgvector' and not payload.get('PERSONALIZATION_SUPABASE_URL'):
+        missing.append('PERSONALIZATION_SUPABASE_URL')
+    if args.related_mode == 'pgvector' and not any(payload.get(name) for name in ('PERSONALIZATION_SUPABASE_SECRET_KEY', 'PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY')):
+        missing.append('PERSONALIZATION_SUPABASE_SECRET_KEY')
     if missing:
         raise RuntimeError(
             'Missing envs for encrypted Kaggle Gemma limiter dataset: '
@@ -362,6 +389,11 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
+        'related_mode': args.related_mode,
+        'sync_pgvector_vectors': bool(args.sync_pgvector_vectors),
+        'pgvector_embedding_model': args.pgvector_embedding_model,
+        'pgvector_embedding_key_env': args.pgvector_embedding_key_env,
+        'pgvector_max_provider_calls': args.pgvector_max_provider_calls,
         'gemma_related_verify': bool(args.gemma_related_verify),
         'gemma_related_model': args.gemma_related_model,
         'gemma_related_key_env': args.gemma_related_key_env,
@@ -415,6 +447,11 @@ def main() -> int:
     parser.add_argument('--ics-base-url', default=os.getenv('PUBLIC_ICS_BASE_URL', ''))
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
+    parser.add_argument('--related-mode', choices=['sparse', 'pgvector'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))
+    parser.add_argument('--sync-pgvector-vectors', action='store_true', default=(os.getenv('STATIC_SITE_SYNC_PGVECTOR_VECTORS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
+    parser.add_argument('--pgvector-embedding-model', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_MODEL', 'gemini-embedding-2'))
+    parser.add_argument('--pgvector-embedding-key-env', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV', 'GOOGLE_API_KEY4'))
+    parser.add_argument('--pgvector-max-provider-calls', type=int, default=int(os.getenv('STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS', '1000') or '1000'))
     parser.add_argument('--gemma-related-verify', action='store_true', default=(os.getenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--gemma-related-model', default=os.getenv('STATIC_SITE_GEMMA_RELATED_MODEL', 'models/gemma-4-26b-a4b-it'))
     parser.add_argument('--gemma-related-key-env', default=os.getenv('STATIC_SITE_GEMMA_RELATED_KEY_ENV', 'GOOGLE_API_KEY4'))

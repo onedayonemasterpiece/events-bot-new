@@ -21,12 +21,21 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PREVIEW_JSON = ROOT / "site" / "src" / "data" / "preview-events.json"
+WEEKDAY_RU = {
+    1: "понедельник",
+    2: "вторник",
+    3: "среда",
+    4: "четверг",
+    5: "пятница",
+    6: "суббота",
+    7: "воскресенье",
+}
 
 
 def load_env(path: Path) -> None:
@@ -54,10 +63,74 @@ def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def event_weekday(event: dict[str, Any]) -> tuple[int | None, str | None]:
+    raw = clean_text(event.get("start_date"))
+    try:
+        iso = date.fromisoformat(raw).isoweekday()
+    except Exception:
+        return None, None
+    return iso, WEEKDAY_RU.get(iso)
+
+
+def event_time_of_day(event: dict[str, Any]) -> str | None:
+    raw = clean_text(event.get("start_time")) or clean_text(event.get("starts_at"))[11:16]
+    match = re.search(r"(\d{1,2}):", raw)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    if 6 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 17:
+        return "day"
+    if 17 <= hour < 22:
+        return "evening"
+    return "night"
+
+
+def event_availability(event: dict[str, Any]) -> str:
+    lifecycle = clean_text(event.get("lifecycle_status")).lower() or "active"
+    ticket = event.get("ticket") or {}
+    status = " ".join([
+        clean_text(ticket.get("status")),
+        clean_text(ticket.get("label")),
+        clean_text(event.get("status_label")),
+    ]).lower()
+    if lifecycle and lifecycle != "active":
+        if "cancel" in lifecycle or "отмен" in lifecycle:
+            return "cancelled"
+        if "postpon" in lifecycle or "перен" in lifecycle:
+            return "postponed"
+        return lifecycle[:40]
+    if re.search(r"sold|unavailable|not[_\s-]?available|нет\s+бил|законч|распрод", status, re.I):
+        return "sold_out"
+    if ticket.get("kind") in {"ticket", "registration", "phone", "free"} or ticket.get("href") or ticket.get("is_free"):
+        return "available"
+    return "unknown"
+
+
+def event_admission_type(event: dict[str, Any]) -> str:
+    ticket = event.get("ticket") or {}
+    if ticket.get("is_free"):
+        return "free"
+    kind = clean_text(ticket.get("kind"))
+    if kind in {"ticket", "registration", "phone", "status"}:
+        return "registration_required" if kind == "registration" else kind
+    return "unknown"
+
+
 def ru_event_category(event: dict[str, Any]) -> str:
-    haystack = " ".join(str(x or "") for x in [event.get("event_type"), *(event.get("topics") or [])]).lower()
+    haystack = " ".join(
+        str(x or "")
+        for x in [
+            event.get("title"),
+            event.get("event_type"),
+            event.get("summary"),
+            *(event.get("topics") or []),
+        ]
+    ).lower()
     patterns = [
-        (r"концерт|симфони|музык|CONCERT", "music"),
+        (r"архитект|урбан|городск\w*\s+сред|будущ\w*\s+город|общественн\w*\s+пространств|концепци|моделир", "urbanism"),
+        (r"опера|опероман|вокал|концерт|симфони|музык|CONCERT", "music"),
         (r"выстав|EXHIB", "exhibition"),
         (r"спектак|театр|THEATRE", "theatre"),
         (r"лекц|встреч", "lecture"),
@@ -133,6 +206,10 @@ def is_calendar_eligible(event: dict[str, Any]) -> bool:
 
 def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -> str:
     ticket = event.get("ticket") or {}
+    weekday_iso, weekday_ru = event_weekday(event)
+    time_of_day = event_time_of_day(event)
+    availability = event_availability(event)
+    admission = event_admission_type(event)
     facts = [
         f"Категория: {category}",
         f"Тип: {clean_text(event.get('event_type')) or 'событие'}",
@@ -141,8 +218,11 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
         f"Описание: {clean_text(event.get('description_html'))[:2500]}",
         f"Место: {join_parts([event.get('venue_name'), event.get('address'), event.get('city')])}",
         f"Дата: {join_parts([event.get('display_date'), event.get('display_time')])}",
+        f"День недели: {weekday_ru}" if weekday_ru else "",
+        f"День недели ISO: {weekday_iso}" if weekday_iso else "",
+        f"Время суток: {time_of_day}" if time_of_day else "",
         f"Темы: {', '.join(tags)}",
-        f"Условия: {join_parts([ticket.get('label'), ticket.get('price_label'), ticket.get('status')])}",
+        f"Условия: {join_parts([admission, availability, ticket.get('label'), ticket.get('price_label'), ticket.get('status')])}",
     ]
     return "\n".join(part for part in facts if part and not part.endswith(": "))[:7000]
 
@@ -215,11 +295,18 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     embedding_input = f"title: {clean_text(event.get('title'))} | text: {digest}"
     text_hash = sha256_text(embedding_input)
     ticket = event.get("ticket") or {}
+    weekday_iso, weekday_ru = event_weekday(event)
+    time_of_day = event_time_of_day(event)
+    availability = event_availability(event)
+    admission = event_admission_type(event)
+    start_date = clean_text(event.get("start_date")) or None
     doc = {
         "event_id": int(event["id"]),
-        "search_doc_version": "event-search-doc-v1",
+        "search_doc_version": "event-search-doc-v2-weekday",
         "card_snapshot_version": "event-card-v1",
         "text_hash": text_hash,
+        "slug": clean_text(event.get("slug")) or None,
+        "canonical_path": event_href(event, base_path="").rstrip("/") + "/",
         "title": clean_text(event.get("title")),
         "search_digest": digest,
         "event_type": clean_text(event.get("event_type")) or None,
@@ -227,14 +314,25 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
         "tags": tags,
         "city": clean_text(event.get("city")) or None,
         "venue_name": clean_text(event.get("venue_name")) or None,
-        "start_date": clean_text(event.get("start_date")) or None,
+        "start_date": start_date,
         "end_date": clean_text(event.get("end_date")) or None,
+        "date_local": start_date,
         "starts_at": clean_text(event.get("starts_at")) or None,
+        "ends_at": clean_text(event.get("end_at")) or None,
+        "timezone": clean_text(event.get("timezone")) or "Europe/Kaliningrad",
+        "weekday_iso": weekday_iso,
+        "weekday_ru": weekday_ru,
+        "is_weekend": weekday_iso in {6, 7} if weekday_iso else None,
+        "time_of_day": time_of_day,
         "lifecycle_status": clean_text(event.get("lifecycle_status")) or "active",
         "ticket_kind": clean_text(ticket.get("kind")) or None,
+        "admission_type": admission,
+        "availability_status": availability,
         "price_label": clean_text(ticket.get("price_label")) or None,
         "is_free": bool(ticket.get("is_free")),
         "active": clean_text(event.get("lifecycle_status")) in {"", "active"} or event.get("lifecycle_status") is None,
+        "is_public": True,
+        "is_searchable": True,
         "card_snapshot": build_card_snapshot(event, site_origin=site_origin, base_path=base_path, ics_base_url=ics_base_url),
         "source_event_updated_at": clean_text(event.get("updated_at")) or None,
         "indexed_at": datetime.now(timezone.utc).isoformat(),
@@ -312,7 +410,7 @@ def upsert_embeddings(rows: list[dict[str, Any]], *, chunk_size: int = 50) -> in
     return sent
 
 
-def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: float = 45.0) -> list[float]:
+def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: float = 45.0, retries: int = 3) -> list[float]:
     key = env_required(key_env)
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
     body = {
@@ -326,12 +424,25 @@ def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: floa
         method="POST",
         headers={"Content-Type": "application/json", "x-goog-api-key": key},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1500]
-        raise RuntimeError(f"Gemini embedding failed HTTP {exc.code}: {detail}") from exc
+    last_error: Exception | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:1500]
+            last_error = RuntimeError(f"Gemini embedding failed HTTP {exc.code}: {detail}")
+            if exc.code not in {429, 500, 502, 503, 504} or attempt >= max(1, retries) - 1:
+                raise last_error from exc
+            time.sleep(min(8.0, 1.5 * (attempt + 1)))
+        except Exception as exc:
+            last_error = exc
+            if attempt >= max(1, retries) - 1:
+                raise
+            time.sleep(min(8.0, 1.5 * (attempt + 1)))
+    else:
+        raise RuntimeError(f"Gemini embedding failed: {last_error}")
     values = payload.get("embedding", {}).get("values")
     if not isinstance(values, list) or len(values) != int(dim):
         raise RuntimeError(f"Gemini embedding returned unexpected dimension: {len(values) if isinstance(values, list) else 'missing'}")

@@ -61,7 +61,7 @@ Fly SQLite / static export
 
 ### pgvector schema
 
-Migration: `supabase/migrations/20260628_event_search_pgvector.sql`.
+Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus hardening migrations `20260628_event_search_weekday_and_related_rpc.sql` and `20260628_event_search_public_fields_and_model_filter.sql`.
 
 Tables:
 
@@ -111,7 +111,7 @@ The Edge Function can run an optional LLM verifier/reranker only after vector ca
 Env gate:
 
 - `EVENT_SEARCH_LLM_ENABLED=1` enables verifier;
-- `EVENT_SEARCH_LLM_MODEL` defaults to `gemini-3.1-flash-lite` for product reranking (this is not an external consultant review).
+- `EVENT_SEARCH_LLM_MODEL` defaults to `gemma-4-26b-a4b-it` for product reranking. This verifier is an operational reranker over already retrieved IDs, not an external consultant review.
 
 If the LLM call fails, results fall back to vector order and the request remains usable.
 
@@ -150,8 +150,8 @@ The component uses `@supabase/supabase-js` and invokes Supabase Edge Function `e
 Applied to the personalization Supabase project on 2026-06-28:
 
 - `vector` extension installed in schema `extensions`;
-- `event_search_documents`: 70 rows;
-- `event_embeddings`: 70 rows for `gemini-embedding-2`, dim `768`;
+- `event_search_documents`: 76 rows after v48 canary syncs;
+- `event_embeddings`: 76 rows for `gemini-embedding-2`, dim `768`;
 - relation sizes after backfill: embeddings about `672 kB`, documents about `640 kB`.
 
 Security smoke:
@@ -159,13 +159,23 @@ Security smoke:
 - anonymous direct table select on `event_search_documents` returns `401 permission denied`;
 - anonymous call to `get_event_search_quota_v1` returns `401 permission denied`.
 
-Golden semantic smoke for event `6447` (“Как договориться о будущем города”): querying with that event embedding returns:
-
-1. `6447` self-match;
-2. `6310` “Архитектурно-урбанистическая студия...” similarity `0.8530`;
-3. `5261` “Музыка нашего города” similarity `0.8352`.
+Golden semantic smoke for event `6447` (“Как договориться о будущем города”): backend pgvector RPC returns `6310` “Архитектурно-урбанистическая студия...” as the first non-self candidate (`vector_similarity≈0.8592` in the v48 build), ahead of `5261` “Музыка нашего города”. The published discovery JSON for 6447 also keeps `6310` first after Gemma 4 26B verification (`llm_semantic_score=0.92`).
 
 This fixes the specific lexical failure where “Музыка нашего города” outranked the urban-planning studio solely because of the token “город”.
+
+
+## v48 canary evidence
+
+Public Kaggle-built preview: <https://kenigevents.ru/preview-20260628-event-pages-v48-pgvector-gemma-kaggle/__preview/>.
+
+Evidence from 2026-06-29 UTC:
+
+- local vector sync: `70` documents upserted, `12` new/changed Gemini Embedding 2 vectors after weekday/category hardening;
+- live personalization Supabase: `event_search_documents=76`, `event_embeddings=76` for `gemini-embedding-2/vector(768)`;
+- related retrieval: `event_pgvector_related_chain_v1`, `retrieval_method=supabase_pgvector_hnsw_cosine_v1`, `semantic_embeddings=true`;
+- Gemma 4 26B verifier: local canary `status=ok`, `audited_anchors=15`, `provider_calls=7`, `cache_hits=8`, `errors=[]`; the subsequent Kaggle run used the persisted verifier cache (`cache_hit_no_provider`, `provider_calls=0`);
+- Kaggle CPU canary: `preview-20260628-event-pages-v48-pgvector-gemma-kaggle`, `ok=true`, `event_count=70`, `npm run check:preview` passed inside the notebook;
+- live public smoke: `/data/discovery/6447.json` returns `algorithm_id=event_pgvector_related_chain_v1` and first candidate `6310` with `vector_similarity≈0.8592`, `llm_semantic_score=0.92`.
 
 ## Remaining gates before production UX claim
 

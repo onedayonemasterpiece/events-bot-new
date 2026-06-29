@@ -23,6 +23,10 @@ function env(name: string, fallback = ''): string {
   return Deno.env.get(name) || fallback;
 }
 
+function googleModelId(value: string, fallback: string): string {
+  return String(value || fallback || '').replace(/^models\//, '').trim();
+}
+
 function normalizeQuery(value: unknown): string {
   return String(value || '')
     .replace(/\s+/g, ' ')
@@ -50,7 +54,7 @@ function bearerToken(header: string | null): string | null {
 async function embedQuery(query: string): Promise<number[]> {
   const apiKey = env('GOOGLE_API_KEY4') || env('GOOGLE_API_KEY') || env('GEMINI_API_KEY');
   if (!apiKey) throw new Error('embedding_api_key_missing');
-  const model = env('EVENT_SEARCH_EMBEDDING_MODEL', 'gemini-embedding-2');
+  const model = googleModelId(env('EVENT_SEARCH_EMBEDDING_MODEL'), 'gemini-embedding-2');
   const text = `task: search result | query: ${query}`;
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`, {
     method: 'POST',
@@ -112,7 +116,7 @@ async function llmVerify(query: string, candidates: Candidate[]): Promise<Candid
   if (!enabled || candidates.length <= 1) return candidates;
   const apiKey = env('GOOGLE_API_KEY4') || env('GOOGLE_API_KEY') || env('GEMINI_API_KEY');
   if (!apiKey) return candidates;
-  const model = env('EVENT_SEARCH_LLM_MODEL', 'gemini-3.1-flash-lite');
+  const model = googleModelId(env('EVENT_SEARCH_LLM_MODEL'), 'gemma-4-26b-a4b-it');
   const compact = candidates.slice(0, 24).map((candidate, index) => ({
     id: candidateId(candidate),
     rank: index + 1,
@@ -211,6 +215,7 @@ Deno.serve(async (request) => {
   }
 
   try {
+    const embeddingModel = googleModelId(env('EVENT_SEARCH_EMBEDDING_MODEL'), 'gemini-embedding-2');
     const embedding = await embedQuery(query);
     const { data: rows, error: searchError } = await supabase.rpc('search_events_by_embedding_v1', {
       p_query_embedding: embedding,
@@ -220,6 +225,8 @@ Deno.serve(async (request) => {
       p_date_to: null,
       p_city_filter: null,
       p_category_filter: null,
+      p_embedding_model: embeddingModel,
+      p_embedding_dim: EMBEDDING_DIM,
     });
     if (searchError) throw new Error(`db_search:${searchError.message}`);
     let items = (Array.isArray(rows) ? rows : []).map(normalizeCandidate);

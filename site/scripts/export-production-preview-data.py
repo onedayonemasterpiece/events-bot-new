@@ -18,6 +18,9 @@ import re
 import sqlite3
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,10 +32,19 @@ for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_
         sys.path.insert(0, str(_candidate))
 
 CURRENT_DATE_DEFAULT = "2026-06-28"
-CONTROL_EVENT_IDS = [5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698]
+CONTROL_EVENT_IDS = [
+    5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698,
+    # pgvector semantic retrieval golden anchors: urban-planning intent must
+    # prefer the architecture/urbanism studio over lexical "город" music noise.
+    6447, 6310, 5261, 5237,
+]
 SPARSE_RELATED_ALGORITHM = "event_sparse_related_chain_v1"
 SPARSE_RELATED_SCHEMA_VERSION = "event_sparse_related_chain_v1"
 SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
+PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v1"
+PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v1"
+PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v1_cache_20260628c"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
@@ -97,7 +109,7 @@ def log_stage(stage: str, **payload: Any) -> None:
     cache state.
     """
     record = {
-        "scope": "static_site.event_sparse_related_chain_v1",
+        "scope": "static_site.related_chain_builder",
         "stage": stage,
         "ts": datetime.now(timezone.utc).isoformat(),
         **payload,
@@ -561,13 +573,22 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
 
 def category(event: dict[str, Any]) -> str:
     topics = event.get("topics") or []
+    text = " ".join([str(event.get("event_type") or ""), event.get("title") or ""]).lower()
+    for pattern, cat in [
+        (r"архитект|урбан|городск\w*\s+сред|будущ\w*\s+город|общественн\w*\s+пространств|концепци|моделир", "urbanism"),
+        (r"опера|опероман|вокал|концерт|музык", "music"),
+        (r"выстав", "exhibition"),
+        (r"театр|спектак", "theatre"),
+        (r"лекц", "lecture"),
+        (r"мастер", "workshop"),
+        (r"экскурс", "excursion"),
+        (r"фестив|маркет", "festival"),
+    ]:
+        if re.search(pattern, text):
+            return cat
     for topic in topics:
         if topic in TOPIC_CATEGORY:
             return TOPIC_CATEGORY[topic]
-    text = " ".join([str(event.get("event_type") or ""), event.get("title") or ""]).lower()
-    for pattern, cat in [(r"концерт|музык", "music"), (r"выстав", "exhibition"), (r"театр|спектак", "theatre"), (r"лекц", "lecture"), (r"мастер", "workshop"), (r"экскурс", "excursion"), (r"фестив|маркет", "festival")]:
-        if re.search(pattern, text):
-            return cat
     return "event"
 
 
@@ -810,6 +831,190 @@ def build_sparse_related_chain(events: list[dict[str, Any]], *, cache_salt: str)
     return chains
 
 
+def personalization_supabase_request(function_name: str, payload: dict[str, Any], *, timeout: float = 30.0) -> Any:
+    base_url = (os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip().rstrip("/")
+    key = (
+        os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY")
+        or os.getenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+        or ""
+    ).strip()
+    if not base_url or not key:
+        raise RuntimeError("PERSONALIZATION_SUPABASE_URL and PERSONALIZATION_SUPABASE_SECRET_KEY are required for pgvector related build")
+    req = urllib.request.Request(
+        f"{base_url}/rest/v1/rpc/{urllib.parse.quote(function_name, safe='')}",
+        data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+        method="POST",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:1500]
+        raise RuntimeError(f"Supabase RPC {function_name} failed HTTP {exc.code}: {detail}") from exc
+
+
+def build_pgvector_related_chain(
+    events: list[dict[str, Any]],
+    *,
+    current_date: str,
+    embedding_model: str = "gemini-embedding-2",
+    match_count: int = 60,
+) -> dict[str, list[dict[str, Any]]]:
+    by_id = {int(event["id"]): event for event in events}
+    allowed_ids = set(by_id)
+    facets_by_id = {int(event["id"]): facet_set(event) for event in events}
+    chains: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        event_id = int(event["id"])
+        rows = personalization_supabase_request(
+            "event_related_candidates_by_event_id_v1",
+            {
+                "p_anchor_event_id": event_id,
+                "p_embedding_model": embedding_model,
+                "p_embedding_dim": 768,
+                "p_match_count": match_count,
+                "p_date_from": current_date,
+                "p_date_to": None,
+            },
+            timeout=45.0,
+        ) or []
+        scored: list[dict[str, Any]] = []
+        excluded_ids = {event_id, *[int(item) for item in event.get("other_date_ids") or []]}
+        anchor_facets = facets_by_id.get(event_id, set())
+        for row in rows:
+            try:
+                candidate_id = int(row.get("event_id"))
+            except Exception:
+                continue
+            candidate = by_id.get(candidate_id)
+            if not candidate or candidate_id not in allowed_ids or candidate_id in excluded_ids:
+                continue
+            if int(event_id) in [int(item) for item in candidate.get("other_date_ids") or []]:
+                continue
+            if not eligible_related_pair(event, candidate):
+                continue
+            vector_similarity = max(0.0, min(1.0, float(row.get("vector_similarity") or 0)))
+            deterministic = score_pair(event, candidate)
+            same_category = category(event) == category(candidate)
+            candidate_facets = facets_by_id.get(candidate_id, set())
+            shared_facets = sorted(anchor_facets & candidate_facets)
+            facet_score = min(1.0, len(shared_facets) / 2) if shared_facets else 0.0
+            same_date = bool(event.get("start_date") and candidate.get("start_date") and event.get("start_date") == candidate.get("start_date"))
+            strong_domain = vector_similarity >= 0.80 or bool(shared_facets) or (same_category and vector_similarity >= 0.76)
+            slot_type = "pure_related" if strong_domain else "adjacent_discovery"
+            # In pgvector mode semantic similarity is the retrieval contract.
+            # Deterministic facets are only light tie-breakers; they must not
+            # let a broad lexical/category overlap outrank a stronger semantic
+            # neighbor (the 6447 urbanism/music regression).
+            related_score = (
+                0.90 * vector_similarity
+                + 0.035 * facet_score
+                + 0.025 * deterministic
+                + (0.018 if same_category else 0.0)
+                + (0.035 if "urbanism" in shared_facets else 0.0)
+                + (0.015 if "music" in shared_facets else 0.0)
+                + (0.006 if same_date else 0.0)
+                + stable_jitter(event_id, candidate_id, f"{PGVECTOR_RELATED_ALGORITHM}:{embedding_model}")
+            )
+            reason_codes = [
+                f"vector:{PGVECTOR_RELATED_RETRIEVAL_METHOD}",
+                f"embedding:{embedding_model}",
+                f"category:{category(candidate)}",
+            ]
+            if same_category:
+                reason_codes.append("same_category")
+            for facet in shared_facets:
+                reason_codes.append(f"facet:{facet}")
+            if event.get("city") and event.get("city") == candidate.get("city"):
+                reason_codes.append("same_city")
+            if event.get("venue_name") and event.get("venue_name") == candidate.get("venue_name"):
+                reason_codes.append("same_venue")
+            if same_date:
+                reason_codes.append("same_date")
+            scored.append({
+                "event_id": candidate_id,
+                "related_score": round(max(0.0, min(1.0, related_score)), 4),
+                "vector_similarity": round(vector_similarity, 4),
+                "deterministic_score": round(deterministic, 4),
+                "slot_type": slot_type,
+                "similarity_class": "same_domain" if slot_type == "pure_related" else "adjacent_discovery",
+                "confidence": round(max(0.15, min(0.97, 0.35 + vector_similarity * 0.45 + (0.08 if same_category else 0.0) + 0.07 * facet_score)), 4),
+                "reason_codes": reason_codes,
+                "retrieval_sources": ["supabase_pgvector", "event_embedding"],
+                "display_eligible": True,
+            })
+        scored.sort(key=lambda item: (-float(item["related_score"]), -float(item.get("vector_similarity") or 0), int(item["event_id"])))
+        chains[str(event_id)] = scored[:40]
+    chain_lengths = [len(value or []) for value in chains.values()]
+    log_stage(
+        "pgvector_rebuild_complete",
+        event_count=len(events),
+        min_chain=min(chain_lengths) if chain_lengths else 0,
+        max_chain=max(chain_lengths) if chain_lengths else 0,
+        avg_chain=round(sum(chain_lengths) / max(1, len(chain_lengths)), 2),
+        embedding_model=embedding_model,
+    )
+    return chains
+
+
+def find_pgvector_sync_script() -> Path | None:
+    candidates = [
+        SCRIPT_PATH.parents[2] / "scripts" / "sync_event_search_vectors_to_supabase.py",
+        SCRIPT_PATH.parent / "sync_event_search_vectors_to_supabase.py",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def sync_event_vectors_to_supabase(
+    *,
+    preview_events_json: Path,
+    build_id: str,
+    site_origin: str,
+    ics_base_url: str,
+    embedding_model: str,
+    embedding_key_env: str,
+    max_provider_calls: int,
+) -> None:
+    script = find_pgvector_sync_script()
+    if not script:
+        raise FileNotFoundError("sync_event_search_vectors_to_supabase.py not found in repo/site payload")
+    cmd = [
+        sys.executable,
+        str(script),
+        "--apply",
+        "--preview-events-json", str(preview_events_json),
+        "--site-origin", site_origin,
+        "--base-path", build_id,
+        "--ics-base-url", ics_base_url,
+        "--embedding-model", embedding_model,
+        "--embedding-dim", "768",
+        "--google-key-env", embedding_key_env,
+        "--max-provider-calls", str(max(0, int(max_provider_calls))),
+        "--sleep-seconds", "0.1",
+    ]
+    log_stage(
+        "pgvector_sync_start",
+        preview_events_json=str(preview_events_json),
+        embedding_model=embedding_model,
+        embedding_key_env=embedding_key_env,
+        max_provider_calls=max_provider_calls,
+    )
+    import subprocess
+
+    subprocess.run(cmd, check=True)
+    log_stage("pgvector_sync_complete", preview_events_json=str(preview_events_json), embedding_model=embedding_model)
+
+
 def load_related_cache(path: Path | None) -> dict[str, Any] | None:
     if not path or not path.exists():
         return None
@@ -970,7 +1175,7 @@ async def call_gemma_related_audit_async(
                 os.environ[name] = value
     if not str(text or "").strip():
         raise RuntimeError("Gemma related audit returned empty text after thought filtering")
-    parsed = json.loads(str(text).strip())
+    parsed = parse_gemma_json_object(str(text).strip())
     out: dict[int, dict[str, Any]] = {}
     for item in parsed.get("ranked") or []:
         try:
@@ -983,6 +1188,30 @@ async def call_gemma_related_audit_async(
 
 def call_gemma_related_audit(**kwargs: Any) -> dict[int, dict[str, Any]]:
     return asyncio.run(call_gemma_related_audit_async(**kwargs))
+
+
+def parse_gemma_json_object(text: str) -> dict[str, Any]:
+    """Parse one JSON object from Gemma structured output text.
+
+    GoogleAIClient intentionally joins all non-thought text parts with newlines.
+    Some Gemma 4 responses with native schema still arrive as duplicated JSON
+    text parts; for this audit stage the first well-formed object is the useful
+    contract and trailing duplicated text should not poison the whole anchor.
+    """
+    raw = str(text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\s*```$", "", raw).strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        if start < 0:
+            raise
+        parsed, _end = json.JSONDecoder().raw_decode(raw[start:])
+    if not isinstance(parsed, dict):
+        raise ValueError("Gemma audit JSON must be an object")
+    return parsed
 
 
 def maybe_apply_gemma_audit(
@@ -1093,7 +1322,24 @@ def maybe_apply_gemma_audit(
     return chains, meta
 
 
-def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = None, gemma_verify: bool = False, gemma_model: str = "models/gemma-4-26b-a4b-it", gemma_key_env: str = "GOOGLE_API_KEY4", gemma_max_anchors: int = 0) -> dict[str, Any]:
+def build_related(
+    events: list[dict[str, Any]],
+    *,
+    current_date: str,
+    related_mode: str = "sparse",
+    cache_path: Path | None = None,
+    gemma_verify: bool = False,
+    gemma_model: str = "models/gemma-4-26b-a4b-it",
+    gemma_key_env: str = "GOOGLE_API_KEY4",
+    gemma_max_anchors: int = 0,
+    embedding_model: str = "gemini-embedding-2",
+) -> dict[str, Any]:
+    related_mode = "pgvector" if str(related_mode or "").strip().lower() == "pgvector" else "sparse"
+    algorithm = PGVECTOR_RELATED_ALGORITHM if related_mode == "pgvector" else SPARSE_RELATED_ALGORITHM
+    schema_version = PGVECTOR_RELATED_SCHEMA_VERSION if related_mode == "pgvector" else SPARSE_RELATED_SCHEMA_VERSION
+    retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
+    cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
+    embedding_doc_version = "event_search_doc_v2_weekday" if related_mode == "pgvector" else "event_embedding_doc_v1"
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     event_ids = [int(event["id"]) for event in events]
@@ -1109,7 +1355,9 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
     }
     changed_event_ids.update(previous_id_set - current_id_set)
     cache_valid = (
-        cache.get("schema_version") == RELATED_CACHE_SCHEMA_VERSION
+        cache.get("schema_version") == cache_schema_version
+        and cache.get("algorithm") == algorithm
+        and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -1124,6 +1372,8 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
         changed_event_ids=sorted(changed_event_ids),
         gemma_verify=gemma_verify,
         gemma_model=gemma_model,
+        related_mode=related_mode,
+        algorithm=algorithm,
     )
     if cache_valid:
         chains = cache["chains"]
@@ -1155,12 +1405,15 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
             )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
-        log_stage("sparse_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids))
-        chains = build_sparse_related_chain(events, cache_salt=salt)
+        log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
+        if related_mode == "pgvector":
+            chains = build_pgvector_related_chain(events, current_date=current_date, embedding_model=embedding_model)
+        else:
+            chains = build_sparse_related_chain(events, cache_salt=salt)
         cache_state = "miss_rebuilt"
         chain_lengths = [len(value or []) for value in chains.values()]
         log_stage(
-            "sparse_rebuild_complete",
+            f"{related_mode}_rebuild_complete",
             event_count=len(events),
             min_chain=min(chain_lengths) if chain_lengths else 0,
             max_chain=max(chain_lengths) if chain_lengths else 0,
@@ -1178,11 +1431,12 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
         )
     log_stage("gemma_audit_complete", **gemma_meta)
     cache_payload = {
-        "schema_version": RELATED_CACHE_SCHEMA_VERSION,
-        "algorithm": SPARSE_RELATED_ALGORITHM,
-        "retrieval_method": SPARSE_RELATED_RETRIEVAL_METHOD,
-        "embedding_document_version": "event_embedding_doc_v1",
-        "semantic_embeddings": False,
+        "schema_version": cache_schema_version,
+        "algorithm": algorithm,
+        "retrieval_method": retrieval_method,
+        "embedding_document_version": embedding_doc_version,
+        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "semantic_embeddings": related_mode == "pgvector",
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
@@ -1213,13 +1467,14 @@ def build_related(events: list[dict[str, Any]], *, cache_path: Path | None = Non
             "underfilled": len(chain) < min(20, max(0, len(events) - 1)),
         }
     return {
-        "schema_version": SPARSE_RELATED_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "generated_at": generated_at,
-        "algorithm": SPARSE_RELATED_ALGORITHM,
+        "algorithm": algorithm,
         "fallback_algorithm": "prod_sqlite_static_related_v1",
-        "retrieval_method": SPARSE_RELATED_RETRIEVAL_METHOD,
-        "semantic_embeddings": False,
-        "embedding_document_version": "event_embedding_doc_v1",
+        "retrieval_method": retrieval_method,
+        "semantic_embeddings": related_mode == "pgvector",
+        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "embedding_document_version": embedding_doc_version,
         "gemma_verification": gemma_meta,
         "cache": {"state": cache_state, "path": str(cache_path) if cache_path else None},
         "related": related,
@@ -1234,6 +1489,14 @@ def main() -> int:
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
+    parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
+    parser.add_argument("--sync-pgvector-vectors", action="store_true", default=(os.getenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", "").strip().lower() in {"1", "true", "yes", "on"}), help="Upsert event search docs/embeddings before pgvector related build")
+    parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
+    parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
+    parser.add_argument("--pgvector-max-provider-calls", type=int, default=int(os.getenv("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", "1000") or "1000"))
+    parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
+    parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
+    parser.add_argument("--ics-base-url", default=os.getenv("PUBLIC_ICS_BASE_URL", ""))
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
@@ -1261,16 +1524,30 @@ def main() -> int:
         },
         "events": events,
     }
+    preview_events_path = out_dir / "preview-events.json"
+    preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
+        sync_event_vectors_to_supabase(
+            preview_events_json=preview_events_path,
+            build_id=args.base_path,
+            site_origin=args.site_origin,
+            ics_base_url=args.ics_base_url,
+            embedding_model=args.pgvector_embedding_model,
+            embedding_key_env=args.pgvector_embedding_key_env,
+            max_provider_calls=args.pgvector_max_provider_calls,
+        )
     related_cache = Path(args.related_cache) if args.related_cache else None
     related_payload = build_related(
         events,
+        current_date=args.current_date,
+        related_mode=args.related_mode,
         cache_path=related_cache,
         gemma_verify=bool(args.gemma_related_verify),
         gemma_model=args.gemma_related_model,
         gemma_key_env=args.gemma_related_key_env,
         gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
+        embedding_model=args.pgvector_embedding_model,
     )
-    (out_dir / "preview-events.json").write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")
     print("IDs:", ",".join(str(event["id"]) for event in events))

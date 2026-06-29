@@ -29,6 +29,7 @@ export const RELATED_SURFACE = 'event_detail_related' as const;
 export const STATIC_RELATED_ALGORITHM_ID = 'static_related_v1' as const;
 export const SPARSE_RELATED_ALGORITHM_ID = 'event_sparse_related_chain_v1' as const;
 export const LEGACY_VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2' as const;
+export const PGVECTOR_RELATED_ALGORITHM_ID = 'event_pgvector_related_chain_v1' as const;
 
 export function getPreviewBuild() {
   return data.build;
@@ -374,14 +375,16 @@ function chainRelatedCandidate(event: PreviewEvent, candidate: PreviewEvent): Re
   const chainItem = relatedChainItemFor(event, candidate);
   if (!chainItem) return base;
   const score = Number(chainItem.related_score ?? chainItem.lexical_similarity ?? chainItem.vector_similarity ?? base.base_similarity);
-  const lexicalSimilarity = Number(chainItem.lexical_similarity ?? chainItem.vector_similarity ?? score);
+  const lexicalSimilarity = Number(chainItem.lexical_similarity ?? score);
+  const vectorSimilarity = Number(chainItem.vector_similarity ?? score);
   const deterministicScore = Number(chainItem.deterministic_score ?? base.static_score);
   return {
     ...base,
     base_similarity: Number.isFinite(score) ? score : base.base_similarity,
     static_score: Number.isFinite(score) ? score : base.static_score,
     slot_type: ['pure_related', 'adjacent_discovery', 'promo'].includes(String(chainItem.slot_type || '')) ? chainItem.slot_type as RelatedManifestCandidate['slot_type'] : undefined,
-    lexical_similarity: Number.isFinite(lexicalSimilarity) ? lexicalSimilarity : undefined,
+    lexical_similarity: Number.isFinite(lexicalSimilarity) && 'lexical_similarity' in chainItem ? lexicalSimilarity : undefined,
+    vector_similarity: Number.isFinite(vectorSimilarity) && 'vector_similarity' in chainItem ? vectorSimilarity : undefined,
     deterministic_score: Number.isFinite(deterministicScore) ? deterministicScore : undefined,
     llm_semantic_score: Number.isFinite(Number(chainItem.llm_semantic_score)) ? Number(chainItem.llm_semantic_score) : undefined,
     llm_confidence: Number.isFinite(Number(chainItem.llm_confidence)) ? Number(chainItem.llm_confidence) : undefined,
@@ -417,23 +420,26 @@ export function getStaticRelatedCandidates(event: PreviewEvent, limit = 30): Rel
     .slice(0, Math.max(0, limit));
 }
 
-export function eventDetailRelatedAlgorithmId(): 'static_related_v1' | 'event_sparse_related_chain_v1' {
+export function eventDetailRelatedAlgorithmId(): 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_pgvector_related_chain_v1' {
+  if (related.algorithm === PGVECTOR_RELATED_ALGORITHM_ID) return PGVECTOR_RELATED_ALGORITHM_ID;
   const isSparse = related.algorithm === SPARSE_RELATED_ALGORITHM_ID || related.algorithm === LEGACY_VECTOR_RELATED_ALGORITHM_ID;
   return isSparse ? SPARSE_RELATED_ALGORITHM_ID : STATIC_RELATED_ALGORITHM_ID;
 }
 
 export function buildEventDetailRelatedManifest(event: PreviewEvent, limit = 30): EventDetailRelatedManifest {
-  const isSparse = eventDetailRelatedAlgorithmId() === SPARSE_RELATED_ALGORITHM_ID;
+  const algorithmId = eventDetailRelatedAlgorithmId();
   return {
     version: 1,
     schema_version: RELATED_SCHEMA_VERSION,
     feature_schema_version: RELATED_SCHEMA_VERSION,
     taxonomy_version: TAXONOMY_VERSION,
     surface: RELATED_SURFACE,
-    algorithm_id: eventDetailRelatedAlgorithmId(),
+    algorithm_id: algorithmId,
     generated_at: getPreviewBuild().generated_at,
     event_id: event.id,
-    strategy: isSparse ? 'event_sparse_related_chain_v1_manifest' : 'static_related_manifest_v1',
+    strategy: algorithmId === PGVECTOR_RELATED_ALGORITHM_ID
+      ? 'event_pgvector_related_chain_v1_manifest'
+      : (algorithmId === SPARSE_RELATED_ALGORITHM_ID ? 'event_sparse_related_chain_v1_manifest' : 'static_related_manifest_v1'),
     preload_target: 10,
     page_size: 10,
     current_event: eventFeatureSummary(event),
