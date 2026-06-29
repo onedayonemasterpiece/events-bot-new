@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Personalization / authorized search Supabase deployment**: configured `custom:yandex` in the personalization Supabase project, deployed Edge Function `event-search` with runtime secrets and `--no-verify-jwt` so CORS preflight works while POST remains JWT-checked in function code, and verified OPTIONS 200, unauthenticated POST 401 and provider redirect 302.
 - **Personalization / Supabase deploy env names**: updated the authorized-search readiness gate to accept `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` as the preferred control-plane token for the separate personalization Supabase project, with legacy `SUPABASE_ACCESS_TOKEN` only as fallback.
 - **Personalization / authorized search UI smoke**: added `scripts/smoke_authorized_search_ui.py`, a mocked browser regression gate for the Yandex/Supabase authorized search UI that simulates a Supabase Auth callback, calls a mocked `event-search`, verifies shared split-action cards with like/share/not-interested/calendar actions and served-list metadata, and fixed the card renderer escaping helper so numeric zero values such as `data-rank="0"` are not erased.
 - **Personalization / authorized search query facets**: added the Supabase migration and Edge Function wiring for compact weekday/time/admission query facets (`пятница`, `вечером`, `бесплатно`, `по регистрации`), applying them as bounded boosts over pgvector nearest candidates while keeping raw search text out of audit/logs and keeping cards sourced only from trusted snapshots.

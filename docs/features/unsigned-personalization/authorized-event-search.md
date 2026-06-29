@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented on 2026-06-28; Yandex provider credentials and Edge Function deploy are the remaining external configuration gates.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed; the remaining gate is live browser OAuth/search E2E on the preview site.
 
 ## Product contract
 
@@ -20,7 +20,7 @@ Anonymous users have quota `0`: the UI shows “Войти через Яндек
 
 Supabase has no built-in Yandex provider in the social-login list, so the project uses **Custom OAuth/OIDC Providers** with identifier `custom:yandex`.
 
-Required external setup in Supabase Dashboard:
+Configured in the personalization Supabase project on 2026-06-29. Manual/Dashboard setup contract:
 
 1. Auth → Providers → New Provider → Manual configuration.
 2. Identifier: `custom:yandex`.
@@ -227,7 +227,7 @@ Evidence from 2026-06-29 UTC:
 
 ## Authorized RPC smoke evidence
 
-Because the Supabase Edge Function is not deployable without `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` (or legacy `SUPABASE_ACCESS_TOKEN`) and `PERSONALIZATION_SUPABASE_PROJECT_REF`, the currently executable live-auth proof is the protected PostgREST/RPC path used by the Edge Function.
+Before 2026-06-29 the Edge Function deploy was blocked without `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` and `PERSONALIZATION_SUPABASE_PROJECT_REF`; the live-auth proof below remains useful as a backend RPC regression smoke for the path used by the Edge Function.
 
 Script: `scripts/smoke_authorized_event_search_rpc.py`.
 
@@ -249,7 +249,7 @@ Result:
 - compact audit RPC succeeded;
 - smoke quota/audit rows and the temporary user were removed after the run.
 
-This proves the authenticated pgvector RPC path and quota/audit path. It does not claim the Yandex OAuth browser UX or deployed Edge Function is complete.
+This proves the authenticated pgvector RPC path and quota/audit path independently of the browser OAuth UX.
 
 Additional facet smoke after `20260629_event_search_query_facets.sql`:
 
@@ -270,7 +270,7 @@ Result: authenticated pgvector RPC returned `6310` as top-1 with boosted similar
 
 Script: `scripts/smoke_authorized_search_ui.py`.
 
-This is a browser smoke for the static Astro UI with mocked Supabase network responses. It is intentionally **not** a substitute for the final live Yandex OAuth + deployed Edge Function E2E; it exists to catch frontend integration regressions before the external auth/deploy gates are available.
+This is a browser smoke for the static Astro UI with mocked Supabase network responses. It is intentionally **not** a substitute for the final live Yandex OAuth + deployed Edge Function E2E; it catches frontend integration regressions without requiring an interactive Yandex login session.
 
 Verified on 2026-06-29 UTC against a preview build rendered with browser-safe public env:
 
@@ -316,11 +316,9 @@ The checker is redacted: it prints only `OK`/`MISSING` and never prints secret v
 - Edge runtime env has Supabase Auth/RPC + Gemini embedding access;
 - backend vector sync env has service/secret access.
 
-On 2026-06-29 UTC, current local env is ready for static rendering + vector sync but still lacks `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `PERSONALIZATION_SUPABASE_ACCESS_TOKEN` (or legacy `SUPABASE_ACCESS_TOKEN`) and `PERSONALIZATION_SUPABASE_PROJECT_REF`, so browser Yandex login + deployed Edge Function E2E remains an external gate.
+On 2026-06-29 UTC, readiness is green for static public env, Yandex credentials, Supabase deploy credentials, Edge runtime env and vector sync env. Live probes passed: `OPTIONS /functions/v1/event-search` returns 200, unauthenticated POST returns `401 auth_required`, and Supabase Auth authorize for `custom:yandex` redirects to the provider (`302`).
 
 ## Remaining gates before production UX claim
 
-1. Create/enable Supabase custom OAuth provider `custom:yandex` after Yandex credentials are provided.
-2. Deploy `supabase/functions/event-search` to the personalization Supabase project and configure Edge envs.
-3. Pass live browser auth/search E2E on mobile: login → quota visible → search → cards render → like/share/not-interested still work.
-4. Enable automatic Smart Update → Kaggle artifact → CDN promotion after artifact checks. The Smart Update → Kaggle command handoff already passes pgvector/vector-sync/search public envs; publishing the checked artifact to CDN remains a separate release gate.
+1. Pass live browser auth/search E2E on mobile: preview page → login through Yandex → return to preview URL → quota visible → search → cards render → like/share/not-interested still work.
+2. Enable automatic Smart Update → Kaggle artifact → CDN promotion after artifact checks. The Smart Update → Kaggle command handoff already passes pgvector/vector-sync/search public envs; publishing the checked artifact to CDN remains a separate release gate.
