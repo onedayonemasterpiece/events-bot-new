@@ -266,6 +266,37 @@ python3 scripts/smoke_authorized_event_search_rpc.py \
 
 Result: authenticated pgvector RPC returned `6310` as top-1 with boosted similarity `≈0.9255`, proving that explicit weekday/time/admission facets influence order while still searching through `gemini-embedding-2/vector(768)` candidates and trusted snapshots.
 
+## Mocked browser UI smoke evidence
+
+Script: `scripts/smoke_authorized_search_ui.py`.
+
+This is a browser smoke for the static Astro UI with mocked Supabase network responses. It is intentionally **not** a substitute for the final live Yandex OAuth + deployed Edge Function E2E; it exists to catch frontend integration regressions before the external auth/deploy gates are available.
+
+Verified on 2026-06-29 UTC against a preview build rendered with browser-safe public env:
+
+```bash
+PUBLIC_PERSONALIZATION_SUPABASE_URL=https://example.supabase.co \
+PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test \
+PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex \
+npm --prefix site run build:preview
+
+python3 scripts/smoke_authorized_search_ui.py \
+  --dist site/dist/preview-20260629t015724-4c2d398a \
+  --supabase-url https://example.supabase.co
+```
+
+Result:
+
+- simulated a Supabase implicit auth callback in the browser URL hash and mocked `/auth/v1/user`;
+- verified the root switches to authenticated state, hides the Yandex login button and shows the one-line search form;
+- submitted query `урбанистика в четверг вечером по регистрации`;
+- verified the UI calls `event-search` with `use_llm_verifier=true`;
+- verified returned results render through the shared split-action event-card renderer, including detail-link card, like, share, `Не интересно` and calendar actions;
+- verified the search result container keeps `surface=authorized_event_search`, `request_id`, `served_list_id`, `served_list_hash` and `algorithm_id`;
+- verified fallback starts as a separate **«Возможно, вам будет интересно»** section.
+
+The smoke also fixed a real renderer bug: `escapeHtml(value || '')` erased numeric `0`, so the first result card rendered `data-rank=""`. The renderer now preserves zero values with `value == null ? '' : value`.
+
 ## Deploy/browser readiness check
 
 Script: `scripts/check_authorized_search_readiness.py`.
@@ -292,5 +323,4 @@ On 2026-06-29 UTC, current local env is ready for static rendering + vector sync
 1. Create/enable Supabase custom OAuth provider `custom:yandex` after Yandex credentials are provided.
 2. Deploy `supabase/functions/event-search` to the personalization Supabase project and configure Edge envs.
 3. Pass live browser auth/search E2E on mobile: login → quota visible → search → cards render → like/share/not-interested still work.
-4. Wire the vector sync script into the Smart Update/Kaggle static-site sequence after the static export snapshot is produced.
-5. Add nightly/full recompute policy: because a new event can become similar to older events, related/static search snapshots must be refreshed for the whole active/future set, not only changed anchors.
+4. Enable automatic Smart Update → Kaggle artifact → CDN promotion after artifact checks. The Smart Update → Kaggle command handoff already passes pgvector/vector-sync/search public envs; publishing the checked artifact to CDN remains a separate release gate.
