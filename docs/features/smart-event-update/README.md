@@ -22,19 +22,31 @@ Smart Update по умолчанию строит публичный текст 
 
 - чувствительные LLM-факты из linked-source merge/create (возрастные ограничения, лимиты группы/мест, длительность, концертно-музыкальные утверждения и т.п.) попадают в `event_source_fact` и публичный fact-first narrative только если подтверждаются `source_text` / `raw_excerpt` / OCR этого же кандидата; неподтверждённые факты отбрасываются как hallucination-prone.
 
-## Справочное дообогащение события
+## Sparse Event Safety и справочное дообогащение события
 
 Отдельная feature-спека: `docs/features/event-reference-enrichment/README.md`.
 
-Smart Update может вызывать справочное дообогащение **только после** валидации события и извлечения source-grounded фактов. Цель — улучшить sparse, но уже валидные события короткими reference-фактами об артистах/группах/персонах; первый планируемый provider — Wikipedia/Wikidata.
+Важно: справочное дообогащение **не provider-first фича**. Перед Wikimedia/Wikidata provider-ом Smart Update обязан закрыть P0 Sparse Event Safety: source-role classification, `giveaway/promo-only -> needs_event_source`, strict sparse writer, claim-class coverage-check и regression для SQWOZ BAB / event `6501`, где бедный giveaway-like источник породил неподтверждённые claims про `хиты`, `сет-лист`, `новые композиции`, `живое исполнение` и `программу выступления`.
+
+Required order:
+
+1. classify `source_role` и `event_status`;
+2. block giveaway/promo-only без независимого `event_source`;
+3. extract facts with `claim_class` / `render_policy` / `source_role`;
+4. classify sparse/rich по event-specific content facts (не по date/time/venue anchors);
+5. generate dry sparse text and run coverage-check;
+6. remove unsupported existing public claims on rerender;
+7. only then call reference enrichment for eligible `publish_sparse` events.
 
 Инварианты:
 
 - Wikipedia/Wikidata не подтверждает само событие, не повышает `event_validity_score` и не переводит giveaway/promo-only источник в публикацию.
+- `WIKIMEDIA_REFERENCE_ENRICHMENT` нельзя включать, пока не включены `STRICT_SPARSE_WRITER` и `GIVEAWAY_REQUIRES_EVENT_SOURCE` и не проходит SQWOZ BAB regression.
+- В v1 публично renderable reference facts берутся только из Wikidata structured data; Wikipedia prose/extract не рендерится без видимой attribution.
 - Справочные источники имеют роль `reference_source` / `entity_reference` и не смешиваются с `event_source`, которые подтверждают дату/место/сам факт события.
 - Публичный счётчик `Источников: N` считает только event-specific источники; reference-source не должен выглядеть как подтверждение события.
-- Writer может использовать Wikipedia/Wikidata только для разрешённых справочных фактов (identity/occupation/genre) и не может выводить event-specific claims (`сет-лист`, `хиты`, `новые композиции`, `live-бэнд`, `гости`, `программа`) без поддержки в event-source фактах.
-- Если Wikipedia/Wikidata факты приняты или использованы в public copy, операторский Smart Update отчёт в боте обязан явно показать строку `Справочное обогащение: Wikipedia ...` с entity/page/QID/confidence/количеством фактов в компактной форме.
+- Writer может использовать reference facts только для разрешённых v1 фактов (`identity`, `occupation`) и не может выводить event-specific claims (`сет-лист`, `хиты`, `новые композиции`, `live-бэнд`, `гости`, `программа`) без поддержки в event-source facts.
+- Если reference facts приняты/использованы, заблокированы или если sparse safety удалил неподтверждённые claims, операторский Smart Update отчёт в боте обязан явно показать это компактной строкой.
 
 ## Что реализовано
 
@@ -429,7 +441,9 @@ LLM остаётся владельцем смысловых решений, н�
 - `ICS: ics` (короткая кликабельная ссылка, либо `—/⏳`)
 - `Посты: VK пост/⏳ · TG пост/⏳` (кликабельные ссылки на управляемый `klgdevents` VK-анонс и Telegram event post, если они уже опубликованы; для VK рядом может быть пометка `соавторство: @... предложено`, когда publish-flow распознал известного источника-соавтора)
 - `Факты: ✅N ↩️M ⚠️K ℹ️L` (сколько фактов добавлено/проигнорировано/в конфликте/служебных заметок на текущей итерации)
-- `Справочное обогащение: ...` — обязательная строка, если Smart Update принял/использовал Wikipedia/Wikidata reference-факты (например `Wikipedia — Sqwoz Bab / Q106541067, +2 факта, confidence 0.93`). Формулировка должна быть именно справочной и не должна представлять Wikipedia как источник, подтверждающий событие.
+- `Справочное обогащение: ...` — обязательная строка, если Smart Update принял/использовал Wikidata/Wikipedia reference-факты (например `Wikidata/Wikipedia — Sqwoz Bab / Q106541067, +2 факта, confidence 0.93`). Формулировка должна быть именно справочной и не должна представлять Wikipedia как источник, подтверждающий событие.
+- `Справочное обогащение: заблокировано/не запускалось ...` — в operator/debug context показывает, что reference enrichment был запрещён из-за `needs_event_source`, giveaway-only, ambiguous entity, rich source или provider soft-failure.
+- `Sparse safety: удалены неподтверждённые claims: ...` — обязательная строка, если rerender/coverage-check вычистил unsupported programme/set-list/hits/new-compositions/live-band claims из нового или существующего описания.
 - `Иллюстрации:` и `Видео:` (где доступно: delta `+N` и `всего M`)
 
 Также, если обнаружено: строки про добавление в очереди `festival_queue` и/или `ticket_site_queue`.

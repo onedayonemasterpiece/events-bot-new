@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added the canonical `event-reference-enrichment` feature spec for Smart Update-called sparse event enrichment, with Wikipedia/Wikidata as the first strict reference provider, source-role separation (`event_source` vs `reference_source`), sparse/giveaway gates, writer coverage rules, and a required Smart Update bot-report line whenever Wikipedia facts are accepted or used.
+- Added and tightened the canonical `event-reference-enrichment` implementation contract: Wikimedia provider work is blocked behind P0 Sparse Event Safety, SQWOZ BAB/event 6501 regression, source-role/score caps, claim-class persistence, existing bad-description remediation, Wikidata-only public v1 facts, no-block rendering, provider failure budgets, and Smart Update report lines for accepted, blocked, and removed-claim decisions.
 - Telegram post metrics now store available open-discussion comment counts, and Telegram daily `ДОБАВИЛИ В АНОНС` can show audience labels for popular events using summed Telegram+VK source metrics.
 - Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
 
