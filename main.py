@@ -19192,6 +19192,95 @@ def _static_site_status_callback_url() -> str:
     return f"https://{fly_app}.fly.dev/internal/kaggle/run-event"
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = (os.getenv(name) or "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    return int(raw)
+
+
+def _first_env(*names: str, default: str = "") -> str:
+    for name in names:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return default
+
+
+def _static_site_build_kaggle_command(
+    *,
+    db_path: str,
+    build_id: str,
+    limit: int,
+    current_date: str,
+    script_path: str,
+    status_callback_url: str,
+) -> list[str]:
+    related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
+    if related_mode not in {"sparse", "pgvector"}:
+        raise ValueError(f"unsupported STATIC_SITE_RELATED_MODE={related_mode!r}")
+    cmd = [
+        sys.executable,
+        script_path,
+        "--db",
+        db_path,
+        "--status-db",
+        db_path,
+        "--status-callback-url",
+        status_callback_url,
+        "--limit",
+        str(limit),
+        "--current-date",
+        current_date,
+        "--build-id",
+        build_id,
+        "--public-site-origin",
+        _first_env("STATIC_SITE_PUBLIC_SITE_ORIGIN", "PUBLIC_SITE_ORIGIN", default="https://kenigevents.ru"),
+        "--asset-base-url",
+        _first_env("STATIC_SITE_ASSET_BASE_URL", "PUBLIC_ASSET_BASE_URL"),
+        "--astro-asset-base-url",
+        _first_env("STATIC_SITE_ASTRO_ASSET_BASE_URL", "PUBLIC_ASTRO_ASSET_BASE_URL"),
+        "--ics-base-url",
+        _first_env("STATIC_SITE_ICS_BASE_URL", "PUBLIC_ICS_BASE_URL"),
+        "--export-in-kaggle",
+        "--related-cache",
+        (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
+        "--related-mode",
+        related_mode,
+        "--pgvector-embedding-model",
+        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip(),
+        "--pgvector-embedding-key-env",
+        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+        "--pgvector-max-provider-calls",
+        str(_env_int("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", 1000)),
+        "--gemma-related-model",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip(),
+        "--gemma-related-key-env",
+        (os.getenv("STATIC_SITE_GEMMA_RELATED_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+        "--gemma-related-max-anchors",
+        str(_env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0)),
+        "--timeout-minutes",
+        str(_env_int("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", 60)),
+        "--poll-interval",
+        str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
+        "--download-output",
+    ]
+    if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
+        cmd.append("--sync-pgvector-vectors")
+    if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
+        cmd.append("--gemma-related-verify")
+    if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
+        cmd.append("--keep-secret-datasets")
+    return cmd
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
     """Coalesced static-site build after Smart Update.
 
@@ -19218,48 +19307,22 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         or f"preview-{now_local.strftime('%Y%m%d%H%M')}-event-pages-prod{limit}-kaggle"
     ).strip()
     script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
-    cmd = [
-        sys.executable,
-        script_path,
-        "--db",
-        db.path,
-        "--status-db",
-        db.path,
-        "--status-callback-url",
-        _static_site_status_callback_url(),
-        "--limit",
-        str(limit),
-        "--current-date",
-        current_date,
-        "--build-id",
-        build_id,
-        "--export-in-kaggle",
-        "--related-cache",
-        (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
-        "--gemma-related-model",
-        (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip(),
-        "--gemma-related-key-env",
-        (os.getenv("STATIC_SITE_GEMMA_RELATED_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
-        "--gemma-related-max-anchors",
-        str(int((os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS") or "0").strip() or "0")),
-        "--timeout-minutes",
-        str(int((os.getenv("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES") or "60").strip() or "60")),
-        "--poll-interval",
-        str(int((os.getenv("STATIC_SITE_KAGGLE_POLL_INTERVAL") or "30").strip() or "30")),
-        "--download-output",
-    ]
-    if (os.getenv("STATIC_SITE_GEMMA_RELATED_VERIFY") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        cmd.append("--gemma-related-verify")
+    cmd = _static_site_build_kaggle_command(
+        db_path=db.path,
+        build_id=build_id,
+        limit=limit,
+        current_date=current_date,
+        script_path=script_path,
+        status_callback_url=_static_site_status_callback_url(),
+    )
     logging.info(
-        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s",
+        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
         event_id,
         build_id,
         limit,
+        (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+        _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
+        _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,

@@ -48,11 +48,13 @@ The current verified path produces a checked tarball artifact. CDN host `static.
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
 
 
-## Current v47 evidence and open gate
+## Current v48 pgvector evidence and open gate
 
-`preview-20260628-event-pages-v47-sparse-fixes` verifies the CDN-enabled preview path on real production-snapshot data: 70 events, `npm run check:preview` passed, public Playwright regression passed, 957 referenced active media keys were present in bucket `kenigevents.ru`, and stable ICS files were uploaded under `https://static.kenigevents.ru/ics/<event_id>.ics`.
+`preview-20260628-event-pages-v48-pgvector-gemma-kaggle` verifies the CDN-enabled pgvector preview path on real production-snapshot data: 70 events, `npm run check:preview` passed inside Kaggle CPU, live public smoke passed for `/data/discovery/6447.json`, 76 compact search documents and 76 `gemini-embedding-2/vector(768)` embeddings exist in the personalization Supabase project, and the 6447 golden anchor puts `6310` “Архитектурно-урбанистическая студия...” first after pgvector+Gemma verification.
 
-This does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
+Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback and CDN asset/ICS bases. This means the coalesced `static_site_build` job can reproduce the v48-style vector sync/retrieval process from `/data/db.sqlite` after Smart Update.
+
+This still does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
 
 ## Static-site Gemma/related secrets
 
@@ -63,7 +65,7 @@ For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secret
 
 Only the minimal runtime env is encrypted: the selected Google key env (default `GOOGLE_API_KEY4`) and Supabase limiter env (`SUPABASE_URL` plus `SUPABASE_KEY`/service key). The Kaggle kernel loads these envs in memory before running the exporter. A waited run deletes the secret datasets in `finally`; `--no-wait` keeps them because the kernel still needs them.
 
-The build must still fail/skip loudly if limiter env is missing. Direct provider calls or local limiter fallback are not allowed for the related-chain Gemma audit.
+The build must still fail/skip loudly if limiter env is missing. Direct provider calls or local limiter fallback are not allowed for the related-chain Gemma audit. For pgvector related mode the encrypted runtime payload also carries the personalization Supabase URL/secret and selected embedding key env, because the Kaggle exporter must upsert changed search documents/vectors before calling the backend-only related RPC.
 
 ## Release manifest contract
 
