@@ -46,20 +46,20 @@ Static PKCE hardening in v52:
 ```ts
 const supabase = createClient(url, publishableKey, {
   auth: {
-    flowType: 'pkce',
+    flowType: "pkce",
     detectSessionInUrl: false,
     persistSession: true,
     autoRefreshToken: true,
   },
-})
+});
 
 await supabase.auth.signInWithOAuth({
-  provider: 'custom:yandex',
+  provider: "custom:yandex",
   options: { redirectTo: cleanAuthRedirectUrl() },
-})
+});
 
 // On return to the same page:
-await supabase.auth.exchangeCodeForSession(code)
+await supabase.auth.exchangeCodeForSession(code);
 ```
 
 As of 2026-06-29 the local/private environment contains the Yandex client credentials and the Supabase provider `custom:yandex` is configured. These secrets are not committed; readiness is checked by `scripts/check_authorized_search_readiness.py --probe-yandex-provider`.
@@ -148,31 +148,35 @@ Query:    task: search result | query: {user_query}
 
 ## LLM verifier
 
-The Edge Function can run an optional LLM verifier/reranker only after vector candidates exist and quota is reserved. The verifier:
+The Edge Function runs an LLM verifier after pgvector retrieval when the user has LLM quota. This verifier is an operational classifier over already retrieved IDs, not an external consultant review. Runtime contract:
 
-- receives only candidate IDs + compact card facts;
-- may reorder or reject candidates;
-- cannot create new events;
-- returns IDs only, cards are hydrated from trusted `card_snapshot`.
+- `EVENT_SEARCH_LLM_ENABLED=1` enables the verifier;
+- `EVENT_SEARCH_LLM_MODEL` production/canary value is `gemini-3.1-flash-lite`; the code fallback is also `gemini-3.1-flash-lite` so a missing env var does not silently fall back to the Gemma 4 models that timed out/500-ed in live probes;
+- `EVENT_SEARCH_VERIFICATION_WINDOW=12` for the current canary;
+- `EVENT_SEARCH_LLM_TIMEOUT_MS=7000` after live tests showed Gemma 4 was unreliable while Flash-Lite returned the verifier decision in about 1.0–1.3s.
 
-Env gate:
+High-match contract:
 
-- `EVENT_SEARCH_LLM_ENABLED=1` enables verifier;
-- `EVENT_SEARCH_LLM_MODEL` defaults to `gemma-4-26b-a4b-it` for product reranking. This verifier is an operational reranker over already retrieved IDs, not an external consultant review.
-- `EVENT_SEARCH_LLM_TIMEOUT_MS` defaults to `3500`; timeout/failure must return vector order, not block the user-facing feed.
-- `EVENT_SEARCH_EMBEDDING_TIMEOUT_MS` defaults to `8000`; embedding timeout is a hard search-provider failure because pgvector query embedding is required.
+1. pgvector returns a bounded candidate window from `gemini-embedding-2` vectors.
+2. The LLM receives candidate IDs + compact facts from `search_digest`; it returns exactly three buckets: `exact_event_ids`, `possible_event_ids`, `rejected_event_ids` plus `query_interpretation`.
+3. Only `exact_event_ids` are rendered under **«Результаты поиска»** (`items`).
+4. Weak/uncertain matches are rendered only under **«Возможно, вам будет интересно»** (`fallback_items`).
+5. If the LLM times out, provider returns non-2xx, facts are insufficient, quota is not reserved, the LLM rubber-stamps too many candidates as exact, or the verifier is disabled, the Edge Function fails closed: `items=[]`, candidates become possible/fallback only. Raw pgvector candidates must not be shown as exact search results in the public high-match mode.
+6. `has_more=false` in this MVP high-match mode because repeated per-page LLM calls produced inconsistent page boundaries. The next production step is a cached/cursor verified window so “Показать ещё” paginates within one LLM-classified set instead of re-verifying each page.
 
-The verifier uses native Gemini structured output in `generateContent` (`responseMimeType: application/json` + `responseJsonSchema`) so parsing is constrained by provider-side JSON Schema rather than by post-hoc free-text parsing only. If the LLM call fails, results fall back to vector order and the request remains usable.
+The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. A non-semantic over-approval sanity check demotes the whole set to possible if the model marks more than 60% of a 4+ candidate window as exact; this is a safety guard against LLM rubber-stamping, not a deterministic topic/audience rule.
 
-2026-06-29 relevance hardening for audience-sensitive queries:
+2026-06-29 live evidence after high-match hardening:
 
-- pgvector remains the retrieval layer; no deterministic audience/category guard was added for queries like “интересно детям”;
-- the Edge Function fetches compact `search_digest` facts for the retrieved candidate IDs server-side with the Supabase service role and passes only short factual snippets to the LLM verifier;
-- `ordered_event_ids` is now interpreted as the **final exact-result set**, not as a weak rerank hint; omitted or rejected candidates do not re-enter exact search results;
-- the verifier prompt is fail-closed for explicit audience/scenario requests: for children/family queries it must keep only candidates whose facts are explicitly compatible with that audience and reject adult professional/urbanistic/lecture-style candidates when compatibility is not evident;
-- the verifier also runs for a single candidate, so a late lone pgvector hit can still be rejected and the UI can move to the separate fallback/discovery section.
+- `Концерт классической музыки`: exact `5201 Концерт «Фестиваль Pianissimo: Константин Емельянов»`, 3 possible, LLM stage ≈1.0s.
+- `Чтобы было интересно детям`: exact `4512 С чего начинается Родина`, 3 possible, urban-planning events no longer appear as exact results.
+- `джаз на выходных`: 0 exact, 4 possible; with the current limited corpus this is preferable to showing non-jazz music as exact.
+- NDJSON/progress path emits backend stages: `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `finalize`, `result`.
 
-Incident example that drove the correction: query `Чтобы было интересно детям` previously surfaced `Архитектурно-урбанистическая студия` and `Как договориться о будущем города` because the LLM prompt was permissive and the code appended candidates omitted by the LLM. After the fix, direct Edge probes return exact results without those urban-planning cards, with `llm_verifier.candidate_fact_count=12` on full pages.
+Consultant traceability:
+
+- Gemini Pro review was attempted only on allowed Pro models (`gemini-3.1-pro-preview`, `gemini-3-pro-preview`) and was blocked by `429 RESOURCE_EXHAUSTED`; evidence is stored in `artifacts/codex/search-consultants-20260629*/gemini-*-error.txt` and is not treated as completed Gemini review.
+- `a-opus` reviewed the implementation twice. The first review found the fatal raw-vector-as-exact fallback; the second high-match review accepted the fail-closed architecture and flagged the now-fixed model fallback and over-approval guard, with remaining P1s around dedicated provider quota/key lane, prompt-injection hardening of candidate text, unreserving failed LLM quota, and proper verified-window pagination. Artifacts: `artifacts/codex/search-consultants-20260629/a-opus-review.md` and `artifacts/codex/search-consultants-20260629-high-match/a-opus-full-review.md`.
 
 ## Query facets
 
@@ -194,7 +198,8 @@ Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
 - current Supabase Auth user count (`auth.users`);
 - documented current provider project limits:
   - `gemini-embedding-2`: `100 RPM / 30k TPM / 1000 RPD`;
-  - `gemma-4-26b-a4b-it`: `15 RPM / unlimited TPM / 1500 RPD`;
+  - `gemini-3.1-flash-lite`: `15 RPM / 250k TPM / 500 RPD` for the current online verifier;
+  - `gemma-4-26b-a4b-it` / `gemma-4-31b-it`: `15 RPM / unlimited TPM / 1500 RPD`, kept as documented capacity but not the current online verifier because live search probes showed timeouts/500s.
 - reserves for static generation/backfill (`400` embedding RPD, `500` LLM RPD by default);
 - abuse caps for the still-private canary (`max 50` searches/day and `max 40` LLM reranks/day per registered user).
 
@@ -210,7 +215,7 @@ conservatively counts one available provider lane plus reserves. If/when
 `event-search` is routed through a central multi-key limiter, the same RPC can be
 called with higher effective RPD inputs instead of hardcoding a new plan.
 
-Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still return pgvector results with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
+Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 
 ## Frontend integration
 
@@ -342,8 +347,6 @@ Security smoke:
 Golden semantic smoke for event `6447` (“Как договориться о будущем города”): backend pgvector RPC returns `6310` “Архитектурно-урбанистическая студия...” as the first non-self candidate (`vector_similarity≈0.8592` in the v48 build), ahead of `5261` “Музыка нашего города”. The published discovery JSON for 6447 also keeps `6310` first after Gemma 4 26B verification (`llm_semantic_score=0.92`).
 
 This fixes the specific lexical failure where “Музыка нашего города” outranked the urban-planning studio solely because of the token “город”.
-
-
 
 ## v49 auth/search navigation canary
 
@@ -495,6 +498,7 @@ Verification evidence on 2026-06-29:
 - Readiness probe passed: `OPTIONS /functions/v1/event-search = 200`, Yandex provider authorize redirect `302`.
 - Live Supabase RPC smoke with a temporary authenticated user passed for query `урбанистика будущее города`: pgvector top-3 included `6447`, `6310`, `5690`.
 - Live Edge Function smoke with a temporary authenticated user returned `200`, algorithm `pgvector_gemini_embedding_2_llm_verify_v1`, ids `[6447, 6310]`, `llm_verifier.status=ok`; temporary user/quota/audit rows were cleaned up.
+
 ## Auth redirect incident: localhost fallback
 
 On 2026-06-29 a real mobile OAuth attempt returned to `localhost:3000/?error=...` after Yandex consent. Root cause: the personalization Supabase Auth URL Configuration still had the default `site_url=http://localhost:3000` and an empty `uri_allow_list`, so Supabase fell back to the local development URL instead of the `redirectTo` preview URL.
@@ -546,7 +550,6 @@ Verification evidence on 2026-06-29:
 - `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v52-auth-static-pkce`;
 - `scripts/smoke_authorized_search_ui.py` passed against the v52 build with the real personalization Supabase URL mocked at network layer; the smoke now covers both missing-verifier error UX and a successful mocked PKCE callback/search;
 - public smoke for `https://kenigevents.ru/preview-20260629-event-pages-v52-auth-static-pkce/poisk/?code=missing-verifier-code` returns to clean `/poisk/` and shows the explicit “сессия входа устарела…” retry message.
-
 
 ## v53 backend-progress search canary
 

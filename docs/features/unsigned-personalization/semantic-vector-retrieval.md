@@ -18,7 +18,7 @@ Authorized search is a two-stage semantic pipeline, not a deterministic keyword 
 1. **pgvector retrieval** returns nearest event candidates from `gemini-embedding-2` vectors over compact event search documents.
 2. **LLM verifier** receives only the retrieved candidate IDs plus compact public facts and decides which candidates are exact matches for the user query. It may return fewer than the requested limit, including zero.
 
-For audience-sensitive queries such as “интересно детям”, relevance must be decided by the LLM from event facts rather than by regex filters. Adult/professional urban-planning events are rejected by the verifier when the facts do not support child/family suitability; they can still appear later only under the separately headed fallback/discovery section, not as exact search results.
+High-match invariant: raw pgvector candidates are not exact search results until the LLM explicitly approves them. On LLM timeout/error/quota miss/insufficient facts/over-approval, exact results are empty and candidates are downgraded to the separately headed possible/discovery section. For audience-sensitive queries such as “интересно детям”, relevance must be decided by the LLM from event facts rather than by regex filters. Adult/professional urban-planning events are rejected by the verifier when the facts do not support child/family suitability; they can still appear later only under the separately headed fallback/discovery section, not as exact search results.
 
 ## Layer boundaries
 
