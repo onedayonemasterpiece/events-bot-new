@@ -9,10 +9,10 @@
 
 ### Changed
 
-- Non-promo Telegram event posts now keep permanent footer links to Max and VK
-  next to the `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a
-  12-space visual offset), while promo/button-highlight posts suppress that
-  social footer to preserve their CTA-focused structure.
+- Telegram event posts keep permanent footer links to Max and VK next to the
+  `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual
+  offset); only explicit button-highlight posts where `Подробнее` moves to an
+  inline button suppress that social footer.
 - Telegram event-post footer hashtags now drop long title-like/festival slug
   tags, keeping hashtags as compact navigation/search aids; the `Вконтакте`
   footer link now targets the VK channel URL (`vk.ru/im/channels/-239844596`).

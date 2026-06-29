@@ -677,6 +677,27 @@ def test_tg_event_promo_details_move_to_inline_button():
     assert promo_markup.inline_keyboard[1][0].url == "https://example.com/event.ics"
 
 
+def test_tg_event_promo_intro_without_button_keeps_social_footer():
+    event = _event(ics_url="https://example.com/event.ics")
+
+    text = main.build_tg_event_announcement(
+        event,
+        "Описание.",
+        promo_highlight=True,
+        details_button_highlight=False,
+    )
+    markup = main.build_tg_event_reply_markup(
+        event,
+        promo_highlight=True,
+        details_button_highlight=False,
+    )
+
+    assert "🔎 Подробнее" in text
+    assert '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' in text
+    assert '<a href="https://vk.ru/im/channels/-239844596">Вконтакте</a>' in text
+    assert markup.inline_keyboard[0][0].text == "📅 20 июня 19:00 · Добавить в календарь"
+
+
 def test_tg_event_button_highlight_suppresses_social_footer_even_without_promo_intro():
     event = _event()
 

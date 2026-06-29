@@ -72,10 +72,10 @@
   если активности нет или она выключена, `🔎 Подробнее` остаётся текстовой
   ссылкой даже при promo-intro. Это позволяет оставить богатый promo intro от
   кампании, но отключить громоздкую кнопку для широких механик вроде
-  `tg_repost`. `Подписаться` не добавляется в event captions. Для promo-постов
-  (`promo_highlight`) и button-highlight постов с inline-кнопкой `✨ Подробнее`
-  social footer `Max · Вконтакте` не добавляется: у них уже есть промо-структура,
-  дополнительная кнопка/CTA и более длинный текст.
+  `tg_repost`. `Подписаться` не добавляется в event captions. Social footer
+  `Max · Вконтакте` подавляется только для явных button-highlight постов, где
+  `Подробнее` уже вынесен в inline-кнопку `✨ Подробнее`; широкий
+  `promo_highlight`/богатый intro сам по себе не убирает footer-ссылки.
 - Если у события есть календарь, пост получает inline-кнопку вида `📅 <дата или диапазон> <время> · Добавить в календарь`. Публичный CTA должен вести на открываемую аудиторией ссылку: публичный Telegram calendar-post URL (`https://t.me/<username>/<id>`) предпочтительнее, но приватные внутренние `https://t.me/c/...` ссылки asset-канала не считаются публичными и заменяются на `event.ics_url`. Новые `tg_ics_post` записи сохраняют username-ссылку, если asset-канал зарегистрирован с `username`.
 - Source posts that look like third-party ticket giveaways (`розыгрыш` / `разыгрываем` / `выиграть` + `билет` / `пригласительный`) are fallback content for managed Telegram/VK event publication only when Smart Update has not produced substantial cleaned non-giveaway event copy. If Smart Update extracted a real event body after removing raffle mechanics, the event still receives the normal Telegram event post and managed VK dependency even when the raw source mentioned a giveaway.
 - Для бесплатных Telegram event posts в hashtag line добавляется `#бесплатно`, чтобы событие оставалось поисковым даже если post-publication premium emoji editor заменит видимую строку `🟡 Бесплатно...` на custom emoji label.
