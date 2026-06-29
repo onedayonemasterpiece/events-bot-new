@@ -5,7 +5,7 @@
 - Captured from Telegram Saved Messages message `31117` on `2026-06-29T07:33:01Z`.
 - Visible fallback text: `🆓🆓🆓🆓`.
 - Free-label custom emoji document ids: `5406749623865857008,5407072545276973461,5406815783542085177,5406927577245833438`.
-- `Полюбить Калининград` (`lovekenigofficial`) replacements: `👉` document id `5204036388789445008`; `🎭` document id `5390961951150988955`; `🤘` document id `5393556708398225048`; date/calendar `🎟` document id `5267071016747690521`; Tretyakov pair `🖼🖼` document ids `5188445640325099838,5188470637034758005` from `https://t.me/addemoji/lovekenigofficial` (the two adjacent emoji parts after the small standalone Tretyakov building thumbnail).
+- `Полюбить Калининград` (`lovekenigofficial`) replacements: `👉` document id `5204036388789445008`; `🎭` document id `5390961951150988955`; `🤘` document id `5404517529362128309`; date/calendar `🎟` document id `5267071016747690521`; Tretyakov pair `🖼🖼` document ids `5188445640325099838,5188470637034758005` from `https://t.me/addemoji/lovekenigofficial` (the two adjacent emoji parts after the small standalone Tretyakov building thumbnail).
 - `Most V Kёnigsberg` (`MostVKenig`, `https://t.me/addemoji/MostVKenig`) insertions: `💰` document id `5305700407874449437`; `📗` document id `5339143926638996892`; `🏰` document id `5305794630866989617` (first castle variant).
 
 ## Replacement contract

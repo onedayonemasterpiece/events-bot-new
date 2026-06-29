@@ -31,7 +31,7 @@ DEFAULT_FREE_EMOJI_DOCUMENT_IDS: tuple[int, ...] = (
 DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
     "🎭": 5390961951150988955,
     "👉": 5204036388789445008,
-    "🤘": 5393556708398225048,
+    "🤘": 5404517529362128309,
     "🎟": 5267071016747690521,
     "💰": 5305700407874449437,
     "📗": 5339143926638996892,
@@ -287,19 +287,20 @@ def _find_daily_single_emoji_ops(
     mapping: dict[str, int],
 ) -> list[_SubstitutionOp]:
     sur_text = add_surrogate(text)
-    existing_custom_ranges = [
-        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
-        for entity in (entities or [])
-        if isinstance(entity, MessageEntityCustomEmoji)
-    ]
+    custom_entities = [entity for entity in (entities or []) if isinstance(entity, MessageEntityCustomEmoji)]
     ops: list[_SubstitutionOp] = []
     occupied: list[tuple[int, int]] = []
     for emoji, document_id in mapping.items():
+        expected_ranges = [
+            (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
+            for entity in custom_entities
+            if int(getattr(entity, "document_id", 0)) == int(document_id)
+        ]
         sur_emoji = add_surrogate(emoji)
         pos = sur_text.find(sur_emoji)
         while pos >= 0:
             end = pos + len(sur_emoji)
-            if not _ranges_overlap(pos, end, existing_custom_ranges) and not _ranges_overlap(pos, end, occupied):
+            if not _ranges_overlap(pos, end, expected_ranges) and not _ranges_overlap(pos, end, occupied):
                 ops.append(_SubstitutionOp(pos, len(sur_emoji), emoji, (int(document_id),)))
                 occupied.append((pos, end))
             pos = sur_text.find(sur_emoji, pos + 1)

@@ -27,6 +27,9 @@
 - `INC-2026-06-29-tg-event-publish-fresh-import-starvation.md`
   - Scope: `joboutbox` due ordering and `tg_event_publish` spacing/catch-up for Smart Update imports into `@kldevents`.
   - Must not regress: fresh Smart Update event announcements must not be starved behind old `tg_event_publish` catch-up/backlog rows; Telegram spacing may still enforce one post per interval, but newly imported events with completed dependencies need a freshness lane and public VK/TG divergence must be visible in evidence.
+- `INC-2026-06-29-tg-premium-rock-emoji-wrong-id.md`
+  - Scope: Telegram premium emoji editor for rock-concert title/category icons in `@kldevents` and daily announcements, especially the `lovekenigofficial` `🤘` document id.
+  - Must not regress: rock `🤘` must use document id `5404517529362128309` (rock/guitarist symbol), not neighboring id `5393556708398225048`; existing wrong custom entities for visible `🤘` must be corrected in-place.
 - `INC-2026-06-29-tg-premium-tretyakov-composite-pair.md`
   - Scope: Telegram premium emoji editor for daily Tretyakov venue markers in `@kenigevents`, especially the `lovekenigofficial` `🖼🖼` document-id pair.
   - Must not regress: Tretyakov `🖼🖼` must use the two-part composite ids `5188445640325099838,5188470637034758005`, not the small standalone thumbnail id `5188683852096234620` and not duplicated thumbnails; marker scope remains venue-only, not title/description-inferred.

@@ -75,6 +75,26 @@ def test_existing_single_custom_emoji_is_not_replaced_again():
     assert new_entities == entities
 
 
+def test_wrong_single_custom_emoji_document_id_is_corrected():
+    text = "🤘 Трибьют группы «АРИЯ»"
+    entities = [
+        MessageEntityCustomEmoji(
+            offset=0,
+            length=len(add_surrogate("🤘")),
+            document_id=5393556708398225048,
+        )
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
+
+    assert new_text == text
+    assert count == 1
+    custom = [entity for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert len(custom) == 1
+    assert custom[0].document_id == DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"]
+    assert custom[0].document_id == 5404517529362128309
+
+
 def test_daily_price_source_ticket_gets_money_custom_emoji_and_keeps_link():
     text = "[ignored header]\nБилеты в источнике 2200\n26 июня 19:00 Другая площадка"
     ticket_offset = add_surrogate(text).index("Билеты в источнике")
