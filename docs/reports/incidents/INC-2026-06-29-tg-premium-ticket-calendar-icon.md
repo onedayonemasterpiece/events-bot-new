@@ -1,10 +1,10 @@
 # INC-2026-06-29-tg-premium-ticket-calendar-icon Telegram premium editor changed date calendars into ticket icons
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Telegram `@kldevents` / premium emoji editor
 Opened: 2026-06-29
-Closed: —
+Closed: 2026-06-29
 Owners: events-bot
 Related incidents: —
 Related docs: `docs/features/tg-premium-emojis-update/README.md`, `.codex/skills/tg-premium-emojis-update/SKILL.md`
@@ -81,14 +81,20 @@ The Telegram premium emoji editor interpreted the requested `📅` replacement t
 
 ## Follow-up Actions
 
-- [ ] Close after deploy and post-deploy live verification are recorded below.
+- [x] Closed after deploy and post-deploy live verification were recorded below.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `80b2cc563cc3422bbe82783696d6f368ce14092f`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree, HEAD equal to `origin/main`.
+- regression checks:
+  - `pytest -q tests/test_tg_premium_emojis.py tests/test_daily_format.py::test_format_event_daily_marks_rock_concert_with_horns_icon tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send tests/test_remote_telegram_session.py` → `21 passed`.
+  - `py_compile tg_premium_emojis.py scripts/tg_premium_emoji_editor.py main.py main_part2.py` → passed.
+  - live `@kldevents` posts `1606…1597` reread with local fixed editor → `remaining_replacements=0`, date rows start with `📅`, `1606` has `🎟 Билеты 💰 1000` and no textual `руб.`.
+- post-deploy verification:
+  - Fly image `deployment-01KW9A0PX6NG1N5QSD9AZDKJTX`, machine version `1520`, `/healthz` returned `200` and `ready=true`.
+  - Production env check: `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1`, dedicated `TG_PREMIUM_EMOJI_AUTH_BUNDLE` present, delay/jitter configured.
+  - Production code smoke: sample `📅 30 июня 19:00` stayed `📅`, sample `🎟 Билеты 1000 руб.` became `🎟 Билеты 💰 1000`.
 
 ## Prevention
 
