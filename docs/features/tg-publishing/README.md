@@ -64,7 +64,7 @@
 - Обычный non-promo footer сохраняет текстовую ссылку `🔎 Подробнее`, а
   после неё в той же строке добавляет постоянные ссылки `Max` и `Вконтакте`
   (`https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA`,
-  `https://vk.com/klgdevents`) с визуальным отступом в 12 пробелов: `🔎 Подробнее            Max · Вконтакте`.
+  `https://vk.ru/im/channels/-239844596`) с визуальным отступом в 12 пробелов: `🔎 Подробнее            Max · Вконтакте`.
   Inline-кнопка `✨ Подробнее` управляется отдельной promo-активностью
   `promo_activity.surface='tg_button_highlight'` /
   `profile_key='kldevents:details-button'`: если активность включена для
@@ -77,6 +77,14 @@
 - Если у события есть календарь, пост получает inline-кнопку вида `📅 <дата или диапазон> <время> · Добавить в календарь`. Публичный CTA должен вести на открываемую аудиторией ссылку: публичный Telegram calendar-post URL (`https://t.me/<username>/<id>`) предпочтительнее, но приватные внутренние `https://t.me/c/...` ссылки asset-канала не считаются публичными и заменяются на `event.ics_url`. Новые `tg_ics_post` записи сохраняют username-ссылку, если asset-канал зарегистрирован с `username`.
 - Source posts that look like third-party ticket giveaways (`розыгрыш` / `разыгрываем` / `выиграть` + `билет` / `пригласительный`) are fallback content for managed Telegram/VK event publication only when Smart Update has not produced substantial cleaned non-giveaway event copy. If Smart Update extracted a real event body after removing raffle mechanics, the event still receives the normal Telegram event post and managed VK dependency even when the raw source mentioned a giveaway.
 - Для бесплатных Telegram event posts в hashtag line добавляется `#бесплатно`, чтобы событие оставалось поисковым даже если post-publication premium emoji editor заменит видимую строку `🟡 Бесплатно...` на custom emoji label.
+- Хештеги в Telegram event posts должны быть навигационными и поисковыми, а
+  не пересказом названия события. Канонический набор: дата (`#1июля`,
+  `#1_июля`), городской афишный тег (`#афишакалининград`), до трёх коротких
+  type-тегов (`#лекция`, `#концерт`, ...), `#бесплатно` для бесплатных
+  событий и только короткий фестивальный/брендовый тег. Presentation guardrail:
+  один tag body после `#` — максимум 28 символов, строка — максимум 8 тегов и
+  около 140 видимых символов. Длинные слитные title-like slug tags вроде
+  `#ПоодёжкевстречаютНародныйкостюмтрадицииисмыслы` не публикуются.
 - Если структурной цены, билетной ссылки, sold-out статуса и явного признака бесплатности нет, билетная строка не выводится.
 - Telegram использует исходный `event.ticket_link`. `event.vk_ticket_short_url` — VK-only analytics ссылка и не должна попадать ни в текст, ни в entities/buttons Telegram-поста.
 - Если `event.ticket_link` содержит телефон (`tel:+...`) или в narrative/body есть телефонный контакт, Telegram-пост должен делать его кликабельным явной Telegram `phone_number` entity при отправке/редактировании caption/text. Для самого Telegram caption видимый номер нормализуется в компактный `+74012463635`, потому что Bot API принимает `phone_number` entity только на таком phone-like payload; человекочитаемая группировка сохраняется в промежуточной HTML-сборке/Telegraph, но не должна ломать actionability в Telegram. Уже существующие HTML-ссылки не перелинковываются повторно.

@@ -11,6 +11,9 @@
 
 - Telegram event posts now keep permanent footer links to Max and VK next to
   the `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual offset).
+- Telegram event-post footer hashtags now drop long title-like/festival slug
+  tags, keeping hashtags as compact navigation/search aids; the `Вконтакте`
+  footer link now targets the VK channel URL (`vk.ru/im/channels/-239844596`).
 - Daily `ДОБАВИЛИ В АНОНС` audience labels now adapt their own score
   threshold: if strict `likes + 5*reposts >= 20` labels are below the minimum
   share, the daily renderer lowers only this daily threshold to a conservative

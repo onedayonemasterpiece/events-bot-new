@@ -115,9 +115,34 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert (
         '<a href="https://telegra.ph/event">🔎 Подробнее</a>            '
         '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a> · '
-        '<a href="https://vk.com/klgdevents">Вконтакте</a>'
+        '<a href="https://vk.ru/im/channels/-239844596">Вконтакте</a>'
     ) in text
     assert "Подписаться" not in text
+
+
+def test_tg_event_hashtag_line_drops_long_title_like_festival_slug():
+    event = _event(
+        festival="По одёжке встречают: Народный костюм, традиции и смыслы",
+        is_free=True,
+        ticket_link=None,
+        ticket_price_min=None,
+        ticket_price_max=None,
+        date="2026-07-01",
+        title="Лекция «Чулки и носки»",
+        description="Лекция и встреча о народном костюме.",
+    )
+
+    hashtag_line = main._tg_event_hashtag_line(event)
+
+    assert "#1июля" in hashtag_line
+    assert "#1_июля" in hashtag_line
+    assert "#афишакалининград" in hashtag_line
+    assert "#лекция" in hashtag_line
+    assert "#встреча" in hashtag_line
+    assert "#бесплатно" in hashtag_line
+    assert "#ПоодёжкевстречаютНародныйкостюмтрадицииисмыслы" not in hashtag_line
+    assert all(len(tag.lstrip("#")) <= main.TG_EVENT_HASHTAG_MAX_TAG_CHARS for tag in hashtag_line.split())
+    assert len(hashtag_line.split()) <= main.TG_EVENT_HASHTAG_MAX_TAGS
 
 
 def test_build_tg_event_announcement_formats_multiday_range():
@@ -645,7 +670,7 @@ def test_tg_event_promo_details_move_to_inline_button():
     assert normal_markup.inline_keyboard[0][0].text == "📅 20 июня 19:00 · Добавить в календарь"
     assert "Подробнее" not in promo
     assert '<a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' in promo
-    assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in promo
+    assert '<a href="https://vk.ru/im/channels/-239844596">Вконтакте</a>' in promo
     assert promo_markup.inline_keyboard[0][0].text == "✨ Подробнее"
     assert promo_markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
     assert promo_markup.inline_keyboard[1][0].text == "📅 20 июня 19:00 · Добавить в календарь"

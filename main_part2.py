@@ -5047,7 +5047,7 @@ async def publish_vk_channel_promo_event_publication(
 
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
 TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
-TG_EVENT_VK_URL = "https://vk.com/klgdevents"
+TG_EVENT_VK_URL = "https://vk.ru/im/channels/-239844596"
 TG_EVENT_MAX_URL = "https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
@@ -5356,7 +5356,39 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
         tags.append("#бесплатно")
     if festival_tag:
         tags.append(festival_tag)
-    return format_vk_hashtag_line(dedupe_vk_hashtags(tags))
+    return format_vk_hashtag_line(_tg_event_filter_hashtags(dedupe_vk_hashtags(tags)))
+
+
+TG_EVENT_HASHTAG_MAX_TAG_CHARS = 28
+TG_EVENT_HASHTAG_MAX_TAGS = 8
+TG_EVENT_HASHTAG_MAX_LINE_CHARS = 140
+
+
+def _tg_event_filter_hashtags(tags: list[str]) -> list[str]:
+    """Keep Telegram event hashtags useful for search, not as long title slugs."""
+
+    kept: list[str] = []
+    line_len = 0
+    for tag in tags:
+        clean = str(tag or "").strip()
+        if not clean.startswith("#"):
+            continue
+        body = clean[1:]
+        if not body:
+            continue
+        # Telegram footer hashtags are navigation/search aids. Long concatenated
+        # title/festival slugs like ``#ПоодёжкевстречаютНародныйкостюм...`` are
+        # visually heavy and poor search affordances, so keep only compact tags.
+        if len(body) > TG_EVENT_HASHTAG_MAX_TAG_CHARS:
+            continue
+        projected = line_len + (1 if kept else 0) + len(clean)
+        if projected > TG_EVENT_HASHTAG_MAX_LINE_CHARS:
+            break
+        kept.append(clean)
+        line_len = projected
+        if len(kept) >= TG_EVENT_HASHTAG_MAX_TAGS:
+            break
+    return kept
 
 
 def _tg_event_city_hashtag(city: str | None) -> str | None:
@@ -5906,7 +5938,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_social_footer_vkontakte_v3",
+                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_v4",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
