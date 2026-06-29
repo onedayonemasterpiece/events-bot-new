@@ -159,6 +159,8 @@ Env gate:
 
 - `EVENT_SEARCH_LLM_ENABLED=1` enables verifier;
 - `EVENT_SEARCH_LLM_MODEL` defaults to `gemma-4-26b-a4b-it` for product reranking. This verifier is an operational reranker over already retrieved IDs, not an external consultant review.
+- `EVENT_SEARCH_LLM_TIMEOUT_MS` defaults to `3500`; timeout/failure must return vector order, not block the user-facing feed.
+- `EVENT_SEARCH_EMBEDDING_TIMEOUT_MS` defaults to `8000`; embedding timeout is a hard search-provider failure because pgvector query embedding is required.
 
 If the LLM call fails, results fall back to vector order and the request remains usable.
 
@@ -245,14 +247,24 @@ otherwise a neutral inline SVG fallback. Logout is available only inside the
 account popover and the popover closes on outside click/Escape; this avoids an
 accidental logout tap while typing/searching on mobile.
 
-The browser currently calls `event-search` with `Accept: application/json` and
-renders cards from the single JSON response. This is an intentional v56 rollback
-from NDJSON result delivery: live mobile evidence at `2026-06-29T14:28Z` and
-`14:29Z` showed the backend wrote successful `event_search_requests` rows with
-`12` results in `<1s`, but Chrome/WebView did not deliver/render the terminal
-stream result and the user saw a timeout after the progress UI reached
-“Собираю карточки”. Until the feature has job/polling progress, reliability of
-the result feed is more important than streamed backend-stage progress.
+The browser currently calls `event-search` with `Accept: application/json`,
+`use_llm_verifier=false`, and renders cards from the single JSON response. This
+is an intentional v57 production-safety rollback: live mobile evidence showed
+two different failure modes:
+
+1. at `2026-06-29T14:28Z` and `14:29Z` the backend wrote successful
+   `event_search_requests` rows with `12` results in `<1s`, but Chrome/WebView
+   did not deliver/render the terminal streamed result;
+2. after switching to JSON, a later mobile request reached the fake 88%
+   “Собираю карточки” progress state and timed out with no audit row, which is
+   consistent with a provider/Edge request stuck before completion.
+
+Therefore the visible product path no longer asks the optional LLM verifier to
+run inline. The Edge Function still supports `use_llm_verifier=true` for
+controlled diagnostics/admin canaries, but that path is bounded by
+`EVENT_SEARCH_LLM_TIMEOUT_MS` and must fall back to vector order on timeout.
+Until the feature has job/polling progress, reliability of the result feed is
+more important than streamed or inline-LLM backend-stage progress.
 
 The Edge Function still supports NDJSON when requested with
 `Accept: application/x-ndjson`; use that for controlled diagnostics only. The

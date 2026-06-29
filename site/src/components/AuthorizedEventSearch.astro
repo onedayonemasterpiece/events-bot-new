@@ -555,7 +555,10 @@ const HeadingTag = headingLevel;
         }
         const { data, error } = await withTimeout(
           invokeEventSearch(
-            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
+            // User-facing mobile search must return the vector feed reliably.
+            // The optional LLM verifier stays available for controlled Edge
+            // diagnostics, but it is not allowed to block the visible result.
+            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: false },
             session,
           ),
           searchTimeoutMs,

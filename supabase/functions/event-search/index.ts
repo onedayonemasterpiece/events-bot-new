@@ -146,6 +146,28 @@ function clampInt(
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
 }
 
+function envInt(name: string, fallback: number, min: number, max: number): number {
+  return clampInt(env(name), fallback, min, max);
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  label: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`${label}_timeout`);
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function sha256Hex(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -196,7 +218,7 @@ async function embedQuery(query: string): Promise<number[]> {
     "gemini-embedding-2",
   );
   const text = `task: search result | query: ${query}`;
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
     {
       method: "POST",
@@ -207,6 +229,8 @@ async function embedQuery(query: string): Promise<number[]> {
         outputDimensionality: EMBEDDING_DIM,
       }),
     },
+    envInt("EVENT_SEARCH_EMBEDDING_TIMEOUT_MS", 8000, 1000, 20000),
+    "embedding_provider",
   );
   if (!response.ok) {
     const detail = await response.text();
@@ -383,7 +407,7 @@ async function llmVerify(
     `Кандидаты: ${JSON.stringify(compact, null, 2)}`,
   ].join("\n\n");
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: "POST",
@@ -400,6 +424,8 @@ async function llmVerify(
           },
         }),
       },
+      envInt("EVENT_SEARCH_LLM_TIMEOUT_MS", 3500, 500, 12000),
+      "llm_provider",
     );
     if (!response.ok)
       return {

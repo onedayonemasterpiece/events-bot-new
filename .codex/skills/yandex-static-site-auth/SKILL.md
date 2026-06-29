@@ -151,6 +151,11 @@ only for diagnostics (`Accept: application/x-ndjson`) with progress events
 `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`,
 `llm_verify`, `fallback`, `finalize`, then `result` or `error`.
 
+User-facing search should send `use_llm_verifier=false` until the feature has
+job/polling progress or proven provider deadlines. The Edge Function may still
+support `use_llm_verifier=true` for controlled diagnostics/admin canaries, but
+it must enforce `EVENT_SEARCH_LLM_TIMEOUT_MS` and fall back to vector order.
+
 Even if an Edge Function is deployed with `--no-verify-jwt` for CORS/manual auth reasons, it must manually require and validate the Bearer token via `supabase.auth.getUser(accessToken)` before doing user-specific work.
 
 
