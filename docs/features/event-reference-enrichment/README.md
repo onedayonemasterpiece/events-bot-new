@@ -1,8 +1,19 @@
 # Event Reference Enrichment (справочное дообогащение события)
 
-> **Status:** design / implementation contract, **not provider-first**  
+> **Status:** ready for implementation / external-agent handoff accepted, **not provider-first**  
 > **Caller:** Smart Update (`smart_event_update.py`) after source-role validation and sparse safety pre-check; final public writer coverage runs after any reference enrichment.  
 > **Primary goal:** first stop unsupported sparse/giveaway descriptions; only then add at most one safe reference sentence for already valid sparse events.
+
+## Implementation readiness
+
+Ready for implementation by an external agent. The final external review accepted commit `d0402857` and explicitly approved handoff with this framing:
+
+> Implement Sparse Event Safety first. Do not implement Wikimedia provider until source roles, claim classes, giveaway blocking, sparse/rich classification, existing-description remediation, SQWOZ BAB/event `6501` regression, and final writer coverage-check pass.
+
+This feature is tracked as Smart Update quality technical debt until implemented. The implementation task is **not** “add Wikipedia enrichment”; it is:
+
+1. P0 Sparse Event Safety;
+2. Reference Enrichment v1 only on top of already valid `publish_sparse` events.
 
 ## P0: do not implement Wikimedia provider first
 

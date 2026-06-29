@@ -6,6 +6,7 @@
 
 ## TODO (проработано, но не реализовано)
 
+- Smart Update Sparse Event Safety + Event Reference Enrichment v1 (техдолг качества event descriptions; готово к реализации): `docs/features/event-reference-enrichment/README.md`
 - Movie showtimes (кино/сеансы): `docs/backlog/features/movie-showtimes/README.md`
 - Event scoring & filtering (скоринг/фильтрация): `docs/backlog/features/event-scoring/README.md`
 - Event static pages (собственный домен, SEO/GEO, Yandex S3): `docs/backlog/features/static-event-pages/README.md`

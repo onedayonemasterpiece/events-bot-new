@@ -33,9 +33,12 @@
 - `docs/features/tg-monitoring-on-demand/README.md` — fast-path запуск Telegram Monitoring по новым постам в allowlisted Telegram-каналах
 - `docs/features/kaggle-status-framework/README.md` — единый callback/heartbeat/status framework для Kaggle runtime/notebooks без скрытой дедупликации публикаций
 
+## Готово к реализации
+
+- `docs/features/event-reference-enrichment/README.md` — Smart Update Sparse Event Safety + Reference Enrichment v1; внешний review принял handoff на commit `d0402857`, реализацию начинать с анти-мусорного safety layer, не с Wikimedia provider.
+
 ## Черновики требований
 
-- `docs/features/event-reference-enrichment/README.md` — справочное дообогащение sparse-событий из Smart Update (Wikipedia/Wikidata как первый provider, строгие source-role и writer coverage gates).
 - `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
 
 ## Как добавлять новую фичу

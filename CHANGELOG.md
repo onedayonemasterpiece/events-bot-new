@@ -10,6 +10,7 @@
 
 ### Changed
 
+- Marked `event-reference-enrichment` as ready for external-agent implementation and added it to the ready-to-implement features/backlog tech-debt indexes; the handoff remains P0 Sparse Event Safety first, Reference Enrichment v1 second.
 - Telegram event posts now keep permanent footer links to Max and VK next to
   the `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual offset).
 - Telegram event-post footer hashtags now drop long title-like/festival slug

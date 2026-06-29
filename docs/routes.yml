@@ -77,6 +77,7 @@ sections:
       telegram_monitoring: docs/backlog/features/telegram-monitoring/README.md
       telegram_monitoring_videos: docs/backlog/features/telegram-monitoring-videos/README.md
       smart_event_update: docs/backlog/features/smart-event-update/README.md
+      event_reference_enrichment_ready: docs/features/event-reference-enrichment/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
@@ -322,7 +323,7 @@ features:
       - models.py
       - db.py
   event_reference_enrichment:
-    status: design
+    status: ready_for_implementation
     docs: docs/features/event-reference-enrichment/README.md
     caller: docs/features/smart-event-update/README.md
     provider_mvp: wikipedia_wikidata
