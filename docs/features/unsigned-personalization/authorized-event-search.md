@@ -335,7 +335,7 @@ The checker is redacted: it prints only `OK`/`MISSING` and never prints secret v
 - Edge runtime env has Supabase Auth/RPC + Gemini embedding access;
 - backend vector sync env has service/secret access.
 
-On 2026-06-29 UTC, readiness is green for static public env, Yandex credentials, Supabase deploy credentials, Edge runtime env and vector sync env. Live probes passed: `OPTIONS /functions/v1/event-search` returns 200, unauthenticated POST returns `401 auth_required`, and Supabase Auth authorize for `custom:yandex` redirects to the provider (`302`).
+On 2026-06-29 UTC, readiness is green for static public env, Yandex credentials, Supabase deploy credentials, Edge runtime env and vector sync env. Live probes passed: `OPTIONS /functions/v1/event-search` returns 200, unauthenticated POST returns `401 auth_required`, Supabase Auth URL Configuration has `site_url=https://kenigevents.ru` plus `https://kenigevents.ru/**` in the redirect allow-list, and Supabase Auth authorize for `custom:yandex` redirects to Yandex (`302`) without a localhost fallback.
 
 ## Remaining gates before production UX claim
 
@@ -364,3 +364,14 @@ Verification evidence on 2026-06-29:
 - Readiness probe passed: `OPTIONS /functions/v1/event-search = 200`, Yandex provider authorize redirect `302`.
 - Live Supabase RPC smoke with a temporary authenticated user passed for query `урбанистика будущее города`: pgvector top-3 included `6447`, `6310`, `5690`.
 - Live Edge Function smoke with a temporary authenticated user returned `200`, algorithm `pgvector_gemini_embedding_2_llm_verify_v1`, ids `[6447, 6310]`, `llm_verifier.status=ok`; temporary user/quota/audit rows were cleaned up.
+## Auth redirect incident: localhost fallback
+
+On 2026-06-29 a real mobile OAuth attempt returned to `localhost:3000/?error=...` after Yandex consent. Root cause: the personalization Supabase Auth URL Configuration still had the default `site_url=http://localhost:3000` and an empty `uri_allow_list`, so Supabase fell back to the local development URL instead of the `redirectTo` preview URL.
+
+Fixed through Supabase Management API:
+
+- `site_url=https://kenigevents.ru`;
+- `uri_allow_list=https://kenigevents.ru/**,https://www.kenigevents.ru/**`.
+
+Regression guard: `scripts/check_authorized_search_readiness.py --probe-auth-config --probe-yandex-provider --probe-edge --strict` now checks the Auth URL Configuration and verifies the authorize redirect points to Yandex without `localhost` in the redirect chain.
+

@@ -115,14 +115,21 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def http_status(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: int = 20) -> tuple[int, str]:
+def http_response(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: int = 20, read_limit: int = 300) -> tuple[int, str, dict[str, str]]:
     opener = urllib.request.build_opener(NoRedirect)
-    req = urllib.request.Request(url, method=method, headers=headers or {})
+    request_headers = {"User-Agent": "codex-authorized-search-readiness"}
+    request_headers.update(headers or {})
+    req = urllib.request.Request(url, method=method, headers=request_headers)
     try:
         with opener.open(req, timeout=timeout) as response:
-            return int(response.status), response.read(300).decode("utf-8", "replace")
+            return int(response.status), response.read(read_limit).decode("utf-8", "replace"), dict(response.headers.items())
     except urllib.error.HTTPError as exc:
-        return int(exc.code), exc.read(300).decode("utf-8", "replace")
+        return int(exc.code), exc.read(read_limit).decode("utf-8", "replace"), dict(exc.headers.items())
+
+
+def http_status(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: int = 20) -> tuple[int, str]:
+    status, body, _headers = http_response(url, method=method, headers=headers, timeout=timeout)
+    return status, body
 
 
 def probe_edge() -> Check:
@@ -143,6 +150,36 @@ def probe_edge() -> Check:
     )
 
 
+def probe_auth_config() -> Check:
+    ref = first_env("PERSONALIZATION_SUPABASE_PROJECT_REF")
+    token = first_env("PERSONALIZATION_SUPABASE_ACCESS_TOKEN", "SUPABASE_ACCESS_TOKEN")
+    if not ref or not token:
+        return Check("auth_redirect_config_probe", False, "Skipped: missing Supabase project ref/access token")
+    status, body, _headers = http_response(
+        f"https://api.supabase.com/v1/projects/{urllib.parse.quote(ref)}/config/auth",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        timeout=30,
+        read_limit=200000,
+    )
+    if not (200 <= status < 300):
+        return Check("auth_redirect_config_probe", False, f"Auth config fetch failed, status={status}, body={body[:120]!r}")
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return Check("auth_redirect_config_probe", False, "Auth config fetch returned non-JSON payload")
+    site_url = str(data.get("site_url") or "")
+    allow_list = str(data.get("uri_allow_list") or "")
+    required = "https://kenigevents.ru/**"
+    ok = site_url == "https://kenigevents.ru" and required in [item.strip() for item in allow_list.split(",") if item.strip()]
+    if ok:
+        return Check("auth_redirect_config_probe", True, "Auth Site URL and redirect allow-list point to kenigevents.ru")
+    return Check(
+        "auth_redirect_config_probe",
+        False,
+        f"Need site_url=https://kenigevents.ru and uri_allow_list containing {required}; current site_url={site_url!r}",
+    )
+
+
 def probe_yandex_provider() -> Check:
     base_url = first_env("PERSONALIZATION_SUPABASE_URL").rstrip("/")
     key = first_env("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY")
@@ -154,15 +191,19 @@ def probe_yandex_provider() -> Check:
             "redirect_to": "https://kenigevents.ru/__auth-smoke",
         }
     )
-    status, body = http_status(
+    status, body, headers = http_response(
         f"{base_url}/auth/v1/authorize?{params}",
         headers={"apikey": key},
     )
-    ok = status in {302, 303, 307, 308}
+    location = headers.get("Location") or headers.get("location") or ""
+    location_host = urllib.parse.urlparse(location).netloc
+    ok = status in {302, 303, 307, 308} and "oauth.yandex" in location_host and "localhost" not in location
     return Check(
         "yandex_provider_probe",
         ok,
-        f"Auth authorize redirects to provider, status={status}" if ok else f"Provider not ready, status={status}, body={body[:120]!r}",
+        f"Auth authorize redirects to Yandex, status={status}, no localhost fallback"
+        if ok
+        else f"Provider not ready or redirect is wrong, status={status}, location_host={location_host!r}, body={body[:120]!r}",
     )
 
 
@@ -170,6 +211,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--probe-edge", action="store_true")
+    parser.add_argument("--probe-auth-config", action="store_true")
     parser.add_argument("--probe-yandex-provider", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero if any check fails.")
@@ -179,6 +221,8 @@ def main() -> int:
     checks = check_env()
     if args.probe_edge:
         checks.append(probe_edge())
+    if args.probe_auth_config:
+        checks.append(probe_auth_config())
     if args.probe_yandex_provider:
         checks.append(probe_yandex_provider())
 
