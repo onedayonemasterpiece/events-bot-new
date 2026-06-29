@@ -4,6 +4,7 @@
 
 ### Added
 
+- Telegram post metrics now store available open-discussion comment counts, and Telegram daily `ДОБАВИЛИ В АНОНС` can show audience labels for popular events using summed Telegram+VK source metrics.
 - Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
 
 ### Changed

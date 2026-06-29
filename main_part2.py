@@ -2863,6 +2863,251 @@ def _format_daily_recommend_today_line(event: Event) -> str:
     return f"• {title}{suffix}"
 
 
+
+DAILY_AUDIENCE_HEART_EMOJI_ID = "5339188899241570417"
+DAILY_AUDIENCE_REPOST_EMOJI_ID = "5336998942661975661"
+DAILY_AUDIENCE_MIN_SCORE = 20
+DAILY_AUDIENCE_REPOST_WEIGHT = 5
+DAILY_AUDIENCE_MAX_SHARE = 0.10
+DAILY_AUDIENCE_INDENT = " " * 24
+
+
+@dataclass(slots=True)
+class DailyAudienceMetric:
+    event_id: int
+    views: int = 0
+    likes: int = 0
+    comments: int = 0
+    reposts: int = 0
+    sources: int = 0
+
+    @property
+    def score(self) -> int:
+        return int(self.likes or 0) + DAILY_AUDIENCE_REPOST_WEIGHT * int(self.reposts or 0)
+
+
+def _daily_metric_value(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int) and value >= 0:
+        return int(value)
+    return 0
+
+
+def _parse_tg_post_ref(url: str | None) -> tuple[str, int] | None:
+    text_value = (url or "").strip()
+    if not text_value:
+        return None
+    m = re.search(r"(?:https?://)?t\.me/([^/?#\s]+)/([0-9]+)", text_value, flags=re.I)
+    if not m:
+        return None
+    username = m.group(1).strip().lstrip("@").lower()
+    if not username or username == "c":
+        return None
+    return username, int(m.group(2))
+
+
+def _parse_vk_wall_ref(url: str | None) -> tuple[int, int] | None:
+    text_value = (url or "").strip()
+    if not text_value:
+        return None
+    m = re.search(r"wall(-?\d+)_(\d+)", text_value, flags=re.I)
+    if not m:
+        return None
+    owner_id = int(m.group(1))
+    post_id = int(m.group(2))
+    group_id = abs(owner_id)
+    return group_id, post_id
+
+
+def _format_daily_audience_line(metric: DailyAudienceMetric) -> str | None:
+    likes = int(metric.likes or 0)
+    reposts = int(metric.reposts or 0)
+    if likes <= 0 and reposts <= 0:
+        return None
+    heart = f'<tg-emoji emoji-id="{DAILY_AUDIENCE_HEART_EMOJI_ID}">❤️</tg-emoji>'
+    repost = f'<tg-emoji emoji-id="{DAILY_AUDIENCE_REPOST_EMOJI_ID}">🔂</tg-emoji>'
+    return f"{DAILY_AUDIENCE_INDENT}{heart} {likes}  {repost} {reposts}"
+
+
+def _select_daily_audience_labels(
+    events: Sequence[Event],
+    metrics: Mapping[int, DailyAudienceMetric],
+) -> dict[int, DailyAudienceMetric]:
+    cap = int(len(events) * DAILY_AUDIENCE_MAX_SHARE)
+    if cap <= 0:
+        return {}
+    candidates: list[DailyAudienceMetric] = []
+    for event in events:
+        if event.id is None:
+            continue
+        metric = metrics.get(int(event.id))
+        if not metric:
+            continue
+        if metric.score < DAILY_AUDIENCE_MIN_SCORE:
+            continue
+        if metric.likes <= 0 and metric.reposts <= 0:
+            continue
+        candidates.append(metric)
+    candidates.sort(
+        key=lambda m: (
+            int(m.score),
+            int(m.reposts or 0),
+            int(m.likes or 0),
+            int(m.comments or 0),
+            int(m.views or 0),
+        ),
+        reverse=True,
+    )
+    return {m.event_id: m for m in candidates[:cap]}
+
+
+async def _load_daily_audience_metrics(
+    db: Database,
+    events: Sequence[Event],
+    *,
+    now_ts: int,
+) -> dict[int, DailyAudienceMetric]:
+    """Sum latest available TG/VK source-post metrics per event.
+
+    This deliberately aggregates all distinct source posts attached to the event
+    instead of taking a single VK/best-source row, because daily labels should
+    reflect total available audience signal across Telegram and VK.
+    """
+    event_ids = [int(e.id) for e in events if e.id is not None]
+    if not event_ids:
+        return {}
+
+    event_by_id = {int(e.id): e for e in events if e.id is not None}
+    tg_refs: dict[int, set[tuple[int, int]]] = {eid: set() for eid in event_ids}
+    vk_refs: dict[int, set[tuple[int, int]]] = {eid: set() for eid in event_ids}
+
+    import aiosqlite
+
+    async with aiosqlite.connect(db.path) as conn:
+        source_rows: list[tuple[Any, ...]] = []
+        placeholders = ",".join("?" for _ in event_ids)
+        try:
+            cur = await conn.execute(
+                f"""
+                SELECT event_id, source_type, source_url, source_chat_username, source_chat_id, source_message_id
+                FROM event_source
+                WHERE event_id IN ({placeholders})
+                """,
+                tuple(event_ids),
+            )
+            source_rows = await cur.fetchall()
+        except Exception:
+            source_rows = []
+
+        tg_by_username: dict[str, int] = {}
+        try:
+            cur = await conn.execute("SELECT id, username FROM telegram_source")
+            rows = await cur.fetchall()
+            for sid, username in rows:
+                source_id = int(sid)
+                username_norm = str(username or "").strip().lstrip("@").lower()
+                if username_norm:
+                    tg_by_username[username_norm] = source_id
+        except Exception:
+            pass
+
+        def _add_tg(eid: int, *, username: Any = None, chat_id: Any = None, message_id: Any = None, url: Any = None) -> None:
+            mid = int(message_id) if isinstance(message_id, int) else None
+            parsed = _parse_tg_post_ref(str(url)) if url else None
+            if parsed:
+                username = parsed[0]
+                mid = parsed[1]
+            if mid is None:
+                return
+            source_id = None
+            username_norm = str(username or "").strip().lstrip("@").lower()
+            if username_norm:
+                source_id = tg_by_username.get(username_norm)
+            if source_id is not None:
+                tg_refs.setdefault(eid, set()).add((int(source_id), int(mid)))
+
+        def _add_vk(eid: int, url: Any) -> None:
+            parsed = _parse_vk_wall_ref(str(url)) if url else None
+            if parsed:
+                vk_refs.setdefault(eid, set()).add(parsed)
+
+        for event in event_by_id.values():
+            eid = int(event.id)
+            _add_tg(
+                eid,
+                chat_id=getattr(event, "source_chat_id", None),
+                message_id=getattr(event, "source_message_id", None),
+                url=getattr(event, "source_post_url", None),
+            )
+            _add_vk(eid, getattr(event, "source_post_url", None))
+            _add_vk(eid, getattr(event, "source_vk_post_url", None))
+
+        for row in source_rows:
+            eid = int(row[0])
+            source_type = str(row[1] or "").strip().lower()
+            source_url = row[2]
+            source_chat_username = row[3]
+            source_chat_id = row[4]
+            source_message_id = row[5]
+            if source_type == "telegram" or _parse_tg_post_ref(str(source_url or "")):
+                _add_tg(
+                    eid,
+                    username=source_chat_username,
+                    chat_id=source_chat_id,
+                    message_id=source_message_id,
+                    url=source_url,
+                )
+            if source_type == "vk" or _parse_vk_wall_ref(str(source_url or "")):
+                _add_vk(eid, source_url)
+
+        out: dict[int, DailyAudienceMetric] = {eid: DailyAudienceMetric(event_id=eid) for eid in event_ids}
+        for eid, refs in tg_refs.items():
+            for source_id, message_id in sorted(refs):
+                cur = await conn.execute(
+                    """
+                    SELECT views, likes, comments
+                    FROM telegram_post_metric
+                    WHERE source_id = ? AND message_id = ? AND collected_ts <= ?
+                    ORDER BY collected_ts DESC, age_day DESC
+                    LIMIT 1
+                    """,
+                    (int(source_id), int(message_id), int(now_ts)),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    continue
+                metric = out.setdefault(eid, DailyAudienceMetric(event_id=eid))
+                metric.views += _daily_metric_value(row[0])
+                metric.likes += _daily_metric_value(row[1])
+                metric.comments += _daily_metric_value(row[2])
+                metric.sources += 1
+
+        for eid, refs in vk_refs.items():
+            for group_id, post_id in sorted(refs):
+                cur = await conn.execute(
+                    """
+                    SELECT views, likes, comments, reposts
+                    FROM vk_post_metric
+                    WHERE group_id = ? AND post_id = ? AND collected_ts <= ?
+                    ORDER BY collected_ts DESC, age_day DESC
+                    LIMIT 1
+                    """,
+                    (int(group_id), int(post_id), int(now_ts)),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    continue
+                metric = out.setdefault(eid, DailyAudienceMetric(event_id=eid))
+                metric.views += _daily_metric_value(row[0])
+                metric.likes += _daily_metric_value(row[1])
+                metric.comments += _daily_metric_value(row[2])
+                metric.reposts += _daily_metric_value(row[3])
+                metric.sources += 1
+
+    return {eid: metric for eid, metric in out.items() if metric.sources > 0}
+
+
 async def build_daily_posts(
     db: Database,
     tz: timezone,
@@ -3049,6 +3294,18 @@ async def build_daily_posts(
             elif m == next_month(cur_month):
                 next_count += 1
 
+    daily_audience_labels: dict[int, DailyAudienceMetric] = {}
+    try:
+        now_ts = int(now.astimezone(timezone.utc).timestamp())
+        daily_audience_metrics = await _load_daily_audience_metrics(
+            db,
+            events_new,
+            now_ts=now_ts,
+        )
+        daily_audience_labels = _select_daily_audience_labels(events_new, daily_audience_metrics)
+    except Exception:
+        logging.warning("daily audience metrics load failed", exc_info=True)
+
     processed_short_ids: set[int] = set()
     for candidate in (*events_today, *events_new):
         if (
@@ -3119,6 +3376,11 @@ async def build_daily_posts(
                         partner_creator_ids=partner_creator_ids,
                     )
                 )
+                metric = daily_audience_labels.get(int(e.id)) if e.id is not None else None
+                metric_line = _format_daily_audience_line(metric) if metric else None
+                if metric_line:
+                    lines2.append(metric_line)
+                    lines2.append("")
         lines2.append("")
         lines2.append("ℹ️ Нажмите на название мероприятия, чтобы открыть подробности")
     else:
@@ -3139,6 +3401,11 @@ async def build_daily_posts(
                     partner_creator_ids=partner_creator_ids,
                 )
             )
+            metric = daily_audience_labels.get(int(e.id)) if e.id is not None else None
+            metric_line = _format_daily_audience_line(metric) if metric else None
+            if metric_line:
+                lines2.append(metric_line)
+                lines2.append("")
     if recent_festival_entries:
         lines2.append("")
         lines2.append("ФЕСТИВАЛИ")

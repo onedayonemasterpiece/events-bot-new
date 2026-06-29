@@ -237,6 +237,7 @@ async def upsert_telegram_post_metric(
     message_ts: int | None,
     views: int | None,
     likes: int | None,
+    comments: int | None = None,
     reactions: dict[str, Any] | None = None,
     collected_ts: int | None = None,
 ) -> None:
@@ -245,15 +246,16 @@ async def upsert_telegram_post_metric(
         await conn.execute(
             """
             INSERT INTO telegram_post_metric(
-                source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes, reactions_json
+                source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes, comments, reactions_json
             )
-            VALUES(?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(source_id, message_id, age_day) DO UPDATE SET
                 collected_ts=excluded.collected_ts,
                 source_url=COALESCE(excluded.source_url, telegram_post_metric.source_url),
                 message_ts=COALESCE(excluded.message_ts, telegram_post_metric.message_ts),
                 views=MAX(COALESCE(telegram_post_metric.views, -1), COALESCE(excluded.views, -1)),
                 likes=MAX(COALESCE(telegram_post_metric.likes, -1), COALESCE(excluded.likes, -1)),
+                comments=MAX(COALESCE(telegram_post_metric.comments, -1), COALESCE(excluded.comments, -1)),
                 reactions_json=COALESCE(excluded.reactions_json, telegram_post_metric.reactions_json)
             """,
             (
@@ -265,6 +267,7 @@ async def upsert_telegram_post_metric(
                 int(collected_ts),
                 int(views) if isinstance(views, int) else None,
                 int(likes) if isinstance(likes, int) else None,
+                int(comments) if isinstance(comments, int) else None,
                 reactions if isinstance(reactions, dict) else None,
             ),
         )

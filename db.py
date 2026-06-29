@@ -781,6 +781,7 @@ class Database:
                     collected_ts INTEGER NOT NULL,
                     views INTEGER,
                     likes INTEGER,
+                    comments INTEGER,
                     reactions_json JSON,
                     UNIQUE(source_id, message_id, age_day),
                     FOREIGN KEY(source_id) REFERENCES telegram_source(id) ON DELETE CASCADE
@@ -793,6 +794,7 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_tg_metric_source_message ON telegram_post_metric(source_id, message_id)"
             )
+            await _add_column(conn, "telegram_post_metric", "comments INTEGER")
             await _add_column(conn, "telegram_post_metric", "reactions_json JSON")
 
             dbg("guide_profile")

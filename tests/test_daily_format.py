@@ -5,6 +5,7 @@ import pytest
 from db import Database
 
 import main
+from source_parsing.post_metrics import upsert_telegram_post_metric, upsert_vk_post_metric
 
 
 def make_event(**kwargs: object) -> main.Event:
@@ -250,3 +251,68 @@ async def test_build_daily_posts_includes_fair_when_few_events(tmp_path):
     combined = "\n".join(p[0] for p in posts)
     assert "Fair" in combined
     assert main.format_day_pretty(now.date()) in combined
+
+
+@pytest.mark.asyncio
+async def test_build_daily_posts_labels_popular_added_event_from_all_sources(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    now = datetime(2026, 6, 30, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        tg_source = main.TelegramSource(username="tgsrc", title="TG Source")
+        session.add(tg_source)
+        for idx in range(10):
+            event = main.Event(
+                title=f"Event {idx}",
+                description="Desc",
+                source_text="source",
+                date=(now.date() + timedelta(days=idx + 1)).isoformat(),
+                time="18:00",
+                location_name="Place",
+                city="Калининград",
+                added_at=now - timedelta(hours=1),
+                source_post_url="https://t.me/tgsrc/100" if idx == 0 else None,
+                source_vk_post_url="https://vk.com/wall-1_200" if idx == 0 else None,
+            )
+            session.add(event)
+        await session.flush()
+        source_id = int(tg_source.id)
+        await session.commit()
+
+    collected_ts = int(now.timestamp())
+    await upsert_telegram_post_metric(
+        db,
+        source_id=source_id,
+        message_id=100,
+        age_day=0,
+        source_url="https://t.me/tgsrc/100",
+        message_ts=collected_ts - 3600,
+        views=100,
+        likes=8,
+        comments=3,
+        collected_ts=collected_ts,
+    )
+    await upsert_vk_post_metric(
+        db,
+        group_id=1,
+        post_id=200,
+        age_day=0,
+        source_url="https://vk.com/wall-1_200",
+        post_ts=collected_ts - 3600,
+        views=50,
+        likes=4,
+        comments=1,
+        reposts=2,
+        collected_ts=collected_ts,
+    )
+
+    posts = await main.build_daily_posts(db, timezone.utc, now)
+    combined = "\n".join(p[0] for p in posts)
+
+    assert "+10 ДОБАВИЛИ В АНОНС" in combined
+    assert '<tg-emoji emoji-id="5339188899241570417">❤️</tg-emoji> 12' in combined
+    assert '<tg-emoji emoji-id="5336998942661975661">🔂</tg-emoji> 2' in combined
+    assert combined.count('<tg-emoji emoji-id="5339188899241570417">❤️</tg-emoji>') == 1
+    await db.close()

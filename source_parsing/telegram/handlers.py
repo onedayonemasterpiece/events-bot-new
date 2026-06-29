@@ -5640,6 +5640,7 @@ async def process_telegram_results(
             try:
                 views = metrics.get("views")
                 likes = metrics.get("likes")
+                comments = metrics.get("comments")
                 reactions = metrics.get("reactions")
                 await upsert_telegram_post_metric(
                     db,
@@ -5650,6 +5651,7 @@ async def process_telegram_results(
                     message_ts=message_ts,
                     views=int(views) if isinstance(views, int) else None,
                     likes=int(likes) if isinstance(likes, int) else None,
+                    comments=int(comments) if isinstance(comments, int) else None,
                     reactions=reactions if isinstance(reactions, dict) else None,
                     collected_ts=int(collected_ts),
                 )

@@ -310,6 +310,9 @@ features:
     docs: docs/features/post-metrics/README.md
     entrypoints:
       - source_parsing/post_metrics.py
+      - source_parsing/telegram/handlers.py
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - main_part2.py
       - db.py
   smart_event_update:
     status: implemented

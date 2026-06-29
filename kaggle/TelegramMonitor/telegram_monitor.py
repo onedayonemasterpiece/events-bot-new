@@ -1566,6 +1566,16 @@ def _message_likes(msg) -> int | None:
     return sum(r.count for r in reactions.results if getattr(r, 'count', None))
 
 
+def _message_comments(msg) -> int | None:
+    replies = getattr(msg, 'replies', None)
+    if not replies:
+        return None
+    count = getattr(replies, 'replies', None)
+    if isinstance(count, int) and count >= 0:
+        return int(count)
+    return None
+
+
 def _source_type(entity) -> str:
     if isinstance(entity, Channel):
         return 'channel' if getattr(entity, 'broadcast', False) else 'supergroup'
@@ -3903,6 +3913,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
 
         views = getattr(msg, 'views', None)
         likes = _message_likes(msg)
+        comments = _message_comments(msg)
         if isinstance(views, int):
             views_vals.append(views)
         if isinstance(likes, int):
@@ -4289,6 +4300,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'metrics': {
                 'views': views,
                 'likes': likes,
+                'comments': comments,
             },
             'links': links_meta,
             'posters': posters,

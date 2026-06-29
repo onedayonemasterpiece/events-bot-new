@@ -1862,10 +1862,13 @@ def _format_event_block(
             parts: list[str] = []
             views = metrics.get("views")
             likes = metrics.get("likes")
+            comments = metrics.get("comments")
             if isinstance(views, int) and views >= 0:
                 parts.append(f"views={views}")
             if isinstance(likes, int) and likes >= 0:
                 parts.append(f"likes={likes}")
+            if isinstance(comments, int) and comments >= 0:
+                parts.append(f"comments={comments}")
             reactions = metrics.get("reactions")
             if isinstance(reactions, dict):
                 for k in ("👍", "❤", "❤️", "🔥"):
@@ -2004,11 +2007,14 @@ def _format_popular_posts_block(
         if isinstance(metrics, dict):
             v = metrics.get("views")
             l = metrics.get("likes")
+            c = metrics.get("comments")
             parts = []
             if isinstance(v, int) and v >= 0:
                 parts.append(f"views={v}")
             if isinstance(l, int) and l >= 0:
                 parts.append(f"likes={l}")
+            if isinstance(c, int) and c >= 0:
+                parts.append(f"comments={c}")
             if parts:
                 lines.append(f"  метрики: {html.escape(' '.join(parts))}")
         extracted = int(getattr(it, "events_extracted", 0) or 0)
@@ -2055,10 +2061,13 @@ def _format_metrics_line(metrics: dict[str, Any] | None) -> str | None:
     parts: list[str] = []
     views = metrics.get("views")
     likes = metrics.get("likes")
+    comments = metrics.get("comments")
     if isinstance(views, int) and views >= 0:
         parts.append(f"views={views}")
     if isinstance(likes, int) and likes >= 0:
         parts.append(f"likes={likes}")
+    if isinstance(comments, int) and comments >= 0:
+        parts.append(f"comments={comments}")
     return f"Метрики поста: {' '.join(parts)}" if parts else None
 
 
