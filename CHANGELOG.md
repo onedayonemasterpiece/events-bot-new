@@ -9,6 +9,10 @@
 
 ### Changed
 
+- Daily `ДОБАВИЛИ В АНОНС` audience labels now adapt their own score
+  threshold: if strict `likes + 5*reposts >= 20` labels are below the minimum
+  share, the daily renderer lowers only this daily threshold to a conservative
+  floor and adds a few next-best `❤️/🔂` rows.
 - Extended the Telegram daily premium emoji editor to also replace regular `👉` and `🎭` with same-pack custom emoji entities while preserving the visible characters and title formatting.
 - Extended the Telegram premium emoji editor beyond daily announcements to post-publication Telegram event posts, added human-like randomized edit delays, and added `#бесплатно` to free event hashtag lines so search remains available after visible free labels become custom emoji.
 - Added `MostVKenig` premium emoji insertions for daily announcements: `💰` before source ticket prices, `📗` before `Научная библиотека` venue lines, and `🏰` before `Замок Ноухайзен` venue lines.

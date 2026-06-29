@@ -2867,9 +2867,39 @@ def _format_daily_recommend_today_line(event: Event) -> str:
 DAILY_AUDIENCE_HEART_EMOJI_ID = "5339188899241570417"
 DAILY_AUDIENCE_REPOST_EMOJI_ID = "5336998942661975661"
 DAILY_AUDIENCE_MIN_SCORE = 20
+DAILY_AUDIENCE_RELAXED_MIN_SCORE = 8
 DAILY_AUDIENCE_REPOST_WEIGHT = 5
-DAILY_AUDIENCE_MAX_SHARE = 0.10
+DAILY_AUDIENCE_MIN_SHARE = 0.15
+DAILY_AUDIENCE_MAX_SHARE = 0.20
 DAILY_AUDIENCE_INDENT = " " * 24
+
+
+def _daily_audience_env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
+
+
+def _daily_audience_env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
+
+
+def _daily_audience_share_count(total: int, share: float) -> int:
+    total = int(total or 0)
+    share = float(share or 0.0)
+    if total <= 0 or share <= 0:
+        return 0
+    return max(1, int(total * share + 0.999999))
 
 
 @dataclass(slots=True)
@@ -2934,22 +2964,51 @@ def _select_daily_audience_labels(
     events: Sequence[Event],
     metrics: Mapping[int, DailyAudienceMetric],
 ) -> dict[int, DailyAudienceMetric]:
-    cap = int(len(events) * DAILY_AUDIENCE_MAX_SHARE)
+    total = int(len(events or ()))
+    max_share = max(
+        0.0,
+        min(
+            1.0,
+            _daily_audience_env_float("DAILY_AUDIENCE_MAX_SHARE", DAILY_AUDIENCE_MAX_SHARE),
+        ),
+    )
+    min_share = max(
+        0.0,
+        min(
+            max_share,
+            _daily_audience_env_float("DAILY_AUDIENCE_MIN_SHARE", DAILY_AUDIENCE_MIN_SHARE),
+        ),
+    )
+    cap = _daily_audience_share_count(total, max_share)
     if cap <= 0:
         return {}
-    candidates: list[DailyAudienceMetric] = []
+    target = _daily_audience_share_count(total, min_share)
+    target = min(cap, target)
+    base_score = max(
+        0,
+        _daily_audience_env_int("DAILY_AUDIENCE_MIN_SCORE", DAILY_AUDIENCE_MIN_SCORE),
+    )
+    relaxed_score = max(
+        0,
+        min(
+            base_score,
+            _daily_audience_env_int(
+                "DAILY_AUDIENCE_RELAXED_MIN_SCORE",
+                DAILY_AUDIENCE_RELAXED_MIN_SCORE,
+            ),
+        ),
+    )
+    comparable: list[DailyAudienceMetric] = []
     for event in events:
         if event.id is None:
             continue
         metric = metrics.get(int(event.id))
         if not metric:
             continue
-        if metric.score < DAILY_AUDIENCE_MIN_SCORE:
-            continue
         if metric.likes <= 0 and metric.reposts <= 0:
             continue
-        candidates.append(metric)
-    candidates.sort(
+        comparable.append(metric)
+    comparable.sort(
         key=lambda m: (
             int(m.score),
             int(m.reposts or 0),
@@ -2959,7 +3018,16 @@ def _select_daily_audience_labels(
         ),
         reverse=True,
     )
-    return {m.event_id: m for m in candidates[:cap]}
+    strict = [metric for metric in comparable if int(metric.score) >= base_score]
+    if len(strict) >= target:
+        selected = strict[:cap]
+    else:
+        # Daily-specific adaptive relaxation: if the visible `❤️/🔂` labels are
+        # below the target share, lower only this daily score threshold down to a
+        # conservative floor and take just enough next-best rows to reach target.
+        relaxed = [metric for metric in comparable if int(metric.score) >= relaxed_score]
+        selected = relaxed[: max(len(strict), target)]
+    return {m.event_id: m for m in selected[:cap]}
 
 
 async def _load_daily_audience_metrics(

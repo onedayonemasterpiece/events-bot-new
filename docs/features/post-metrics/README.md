@@ -97,7 +97,9 @@ ENV (общие для TG/VK):
 - Ежедневный анонс (`build_daily_posts`):
   - в секции `ДОБАВИЛИ В АНОНС` популярные события получают дополнительную строку с кастомными emoji `❤️`/`🔂` из adaptive pack;
   - расчёт идёт **по сумме всех доступных distinct source posts события**: Telegram + VK, а не по одному “лучшему” VK-посту;
-  - текущий MVP-score: `likes_sum + 5 * reposts_sum`; порог `>=20`; максимум `floor(N * 0.10)` событий в секции, чтобы daily не раздувался;
+  - score: `likes_sum + 5 * reposts_sum`; базовый порог `DAILY_AUDIENCE_MIN_SCORE=20`;
+  - если событий с label меньше `DAILY_AUDIENCE_MIN_SHARE` (default `0.15`) от секции, daily снижает только свой порог до `DAILY_AUDIENCE_RELAXED_MIN_SCORE=8` и добирает следующие лучшие строки до target;
+  - верхняя граница — `DAILY_AUDIENCE_MAX_SHARE` (default `0.20`) от секции, чтобы daily не раздувался;
   - ранжирование: `score`, затем `reposts`, `likes`, `comments`, `views`.
 
 ## Будущее (roadmap, кратко)
