@@ -127,7 +127,7 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime
   - managed VK remains present: `6491` `https://vk.com/wall-231920894_4998`; `6492` `https://vk.com/wall-231920894_4999`.
   - recurrence `/healthz`: OK at `2026-06-29 18:19 UTC`, including `job_outbox_worker=ok` and `job_outbox_worker_loop=ok`.
   - recurrence queue repair: backed up touched rows to `codex_backup_tg_publish_requeue_20260629_6499_6507`, then rearmed only `tg_event_publish` rows for active no-TG events `6499–6507` whose dependencies were already done; no direct Telegram bypass was used.
-  - recurrence public Telegram: normal worker published `6507` as `https://t.me/kldevents/1621` at `2026-06-29 18:28:42 UTC`; remaining rearmed rows moved to the next standard 10-minute slot (`2026-06-29 18:38:42 UTC`).
+  - recurrence public Telegram: normal worker published `6507` as `https://t.me/kldevents/1621` at `2026-06-29 18:28:42 UTC` and `6506` as `https://t.me/kldevents/1622` at `2026-06-29 18:38:49 UTC`; remaining rearmed rows moved to the next standard 10-minute slot (`2026-06-29 18:48:49 UTC`). Telethon reread showed `1621` was edited by the standard premium-emoji post-processor at `2026-06-29 18:31:47 UTC`.
 
 ## Prevention
 
