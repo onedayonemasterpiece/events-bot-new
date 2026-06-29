@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import html
 import logging
-import math
 import os
 import re
 import sqlite3
@@ -73,16 +72,6 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return int(default)
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return float(default)
-    try:
-        return float(raw)
-    except Exception:
-        return float(default)
 
 
 def _median_int(values: list[int]) -> int | None:
@@ -211,24 +200,6 @@ class _PostItem:
     baseline: _Baseline
     popularity: str
     score: float
-
-
-@dataclass(slots=True)
-class _PostDraft:
-    platform: str
-    source_key: int
-    source_label: str
-    post_id: int
-    post_url: str
-    published_ts: int
-    views: int
-    likes: int
-    baseline: _Baseline
-    views_ratio: float
-    likes_ratio: float
-    primary_ratio: float
-    strict_above_views: bool
-    strict_above_likes: bool
 
 
 @dataclass(slots=True, frozen=True)
@@ -750,11 +721,8 @@ async def _load_top_items(
             sample=sample,
         )
 
-    # Build comparable drafts first. Normally a post must be strictly above the
-    # source median on views or likes. If that produces too little inventory for
-    # operator/video-review surfaces, we adaptively add a few next-best posts by
-    # lowering the effective multiplier, capped by share and count controls.
-    drafts: list[_PostDraft] = []
+    # Build candidates: strictly above median on at least one metric.
+    candidates: list[_PostItem] = []
     skipped: dict[str, Any] = {
         "tg_available": bool(tg_ready),
         "vk_available": bool(vk_ready),
@@ -782,14 +750,6 @@ async def _load_top_items(
         "skipped_missing_median": 0,
         "skipped_missing_metrics": 0,
         "skipped_not_above_median": 0,
-        "strict_selected": 0,
-        "adaptive_selected": 0,
-        "adaptive_added": 0,
-        "adaptive_target": 0,
-        "adaptive_effective_mult": 1.0,
-        "adaptive_min_share": 0.0,
-        "adaptive_floor_mult": 1.0,
-        "adaptive_max_added": 0,
     }
 
     def _add_candidate(
@@ -822,14 +782,30 @@ async def _load_top_items(
             skipped["above_median_likes"] += 1
         if is_above_views and is_above_likes:
             skipped["above_median_both"] += 1
+        if not (is_above_views or is_above_likes):
+            skipped["skipped_not_above_median"] += 1
+            return
+        popularity = ""
+        try:
+            from source_parsing.post_metrics import PopularityBaseline, popularity_marks
+
+            popularity = popularity_marks(
+                views=int(views),
+                likes=int(likes),
+                baseline=PopularityBaseline(
+                    median_views=baseline.median_views,
+                    median_likes=baseline.median_likes,
+                    sample=int(baseline.sample),
+                ),
+            ).text
+        except Exception:
+            popularity = ""
         v_ratio = _safe_ratio(views, baseline.median_views)
         l_ratio = _safe_ratio(likes, baseline.median_likes)
         primary_ratio = max(v_ratio if is_above_views else 0.0, l_ratio if is_above_likes else 0.0)
-        if not (is_above_views or is_above_likes):
-            skipped["skipped_not_above_median"] += 1
-            primary_ratio = max(v_ratio, l_ratio)
-        drafts.append(
-            _PostDraft(
+        score = float(primary_ratio) + 0.01 * float(v_ratio + l_ratio)
+        candidates.append(
+            _PostItem(
                 platform=platform,
                 source_key=int(source_key),
                 source_label=str(source_label).strip() or str(source_key),
@@ -839,65 +815,10 @@ async def _load_top_items(
                 views=int(views),
                 likes=int(likes),
                 baseline=baseline,
-                views_ratio=float(v_ratio),
-                likes_ratio=float(l_ratio),
-                primary_ratio=float(primary_ratio),
-                strict_above_views=bool(is_above_views),
-                strict_above_likes=bool(is_above_likes),
+                popularity=str(popularity or "").strip(),
+                score=float(score),
             )
         )
-
-    def _draft_sort_key(it: _PostDraft) -> tuple[float, int, int]:
-        return (float(it.primary_ratio), int(it.views or 0), int(it.likes or 0))
-
-    def _select_drafts() -> tuple[list[_PostDraft], float]:
-        if not drafts:
-            return [], 1.0
-
-        strict = [it for it in drafts if it.strict_above_views or it.strict_above_likes]
-        strict_count = len(strict)
-        checked = len(drafts)
-
-        min_share = max(0.0, min(1.0, _env_float("POST_POPULARITY_MIN_SELECTED_SHARE", 0.20)))
-        floor_mult = max(0.0, min(1.0, _env_float("POST_POPULARITY_RELAXED_MIN_MULT", 0.75)))
-        max_added = max(0, _env_int("POST_POPULARITY_RELAXED_MAX_ADDED", 3))
-        target = int(math.ceil(float(checked) * float(min_share))) if min_share > 0 else strict_count
-        target = min(target, strict_count + max_added)
-        if target < strict_count:
-            target = strict_count
-
-        skipped["strict_selected"] = int(strict_count)
-        skipped["adaptive_min_share"] = float(min_share)
-        skipped["adaptive_floor_mult"] = float(floor_mult)
-        skipped["adaptive_max_added"] = int(max_added)
-        skipped["adaptive_target"] = int(target)
-
-        if checked <= 0 or strict_count >= target:
-            selected = sorted(strict, key=_draft_sort_key, reverse=True)
-            skipped["adaptive_selected"] = int(len(selected))
-            return selected, 1.0
-
-        eligible = [it for it in drafts if float(it.primary_ratio) > floor_mult]
-        ranked = sorted(eligible, key=_draft_sort_key, reverse=True)
-        selected = ranked[: min(len(ranked), max(1, target))]
-        selected_ids = {(it.platform, it.source_key, it.post_id) for it in selected}
-        # Preserve any strict post if a tie/cap combination would otherwise drop it.
-        for it in sorted(strict, key=_draft_sort_key, reverse=True):
-            key = (it.platform, it.source_key, it.post_id)
-            if key not in selected_ids:
-                selected.append(it)
-                selected_ids.add(key)
-
-        selected = sorted(selected, key=_draft_sort_key, reverse=True)
-        effective = 1.0
-        if selected:
-            effective = min(1.0, min(float(it.primary_ratio) for it in selected) - 1e-9)
-            if effective < floor_mult:
-                effective = floor_mult
-        skipped["adaptive_selected"] = int(len(selected))
-        skipped["adaptive_added"] = max(0, int(len(selected)) - int(strict_count))
-        skipped["adaptive_effective_mult"] = float(effective)
-        return selected, float(effective)
 
     for source_id, message_id, url, ts, _age, v, l, _imp, username, title in tg_rows:
         try:
@@ -957,52 +878,6 @@ async def _load_top_items(
             views=v if isinstance(v, int) else None,
             likes=l if isinstance(l, int) else None,
             baseline=base,
-        )
-
-    selected_drafts, effective_mult = _select_drafts()
-
-    candidates: list[_PostItem] = []
-    for draft in selected_drafts:
-        is_relaxed = not (draft.strict_above_views or draft.strict_above_likes)
-        mark_mult = float(effective_mult) if is_relaxed else 1.0
-        popularity = ""
-        try:
-            from source_parsing.post_metrics import PopularityBaseline, popularity_marks
-
-            popularity = popularity_marks(
-                views=int(draft.views),
-                likes=int(draft.likes),
-                baseline=PopularityBaseline(
-                    median_views=draft.baseline.median_views,
-                    median_likes=draft.baseline.median_likes,
-                    sample=int(draft.baseline.sample),
-                ),
-                views_mult=mark_mult,
-                likes_mult=mark_mult,
-            ).text
-        except Exception:
-            popularity = ""
-        primary_ratio = max(
-            draft.views_ratio if draft.views_ratio > mark_mult else 0.0,
-            draft.likes_ratio if draft.likes_ratio > mark_mult else 0.0,
-        )
-        if primary_ratio <= 0:
-            primary_ratio = float(draft.primary_ratio)
-        score = float(primary_ratio) + 0.01 * float(draft.views_ratio + draft.likes_ratio)
-        candidates.append(
-            _PostItem(
-                platform=draft.platform,
-                source_key=int(draft.source_key),
-                source_label=str(draft.source_label).strip() or str(draft.source_key),
-                post_id=int(draft.post_id),
-                post_url=str(draft.post_url).strip(),
-                published_ts=int(draft.published_ts),
-                views=int(draft.views),
-                likes=int(draft.likes),
-                baseline=draft.baseline,
-                popularity=str(popularity or "").strip(),
-                score=float(score),
-            )
         )
 
     # Sort by score (normalized), then raw views/likes.
@@ -1136,15 +1011,6 @@ async def _send_popular_posts_report(message: Message, db: Database, *, limit: i
                     f"оба={int(dbg.get('above_median_both', 0) or 0)} "
                     f"(из {checked})."
                 )
-                added = int(dbg.get("adaptive_added", 0) or 0)
-                if added > 0:
-                    eff = float(dbg.get("adaptive_effective_mult", 1.0) or 1.0)
-                    share = float(dbg.get("adaptive_min_share", 0.0) or 0.0)
-                    lines.append(
-                        "Адаптивный добор: "
-                        f"+{added} пост(ов), effective_mult≈{eff:.2f}, "
-                        f"min_share={share:.0%}, floor={float(dbg.get('adaptive_floor_mult', 0.0) or 0.0):.2f}."
-                    )
 
         if not items:
             lines.append("Нет постов, которые выше медианы и имеют достаточную выборку для расчёта.")

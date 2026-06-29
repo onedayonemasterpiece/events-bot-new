@@ -64,14 +64,6 @@
 2. Каждый следующий уровень требует превышения ещё на `POST_POPULARITY_*_STEP * median` сверх порога.
 3. Уровни ограничены `POST_POPULARITY_MAX_LEVEL`.
 
-Для `/popular_posts` и потребителей этого пула (например, popularity-driven
-video review) действует мягкий адаптивный добор: если строгий фильтр
-`views/likes > median` даёт слишком маленькую долю подсвеченных постов в окне,
-алгоритм добавляет несколько следующих по normalized score постов, временно
-снижая effective multiplier до безопасного floor. Это нужно для дней, когда
-почти все посты стоят ровно на медиане и оператор видит слишком мало
-`⭐/👍`-сигналов.
-
 ENV (общие для TG/VK):
 
 - `POST_POPULARITY_HORIZON_DAYS` (default `90`)
@@ -82,13 +74,6 @@ ENV (общие для TG/VK):
 - `POST_POPULARITY_MAX_LEVEL` (default `4`)
 - `POST_POPULARITY_VIEWS_STEP` (default `0.5`)
 - `POST_POPULARITY_LIKES_STEP` (default `0.5`)
-- `POST_POPULARITY_MIN_SELECTED_SHARE` (default `0.20`) — минимальная доля
-  comparable-постов для адаптивного добора в `/popular_posts`.
-- `POST_POPULARITY_RELAXED_MIN_MULT` (default `0.75`) — нижняя граница
-  снижения effective multiplier; ниже этого floor посты не добираются.
-- `POST_POPULARITY_RELAXED_MAX_ADDED` (default `3`) — максимум добранных
-  сверх строгого `> median`, чтобы подсветка не затапливала отчёт при больших
-  пачках одинаковых медианных значений.
 - `POST_METRICS_RETENTION_DAYS` (default = `POST_POPULARITY_HORIZON_DAYS`)
 
 ## Поверхности в UI/отчётах
