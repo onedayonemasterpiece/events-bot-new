@@ -16,6 +16,7 @@ The script does not print secrets and does not call real Supabase services.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import contextlib
 import json
@@ -91,7 +92,7 @@ def fake_user() -> dict[str, Any]:
             "provider": "custom:yandex",
             "providers": ["custom:yandex"],
         },
-        "user_metadata": {"purpose": "authorized_search_ui_smoke"},
+        "user_metadata": {"purpose": "authorized_search_ui_smoke", "preferred_username": "ui-smoke-user"},
         "created_at": "2026-06-29T00:00:00.000Z",
     }
 
@@ -254,14 +255,21 @@ async def run_smoke(args: argparse.Namespace) -> int:
                     )
                     return
                 if url.endswith("/functions/v1/event-search"):
+                    await asyncio.sleep(0.25)
                     try:
                         calls.append(json.loads(request.post_data or "{}"))
                     except json.JSONDecodeError:
                         calls.append({"bad_json": request.post_data})
+                    progress = [
+                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
+                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},
+                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "llm_verify", "progress": 72, "label": "Проверяю релевантность"},
+                        {"type": "result", "request_id": "00000000-0000-4000-8000-000000000001", "progress": 100, "label": "Готово", "data": fake_search_response()},
+                    ]
                     await route.fulfill(
                         status=200,
-                        content_type="application/json; charset=utf-8",
-                        body=json.dumps(fake_search_response(), ensure_ascii=False),
+                        content_type="application/x-ndjson; charset=utf-8",
+                        body="\n".join(json.dumps(item, ensure_ascii=False) for item in progress) + "\n",
                     )
                     return
                 await route.fulfill(status=404, body="unexpected supabase call")
@@ -303,10 +311,19 @@ async def run_smoke(args: argparse.Namespace) -> int:
             )
             await expect(page.locator("[data-search-login]").first).to_be_hidden()
             await expect(page.locator("[data-search-logout]").first).to_be_visible()
+            await expect(page.locator("[data-search-user]").first).to_be_visible()
+            await expect(page.locator("[data-search-user-name]").first).to_contain_text("ui-smoke-user")
             await expect(page.locator("[data-search-form]").first).to_be_visible()
+
+            await page.locator("[data-search-input]").first.fill("<script>alert(1)</script>")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-status]").first).to_contain_text("техническую команду")
+            if calls:
+                raise AssertionError(f"unsafe query must not call event-search: {calls}")
 
             await page.locator("[data-search-input]").first.fill("урбанистика в четверг вечером по регистрации")
             await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
 
             results = page.locator("[data-search-results]").first
             await expect(results).to_be_visible()
@@ -326,6 +343,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(first_card.locator("[data-feedback-action='not_interested']")).to_be_visible()
             await expect(first_card.locator(".feedback-button--calendar")).to_be_visible()
             await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_visible()
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+            await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
 
             if not calls:
                 raise AssertionError("event-search function was not called")

@@ -24,14 +24,20 @@ const HeadingTag = headingLevel;
         <span class="authorized-search__yandex-icon" aria-hidden="true">Я</span>
         <span>Войти через Яндекс</span>
       </button>
-      <button type="button" class="secondary-button authorized-search__logout" data-search-logout hidden>Выйти</button>
+      <div class="authorized-search__account" data-search-user hidden>
+        <span>Вошли как</span>
+        <strong data-search-user-name></strong>
+      </div>
+      <button type="button" class="secondary-button authorized-search__logout" data-search-logout hidden>Выйти из аккаунта</button>
     </div>
   </div>
   {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
   <form class="authorized-search__form" data-search-form hidden>
     <label class="sr-only" for="authorized-event-search-input">Что хочется найти</label>
     <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
-    <button type="submit" class="cta-button" data-search-submit>Искать</button>
+    <button type="submit" class="cta-button authorized-search__submit" data-search-submit style="--search-progress: 0%;">
+      <span class="authorized-search__submit-label" data-search-submit-label>Искать</span>
+    </button>
   </form>
   <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
   <div class="authorized-search__results" data-search-results hidden></div>
@@ -52,6 +58,10 @@ const HeadingTag = headingLevel;
     const logout = root.querySelector('[data-search-logout]');
     const form = root.querySelector('[data-search-form]');
     const input = root.querySelector('[data-search-input]');
+    const submit = root.querySelector('[data-search-submit]');
+    const submitLabel = root.querySelector('[data-search-submit-label]');
+    const userBadge = root.querySelector('[data-search-user]');
+    const userName = root.querySelector('[data-search-user-name]');
     const results = root.querySelector('[data-search-results]');
     const more = root.querySelector('[data-search-more]');
     let supabase = null;
@@ -60,6 +70,9 @@ const HeadingTag = headingLevel;
     let loading = false;
     let fallbackStarted = false;
     let authCallbackHadError = false;
+    let progressValue = 0;
+    const searchTimeoutMs = 60000;
+    const maxQueryLength = 180;
 
     const pkceCookiePrefix = 'ke_pkce_';
 
@@ -138,6 +151,78 @@ const HeadingTag = headingLevel;
       else status.removeAttribute('role');
     }
 
+    function displayUserName(user) {
+      const metadata = user?.user_metadata || {};
+      return metadata.preferred_username || metadata.name || metadata.full_name || user?.email || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
+    }
+
+    function normalizeSearchInput(value) {
+      return String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function validateSearchInput(value) {
+      const query = normalizeSearchInput(value);
+      if (query.length < 3) return { ok: false, message: 'Введите хотя бы 3 символа.' };
+      if (query.length > maxQueryLength) return { ok: false, message: `Слишком длинный запрос: максимум ${maxQueryLength} символов.` };
+      const unsafePatterns = [
+        /<\s*\/?\s*(script|iframe|object|embed|svg|img|style|meta|link)/iu,
+        /javascript\s*:/iu,
+        /(?:--|\/\*|\*\/|;)/u,
+        /(?:\{\{|\}\}|\$\{)/u,
+        /\b(?:select|insert|update|delete|drop|alter|truncate|union)\b[\s\S]{0,48}\b(?:from|where|table|into|values|set)\b/iu,
+        /\b(?:ignore|forget)\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|rules?)\b/iu,
+      ];
+      if (unsafePatterns.some((pattern) => pattern.test(query))) {
+        return { ok: false, message: 'Запрос похож на техническую команду. Опишите событие обычными словами.' };
+      }
+      if (/[^\p{L}\p{N}\p{M}\s.,!?«»"'()№:+\/\\\-–—]/u.test(query)) {
+        return { ok: false, message: 'В запросе есть неподдерживаемые символы. Оставьте обычный текст, дату, место или жанр.' };
+      }
+      return { ok: true, query };
+    }
+
+    function setSearchProgress(value, label) {
+      progressValue = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+      if (submit) submit.style.setProperty('--search-progress', `${progressValue}%`);
+      if (submitLabel) submitLabel.textContent = progressValue >= 100 ? 'Готово' : `Ищу… ${progressValue}%`;
+      if (label) setStatus(label);
+    }
+
+    function resetSearchProgress() {
+      if (submit) submit.style.setProperty('--search-progress', '0%');
+      if (submitLabel) submitLabel.textContent = 'Искать';
+    }
+
+    function setSearchLoading(isLoading) {
+      loading = isLoading;
+      if (submit) {
+        submit.disabled = isLoading;
+        submit.classList.toggle('is-loading', isLoading);
+        submit.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+      }
+      if (input) input.readOnly = isLoading;
+    }
+
+    function withTimeout(promise, ms, message) {
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => window.clearTimeout(timeoutId));
+    }
+
+    function errorMessageFromSearchPayload(payload) {
+      const code = payload?.error || payload?.error_code || '';
+      if (payload?.detail && /^query_/u.test(String(code))) return String(payload.detail);
+      if (code === 'quota_exceeded') return 'Лимит поисков на сегодня закончился. Попробуйте позже.';
+      if (code === 'auth_required') return 'Сессия закончилась. Войдите через Яндекс ещё раз.';
+      if (code === 'query_too_short') return 'Введите хотя бы 3 символа.';
+      if (code === 'query_too_long') return `Слишком длинный запрос: максимум ${maxQueryLength} символов.`;
+      if (code === 'query_unsafe') return 'Запрос похож на техническую команду. Опишите событие обычными словами.';
+      if (code === 'query_bad_characters') return 'В запросе есть неподдерживаемые символы. Оставьте обычный текст, дату, место или жанр.';
+      return 'Поиск сейчас не сработал. Попробуйте ещё раз чуть позже.';
+    }
+
     function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
       if (typeof renderer === 'function') {
@@ -190,6 +275,8 @@ const HeadingTag = headingLevel;
       if (login) login.hidden = signedIn;
       if (logout) logout.hidden = !signedIn;
       if (form) form.hidden = !signedIn;
+      if (userBadge) userBadge.hidden = !signedIn;
+      if (userName && signedIn) userName.textContent = displayUserName(sessionData.session.user);
       root.classList.toggle('is-authorized', signedIn);
       if (signedIn) await refreshQuota();
       else if (!preserveError) setStatus('Войдите через Яндекс, чтобы включить поиск.');
@@ -203,75 +290,157 @@ const HeadingTag = headingLevel;
       fallbackStarted = false;
     }
 
+    async function invokeEventSearch(body, session) {
+      const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          apikey: root.dataset.supabaseKey,
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/x-ndjson',
+        },
+        body: JSON.stringify(body),
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/x-ndjson')) {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
+        return { data: payload, error: null };
+      }
+      const reader = response.body?.getReader();
+      if (!reader) return { data: null, error: { error: 'stream_unavailable' } };
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+      let finalError = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          let event;
+          try { event = JSON.parse(trimmed); }
+          catch (_error) { continue; }
+          if (event.type === 'progress') {
+            setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
+          } else if (event.type === 'result') {
+            finalData = event.data;
+            setSearchProgress(100, event.label || 'Готово');
+          } else if (event.type === 'error') {
+            finalError = event;
+          }
+        }
+      }
+      const tail = buffer.trim();
+      if (tail) {
+        try {
+          const event = JSON.parse(tail);
+          if (event.type === 'result') finalData = event.data;
+          else if (event.type === 'error') finalError = event;
+          else if (event.type === 'progress') setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
+        } catch (_error) {
+          // Ignore malformed trailing stream fragments.
+        }
+      }
+      return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
+    }
+
     async function runSearch({ append = false } = {}) {
       if (!supabase || loading) return;
       const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.user) {
+      const session = sessionData?.session || null;
+      if (!session?.user || !session?.access_token) {
         clearResults();
         await updateAuth();
         setStatus('Сначала войдите через Яндекс.', 'error');
         return;
       }
-      const query = String(input?.value || '').trim();
-      if (query.length < 3) {
-        setStatus('Введите хотя бы 3 символа.', 'error');
+      const validation = validateSearchInput(input?.value || '');
+      if (!validation.ok) {
+        setStatus(validation.message, 'error');
         return;
       }
-      loading = true;
+      const query = validation.query;
+      if (input) input.value = query;
+      setSearchLoading(true);
+      setSearchProgress(1, 'Запускаю поиск…');
       if (more) more.hidden = true;
-      setStatus('Ищу события…');
-      if (!append || query !== currentQuery) {
-        currentQuery = query;
-        offset = 0;
-        fallbackStarted = false;
+      try {
+        if (!append || query !== currentQuery) {
+          currentQuery = query;
+          offset = 0;
+          fallbackStarted = false;
+          if (results) {
+            results.innerHTML = '';
+            setResultContext({});
+          }
+        }
+        const { data, error } = await withTimeout(
+          invokeEventSearch(
+            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
+            session,
+          ),
+          searchTimeoutMs,
+          'search_timeout',
+        );
+        if (error) {
+          const statusCode = Number(error?.status || error?.context?.status || 0);
+          if (statusCode === 401 || statusCode === 403 || error?.error === 'auth_required') {
+            await supabase.auth.signOut();
+            clearResults();
+            await updateAuth();
+          }
+          setStatus(errorMessageFromSearchPayload(error), 'error');
+          return;
+        }
+        if (!data) {
+          setStatus('Поиск не вернул ответ. Попробуйте ещё раз.', 'error');
+          return;
+        }
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const fallbackItems = Array.isArray(data?.fallback_items) ? data.fallback_items : [];
         if (results) {
-          results.innerHTML = '';
-          setResultContext({});
-        }
-      }
-      const { data, error } = await supabase.functions.invoke('event-search', {
-        body: { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
-      });
-      loading = false;
-      if (error) {
-        const statusCode = Number(error?.context?.status || error?.status || 0);
-        if (statusCode === 401 || statusCode === 403) {
-          await supabase.auth.signOut();
-          clearResults();
-          await updateAuth();
-          setStatus('Сессия закончилась. Войдите через Яндекс ещё раз.', 'error');
-        } else {
-          setStatus('Поиск сейчас не сработал. Попробуйте ещё раз чуть позже.', 'error');
-        }
-        return;
-      }
-      const items = Array.isArray(data?.items) ? data.items : [];
-      if (results) {
-        setResultContext(data);
-        if (!append && items.length > 0 && results.children.length === 0) {
-          appendSectionHeading('Результаты поиска');
-        }
-        const html = renderCards(items, offset);
-        if (html) results.insertAdjacentHTML('beforeend', html);
-        if (items.length === 0 && !fallbackStarted) {
-          appendSectionHeading('Возможно, вам будет интересно');
-          fallbackStarted = true;
-        }
-        if (!data?.has_more && Array.isArray(data?.fallback_items) && data.fallback_items.length) {
-          if (!fallbackStarted) {
+          setResultContext(data);
+          if (!append && items.length > 0 && results.children.length === 0) {
+            appendSectionHeading('Результаты поиска');
+          }
+          const html = renderCards(items, offset);
+          if (html) results.insertAdjacentHTML('beforeend', html);
+          if (items.length === 0 && !fallbackStarted) {
             appendSectionHeading('Возможно, вам будет интересно');
             fallbackStarted = true;
           }
-          results.insertAdjacentHTML('beforeend', renderCards(data.fallback_items, offset + items.length));
+          if (!data?.has_more && fallbackItems.length) {
+            if (!fallbackStarted) {
+              appendSectionHeading('Возможно, вам будет интересно');
+              fallbackStarted = true;
+            }
+            results.insertAdjacentHTML('beforeend', renderCards(fallbackItems, offset + items.length));
+          }
+          results.hidden = !results.children.length;
         }
-        results.hidden = !results.children.length;
+        offset += items.length;
+        if (more) more.hidden = !data?.has_more;
+        const quota = data?.quota;
+        if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
+        else await refreshQuota();
+        if (items.length === 0 && fallbackItems.length === 0) setStatus('Ничего не нашлось. Попробуйте описать запрос иначе.');
+        if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
+      } catch (error) {
+        const message = String(error?.message || error);
+        if (message === 'search_timeout') setStatus('Поиск занял слишком много времени. Попробуйте ещё раз — кнопка снова активна.', 'error');
+        else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
+      } finally {
+        setSearchLoading(false);
+        window.setTimeout(() => {
+          if (!loading) resetSearchProgress();
+        }, 650);
       }
-      offset += items.length;
-      if (more) more.hidden = !data?.has_more;
-      const quota = data?.quota;
-      if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
-      else await refreshQuota();
-      if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
     }
 
     function cleanAuthRedirectUrl() {

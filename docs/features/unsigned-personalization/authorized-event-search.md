@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v52 has passed static checks, mocked PKCE browser UI search including missing-verifier callback handling, public missing-verifier callback smoke, authenticated pgvector RPC smoke and authenticated Edge Function smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. v53 has passed static checks, mocked PKCE browser UI search including missing-verifier callback handling, streamed backend-progress search UI smoke, live Edge Function NDJSON progress smoke and authenticated Edge Function search smoke; the remaining manual gate is a real end-user Yandex OAuth click-through in the browser.
 
 ## Product contract
 
@@ -459,3 +459,32 @@ Verification evidence on 2026-06-29:
 - `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v52-auth-static-pkce`;
 - `scripts/smoke_authorized_search_ui.py` passed against the v52 build with the real personalization Supabase URL mocked at network layer; the smoke now covers both missing-verifier error UX and a successful mocked PKCE callback/search;
 - public smoke for `https://kenigevents.ru/preview-20260629-event-pages-v52-auth-static-pkce/poisk/?code=missing-verifier-code` returns to clean `/poisk/` and shows the explicit “сессия входа устарела…” retry message.
+
+
+## v53 backend-progress search canary
+
+Public preview: <https://kenigevents.ru/preview-20260629-event-pages-v53-search-progress/poisk/>.
+
+Why this exists: after v52 a real Yandex login reached the authorized UI and quota was visible, but a submitted search did not render results and the UI could stay in an unrecoverable loading state. Database inspection showed the real Yandex user/session existed, while no new `event_search_requests` rows were recorded for that attempt, so the page needed stronger request diagnostics, visible backend stages and guaranteed error/timeout recovery.
+
+Search progress contract:
+
+- the static page no longer treats the button progress as decorative; it calls `event-search` directly with `Accept: application/x-ndjson`;
+- the Edge Function streams compact NDJSON events with real backend stages: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then either `result` or `error`;
+- the UI updates the button progress/status only from those streamed backend events, then renders the final result payload through the same split-action event cards;
+- if streaming is unavailable, the UI falls back to a normal JSON response, so older/non-stream responses fail gracefully instead of leaving a dead button.
+
+Validation and error handling:
+
+- client and Edge Function both normalize control characters/whitespace and enforce a 3..180 character query;
+- obviously technical/unsafe input is rejected before provider/RPC work: HTML/script tags, `javascript:`, SQL-comment markers, broad SQL command patterns, template-injection markers and direct prompt-injection phrases;
+- Edge Function validation is authoritative and returns `query_too_short`, `query_too_long`, `query_unsafe` or `query_bad_characters`;
+- the browser maps backend errors (`quota_exceeded`, `auth_required`, query validation errors, provider/search failures, timeout) to product copy and always re-enables the input/search button;
+- authorized state shows the Yandex display name/login/email as “Вошли как …”, so the logout button is no longer ambiguous.
+
+Verification evidence on 2026-06-29:
+
+- deployed `event-search` with `--no-verify-jwt` and verified live NDJSON streaming with a temporary authenticated user: unsafe query streamed `accepted/auth/validate/error:query_unsafe`; normal query streamed `accepted/auth/validate/quota/embedding/vector_search/llm_verify/fallback/finalize/result`;
+- `npm --prefix site run check:preview` passed for `preview-20260629-event-pages-v53-search-progress`;
+- `scripts/smoke_authorized_search_ui.py` passed for v53 and now covers signed-in identity display, client-side unsafe-query rejection without calling `event-search`, NDJSON progress/result handling and final button reset;
+- readiness probe passed for static env, Yandex provider redirect, userinfo adapter and Edge Function OPTIONS.
