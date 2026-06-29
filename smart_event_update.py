@@ -5558,7 +5558,11 @@ def _looks_like_railway_gates_alias(norm_compact: str) -> bool:
         return False
     norm_soft = norm_compact.replace("-", " ").replace("—", " ")
     norm_soft = re.sub(r"\s+", " ", norm_soft).strip()
-    if "железнодорож" in norm_soft:
+    # `Железнодорожная 1` is also a street address in Зеленоградск for
+    # `Театральная гостиная Солёная ворона`; do not collapse it to the
+    # Kaliningrad gate unless the source explicitly says "ворота" or gives the
+    # Railway Gates address/landmarks.
+    if "железнодорож" in norm_soft and "ворот" in norm_soft:
         return True
     if "гвардейск" in norm_soft and "51а" in norm_soft:
         return True

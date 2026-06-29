@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-kldevents-solenaya-railway-gates.md`
+  - Scope: Smart Update location canonicalization for gate-family aliases, `Солёная ворона` / `Железнодорожная 1` Зеленоградск events, and public Telegram/VK/Telegraph event surfaces.
+  - Must not regress: `Железнодорожная 1, Зеленоградск` must remain `Театральная гостиная Солёная ворона`, not `Железнодорожные ворота`; Railway Gates canonicalization still requires explicit `ворота` or the real Kaliningrad gate address/landmarks.
 - `INC-2026-06-29-tg-promo-compensation-repeat.md`
   - Scope: broad Telegram `tg_repost` popular amplification diversity and incident compensation posts in `@kldevents`.
   - Must not regress: `@kenigevents` popular reposts must not repeat the same normalized title inside 7 days while another forwardable candidate exists; compensation Telegram event posts must preserve direct registration/ticket links, respect media-group no-button limits, and explicitly run/verify the premium emoji editor after the standard event publisher path.

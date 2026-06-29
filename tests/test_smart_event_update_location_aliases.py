@@ -24,6 +24,25 @@ def test_gate_locations_do_not_collapse_into_one_bucket() -> None:
     )
 
 
+def test_solenaya_vorona_railway_street_is_not_railway_gates() -> None:
+    """Regression for INC-2026-06-29: street name != Kaliningrad Railway Gates."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="Театральная гостиная Солёная ворона",
+            location_address="Железнодорожная 1",
+            city="Зеленоградск",
+        )
+        == ("Театральная гостиная Солёная ворона", "Железнодорожная 1", "Зеленоградск")
+    )
+    assert (
+        su._normalize_location(
+            "Театральная гостиная Солёная ворона, Железнодорожная 1, Зеленоградск"
+        )
+        != "железнодорожные ворота"
+    )
+
+
 def test_generic_vorota_is_not_forced_into_zakheim_bucket() -> None:
     assert su._normalize_location("Ворота") == "ворота"
 

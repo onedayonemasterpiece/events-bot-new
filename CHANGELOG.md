@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- **Incident / Solёная Ворона Railway Gates venue drift (INC-2026-06-29)**: tightened Smart Update Railway Gates aliasing so `Железнодорожная 1, Зеленоградск` remains `Театральная гостиная Солёная ворона` instead of being canonicalized to Kaliningrad `Железнодорожные ворота`; repaired the affected public `@kldevents`/`klgdevents`/Telegraph event surfaces.
 - **Incident / Telegram promo compensation and repost repeat (INC-2026-06-29)**:
   `tg_repost` now applies a 7-day same-title diversity cooldown on top of exact
   source URL dedup, allowing a repeat only when no other forwardable candidate
