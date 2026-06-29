@@ -104,10 +104,10 @@ Reported by operator on 2026-06-29 after comparing the public event with the Qti
 
 ## Release And Closure Evidence
 
-- deployed SHA: `fe8fd8ead369f0aa4931c2ce5ba1bebb07130c4f`
+- deployed SHA: `201e40a30119f4f4676f73bb86f400757a933d2a`
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --detach`
-  - image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWARM65EA3CXGZJP68XFE4WK`
-  - machine version: `1542`
+  - image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWAS744XNB1K34N5HS5GDEBX`
+  - machine version: `1543`
 - regression checks:
   - `uv run --with pytest --with-requirements requirements.txt pytest -q tests/test_qtickets_structured_facts.py tests/test_source_parsing.py tests/test_ticket_sites_queue.py` → `35 passed`
   - replay fixture: `tests/replays/INC-2026-06-29-qtickets-structured-facts-lost/qtickets_events.json`
