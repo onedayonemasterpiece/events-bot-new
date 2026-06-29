@@ -35,6 +35,11 @@ DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
     "📗": 5339143926638996892,
     "🏰": 5305794630866989617,
 }
+DEFAULT_TRETYAKOV_EMOJI_FALLBACK = "🖼🖼"
+DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS: tuple[int, int] = (
+    5188683852096234620,
+    5188445640325099838,
+)
 DAILY_ADDED_HEADING = "ДОБАВИЛИ В АНОНС"
 
 
@@ -206,6 +211,10 @@ def _apply_substitution_ops(
                 next_entities.append(entity)
             elif ent_start >= end:
                 next_entities.append(_clone_entity_with_offset(entity, ent_start + delta))
+            elif not isinstance(entity, MessageEntityCustomEmoji) and ent_start <= start and ent_end >= end:
+                cloned = copy.copy(entity)
+                cloned.length = ent_len + delta
+                next_entities.append(cloned)
             elif old_len == 0 and delta > 0 and ent_start < start < ent_end:
                 cloned = copy.copy(entity)
                 cloned.length = ent_len + delta
@@ -310,6 +319,70 @@ def _plain_prefix_is_daily_venue_context(prefix: str) -> bool:
     )
 
 
+def _daily_tretyakov_emoji_ids() -> tuple[int, int]:
+    raw = _env("TG_PREMIUM_EMOJI_TRETYAKOV_DOCUMENT_IDS")
+    if not raw:
+        return DEFAULT_TRETYAKOV_EMOJI_DOCUMENT_IDS
+    parts = [part.strip() for part in raw.replace(";", ",").split(",") if part.strip()]
+    if len(parts) != 2:
+        raise ValueError("TG_PREMIUM_EMOJI_TRETYAKOV_DOCUMENT_IDS must contain exactly two ids")
+    return int(parts[0]), int(parts[1])
+
+
+def _tretyakov_replacement_op(start: int, old_len: int) -> _SubstitutionOp:
+    return _SubstitutionOp(
+        start,
+        old_len,
+        DEFAULT_TRETYAKOV_EMOJI_FALLBACK,
+        _daily_tretyakov_emoji_ids(),
+    )
+
+
+def _find_daily_tretyakov_ops(text: str) -> list[_SubstitutionOp]:
+    ops: list[_SubstitutionOp] = []
+    sur_offset = 0
+    picture_variants = ("🖼️", "🖼")
+    for line in text.splitlines(keepends=True):
+        visible_line = line.rstrip("\r\n")
+        stripped = visible_line.strip()
+        # Full daily cards for Tretyakov/gallery-type events often start with
+        # the generic picture emoji. Replace it with the curated pair.
+        if (
+            stripped.startswith("👉 ")
+            and not stripped.startswith(f"👉 {DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ")
+            and re.search(r"(?:Дейнека|Петрова-Водкина|Третьяков)", stripped, flags=re.IGNORECASE)
+        ):
+            line_sur = add_surrogate(visible_line)
+            for variant in picture_variants:
+                marker = f"👉 {variant} "
+                if stripped.startswith(marker):
+                    start = sur_offset + line_sur.find(add_surrogate(variant))
+                    if start >= sur_offset:
+                        ops.append(_tretyakov_replacement_op(start, len(add_surrogate(variant))))
+                    break
+
+        for venue_marker in ("Третьяков",):
+            pos = visible_line.find(venue_marker)
+            while pos >= 0:
+                prefix = visible_line[:pos]
+                if not prefix.endswith(f"{DEFAULT_TRETYAKOV_EMOJI_FALLBACK} ") and _plain_prefix_is_daily_venue_context(prefix):
+                    start = sur_offset + len(add_surrogate(prefix))
+                    ops.append(_tretyakov_replacement_op(start, 0))
+                pos = visible_line.find(venue_marker, pos + len(venue_marker))
+
+        # Added-announcement rows can be premarked by the daily formatter for
+        # Tretyakov events as `🖼🖼`; older rows remain unchanged unless the
+        # visible text itself names Tretyakov/gallery-specific content.
+        if re.search(r"(?:Дейнека|Петрова-Водкина|Третьяков)", visible_line, flags=re.IGNORECASE):
+            flag_pos = visible_line.find("🚩")
+            if flag_pos >= 0:
+                start = sur_offset + len(add_surrogate(visible_line[:flag_pos]))
+                ops.append(_tretyakov_replacement_op(start, len(add_surrogate("🚩"))))
+
+        sur_offset += len(add_surrogate(line))
+    return sorted(ops, key=lambda item: item.start)
+
+
 def _find_daily_insert_emoji_ops(text: str, mapping: dict[str, int]) -> list[_SubstitutionOp]:
     ops: list[_SubstitutionOp] = []
     money_id = mapping.get("💰")
@@ -360,6 +433,7 @@ def apply_daily_free_premium_emojis(
     ops = [
         *_find_daily_free_label_ops(text, ids),
         *_find_daily_insert_emoji_ops(text, single_mapping),
+        *_find_daily_tretyakov_ops(text),
         *_find_daily_single_emoji_ops(text, entities, single_mapping),
     ]
     return _apply_substitution_ops(text, entities, ops)

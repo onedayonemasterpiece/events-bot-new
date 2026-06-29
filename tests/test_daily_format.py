@@ -68,6 +68,33 @@ def test_format_event_daily_promo_highlight_uses_subtle_marker() -> None:
     assert "promo" not in inline.casefold()
 
 
+
+def test_format_event_daily_marks_tretyakov_with_picture_pair() -> None:
+    event = make_event(
+        title="Александр Дейнека",
+        emoji="🖼️",
+        location_name="Филиал Третьяковской галереи",
+    )
+
+    rendered = main.format_event_daily(event, highlight=True)
+
+    assert rendered.startswith("<b>👉 🚩 🖼🖼 Александр Дейнека</b>")
+
+
+def test_format_event_daily_inline_replaces_recent_flag_for_tretyakov() -> None:
+    event = make_event(
+        title="Лекция «Чулки и носки»",
+        emoji="🖼️",
+        location_name="Филиал Третьяковской галереи",
+        added_at=datetime.now(timezone.utc),
+    )
+
+    rendered = main.format_event_daily_inline(event)
+
+    assert rendered.startswith("01.01 🖼🖼 Лекция")
+    assert "🚩" not in rendered
+
+
 def test_format_event_daily_handles_timezone_aware_added_at() -> None:
     event = make_event(
         added_at=datetime(2024, 1, 2, 12, tzinfo=timezone.utc),

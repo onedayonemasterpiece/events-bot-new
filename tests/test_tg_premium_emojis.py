@@ -153,3 +153,27 @@ def test_daily_venue_icon_insertion_extends_covering_format_entity():
     bold = next(entity for entity in new_entities if isinstance(entity, MessageEntityBold))
     assert bold.offset == 0
     assert bold.length == len(add_surrogate(new_text))
+
+
+def test_daily_tretyakov_title_picture_is_replaced_with_custom_pair():
+    text = "👉 🖼️ Александр Дейнека. Картины советской эпохи"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert new_text == "👉 🖼🖼 Александр Дейнека. Картины советской эпохи"
+    assert count == 2
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert 5188683852096234620 in custom_ids
+    assert 5188445640325099838 in custom_ids
+
+
+def test_daily_tretyakov_added_row_replaces_flag_when_visible_marker_present():
+    text = "+1 ДОБАВИЛИ В АНОНС\n\n01.07 🚩 🖼️ Александр Дейнека"
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, [])
+
+    assert "01.07 🖼🖼 🖼️ Александр Дейнека" in new_text
+    assert count >= 1
+    custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert 5188683852096234620 in custom_ids
+    assert 5188445640325099838 in custom_ids
