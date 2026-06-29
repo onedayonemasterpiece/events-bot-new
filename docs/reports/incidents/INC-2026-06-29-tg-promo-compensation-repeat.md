@@ -1,6 +1,6 @@
 # INC-2026-06-29 Telegram promo compensation CTA/premium loss and popular repost repeat
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Telegram promo publishing (`@kldevents`, `@kenigevents`)
 Opened: 2026-06-29
@@ -125,11 +125,13 @@ Two Telegram promo regressions were reported on 2026-06-29:
 
 ## Immediate Mitigation
 
-- Code fix in progress: add normalized-title repeat cooldown for `tg_repost` and
-  schedule premium editor from promo direct posts.
-- Production repair required: republish events `5077` and `4417` through the
-  standard event-post publisher, delete/supersede bad compensation posts
-  `1611`/`1612`/`1613`, and reconcile DB/exposure rows.
+- Deployed code fix `e9a07568` adds normalized-title repeat cooldown for `tg_repost` and schedules the premium editor from promo direct posts.
+- 2026-06-29T11:38Z: edited existing public compensation captions in place to restore direct registration links:
+  - `@kldevents/1611` (event `5077`) now has a `MessageEntityTextUrl` on `по регистрации` pointing to the `kgd80.ru/.../?register=1` URL; album continuation `1612` remains buttonless/empty-caption.
+  - `@kldevents/1613` (event `4417`) now has a `MessageEntityTextUrl` on `по регистрации` pointing to the `kgd80.ru/.../?register=1` URL.
+- 2026-06-29T11:38Z: ran `scripts/tg_premium_emoji_editor.py` manually for messages `1611` and `1613`; Telethon reread showed 5 custom emoji entities per caption (date + four-part free label) and no visible `🟡 Бесплатно`.
+- Production exposure rows `585` and `586` were updated with repair evidence after backing up to `codex_backup_tg_promo_comp_repeat_20260629_exposure`.
+- Production activity `31` config was backed up to `codex_backup_tg_repost_repeat_cfg_20260629_activity` and explicitly set to `repeat_cooldown_days=7`.
 
 ## Corrective Actions
 
@@ -145,16 +147,16 @@ Two Telegram promo regressions were reported on 2026-06-29:
 
 ## Follow-up Actions
 
-- [ ] Finish production repair for `@kldevents/1611`/`1612`/`1613`.
+- [x] Finish production repair for `@kldevents/1611`/`1612`/`1613`.
 - [ ] After deploy, verify the next `tg_repost` run does not choose an `Алиса`
       title again unless the candidate inventory has no alternatives.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `e9a07568`
+- deploy path: manual `fly deploy -a events-bot-new-wngqia --remote-only`, image `deployment-01KW9JN3JCH1W0PJ2WBFXRH0Y1`, machine version `1527`
+- regression checks: targeted pytest passed: `tests/test_promo.py::test_tg_repost_weighted_popularity_prefers_diverse_title_within_week`, `tests/test_promo.py::test_tg_repost_weighted_popularity_uses_owned_vk_boost_and_tme_c_source`, `tests/test_tg_event_publish.py::test_build_tg_promo_event_publication_formats_markdown_body`, `tests/test_tg_event_publish.py::test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption_limit`; `python3 -m py_compile promo.py main_part2.py` passed. A broader `tests/test_promo.py tests/test_tg_event_publish.py` run exposed unrelated date-sensitive failures around test fixtures dated 2026-06-20 now being past as of 2026-06-29.
+- post-deploy verification: `/healthz` OK; Telethon reread confirmed registration link entities and custom emoji entities on `@kldevents/1611` and `@kldevents/1613`; production `promo_activity.id=31` has explicit `repeat_cooldown_days=7`.
 
 ## Prevention
 
