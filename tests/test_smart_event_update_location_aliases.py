@@ -43,6 +43,61 @@ def test_solenaya_vorona_railway_street_is_not_railway_gates() -> None:
     )
 
 
+def test_konb_room_location_uses_source_building_not_room() -> None:
+    """Regression for INC-2026-06-29: KОНБ room names are not public venues."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="ЧИТАЛЬНЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15489",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="4 ЭТАЖ ЛЕКЦИОННЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15501",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="читальный зал, 2 этаж",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15514",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+
+
+def test_konb_room_location_negative_controls() -> None:
+    """Do not classify generic room names without the source grounding."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="ЧИТАЛЬНЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-123_456",
+        )
+        == ("ЧИТАЛЬНЫЙ ЗАЛ", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="Дом китобоя",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15489",
+        )
+        == ("Дом китобоя", "Мира 9", "Калининград")
+    )
+
+
 def test_generic_vorota_is_not_forced_into_zakheim_bucket() -> None:
     assert su._normalize_location("Ворота") == "ворота"
 

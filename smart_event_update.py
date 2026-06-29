@@ -5520,6 +5520,33 @@ def _looks_like_scientific_library_alias(norm_compact: str) -> bool:
     )
 
 
+def _looks_like_scientific_library_room_alias(norm_compact: str) -> bool:
+    """Return true for source-local room/floor names inside KОНБ.
+
+    These strings are useful as room details, but they are not standalone
+    venues.  Keep the rule intentionally narrow and source-gated in
+    ``_canonicalize_location_fields`` so a generic room at another Мира 9 venue
+    (for example Дом китобоя) is not silently reclassified.
+    """
+
+    if not norm_compact:
+        return False
+    if "бфу" in norm_compact or "дом китобоя" in norm_compact:
+        return False
+    probes = {
+        norm_compact,
+        re.sub(r"\b(?:2|4)\s*этаж\b", "", norm_compact).strip(),
+        re.sub(r"\b(?:этаж|место проведения)\b", "", norm_compact).strip(),
+    }
+    return any(
+        probe in {"читальный зал", "лекционный зал"}
+        or re.fullmatch(r"(?:2|4)\s*этаж\s+(?:читальный|лекционный)\s+зал", probe)
+        or re.fullmatch(r"(?:читальный|лекционный)\s+зал\s+(?:2|4)\s*этаж", probe)
+        for probe in probes
+        if probe
+    )
+
+
 def _looks_like_dom_kitoboya_alias(norm_compact: str) -> bool:
     if not norm_compact:
         return False
@@ -5592,8 +5619,23 @@ def _canonicalize_location_fields(
             (source_url or "").strip().casefold(),
         ]
     ).strip()
+    is_konb_source = any(
+        marker in source_hint
+        for marker in ("konb39", "wall-30777579_", "vk.com/public30777579")
+    )
 
     if _looks_like_scientific_library_alias(combined_norm):
+        return (
+            _CANONICAL_SCI_LIBRARY_NAME,
+            _CANONICAL_SCI_LIBRARY_ADDRESS,
+            _CANONICAL_SCI_LIBRARY_CITY,
+        )
+
+    if (
+        is_konb_source
+        and _looks_like_scientific_library_room_alias(name_norm)
+        and (not address_norm or "мира 9" in address_norm)
+    ):
         return (
             _CANONICAL_SCI_LIBRARY_NAME,
             _CANONICAL_SCI_LIBRARY_ADDRESS,

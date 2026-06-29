@@ -31,6 +31,10 @@
 - Fixed the Telegram premium emoji editor so daily audience `❤️/🔂` rows keep
   `@kenigevents adaptive pack` custom emoji entities after Telethon edits
   instead of falling back to ordinary Unicode emoji.
+- **Incident / KОНБ room-as-venue location drift (INC-2026-06-29)**: VK auto-import
+  and Smart Update now treat `читальный зал`/`лекционный зал`/floor labels from
+  `konb39` as room hints and publish the canonical `Научная библиотека, Мира 9,
+  Калининград` venue instead of exposing the room name as the public venue.
 - **Incident / Solёная Ворона Railway Gates venue drift (INC-2026-06-29)**: tightened Smart Update Railway Gates aliasing so `Железнодорожная 1, Зеленоградск` remains `Театральная гостиная Солёная ворона` instead of being canonicalized to Kaliningrad `Железнодорожные ворота`; repaired the affected public `@kldevents`/`klgdevents`/Telegraph event surfaces.
 - **Incident / Telegram promo compensation and repost repeat (INC-2026-06-29)**:
   `tg_repost` now applies a 7-day same-title diversity cooldown on top of exact

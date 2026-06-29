@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-29-konb-room-venue-drift.md`
+  - Scope: VK auto-import/Smart Update source-grounded location handling for KОНБ (`konb39`/`wall-30777579_*`) room/floor labels and public `@kldevents`/`klgdevents`/Telegraph event surfaces.
+  - Must not regress: `читальный зал`, `2 этаж`, or `4 этаж лекционный зал` from KОНБ at `Мира 9` must publish as `Научная библиотека, Мира 9, Калининград` while remaining only hall/room detail; the same generic room without KОНБ source grounding and `Дом китобоя, Мира 9` must not be auto-rewritten.
 - `INC-2026-06-29-kldevents-solenaya-railway-gates.md`
   - Scope: Smart Update location canonicalization for gate-family aliases, `Солёная ворона` / `Железнодорожная 1` Зеленоградск events, and public Telegram/VK/Telegraph event surfaces.
   - Must not regress: `Железнодорожная 1, Зеленоградск` must remain `Театральная гостиная Солёная ворона`, not `Железнодорожные ворота`; Railway Gates canonicalization still requires explicit `ворота` or the real Kaliningrad gate address/landmarks.

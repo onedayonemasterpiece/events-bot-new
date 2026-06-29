@@ -1918,9 +1918,12 @@ async def build_event_drafts_from_vk(
         ]
         if part
     ).casefold().replace("ё", "е")
-    if re.search(r"\b(?:лекционн\w*\s+зал|конференц[-\s]?зал|аудитори\w*|4\s*этаж)\b", room_probe):
+    if re.search(
+        r"\b(?:лекционн\w*\s+зал|читальн\w*\s+зал|конференц[-\s]?зал|аудитори\w*|[24]\s*этаж)\b",
+        room_probe,
+    ):
         llm_text += (
-            "\nRoom/floor is not venue: `лекционный зал`/`4 этаж` -> infer building. "
+            "\nRoom/floor is not venue: `лекционный зал`/`читальный зал`/`2 этаж`/`4 этаж` -> infer building. "
             "If the explicit place is only a room, hall, audience room, or floor, treat venue "
             "as missing and use the source organization/source_location/location hint as the "
             "building when source text/OCR supports it. КОНБ+Мира9 => "

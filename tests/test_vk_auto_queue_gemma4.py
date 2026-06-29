@@ -372,6 +372,8 @@ def test_vk_intake_prompt_mentions_poster_datetime_conflict_rule():
     assert "в этот четверг" in joined
     assert "OCR афиши более точным" in joined
     assert "не считай афишу автоматически сильнее" in joined
+    assert "читальный зал" in joined
+    assert "Room/floor is not venue" in joined
 
 
 @pytest.mark.asyncio
