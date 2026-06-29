@@ -19,6 +19,7 @@ from tg_premium_emojis import (  # noqa: E402
     edit_latest_daily_announcement,
     edit_message_daily_free_labels,
     load_telethon_config_from_env,
+    parse_daily_single_emoji_document_ids,
     parse_document_ids,
     raise_if_session_busy,
     telethon_client_from_config,
@@ -67,6 +68,7 @@ async def _main_async(args: argparse.Namespace) -> None:
     cfg = load_telethon_config_from_env()
     await raise_if_session_busy(cfg.auth_scope)
     parse_document_ids()  # fail fast on malformed ids
+    parse_daily_single_emoji_document_ids()  # fail fast on malformed JSON overrides
     async with telethon_client_from_config(cfg) as client:
         if args.latest:
             results = await edit_latest_daily_announcement(

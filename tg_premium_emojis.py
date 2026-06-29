@@ -26,6 +26,10 @@ DEFAULT_FREE_EMOJI_DOCUMENT_IDS: tuple[int, ...] = (
     5406815783542085177,
     5406927577245833438,
 )
+DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS: dict[str, int] = {
+    "🎭": 5390961951150988955,
+    "👉": 5204036388789445008,
+}
 DAILY_ADDED_HEADING = "ДОБАВИЛИ В АНОНС"
 
 
@@ -40,6 +44,14 @@ class PremiumEmojiTelethonConfig:
     app_version: str | None = None
     lang_code: str | None = None
     system_lang_code: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class _SubstitutionOp:
+    start: int
+    old_len: int
+    replacement: str
+    document_ids: tuple[int, ...]
 
 
 @dataclass(slots=True, frozen=True)
@@ -74,6 +86,24 @@ def parse_document_ids(raw: str | None = None) -> tuple[int, ...]:
     if not ids:
         raise ValueError("TG_PREMIUM_EMOJI_FREE_DOCUMENT_IDS is empty")
     return tuple(ids)
+
+
+def parse_daily_single_emoji_document_ids(raw: str | None = None) -> dict[str, int]:
+    value = (raw or _env("TG_PREMIUM_EMOJI_DAILY_SINGLE_DOCUMENT_IDS_JSON")).strip()
+    if not value:
+        return dict(DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS)
+    payload = json.loads(value)
+    if not isinstance(payload, dict):
+        raise ValueError("TG_PREMIUM_EMOJI_DAILY_SINGLE_DOCUMENT_IDS_JSON must be an object")
+    parsed: dict[str, int] = {}
+    for emoji, document_id in payload.items():
+        emoji_text = str(emoji)
+        if not emoji_text:
+            continue
+        parsed[emoji_text] = int(document_id)
+    if not parsed:
+        raise ValueError("TG_PREMIUM_EMOJI_DAILY_SINGLE_DOCUMENT_IDS_JSON is empty")
+    return parsed
 
 
 def _session_bundle_from_env() -> tuple[str, dict[str, Any], str]:
@@ -142,8 +172,7 @@ def _clone_entity_with_offset(entity: Any, offset: int) -> Any:
 def _apply_substitution_ops(
     text: str,
     entities: Sequence[Any] | None,
-    ops: Sequence[tuple[int, int, str]],
-    document_ids: Sequence[int],
+    ops: Sequence[_SubstitutionOp],
 ) -> tuple[str, list[Any], int]:
     if not ops:
         return text, list(entities or []), 0
@@ -153,8 +182,10 @@ def _apply_substitution_ops(
     premium_entities: list[MessageEntityCustomEmoji] = []
     shift = 0
 
-    for original_start, old_len, replacement in sorted(ops, key=lambda item: item[0]):
-        start = original_start + shift
+    for op in sorted(ops, key=lambda item: item.start):
+        start = op.start + shift
+        old_len = op.old_len
+        replacement = op.replacement
         replacement_sur = add_surrogate(replacement)
         new_len = len(replacement_sur)
         end = start + old_len
@@ -170,6 +201,12 @@ def _apply_substitution_ops(
                 next_entities.append(entity)
             elif ent_start >= end:
                 next_entities.append(_clone_entity_with_offset(entity, ent_start + delta))
+            elif delta == 0 and not isinstance(entity, MessageEntityCustomEmoji):
+                # Single-emoji premiumization keeps the visible text unchanged.
+                # Preserve surrounding title/link formatting even when it covers
+                # the emoji; Telegram accepts custom emoji entities alongside
+                # ordinary formatting entities for the same text range.
+                next_entities.append(entity)
             else:
                 logger.warning(
                     "tg_premium_emoji.drop_overlapping_entity type=%s offset=%s length=%s substitution_start=%s substitution_len=%s",
@@ -182,7 +219,7 @@ def _apply_substitution_ops(
         adjusted_entities = next_entities
 
         emoji_offset = start
-        for index, document_id in enumerate(document_ids):
+        for index, document_id in enumerate(op.document_ids):
             premium_entities.append(
                 MessageEntityCustomEmoji(
                     offset=emoji_offset + index * 2,
@@ -196,9 +233,14 @@ def _apply_substitution_ops(
     return del_surrogate(sur_text), merged, len(ops)
 
 
-def _find_daily_free_label_ops(text: str) -> list[tuple[int, int, str]]:
+def _ranges_overlap(start: int, end: int, ranges: Sequence[tuple[int, int]]) -> bool:
+    return any(not (end <= taken_start or start >= taken_end) for taken_start, taken_end in ranges)
+
+
+def _find_daily_free_label_ops(text: str, document_ids: Sequence[int]) -> list[_SubstitutionOp]:
     sur_text = add_surrogate(text)
-    ops: list[tuple[int, int, str]] = []
+    ids = tuple(int(item) for item in document_ids)
+    ops: list[_SubstitutionOp] = []
     occupied: list[tuple[int, int]] = []
 
     def add_matches(pattern: str, start_at: int = 0) -> None:
@@ -206,8 +248,8 @@ def _find_daily_free_label_ops(text: str) -> list[tuple[int, int, str]]:
         pos = sur_text.find(sur_pattern, start_at)
         while pos >= 0:
             end = pos + len(sur_pattern)
-            if not any(not (end <= taken_start or pos >= taken_end) for taken_start, taken_end in occupied):
-                ops.append((pos, len(sur_pattern), DEFAULT_FREE_EMOJI_FALLBACK))
+            if not _ranges_overlap(pos, end, occupied):
+                ops.append(_SubstitutionOp(pos, len(sur_pattern), DEFAULT_FREE_EMOJI_FALLBACK, ids))
                 occupied.append((pos, end))
             pos = sur_text.find(sur_pattern, pos + 1)
 
@@ -216,7 +258,32 @@ def _find_daily_free_label_ops(text: str) -> list[tuple[int, int, str]]:
         add_matches("🚩 🟡", heading_pos)
 
     add_matches("🟡 Бесплатно")
-    return sorted(ops, key=lambda item: item[0])
+    return sorted(ops, key=lambda item: item.start)
+
+
+def _find_daily_single_emoji_ops(
+    text: str,
+    entities: Sequence[Any] | None,
+    mapping: dict[str, int],
+) -> list[_SubstitutionOp]:
+    sur_text = add_surrogate(text)
+    existing_custom_ranges = [
+        (int(getattr(entity, "offset", 0)), int(getattr(entity, "offset", 0)) + int(getattr(entity, "length", 0)))
+        for entity in (entities or [])
+        if isinstance(entity, MessageEntityCustomEmoji)
+    ]
+    ops: list[_SubstitutionOp] = []
+    occupied: list[tuple[int, int]] = []
+    for emoji, document_id in mapping.items():
+        sur_emoji = add_surrogate(emoji)
+        pos = sur_text.find(sur_emoji)
+        while pos >= 0:
+            end = pos + len(sur_emoji)
+            if not _ranges_overlap(pos, end, existing_custom_ranges) and not _ranges_overlap(pos, end, occupied):
+                ops.append(_SubstitutionOp(pos, len(sur_emoji), emoji, (int(document_id),)))
+                occupied.append((pos, end))
+            pos = sur_text.find(sur_emoji, pos + 1)
+    return sorted(ops, key=lambda item: item.start)
 
 
 def apply_daily_free_premium_emojis(
@@ -224,12 +291,18 @@ def apply_daily_free_premium_emojis(
     entities: Sequence[Any] | None = None,
     *,
     document_ids: Sequence[int] | None = None,
+    single_emoji_document_ids: dict[str, int] | None = None,
 ) -> tuple[str, list[Any], int]:
-    """Replace daily free markers with the configured premium custom emoji label."""
+    """Replace daily free markers and configured daily emoji with premium custom emoji entities."""
     ids = tuple(document_ids or parse_document_ids())
     if len(ids) != len(DEFAULT_FREE_EMOJI_FALLBACK):
         raise ValueError("daily free premium label must contain exactly 4 custom emoji document ids")
-    return _apply_substitution_ops(text, entities, _find_daily_free_label_ops(text), ids)
+    single_ids = single_emoji_document_ids if single_emoji_document_ids is not None else parse_daily_single_emoji_document_ids()
+    ops = [
+        *_find_daily_free_label_ops(text, ids),
+        *_find_daily_single_emoji_ops(text, entities, dict(single_ids)),
+    ]
+    return _apply_substitution_ops(text, entities, ops)
 
 
 async def raise_if_session_busy(auth_scope: str) -> None:
@@ -247,6 +320,7 @@ async def edit_message_daily_free_labels(
     message_id: int,
     *,
     document_ids: Sequence[int] | None = None,
+    single_emoji_document_ids: dict[str, int] | None = None,
     dry_run: bool = False,
 ) -> PremiumEmojiEditResult:
     entity = await client.get_entity(chat)
@@ -258,8 +332,9 @@ async def edit_message_daily_free_labels(
         before,
         getattr(message, "entities", None) or [],
         document_ids=document_ids,
+        single_emoji_document_ids=single_emoji_document_ids,
     )
-    if count <= 0 or after == before:
+    if count <= 0:
         return PremiumEmojiEditResult(chat, int(message_id), False, count, before, after)
     if dry_run:
         return PremiumEmojiEditResult(chat, int(message_id), False, count, before, after)
@@ -282,6 +357,7 @@ async def edit_latest_daily_announcement(
     chats: Iterable[str | int],
     *,
     document_ids: Sequence[int] | None = None,
+    single_emoji_document_ids: dict[str, int] | None = None,
     dry_run: bool = False,
 ) -> list[PremiumEmojiEditResult]:
     results: list[PremiumEmojiEditResult] = []
@@ -298,6 +374,7 @@ async def edit_latest_daily_announcement(
                 chat,
                 int(message.id),
                 document_ids=document_ids,
+                single_emoji_document_ids=single_emoji_document_ids,
                 dry_run=dry_run,
             )
         )
@@ -315,6 +392,7 @@ async def edit_daily_messages_with_env(
     cfg = load_telethon_config_from_env()
     await raise_if_session_busy(cfg.auth_scope)
     ids = parse_document_ids()
+    single_ids = parse_daily_single_emoji_document_ids()
     async with telethon_client_from_config(cfg) as client:
         results: list[PremiumEmojiEditResult] = []
         for chat, message_id in targets:
@@ -325,6 +403,7 @@ async def edit_daily_messages_with_env(
                         chat,
                         int(message_id),
                         document_ids=ids,
+                        single_emoji_document_ids=single_ids,
                         dry_run=dry_run,
                     )
                 )
