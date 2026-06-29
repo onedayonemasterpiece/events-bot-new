@@ -35,6 +35,7 @@
 
 ## Черновики требований
 
+- `docs/features/recap/requirements.md` — требования к post-event Recap: автоматические итоги/отчёты по прошедшим событиям, multi-source evidence и social proof для будущих анонсов.
 - `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
 
 ## Как добавлять новую фичу
