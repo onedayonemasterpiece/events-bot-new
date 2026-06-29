@@ -8,6 +8,12 @@ Goal: pick the smallest stable model/tooling set for static-site personalization
 offline event enrichment, embeddings/similarity, eval/review, and no LLM in the
 online page-view/feed hot path.
 
+2026-06-29 addendum: authorized one-line search (`/poisk/`) is an explicit
+logged-in user action, not the passive page-view/feed hot path. It uses pgvector
+retrieval plus an LLM verifier over a bounded candidate window. For that
+interactive verifier, Gemma 4 26B is primary and `gemini-3.1-flash-lite` is only
+a protected fallback/rescue lane; see `authorized-event-search.md`.
+
 ## Executive decision
 
 Use a **non-LLM online recommender**:
@@ -23,6 +29,7 @@ Selected minimal set:
 | --- | --- | --- | --- |
 | Online ranking | Deterministic formula `local_related_rerank_v1` for MVP-0 `event_detail_related`; later broader `local_rerank_v1`/CatBoost only after logs | Cheapest, explainable, no provider latency/quota risk; matches source analytics MVP recommendation | Reference JS + Playwright contract exist; no provider call |
 | Event semantic enrichment | `gemini-3.1-flash-lite` as primary; `gemma-4-31b-it` only as quality fallback/review for ambiguous rows | Source analytics asked for younger/simple models; Lite is the cheapest stable managed candidate with a limiter row; 31B is reserved for hard cases | Live provider + Supabase limiter smoke passed |
+| Authorized search verifier | `gemma-4-26b-a4b-it` primary; `gemini-3.1-flash-lite` protected fallback only | Search must conserve Lite’s `500 RPD` pool for critical processes, while Gemma 4 26B has `1500 RPD`; high-match search can fail closed if all attempts fail | Implemented in Edge Function as `fast_onboarding_fallback` / `gemma_priority_late_fallback` |
 | Event vectors / similarity baseline | Local deterministic feature vectors first; `gemini-embedding-001` only as optional semantic embedding eval/upgrade | Normalized tags/categories/audience/price/time/venue from enrichment can be vectorized locally; external embeddings cost extra requests and are not required for MVP | Local vector needs no provider; Google embedding live-smoked if we later enable it |
 | Local/open embedding option | `EmbeddingGemma` is accepted as future offline/local candidate, not selected for immediate MVP | It fits the source analytics idea (small 308M multilingual embedding model), but current repo env lacks HF token and local `torch`/`sentence-transformers`; Google API does not expose it as a simple managed model here | Not available in current local access path |
 | Eval/reviewer / prompt audit | `gemini-3.1-flash-lite` first; `gemma-4-31b-it` for hard Google-side review; no OpenAI in MVP | Keeps the MVP on available/free-tier Google models with AI Studio limits; avoids assuming GPT-5.x complimentary-token eligibility | Google live + limiter smoke passed; OpenAI GPT-5.x removed from selected MVP set |
@@ -218,7 +225,7 @@ public/forum limits remain only a secondary cross-check and are superseded when 
 
 | Model(s) | Lifecycle / task fit | Official facts | Project limit evidence | Our limiter row | Live smoke | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| `gemma-4-26b-a4b-it` | Hosted open model, cheaper/lighter Gemma review candidate | Official Gemma-on-Gemini API docs: Gemini API supports only `gemma-4-31b-it` and `gemma-4-26b-a4b-it`; Gemma 4 pricing free input/output, paid tier unavailable | **AI Studio actual:** `15 RPM / unlimited TPM / 1500 RPD` | `15 RPM / unlimited TPM / 1500 RPD` | OK, ~0.6s | Not primary: repo evidence warns about long Russian structured-output instability |
+| `gemma-4-26b-a4b-it` | Hosted open model, cheaper/lighter Gemma candidate | Official Gemma-on-Gemini API docs: Gemini API supports only `gemma-4-31b-it` and `gemma-4-26b-a4b-it`; Gemma 4 pricing free input/output, paid tier unavailable | **AI Studio actual:** `15 RPM / unlimited TPM / 1500 RPD` | `15 RPM / unlimited TPM / 1500 RPD` | OK, ~0.6s; can return transient `5xx/timeout` on some structured prompts | **Primary for authorized search verifier with retries/backoff; not primary for bulk enrichment writer** |
 | `gemma-4-31b-it` | Hard review/fallback for ambiguous enrichment, not bulk | Same official hosted Gemma support; requires thinking config in this repo path | **AI Studio actual:** `15 RPM / unlimited TPM / 1500 RPD`; peak last 28 days `15 RPM / 41.33k TPM / 344 RPD` | `15 RPM / unlimited TPM / 1500 RPD` | OK, ~2.7s | **Fallback/review only** |
 | Gemma 4 E2B/E4B/12B | Local/open weights, not managed Gemini API candidates for current key | Official Gemma docs list E2B/E4B/12B sizes, but hosted Gemini API supports only 26B A4B and 31B | no Gemini API quota because not hosted here | none | not callable via Gemini API | Future HF/Kaggle/local route only, not current MVP |
 | `gemini-embedding-001` | Text embeddings for event similarity/recommendations | Official model page: stable, text input, flexible output dims 128-3072; pricing page: free-tier input free, paid $0.15/1M tokens | **AI Studio actual:** `100 RPM / 30k TPM / 1000 RPD` | none yet | OK | Optional semantic embedding candidate; add limiter before bulk |

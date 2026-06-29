@@ -93,6 +93,19 @@ For `--related-mode pgvector`:
 
 Astro pages still read only the static JSON/HTML chain on page view.
 
+Static related-generation model policy is deliberately different from the
+interactive `/poisk/` policy:
+
+- primary/audit model is Gemma 4 26B (`models/gemma-4-26b-a4b-it`);
+- there is **no** Flash-Lite/Gemini-Lite fallback for static related generation;
+- provider `5xx/429/timeout` must be handled by repeated Gemma attempts with
+  pauses/backoff (`STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS`,
+  `STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC`) because static rebuild speed is
+  less important than preserving the scarce `gemini-3.1-flash-lite` quota for
+  online rescue and other critical flows;
+- if all Gemma attempts fail for an anchor, the builder records the error and
+  keeps the pgvector order for that anchor rather than burning Lite quota.
+
 ### Authorized search
 
 Design doc: `docs/features/unsigned-personalization/authorized-event-search.md`.

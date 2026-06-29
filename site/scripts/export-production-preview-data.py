@@ -1237,6 +1237,17 @@ def maybe_apply_gemma_audit(
         "changed_event_ids": sorted(changed_event_ids),
         "skipped_unchanged_without_cache": 0,
         "errors": [],
+        "retry_policy": {
+            "fallback_models": [],
+            "max_attempts": max(
+                1,
+                int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "4") or "4"),
+            ),
+            "backoff_seconds": max(
+                0.0,
+                float(os.getenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "20") or "20"),
+            ),
+        },
     }
     if not enabled:
         return chains, meta
@@ -1276,14 +1287,44 @@ def maybe_apply_gemma_audit(
         else:
             try:
                 candidates = [by_id[cid] for cid in top_ids if cid in by_id]
-                log_stage(
-                    "gemma_audit_call",
-                    anchor_event_id=anchor_int_id,
-                    candidate_count=len(candidates),
-                    model=model,
-                    key_env=key_env,
-                )
-                audit = call_gemma_related_audit(model=model, key_env=key_env, anchor=anchor, candidates=candidates)
+                max_attempts = int(meta["retry_policy"]["max_attempts"])
+                backoff_seconds = float(meta["retry_policy"]["backoff_seconds"])
+                last_exc: Exception | None = None
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        log_stage(
+                            "gemma_audit_call",
+                            anchor_event_id=anchor_int_id,
+                            candidate_count=len(candidates),
+                            model=model,
+                            key_env=key_env,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                        )
+                        audit = call_gemma_related_audit(
+                            model=model,
+                            key_env=key_env,
+                            anchor=anchor,
+                            candidates=candidates,
+                        )
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        if attempt >= max_attempts:
+                            raise
+                        sleep_seconds = backoff_seconds * attempt
+                        log_stage(
+                            "gemma_audit_retry",
+                            anchor_event_id=anchor_int_id,
+                            model=model,
+                            attempt=attempt,
+                            next_attempt=attempt + 1,
+                            sleep_seconds=sleep_seconds,
+                            error=str(exc)[:500],
+                        )
+                        time.sleep(sleep_seconds)
+                else:
+                    raise RuntimeError(str(last_exc) if last_exc else "Gemma related audit failed")
                 audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                 meta["provider_calls"] += 1
                 # Respect free-tier RPM without introducing a queue.

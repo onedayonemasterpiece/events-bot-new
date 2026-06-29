@@ -151,9 +151,15 @@ Query:    task: search result | query: {user_query}
 The Edge Function runs an LLM verifier after pgvector retrieval when the user has LLM quota. This verifier is an operational classifier over already retrieved IDs, not an external consultant review. Runtime contract:
 
 - `EVENT_SEARCH_LLM_ENABLED=1` enables the verifier;
-- `EVENT_SEARCH_LLM_MODEL` production/canary value is `gemini-3.1-flash-lite`; the code fallback is also `gemini-3.1-flash-lite` so a missing env var does not silently fall back to the Gemma 4 models that timed out/500-ed in live probes;
+- primary verifier model is Gemma 4 26B (`EVENT_SEARCH_LLM_PRIMARY_MODEL=gemma-4-26b-a4b-it`; legacy `EVENT_SEARCH_LLM_MODEL` is still accepted). This protects the scarce `gemini-3.1-flash-lite` lane, which has only `500 RPD` and is shared with other critical processes;
+- fallback verifier model is `EVENT_SEARCH_LLM_FALLBACK_MODEL=gemini-3.1-flash-lite`, but it is a protected rescue lane, not the normal runtime;
 - `EVENT_SEARCH_VERIFICATION_WINDOW=12` for the current canary;
-- `EVENT_SEARCH_LLM_TIMEOUT_MS=7000` after live tests showed Gemma 4 was unreliable while Flash-Lite returned the verifier decision in about 1.0–1.3s.
+- model policy is user-state aware:
+  - first/onboarding searches may use `fast_onboarding_fallback`: one short Gemma attempt, then Lite fallback if Gemma quickly returns `5xx/429/timeout`;
+  - after the user has already spent several searches today, the function switches to `gemma_priority_late_fallback`: multiple longer Gemma attempts with backoff before any Lite fallback;
+  - the threshold is controlled by `EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN` (default `45` after quota reservation for the current `50/day` canary plan).
+
+Operational knobs: `EVENT_SEARCH_LLM_FAST_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_FAST_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_FALLBACK_TIMEOUT_MS`, `EVENT_SEARCH_LLM_PRIMARY_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_FALLBACK_ENABLED`, `EVENT_SEARCH_LLM_LATE_FALLBACK_ENABLED`.
 
 High-match contract:
 
@@ -165,6 +171,13 @@ High-match contract:
 6. `has_more=false` in this MVP high-match mode because repeated per-page LLM calls produced inconsistent page boundaries. The next production step is a cached/cursor verified window so “Показать ещё” paginates within one LLM-classified set instead of re-verifying each page.
 
 The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. A non-semantic over-approval sanity check demotes the whole set to possible if the model marks more than 60% of a 4+ candidate window as exact; this is a safety guard against LLM rubber-stamping, not a deterministic topic/audience rule.
+Every provider try is recorded in `llm_verifier.attempts[]` and search metadata
+with `{model, role: primary|fallback, attempt, status, elapsed_ms}`. The response
+also exposes `llm_verifier.model`, `llm_verifier.policy` and
+`llm_verifier.fast_fallback_allowed` so product/debug review can see whether a
+Lite fallback was spent intentionally. If all attempts fail, the high-match
+contract still fails closed: exact `items=[]`, possible candidates remain under
+the separate fallback/discovery heading.
 
 2026-06-29 live evidence after high-match hardening:
 
@@ -172,6 +185,15 @@ The verifier uses Gemini structured output (`responseMimeType: application/json`
 - `Чтобы было интересно детям`: exact `4512 С чего начинается Родина`, 3 possible, urban-planning events no longer appear as exact results.
 - `джаз на выходных`: 0 exact, 4 possible; with the current limited corpus this is preferable to showing non-jazz music as exact.
 - NDJSON/progress path emits backend stages: `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `finalize`, `result`.
+- After the 2026-06-29 model-cascade fix, live Edge JSON smoke proves both
+  policies:
+  - fresh user / first search: `policy=fast_onboarding_fallback`, Gemma 4 26B
+    primary attempt timed out at `3502ms`, Lite fallback returned `ok` in
+    `1027ms`, exact `[5201]`;
+  - same-user late path after 5 non-LLM searches:
+    `policy=gemma_priority_late_fallback`, `fast_fallback_allowed=false`,
+    Gemma 4 26B was tried twice at about `6500ms` each before Lite fallback
+    returned `ok` in `991ms`, exact `[5201]`.
 
 Consultant traceability:
 
@@ -198,8 +220,8 @@ Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
 - current Supabase Auth user count (`auth.users`);
 - documented current provider project limits:
   - `gemini-embedding-2`: `100 RPM / 30k TPM / 1000 RPD`;
-  - `gemini-3.1-flash-lite`: `15 RPM / 250k TPM / 500 RPD` for the current online verifier;
-  - `gemma-4-26b-a4b-it` / `gemma-4-31b-it`: `15 RPM / unlimited TPM / 1500 RPD`, kept as documented capacity but not the current online verifier because live search probes showed timeouts/500s.
+  - `gemma-4-26b-a4b-it` / `gemma-4-31b-it`: `15 RPM / unlimited TPM / 1500 RPD`; Gemma 4 26B is the primary online verifier lane;
+  - `gemini-3.1-flash-lite`: `15 RPM / 250k TPM / 500 RPD`; this is a protected fallback/rescue lane because the same project already uses it for other critical processes.
 - reserves for static generation/backfill (`400` embedding RPD, `500` LLM RPD by default);
 - abuse caps for the still-private canary (`max 50` searches/day and `max 40` LLM reranks/day per registered user).
 
