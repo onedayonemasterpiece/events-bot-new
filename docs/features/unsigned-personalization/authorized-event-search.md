@@ -160,6 +160,9 @@ The Edge Function runs an LLM verifier after pgvector retrieval when the user ha
   - the threshold is controlled by `EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN` (default `45` after quota reservation for the current `50/day` canary plan).
 
 Operational knobs: `EVENT_SEARCH_LLM_FAST_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_FAST_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_FALLBACK_TIMEOUT_MS`, `EVENT_SEARCH_LLM_PRIMARY_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_FALLBACK_ENABLED`, `EVENT_SEARCH_LLM_LATE_FALLBACK_ENABLED`.
+Prompt/latency knobs: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `768`),
+`EVENT_SEARCH_LLM_THINKING_LEVEL` (default `MINIMAL`) and
+`EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `320`).
 
 High-match contract:
 
@@ -178,6 +181,27 @@ also exposes `llm_verifier.model`, `llm_verifier.policy` and
 Lite fallback was spent intentionally. If all attempts fail, the high-match
 contract still fails closed: exact `items=[]`, possible candidates remain under
 the separate fallback/discovery heading.
+For Gemma 4 26B latency analysis, each attempt also records
+`timeout_ms`, `prompt_chars`, `prompt_fact_chars` and
+`compact_candidate_count`. A direct SQL probe can summarize the history:
+
+```sql
+select
+  created_at,
+  attempt->>'model' as model,
+  attempt->>'role' as role,
+  (attempt->>'attempt')::int as attempt_no,
+  attempt->>'status' as status,
+  (attempt->>'elapsed_ms')::int as elapsed_ms,
+  (attempt->>'timeout_ms')::int as timeout_ms,
+  (attempt->>'prompt_chars')::int as prompt_chars,
+  (attempt->>'prompt_fact_chars')::int as prompt_fact_chars,
+  metadata->>'llm_policy' as llm_policy
+from public.event_search_requests
+cross join lateral jsonb_array_elements(metadata->'llm_attempts') as attempt
+where attempt->>'model' = 'gemma-4-26b-a4b-it'
+order by created_at desc;
+```
 
 2026-06-29 live evidence after high-match hardening:
 
@@ -194,6 +218,17 @@ the separate fallback/discovery heading.
     `policy=gemma_priority_late_fallback`, `fast_fallback_allowed=false`,
     Gemma 4 26B was tried twice at about `6500ms` each before Lite fallback
     returned `ok` in `991ms`, exact `[5201]`.
+- Prompt-size/timeout follow-up on the same day showed the earlier failures were
+  timeout/telemetry configuration problems, not proof that Gemma 26B cannot do
+  the task. Direct provider probes returned the full 12-candidate verifier prompt
+  in about `3.5–3.8s`. After deploying `maxOutputTokens=768`,
+  `thinkingLevel=MINIMAL`, `EVENT_SEARCH_LLM_FACT_MAX_CHARS=320`,
+  `FAST_PRIMARY_TIMEOUT_MS=5000` and `LATE_PRIMARY_TIMEOUT_MS=12000`, live Edge
+  searches returned through Gemma 4 26B itself:
+  `fast_onboarding_fallback` in `3379ms` and `gemma_priority_late_fallback` in
+  `3394ms`, both with `prompt_chars=8508`, `prompt_fact_chars=3839`,
+  `compact_candidate_count=12`, exact `[5201, 5478, 5479, 3730]`, and no Lite
+  fallback spent.
 
 Consultant traceability:
 
