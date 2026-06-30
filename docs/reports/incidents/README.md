@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-30-prose-location-non-event-daily-duplicate.md`
+  - Scope: Telegram import/Smart Update short prose-location leaks (`В программе — ...`, `И не забывайте`), campaign/discount non-event routing, and Telegram daily scheduler restart idempotency.
+  - Must not regress: short source-grounded non-location fragments must not survive as `location_name`; campaign/discount/action posts must route to LLM eventness review before create; scheduled daily announcements must have durable per-channel/day claims so releases/restarts cannot duplicate an already-sent daily slot.
 - `INC-2026-06-30-generic-title-dropped-own-name.md`
   - Scope: Smart Update create-title recovery for category-only titles where the source/OCR contains a distinctive own name, plus public Telegram/VK/Telegraph repair for event `6508`.
   - Must not regress: generic titles like `Городской фестиваль` must route to LLM recovery when source headline/OCR carries a grounded own name such as `ВЕЛОДЕНЬ`; the guard must not deterministically rewrite titles and must not force recovery when no own-name evidence exists or when the current title is already distinctive.

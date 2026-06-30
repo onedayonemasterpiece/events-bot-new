@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Routed campaign/discount/action candidates through LLM eventness review, rejected short prose/program/reminder fragments as event locations, and added durable daily-announcement scheduler claims to prevent same-day duplicate daily posts after releases/restarts.
+
 ### Added
 
 - Guide excursions monitoring now seeds `@progulki_s_katey` as a medium-trust

@@ -61,7 +61,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - **partner reminders** – reminds inactive partners after 09:00 local time.
 - **cleanup old events** – removes past events after 03:00 local time and notifies the superadmin.
 - **general stats** – daily operational system report (`/general_stats`) for the previous 24 hours.
-- **Telegram daily announcements** – posts `/daily` channel announcements after configured `daily_time`; scheduler has per-channel in-process dedup guard (inflight + sent-today cache) to prevent repeated sends while one run is still in progress.
+- **Telegram daily announcements** – posts `/daily` channel announcements after configured `daily_time`; scheduler has per-channel durable DB claims (`daily_announcement_guard`) plus an in-process guard to prevent repeated sends while one run is still in progress and to survive releases/restarts after the slot has already been claimed/sent.
   - Daily build must treat shortlink enrichment as best-effort: if VK `utils.getShortLink` fails for one actor/token path (including `code=8 / Application is blocked`), the run must fall back to the next token or keep the original URL instead of stalling the whole announcement.
   - Optional premium emoji editor: when `ENABLE_TG_PREMIUM_EMOJI_EDITOR=1`, successfully sent daily messages are edited via a dedicated Telethon session after `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS` (default `150`) to replace free markers with custom emoji labels. Canonical feature doc: `docs/features/tg-premium-emojis-update/README.md`.
 - **VK daily posts and polls** – publishes daily announcements and festival polls when posting times are reached and a VK group is configured.

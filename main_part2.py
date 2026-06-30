@@ -7178,7 +7178,25 @@ async def send_daily_announcement_vk(
             await _post_section(section2, "added")
 
 
-async def _daily_try_claim(channel_id: int, day_key: str) -> bool:
+async def _ensure_daily_announcement_guard_table(db: Database) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_announcement_guard (
+                channel_id INTEGER NOT NULL,
+                day_key TEXT NOT NULL,
+                status TEXT NOT NULL,
+                claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP,
+                sent_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (channel_id, day_key)
+            )
+            """
+        )
+        await conn.commit()
+
+
+async def _daily_try_claim(db: Database, channel_id: int, day_key: str) -> bool:
     async with _daily_state_lock:
         stale = {item for item in _daily_sent_cache if item[1] != day_key}
         if stale:
@@ -7187,11 +7205,43 @@ async def _daily_try_claim(channel_id: int, day_key: str) -> bool:
             return False
         if (channel_id, day_key) in _daily_sent_cache:
             return False
+        await _ensure_daily_announcement_guard_table(db)
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT status, sent_count
+                FROM daily_announcement_guard
+                WHERE channel_id=? AND day_key=?
+                """,
+                (channel_id, day_key),
+            )
+            row = await cur.fetchone()
+            if row is not None:
+                status = str(row[0] or "").lower()
+                sent_count = int(row[1] or 0)
+                if status in {"running", "sent"} or sent_count > 0:
+                    if status == "sent" or sent_count > 0:
+                        _daily_sent_cache.add((channel_id, day_key))
+                    return False
+                # A zero-send failed scheduled run is left as a fail-closed
+                # blocker for the day. This avoids restart-induced duplicates;
+                # operators can still use manual /daily test sends with
+                # record=False for catch-up.
+                return False
+            await conn.execute(
+                """
+                INSERT INTO daily_announcement_guard(channel_id, day_key, status)
+                VALUES (?, ?, 'running')
+                """,
+                (channel_id, day_key),
+            )
+            await conn.commit()
         _daily_inflight_channels.add(channel_id)
         return True
 
 
 async def _daily_release_claim(
+    db: Database,
     channel_id: int,
     day_key: str,
     *,
@@ -7199,6 +7249,28 @@ async def _daily_release_claim(
 ) -> None:
     async with _daily_state_lock:
         _daily_inflight_channels.discard(channel_id)
+        await _ensure_daily_announcement_guard_table(db)
+        status = "sent" if sent_count > 0 else "failed"
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT INTO daily_announcement_guard(
+                    channel_id, day_key, status, finished_at, sent_count
+                )
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+                ON CONFLICT(channel_id, day_key) DO UPDATE SET
+                    status=excluded.status,
+                    finished_at=excluded.finished_at,
+                    sent_count=excluded.sent_count
+                """,
+                (channel_id, day_key, status, sent_count),
+            )
+            if sent_count > 0:
+                await conn.execute(
+                    "UPDATE channel SET last_daily=? WHERE channel_id=?",
+                    (day_key, channel_id),
+                )
+            await conn.commit()
         if sent_count > 0:
             _daily_sent_cache.add((channel_id, day_key))
 
@@ -7357,7 +7429,7 @@ async def _run_daily_scheduler_send(
     except Exception:
         logging.exception("daily_scheduler: channel %s failed", channel_id)
     finally:
-        await _daily_release_claim(channel_id, day_key, sent_count=sent)
+        await _daily_release_claim(db, channel_id, day_key, sent_count=sent)
 
 
 async def daily_scheduler(db: Database, bot: Bot):
@@ -7395,7 +7467,7 @@ async def daily_scheduler(db: Database, bot: Bot):
             if due:
                 try:
                     channel_id = int(r["channel_id"])
-                    claimed = await _daily_try_claim(channel_id, day_key)
+                    claimed = await _daily_try_claim(db, channel_id, day_key)
                     if not claimed:
                         logging.info(
                             "daily_scheduler: channel=%s skipped (already inflight/sent)",

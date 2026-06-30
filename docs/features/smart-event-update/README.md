@@ -464,3 +464,9 @@ LLM остаётся владельцем смысловых решений, н�
 
 - `tests/e2e/features/smart_event_update.feature` (пограничные кейсы матчинга/мерджа).
 - `tests/e2e/features/telegram_monitoring.feature` (обогащение событий из Telegram Monitoring).
+
+### 2026-06-30 incident guard: campaign actions and short prose locations
+
+Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
+
+Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.

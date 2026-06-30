@@ -5765,6 +5765,16 @@ _LOCATION_VALUE_TEMPORAL_RE = re.compile(
     r")\s*[,.:;!?]?\s*$"
 )
 
+_LOCATION_VALUE_NON_VENUE_START_RE = re.compile(
+    r"(?iu)^\s*(?:"
+    r"в\s+программе|программа\s+[–—-]|вы\s+услышите|"
+    r"и\s+не\s+забывайте|не\s+забывайте|напоминаем"
+    r")\b"
+)
+_LOCATION_VALUE_CAMPAIGN_RE = re.compile(
+    r"(?iu)\b(?:акци[яию]|скидк\w*|пушкинск\w+\s+карт\w*|как\s+принять\s+участие|услови[яй]\s+акци)\b"
+)
+
 
 def _strip_location_value_temporal_decoration(value: str) -> str:
     compact = re.sub(r"\s+", " ", value or "").strip()
@@ -5781,6 +5791,8 @@ def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
         return True
     temporal_probes = {compact, _strip_location_value_temporal_decoration(compact)}
     if any(_LOCATION_VALUE_TEMPORAL_RE.fullmatch(probe) for probe in temporal_probes if probe):
+        return True
+    if _LOCATION_VALUE_NON_VENUE_START_RE.search(compact) and not _LOCATION_VALUE_ADDRESS_HINT_RE.search(compact):
         return True
     if len(compact) > 90:
         return True
@@ -10448,6 +10460,11 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # attached dates. Do not skip here; require LLM confirmation below.
     if len(raw) <= 220 and re.search(r"(?iu)\b(дайджест|афиша|подборка)\b", raw):
         return True
+    # Campaign/discount/action posts are semantic: do not skip by regex, but
+    # require the LLM to confirm that the source announces one concrete
+    # attendable event rather than an entitlement/promo mechanic.
+    if _LOCATION_VALUE_CAMPAIGN_RE.search("\n".join(part for part in (title, raw) if part)):
+        return True
     return False
 
 
@@ -10488,6 +10505,7 @@ async def _llm_review_candidate_eventness(
         "Важно:\n"
         "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
         "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
+        "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"
         "- Если сомневаешься для такого слабого кандидата, верни uncertain.\n\n"

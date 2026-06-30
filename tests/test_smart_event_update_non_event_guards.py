@@ -712,3 +712,68 @@ async def test_grounded_exhibition_date_corrects_inferred_legacy_range(tmp_path,
             assert rows[0].end_date_is_inferred is True
     finally:
         await db.close()
+
+
+def test_short_non_location_fragments_are_unsupported_prose_locations() -> None:
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/agropark39/1885",
+        source_text="И не забывайте , что парк работает для прогулок каждый день",
+        title="Самосбор клубники",
+        date="2026-07-05",
+        location_name="И не забывайте",
+        city="Калининград",
+    )
+
+    assert su._candidate_location_looks_unsupported_prose(candidate) is True
+
+
+@pytest.mark.asyncio
+async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Веди родителей в музей" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.9,
+            "reason_short": "discount campaign, not one concrete event",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["concrete event program"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-29891284_13962",
+            source_text=(
+                "Акция «Веди родителей в музей». С 1 июля по 15 августа "
+                "обладатели Пушкинской карты смогут получить скидку 10%. "
+                "Как принять участие? Приобретите билет и предъявите документы."
+            ),
+            title="Акция «Веди родителей в музей»",
+            date="2026-07-01",
+            end_date="2026-08-15",
+            location_name="Историко-художественный музей",
+            location_address="Клиническая 21",
+            city="Калининград",
+            event_type="акция",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls == ["eventness_review"]
+    finally:
+        await db.close()

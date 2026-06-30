@@ -11332,3 +11332,18 @@ async def test_progress_includes_festival_tg(tmp_path: Path, monkeypatch):
     await main.publish_event_progress(ev, db, bot, chat_id=1)
     final_text = bot.text_edits[-1][2]
     assert "✅ Telegraph (фестиваль) — http://fest" in final_text
+
+
+@pytest.mark.asyncio
+async def test_daily_scheduler_claim_survives_runtime_reset(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        await main._daily_reset_runtime_state()
+        assert await main._daily_try_claim(db, 12345, "2026-06-30") is True
+        await main._daily_release_claim(db, 12345, "2026-06-30", sent_count=3)
+        await main._daily_reset_runtime_state()
+
+        assert await main._daily_try_claim(db, 12345, "2026-06-30") is False
+    finally:
+        await db.close()

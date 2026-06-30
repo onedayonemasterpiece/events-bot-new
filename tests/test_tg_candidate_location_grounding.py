@@ -1079,3 +1079,12 @@ async def test_tg_build_candidate_recovers_studio_from_address_ocr_over_wrong_kn
     assert cand.location_name == "809 студия"
     assert cand.location_address == "Советский проспект 12"
     assert cand.city == "Калининград"
+
+
+def test_short_program_and_reminder_fragments_are_not_event_local_locations() -> None:
+    from source_parsing.telegram import handlers as h
+
+    assert h._event_local_location_candidate_ok(
+        'В программе — бессмертные «Ave Maria» Ф. Шуберта', None
+    ) is False
+    assert h._event_local_location_candidate_ok('И не забывайте', None) is False

@@ -2505,7 +2505,7 @@ def _filter_schedule_source_text(text: str, *, event_date: str | None, event_tit
 _DATE_TITLE_PREFIX_RE = re.compile(r"^\s*\d{1,2}[./]\d{1,2}(?:[./](?:19|20)\d{2})?\s*(?:[|—–-]\s*)?", re.U)
 _BAD_TITLE_RE = re.compile(r"^\s*[\W_]*\(?\s*\d*\s*(?:мест[ао]?)?\s*\)?\s*[\W_]*$", re.I | re.U)
 _ADDRESS_HINT_RE = re.compile(
-    r"(?i)\b(ул\.|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
+    r"(?i)\b(ул\.?|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
 )
 _LOCATION_VENUE_CUE_RE = re.compile(
     r"(?iu)\b(?:театр\w*|музе[йяе]|галере[яи]|кино(?:театр|зал)|дк\b|дом\s+культур\w*|"
@@ -2522,7 +2522,9 @@ _LOCATION_PROSE_VERB_RE = re.compile(
 )
 _LOCATION_PROSE_START_RE = re.compile(
     r"(?iu)^\s*(?:которые|известн\w*|дарим|вместо|по\s+решению|это|аниме|мультфильм|"
-    r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не)\b"
+    r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не|"
+    r"в\s+программе|программа\s+[–—-]|вы\s+услышите|"
+    r"и\s+не\s+забывайте|не\s+забывайте|напоминаем)\b"
 )
 _LOCATION_LABEL_FRAGMENT_RE = re.compile(
     r"(?iu)^\s*(?:кинозал|мастерские|мастер[- ]?классы|расписание|программа|сцена|зал)\s*:?\s*$"
@@ -2805,6 +2807,7 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if not cleaned:
             continue
         cleaned = cleaned.lstrip("📍").strip()
+        cleaned = re.sub(r"(?iu)^\s*(?:место|адрес|локация)\s*[:：-]\s*", "", cleaned).strip()
         if not cleaned:
             continue
         low = cleaned.casefold()
@@ -2914,6 +2917,8 @@ def _looks_like_location_program_fragment(value: str | None, address: str | None
     if not raw:
         return False
     has_venue_or_address_cue = bool(_ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw))
+    if _LOCATION_PROSE_START_RE.search(raw) and not has_venue_or_address_cue:
+        return True
     if _LOCATION_PROGRAM_ITEM_RE.search(raw) and not has_venue_or_address_cue:
         return True
     if addr and _LOCATION_CATALOGUE_ADDRESS_RE.search(addr) and not (
@@ -4143,8 +4148,13 @@ def _build_candidate(
         grounded_addr = inferred_addr or poster_addr
         if (
             grounded_loc
+            and _location_override_candidate_ok(grounded_loc, grounded_addr)
             and not _location_matches(grounded_loc, source.default_location)
-            and _location_is_grounded_in_text(grounded_loc, probe_text)
+            and _location_payload_grounded_in_text(
+                location_name=grounded_loc,
+                location_address=grounded_addr,
+                text=probe_text,
+            )
             and not _location_is_grounded_in_text(str(location_name), probe_text)
         ):
             logger.warning(
