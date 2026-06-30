@@ -29,6 +29,8 @@
 - Empty-caption poster-only posts remain part of the normal LLM-first extraction path:
   when Telegram text/caption is empty but OCR contains event facts (title/date/time/venue/price/registration),
   TelegramMonitor passes the OCR text as primary source evidence instead of returning `events=[]` at the caption guard.
+  The server import also preserves that OCR as event/source text and may derive a narrow `tel:+...` booking contact
+  from explicit `Запись/регистрация по телефону` evidence before any group post-author fallback is considered.
   Regression contract: `INC-2026-06-30-kraftmarket317-poster-only-zero-events`.
 - Сервер скачивает `telegram_results.json` и импортирует события через Smart Update:
   - создаёт новые события;

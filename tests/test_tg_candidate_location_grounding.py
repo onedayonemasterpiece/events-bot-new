@@ -3,6 +3,56 @@ from types import SimpleNamespace
 import pytest
 
 
+def test_tg_build_candidate_ocr_only_phone_contact_beats_group_author_fallback():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    ocr_text = (
+        "МАСТЕР КЛАСС\n"
+        "ПО КАЛЛИГРАФИИ\n"
+        "проводит Ламейко Светлана\n"
+        "Дата: 1 июля\n"
+        "Время: 19:00\n"
+        "Место: музей «Восток на Западе», ул. Клиническая, 19А\n"
+        "Стоимость: 1000 рублей\n"
+        "Запись по телефону:\n"
+        "+ 7 (931) 616 08 88"
+    )
+    message = {
+        "source_username": "kraftmarket39",
+        "source_type": "supergroup",
+        "message_id": 317,
+        "source_link": "https://t.me/kraftmarket39/317",
+        "message_date": "2026-06-29T21:39:03+00:00",
+        "text": "",
+        "post_author": {
+            "user_id": 1799336248,
+            "username": "tasha9917",
+            "is_user": True,
+        },
+        "posters": [{"sha256": "p1", "ocr_text": ocr_text, "ocr_title": "МАСТЕР КЛАСС ПО КАЛЛИГРАФИИ"}],
+    }
+    event = {
+        "title": "Мастер-класс по каллиграфии",
+        "date": "2026-07-01",
+        "time": "19:00",
+        "location_name": "музей «Восток на Западе»",
+        "location_address": "ул. Клиническая, 19А",
+        "city": "Калининград",
+        "ticket_link": "",
+        "ticket_price_min": 1000,
+        "ticket_price_max": 1000,
+        "event_type": "мастер-класс",
+    }
+
+    cand = _build_candidate(src, message, event)
+
+    assert cand.ticket_link == "tel:+79316160888"
+    assert cand.source_text and "Запись по телефону" in cand.source_text
+    assert cand.metrics["tg_ticket_link_from_post_author"] is False
+    assert cand.tg_source_author == "tasha9917"
+
+
 @pytest.mark.asyncio
 async def test_tg_build_candidate_replaces_unsupported_extracted_location_from_poster_ocr():
     from source_parsing.telegram.handlers import _build_candidate

@@ -23,6 +23,7 @@ from location_reference import (
     match_known_venue,
     normalise_event_location_from_reference,
 )
+from markup import tel_href_for_phone_value
 from models import (
     Channel,
     Event,
@@ -3014,7 +3015,7 @@ _TICKET_CONTACT_LINE_RE = re.compile(
 _TG_HANDLE_IN_TEXT_RE = re.compile(r"(?i)@([a-z0-9_]{4,32})")
 _TG_LINK_IN_TEXT_RE = re.compile(r"(?i)(?:https?://)?t\.me/([a-z0-9_]{4,32})\b")
 _PHONE_IN_TEXT_RE = re.compile(
-    r"(?u)(?<!\d)(?:\+7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
+    r"(?u)(?<!\d)(?:\+\s*7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
 )
 _EMAIL_IN_TEXT_RE = re.compile(r"(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b")
 
@@ -3023,6 +3024,12 @@ def _extract_ticket_link_from_text(text: str | None) -> str | None:
     raw = str(text or "")
     if not raw.strip():
         return None
+    if _TICKET_CONTACT_LINE_RE.search(raw):
+        phone_match = _PHONE_IN_TEXT_RE.search(raw)
+        if phone_match:
+            phone_href = tel_href_for_phone_value(phone_match.group(0))
+            if phone_href:
+                return phone_href
     m = _BOOKING_HANDLE_RE.search(raw)
     if m:
         handle = (m.group(1) or "").strip().lstrip("@")
@@ -3773,6 +3780,19 @@ def _build_candidate(
     message_posters_payload = message.get("posters") or []
     assigned_posters_payload = event_data.get("posters") or []
     posters_payload = assigned_posters_payload or message_posters_payload or []
+    ocr_source_text_parts: list[str] = []
+    for key in ("ocr_text", "ocr_title"):
+        chunk = str(message.get(key) or "").strip()
+        if chunk:
+            ocr_source_text_parts.append(chunk)
+    for item in (posters_payload[:3] if isinstance(posters_payload, list) else []):
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if chunk and chunk not in ocr_source_text_parts:
+                ocr_source_text_parts.append(chunk)
+    ocr_source_text = "\n".join(ocr_source_text_parts).strip()
     event_source_text = event_data.get("source_text") or event_data.get("description") or ""
     event_source_text_raw = str(event_source_text or "")
     message_text = message.get("text") or ""
@@ -3790,6 +3810,8 @@ def _build_candidate(
         )
     ):
         event_source_text = message_text_s
+    elif not message_text_s and not event_source_text_s and ocr_source_text:
+        event_source_text = ocr_source_text
     else:
         event_source_text = event_source_text_s
     event_source_text = _filter_schedule_source_text(
@@ -4395,7 +4417,9 @@ def _build_candidate(
         inferred_author_link = _infer_ticket_link_from_group_post_author(
             message,
             text="\n".join(
-                part for part in (message_text_s, event_source_text) if str(part or "").strip()
+                part
+                for part in (message_text_s, event_source_text, ocr_source_text)
+                if str(part or "").strip()
             ),
         )
         if inferred_author_link:

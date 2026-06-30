@@ -42,6 +42,7 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 2. The existing clear-single-event rescue was unreachable for poster-only posts because it runs after the early caption guard.
 3. Server-side diagnostics correctly detected clear event signals from `posters[].ocr_text`, but diagnostics alone only marked the message skipped; it could not create an event without a producer payload.
 4. `Музей «Восток на Западе»` was missing from `docs/reference/locations.md` / aliases, so even successful imports used drifted venue spellings.
+5. After the first forced replay, downstream Telegram import preserved empty caption as empty `source_text` and evaluated group post-author fallback without OCR phone evidence. That allowed the post author's Telegram username to become a false `ticket_link`, while the poster's real phone booking contact stayed non-actionable.
 
 ## Contributing Factors
 
@@ -62,6 +63,7 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 
 - `kaggle/TelegramMonitor/telegram_monitor.py`
 - `source_parsing/telegram/handlers.py` diagnostics
+- `source_parsing/telegram/handlers.py` candidate source-text/contact extraction
 - production `telegram_source`, `telegram_scanned_message`, `event`, `event_source`, `joboutbox`, `ops_run`
 - `docs/reference/locations.md`, `docs/reference/location-aliases.md`
 - public Telegram/VK/Telegraph event surfaces after repair
@@ -93,6 +95,8 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 
 - [x] Producer no longer drops OCR-only poster posts at the empty-caption guard.
 - [x] Prompt/rescue contract explicitly covers empty-caption OCR-only poster announcements.
+- [x] Telegram import preserves OCR text as `source_text` for empty-caption poster-only posts.
+- [x] Phone-only OCR booking contacts are normalized to `tel:+...` before post-author fallback can run.
 - [x] Added regression fixture and tests for `kraftmarket39/317` poster-only OCR signal and schedule-like negative control.
 - [x] Added museum standard location and aliases.
 - [ ] Deploy to production and run forced replay for `@kraftmarket39/317`.
