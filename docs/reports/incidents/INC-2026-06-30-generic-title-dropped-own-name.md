@@ -1,10 +1,10 @@
 # INC-2026-06-30 Generic Category Title Dropped Event Own Name
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / public @kldevents + klgdevents + Telegraph event posts
 Opened: 2026-06-30
-Closed: —
+Closed: 2026-06-30
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-06-18-vk-title-shortlink-public-regression`, `INC-2026-05-11-bar-bastion-stochastic-title-fallback-and-semantic-dup`, `INC-2026-06-24-future-event-date-default-venue-regressions`, `INC-2026-06-29-qtickets-structured-facts-lost`
 Related docs: `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`, `docs/operations/incident-management.md`
@@ -85,8 +85,8 @@ The same generic title propagated to the production DB, Telegraph page `https://
 - [x] Extend Smart Update weak-title routing beyond `<event_type> — <venue>` to source-grounded category-title own-name loss.
 - [x] Update Smart Update docs and changelog.
 - [x] Add unit/Smart Update replay tests with negative controls.
-- [ ] Repair event `6508` canonical DB row and public Telegram/VK/Telegraph surfaces.
-- [ ] Deploy from a clean SHA and back-merge to `origin/main`.
+- [x] Repair event `6508` canonical DB row and public Telegram/VK/Telegraph surfaces.
+- [x] Deploy from a clean SHA and back-merge to `origin/main`.
 
 ## Follow-up Actions
 
@@ -95,10 +95,20 @@ The same generic title propagated to the production DB, Telegraph page `https://
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `56bee01c` (`fix(smart-update): recover own names from generic titles`), pushed to `origin/main` on 2026-06-30.
+- deploy path: clean hotfix worktree `/home/dev/projects/events-bot-new-worktrees/inc-title-keyword-20260630`, manual `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KWCF95PX90FC0YCCHG9EHZVS`, machine `683961db016e28` reached started/good state.
+- regression checks:
+  - `python3 -m py_compile smart_event_update.py tests/test_genai_dump_and_poster_dedup.py tests/test_smart_event_update_title_recovery.py` — passed.
+  - `uv run --with-requirements requirements.txt pytest -q tests/test_genai_dump_and_poster_dedup.py tests/test_smart_event_update_title_recovery.py tests/test_qtickets_structured_facts.py` — `27 passed`.
+  - Replay fixture `tests/replays/INC-2026-06-30-generic-title-dropped-own-name/kulturnaya_chaika_7913.json` is covered by `tests/test_smart_event_update_title_recovery.py`: Smart Update create boundary saves `Городской фестиваль «ВЕЛОДЕНЬ»`.
+  - Negative controls passed: no forced recovery without quoted/OCR own-name evidence; no recovery for already distinctive `Городской фестиваль «ВЕЛОДЕНЬ»`.
+- production repair verification:
+  - Production DB backup tables created: `codex_backup_20260630_title_6508_event`, `event_source`, `eventposter`, `event_source_fact`, `joboutbox`.
+  - Production DB after repair: event `6508` title `Городской фестиваль «ВЕЛОДЕНЬ»`; description/short/search digest source-grounded; Telegraph URL unchanged `https://telegra.ph/Gorodskoj-festival-06-29`; Telegram post unchanged in place `https://t.me/kldevents/1630`; VK managed URL reconciled from stale postponed id `5115` to live `https://vk.com/wall-231920894_5143`.
+  - Telegraph public page contains `Городской фестиваль «ВЕЛОДЕНЬ»`, source-grounded body, `Источников:`, and Max footer link.
+  - Telethon final check of `https://t.me/kldevents/1630` shows title and body contain `ВЕЛОДЕНЬ`; registration row remains; footer `Max · Вконтакте` remains; premium emoji editor reported `edited=true`, `replacements=1`.
+  - VK API final check of `https://vk.com/wall-231920894_5143` shows title/body contain `ВЕЛОДЕНЬ` and the stale standalone `Городской фестиваль` body segment was removed.
+- post-deploy verification: in-machine `/healthz` returned HTTP 200 with `ready=true`, scheduler and DB OK.
 
 ## Prevention
 
