@@ -108,7 +108,32 @@ The same day the daily announcement was posted again at `2026-06-30 16:36 Europe
 
 ## Release And Closure Evidence
 
-Pending deploy evidence.
+- code release:
+  - commit `a857dd3c` (`fix(event-quality): guard prose locations and daily duplicates`) pushed to `origin/main`;
+  - manual Fly deploy image `registry.fly.io/events-bot-new-wngqia:deployment-01KWCHDXZBB0KYJD3Y51WBWRD2`;
+  - post-deploy `/healthz` returned `ok=true`, `ready=true`, DB and scheduler tasks OK.
+- regression checks:
+  - `python3 -m py_compile source_parsing/telegram/handlers.py smart_event_update.py main_part2.py main.py` passed;
+  - `pytest -q tests/test_tg_candidate_location_grounding.py tests/test_smart_event_update_non_event_guards.py tests/test_smart_event_update_title_recovery.py tests/test_bot.py::test_send_daily_preview_disabled tests/test_bot.py::test_daily_test_send_no_record tests/test_bot.py::test_daily_scheduler_claim_survives_runtime_reset tests/test_daily_format.py::test_split_daily_text_atomic_keeps_event_card_together` printed `66 passed`; local process required interruption during interpreter shutdown because of a background thread, after pytest had completed successfully.
+- production repair backups:
+  - `codex_backup_20260630_prose_non_event_event`;
+  - `codex_backup_20260630_prose_non_event_event_source`;
+  - `codex_backup_20260630_prose_non_event_eventposter`;
+  - `codex_backup_20260630_prose_non_event_joboutbox`;
+  - `codex_backup_20260630_prose_non_event_event_source_fact`.
+- public repair evidence:
+  - `https://t.me/kldevents/1634` now shows `Евангелистко-Лютеранская церковь, Мира 101, #Калининград`; VK reconciled to `https://vk.com/wall-231920894_5148`; Telegraph `https://telegra.ph/Salve-Regina-Radujsya-Carica-06-29` rebuilt.
+  - `https://t.me/kldevents/1658` now shows `АгроПарк Некрасово поле, Гурьевский район, #Некрасово`; VK reconciled to `https://vk.com/wall-231920894_4991`; Telegraph `https://telegra.ph/Samosbor-klubniki-06-28` rebuilt.
+  - `https://t.me/kldevents/1667` returns `message_not_found`; managed VK `https://vk.com/wall-231920894_5221` was deleted; event `6522` is `cancelled/silent`.
+  - `https://t.me/kldevents/1630` remained repaired from the linked title incident: DB title `Городской фестиваль «ВЕЛОДЕНЬ»`.
+- production audit after repair:
+  - active/current/future row count checked: `273`;
+  - prose-location candidates: `0`;
+  - generic-title candidates: `0`;
+  - campaign/action heuristic candidates remained as manually-reviewable positives; the confirmed non-event `6522` was removed from active inventory.
+- daily scheduler evidence:
+  - production `channel.last_daily` rows for `@kenigevents` and `@keniggpt` are `2026-06-30`;
+  - post-deploy runtime lines show `daily_scheduler ... due=False last_daily=2026-06-30` after BOOT_OK, so no further same-day duplicate was scheduled.
 
 ## Prevention
 
