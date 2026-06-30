@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- **Incident / kraftmarket317 poster-only zero-events (INC-2026-06-30)**:
+  TelegramMonitor now routes empty-caption poster-only posts through OCR-backed
+  LLM extraction instead of returning `events=[]`, and `Музей «Восток на Западе»`
+  is now a standard venue with aliases.
 - Routed campaign/discount/action candidates through LLM eventness review, rejected short prose/program/reminder fragments as event locations, and added durable daily-announcement scheduler claims to prevent same-day duplicate daily posts after releases/restarts.
 
 ### Added

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
+  - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
+  - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.
 - `INC-2026-06-30-prose-location-non-event-daily-duplicate.md`
   - Scope: Telegram import/Smart Update short prose-location leaks (`В программе — ...`, `И не забывайте`), campaign/discount non-event routing, and Telegram daily scheduler restart idempotency.
   - Must not regress: short source-grounded non-location fragments must not survive as `location_name`; campaign/discount/action posts must route to LLM eventness review before create; scheduled daily announcements must have durable per-channel/day claims so releases/restarts cannot duplicate an already-sent daily slot.

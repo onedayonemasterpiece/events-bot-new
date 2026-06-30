@@ -25,7 +25,11 @@
   - объект сохраняется **в WebP** (только WebP, без JPEG) для экономии объёма;
   - ключ объекта content‑addressed по перцептивному хешу (dHash16), чтобы одно и то же изображение (даже при разном разрешении/реэнкоде) не загружалось повторно:
     - `supabase_path`: `<prefix>/dh16/<first2>/<dhash>.webp` (prefix по умолчанию `p`, настраивается через `TG_MONITORING_POSTERS_PREFIX`);
-    - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
+  - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
+- Empty-caption poster-only posts remain part of the normal LLM-first extraction path:
+  when Telegram text/caption is empty but OCR contains event facts (title/date/time/venue/price/registration),
+  TelegramMonitor passes the OCR text as primary source evidence instead of returning `events=[]` at the caption guard.
+  Regression contract: `INC-2026-06-30-kraftmarket317-poster-only-zero-events`.
 - Сервер скачивает `telegram_results.json` и импортирует события через Smart Update:
   - создаёт новые события;
   - мерджит существующие;

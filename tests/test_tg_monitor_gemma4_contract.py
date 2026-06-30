@@ -204,6 +204,10 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
     assert "city must be the place name itself, not an inflected phrase" in source
     assert "_correct_single_event_from_source_datetime" in source
+    assert "poster_only_ocr = (not caption_content) and bool(ocr_only_content)" in source
+    assert "content = caption_content or ocr_only_content" in source
+    assert "OCR-only poster text:" in source
+    assert "do not return [] merely because caption text is empty" in source
 
 
 def test_tg_monitor_source_datetime_guard_corrects_single_event_drift() -> None:
@@ -894,6 +898,41 @@ def test_tg_monitor_strong_event_signal_keeps_kraftmarket_promo_posts_in_llm_pat
     assert clear(kraft_285)
     assert strong(kraft_287)
     assert clear(kraft_287)
+
+
+def test_tg_monitor_clear_event_signal_accepts_poster_only_ocr() -> None:
+    ns = _load_tg_monitor_signal_helpers_in_isolation()
+    strong = ns["_has_strong_event_invitation_signal"]
+    clear = ns["_looks_like_clear_single_event_invitation"]
+
+    kraft_317_ocr = (
+        "МАСТЕР КЛАСС\n"
+        "ПО КАЛЛИГРАФИИ\n"
+        "проводит Ламейко Светлана\n"
+        "Дата: 1 июля\n"
+        "Время: 19:00\n"
+        "Место: музей «Восток на Западе», ул. Клиническая, 19А\n"
+        "Стоимость: 1000 рублей\n"
+        "Запись по телефону: +7 (931) 616 08 88"
+    )
+    schedule_noise = (
+        "АФИША\n"
+        "1 июля 19:00 лекция\n"
+        "2 июля 19:00 концерт\n"
+        "3 июля 19:00 встреча\n"
+        "4 июля 19:00 мастер-класс\n"
+        "5 июля 19:00 экскурсия\n"
+        "музей"
+    )
+    raffle_results_with_event = (
+        "Поздравляем победителей розыгрыша!\n\n"
+        "А тем, кому сегодня чуть-чуть не повезло, не грустите: ждём вас 13 июня "
+        "с 11:00 до 16:00 в деревне Холмогорье. Билеты стоят 800 рублей, впереди "
+        "конкурс костюмов и запуск воздушных змеев."
+    )
+
+    assert clear(kraft_317_ocr)
+    assert not clear(schedule_noise)
     assert strong(raffle_results_with_event)
     assert not strong("Поздравляем победителей конкурса! Итоги уже в комментариях.")
 

@@ -2889,7 +2889,13 @@ async def extract_events(
     source_title: str | None = None,
     source_default_location: str | None = None,
 ):
-    content = (text or '').strip()
+    caption_content = (text or '').strip()
+    ocr_only_content = (ocr_text or '').strip()
+    poster_only_ocr = (not caption_content) and bool(ocr_only_content)
+    # Poster-only Telegram posts have an empty caption but may carry the whole
+    # event announcement in OCR. Keep extraction LLM-first: OCR text becomes the
+    # source text for the LLM instead of being ignored by the early caption guard.
+    content = caption_content or ocr_only_content
     if not content or len(content) < 10:
         return []
 
@@ -3056,9 +3062,11 @@ async def extract_events(
         return (ru_sched_events or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
     # LLM path
-    message_text_only = content
-    if ocr_text:
+    message_text_only = caption_content
+    if ocr_text and not poster_only_ocr:
         content = (content + '\n\nOCR:\n' + ocr_text).strip()
+    elif poster_only_ocr:
+        content = ('OCR-only poster text:\n' + ocr_only_content).strip()
     if not content or len(content) < 10:
         return []
     message_date_ymd = msg_date.isoformat() if msg_date else ''
@@ -3128,6 +3136,8 @@ async def extract_events(
         'If message text/caption contains a named event and OCR contains only schedule/service headings '
         'like a date, weekday, time, "НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ", price, age limit, or venue label, '
         'keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields. '
+        'If the Telegram message has no caption and the poster OCR itself contains a full announcement, use that '
+        'OCR text as the primary source evidence; do not return [] merely because caption text is empty. '
         'Before returning, audit every title: if it is only a schedule/service heading and the caption has a named '
         'headline, replace the title with that named headline. Example: caption "Второй Большой киноквиз!" plus '
         'OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00". '
@@ -3376,6 +3386,7 @@ async def extract_events(
             'A transfer/reschedule post with "перенос/перенесена" plus a future date/time is still an event. '
             'A giveaway-result or congratulatory/promo post with a concrete future event date/time plus venue or registration/ticket URL is still an event; ignore winner names, repost rules, and promo mechanics. '
             'If the text contains a registration/ticket URL next to a titled lecture/talk, treat that as strong attendance evidence. '
+            'If the Telegram caption is empty but OCR-only poster text contains event title, date, time, venue, price, or phone registration, extract that one source-grounded event. '
             'Do not invent facts: leave unresolved venue/address/city/ticket fields empty. '
             'Infer missing year from the message date and choose the nearest upcoming date. '
             'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '

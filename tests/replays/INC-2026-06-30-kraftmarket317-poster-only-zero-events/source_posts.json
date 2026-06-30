@@ -1,0 +1,28 @@
+{
+  "incident_id": "INC-2026-06-30-kraftmarket317-poster-only-zero-events",
+  "positive": {
+    "source_url": "https://t.me/kraftmarket39/317",
+    "source_username": "kraftmarket39",
+    "message_id": 317,
+    "message_date": "2026-06-29T21:39:03+00:00",
+    "caption_text": "",
+    "ocr_text": "МАСТЕР КЛАСС\nПО КАЛЛИГРАФИИ\nпроводит Ламейко Светлана\nДата: 1 июля\nВремя: 19:00\nМесто: музей «Восток на Западе», ул. Клиническая, 19А\nСтоимость: 1000 рублей\nЗапись по телефону: +7 (931) 616 08 88",
+    "expected": {
+      "title_contains": "Каллиграф",
+      "date": "2026-07-01",
+      "time": "19:00",
+      "location_name": "Музей «Восток на Западе»",
+      "location_address": "Клиническая 19А",
+      "ticket_status": "registration",
+      "ticket_price_min": 1000
+    }
+  },
+  "negative_control": {
+    "caption_text": "",
+    "ocr_text": "АФИША\n1 июля 19:00 лекция\n2 июля 19:00 концерт\n3 июля 19:00 встреча\n4 июля 19:00 мастер-класс\n5 июля 19:00 экскурсия\nмузей",
+    "expected": {
+      "clear_single_event_signal": false,
+      "reason": "many time anchors / schedule-like poster must not trigger single-event rescue"
+    }
+  }
+}
