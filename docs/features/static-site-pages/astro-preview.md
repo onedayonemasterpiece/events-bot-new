@@ -2,7 +2,7 @@
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
 > **Build ID:** current full-catalog review target `preview-20260630-event-pages-v62-two-vector-gemma-full` (343 future events, `search_v3` + `related_v1`, Supabase pgvector, strict Gemma 4 26B verifier/reranker cache, CDN media/ICS). Historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>. As of the latest 2026-06-30 verification, the objects are present in `s3://kenigevents.ru/...`, but public GET returns `404/403` because bucket/CDN public-read policy is not enabled for uploaded objects; this is an infrastructure blocker, not a generator failure.
+> **Preview index target:** <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>. As of the latest 2026-06-30 verification, the objects are present in `s3://kenigevents.ru/...`, but public GET returns `404/403` because bucket/CDN public-read policy is not enabled for uploaded objects. `static.kenigevents.ru` also still presents a `*.yccdn.cloud.yandex.net` certificate, not a `static.kenigevents.ru` certificate. These are infrastructure blockers, not generator failures.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI source is present but remains gated by Supabase/Yandex/Edge deployment. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
@@ -198,7 +198,7 @@ v62 verification evidence on 2026-06-30:
 
 - S3 listing confirms `1060` uploaded objects for the v62 prefix, including `343` event detail pages and `343` discovery JSON files;
 - authenticated S3 listing confirms `__preview/index.html`, `/poisk/index.html`, golden event pages and stable ICS files exist in the bucket;
-- public HTTP is currently blocked: `https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/` and `https://static.kenigevents.ru/ics/5878.ics` return `404/403` until the bucket/CDN public-read policy is enabled;
+- public HTTP is currently blocked: `https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/` returns `404`; `https://static.kenigevents.ru/ics/5878.ics` fails TLS validation because the CDN certificate is still for `*.yccdn.cloud.yandex.net`; bucket public-read policy and CDN certificate/domain binding must be fixed before user-facing review;
 - built discovery JSON for `6447` has `algorithm_id=event_pgvector_related_chain_v2_two_doc`, `strategy=event_pgvector_related_chain_v2_manifest`, and only two strict related cards: `4759` (`llm_semantic_score=0.85`, `llm_confidence=0.95`) and `6310` (`0.75`, `0.90`);
 - built discovery JSON for `5878` has music/retro/concert candidates first (`3398`, `5777`, `6488`, `6481`, `5733`);
 - built discovery JSON for `5370` has art/exhibition candidates first (`6214`, `5969`, `6080`, `5391`);
