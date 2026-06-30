@@ -1,0 +1,11 @@
+{
+  "source_type": "telegram",
+  "source_url": "https://t.me/kulturnaya_chaika/7913",
+  "reported_public_url": "https://t.me/kldevents/1630",
+  "event_id": 6508,
+  "bad_candidate_title": "Городской фестиваль",
+  "expected_title_contains": "ВЕЛОДЕНЬ",
+  "source_text": "Городской фестиваль «ВЕЛОДЕНЬ»\n12 июля в 10:00 на парковке у Правительства Калининградской области.\nВ программе детские заезды, мастер-классы, конкурсы и велопарад 13 км.",
+  "poster_ocr_title": "ВЕЛОДЕНЬ / 12 ИЮЛЯ",
+  "notes": "Minimal replay fixture for the incident shape: upstream extraction passed only the category title, while source headline and OCR carried the own name."
+}

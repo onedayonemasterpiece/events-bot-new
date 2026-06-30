@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-30-generic-title-dropped-own-name.md`
+  - Scope: Smart Update create-title recovery for category-only titles where the source/OCR contains a distinctive own name, plus public Telegram/VK/Telegraph repair for event `6508`.
+  - Must not regress: generic titles like `Городской фестиваль` must route to LLM recovery when source headline/OCR carries a grounded own name such as `ВЕЛОДЕНЬ`; the guard must not deterministically rewrite titles and must not force recovery when no own-name evidence exists or when the current title is already distinctive.
 - `INC-2026-06-29-qtickets-structured-facts-lost.md`
   - Scope: Qtickets/ticket-site parser structured fact handoff, `TheatreEvent` source text preservation, poster OCR priority, and public Telegram/VK/Telegraph fanout for parser-backed events.
   - Must not regress: ticket-page JSON-LD title, venue, address, date/end-date, price and URL must remain visible to the LLM/Smart Update boundary; poster OCR remains secondary and must not replace canonical page titles such as `FLAVA INTENSIVE (VALERA & LERA VOYNITS)` with fragments like `VALERA`.

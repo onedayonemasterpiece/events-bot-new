@@ -15,6 +15,7 @@ from smart_event_update import (
     PosterCandidate,
     _apply_posters,
     _dedup_near_duplicate_posters,
+    _is_candidate_title_weak_for_llm_override,
     _is_generic_title_event_type_venue,
     _llm_recover_event_title,
     _sanitize_description_output,
@@ -409,6 +410,60 @@ def _patch_llm_sequence(monkeypatch, returned_titles):
         return next(calls)
 
     monkeypatch.setattr(su, "_ask_gemma_text", _fake)
+
+
+
+
+def test_generic_category_title_with_source_own_name_routes_to_llm_recovery():
+    cand = _candidate(
+        "Городской фестиваль «ВЕЛОДЕНЬ» состоится 12 июля.",
+        event_type="фестиваль",
+        venue="Парковка у Правительства Калининградской области",
+    )
+    cand.posters = [SimpleNamespace(ocr_title="ВЕЛОДЕНЬ / 12 ИЮЛЯ", ocr_text="ВЕЛОДЕНЬ 12 ИЮЛЯ")]
+
+    assert (
+        _is_candidate_title_weak_for_llm_override(
+            "Городской фестиваль",
+            candidate=cand,
+            normalized_event_type="фестиваль",
+        )
+        is True
+    )
+
+
+def test_generic_category_title_without_own_name_does_not_force_recovery():
+    cand = _candidate(
+        "Городской фестиваль состоится 12 июля. В программе мастер-классы и велопарад.",
+        event_type="фестиваль",
+        venue="Парковка у Правительства Калининградской области",
+    )
+
+    assert (
+        _is_candidate_title_weak_for_llm_override(
+            "Городской фестиваль",
+            candidate=cand,
+            normalized_event_type="фестиваль",
+        )
+        is False
+    )
+
+
+def test_distinctive_title_not_routed_to_llm_recovery():
+    cand = _candidate(
+        "Городской фестиваль «ВЕЛОДЕНЬ» состоится 12 июля.",
+        event_type="фестиваль",
+        venue="Парковка у Правительства Калининградской области",
+    )
+
+    assert (
+        _is_candidate_title_weak_for_llm_override(
+            "Городской фестиваль «ВЕЛОДЕНЬ»",
+            candidate=cand,
+            normalized_event_type="фестиваль",
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio

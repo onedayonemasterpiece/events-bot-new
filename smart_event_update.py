@@ -10534,6 +10534,63 @@ _TITLE_MATCH_STOPWORDS = {
     "калининград",
 }
 
+# Adjectives that make a title look presentable but still do not identify the
+# event on their own.  These are used only as a routing guard for LLM title
+# recovery: the guard never chooses the replacement title deterministically.
+_TITLE_GENERIC_QUALIFIER_STOPWORDS = {
+    "городской",
+    "областной",
+    "региональный",
+    "районный",
+    "муниципальный",
+    "международный",
+    "всероссийский",
+    "ежегодный",
+    "традиционный",
+    "семейный",
+    "детский",
+    "молодежный",
+    "молодёжный",
+    "уличный",
+    "летний",
+    "зимний",
+    "осенний",
+    "весенний",
+    "открытый",
+    "большой",
+    "первый",
+    "новый",
+}
+
+_TITLE_EVIDENCE_NOISE_TOKENS = {
+    "июля",
+    "июнь",
+    "июня",
+    "август",
+    "августа",
+    "сентябрь",
+    "сентября",
+    "октябрь",
+    "октября",
+    "ноябрь",
+    "ноября",
+    "декабрь",
+    "декабря",
+    "январь",
+    "января",
+    "февраль",
+    "февраля",
+    "март",
+    "марта",
+    "апрель",
+    "апреля",
+    "май",
+    "мая",
+    "дата",
+    "время",
+    "адрес",
+}
+
 
 def _normalize_text_for_grounding(text: str | None) -> str:
     if not text:
@@ -10629,6 +10686,89 @@ def _is_title_grounded_in_candidate_sources(
     return False
 
 
+def _distinctive_title_tokens_for_recovery(
+    title: str | None,
+    *,
+    event_type: str | None = None,
+) -> set[str]:
+    """Tokens that can identify an event beyond its category/scale words.
+
+    This helper is intentionally stricter than `_meaningful_title_tokens` and is
+    used only to decide whether to ask the LLM for title recovery. It must not be
+    used to choose or rewrite a title.
+    """
+
+    norm = _normalize_text_for_grounding(title)
+    if not norm:
+        return set()
+    event_type_tokens = {
+        t
+        for t in _normalize_text_for_grounding(event_type).split()
+        if len(t) >= 3
+    }
+    out: set[str] = set()
+    for tok in norm.split():
+        if len(tok) < 3 or tok.isdigit():
+            continue
+        if tok in _TITLE_MATCH_STOPWORDS:
+            continue
+        if tok in _TITLE_GENERIC_QUALIFIER_STOPWORDS:
+            continue
+        if tok in _TITLE_EVIDENCE_NOISE_TOKENS:
+            continue
+        if tok in event_type_tokens:
+            continue
+        out.add(tok)
+    return out
+
+
+def _candidate_contains_distinct_title_evidence(
+    candidate: "EventCandidate",
+    *,
+    current_title: str | None,
+    normalized_event_type: str | None,
+) -> bool:
+    """Return True when source/OCR visibly contains an own-name candidate.
+
+    The function is a fail-closed router into LLM recovery for cases like
+    `Городской фестиваль` + source headline `Городской фестиваль «ВЕЛОДЕНЬ»`.
+    It does not extract the replacement title; it only detects that the current
+    title is probably missing a distinctive, source-grounded name.
+    """
+
+    current_norm_tokens = set(_normalize_text_for_grounding(current_title).split())
+    event_type = normalized_event_type or candidate.event_type
+
+    source = "\n".join(
+        part
+        for part in [candidate.source_text or "", candidate.raw_excerpt or ""]
+        if str(part or "").strip()
+    )
+    for quoted in re.findall(r"[«\"]([^»\"]{3,90})[»\"]", source):
+        q_tokens = _distinctive_title_tokens_for_recovery(
+            quoted,
+            event_type=event_type,
+        )
+        if q_tokens and not q_tokens.issubset(current_norm_tokens):
+            return True
+
+    for poster in list(getattr(candidate, "posters", None) or [])[:4]:
+        for value in [getattr(poster, "ocr_title", None), getattr(poster, "ocr_text", None)]:
+            text = str(value or "").strip()
+            if not text:
+                continue
+            # OCR title/text may be mostly date/time; require at least one
+            # distinctive token absent from the current generic title.
+            p_tokens = _distinctive_title_tokens_for_recovery(
+                _clip(text, 220),
+                event_type=event_type,
+            )
+            if p_tokens and not p_tokens.issubset(current_norm_tokens):
+                return True
+
+    return False
+
+
 def _is_generic_title_event_type_venue(
     title: str | None,
     *,
@@ -10684,7 +10824,7 @@ _EVENT_TITLE_RECOVERY_INSTRUCTIONS = (
 
 _EVENT_TITLE_PUBLIC_RECOVERY_INSTRUCTIONS = (
     "Ты — редактор афиши. По данным ниже сделай КОРОТКИЙ публичный заголовок "
-    "для события, у которого сейчас только технический шаблон «тип — площадка».\n"
+    "для события, у которого сейчас только технический или слишком общий заголовок.\n"
     "Это не креативный нейминг: заголовок должен быть собран только из явно "
     "grounded деталей источника — темы, программы, участника/коллектива, праздника, "
     "проекта/фестиваля, центрального произведения или объекта события.\n"
@@ -10800,8 +10940,12 @@ async def _llm_recover_event_title(
     normalized_event_type: str | None,
     facts: Sequence[str] | None,
 ) -> str | None:
-    """Recover a grounded event title when the only title we have is the generic
-    ``"<event_type> — <venue>"`` placeholder.
+    """Recover a grounded event title when the current title is only generic.
+
+    This covers both the explicit ``"<event_type> — <venue>"`` placeholder and
+    category-only titles that lack a distinctive source name while source/OCR
+    evidence visibly contains one (for example `Городской фестиваль` vs
+    `Городской фестиваль «ВЕЛОДЕНЬ»`).
 
     Single-purpose call routed through the text path (which carries the existing
     Gemma→GPT-4o fallback): the description model ``gemma-4-31b-it`` often spends
@@ -10874,6 +11018,19 @@ def _is_candidate_title_weak_for_llm_override(
         city=candidate.city,
     ):
         return True
+    if (
+        not _distinctive_title_tokens_for_recovery(
+            title,
+            event_type=normalized_event_type or candidate.event_type,
+        )
+        and _candidate_contains_distinct_title_evidence(
+            candidate,
+            current_title=title,
+            normalized_event_type=normalized_event_type,
+        )
+    ):
+        return True
+
     tokens = _meaningful_title_tokens(title)
     if not tokens:
         return True
@@ -14142,16 +14299,15 @@ async def _smart_event_update_impl(
         # Safety-net: Telegraph + Telegram UI behave poorly with extremely long titles.
         final_title = _clip_title(final_title, 160) or clean_title
 
-        # Recover a real title when all we have is the generic "<event_type> — <venue>"
-        # placeholder (the vk_intake suspicious-title fallback). The source almost always
-        # contains a usable event name; a single grounded native-schema call retrieves it.
-        # Gated on the placeholder detector + grounding validation, so good titles are
-        # never touched and the recovered title cannot hallucinate.
-        if _is_generic_title_event_type_venue(
+        # Recover a real title when all we have is a generic category title:
+        # either an explicit "<event_type> — <venue>" placeholder or a category-only
+        # title that lacks the distinctive source/OCR name. The deterministic guard
+        # only routes to LLM recovery; the replacement is accepted only after source
+        # grounding validation, so good titles are never deterministically rewritten.
+        if _is_candidate_title_weak_for_llm_override(
             final_title,
-            event_type=normalized_event_type or candidate.event_type,
-            location_name=candidate.location_name,
-            city=candidate.city,
+            candidate=candidate,
+            normalized_event_type=normalized_event_type,
         ):
             recovered_title = await _llm_recover_event_title(
                 candidate,
@@ -14160,7 +14316,7 @@ async def _smart_event_update_impl(
             )
             if recovered_title:
                 logger.info(
-                    "smart_update.title_recovered source_type=%s source_url=%s placeholder=%r recovered=%r",
+                    "smart_update.title_recovered source_type=%s source_url=%s weak_title=%r recovered=%r",
                     candidate.source_type,
                     candidate.source_url,
                     _clip_title(final_title),

@@ -28,6 +28,7 @@
 
 ### Fixed
 
+- **Incident / generic title dropped own event name (INC-2026-06-30)**: Smart Update now routes category-only titles such as `Городской фестиваль` to LLM title recovery when the same source/OCR visibly contains a grounded own name like `ВЕЛОДЕНЬ`, without deterministic title rewriting and with negative controls for genuinely generic sources.
 - **Incident / Qtickets structured facts lost to poster OCR (INC-2026-06-29)**:
   Qtickets imports now preserve ticket-page address and end-date fields and keep
   the structured page facts as Smart Update `source_text`, with a narrow
