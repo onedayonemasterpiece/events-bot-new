@@ -66,5 +66,7 @@ def test_build_gemma_related_audit_prompt_is_compact_and_xml_escaped() -> None:
     assert '<candidate id="11">' in prompt
     assert "A &lt; B" in prompt
     assert "Про город &amp; людей" in prompt
+    assert "similarity_class" in prompt
+    assert "confidence" in prompt
     assert "reason_codes" not in prompt
     assert len(prompt) < 1800

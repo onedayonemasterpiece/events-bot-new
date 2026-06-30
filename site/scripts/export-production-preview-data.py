@@ -1171,7 +1171,9 @@ def build_gemma_related_audit_prompt(
         "Задача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\n"
         "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
         "Если событие просто другое, даже качественное, ставь reject=true.\n"
-        "Не объясняй решение, не возвращай дополнительные поля.\n\n"
+        "similarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
+        "confidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\n"
+        "Не объясняй решение, не возвращай лишние поля.\n\n"
         "<anchor>\n"
         f"{_related_audit_event_block(anchor, tag='event', fact_max_chars=fact_max_chars)}\n"
         "</anchor>\n\n"
@@ -1233,9 +1235,11 @@ async def call_gemma_related_audit_async(
                     "properties": {
                         "event_id": {"type": "INTEGER"},
                         "llm_semantic_score": {"type": "NUMBER"},
+                        "similarity_class": {"type": "STRING"},
+                        "confidence": {"type": "NUMBER"},
                         "reject": {"type": "BOOLEAN"},
                     },
-                    "required": ["event_id", "llm_semantic_score", "reject"],
+                    "required": ["event_id", "llm_semantic_score", "similarity_class", "confidence", "reject"],
                 },
             }
         },
@@ -1338,11 +1342,19 @@ def rescue_truncated_gemma_ranked(raw: str) -> dict[str, Any]:
             reject = bool(item["reject"])
         except Exception:
             continue
-        ranked.append({
+        rescued_item: dict[str, Any] = {
             "event_id": event_id,
             "llm_semantic_score": max(0.0, min(1.0, score)),
             "reject": reject,
-        })
+        }
+        if item.get("similarity_class"):
+            rescued_item["similarity_class"] = str(item.get("similarity_class"))
+        if item.get("confidence") is not None:
+            try:
+                rescued_item["confidence"] = max(0.0, min(1.0, float(item.get("confidence"))))
+            except Exception:
+                pass
+        ranked.append(rescued_item)
     return {"ranked": ranked}
 
 
@@ -1358,6 +1370,18 @@ def classify_gemma_similarity(score: float, *, reject: bool) -> str:
     return "weak_or_adjacent_related"
 
 
+def normalize_gemma_similarity_class(value: Any, *, score: float, reject: bool) -> str:
+    allowed = {
+        "identical_or_near_identical",
+        "highly_similar",
+        "thematically_close",
+        "weak_or_adjacent_related",
+        "different_topic",
+    }
+    text = str(value or "").strip()
+    return text if text in allowed else classify_gemma_similarity(score, reject=reject)
+
+
 def gemma_related_policy_signature(*, model: str) -> str:
     """Stable cache signature for Gemma related rerank contract.
 
@@ -1371,11 +1395,15 @@ def gemma_related_policy_signature(*, model: str) -> str:
             6,
             min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")),
         ),
+        "pass_count": max(
+            1,
+            min(3, int(os.getenv("STATIC_SITE_GEMMA_RELATED_PASSES", "2") or "2")),
+        ),
         "fact_max_chars": max(
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v3_compact_xml",
+        "prompt_version": "related_gemma4_schema_v4_compact_xml_model_confidence_two_pass",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -1426,6 +1454,10 @@ def maybe_apply_gemma_audit(
                     int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10"),
                 ),
             ),
+            "pass_count": max(
+                1,
+                min(3, int(os.getenv("STATIC_SITE_GEMMA_RELATED_PASSES", "2") or "2")),
+            ),
         },
         "attempts": [],
     }
@@ -1438,6 +1470,8 @@ def maybe_apply_gemma_audit(
     audit_cache = cache.setdefault("gemma_audit_cache", {})
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     candidate_limit = int(meta["retry_policy"]["candidate_limit"])
+    pass_count = int(meta["retry_policy"].get("pass_count") or 1)
+    total_candidate_limit = candidate_limit * pass_count
     policy_signature = gemma_related_policy_signature(model=model)
     audited = 0
     attempted_anchors = 0
@@ -1446,7 +1480,7 @@ def maybe_apply_gemma_audit(
             break
         anchor_id = str(anchor["id"])
         chain = chains.get(anchor_id) or []
-        top_ids = [int(item["event_id"]) for item in chain[:candidate_limit]]
+        top_ids = [int(item["event_id"]) for item in chain[:total_candidate_limit]]
         if not top_ids:
             continue
         anchor_int_id = int(anchor["id"])
@@ -1472,77 +1506,119 @@ def maybe_apply_gemma_audit(
         else:
             attempted_anchors += 1
             try:
-                candidates = [by_id[cid] for cid in top_ids if cid in by_id]
+                candidate_events = [by_id[cid] for cid in top_ids if cid in by_id]
                 max_attempts = int(meta["retry_policy"]["max_attempts"])
                 backoff_seconds = float(meta["retry_policy"]["backoff_seconds"])
-                last_exc: Exception | None = None
-                for attempt in range(1, max_attempts + 1):
-                    try:
-                        log_stage(
-                            "gemma_audit_call",
-                            anchor_event_id=anchor_int_id,
-                            candidate_count=len(candidates),
-                            candidate_limit=candidate_limit,
-                            model=model,
-                            key_env=key_env,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                        )
+                audit: dict[int, dict[str, Any]] = {}
+                pass_failures: list[dict[str, Any]] = []
+                successful_passes = 0
+                expected_passes = sum(
+                    1
+                    for pass_index in range(pass_count)
+                    if candidate_events[pass_index * candidate_limit : (pass_index + 1) * candidate_limit]
+                )
+                for pass_index in range(pass_count):
+                    pass_candidates = candidate_events[pass_index * candidate_limit : (pass_index + 1) * candidate_limit]
+                    if not pass_candidates:
+                        continue
+                    last_exc: Exception | None = None
+                    for attempt in range(1, max_attempts + 1):
                         started = time.monotonic()
-                        audit = call_gemma_related_audit(
-                            model=model,
-                            key_env=key_env,
-                            anchor=anchor,
-                            candidates=candidates,
-                            timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
-                            candidate_limit=candidate_limit,
-                        )
-                        elapsed_ms = int((time.monotonic() - started) * 1000)
-                        meta["attempts"].append({
-                            "anchor_event_id": anchor_int_id,
-                            "attempt": attempt,
-                            "model": model,
-                            "status": "ok",
-                            "elapsed_ms": elapsed_ms,
-                            "candidate_count": len(candidates),
-                            "candidate_limit": candidate_limit,
+                        try:
+                            log_stage(
+                                "gemma_audit_call",
+                                anchor_event_id=anchor_int_id,
+                                candidate_count=len(pass_candidates),
+                                candidate_limit=candidate_limit,
+                                total_candidate_limit=total_candidate_limit,
+                                pass_index=pass_index + 1,
+                                pass_count=pass_count,
+                                model=model,
+                                key_env=key_env,
+                                attempt=attempt,
+                                max_attempts=max_attempts,
+                            )
+                            pass_audit = call_gemma_related_audit(
+                                model=model,
+                                key_env=key_env,
+                                anchor=anchor,
+                                candidates=pass_candidates,
+                                timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
+                                candidate_limit=candidate_limit,
+                            )
+                            elapsed_ms = int((time.monotonic() - started) * 1000)
+                            audit.update(pass_audit)
+                            successful_passes += 1
+                            meta["provider_calls"] += 1
+                            meta["attempts"].append({
+                                "anchor_event_id": anchor_int_id,
+                                "attempt": attempt,
+                                "pass_index": pass_index + 1,
+                                "pass_count": pass_count,
+                                "model": model,
+                                "status": "ok",
+                                "elapsed_ms": elapsed_ms,
+                                "candidate_count": len(pass_candidates),
+                                "candidate_limit": candidate_limit,
+                                "total_candidate_limit": total_candidate_limit,
+                            })
+                            log_stage(
+                                "gemma_audit_call_complete",
+                                anchor_event_id=anchor_int_id,
+                                model=model,
+                                attempt=attempt,
+                                pass_index=pass_index + 1,
+                                elapsed_ms=elapsed_ms,
+                            )
+                            break
+                        except Exception as exc:
+                            elapsed_ms = int((time.monotonic() - started) * 1000)
+                            meta["attempts"].append({
+                                "anchor_event_id": anchor_int_id,
+                                "attempt": attempt,
+                                "pass_index": pass_index + 1,
+                                "pass_count": pass_count,
+                                "model": model,
+                                "status": "error",
+                                "elapsed_ms": elapsed_ms,
+                                "error": str(exc)[:200],
+                            })
+                            last_exc = exc
+                            if attempt >= max_attempts:
+                                pass_failures.append({
+                                    "pass_index": pass_index + 1,
+                                    "error": str(exc)[:500],
+                                })
+                                break
+                            sleep_seconds = backoff_seconds * attempt
+                            log_stage(
+                                "gemma_audit_retry",
+                                anchor_event_id=anchor_int_id,
+                                model=model,
+                                attempt=attempt,
+                                next_attempt=attempt + 1,
+                                pass_index=pass_index + 1,
+                                sleep_seconds=sleep_seconds,
+                                error=str(exc)[:500],
+                            )
+                            time.sleep(sleep_seconds)
+                    else:
+                        pass_failures.append({
+                            "pass_index": pass_index + 1,
+                            "error": str(last_exc)[:500] if last_exc else "Gemma related audit failed",
                         })
-                        log_stage(
-                            "gemma_audit_call_complete",
-                            anchor_event_id=anchor_int_id,
-                            model=model,
-                            attempt=attempt,
-                            elapsed_ms=elapsed_ms,
-                        )
-                        break
-                    except Exception as exc:
-                        elapsed_ms = int((time.monotonic() - started) * 1000) if "started" in locals() else None
-                        meta["attempts"].append({
-                            "anchor_event_id": anchor_int_id,
-                            "attempt": attempt,
-                            "model": model,
-                            "status": "error",
-                            "elapsed_ms": elapsed_ms,
-                            "error": str(exc)[:200],
-                        })
-                        last_exc = exc
-                        if attempt >= max_attempts:
-                            raise
-                        sleep_seconds = backoff_seconds * attempt
-                        log_stage(
-                            "gemma_audit_retry",
-                            anchor_event_id=anchor_int_id,
-                            model=model,
-                            attempt=attempt,
-                            next_attempt=attempt + 1,
-                            sleep_seconds=sleep_seconds,
-                            error=str(exc)[:500],
-                        )
-                        time.sleep(sleep_seconds)
-                else:
-                    raise RuntimeError(str(last_exc) if last_exc else "Gemma related audit failed")
-                audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
-                meta["provider_calls"] += 1
+                if not audit:
+                    raise RuntimeError(
+                        pass_failures[0]["error"] if pass_failures else "Gemma related audit failed"
+                    )
+                if pass_failures:
+                    meta["errors"].append({
+                        "anchor_event_id": anchor_int_id,
+                        "error": "partial_gemma_pass_failure",
+                        "pass_failures": pass_failures,
+                    })
+                if successful_passes == expected_passes:
+                    audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                 meta["verified_event_ids"].append(anchor_int_id)
                 # Respect free-tier RPM without introducing a queue.
                 time.sleep(4.2)
@@ -1557,8 +1633,12 @@ def maybe_apply_gemma_audit(
                 continue
             llm_score = max(0.0, min(1.0, float(verdict.get("llm_semantic_score") or 0)))
             item["llm_semantic_score"] = round(llm_score, 4)
-            item["llm_confidence"] = round(max(0.0, min(1.0, float(verdict.get("confidence") or 1.0))), 4)
-            item["similarity_class"] = classify_gemma_similarity(llm_score, reject=bool(verdict.get("reject")))
+            item["llm_confidence"] = round(max(0.0, min(1.0, float(verdict.get("confidence") or 0.0))), 4)
+            item["similarity_class"] = normalize_gemma_similarity_class(
+                verdict.get("similarity_class"),
+                score=llm_score,
+                reject=bool(verdict.get("reject")),
+            )
             item["gemma_reject"] = bool(verdict.get("reject"))
             if item["gemma_reject"]:
                 item["display_eligible"] = False

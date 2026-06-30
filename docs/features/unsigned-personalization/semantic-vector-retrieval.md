@@ -92,6 +92,11 @@ Decision:
    - RPCs must filter by both model/dimension and `embedding_doc_kind`.
 3. The two-vector target still uses the same embedding model (`gemini-embedding-2/vector(768)`) unless a future eval proves a better model; “two vectors” means two **document representations**, not two unrelated vector databases.
 
+As of this branch, the weighted two-document/two-vector schema is **not yet
+implemented**: there is no committed `embedding_doc_kind`, `related_digest_v1`
+or separate search/related RPC filter in the migrations/code. It remains the
+next hardening step after the current full-catalog stress measurements.
+
 ### Vector sync / document generation
 
 Script: `scripts/sync_event_search_vectors_to_supabase.py`.
@@ -140,7 +145,7 @@ interactive `/poisk/` policy:
   strict similar block, but it must not silently label raw pgvector order as
   Gemma-verified related.
 
-#### Gemma static-related verifier contract v3
+#### Gemma static-related verifier contract v4
 
 The full-catalog v61 stress run showed that the previous verifier contract was
 too verbose for Gemma 4 26B: retry classes were dominated by malformed JSON
@@ -148,31 +153,35 @@ too verbose for Gemma 4 26B: retry classes were dominated by malformed JSON
 successful calls had p50/p95 around `22s/31s`. The root issue is output size and
 truncation, not a need to replace Gemma with Flash-Lite.
 
-The accepted v3 contract is:
+The accepted v4 contract is a compromise between JSON stability and semantic
+quality:
 
 - input prompt is compact XML-like factual blocks, not a large JSON-stringified
   instruction payload;
-- default verifier window is the top `10` pgvector candidates, configurable only
-  inside `6..12` via `STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT`;
+- Gemma evaluates candidates in compact batches of `10` by default
+  (`STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT`, clamped to `6..12`);
+- static related uses `2` passes by default
+  (`STATIC_SITE_GEMMA_RELATED_PASSES`, clamped to `1..3`), so the normal strict
+  audit inspects up to `20` pgvector candidates without forcing one large
+  fragile JSON response;
 - fact text defaults to `360` chars per event;
-- native structured output schema returns only
-  `ranked[].event_id`, `ranked[].llm_semantic_score`, `ranked[].reject`;
-- `similarity_class` and confidence are derived in application code from the
-  score/reject fields, and `reason_codes` are not requested from the model;
+- native structured output schema returns
+  `ranked[].event_id`, `ranked[].llm_semantic_score`,
+  `ranked[].similarity_class`, `ranked[].confidence`, `ranked[].reject`;
+- model-provided `similarity_class` and `confidence` are preserved because they
+  are product/QA signals, while verbose `reason_codes` are not requested;
 - output cap defaults to `768` tokens; timeout defaults to `60s`; default static
   attempts are `2` with `10s` backoff;
 - JSON rescue is syntax-only: it may salvage fully complete verdict objects from
   a truncated `ranked` array, but it never invents ids, scores or semantic
   decisions.
 
-For the **strict “Похожие” block**, do not split the full top-40 pgvector pool
-into many Gemma calls by default. pgvector is the recall stage and Gemma is the
-precision stage over the strongest candidates. If the top-10 verifier returns
-too few strict results, the remaining candidates should be shown later under a
+For the **strict “Похожие” block**, pgvector remains the recall stage and Gemma
+is the precision stage. The normal offline build now verifies two compact
+batches (`1..10` and `11..20`) and merges/reorders by Gemma score/class. The
+remaining lower-ranked pgvector candidates should be shown later only under a
 separate adjacent/discovery heading such as “Возможно, вам будет интересно”,
-or a second pass over candidates `11..20` may be enabled only as an exceptional
-quality/canary mode. Ordinary static builds should not multiply Gemma calls per
-anchor.
+not silently mixed into strict similar cards.
 
 Prompt/schema audit evidence:
 
@@ -182,6 +191,8 @@ Prompt/schema audit evidence:
   `artifacts/codex/related-gemma-prompt-audit-20260630/OPUS_BLOCKER.md`.
 - Local live smoke after v3 compaction: synthetic 4-candidate call `4.65s`,
   real anchors `6447/5878/5370` returned valid JSON in `8.20s/6.43s/6.22s`.
+- Local live smoke after v4 restored model `similarity_class`/`confidence`:
+  synthetic 4-candidate call returned valid JSON in `7.00s`.
   This smoke is not a replacement for the next full 344-anchor Kaggle run, which
   must measure the new statistical error rate.
 

@@ -143,22 +143,27 @@ Verification evidence:
 The first full future-catalog stress attempt exposed a Gemma verifier I/O issue:
 embeddings and pgvector retrieval were cached/reusable, but the old verbose
 Gemma prompt produced many invalid/truncated JSON retries. The related verifier
-now uses the compact v3 contract documented in
+now uses the compact v4 contract documented in
 `docs/features/unsigned-personalization/semantic-vector-retrieval.md`:
 
-- Gemma sees only the strongest 10 pgvector candidates by default (`6..12`
-  allowed), not the whole top-40 pool;
-- the model returns only `event_id`, `llm_semantic_score` and `reject`;
-- app code derives `similarity_class`/confidence and can rescue only fully
-  complete verdict objects from a truncated JSON tail;
+- Gemma sees compact 10-candidate batches by default (`6..12` allowed);
+- the static related audit runs 2 passes by default, so it can inspect up to
+  20 strongest pgvector candidates without one large fragile JSON response;
+- the model returns `event_id`, `llm_semantic_score`, `similarity_class`,
+  `confidence` and `reject`; verbose reason-code explanations stay out of the
+  output;
+- app code can rescue only fully complete verdict objects from a truncated JSON
+  tail;
 - strict “Похожие” remains LLM-verified; lower pgvector candidates should be a
   separately headed discovery section, not silently mixed into similar cards.
 
 Evidence is in `artifacts/codex/related-gemma-prompt-audit-20260630/`: Gemini
 3.1 Pro review completed, Opus review is explicitly blocked (empty `a-opus`/`agy`
 outputs and Claude `401`), and local live smoke on anchors `6447`, `5878`, `5370`
-returned valid Gemma JSON in `6.22–8.20s`. A new full Kaggle run is still needed
-to measure the statistical retry/error reduction on all anchors.
+returned valid compact Gemma JSON in `6.22–8.20s`; after restoring
+model-provided `similarity_class`/`confidence`, the synthetic smoke returned
+valid JSON in `7.00s`. A new full Kaggle run is still needed to measure the
+statistical retry/error reduction on all anchors.
 
 
 ## v47 sparse terminology, related-order and CDN verification

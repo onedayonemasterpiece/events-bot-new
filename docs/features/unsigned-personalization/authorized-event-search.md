@@ -190,6 +190,21 @@ High-match contract:
 5. If the LLM times out, provider returns non-2xx, facts are insufficient, quota is not reserved, the LLM rubber-stamps too many candidates as exact, or the verifier is disabled, the Edge Function fails closed: `items=[]`, candidates become possible/fallback only. Raw pgvector candidates must not be shown as exact search results in the public high-match mode.
 6. `has_more=false` in this MVP high-match mode because repeated per-page LLM calls produced inconsistent page boundaries. The next production step is a cached/cursor verified window so “Показать ещё” paginates within one LLM-classified set instead of re-verifying each page.
 
+P1 progressive UX target:
+
+- first response should return the high-confidence Gemma-verified window as soon
+  as the first verifier pass completes;
+- while the user starts reading/scrolling, the backend may continue verifying
+  the next candidate window(s) and append accepted cards below the current list;
+- unverified vector candidates can be shown only under a separate provisional
+  discovery heading, never as exact **«Результаты поиска»**;
+- when later verifier passes finish, the UI may remove/reclassify lower
+  unverified/provisional cards below the user’s current viewport, but must not
+  suddenly move or remove the card the user is currently interacting with;
+- this requires a server-side `search_session_id`/cursor and a cached verified
+  result set, so repeated “Показать ещё” calls reuse one classification job
+  instead of creating inconsistent independent LLM pages.
+
 The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. A non-semantic over-approval sanity check demotes the whole set to possible if the model marks more than 60% of a 4+ candidate window as exact; this is a safety guard against LLM rubber-stamping, not a deterministic topic/audience rule.
 Every provider try is recorded in `llm_verifier.attempts[]` and search metadata
 with `{model, role: primary|fallback, attempt, status, elapsed_ms}`. The response
