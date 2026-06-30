@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Static site / information partners**: added the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage, and canonical feature docs for partner logo/status handling with nofollow external links.
+
 ### Fixed
 
 - **Personalization / authorized search Gemma telemetry**: added per-attempt Gemma verifier telemetry (`timeout_ms`, prompt size, fact chars, candidate count), capped verifier output, set minimal thinking/fact-size controls, increased Gemma timeout policy, and verified live Edge searches now complete on `gemma-4-26b-a4b-it` in about 3.4s without spending Lite fallback.

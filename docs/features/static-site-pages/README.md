@@ -13,6 +13,10 @@
 
 
 
+### Информационные партнёры
+
+Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для статуса «информационный партнёр». Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro`, попадает в `sitemap.xml` и доступен из footer-навигации как `Инфопартнёры`. Внешние ссылки партнёров помечены `rel="nofollow noopener noreferrer"`; до production-gate используются текстовые logo-lockup-заглушки вместо несогласованных официальных логотипов. Каноника фичи: `docs/features/info-partners/README.md`.
+
 ### Kaggle CPU build handoff
 
 Static-site generation is now prepared as a Kaggle CPU job reusing the existing CherryFlash/TelegramMonitor infrastructure: per-run private input dataset, `KaggleClient.push_kernel(...)`, optional `kaggle_run.json` status dataset, `kaggle_status_client` heartbeat/progress from inside the kernel, and a `static_site:builder` resource lease. The first verified 50-event production-snapshot Kaggle build is `preview-20260628-event-pages-prod50-kaggle-v44` (artifact only, not bucket-published): it produced a tar.gz static site archive, `static_site_build_result.json`, and passed `check:preview`. Production Smart Update handoff is a coalesced `static_site_build` outbox job 15 minutes after the last event update, gated by `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`; object-storage/CDN publication is now available for preview/focus-group builds after the media mirror gate; production promotion still requires a separate release gate. Operational publisher protocol: `docs/operations/kaggle-static-site-builder.md`; build notes: `docs/features/static-site-pages/astro-preview.md#kaggle-cpu-builder--smart-update-handoff`.
