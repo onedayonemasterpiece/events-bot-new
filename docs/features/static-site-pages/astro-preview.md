@@ -138,6 +138,28 @@ Verification evidence:
 - public HTTP checks returned 200 for `__preview/`, event `6447` and `/data/discovery/6447.json`;
 - Playwright mobile smoke against the public URL verified that the first visible related card for `6447` is `6310` and that the discovery JSON carries `llm_semantic_score=0.88`.
 
+### v61 full-catalog Gemma verifier prompt audit
+
+The first full future-catalog stress attempt exposed a Gemma verifier I/O issue:
+embeddings and pgvector retrieval were cached/reusable, but the old verbose
+Gemma prompt produced many invalid/truncated JSON retries. The related verifier
+now uses the compact v3 contract documented in
+`docs/features/unsigned-personalization/semantic-vector-retrieval.md`:
+
+- Gemma sees only the strongest 10 pgvector candidates by default (`6..12`
+  allowed), not the whole top-40 pool;
+- the model returns only `event_id`, `llm_semantic_score` and `reject`;
+- app code derives `similarity_class`/confidence and can rescue only fully
+  complete verdict objects from a truncated JSON tail;
+- strict “Похожие” remains LLM-verified; lower pgvector candidates should be a
+  separately headed discovery section, not silently mixed into similar cards.
+
+Evidence is in `artifacts/codex/related-gemma-prompt-audit-20260630/`: Gemini
+3.1 Pro review completed, Opus review is explicitly blocked (empty `a-opus`/`agy`
+outputs and Claude `401`), and local live smoke on anchors `6447`, `5878`, `5370`
+returned valid Gemma JSON in `6.22–8.20s`. A new full Kaggle run is still needed
+to measure the statistical retry/error reduction on all anchors.
+
 
 ## v47 sparse terminology, related-order and CDN verification
 

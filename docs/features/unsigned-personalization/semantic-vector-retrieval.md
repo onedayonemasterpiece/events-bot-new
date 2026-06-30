@@ -140,6 +140,51 @@ interactive `/poisk/` policy:
   strict similar block, but it must not silently label raw pgvector order as
   Gemma-verified related.
 
+#### Gemma static-related verifier contract v3
+
+The full-catalog v61 stress run showed that the previous verifier contract was
+too verbose for Gemma 4 26B: retry classes were dominated by malformed JSON
+(`json_unterminated`, `json_expecting_value`, `json_comma`) and timeouts, while
+successful calls had p50/p95 around `22s/31s`. The root issue is output size and
+truncation, not a need to replace Gemma with Flash-Lite.
+
+The accepted v3 contract is:
+
+- input prompt is compact XML-like factual blocks, not a large JSON-stringified
+  instruction payload;
+- default verifier window is the top `10` pgvector candidates, configurable only
+  inside `6..12` via `STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT`;
+- fact text defaults to `360` chars per event;
+- native structured output schema returns only
+  `ranked[].event_id`, `ranked[].llm_semantic_score`, `ranked[].reject`;
+- `similarity_class` and confidence are derived in application code from the
+  score/reject fields, and `reason_codes` are not requested from the model;
+- output cap defaults to `768` tokens; timeout defaults to `60s`; default static
+  attempts are `2` with `10s` backoff;
+- JSON rescue is syntax-only: it may salvage fully complete verdict objects from
+  a truncated `ranked` array, but it never invents ids, scores or semantic
+  decisions.
+
+For the **strict “Похожие” block**, do not split the full top-40 pgvector pool
+into many Gemma calls by default. pgvector is the recall stage and Gemma is the
+precision stage over the strongest candidates. If the top-10 verifier returns
+too few strict results, the remaining candidates should be shown later under a
+separate adjacent/discovery heading such as “Возможно, вам будет интересно”,
+or a second pass over candidates `11..20` may be enabled only as an exceptional
+quality/canary mode. Ordinary static builds should not multiply Gemma calls per
+anchor.
+
+Prompt/schema audit evidence:
+
+- Gemini Pro review: `artifacts/codex/related-gemma-prompt-audit-20260630/gemini-3.1-pro-review.md`.
+- Opus consultation was requested but blocked: `a-opus`/`agy` returned empty
+  output and Claude Opus returned `401`; evidence is in
+  `artifacts/codex/related-gemma-prompt-audit-20260630/OPUS_BLOCKER.md`.
+- Local live smoke after v3 compaction: synthetic 4-candidate call `4.65s`,
+  real anchors `6447/5878/5370` returned valid JSON in `8.20s/6.43s/6.22s`.
+  This smoke is not a replacement for the next full 344-anchor Kaggle run, which
+  must measure the new statistical error rate.
+
 ### Authorized search
 
 Design doc: `docs/features/unsigned-personalization/authorized-event-search.md`.

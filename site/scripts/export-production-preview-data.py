@@ -1120,6 +1120,67 @@ def supabase_limiter_client():
     return create_client(url, key)
 
 
+def _related_audit_text(value: Any, *, max_chars: int) -> str:
+    text = clean_text(value or "") if not isinstance(value, str) else clean_text(value)
+    text = re.sub(r"\s+", " ", text).strip()
+    return html.escape(text[:max_chars], quote=False)
+
+
+def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_chars: int) -> str:
+    summary = _related_audit_text(event.get("summary") or event.get("description_html") or "", max_chars=fact_max_chars)
+    title = _related_audit_text(event.get("title") or "", max_chars=180)
+    event_type = _related_audit_text(event.get("event_type") or "", max_chars=80)
+    event_category = _related_audit_text(category(event) or "", max_chars=80)
+    venue = _related_audit_text(event.get("venue_name") or "", max_chars=120)
+    city = _related_audit_text(event.get("city") or "", max_chars=80)
+    date = _related_audit_text(event.get("start_date") or "", max_chars=40)
+    event_id = int(event["id"])
+    return (
+        f'<{tag} id="{event_id}">\n'
+        f"<title>{title}</title>\n"
+        f"<type>{event_type}</type>\n"
+        f"<category>{event_category}</category>\n"
+        f"<summary>{summary}</summary>\n"
+        f"<venue>{venue}</venue>\n"
+        f"<city>{city}</city>\n"
+        f"<date>{date}</date>\n"
+        f"</{tag}>"
+    )
+
+
+def build_gemma_related_audit_prompt(
+    *,
+    anchor: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    fact_max_chars: int,
+) -> str:
+    """Compact Gemma verifier prompt.
+
+    The previous JSON-in/verbose-JSON-out contract produced many truncated JSON
+    responses on Gemma 4 26B during full-site static related builds. Keep the
+    semantic job LLM-first, but make the I/O small and tag-delimited so the
+    provider spends tokens on judgement rather than boilerplate.
+    """
+    candidate_blocks = "\n".join(
+        _related_audit_event_block(item, tag="candidate", fact_max_chars=fact_max_chars)
+        for item in candidates
+    )
+    return (
+        "Ты строгий verifier похожих событий для статической афиши Калининграда.\n"
+        "Не добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\n"
+        "Задача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\n"
+        "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
+        "Если событие просто другое, даже качественное, ставь reject=true.\n"
+        "Не объясняй решение, не возвращай дополнительные поля.\n\n"
+        "<anchor>\n"
+        f"{_related_audit_event_block(anchor, tag='event', fact_max_chars=fact_max_chars)}\n"
+        "</anchor>\n\n"
+        "<candidates>\n"
+        f"{candidate_blocks}\n"
+        "</candidates>"
+    )
+
+
 async def call_gemma_related_audit_async(
     *,
     model: str,
@@ -1154,43 +1215,14 @@ async def call_gemma_related_audit_async(
     os.environ["GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR"] = "0"
     os.environ["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"] = str(max(1, int(timeout_seconds)))
     os.environ["GOOGLE_AI_FALLBACK_MODELS"] = ""
-    fact_max_chars = max(160, int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "520") or "520"))
-    candidate_limit = max(6, min(24, int(candidate_limit or 18)))
-    prompt = {
-        "task": "Оцени похожесть событий для статической афиши. Не добавляй новых event_id.",
-        "rules": [
-            "Похожие = пользователь, заинтересовавшийся anchor, сочтет candidate тематически близким.",
-            "Если это просто другое событие без тематической близости — reject=true.",
-            "Отсортируй ranked от наиболее похожих к наименее похожим.",
-            "llm_semantic_score: 0.90+ почти тот же интерес, 0.72+ можно показать как похожее, 0.55-0.71 только слабая/смежная рекомендация, <0.55 reject=true.",
-            "Ответ только JSON по схеме.",
-        ],
-        "anchor": {
-            "event_id": anchor["id"],
-            "title": anchor.get("title"),
-            "type": anchor.get("event_type"),
-            "category": category(anchor),
-            "summary": str(anchor.get("summary") or "")[:fact_max_chars],
-            "description": clean_text(anchor.get("description_html") or "")[:fact_max_chars],
-            "venue": anchor.get("venue_name"),
-            "city": anchor.get("city"),
-            "date": anchor.get("start_date"),
-        },
-        "candidates": [
-            {
-                "event_id": item["id"],
-                "title": item.get("title"),
-                "type": item.get("event_type"),
-                "category": category(item),
-                "summary": str(item.get("summary") or "")[:fact_max_chars],
-                "description": clean_text(item.get("description_html") or "")[:fact_max_chars],
-                "venue": item.get("venue_name"),
-                "city": item.get("city"),
-                "date": item.get("start_date"),
-            }
-            for item in candidates[:candidate_limit]
-        ],
-    }
+    fact_max_chars = max(120, int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"))
+    candidate_limit = max(6, min(12, int(candidate_limit or 10)))
+    candidates = candidates[:candidate_limit]
+    prompt = build_gemma_related_audit_prompt(
+        anchor=anchor,
+        candidates=candidates,
+        fact_max_chars=fact_max_chars,
+    )
     schema = {
         "type": "OBJECT",
         "properties": {
@@ -1201,12 +1233,9 @@ async def call_gemma_related_audit_async(
                     "properties": {
                         "event_id": {"type": "INTEGER"},
                         "llm_semantic_score": {"type": "NUMBER"},
-                        "similarity_class": {"type": "STRING"},
-                        "confidence": {"type": "NUMBER"},
                         "reject": {"type": "BOOLEAN"},
-                        "reason_codes": {"type": "ARRAY", "items": {"type": "STRING"}},
                     },
-                    "required": ["event_id", "llm_semantic_score", "similarity_class", "confidence", "reject"],
+                    "required": ["event_id", "llm_semantic_score", "reject"],
                 },
             }
         },
@@ -1219,10 +1248,10 @@ async def call_gemma_related_audit_async(
             account_name=os.getenv("STATIC_SITE_GEMMA_ACCOUNT_NAME") or "static-site-related",
             default_env_var_name=key_env,
         )
-        max_output_tokens = max(768, int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_OUTPUT_TOKENS", "2048") or "2048"))
+        max_output_tokens = max(384, int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_OUTPUT_TOKENS", "768") or "768"))
         text, _usage = await client.generate_content_async(
             model=model,
-            prompt=json.dumps(prompt, ensure_ascii=False),
+            prompt=prompt,
             generation_config={
                 "temperature": 0.1,
                 "max_output_tokens": max_output_tokens,
@@ -1269,14 +1298,64 @@ def parse_gemma_json_object(text: str) -> dict[str, Any]:
         raw = re.sub(r"\s*```$", "", raw).strip()
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as first_exc:
         start = raw.find("{")
         if start < 0:
             raise
-        parsed, _end = json.JSONDecoder().raw_decode(raw[start:])
+        try:
+            parsed, _end = json.JSONDecoder().raw_decode(raw[start:])
+        except json.JSONDecodeError:
+            rescued = rescue_truncated_gemma_ranked(raw[start:])
+            if rescued["ranked"]:
+                parsed = rescued
+            else:
+                raise first_exc
     if not isinstance(parsed, dict):
         raise ValueError("Gemma audit JSON must be an object")
     return parsed
+
+
+def rescue_truncated_gemma_ranked(raw: str) -> dict[str, Any]:
+    """Best-effort syntax rescue for Gemma JSON cut after complete items.
+
+    This is deliberately syntax-only: it never invents scores or ids and only
+    salvages fully parseable candidate verdict objects already present in the
+    response. A truncated tail therefore drops the worst unfinished candidates
+    instead of wasting another full provider call.
+    """
+    ranked: list[dict[str, Any]] = []
+    for match in re.finditer(r"\{[^{}]*\"event_id\"[^{}]*\"llm_semantic_score\"[^{}]*\"reject\"[^{}]*\}", raw, flags=re.S):
+        chunk = match.group(0)
+        try:
+            item = json.loads(chunk)
+        except Exception:
+            continue
+        if not isinstance(item, dict):
+            continue
+        try:
+            event_id = int(item["event_id"])
+            score = float(item["llm_semantic_score"])
+            reject = bool(item["reject"])
+        except Exception:
+            continue
+        ranked.append({
+            "event_id": event_id,
+            "llm_semantic_score": max(0.0, min(1.0, score)),
+            "reject": reject,
+        })
+    return {"ranked": ranked}
+
+
+def classify_gemma_similarity(score: float, *, reject: bool) -> str:
+    if reject or score < 0.55:
+        return "different_topic"
+    if score >= 0.90:
+        return "identical_or_near_identical"
+    if score >= 0.78:
+        return "highly_similar"
+    if score >= 0.72:
+        return "thematically_close"
+    return "weak_or_adjacent_related"
 
 
 def gemma_related_policy_signature(*, model: str) -> str:
@@ -1290,13 +1369,13 @@ def gemma_related_policy_signature(*, model: str) -> str:
         "model": model,
         "candidate_limit": max(
             6,
-            min(24, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "18") or "18")),
+            min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")),
         ),
         "fact_max_chars": max(
-            160,
-            int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "520") or "520"),
+            120,
+            int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v2_strict_pure",
+        "prompt_version": "related_gemma4_schema_v3_compact_xml",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -1330,21 +1409,21 @@ def maybe_apply_gemma_audit(
             "fallback_models": [],
             "max_attempts": max(
                 1,
-                int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "4") or "4"),
+                int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "2") or "2"),
             ),
             "backoff_seconds": max(
                 0.0,
-                float(os.getenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "20") or "20"),
+                float(os.getenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "10") or "10"),
             ),
             "timeout_seconds": max(
                 5,
-                int(os.getenv("STATIC_SITE_GEMMA_RELATED_TIMEOUT_SEC", "45") or "45"),
+                int(os.getenv("STATIC_SITE_GEMMA_RELATED_TIMEOUT_SEC", "60") or "60"),
             ),
             "candidate_limit": max(
                 6,
                 min(
-                    24,
-                    int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "18") or "18"),
+                    12,
+                    int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10"),
                 ),
             ),
         },
@@ -1478,12 +1557,12 @@ def maybe_apply_gemma_audit(
                 continue
             llm_score = max(0.0, min(1.0, float(verdict.get("llm_semantic_score") or 0)))
             item["llm_semantic_score"] = round(llm_score, 4)
-            item["llm_confidence"] = round(max(0.0, min(1.0, float(verdict.get("confidence") or 0))), 4)
-            item["similarity_class"] = str(verdict.get("similarity_class") or item.get("similarity_class") or "unknown")
+            item["llm_confidence"] = round(max(0.0, min(1.0, float(verdict.get("confidence") or 1.0))), 4)
+            item["similarity_class"] = classify_gemma_similarity(llm_score, reject=bool(verdict.get("reject")))
             item["gemma_reject"] = bool(verdict.get("reject"))
             if item["gemma_reject"]:
                 item["display_eligible"] = False
-            item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), *(verdict.get("reason_codes") or []), "gemma4_26b_audit"]))
+            item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), "gemma4_26b_audit"]))
             item["slot_type"] = "pure_related" if (llm_score >= 0.72 and not item.get("gemma_reject")) else str(item.get("slot_type") or "adjacent_discovery")
             if llm_score < 0.35:
                 item["slot_type"] = "adjacent_discovery"

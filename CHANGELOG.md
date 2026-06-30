@@ -9,6 +9,7 @@
 
 ### Changed
 
+- **Static site pages / Gemma related verifier contract**: compacted the offline Gemma 4 26B related-events verifier to an XML-like prompt, 10-candidate default window and minimal structured JSON (`event_id`, score, reject), deriving classes/confidence in code so full-catalog static related builds spend fewer tokens and are less likely to truncate malformed JSON.
 - **Personalization / search digest v3 + vector representation decision**: enriched the shared P0 search digest with compact weekday/month/season/daypart, admission, availability, audience, Pushkin-card and charity facets; documented why one vector is acceptable for the current full-catalog stress test and why P1 should split `related_v1` and `search_v2/v3` embedding document kinds plus persisted `event_similarity_edges`.
 - **Static site pages / OCR hero parallax**: strengthened poster/OCR hero parallax so text-preserving hero images move like non-OCR photo heroes without cropping the poster text.
 - **Static site pages / v59 strict related canary**: generated and published `preview-20260629-event-pages-v59-related-gemma50` from a production snapshot with 50 tomorrow/near-future events, using Supabase pgvector retrieval plus strict Gemma 4 26B verifier/reranker so public related cards contain only `llm_semantic_score >= 0.72` candidates; added focus-date/current-datetime export controls, strict related cache validation, non-control preview checks and Playwright/public smoke evidence for the 6447→6310 urban-planning golden case.
@@ -16,6 +17,7 @@
 
 ### Fixed
 
+- **Static site pages / Gemma related JSON parsing**: added syntax-only rescue for truncated Gemma `ranked` arrays, preserving only complete verdict objects without inventing ids/scores; added tests for duplicated structured parts, truncated output rescue and compact prompt escaping, plus Gemini Pro prompt/schema review and live smoke evidence.
 - **Static site pages / future export lifecycle filter**: excluded `archived` future rows from static-site exports so full-catalog builds do not generate pages or related anchors for events that are no longer meant to be public/actionable.
 - **Personalization / embedding backfill throttling**: slowed static-site pgvector embedding sync to a TPM-safe default, added 429-aware retry/backoff and partial chunk upserts so a long full-catalog run keeps already-created vectors instead of losing all progress on a transient quota error.
 - **Personalization / vector sync robustness**: made search-digest v3 tolerate missing ticket labels/notes in full-catalog exports instead of crashing before pgvector sync on events with sparse ticket data.
