@@ -3,6 +3,7 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
+import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
@@ -70,6 +71,7 @@ const galleryCta = galleryCtaEvent ? {
         <article class="main-col section-card section-card--hero section-card--impact-hero">
           <div class="section-card__inner section-card__inner--hero">
             <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} />
+            <EventTokenMedallions event={event} />
           </div>
         </article>
         <div class="side-col">

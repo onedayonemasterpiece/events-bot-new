@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + first listing-card formatting slice + starter organizer avatar assets prepared on branch `docs/site-personalization-tokens-20260629`.
+> **Status:** first event-detail rendering slice implemented on branch `docs/site-personalization-tokens-20260629`: starter organizer avatar assets are rendered on matching event pages, Pushkin-card/free/price/family/charity/festival tokens render from already exported safe facts, and listing-card formatting remains separate.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -92,7 +92,7 @@ Overflow:
 
 | Token | Data source | Visual | Copy |
 | --- | --- | --- | --- |
-| Organizer avatar | normalized organizer/venue mapping | official avatar/logo in circle | `Организатор: …` in aria/tooltip; no visible long label on cards |
+| Organizer avatar | normalized organizer/venue mapping | official avatar/logo in circle | `Организатор или площадка: …` in aria/tooltip; no visible long label on cards |
 | Пушкинская карта | existing `pushkin_card=true` plus source evidence | special Pushkin-card medallion | `Пушкинская карта` |
 | Благотворительность | LLM-first classification with evidence | heart/hand SVG pill | `Благотворительность` |
 | Детям / семейное | age/audience fields + LLM-first classification | child/star/kite SVG pill | `Детям` or `Семейное` |
@@ -116,6 +116,12 @@ Asset inventory:
 - browser-facing manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG/PNG rendering, source-faithful cropping and alpha-preserving PNG/WebP export.
+
+Current implementation notes:
+
+- `site/src/components/EventTokenMedallions.astro` renders the row after the hero/title decision block on event detail pages.
+- Organizer matching is intentionally conservative and uses the curated `organizerMedallions.json` aliases against venue/festival/summary/description/source URL. It does not invent logos.
+- The first slice renders only facts already in the exported event payload (`pushkin_card`, `ticket.is_free`, `ticket.price_label`, sold-out status, festival) plus explicit text-derived family/charity flags as a visual hint. Wider semantic badge enrichment remains LLM-first P1 and must carry evidence.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
@@ -243,6 +249,11 @@ Acceptance examples:
 3. Feed token tags into personalization feature snapshots as controlled, versioned features only.
 4. Add Schema.org enrichment where data is source-grounded.
 5. Decide separately whether compact medallions should ever appear inside cards; default is no.
+6. Add speaker/celebrity medallions only from source-grounded identities:
+   - store normalized `event_people[]` with `name`, role, source evidence and optional official/social profile URL;
+   - cache avatars locally/CDN-side from known Telegram/VK/official URLs, never hotlink and never infer by name search alone;
+   - render one or more round person medallions in the same style as organizer tokens, with two-line `Фамилия / Имя` fallback when no avatar is licensed/cached;
+   - require LLM/curator confidence before public rendering, because false speaker attribution is worse than no medallion.
 
 ### P2
 

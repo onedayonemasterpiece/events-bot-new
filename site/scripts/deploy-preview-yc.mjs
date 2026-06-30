@@ -80,7 +80,8 @@ for (const file of find.stdout.split(/\r?\n/).filter(Boolean)) {
   const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', 'inline; filename="event.ics"', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
   const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(rel);
-  const eventId = match ? eventsBySlug.get(match[1]) : null;
+  const slugEventId = match ? /-(\d+)$/u.exec(match[1])?.[1] : null;
+  const eventId = match ? (eventsBySlug.get(match[1]) || (slugEventId ? Number(slugEventId) : null)) : null;
   if (eventId) {
     const stablePut = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/ics/${eventId}.ics`, '--content-type', 'text/calendar; charset=utf-8', '--content-disposition', `inline; filename="event-${eventId}.ics"`, '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
     if (stablePut.status !== 0) process.exit(stablePut.status || 1);

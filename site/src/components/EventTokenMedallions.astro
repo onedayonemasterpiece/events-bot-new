@@ -1,0 +1,183 @@
+---
+import Icon from './Icon.astro';
+import organizerMedallions from '../data/organizerMedallions.json';
+import type { PreviewEvent } from '../lib/types';
+import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
+
+interface Props {
+  event: PreviewEvent;
+}
+
+type OrganizerMedallion = {
+  slug: string;
+  name: string;
+  shortName?: string;
+  aliases?: string[];
+  avatarUrl: string;
+  fallbackPngUrl?: string;
+  background?: string;
+  ring?: string;
+  ariaLabel?: string;
+};
+
+type Token = {
+  kind: 'organizer' | 'pushkin' | 'pill';
+  key: string;
+  label: string;
+  shortLabel?: string;
+  ariaLabel: string;
+  imageUrl?: string;
+  fallbackImageUrl?: string;
+  icon?: 'ticket' | 'spark' | 'info';
+  background?: string;
+  ring?: string;
+  tone?: 'green' | 'brown' | 'blue' | 'purple' | 'neutral';
+};
+
+const { event } = Astro.props;
+
+function normalize(value: unknown): string {
+  return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+function includesAlias(haystack: string, aliases: string[] | undefined): boolean {
+  return Boolean(aliases?.some((alias) => {
+    const needle = normalize(alias);
+    return needle && haystack.includes(needle);
+  }));
+}
+
+const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
+const organizerHaystack = normalize([
+  event.venue_name,
+  event.festival,
+  event.description_html,
+  event.summary,
+  event.source_url,
+].filter(Boolean).join(' '));
+const organizer = (manifest.items || []).find((item) => includesAlias(organizerHaystack, item.aliases || [item.name, item.shortName || '']));
+const admissionLabel = eventAdmissionLabel(event);
+const ticket = event.ticket || {};
+const explicitText = normalize([event.title, event.event_type, event.summary, ...(event.topics || [])].join(' '));
+const hasKids = /\b(kids|family)\b/u.test(explicitText) || /детск|детям|реб[её]н|семейн|для\s+дет/u.test(explicitText);
+const hasCharity = /благотвор|пожертв|донат/u.test(normalize([event.summary, event.description_html, ticket.label, ticket.note].join(' ')));
+
+const tokens: Token[] = [];
+if (organizer) {
+  tokens.push({
+    kind: 'organizer',
+    key: `organizer:${organizer.slug}`,
+    label: organizer.shortName || organizer.name,
+    shortLabel: organizer.shortName || organizer.name,
+    ariaLabel: organizer.ariaLabel || `Организатор или площадка: ${organizer.name}`,
+    imageUrl: organizer.avatarUrl,
+    fallbackImageUrl: organizer.fallbackPngUrl,
+    background: organizer.background,
+    ring: organizer.ring,
+  });
+}
+if (event.pushkin_card) {
+  tokens.push({
+    kind: 'pushkin',
+    key: 'pushkin-card',
+    label: 'Пушкинская карта',
+    shortLabel: 'Пушкинская\nкарта',
+    ariaLabel: 'Можно оплатить Пушкинской картой',
+    tone: 'purple',
+  });
+}
+if (ticket.is_free) {
+  tokens.push({
+    kind: 'pill',
+    key: 'free-admission',
+    label: admissionLabel,
+    ariaLabel: admissionLabel,
+    icon: 'ticket',
+    tone: 'green',
+  });
+} else if (ticket.price_label) {
+  tokens.push({
+    kind: 'pill',
+    key: 'price',
+    label: ticket.price_label,
+    ariaLabel: `Стоимость: ${ticket.price_label}`,
+    icon: 'ticket',
+    tone: 'brown',
+  });
+} else if (isTicketSoldOut(event)) {
+  tokens.push({
+    kind: 'pill',
+    key: 'sold-out',
+    label: 'Билеты закончились',
+    ariaLabel: 'Билеты закончились',
+    icon: 'ticket',
+    tone: 'neutral',
+  });
+}
+if (hasKids) {
+  tokens.push({
+    kind: 'pill',
+    key: 'kids-family',
+    label: 'Детям / семье',
+    ariaLabel: 'Подходит детям или семье по данным события',
+    icon: 'spark',
+    tone: 'blue',
+  });
+}
+if (hasCharity) {
+  tokens.push({
+    kind: 'pill',
+    key: 'charity',
+    label: 'Благотворительное',
+    ariaLabel: 'Благотворительное событие',
+    icon: 'spark',
+    tone: 'green',
+  });
+}
+if (event.festival && tokens.length < 6) {
+  tokens.push({
+    kind: 'pill',
+    key: 'festival',
+    label: event.festival,
+    ariaLabel: `Фестиваль: ${event.festival}`,
+    icon: 'info',
+    tone: 'brown',
+  });
+}
+const visibleTokens = tokens.slice(0, 6);
+
+function tokenStyle(token: Token): string | undefined {
+  const parts: string[] = [];
+  if (token.background) parts.push(`--token-bg:${token.background}`);
+  if (token.ring) parts.push(`--token-ring:${token.ring}`);
+  return parts.length ? parts.join(';') : undefined;
+}
+---
+{visibleTokens.length > 0 && (
+  <div class="event-token-row-wrap" aria-label="Краткие признаки события">
+    <ul class="event-token-row" role="list">
+      {visibleTokens.map((token) => (
+        <li class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'}`} style={tokenStyle(token)}>
+          {token.kind === 'organizer' && token.imageUrl ? (
+            <span class="event-token__circle" aria-label={token.ariaLabel} title={token.label}>
+              <picture>
+                {token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
+                <img src={withBase(token.fallbackImageUrl || token.imageUrl)} alt="" loading="lazy" decoding="async" />
+              </picture>
+            </span>
+          ) : token.kind === 'pushkin' ? (
+            <span class="event-token__circle event-token__circle--text" aria-label={token.ariaLabel} title={token.label}>
+              <span>Пушкинская</span>
+              <strong>карта</strong>
+            </span>
+          ) : (
+            <span class="event-token__pill" aria-label={token.ariaLabel} title={token.label}>
+              {token.icon && <Icon name={token.icon} />}
+              <span>{token.label}</span>
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  </div>
+)}

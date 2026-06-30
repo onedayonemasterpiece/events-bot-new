@@ -16,6 +16,23 @@ When vector results are exhausted, the UI starts a separate section **«Возм
 
 Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
 
+## P1 product idea: saved search as public tag page
+
+Registered users should be able to save a successful search as a compact public tag candidate:
+
+1. After useful results, the UI offers **«Сохранить как тег»**.
+2. The service thanks the user and adds the candidate to their visible saved-search/tag list.
+3. A background LLM curation job reviews the global candidate-tag pool with the smartest available reviewer lane, not the fast runtime verifier:
+   - merge near-duplicates and strong overlaps;
+   - keep names short, ёмкие and human-readable;
+   - reject private/overly narrow/noisy wording;
+   - preserve raw user phrasing only as private audit, not public page copy.
+4. Accepted tags become non-individual static pages, for example `/t/dzhaz-na-vyhodnyh/` or `/tag/detyam-v-vyhodnye/`.
+5. The tag job runs the same vector + Gemma/LLM verification pipeline deeply enough to produce several dozen ordered cards. The public page is then rebuilt regularly and is available to anonymous users without spending per-view embedding/LLM quota.
+6. Personalization on a tag page is mostly subtractive/ordering: hide `Не интересно`, demote negative interests, optionally top-up from the already materialized tag result set. It must not call LLM on ordinary page views.
+
+This is intentionally separate from per-user saved searches. The public tag page exists only after curation accepts the phrase as broadly useful.
+
 ## Auth design: Yandex through Supabase custom OAuth
 
 Supabase has no built-in Yandex provider in the social-login list, so the project uses **Custom OAuth/OIDC Providers** with identifier `custom:yandex`.

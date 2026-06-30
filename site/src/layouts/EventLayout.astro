@@ -467,6 +467,120 @@ const FOOTER_SOCIAL_LINKS = [
         top: max(0.82rem, calc(env(safe-area-inset-top) + 0.82rem));
       }
       .event-hero__gallery-hint .icon { width: 1.08rem; height: 1.08rem; }
+      .event-token-row-wrap {
+        width: min(calc(100vw - 1.5rem), 680px);
+        margin: 0.78rem auto 0;
+        padding: 0 0.05rem 0.1rem;
+      }
+      .event-token-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .event-token {
+        display: inline-flex;
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+      .event-token__circle {
+        width: 58px;
+        height: 58px;
+        display: inline-grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 999px;
+        border: 2px solid var(--token-ring, rgba(121,48,20,0.18));
+        background: var(--token-bg, #fffaf1);
+        box-shadow: 0 11px 24px rgba(72,45,25,0.16), 0 0 0 4px rgba(255,253,248,0.82);
+      }
+      .event-token__circle picture,
+      .event-token__circle img {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .event-token__circle img { object-fit: contain; }
+      .event-token__circle--text {
+        width: 66px;
+        height: 66px;
+        gap: 0.02rem;
+        padding: 0.52rem 0.38rem;
+        border-color: #7b61c9;
+        background: radial-gradient(circle at 32% 22%, #fff 0 18%, #f0eaff 19% 100%);
+        color: #4e398f;
+        text-align: center;
+        line-height: 0.92;
+      }
+      .event-token__circle--text span {
+        font-size: 0.55rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: -0.02em;
+      }
+      .event-token__circle--text strong {
+        font-size: 0.76rem;
+        font-weight: 950;
+        letter-spacing: -0.04em;
+      }
+      .event-token__pill {
+        min-height: 52px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.43rem;
+        max-width: min(100%, 18rem);
+        padding: 0.42rem 0.72rem;
+        border: 1px solid rgba(121,48,20,0.13);
+        border-radius: 999px;
+        background: #fffaf1;
+        color: var(--primary-strong);
+        box-shadow: 0 10px 22px rgba(72,45,25,0.10);
+        font-size: 0.86rem;
+        font-weight: 900;
+        line-height: 1.08;
+      }
+      .event-token__pill .icon {
+        width: 1.18rem;
+        height: 1.18rem;
+        flex: 0 0 auto;
+      }
+      .event-token__pill span {
+        min-width: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .event-token--green .event-token__pill {
+        border-color: rgba(15,122,69,0.18);
+        background: #e6f6e9;
+        color: #0f6c3d;
+      }
+      .event-token--blue .event-token__pill {
+        border-color: rgba(31,101,141,0.18);
+        background: #e7f2f7;
+        color: #1f658d;
+      }
+      .event-token--neutral .event-token__pill {
+        border-color: rgba(82,72,64,0.16);
+        background: #f1eee8;
+        color: #615348;
+      }
+      @media (max-width: 560px) {
+        .event-token-row-wrap { width: min(calc(100vw - 1.15rem), 680px); margin-top: 0.62rem; }
+        .event-token-row { gap: 0.46rem; }
+        .event-token__circle { width: 50px; height: 50px; }
+        .event-token__circle--text { width: 58px; height: 58px; }
+        .event-token__pill {
+          min-height: 46px;
+          padding: 0.34rem 0.62rem;
+          font-size: 0.79rem;
+        }
+        .event-token__pill .icon { width: 1.05rem; height: 1.05rem; }
+      }
       .hero-gallery[hidden] { display: none !important; }
       .hero-gallery {
         position: fixed;
@@ -1366,6 +1480,7 @@ const FOOTER_SOCIAL_LINKS = [
         }
         .event-hero--poster-billboard.event-hero--poster-stage .event-hero__visual,
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
+          --hero-poster-parallax-y: 0px;
           min-height: 0;
           max-height: none;
           padding: 0;
@@ -1538,6 +1653,7 @@ const FOOTER_SOCIAL_LINKS = [
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
         .event-hero--photo-cover .event-hero__image,
         .event-hero--poster-stage .event-hero__image { transform: none !important; }
+        .event-hero--poster-stage .event-hero__visual { --hero-poster-parallax-y: 0px !important; }
       }
     </style>
   </head>
@@ -3439,10 +3555,10 @@ const FOOTER_SOCIAL_LINKS = [
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
               const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
-              const maxOffset = isPosterStage ? 28 : 64;
+              const maxOffset = isPosterStage ? 56 : 64;
               const offset = -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
-                visual.style.setProperty('--hero-poster-parallax-y', `${(offset * 0.45).toFixed(1)}px`);
+                visual.style.setProperty('--hero-poster-parallax-y', `${offset.toFixed(1)}px`);
               } else {
                 images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));
               }

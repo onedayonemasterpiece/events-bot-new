@@ -445,7 +445,7 @@ def event_active_where(current_date: str, current_time: str | None = None) -> st
         start_not_elapsed = f"(date >= '{current_date}')"
     return (
         "date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' "
-        "and coalesce(lifecycle_status,'active') not in ('cancelled','deleted','duplicate') "
+        "and coalesce(nullif(trim(lifecycle_status),''),'active') = 'active' "
         f"and ({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
     )
 
@@ -1044,6 +1044,7 @@ def sync_event_vectors_to_supabase(
     script = find_pgvector_sync_script()
     if not script:
         raise FileNotFoundError("sync_event_search_vectors_to_supabase.py not found in repo/site payload")
+    sleep_seconds = os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_SLEEP_SECONDS", "3.0").strip() or "3.0"
     cmd = [
         sys.executable,
         str(script),
@@ -1056,7 +1057,7 @@ def sync_event_vectors_to_supabase(
         "--embedding-dim", "768",
         "--google-key-env", embedding_key_env,
         "--max-provider-calls", str(max(0, int(max_provider_calls))),
-        "--sleep-seconds", "0.1",
+        "--sleep-seconds", sleep_seconds,
     ]
     log_stage(
         "pgvector_sync_start",
@@ -1064,6 +1065,7 @@ def sync_event_vectors_to_supabase(
         embedding_model=embedding_model,
         embedding_key_env=embedding_key_env,
         max_provider_calls=max_provider_calls,
+        sleep_seconds=sleep_seconds,
     )
     import subprocess
 

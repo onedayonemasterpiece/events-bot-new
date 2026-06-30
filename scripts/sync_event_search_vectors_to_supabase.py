@@ -36,6 +36,40 @@ WEEKDAY_RU = {
     6: "суббота",
     7: "воскресенье",
 }
+MONTH_RU = {
+    1: "январь",
+    2: "февраль",
+    3: "март",
+    4: "апрель",
+    5: "май",
+    6: "июнь",
+    7: "июль",
+    8: "август",
+    9: "сентябрь",
+    10: "октябрь",
+    11: "ноябрь",
+    12: "декабрь",
+}
+SEASON_RU = {
+    12: "зима",
+    1: "зима",
+    2: "зима",
+    3: "весна",
+    4: "весна",
+    5: "весна",
+    6: "лето",
+    7: "лето",
+    8: "лето",
+    9: "осень",
+    10: "осень",
+    11: "осень",
+}
+TIME_OF_DAY_RU = {
+    "morning": "утро",
+    "day": "день",
+    "evening": "вечер",
+    "night": "ночь",
+}
 
 
 def load_env(path: Path) -> None:
@@ -85,6 +119,15 @@ def event_time_of_day(event: dict[str, Any]) -> str | None:
     if 17 <= hour < 22:
         return "evening"
     return "night"
+
+
+def event_month_and_season(event: dict[str, Any]) -> tuple[str | None, str | None]:
+    raw = clean_text(event.get("start_date"))
+    try:
+        month = date.fromisoformat(raw).month
+    except Exception:
+        return None, None
+    return MONTH_RU.get(month), SEASON_RU.get(month)
 
 
 def event_availability(event: dict[str, Any]) -> str:
@@ -208,8 +251,42 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
     ticket = event.get("ticket") or {}
     weekday_iso, weekday_ru = event_weekday(event)
     time_of_day = event_time_of_day(event)
+    month_ru, season_ru = event_month_and_season(event)
     availability = event_availability(event)
     admission = event_admission_type(event)
+    daypart_ru = TIME_OF_DAY_RU.get(time_of_day or "")
+    joined_text = clean_text(" ".join(clean_text(part) for part in [
+        event.get("title"),
+        event.get("event_type"),
+        event.get("summary"),
+        event.get("description_html"),
+        ticket.get("label"),
+        ticket.get("note"),
+    ] if part is not None))
+    audience_flags: list[str] = []
+    tag_set = set(tags)
+    if {"family", "kids", "kids_school"} & tag_set or re.search(r"детск|детям|реб[её]н|семейн|для\s+дет", joined_text, re.I):
+        audience_flags.extend(["для детей", "для семьи"])
+    if "tourist_friendly" in tag_set or re.search(r"турист|экскурс", joined_text, re.I):
+        audience_flags.append("для туристов")
+    if re.search(r"благотвор|пожертв|донат", joined_text, re.I):
+        audience_flags.append("благотворительное")
+    if event.get("pushkin_card"):
+        audience_flags.append("Пушкинская карта")
+    calendar_words = [
+        weekday_ru,
+        "выходной" if weekday_iso in {6, 7} else "будний день" if weekday_iso else None,
+        daypart_ru,
+        month_ru,
+        season_ru,
+    ]
+    admission_words = [
+        "бесплатно" if admission == "free" else None,
+        "регистрация" if admission == "registration_required" else None,
+        "по билетам" if admission == "ticket" else None,
+        "запись по телефону" if admission == "phone" else None,
+        "билеты закончились" if availability == "sold_out" else None,
+    ]
     facts = [
         f"Категория: {category}",
         f"Тип: {clean_text(event.get('event_type')) or 'событие'}",
@@ -218,10 +295,16 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
         f"Описание: {clean_text(event.get('description_html'))[:2500]}",
         f"Место: {join_parts([event.get('venue_name'), event.get('address'), event.get('city')])}",
         f"Дата: {join_parts([event.get('display_date'), event.get('display_time')])}",
+        f"Календарь/поиск: {join_parts(calendar_words, sep=', ')}",
         f"День недели: {weekday_ru}" if weekday_ru else "",
         f"День недели ISO: {weekday_iso}" if weekday_iso else "",
         f"Время суток: {time_of_day}" if time_of_day else "",
+        f"Время суток RU: {daypart_ru}" if daypart_ru else "",
+        f"Месяц: {month_ru}" if month_ru else "",
+        f"Сезон: {season_ru}" if season_ru else "",
         f"Темы: {', '.join(tags)}",
+        f"Аудитория/свойства: {', '.join(unique(audience_flags))}" if audience_flags else "",
+        f"Доступ/поиск: {join_parts(admission_words, sep=', ')}",
         f"Условия: {join_parts([admission, availability, ticket.get('label'), ticket.get('price_label'), ticket.get('status')])}",
     ]
     return "\n".join(part for part in facts if part and not part.endswith(": "))[:7000]
@@ -302,7 +385,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     start_date = clean_text(event.get("start_date")) or None
     doc = {
         "event_id": int(event["id"]),
-        "search_doc_version": "event-search-doc-v2-weekday",
+        "search_doc_version": "event-search-doc-v3-search-facets",
         "card_snapshot_version": "event-card-v1",
         "text_hash": text_hash,
         "slug": clean_text(event.get("slug")) or None,
@@ -410,7 +493,19 @@ def upsert_embeddings(rows: list[dict[str, Any]], *, chunk_size: int = 50) -> in
     return sent
 
 
-def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: float = 45.0, retries: int = 3) -> list[float]:
+def retry_delay_seconds(exc: urllib.error.HTTPError, attempt: int) -> float:
+    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+    if retry_after:
+        try:
+            return max(1.0, min(120.0, float(retry_after)))
+        except Exception:
+            pass
+    if exc.code == 429:
+        return min(90.0, 15.0 * (2 ** attempt))
+    return min(20.0, 2.0 * (attempt + 1))
+
+
+def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: float = 45.0, retries: int = 6) -> list[float]:
     key = env_required(key_env)
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
     body = {
@@ -435,7 +530,19 @@ def gemini_embed(text: str, *, model: str, dim: int, key_env: str, timeout: floa
             last_error = RuntimeError(f"Gemini embedding failed HTTP {exc.code}: {detail}")
             if exc.code not in {429, 500, 502, 503, 504} or attempt >= max(1, retries) - 1:
                 raise last_error from exc
-            time.sleep(min(8.0, 1.5 * (attempt + 1)))
+            delay = retry_delay_seconds(exc, attempt)
+            print(
+                json.dumps({
+                    "stage": "embedding_retry",
+                    "model": model,
+                    "http_code": exc.code,
+                    "attempt": attempt + 1,
+                    "sleep_seconds": delay,
+                }, ensure_ascii=False),
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
         except Exception as exc:
             last_error = exc
             if attempt >= max(1, retries) - 1:
@@ -463,6 +570,7 @@ def main() -> int:
     parser.add_argument("--event-ids", default="", help="Comma-separated event IDs to sync.")
     parser.add_argument("--max-provider-calls", type=int, default=1000)
     parser.add_argument("--sleep-seconds", type=float, default=0.0)
+    parser.add_argument("--upsert-chunk-size", type=int, default=20)
     parser.add_argument("--force", action="store_true", help="Regenerate embeddings even when text_hash matches.")
     parser.add_argument("--apply", action="store_true", help="Write documents/embeddings to Supabase. Without this, only prints a plan.")
     parser.add_argument("--dry-run", action="store_true", help="Explicit no-op alias for the default planning mode.")
@@ -500,6 +608,8 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     provider_calls = 0
     skipped = 0
+    upserted_embeddings = 0
+    started_at = time.monotonic()
     for doc in docs:
         if not args.force and existing.get(doc.event_id) == doc.document["text_hash"]:
             skipped += 1
@@ -517,9 +627,23 @@ def main() -> int:
             "embedded_at": datetime.now(timezone.utc).isoformat(),
             "metadata": {"search_doc_version": doc.document["search_doc_version"]},
         })
+        if len(rows) >= max(1, int(args.upsert_chunk_size)):
+            upserted_embeddings += upsert_embeddings(rows)
+            rows = []
+            print(
+                json.dumps({
+                    "stage": "embedding_partial_upsert",
+                    "provider_calls": provider_calls,
+                    "skipped": skipped,
+                    "elapsed_seconds": round(time.monotonic() - started_at, 1),
+                }, ensure_ascii=False),
+                file=sys.stderr,
+                flush=True,
+            )
         if args.sleep_seconds > 0:
             time.sleep(float(args.sleep_seconds))
-    upserted_embeddings = upsert_embeddings(rows) if rows else 0
+    if rows:
+        upserted_embeddings += upsert_embeddings(rows)
     report.update({
         "documents_upserted": upserted_docs,
         "embeddings_upserted": upserted_embeddings,

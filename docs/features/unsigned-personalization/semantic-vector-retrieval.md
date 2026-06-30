@@ -72,11 +72,40 @@ Document: title: {title} | text: {search_digest}
 Query:    task: search result | query: {user_query}
 ```
 
+### One vector vs two vectors decision
+
+The current production-canary implementation still uses **one embedding row per event** (`event_embeddings(event_id, embedding_model, embedding_dim)`) fed by `search_digest`. This is acceptable for the first full-catalog stress test because the catalogue is only a few hundred active/future events and Gemma verification/reranking is already the final semantic authority.
+
+However, one vector is an explicit compromise, not the target architecture:
+
+- **Related pages** need a “pure similarity” representation: title, event type, genre/theme, format, people/organizer/venue and concise meaning. Calendar words, price words and broad “вечером/летом/бесплатно” facets should not overpower real thematic similarity.
+- **User search** needs a broader representation: weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday, free/registration/paid/sold-out status, charity, audience, mood/occasion and query-friendly synonyms.
+- LLM verification can clean false positives, but using a polluted shared vector wastes candidate slots before the LLM sees them. With only 12–40 candidates, losing slots to calendar/price noise can be worse than the LLM cost.
+
+Decision:
+
+1. **P0/full stress test:** keep one embedding table/model and strengthen `search_digest` only with compact factual search facets. This avoids a migration while we measure quality/cost on the full future corpus.
+2. **P1 production hardening:** add document-kind separation:
+   - `event_embeddings.embedding_doc_kind = 'related_v1' | 'search_v2'`;
+   - `related_digest_v1` stays clean and is used by static related graph generation;
+   - `search_digest_v2`/`v3` carries query facets and is used by `/poisk/`;
+   - RPCs must filter by both model/dimension and `embedding_doc_kind`.
+3. The two-vector target still uses the same embedding model (`gemini-embedding-2/vector(768)`) unless a future eval proves a better model; “two vectors” means two **document representations**, not two unrelated vector databases.
+
 ### Vector sync / document generation
 
 Script: `scripts/sync_event_search_vectors_to_supabase.py`.
 
-It consumes the exported `site/src/data/preview-events.json`, builds compact search docs, hashes embedding input and upserts only changed vectors. The current document version is `event-search-doc-v2-weekday` and includes weekday, time-of-day, admission/availability and card URL fields.
+It consumes the exported `site/src/data/preview-events.json`, builds compact search docs, hashes embedding input and upserts only changed vectors. The current document version is `event-search-doc-v3-search-facets` and includes:
+
+- event category/type/title/summary and a truncated factual description;
+- venue/address/city;
+- date/time plus weekday ISO/RU, weekend/weekday, month, season and RU daypart words;
+- admission/availability (`бесплатно`, `регистрация`, `по билетам`, sold-out when present);
+- controlled tags, Pushkin-card/family/charity/tourist hints when source text or existing topics explicitly support them;
+- trusted card URL/snapshot fields.
+
+This v3 digest is intentionally still a shared P0 compromise. The P1 related/search split above should remove calendar/admission-heavy wording from the `related_v1` document.
 
 ### Static related pipeline
 
@@ -141,6 +170,7 @@ Recompute policy:
 
 - do not recompute if event ids, event search fingerprints and the Gemma policy signature are unchanged;
 - if a new event appears or an existing event’s factual search document changes, recompute the active/future graph, not only the changed anchor, because a new event can become the best related item for older pages;
+- target persistence is `event_similarity_edges` (P1): store `(anchor_event_id, candidate_event_id, related_score, vector_similarity, llm_semantic_score, similarity_class, doc_version, model, policy_signature, source_fingerprints, computed_at)`. A changed/new event recomputes its own outgoing edges and can update reverse incoming edges for older anchors without re-verifying unchanged pairs. Astro generation then sorts from cached edges and applies lifecycle/date exclusions at render time.
 - static related can run less often than Astro page rendering: Astro can reuse a valid related cache, while lifecycle/date changes are still applied at export/generation time;
 - when generating pages, exclude events that already started today, ended, were cancelled, deleted or duplicated, so related cards remain actionable.
 
