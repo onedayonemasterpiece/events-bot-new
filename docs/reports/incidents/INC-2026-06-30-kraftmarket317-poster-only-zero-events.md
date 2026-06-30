@@ -1,10 +1,10 @@
 # INC-2026-06-30 kraftmarket317 poster-only zero-events miss
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring producer/importer, Smart Update event fanout
 Opened: 2026-06-30
-Closed: —
+Closed: 2026-06-30
 Owners: Codex / Telegram Monitoring maintainers
 Related incidents: `INC-2026-05-17-kraftmarket235-tg-monitoring-extraction-miss`, `INC-2026-06-04-kraftmarket271-tg-monitoring-tpm-import-cancel`, `INC-2026-05-09-event-location-alias-free-dup-regressions`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -35,6 +35,8 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 - 2026-06-30 00:12:58 UTC — server imports producer output and records message `317` as `producer_zero_events:clear_event_signals`.
 - 2026-06-30 — investigation confirms no `event_source` / event row for `kraftmarket39/317`, while `kraftmarket39/306` and `/312` imported as museum events.
 - 2026-06-30 — prevention patch prepared: OCR-only poster text is passed into the LLM extraction path instead of being dropped by the empty-caption guard; museum reference row/aliases added.
+- 2026-06-30 16:07–16:10 UTC — forced targeted replay `ops_run id=3127` imports one event, `event_id=6524`.
+- 2026-06-30 16:23–16:28 UTC — canonical repair corrects phone registration, preserves OCR source text, reruns standard `telegraph_build`, `vk_sync`, and `tg_event_publish`, deletes stale managed VK duplicate `wall-231920894_5232`, and rebuilds Telegraph after stale source cleanup.
 
 ## Root Cause
 
@@ -99,8 +101,8 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 - [x] Phone-only OCR booking contacts are normalized to `tel:+...` before post-author fallback can run.
 - [x] Added regression fixture and tests for `kraftmarket39/317` poster-only OCR signal and schedule-like negative control.
 - [x] Added museum standard location and aliases.
-- [ ] Deploy to production and run forced replay for `@kraftmarket39/317`.
-- [ ] Verify public Telegram/VK/Telegraph surfaces after replay.
+- [x] Deploy to production and run forced replay for `@kraftmarket39/317`.
+- [x] Verify public Telegram/VK/Telegraph surfaces after replay.
 
 ## Follow-up Actions
 
@@ -109,10 +111,30 @@ The post has an empty Telegram caption; all event facts are in the poster OCR: t
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHAs:
+  - `91942df8 fix(tg-monitor): extract poster-only OCR events`
+  - `951a82ce fix(tg-monitor): preserve OCR phone contacts`
+- deploy path:
+  - Fly app `events-bot-new-wngqia`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KWCN8TV17Z732Z5DN8X1SM7Q`
+- regression checks:
+  - `pytest tests/test_tg_candidate_location_grounding.py::test_tg_build_candidate_ocr_only_phone_contact_beats_group_author_fallback tests/test_tg_monitor_gemma4_contract.py::test_tg_monitor_clear_event_signal_accepts_poster_only_ocr tests/test_location_reference_bastion.py::test_vostok_na_zapade_reference_aliases_normalize_to_museum -q` → `3 passed`
+  - `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py source_parsing/telegram/handlers.py`
+  - `git diff --check`
+- forced replay:
+  - `ops_run id=3127`, `kind=tg_monitoring`, `trigger=incident_replay`, `status=success`
+  - metrics: `sources_scanned=1`, `messages_processed=1`, `messages_with_events=1`, `events_imported=1`, `events_created=1`, `errors_count=0`
+- repaired event:
+  - `event_id=6524`
+  - source: `https://t.me/kraftmarket39/317`
+  - title/date/time/location: `Мастер-класс по каллиграфии`, `2026-07-01 19:00`, `Музей «Восток на Западе», Клиническая 19А, Калининград`
+  - registration contact: `ticket_link='tel:+79316160888'`, `ticket_trust_level='source_ocr_phone'`
+  - `telegram_scanned_message(source_id=1177,message_id=317)` → `status='done'`, `events_extracted=1`, `events_imported=1`, `error=NULL`
+- public surfaces:
+  - Telegram: `https://t.me/kldevents/1670` (`tg_event_post_id=1670`, `photo_caption`) contains the phone registration number and no `tasha9917`; premium emoji edit completed at `2026-06-30 16:26:44 UTC`.
+  - Telegraph: `https://telegra.ph/Master-klass-po-kalligrafii-06-30` contains full event facts, `+7 (931) 616-08-88`, `Источников: 2`, and no `tasha9917`.
+  - VK: canonical managed post is `https://vk.com/wall-231920894_5234`, contains `tel:+79316160888`; stale managed duplicate `https://vk.com/wall-231920894_5232` was deleted after owner/content verification.
+  - `joboutbox` for `event_id=6524`: `ics_publish`, `telegraph_build`, `tg_ics_post`, `vk_sync`, `tg_event_publish` all `done`, `last_error=NULL`.
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, `job_outbox_worker=ok`, `issues=[]`.
 
 ## Prevention
 
