@@ -92,3 +92,35 @@ const publicBase = (env.KENIGEVENTS_SITE_PUBLIC_BASE_URL || `https://kenigevents
 console.log(`Preview URL: ${publicBase}/${buildId}/__preview/`);
 console.log(`Website endpoint fallback: http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`);
 if (stableIcsUploaded) console.log(`Stable CDN ICS uploaded: ${stableIcsUploaded} -> s3://${bucket}/ics/<event_id>.ics`);
+
+const requirePublicVerify = ['1', 'true', 'yes', 'on'].includes(String(env.KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY || '').toLowerCase());
+const verifyTargets = [
+  [`${publicBase}/${buildId}/__preview/`, 'main-domain preview index'],
+  [`http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`, 'website-endpoint preview index'],
+];
+if (stableIcsUploaded) {
+  const firstIcs = find.stdout.split(/\r?\n/).find(Boolean);
+  const match = firstIcs ? /^sobytiya\/([^/]+)\/event\.ics$/u.exec(firstIcs.slice(sourceDir.length + 1)) : null;
+  const eventId = match ? eventsBySlug.get(match[1]) || /-(\d+)$/u.exec(match[1])?.[1] : null;
+  if (eventId && env.PUBLIC_ICS_BASE_URL) {
+    verifyTargets.push([`${String(env.PUBLIC_ICS_BASE_URL).replace(/\/+$/u, '')}/${eventId}.ics`, 'stable ICS CDN sample']);
+  }
+}
+const publicFailures = [];
+for (const [url, label] of verifyTargets) {
+  try {
+    const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    if (!response.ok) {
+      publicFailures.push(`${label}: ${response.status} ${response.statusText} at ${url}`);
+    }
+  } catch (error) {
+    publicFailures.push(`${label}: ${error?.message || error} at ${url}`);
+  }
+}
+if (publicFailures.length) {
+  console.error(`Public preview verification failed:\n- ${publicFailures.join('\n- ')}`);
+  console.error('Objects were uploaded, but the bucket/CDN is not publicly serving them. Check bucket public-read policy/ACL or CDN origin access.');
+  if (requirePublicVerify) process.exit(1);
+} else {
+  console.log('Public preview verification: ok');
+}

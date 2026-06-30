@@ -29,7 +29,7 @@ export const RELATED_SURFACE = 'event_detail_related' as const;
 export const STATIC_RELATED_ALGORITHM_ID = 'static_related_v1' as const;
 export const SPARSE_RELATED_ALGORITHM_ID = 'event_sparse_related_chain_v1' as const;
 export const LEGACY_VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2' as const;
-export const PGVECTOR_RELATED_ALGORITHM_ID = 'event_pgvector_related_chain_v1' as const;
+export const PGVECTOR_RELATED_ALGORITHM_ID = 'event_pgvector_related_chain_v2_two_doc' as const;
 
 export function getPreviewBuild() {
   return data.build;
@@ -438,7 +438,7 @@ export function getStaticRelatedCandidates(event: PreviewEvent, limit = 30): Rel
     .slice(0, Math.max(0, limit));
 }
 
-export function eventDetailRelatedAlgorithmId(): 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_pgvector_related_chain_v1' {
+export function eventDetailRelatedAlgorithmId(): 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_pgvector_related_chain_v2_two_doc' {
   if (related.algorithm === PGVECTOR_RELATED_ALGORITHM_ID) return PGVECTOR_RELATED_ALGORITHM_ID;
   const isSparse = related.algorithm === SPARSE_RELATED_ALGORITHM_ID || related.algorithm === LEGACY_VECTOR_RELATED_ALGORITHM_ID;
   return isSparse ? SPARSE_RELATED_ALGORITHM_ID : STATIC_RELATED_ALGORITHM_ID;
@@ -456,7 +456,7 @@ export function buildEventDetailRelatedManifest(event: PreviewEvent, limit = 30)
     generated_at: getPreviewBuild().generated_at,
     event_id: event.id,
     strategy: algorithmId === PGVECTOR_RELATED_ALGORITHM_ID
-      ? 'event_pgvector_related_chain_v1_manifest'
+      ? 'event_pgvector_related_chain_v2_manifest'
       : (algorithmId === SPARSE_RELATED_ALGORITHM_ID ? 'event_sparse_related_chain_v1_manifest' : 'static_related_manifest_v1'),
     preload_target: 10,
     page_size: 10,

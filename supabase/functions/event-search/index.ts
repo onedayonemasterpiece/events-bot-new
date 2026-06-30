@@ -636,8 +636,20 @@ function classifyLlmPayload(
     0,
     500,
   );
-  const exactApprovalLimit = Math.ceil(candidates.length * 0.6);
-  if (candidates.length >= 4 && exact.length > exactApprovalLimit) {
+  const overApprovalDemoteEnabled = ["1", "true", "yes", "on"].includes(
+    env("EVENT_SEARCH_LLM_OVER_APPROVAL_DEMOTE_ENABLED", "0").toLowerCase(),
+  );
+  const overApprovalRatio = Number(env("EVENT_SEARCH_LLM_OVER_APPROVAL_RATIO", "0.9"));
+  const exactApprovalLimit = Math.ceil(
+    candidates.length * (Number.isFinite(overApprovalRatio) ? overApprovalRatio : 0.9),
+  );
+  if (
+    overApprovalDemoteEnabled &&
+    candidates.length >= 8 &&
+    exact.length > exactApprovalLimit &&
+    possible.length === 0 &&
+    rejectedIds.length === 0
+  ) {
     return {
       exact: [],
       possible: candidates.map((candidate) => ({
@@ -1172,6 +1184,7 @@ async function runEventSearch(
         p_weekday_iso: queryFacets.weekday_iso,
         p_time_of_day_filter: queryFacets.time_of_day,
         p_admission_filter: queryFacets.admission,
+        p_embedding_doc_kind: env("EVENT_SEARCH_EMBEDDING_DOC_KIND", "search_v3"),
       },
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);

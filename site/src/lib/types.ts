@@ -157,10 +157,10 @@ export interface EventDetailRelatedManifest {
   feature_schema_version: 'event-detail-related-v1';
   taxonomy_version: 'event-taxonomy-v1';
   surface: 'event_detail_related';
-  algorithm_id: 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_vector_related_chain_v2' | 'event_pgvector_related_chain_v1';
+  algorithm_id: 'static_related_v1' | 'event_sparse_related_chain_v1' | 'event_vector_related_chain_v2' | 'event_pgvector_related_chain_v1' | 'event_pgvector_related_chain_v2_two_doc';
   generated_at: string;
   event_id: number;
-  strategy: 'static_related_manifest_v1' | 'event_sparse_related_chain_v1_manifest' | 'event_related_chain_v2_manifest' | 'event_pgvector_related_chain_v1_manifest';
+  strategy: 'static_related_manifest_v1' | 'event_sparse_related_chain_v1_manifest' | 'event_related_chain_v2_manifest' | 'event_pgvector_related_chain_v1_manifest' | 'event_pgvector_related_chain_v2_manifest';
   preload_target: number;
   page_size: number;
   current_event: EventFeatureSummary;

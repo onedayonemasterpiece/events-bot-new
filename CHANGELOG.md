@@ -4,13 +4,15 @@
 
 ### Added
 
+- **Personalization / two-document pgvector retrieval**: implemented `search_v3` and `related_v1` embedding document kinds in Supabase (`embedding_doc_kind`, related digest/hash, partial HNSW indexes and doc-kind-aware RPCs), updated the vector sync to maintain both representations incrementally, and wired static related generation to use the cleaner `related_v1` recall layer before Gemma verification.
 - **Static site pages / event-detail medallions**: rendered the first event-detail medallion row on `/sobytiya/<slug>/`, using the curated organizer-avatar manifest plus safe event facts (`Пушкинская карта`, free/price, family/charity/festival hints); documented speaker/celebrity avatar medallions as a source-grounded P1 extension with cached avatars only.
 - **Static site pages / event medallion assets**: added the first local organizer avatar medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония and Остров Канта, with optimized WebP/PNG runtime assets, source originals/provenance and a `organizerMedallions.json` manifest; the филармония medallion uses the yellow harp background seen in its Telegram profile avatar.
 
 ### Changed
 
+- **Static site pages / v62 full related stress run**: generated and uploaded the full future-catalog preview `preview-20260630-event-pages-v62-two-vector-gemma-full` with 343 future events, cached `related_v1` vectors and strict Gemma 4 26B validation; the recovered cache rebuild used 343 Gemma cache hits and 0 new provider calls, built golden discovery JSON shows only LLM-approved strict related cards, and search UI smokes passed against mocked and real Edge paths. Public GET is currently gated by the `kenigevents.ru` bucket/CDN public-read policy.
 - **Static site pages / Gemma related verifier contract**: compacted the offline Gemma 4 26B related-events verifier to an XML-like prompt, 10-candidate batches and two default passes over up to 20 pgvector candidates, while preserving model-provided `similarity_class` and `confidence` in compact structured JSON so full-catalog static related builds keep quality signals with less truncation risk.
-- **Personalization / search digest v3 + vector representation decision**: enriched the shared P0 search digest with compact weekday/month/season/daypart, admission, availability, audience, Pushkin-card and charity facets; documented why one vector is acceptable for the current full-catalog stress test and why P1 should split `related_v1` and `search_v2/v3` embedding document kinds plus persisted `event_similarity_edges`.
+- **Personalization / search digest v3 + vector representation decision**: enriched the search digest with compact weekday/month/season/daypart, admission, availability, audience, Pushkin-card and charity facets, then implemented the planned document-kind split so `/poisk/` uses `search_v3` while static related pages use cleaner `related_v1`; persisted `event_similarity_edges` remains a P1 storage optimization beyond the current related-cache implementation.
 - **Personalization / authorized search progressive target**: documented the next UX architecture for progressive verified search windows, where the first Gemma-verified results can render while later candidate windows are still classified and provisional vector-only cards remain under a separate discovery heading.
 - **Static site pages / OCR hero parallax**: strengthened poster/OCR hero parallax so text-preserving hero images move like non-OCR photo heroes without cropping the poster text.
 - **Static site pages / v59 strict related canary**: generated and published `preview-20260629-event-pages-v59-related-gemma50` from a production snapshot with 50 tomorrow/near-future events, using Supabase pgvector retrieval plus strict Gemma 4 26B verifier/reranker so public related cards contain only `llm_semantic_score >= 0.72` candidates; added focus-date/current-datetime export controls, strict related cache validation, non-control preview checks and Playwright/public smoke evidence for the 6447→6310 urban-planning golden case.
@@ -18,6 +20,10 @@
 
 ### Fixed
 
+- **Static site pages / Kaggle builder failure cleanup**: added failure-path cleanup for transient `node22` and extracted site directories in the StaticSiteBuilder kernel, preserving recoverable `event_related_chain_cache.json`/SQLite outputs while preventing large failed Kaggle artifacts.
+- **Static site pages / related-cache safety and deploy checks**: the exporter now refuses to overwrite a larger expensive related cache with a smaller canary run unless explicitly allowed, and the Yandex preview deploy script now verifies public preview URLs after upload and reports missing bucket/CDN public-read access instead of silently printing an unusable link.
+- **Personalization / authorized search over-approval guard**: disabled the default deterministic over-approval demotion in the LLM verifier so broad valid queries such as “интересно детям” can return multiple LLM-approved exact cards instead of being forced into the fallback section; the guard remains opt-in via env for future incidents.
+- **Personalization / related ranking authority**: made Gemma verifier scores dominate static related ordering after validation, keeping vector similarity only as a small tie-breaker so lexical/calendar/facet noise cannot outrank LLM-approved semantic matches.
 - **Static site pages / Gemma related JSON parsing**: added syntax-only rescue for truncated Gemma `ranked` arrays, preserving only complete verdict objects without inventing ids/scores; added tests for duplicated structured parts, truncated output rescue and compact prompt escaping, plus Gemini Pro prompt/schema review and live smoke evidence.
 - **Static site pages / future export lifecycle filter**: excluded `archived` future rows from static-site exports so full-catalog builds do not generate pages or related anchors for events that are no longer meant to be public/actionable.
 - **Personalization / embedding backfill throttling**: slowed static-site pgvector embedding sync to a TPM-safe default, added 429-aware retry/backoff and partial chunk upserts so a long full-catalog run keeps already-created vectors instead of losing all progress on a transient quota error.
@@ -1494,9 +1500,6 @@
 ### Fixed
 - **System**: Исправлен конфликт `sys.modules` при запуске бота, вызывавший ошибку доступа к базе данных (`get_db() -> None`) в динамически загружаемых модулях.
 - **Month/Weekend Pages**: Исправлено отсутствие дат и времени на страницах месяцев и выходных в Telegraph. Теперь дата и время отображаются корректно в формате "_31 декабря 19:00, Место, Город_".
-
-### Fixed
-
 ## [1.3.7] - 2025-12-31
 
 ### Added

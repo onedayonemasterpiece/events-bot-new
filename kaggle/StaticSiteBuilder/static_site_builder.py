@@ -83,6 +83,27 @@ def finish_status(*, ok: bool, message: str | None = None) -> None:
             STATUS_CLIENT.stop_alive()
 
 
+def cleanup_transient_workspace() -> None:
+    """Remove large throwaway dependencies without deleting recoverable outputs.
+
+    Keep files that are useful after a failed long run, especially
+    ``event_related_chain_cache.json`` and the copied SQLite DB.  The Node 22
+    npm install can be hundreds of megabytes and must never be left in
+    ``/kaggle/working`` where Kaggle publishes it as an output artifact.
+    """
+
+    transient_paths = [WORKING / 'node22']
+    if EXTRACT_ROOT != WORKING:
+        transient_paths.append(EXTRACT_ROOT)
+    for path in transient_paths:
+        try:
+            if path.exists():
+                print(f'[static-site-builder] cleaning transient path {path}', flush=True)
+                shutil.rmtree(path, ignore_errors=True)
+        except Exception as exc:
+            print(f'[static-site-builder] transient cleanup failed for {path}: {exc}', flush=True)
+
+
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
     print(f"[static-site-builder] $ {' '.join(cmd)} cwd={cwd}", flush=True)
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
@@ -351,11 +372,11 @@ def main() -> int:
         }
         RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
-        shutil.rmtree(EXTRACT_ROOT, ignore_errors=True)
-        shutil.rmtree(WORKING / 'node22', ignore_errors=True)
+        cleanup_transient_workspace()
         finish_status(ok=True, message=f"static site build ready: {build_id}, events={event_count}")
         return 0
     except Exception as exc:
+        cleanup_transient_workspace()
         finish_status(ok=False, message=f"{exc.__class__.__name__}: {exc}")
         raise
 

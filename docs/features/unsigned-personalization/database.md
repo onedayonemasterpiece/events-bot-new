@@ -1,17 +1,19 @@
 # Personalization Database Design
 
-> **Status:** full telemetry schema remains design/draft; public reaction counters applied 2026-06-27; authorized pgvector search tables/RPCs applied 2026-06-28
+> **Status:** full telemetry schema remains design/draft; public reaction counters applied 2026-06-27; authorized pgvector search tables/RPCs applied 2026-06-28; two-document `search_v3`/`related_v1` pgvector split applied 2026-06-30
 > **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)
 > **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions or static rebuild queues.
 
 ## Current capacity snapshot
 
-As of 2026-06-24 the separate personalization Supabase database is effectively empty:
+As of 2026-06-30 after the two-document vector backfill, the separate personalization Supabase database is still comfortably inside the free-tier budget:
 
-- `pg_database_size(current_database())`: `10211 kB`;
-- approximate free space vs 500 MB decimal free tier: `~489.54 MB`;
+- `pg_database_size(current_database())`: about `25 MB`;
+- approximate free space vs 500 MB decimal free tier: about `473 MB`;
 - PostgreSQL: `17.6`;
-- installed extensions include `pgcrypto`, `uuid-ossp`, `pg_stat_statements`; `pgvector` is now enabled for the authorized search sidecar (`event_search_documents` / `event_embeddings`), while ordinary page views still use static manifests and do not call Supabase vector search.
+- installed extensions include `pgcrypto`, `uuid-ossp`, `pg_stat_statements` and `pgvector`;
+- largest relations: `event_embeddings≈9.4 MiB`, `event_search_documents≈4.1 MiB`;
+- vectors present in the current active/future sidecar: about `404` `search_v3` rows and `343` `related_v1` rows. Ordinary page views still use static manifests and do not call Supabase vector search.
 
 ## Architectural gate constraints
 
@@ -46,7 +48,7 @@ Official references:
 
 The MVP write path should be **compact summaries first**, not a raw event firehose:
 
-- `public.event_search_documents` / `public.event_embeddings` — **applied 2026-06-28** closed Supabase pgvector sidecar for authorized search and semantic retrieval canary. Browser roles have no direct table SELECT; authenticated search goes through `event-search` Edge Function and RPC `search_events_by_embedding_v1`. Stores compact `search_digest`, controlled facets, trusted `card_snapshot` and `vector(768)` embeddings (`gemini-embedding-2`), not raw OCR/source text.
+- `public.event_search_documents` / `public.event_embeddings` — **applied 2026-06-28, hardened 2026-06-30** closed Supabase pgvector sidecar for authorized search and semantic retrieval canary. Browser roles have no direct table SELECT; authenticated search goes through `event-search` Edge Function and RPC `search_events_by_embedding_v1`. Stores compact `search_digest` for `search_v3`, cleaner `related_digest` for `related_v1`, controlled facets, trusted `card_snapshot` and `vector(768)` embeddings (`gemini-embedding-2`, keyed by `embedding_doc_kind`), not raw OCR/source text.
 - `public.search_quota_plans`, `public.user_search_quota_ledger`, `public.event_search_requests` — **applied 2026-06-28** quota/audit for authorized smart search. Raw queries are not stored: only hash, length, status and counts.
 - `public.personalization_event_reaction_counter` — **applied 2026-06-27** compact public aggregate for event-card counters. It stores `source_likes_count` (TG/VK/source-post metrics imported by backend) and `service_likes_count` (first-party KenigEvents likes) in the same row, with generated `likes_count = source_likes_count + service_likes_count`. Browser/Data API roles may select only `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`; source/service split, source views and metadata remain backend-only. UI copy must show only total counts. Long-lived first-party reactions should be folded from a bounded state table, not from an infinite raw log.
 - `public.personalization_session_summary` — compact session/profile deltas after consent;

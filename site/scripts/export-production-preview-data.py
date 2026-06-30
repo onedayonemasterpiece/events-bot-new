@@ -42,10 +42,10 @@ CONTROL_EVENT_IDS = [
 SPARSE_RELATED_ALGORITHM = "event_sparse_related_chain_v1"
 SPARSE_RELATED_SCHEMA_VERSION = "event_sparse_related_chain_v1"
 SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
-PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v1"
-PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v1"
+PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v2_two_doc"
+PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v1_cache_20260629a"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260630a"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
@@ -922,6 +922,7 @@ def build_pgvector_related_chain(
     current_date: str,
     embedding_model: str = "gemini-embedding-2",
     match_count: int = 60,
+    embedding_doc_kind: str = "related_v1",
 ) -> dict[str, list[dict[str, Any]]]:
     by_id = {int(event["id"]): event for event in events}
     allowed_ids = set(by_id)
@@ -938,6 +939,7 @@ def build_pgvector_related_chain(
                 "p_match_count": match_count,
                 "p_date_from": current_date,
                 "p_date_to": None,
+                "p_embedding_doc_kind": embedding_doc_kind,
             },
             timeout=45.0,
         ) or []
@@ -1016,6 +1018,7 @@ def build_pgvector_related_chain(
         max_chain=max(chain_lengths) if chain_lengths else 0,
         avg_chain=round(sum(chain_lengths) / max(1, len(chain_lengths)), 2),
         embedding_model=embedding_model,
+        embedding_doc_kind=embedding_doc_kind,
     )
     return chains
 
@@ -1082,11 +1085,22 @@ def load_related_cache(path: Path | None) -> dict[str, Any] | None:
         return None
 
 
-def save_related_cache(path: Path | None, payload: dict[str, Any]) -> None:
+def save_related_cache(path: Path | None, payload: dict[str, Any], *, previous_event_count: int = 0) -> bool:
     if not path:
-        return
+        return False
+    new_event_count = len(payload.get("event_ids") or [])
+    allow_shrink = str(os.getenv("STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK", "")).strip().lower() in {"1", "true", "yes", "on"}
+    if previous_event_count and new_event_count and new_event_count < previous_event_count and not allow_shrink:
+        log_stage(
+            "related_cache_write_skipped_shrink_guard",
+            path=str(path),
+            previous_event_count=previous_event_count,
+            new_event_count=new_event_count,
+        )
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return True
 
 
 def supabase_limiter_client():
@@ -1649,8 +1663,20 @@ def maybe_apply_gemma_audit(
                 item["similarity_class"] = "adjacent_discovery"
             if llm_score < 0.55:
                 item["display_eligible"] = False
+            # After the LLM verifier has seen the pair, its semantic score is
+            # the primary ordering signal. Vector similarity remains a small
+            # stability/tie-break signal, while deterministic facets must not
+            # overpower the LLM verdict (for example 6447 urbanism candidates).
             item["related_score"] = round(
-                max(0.0, min(1.0, 0.55 * llm_score + 0.20 * float(item.get("lexical_similarity") or item.get("vector_similarity") or 0) + 0.20 * float(item.get("deterministic_score") or 0) + 0.05 * float(item.get("related_score") or 0))),
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        0.82 * llm_score
+                        + 0.12 * float(item.get("vector_similarity") or item.get("lexical_similarity") or 0)
+                        + 0.06 * float(item.get("llm_confidence") or 0),
+                    ),
+                ),
                 4,
             )
         chain[:] = [item for item in chain if item.get("display_eligible", True)]
@@ -1681,7 +1707,7 @@ def build_related(
     schema_version = PGVECTOR_RELATED_SCHEMA_VERSION if related_mode == "pgvector" else SPARSE_RELATED_SCHEMA_VERSION
     retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
     cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
-    embedding_doc_version = "event_search_doc_v2_weekday" if related_mode == "pgvector" else "event_embedding_doc_v1"
+    embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") if related_mode == "pgvector" else "event_embedding_doc_v1"
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     event_ids = [int(event["id"]) for event in events]
@@ -1700,6 +1726,7 @@ def build_related(
         cache.get("schema_version") == cache_schema_version
         and cache.get("algorithm") == algorithm
         and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
+        and (related_mode != "pgvector" or cache.get("embedding_document_version") == embedding_doc_version)
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -1769,7 +1796,12 @@ def build_related(
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
         if related_mode == "pgvector":
-            chains = build_pgvector_related_chain(events, current_date=current_date, embedding_model=embedding_model)
+            chains = build_pgvector_related_chain(
+                events,
+                current_date=current_date,
+                embedding_model=embedding_model,
+                embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
+            )
         else:
             chains = build_sparse_related_chain(events, cache_salt=salt)
         raw_chains_for_cache = copy.deepcopy(chains)
@@ -1821,7 +1853,7 @@ def build_related(
         else [],
         "updated_at": generated_at,
     }
-    save_related_cache(cache_path, cache_payload)
+    cache_written = save_related_cache(cache_path, cache_payload, previous_event_count=len(previous_ids))
     related: dict[str, dict[str, Any]] = {}
     for event in events:
         chain = chains.get(str(event["id"]), [])
@@ -1871,7 +1903,12 @@ def build_related(
         "embedding_document_version": embedding_doc_version,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
-        "cache": {"state": cache_state, "path": str(cache_path) if cache_path else None},
+        "cache": {
+            "state": cache_state,
+            "path": str(cache_path) if cache_path else None,
+            "written": cache_written,
+            "previous_event_count": len(previous_ids),
+        },
         "related": related,
     }
 

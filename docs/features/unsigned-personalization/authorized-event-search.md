@@ -124,13 +124,14 @@ Fly SQLite / static export
 
 Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus hardening migrations
 `20260628_event_search_weekday_and_related_rpc.sql`,
-`20260628_event_search_public_fields_and_model_filter.sql` and
-`20260629_event_search_query_facets.sql`.
+`20260628_event_search_public_fields_and_model_filter.sql`,
+`20260629_event_search_query_facets.sql` and
+`20260630_event_search_embedding_doc_kind.sql`.
 
 Tables:
 
-- `public.event_search_documents` — compact factual `search_digest`, controlled facets and trusted `card_snapshot`; no raw OCR/source text;
-- `public.event_embeddings` — `gemini-embedding-2` vectors, `vector(768)`, HNSW cosine index;
+- `public.event_search_documents` — compact factual `search_digest`, cleaner `related_digest`, controlled facets and trusted `card_snapshot`; no raw OCR/source text;
+- `public.event_embeddings` — `gemini-embedding-2` vectors, `vector(768)`, `embedding_doc_kind`, partial HNSW cosine indexes for `search_v3` and `related_v1`;
 - `public.search_quota_plans` — default registered quota plan;
 - `public.user_search_quota_ledger` — day/month counters per Supabase user;
 - `public.event_search_requests` — audit log with query hash and length only, no raw query text.
@@ -163,6 +164,8 @@ Document: title: {title} | text: {search_digest}
 Query:    task: search result | query: {user_query}
 ```
 
+Authorized search uses only `embedding_doc_kind=search_v3`. Static event-page related generation uses `related_v1`; the Edge Function passes `p_embedding_doc_kind` to the RPC and defaults to `search_v3` so a future related-vector backfill cannot pollute user search results.
+
 ## LLM verifier
 
 The Edge Function runs an LLM verifier after pgvector retrieval when the user has LLM quota. This verifier is an operational classifier over already retrieved IDs, not an external consultant review. Runtime contract:
@@ -170,7 +173,7 @@ The Edge Function runs an LLM verifier after pgvector retrieval when the user ha
 - `EVENT_SEARCH_LLM_ENABLED=1` enables the verifier;
 - primary verifier model is Gemma 4 26B (`EVENT_SEARCH_LLM_PRIMARY_MODEL=gemma-4-26b-a4b-it`; legacy `EVENT_SEARCH_LLM_MODEL` is still accepted). This protects the scarce `gemini-3.1-flash-lite` lane, which has only `500 RPD` and is shared with other critical processes;
 - fallback verifier model is `EVENT_SEARCH_LLM_FALLBACK_MODEL=gemini-3.1-flash-lite`, but it is a protected rescue lane, not the normal runtime;
-- `EVENT_SEARCH_VERIFICATION_WINDOW=12` for the current canary;
+- `EVENT_SEARCH_VERIFICATION_WINDOW=48` by default for the current high-match canary (bounded by the Edge Function and UI request);
 - model policy is user-state aware:
   - first/onboarding searches may use `fast_onboarding_fallback`: one short Gemma attempt, then Lite fallback if Gemma quickly returns `5xx/429/timeout`;
   - after the user has already spent several searches today, the function switches to `gemma_priority_late_fallback`: multiple longer Gemma attempts with backoff before any Lite fallback;
@@ -205,7 +208,7 @@ P1 progressive UX target:
   result set, so repeated “Показать ещё” calls reuse one classification job
   instead of creating inconsistent independent LLM pages.
 
-The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. A non-semantic over-approval sanity check demotes the whole set to possible if the model marks more than 60% of a 4+ candidate window as exact; this is a safety guard against LLM rubber-stamping, not a deterministic topic/audience rule.
+The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. Broad queries can legitimately return many exact matches, so the previous default “over-approval” demotion is disabled by default; if a future incident proves rubber-stamping, it can be enabled explicitly with `EVENT_SEARCH_LLM_OVER_APPROVAL_DEMOTE_ENABLED=1` and a high `EVENT_SEARCH_LLM_OVER_APPROVAL_RATIO`.
 Every provider try is recorded in `llm_verifier.attempts[]` and search metadata
 with `{model, role: primary|fallback, attempt, status, elapsed_ms}`. The response
 also exposes `llm_verifier.model`, `llm_verifier.policy` and

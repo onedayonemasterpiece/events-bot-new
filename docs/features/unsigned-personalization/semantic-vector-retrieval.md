@@ -1,6 +1,6 @@
 # Semantic vector retrieval for events
 
-> Status: **P0 pgvector semantic retrieval implemented; strict Gemma-verified static related canary published in v59**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`). The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
+> Status: **two-document pgvector retrieval implemented; v62 full-catalog preview generated and uploaded, public-read gate pending**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`), now split by `embedding_doc_kind`: `search_v3` for user search and `related_v1` for event-to-event related pages. The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
 
 ## Why this document exists
 
@@ -38,11 +38,12 @@ Migrations:
 - `supabase/migrations/20260628_event_search_weekday_and_related_rpc.sql` — weekday facets and service-role-only related RPC for builders.
 - `supabase/migrations/20260628_event_search_public_fields_and_model_filter.sql` — public/searchable/card fields, model/dimension-scoped search RPC and safer fallback filtering.
 - `supabase/migrations/20260629_event_search_query_facets.sql` — explicit-query facet boost for weekday/time/admission words in authorized search.
+- `supabase/migrations/20260630_event_search_embedding_doc_kind.sql` — implemented the two-document split: `event_search_documents.related_digest/related_text_hash`, `event_embeddings.embedding_doc_kind`, `(event_id, embedding_model, embedding_dim, embedding_doc_kind)` primary key, partial HNSW indexes for `search_v3` and `related_v1`, and doc-kind filters in both search and related RPCs.
 
 Main tables:
 
-- `event_search_documents` — compact factual `search_digest`, facets, dates, status, canonical path/slug and trusted `card_snapshot`; no raw OCR or source HTML.
-- `event_embeddings` — `gemini-embedding-2`, `embedding_dim=768`, `vector(768)`, HNSW cosine index, `(event_id, embedding_model, embedding_dim)` primary key.
+- `event_search_documents` — compact factual `search_digest` for query search, cleaner `related_digest` for event-to-event similarity, facets, dates, status, canonical path/slug and trusted `card_snapshot`; no raw OCR or source HTML.
+- `event_embeddings` — `gemini-embedding-2`, `embedding_dim=768`, `vector(768)`, `embedding_doc_kind` (`search_v3` or `related_v1`), partial HNSW cosine indexes, `(event_id, embedding_model, embedding_dim, embedding_doc_kind)` primary key.
 - `search_quota_plans`, `user_search_quota_ledger`, `event_search_requests` — authorized search quotas and privacy-preserving audit.
 
 Main RPCs:
@@ -72,30 +73,16 @@ Document: title: {title} | text: {search_digest}
 Query:    task: search result | query: {user_query}
 ```
 
-### One vector vs two vectors decision
+### Two-document vector decision (implemented)
 
-The current production-canary implementation still uses **one embedding row per event** (`event_embeddings(event_id, embedding_model, embedding_dim)`) fed by `search_digest`. This is acceptable for the first full-catalog stress test because the catalogue is only a few hundred active/future events and Gemma verification/reranking is already the final semantic authority.
+The current implementation deliberately uses **one embedding model and one table**, but **two document representations** per event:
 
-However, one vector is an explicit compromise, not the target architecture:
+- `search_v3` — broad query-search document. It includes weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday language, free/registration/paid/sold-out status, charity/family/tourist/Pushkin-card hints and query-friendly synonyms. This is the document kind used by `/poisk/`.
+- `related_v1` — cleaner event-to-event document. It emphasizes title, event type, category, format, themes, concise meaning, venue/context and audience. Calendar/admission noise is intentionally reduced so “бесплатно вечером” does not beat true thematic similarity in related cards. This is the document kind used by static related generation.
 
-- **Related pages** need a “pure similarity” representation: title, event type, genre/theme, format, people/organizer/venue and concise meaning. Calendar words, price words and broad “вечером/летом/бесплатно” facets should not overpower real thematic similarity.
-- **User search** needs a broader representation: weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday, free/registration/paid/sold-out status, charity, audience, mood/occasion and query-friendly synonyms.
-- LLM verification can clean false positives, but using a polluted shared vector wastes candidate slots before the LLM sees them. With only 12–40 candidates, losing slots to calendar/price noise can be worse than the LLM cost.
+Why this is not “two vector databases”: both kinds use `gemini-embedding-2/vector(768)` and live in `event_embeddings`; the key difference is `embedding_doc_kind`. RPCs filter by `embedding_model`, `embedding_dim` and `embedding_doc_kind`, so search and related retrieval cannot accidentally mix representations.
 
-Decision:
-
-1. **P0/full stress test:** keep one embedding table/model and strengthen `search_digest` only with compact factual search facets. This avoids a migration while we measure quality/cost on the full future corpus.
-2. **P1 production hardening:** add document-kind separation:
-   - `event_embeddings.embedding_doc_kind = 'related_v1' | 'search_v2'`;
-   - `related_digest_v1` stays clean and is used by static related graph generation;
-   - `search_digest_v2`/`v3` carries query facets and is used by `/poisk/`;
-   - RPCs must filter by both model/dimension and `embedding_doc_kind`.
-3. The two-vector target still uses the same embedding model (`gemini-embedding-2/vector(768)`) unless a future eval proves a better model; “two vectors” means two **document representations**, not two unrelated vector databases.
-
-As of this branch, the weighted two-document/two-vector schema is **not yet
-implemented**: there is no committed `embedding_doc_kind`, `related_digest_v1`
-or separate search/related RPC filter in the migrations/code. It remains the
-next hardening step after the current full-catalog stress measurements.
+Implemented storage impact after the 2026-06-30 backfill: `event_search_documents≈3.8 MiB`, `event_embeddings≈9.4 MiB` for about 404 `search_v3` vectors and 343 `related_v1` vectors; total personalization DB size was about 25 MiB, comfortably below the 500 MiB free-tier budget. Expired/past events should keep their canonical facts in Fly SQLite, while Supabase vector rows can be pruned or archived by lifecycle once pages are no longer public/actionable.
 
 ### Vector sync / document generation
 
@@ -105,12 +92,13 @@ It consumes the exported `site/src/data/preview-events.json`, builds compact sea
 
 - event category/type/title/summary and a truncated factual description;
 - venue/address/city;
-- date/time plus weekday ISO/RU, weekend/weekday, month, season and RU daypart words;
-- admission/availability (`бесплатно`, `регистрация`, `по билетам`, sold-out when present);
+- date/time plus weekday ISO/RU, weekend/weekday, month, season and RU daypart words in `search_v3`;
+- admission/availability (`бесплатно`, `регистрация`, `по билетам`, sold-out when present) in `search_v3`;
 - controlled tags, Pushkin-card/family/charity/tourist hints when source text or existing topics explicitly support them;
+- a cleaner `related_v1` digest that removes most calendar/price noise and keeps theme/format/audience/venue context;
 - trusted card URL/snapshot fields.
 
-This v3 digest is intentionally still a shared P0 compromise. The P1 related/search split above should remove calendar/admission-heavy wording from the `related_v1` document.
+The sync is incremental by `(event_id, embedding_model, embedding_dim, embedding_doc_kind, text_hash)`: unchanged `search_v3` or `related_v1` rows are skipped independently, so adding the second document kind does not force a full re-embedding after the initial backfill.
 
 ### Static related pipeline
 
@@ -123,7 +111,7 @@ For `--related-mode pgvector`:
 3. call service-role RPC `event_related_candidates_by_event_id_v1` for each anchor;
 4. score primarily by `vector_similarity`, with small deterministic/facet boosts only;
 5. optionally run Gemma 4 26B verifier over retrieved IDs only;
-6. export static discovery JSON with `algorithm_id=event_pgvector_related_chain_v1`, `retrieval_method=supabase_pgvector_hnsw_cosine_v1`, `semantic_embeddings=true`.
+6. export static discovery JSON with `algorithm_id=event_pgvector_related_chain_v2_two_doc`, `retrieval_method=supabase_pgvector_hnsw_cosine_v1`, `semantic_embeddings=true`, `embedding_document_version=related_v1`.
 
 Astro pages still read only the static JSON/HTML chain on page view.
 
@@ -193,8 +181,27 @@ Prompt/schema audit evidence:
   real anchors `6447/5878/5370` returned valid JSON in `8.20s/6.43s/6.22s`.
 - Local live smoke after v4 restored model `similarity_class`/`confidence`:
   synthetic 4-candidate call returned valid JSON in `7.00s`.
-  This smoke is not a replacement for the next full 344-anchor Kaggle run, which
-  must measure the new statistical error rate.
+  This smoke was followed by the full v62 run below; the remaining next step is
+  to move recovered-cache reuse into the normal Kaggle success path so future
+  failed notebooks do not require manual artifact recovery.
+
+### v62 full-catalog two-document related evidence
+
+Run: `preview-20260630-event-pages-v62-two-vector-gemma-full`. Scope: `343` future/actionable events on the 2026-06-30 snapshot. Retrieval: `search_v3` and `related_v1` vectors in the same `event_embeddings` table, static related using only `related_v1`.
+
+Important evidence:
+
+- Supabase vector sidecar after backfill: about `25 MB` database size; `event_embeddings≈9.4 MiB`, `event_search_documents≈4.1 MiB`; counts `search_v3≈404`, `related_v1≈343`.
+- Kaggle generated the reusable v2 related cache for `343` anchors; because the notebook later ended `ERROR`, the accepted preview was rebuilt locally from the recovered `event_related_chain_cache.json` and `events.sqlite` with `0` new provider calls.
+- Cache-hit export: `343` anchors, `343` Gemma cache hits, `provider_calls=0`, `algorithm=event_pgvector_related_chain_v2_two_doc`, `embedding_doc_kind=related_v1`.
+- Static preview checks passed and the v62 tree is uploaded under `s3://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/` (`343` event pages and `343` discovery JSON files). Public `https://kenigevents.ru/...` / `https://static.kenigevents.ru/...` GET currently returns `404/403` because bucket/CDN public-read policy is not enabled for uploaded objects.
+- Golden public discovery checks:
+  - `6447` («Как договориться о будущем города») strict related is only `4759` and `6310`; both have model-provided `llm_semantic_score`, `similarity_class` and `llm_confidence`, and the prior music false-positive is absent from strict related.
+  - `5878` («Песни СССР») strict related starts with music/retro/concert events (`3398`, `5777`, `6488`, `6481`, `5733`).
+  - `5370` («Точка и линия») strict related starts with art/exhibition events (`6214`, `5969`, `6080`, `5391`).
+- Browser evidence: mocked authorized search UI smoke and real Edge smoke both rendered scrollable cards with shared actions; the real Edge smoke for `концерт классической музыки` returned `12` rendered cards.
+
+The v62 failure mode was operational, not semantic: leaving `node22` in `/kaggle/working` made the failed notebook artifact too large/noisy. The Kaggle kernel now deletes transient `node22` and extracted site paths on both success and failure while preserving recoverable cache/SQLite outputs. The exporter also refuses to overwrite a larger expensive related cache with a smaller canary run unless `STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK=1` is explicitly set.
 
 ### Authorized search
 
@@ -226,7 +233,7 @@ Recompute policy:
 
 - do not recompute if event ids, event search fingerprints and the Gemma policy signature are unchanged;
 - if a new event appears or an existing event’s factual search document changes, recompute the active/future graph, not only the changed anchor, because a new event can become the best related item for older pages;
-- target persistence is `event_similarity_edges` (P1): store `(anchor_event_id, candidate_event_id, related_score, vector_similarity, llm_semantic_score, similarity_class, doc_version, model, policy_signature, source_fingerprints, computed_at)`. A changed/new event recomputes its own outgoing edges and can update reverse incoming edges for older anchors without re-verifying unchanged pairs. Astro generation then sorts from cached edges and applies lifecycle/date exclusions at render time.
+- current implementation persists the related graph in the static-builder related cache (`raw_chains`, Gemma audit cache and `gemma_verified_event_ids`). The cache key includes event fingerprints, candidate fingerprints and Gemma policy signature, so unchanged anchor/candidate pairs are reused. Target persistence is still `event_similarity_edges` (P1): store `(anchor_event_id, candidate_event_id, related_score, vector_similarity, llm_semantic_score, confidence, similarity_class, doc_kind, model, policy_signature, source_fingerprints, computed_at)`. A changed/new event recomputes its own outgoing edges and can update reverse incoming edges for older anchors without re-verifying unchanged pairs. Astro generation then sorts from cached edges and applies lifecycle/date exclusions at render time.
 - static related can run less often than Astro page rendering: Astro can reuse a valid related cache, while lifecycle/date changes are still applied at export/generation time;
 - when generating pages, exclude events that already started today, ended, were cancelled, deleted or duplicated, so related cards remain actionable.
 
@@ -281,7 +288,7 @@ Evidence from 2026-06-29 UTC:
 
 ## Product surfaces
 
-- **Похожие / Смотрите дальше** on event detail pages: static related chain from `event_pgvector_related_chain_v1`; mobile is feed-like, desktop can be grid/list.
+- **Похожие / Смотрите дальше** on event detail pages: static related chain from `event_pgvector_related_chain_v2_two_doc` / `related_v1` in current v62 builds; mobile is feed-like, desktop can be grid/list. Historical v48/v59 previews used `event_pgvector_related_chain_v1`.
 - **Для меня**: local/profile-aware personalization on top of static manifests; no online pgvector call on ordinary page view.
 - **Умный поиск**: authorized explicit search with quota; results are rendered by the shared `KenigEventsRenderEventCard` feed-card renderer, so like, share, “не интересно”, calendar/detail actions and local personalization feedback stay identical to `Смотрите дальше`.
   The authorized-results container carries `request_id`, `served_list_id`, `served_list_hash` and `algorithm_id`; strong actions inherit this context for investigation.

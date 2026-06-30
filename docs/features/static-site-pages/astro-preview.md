@@ -1,27 +1,29 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** latest checked/published focus preview `preview-20260629-event-pages-v59-related-gemma50` (50 real events, Supabase pgvector semantic related-chain, strict Gemma 4 26B verifier/reranker cache, CDN media/ICS).
-> **Public preview index:** <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/__preview/>
+> **Build ID:** current full-catalog review target `preview-20260630-event-pages-v62-two-vector-gemma-full` (343 future events, `search_v3` + `related_v1`, Supabase pgvector, strict Gemma 4 26B verifier/reranker cache, CDN media/ICS). Historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
+> **Preview index target:** <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>. As of the latest 2026-06-30 verification, the objects are present in `s3://kenigevents.ru/...`, but public GET returns `404/403` because bucket/CDN public-read policy is not enabled for uploaded objects; this is an infrastructure blocker, not a generator failure.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI source is present but remains gated by Supabase/Yandex/Edge deployment. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
 ## Public URLs
 
-Required openable URLs for the current preview:
+Required URLs for the current preview once bucket/CDN public-read is restored:
 
-- Preview index: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/vyhodnye/>
-- Search page: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/poisk/>
-- Semantic related golden event: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/data/discovery/6447.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260629-event-pages-v59-related-gemma50/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260629-event-pages-v59-related-gemma50/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/poisk/>
+- Urban-planning golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
+- Music golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Art golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/tochka-i-liniya-kaliningrad-5370/>
+- Golden related discovery JSON: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/data/discovery/6447.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>
 
-CDN media/ICS verification for this preview: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`, and discovery JSON uses `event_pgvector_related_chain_v1` with `strict_verified_related=true` for v59.
+CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 uses `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1` and `strict_verified_related=true`.
 
 ## Code layout
 
@@ -165,6 +167,43 @@ model-provided `similarity_class`/`confidence`, the synthetic smoke returned
 valid JSON in `7.00s`. A new full Kaggle run is still needed to measure the
 statistical retry/error reduction on all anchors.
 
+
+## v62 full-catalog two-document pgvector + Gemma run
+
+`preview-20260630-event-pages-v62-two-vector-gemma-full` is the first full future-catalog stress run for the implemented two-document retrieval split:
+
+- `search_v3` vectors remain optimized for authorized `/poisk/`;
+- `related_v1` vectors are used by static event-to-event related chains;
+- Supabase RPC `event_related_candidates_by_event_id_v1(..., p_embedding_doc_kind => 'related_v1')` is the recall layer;
+- Gemma 4 26B validates/reorders the top candidate windows offline;
+- public `similar[]` is strict: only candidates with Gemma verdict and `llm_semantic_score >= 0.72`; weak/provisional material belongs only under a separate discovery heading.
+
+Incremental contract:
+
+- `scripts/sync_event_search_vectors_to_supabase.py` skips unchanged vectors independently for `search_v3` and `related_v1`; after the initial related-vector backfill, ordinary rebuilds should generate provider embeddings only for new/changed event documents.
+- The related cache stores raw pgvector chains and Gemma verdicts keyed by event/candidate fingerprints and policy signature. If a new event appears, only anchors whose top candidate window changes, plus the new anchor, need new Gemma calls; unchanged anchor/candidate pairs are cache hits.
+- The first v62 run is necessarily heavier than a steady-state rebuild because it changes the document kind/cache schema and has to validate anchors not present in the old v59/v61 cache.
+
+Local preflight on 2026-06-30 before the Kaggle run:
+
+- personalization Supabase size: about 25 MiB; `event_search_documents≈3.8 MiB`, `event_embeddings≈9.4 MiB`;
+- vectors present: `search_v3=404`, `related_v1=343`;
+- full sync from the v61 production snapshot processed 343 future events and created the remaining `related_v1` vectors with `293` embedding provider calls;
+- after the sync, reruns skipped unchanged embeddings by kind;
+- local Gemma cache preflight verified 20 anchors with valid JSON and reused cached verdicts on rerun; golden `6447` ordered `4759` then `6310`, while unrelated music false positives stayed out of strict similar.
+
+The first Kaggle v62 run produced the expensive reusable related cache but ended with Kaggle `ERROR` before a compact archive/result could be accepted because the failed notebook left a large `node22` dependency tree in `/kaggle/working`. The recovered cache was then reused locally with `--pgvector-max-provider-calls 0` / `--gemma-related-max-anchors 0`: `343` anchors exported, `343` Gemma cache hits, `0` provider calls, `npm run check:preview` passed, and the preview tree was uploaded to `s3://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/`. The Kaggle kernel now cleans transient `node22`/extracted site paths on both success and failure while preserving recoverable outputs such as `event_related_chain_cache.json` and `events.sqlite`. The exporter also has a shrink guard so a 50-event canary cannot overwrite a larger expensive related cache unless `STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK=1` is set.
+
+v62 verification evidence on 2026-06-30:
+
+- S3 listing confirms `1060` uploaded objects for the v62 prefix, including `343` event detail pages and `343` discovery JSON files;
+- authenticated S3 listing confirms `__preview/index.html`, `/poisk/index.html`, golden event pages and stable ICS files exist in the bucket;
+- public HTTP is currently blocked: `https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/` and `https://static.kenigevents.ru/ics/5878.ics` return `404/403` until the bucket/CDN public-read policy is enabled;
+- built discovery JSON for `6447` has `algorithm_id=event_pgvector_related_chain_v2_two_doc`, `strategy=event_pgvector_related_chain_v2_manifest`, and only two strict related cards: `4759` (`llm_semantic_score=0.85`, `llm_confidence=0.95`) and `6310` (`0.75`, `0.90`);
+- built discovery JSON for `5878` has music/retro/concert candidates first (`3398`, `5777`, `6488`, `6481`, `5733`);
+- built discovery JSON for `5370` has art/exhibition candidates first (`6214`, `5969`, `6080`, `5391`);
+- mocked browser smoke: `authorized_search_ui_smoke=ok`, result cards scroll and shared like/share/not-interested/calendar actions render;
+- real Edge smoke: `authorized_search_real_edge_smoke=ok`, 12 cards rendered for `концерт классической музыки`, first event `5668`, scrolled event `5667`, quota text returned.
 
 ## v47 sparse terminology, related-order and CDN verification
 

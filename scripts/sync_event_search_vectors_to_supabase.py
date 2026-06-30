@@ -310,6 +310,48 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
     return "\n".join(part for part in facts if part and not part.endswith(": "))[:7000]
 
 
+def build_related_digest(event: dict[str, Any], category: str, tags: list[str]) -> str:
+    """Cleaner event-to-event document for related pages.
+
+    Search documents intentionally include weekday/month/price/free words so
+    explicit user queries like "бесплатно в воскресенье вечером" work. Related
+    pages need a different representation: theme, format, audience and venue are
+    useful; calendar/admission words can pollute similarity.
+    """
+    joined_text = clean_text(" ".join(clean_text(part) for part in [
+        event.get("title"),
+        event.get("event_type"),
+        event.get("summary"),
+        event.get("description_html"),
+        *(event.get("topics") or []),
+    ] if part is not None))
+    audience_flags: list[str] = []
+    tag_set = set(tags)
+    if {"family", "kids", "kids_school"} & tag_set or re.search(r"детск|детям|реб[её]н|семейн|для\s+дет", joined_text, re.I):
+        audience_flags.extend(["для детей", "для семьи"])
+    if re.search(r"турист|экскурс", joined_text, re.I):
+        audience_flags.append("для туристов")
+    if re.search(r"благотвор|пожертв|донат", joined_text, re.I):
+        audience_flags.append("благотворительное")
+    if event.get("pushkin_card"):
+        audience_flags.append("Пушкинская карта")
+    semantic_tags = [
+        tag for tag in tags
+        if tag not in {"free", "ticketed", clean_text(event.get("city")).lower()}
+    ]
+    facts = [
+        f"Категория: {category}",
+        f"Тип/формат: {clean_text(event.get('event_type')) or 'событие'}",
+        f"Название: {clean_text(event.get('title'))}",
+        f"Кратко: {clean_text(event.get('summary'))}",
+        f"Описание: {clean_text(event.get('description_html'))[:2200]}",
+        f"Место/контекст: {join_parts([event.get('venue_name'), event.get('city')])}",
+        f"Темы: {', '.join(semantic_tags)}" if semantic_tags else "",
+        f"Аудитория/свойства: {', '.join(unique(audience_flags))}" if audience_flags else "",
+    ]
+    return "\n".join(part for part in facts if part and not part.endswith(": "))[:5200]
+
+
 def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: str, ics_base_url: str) -> dict[str, Any]:
     category = ru_event_category(event)
     tags = event_tags(event, category)
@@ -367,16 +409,20 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
 class SearchDoc:
     event_id: int
     document: dict[str, Any]
-    embedding_input: str
+    search_embedding_input: str
+    related_embedding_input: str
 
 
 def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str, ics_base_url: str) -> SearchDoc:
     category = ru_event_category(event)
     tags = event_tags(event, category)
     digest = build_search_digest(event, category, tags)
+    related_digest = build_related_digest(event, category, tags)
     # Gemini Embedding 2 has no taskType field; the task is part of the prompt.
-    embedding_input = f"title: {clean_text(event.get('title'))} | text: {digest}"
-    text_hash = sha256_text(embedding_input)
+    search_embedding_input = f"title: {clean_text(event.get('title'))} | text: {digest}"
+    related_embedding_input = f"related-event: title: {clean_text(event.get('title'))} | text: {related_digest}"
+    search_text_hash = sha256_text(search_embedding_input)
+    related_text_hash = sha256_text(related_embedding_input)
     ticket = event.get("ticket") or {}
     weekday_iso, weekday_ru = event_weekday(event)
     time_of_day = event_time_of_day(event)
@@ -386,12 +432,15 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     doc = {
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
+        "related_doc_version": "event-related-doc-v1",
         "card_snapshot_version": "event-card-v1",
-        "text_hash": text_hash,
+        "text_hash": search_text_hash,
+        "related_text_hash": related_text_hash,
         "slug": clean_text(event.get("slug")) or None,
         "canonical_path": event_href(event, base_path="").rstrip("/") + "/",
         "title": clean_text(event.get("title")),
         "search_digest": digest,
+        "related_digest": related_digest,
         "event_type": clean_text(event.get("event_type")) or None,
         "category": category,
         "tags": tags,
@@ -423,9 +472,16 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
             "source": "static_site_preview_events_json",
             "source_prod_id": event.get("source_prod_id"),
             "image_text_mode": event.get("image_text_mode"),
+            "search_text_hash": search_text_hash,
+            "related_text_hash": related_text_hash,
         },
     }
-    return SearchDoc(event_id=int(event["id"]), document=doc, embedding_input=embedding_input)
+    return SearchDoc(
+        event_id=int(event["id"]),
+        document=doc,
+        search_embedding_input=search_embedding_input,
+        related_embedding_input=related_embedding_input,
+    )
 
 
 def env_required(name: str) -> str:
@@ -459,7 +515,7 @@ def supabase_request(method: str, path: str, *, body: Any | None = None, timeout
         raise RuntimeError(f"Supabase REST {method} {path} failed HTTP {exc.code}: {detail}") from exc
 
 
-def fetch_existing_embeddings(event_ids: list[int], *, model: str, dim: int) -> dict[int, str]:
+def fetch_existing_embeddings(event_ids: list[int], *, model: str, dim: int, doc_kind: str) -> dict[int, str]:
     if not event_ids:
         return {}
     out: dict[int, str] = {}
@@ -468,7 +524,8 @@ def fetch_existing_embeddings(event_ids: list[int], *, model: str, dim: int) -> 
         chunk = event_ids[start : start + chunk_size]
         in_list = ",".join(str(int(x)) for x in chunk)
         model_q = urllib.parse.quote(model, safe="")
-        path = f"event_embeddings?select=event_id,text_hash&embedding_model=eq.{model_q}&embedding_dim=eq.{int(dim)}&event_id=in.({in_list})"
+        kind_q = urllib.parse.quote(doc_kind, safe="")
+        path = f"event_embeddings?select=event_id,text_hash&embedding_model=eq.{model_q}&embedding_dim=eq.{int(dim)}&embedding_doc_kind=eq.{kind_q}&event_id=in.({in_list})"
         rows = supabase_request("GET", path) or []
         for row in rows:
             out[int(row["event_id"])] = str(row.get("text_hash") or "")
@@ -488,7 +545,7 @@ def upsert_embeddings(rows: list[dict[str, Any]], *, chunk_size: int = 50) -> in
     sent = 0
     for start in range(0, len(rows), chunk_size):
         chunk = rows[start : start + chunk_size]
-        supabase_request("POST", "event_embeddings?on_conflict=event_id,embedding_model,embedding_dim", body=chunk, timeout=60.0)
+        supabase_request("POST", "event_embeddings?on_conflict=event_id,embedding_model,embedding_dim,embedding_doc_kind", body=chunk, timeout=60.0)
         sent += len(chunk)
     return sent
 
@@ -566,6 +623,11 @@ def main() -> int:
     parser.add_argument("--embedding-model", default="gemini-embedding-2")
     parser.add_argument("--embedding-dim", type=int, default=768)
     parser.add_argument("--google-key-env", default="GOOGLE_API_KEY4")
+    parser.add_argument(
+        "--document-kinds",
+        default="search_v3,related_v1",
+        help="Comma-separated embedding document kinds to sync: search_v3,related_v1.",
+    )
     parser.add_argument("--limit", type=int, default=0, help="Limit events for a canary backfill; 0 = all in fixture.")
     parser.add_argument("--event-ids", default="", help="Comma-separated event IDs to sync.")
     parser.add_argument("--max-provider-calls", type=int, default=1000)
@@ -585,71 +647,115 @@ def main() -> int:
     if args.limit and args.limit > 0:
         events = events[: args.limit]
     docs = [build_search_doc(event, site_origin=args.site_origin, base_path=args.base_path, ics_base_url=args.ics_base_url) for event in events]
+    document_kinds = [
+        item.strip()
+        for item in str(args.document_kinds or "").split(",")
+        if item.strip()
+    ] or ["search_v3", "related_v1"]
+    invalid_kinds = sorted(set(document_kinds) - {"search_v3", "related_v1"})
+    if invalid_kinds:
+        raise SystemExit(f"Unsupported document kinds: {', '.join(invalid_kinds)}")
 
     report: dict[str, Any] = {
         "preview_events_json": str(args.preview_events_json),
         "events": len(events),
         "embedding_model": args.embedding_model,
         "embedding_dim": args.embedding_dim,
+        "document_kinds": document_kinds,
         "apply": bool(args.apply),
         "site_origin": args.site_origin,
         "base_path": args.base_path,
     }
     if not args.apply:
         report["sample"] = [
-            {"event_id": doc.event_id, "text_hash": doc.document["text_hash"], "title": doc.document["title"], "digest_chars": len(doc.document["search_digest"])}
+            {
+                "event_id": doc.event_id,
+                "search_text_hash": doc.document["text_hash"],
+                "related_text_hash": doc.document["related_text_hash"],
+                "title": doc.document["title"],
+                "search_digest_chars": len(doc.document["search_digest"]),
+                "related_digest_chars": len(doc.document["related_digest"] or ""),
+            }
             for doc in docs[:5]
         ]
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
 
     upserted_docs = upsert_documents(docs)
-    existing = fetch_existing_embeddings([doc.event_id for doc in docs], model=args.embedding_model, dim=args.embedding_dim)
+    existing_by_kind = {
+        kind: fetch_existing_embeddings(
+            [doc.event_id for doc in docs],
+            model=args.embedding_model,
+            dim=args.embedding_dim,
+            doc_kind=kind,
+        )
+        for kind in document_kinds
+    }
     rows: list[dict[str, Any]] = []
     provider_calls = 0
-    skipped = 0
+    skipped_by_kind = {kind: 0 for kind in document_kinds}
     upserted_embeddings = 0
     started_at = time.monotonic()
     for doc in docs:
-        if not args.force and existing.get(doc.event_id) == doc.document["text_hash"]:
-            skipped += 1
-            continue
+        for doc_kind in document_kinds:
+            if doc_kind == "search_v3":
+                embedding_input = doc.search_embedding_input
+                text_hash = str(doc.document["text_hash"])
+                doc_version_key = "search_doc_version"
+            else:
+                embedding_input = doc.related_embedding_input
+                text_hash = str(doc.document["related_text_hash"])
+                doc_version_key = "related_doc_version"
+            if not args.force and existing_by_kind.get(doc_kind, {}).get(doc.event_id) == text_hash:
+                skipped_by_kind[doc_kind] += 1
+                continue
+            if provider_calls >= max(0, int(args.max_provider_calls)):
+                break
+            vector = gemini_embed(embedding_input, model=args.embedding_model, dim=args.embedding_dim, key_env=args.google_key_env)
+            provider_calls += 1
+            rows.append({
+                "event_id": doc.event_id,
+                "embedding_model": args.embedding_model,
+                "embedding_dim": int(args.embedding_dim),
+                "embedding_doc_kind": doc_kind,
+                "embedding": vector,
+                "text_hash": text_hash,
+                "embedded_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": {
+                    "doc_kind": doc_kind,
+                    "doc_version": doc.document.get(doc_version_key),
+                    "search_doc_version": doc.document["search_doc_version"],
+                    "related_doc_version": doc.document.get("related_doc_version"),
+                },
+            })
+            if len(rows) >= max(1, int(args.upsert_chunk_size)):
+                upserted_embeddings += upsert_embeddings(rows)
+                rows = []
+                print(
+                    json.dumps({
+                        "stage": "embedding_partial_upsert",
+                        "provider_calls": provider_calls,
+                        "skipped_by_kind": skipped_by_kind,
+                        "elapsed_seconds": round(time.monotonic() - started_at, 1),
+                    }, ensure_ascii=False),
+                    file=sys.stderr,
+                    flush=True,
+                )
+            if args.sleep_seconds > 0:
+                time.sleep(float(args.sleep_seconds))
         if provider_calls >= max(0, int(args.max_provider_calls)):
             break
-        vector = gemini_embed(doc.embedding_input, model=args.embedding_model, dim=args.embedding_dim, key_env=args.google_key_env)
-        provider_calls += 1
-        rows.append({
-            "event_id": doc.event_id,
-            "embedding_model": args.embedding_model,
-            "embedding_dim": int(args.embedding_dim),
-            "embedding": vector,
-            "text_hash": doc.document["text_hash"],
-            "embedded_at": datetime.now(timezone.utc).isoformat(),
-            "metadata": {"search_doc_version": doc.document["search_doc_version"]},
-        })
-        if len(rows) >= max(1, int(args.upsert_chunk_size)):
-            upserted_embeddings += upsert_embeddings(rows)
-            rows = []
-            print(
-                json.dumps({
-                    "stage": "embedding_partial_upsert",
-                    "provider_calls": provider_calls,
-                    "skipped": skipped,
-                    "elapsed_seconds": round(time.monotonic() - started_at, 1),
-                }, ensure_ascii=False),
-                file=sys.stderr,
-                flush=True,
-            )
-        if args.sleep_seconds > 0:
-            time.sleep(float(args.sleep_seconds))
     if rows:
         upserted_embeddings += upsert_embeddings(rows)
+    skipped_total = sum(skipped_by_kind.values())
+    expected_embeddings = len(docs) * len(document_kinds)
     report.update({
         "documents_upserted": upserted_docs,
         "embeddings_upserted": upserted_embeddings,
-        "embeddings_skipped_unchanged": skipped,
+        "embeddings_skipped_unchanged": skipped_total,
+        "embeddings_skipped_by_kind": skipped_by_kind,
         "provider_calls": provider_calls,
-        "not_embedded_due_call_cap": max(0, len(docs) - skipped - provider_calls),
+        "not_embedded_due_call_cap": max(0, expected_embeddings - skipped_total - provider_calls),
     })
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0

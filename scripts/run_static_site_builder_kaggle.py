@@ -440,6 +440,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     expected = ['site_source.tarball', 'build_config.json']
     if args.db and args.export_in_kaggle:
         expected.append('events.sqlite')
+    if args.related_cache and Path(args.related_cache).exists():
+        expected.append('event_related_chain_cache.json')
     wait_dataset_ready(client, dataset_ref, expected_files=expected)
     return build_id, dataset_ref
 
