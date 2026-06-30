@@ -231,6 +231,10 @@ features:
     status: draft
     docs: docs/features/subscriber-acquisition/README.md
     requirements: docs/features/subscriber-acquisition/requirements.md
+  trip_recomendation:
+    status: draft
+    docs: docs/features/trip-recomendation/README.md
+    requirements: docs/features/trip-recomendation/requirements.md
   afishaengagement:
     status: debug_shadow
     docs: docs/features/afishaengagement/README.md

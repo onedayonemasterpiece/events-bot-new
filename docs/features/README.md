@@ -36,6 +36,7 @@
 ## Черновики требований
 
 - `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
+- `docs/features/trip-recomendation/requirements.md` — требования к однодневным туристическим маршрут-рекомендациям с транспортом, событиями/местами и карточками публикаций.
 
 ## Как добавлять новую фичу
 
