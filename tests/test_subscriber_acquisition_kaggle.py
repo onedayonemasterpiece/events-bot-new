@@ -37,6 +37,19 @@ def test_build_opportunity_from_message_is_review_only_with_sticker_observation(
     assert opp["sticker_observation"]["fit"] == "possible"
 
 
+def test_existing_event_logistics_comment_is_not_acquisition_opportunity():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/example", platform="vk")
+
+    assert runtime.build_vk_opportunity(
+        surface,
+        owner_id=-1,
+        post_id=2,
+        comment={"id": 3, "text": "Подскажите, до скольки мероприятие?"},
+        default_target_url="https://t.me/kenigevents",
+    ) is None
+
+
 def test_generic_where_comment_is_not_event_opportunity():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://t.me/example", platform="tg")

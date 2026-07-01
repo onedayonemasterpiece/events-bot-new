@@ -44,6 +44,7 @@
 
 ### Fixed
 
+- Tightened Subscriber Acquisition deterministic opportunity prefilter so existing-event logistics comments such as “до скольки мероприятие?” do not become acquisition reply candidates.
 - Fixed Subscriber Acquisition real Kaggle launch preflight: dataset slugs now
   and titles respect Kaggle's current 50-character API limits, and the Kaggle
   SDK dependency lane pins `kagglesdk==0.1.30` so local server launchers can
@@ -2755,6 +2756,7 @@
 
 ### Fixed
 
+- Tightened Subscriber Acquisition deterministic opportunity prefilter so existing-event logistics comments such as “до скольки мероприятие?” do not become acquisition reply candidates.
 - **CrumpleVideo missing video output (INC-2026-06-26)**: hardened the Kaggle notebook against missing static asset mount paths by searching all `/kaggle/input/*` roots, added required intro fonts to the per-session dataset fallback, and made the notebook fail hard when the final mp4 is not produced instead of reporting a green `render_done`/`report_written` status.
 ## [1.3.7] - 2025-12-31
 
