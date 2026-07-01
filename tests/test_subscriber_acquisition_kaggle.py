@@ -18,10 +18,11 @@ def load_runtime():
 
 def test_extract_candidate_surfaces_from_public_links():
     runtime = load_runtime()
-    surfaces = runtime.extract_candidate_surfaces("Вот t.me/some_kgd_chat и https://vk.com/club12345")
+    surfaces = runtime.extract_candidate_surfaces("Вот t.me/some_kgd_chat и https://vk.com/wall-12345_9")
     by_external = {s["external_id"]: s for s in surfaces}
     assert by_external["tg:some_kgd_chat"]["source"] == "discovered"
     assert by_external["vk:club12345"]["platform"] == "vk"
+    assert by_external["vk:club12345"]["url"] == "https://vk.com/club12345"
 
 
 def test_build_opportunity_from_message_is_review_only_with_sticker_observation():
@@ -34,6 +35,14 @@ def test_build_opportunity_from_message_is_review_only_with_sticker_observation(
     assert opp["link_target"]["kind"] == "pka_channel"
     assert opp["scores"]["source"] == "deterministic_shadow_prefilter"
     assert opp["sticker_observation"]["fit"] == "possible"
+
+
+def test_generic_where_comment_is_not_event_opportunity():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+    message = SimpleNamespace(id=12, message="А где 34 автобус?!", date=datetime(2026, 7, 1, tzinfo=timezone.utc))
+
+    assert runtime.build_opportunity_from_message(surface, message, default_target_url="https://t.me/kenigevents") is None
 
 
 def test_telegram_opportunity_filter_requires_comments_not_channel_posts():

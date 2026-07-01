@@ -31,4 +31,7 @@ Telegram opportunity discovery is comment-first: source/channel posts are read
 to discover linked discussion chats and outbound links, but review opportunities
 are created only from human group/comment messages. Operator rejection feedback
 is collected by pressing `Нет + причина` and replying to the review card; the
-reply text is stored in acquisition feedback export.
+reply text is stored in acquisition feedback export. Runtime seed collection
+prioritizes newly discovered and linked-discussion surfaces before older seed
+surfaces, so repeated Kaggle runs walk the frontier instead of rechecking only
+the original seed list.

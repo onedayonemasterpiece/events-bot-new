@@ -230,6 +230,34 @@ async def test_runtime_seed_payload_includes_existing_vk_monitoring_groups(db):
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/old_seed",
+            external_id="tg:old_seed",
+            status="candidate",
+            source="seed",
+        ))
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="linked_discussion",
+            url="https://t.me/c/123",
+            external_id="tg:123",
+            status="candidate",
+            source="linked_discussion",
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+
+    assert [item["external_id"] for item in payload["surfaces"][:2]] == ["tg:123", "tg:old_seed"]
+
+
+@pytest.mark.asyncio
 async def test_shadow_run_without_payload_uses_kaggle_runner_by_default(db, sample_payload, monkeypatch):
     async def fake_report(run, surfaces, opportunities):
         return "https://telegra.ph/acq-report"

@@ -16,6 +16,10 @@
   Telegram discovery now creates opportunity candidates only from human
   group/comment messages, not from source channel posts or copied ad posts;
   channel posts are still read for linked-discussion and new-link discovery.
+  Newly discovered/linked discussion surfaces are prioritized in the next
+  runtime seed payload, generic `где ...` transport-style comments no longer
+  become event opportunities, and discovered VK wall links are normalized to
+  community URLs such as `vk.com/club...` for future analysis.
 - Telegram event posts keep permanent footer links to Max and VK next to the
   `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual
   offset); only explicit button-highlight posts where `Подробнее` moves to an

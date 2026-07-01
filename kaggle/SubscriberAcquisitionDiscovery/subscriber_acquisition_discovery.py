@@ -54,8 +54,9 @@ DEFAULT_TG_SEEDS = [
 _LINK_RE = re.compile(r"(?i)\b(?:https?://)?(?:t\.me|telegram\.me|vk\.com)/[A-Za-z0-9_./?=&-]+")
 _TG_HOST_RE = re.compile(r"(?i)(?:https?://)?(?:t\.me|telegram\.me)/(?P<handle>[A-Za-z0-9_]{4,})")
 _VK_HOST_RE = re.compile(r"(?i)(?:https?://)?vk\.com/(?P<handle>[A-Za-z0-9_.-]{3,})")
-_OPPORTUNITY_RE = re.compile(
-    r"(?i)\b(куда|где|что\s+посетить|афиша|концерт|выставк|спектакл|детям|с детьми|выходные|мероприят)")
+_VK_WALL_RE = re.compile(r"(?i)^wall-(?P<group_id>\d+)_\d+$")
+_EVENT_INTENT_RE = re.compile(
+    r"(?i)\b(что\s+посетить|афиша|концерт|выставк|спектакл|детям|с детьми|выходные|мероприят|событи|куда\s+(?:сходить|пойти)|где\s+(?:афиша|концерт|выставк|спектакл|мероприят))")
 _STICKER_HINT_RE = re.compile(r"(?i)\b(стикер|sticker|😂|👍|🔥|🤣|❤️|❤|👏)")
 
 
@@ -151,6 +152,18 @@ def _handle_from_url(url: str, platform: str = "tg") -> str:
     return raw.split("/")[-1].split("?")[0].lstrip("@")
 
 
+def _vk_surface_from_handle(handle: str) -> dict[str, Any] | None:
+    clean = str(handle or "").strip().strip("/")
+    if not clean:
+        return None
+    wall = _VK_WALL_RE.match(clean)
+    if wall:
+        clean = f"club{wall.group('group_id')}"
+    if clean.lower().startswith(("wall", "photo", "video", "topic", "im")):
+        return None
+    return _seed_surface(f"https://vk.com/{clean}", platform="vk") | {"source": "discovered"}
+
+
 def extract_candidate_surfaces(text: str) -> list[dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for match in _LINK_RE.findall(text or ""):
@@ -163,19 +176,23 @@ def extract_candidate_surfaces(text: str) -> list[dict[str, Any]]:
                 continue
             out[f"tg:{handle}"] = _seed_surface(f"https://t.me/{handle}", platform="tg") | {"source": "discovered"}
         elif vk:
-            handle = vk.group("handle")
-            out[f"vk:{handle}"] = _seed_surface(f"https://vk.com/{handle}", platform="vk") | {"source": "discovered"}
+            surface = _vk_surface_from_handle(vk.group("handle"))
+            if surface:
+                out[str(surface["external_id"])] = surface
     return list(out.values())
 
 
 def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, default_target_url: str) -> dict[str, Any] | None:
     text = str(getattr(message, "message", None) or getattr(message, "text", None) or "").strip()
-    if not text or not _OPPORTUNITY_RE.search(text):
+    if not text or not _EVENT_INTENT_RE.search(text):
         return None
     msg_id = int(getattr(message, "id", 0) or 0)
     url = surface.get("url") or ""
     handle = surface.get("handle") or _handle_from_url(url)
-    context_url = f"https://t.me/{handle}/{msg_id}" if surface.get("platform") == "tg" and handle and msg_id else url
+    if surface.get("platform") == "tg" and handle and msg_id:
+        context_url = f"https://t.me/c/{handle}/{msg_id}" if str(handle).isdigit() else f"https://t.me/{handle}/{msg_id}"
+    else:
+        context_url = url
     reactions = getattr(message, "reactions", None)
     sticker_possible = bool(_STICKER_HINT_RE.search(text) or any(mark in text for mark in ["😂", "👍", "🔥", "🤣", "❤️", "❤", "👏"]) or getattr(message, "sticker", None) or reactions)
     date = getattr(message, "date", None)
@@ -249,7 +266,7 @@ def _vk_api(method: str, *, token: str, params: dict[str, Any]) -> dict[str, Any
 
 def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int, comment: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
     text = str(comment.get("text") or "").strip()
-    if not text or not _OPPORTUNITY_RE.search(text):
+    if not text or not _EVENT_INTENT_RE.search(text):
         return None
     comment_id = int(comment.get("id") or 0)
     context_url = f"https://vk.com/wall{owner_id}_{post_id}"
@@ -505,7 +522,8 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     if linked_chat_id:
                         linked = await client.get_entity(linked_chat_id)
                         linked_handle = getattr(linked, "username", None) or str(linked_chat_id)
-                        linked_surface = _seed_surface(f"https://t.me/{linked_handle}", platform="tg")
+                        linked_url = f"https://t.me/{linked_handle}" if getattr(linked, "username", None) else f"https://t.me/c/{linked_handle}"
+                        linked_surface = _seed_surface(linked_url, platform="tg")
                         linked_surface.update({
                             "surface_type": "linked_discussion",
                             "title": getattr(linked, "title", None),

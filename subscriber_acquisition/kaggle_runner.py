@@ -97,9 +97,24 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     seen: set[tuple[str, str]] = set()
     async with db.get_session() as session:
         rows = (await session.execute(
-            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(100)
+            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(250)
         )).scalars().all()
-        for row in rows:
+
+        def _surface_priority(row: AcqSurface) -> tuple[int, int, float, int]:
+            source = str(row.source or "").strip().lower()
+            status = str(row.status or "").strip().lower()
+            is_new_frontier = source in {"discovered", "linked_discussion"}
+            next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
+            if next_scan.tzinfo is None:
+                next_scan = next_scan.replace(tzinfo=timezone.utc)
+            return (
+                0 if is_new_frontier else 1,
+                0 if status == "candidate" else 1,
+                next_scan.timestamp(),
+                int(row.id or 0),
+            )
+
+        for row in sorted(rows, key=_surface_priority):
             item = row.model_dump()
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
