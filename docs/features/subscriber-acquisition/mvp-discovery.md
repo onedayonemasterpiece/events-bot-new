@@ -17,7 +17,9 @@ contract:
 - review cards capped by `ACQ_REVIEW_GROUP_MAX_CARDS_PER_RUN` with buttons
   `✅ Да`, `❌ Нет`, `🕒 Потом`, `🔗 Контекст`, `🎯 Куда`;
 - `/acq_run` imports an explicit `ACQ_DISCOVERY_RESULTS_PATH` or
-  `ACQ_DISCOVERY_FIXTURE_PATH`; sample fixture import requires
+  `ACQ_DISCOVERY_FIXTURE_PATH`; when no JSON is configured it runs the same
+  shadow runtime locally via `ACQ_DISCOVERY_RUNNER=local` and imports the
+  generated `acq_discovery_result.json`; sample fixture import requires
   `ACQ_DISCOVERY_USE_SAMPLE=1` so production does not review fake evidence;
 - review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
 - Telegraph report renderer/publisher and JSON schema for Kaggle output import;

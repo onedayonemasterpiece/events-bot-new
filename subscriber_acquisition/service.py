@@ -9,6 +9,7 @@ from sqlalchemy import select
 from models import AcqDiscoveryRun, AcqOpportunity, AcqReviewFeedback, AcqSurface
 from .config import AcqConfig, load_config
 from .importer import ImportResult, import_discovery_result
+from .kaggle_runner import collect_runtime_seed_payload, run_local_discovery_runtime
 from .report import publish_telegraph_report
 from .review import publish_review_cards
 
@@ -28,8 +29,12 @@ async def run_acq_discovery_shadow(db, bot: Any | None = None, *, payload: dict[
                 break
         if payload is None and cfg.use_sample_fixture and _SAMPLE_FIXTURE.exists():
             payload = json.loads(_SAMPLE_FIXTURE.read_text(encoding="utf-8"))
+        if payload is None and cfg.runner in {"local", "local_shadow", "local_shadow_runtime"}:
+            seed_payload = await collect_runtime_seed_payload(db)
+            runtime_result = run_local_discovery_runtime(config=cfg, seed_payload=seed_payload)
+            payload = runtime_result.payload
         if payload is None:
-            payload = {"run_id": "empty", "surfaces": [], "opportunities": []}
+            payload = {"run_id": "empty", "surfaces": [], "opportunities": [], "diagnostics": ["ACQ_DISCOVERY_RUNNER disabled or unsupported"]}
     result = await import_discovery_result(db, payload)
     telegraph_url = None
     if result.opportunities:

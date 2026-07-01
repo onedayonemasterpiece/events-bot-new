@@ -19,3 +19,6 @@ The MVP is intentionally review-only: it may send Telegram messages only to
 `ACQ_REVIEW_CHAT_ID` review chat and has guardrails against external Telegram/VK
 posting. Kaggle/session wiring uses the existing heavy-job and S22 remote-session
 controls; the scanner runtime is under `kaggle/SubscriberAcquisitionDiscovery/`.
+`/acq_run` can import an explicit result JSON or run the same runtime through
+`ACQ_DISCOVERY_RUNNER=local` as a safe shadow fallback that writes/imports
+`acq_discovery_result.json` without any external sends.

@@ -211,6 +211,33 @@ def test_no_send_guard_blocks_external_targets():
 
 
 @pytest.mark.asyncio
+async def test_shadow_run_without_payload_uses_local_runtime(db, sample_payload, monkeypatch):
+    async def fake_report(run, surfaces, opportunities):
+        return "https://telegra.ph/acq-report"
+
+    def fake_runtime(*, config, seed_payload=None):
+        assert config.runner == "local"
+        assert seed_payload == {"surfaces": []}
+        return SimpleNamespace(payload=sample_payload, output_path=Path("/tmp/acq.json"), runner="local_shadow_runtime")
+
+    monkeypatch.setattr("subscriber_acquisition.service.publish_telegraph_report", fake_report)
+    monkeypatch.setattr("subscriber_acquisition.service.run_local_discovery_runtime", fake_runtime)
+    cfg = AcqConfig(review_chat_id=777, runner="local")
+    bot = FakeBot()
+
+    result = await run_acq_discovery_shadow(db, bot=bot, config=cfg)
+
+    assert result.run.telegraph_url == "https://telegra.ph/acq-report"
+    assert len(result.surfaces) == 1
+    assert len(result.opportunities) == 1
+    async with db.get_session() as session:
+        targets = (await session.execute(select(AcqLinkTarget))).scalars().all()
+        feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+    assert targets and targets[0].kind == "topic_landing"
+    assert [row.action for row in feedback] == ["shown"]
+
+
+@pytest.mark.asyncio
 async def test_shadow_run_publishes_report_and_review_cards(db, sample_payload, monkeypatch):
     async def fake_report(run, surfaces, opportunities):
         return "https://telegra.ph/acq-report"
