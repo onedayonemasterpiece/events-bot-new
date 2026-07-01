@@ -77,6 +77,9 @@ blocked by the static no-send guard. To get beyond official event-source
 comments, the server seed payload also includes a small Smartik Kaliningrad
 public-catalog set of VK communities (`Подслушано`, `Типичный Калининград`,
 `Попутчики`, `ЧС`, `KADAUTO`) as `source=smartik_kaliningrad_catalog`.
+Telegram bot/service links (`*bot`, `addstickers`, `share`, etc.) are not queued
+as monitoring surfaces: discovery is for public groups/chats/comment threads,
+not bot accounts.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic
@@ -91,16 +94,23 @@ configured Google key is absent, the runtime fails closed for opportunities
 instead of showing regex-owned semantic cards. The review card stores and displays the Gemma checklist, including
 whether the comment is a real current/future need and not just a post-event
 thank-you/report or local logistics for the currently discussed event/post
-(schedule/programme of one day, exact time/address/entrance).
+(schedule/programme of one day, exact time/address/entrance). Venue-policy
+questions addressed to a specific organizer/community (`у вас есть льготы/
+скидки/билеты/доступность/пандус/можно с коляской/для инвалидов`) are rejected
+as local policy unless the user explicitly asks for a city-wide search/picker of
+accessible/free events.
 
 The cheap prefilter also routes recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
 (`/partnerstvo/`), site search/listing questions (`/poisk/`, `/vystavki/`,
 `/populyarnoe/`), event badge/filter questions around Pushkin card,
 kids/family, charity, recordings/streams, and free entry, plus trip-route
-recommendation contexts from `trip-recomendation` requirements. These remain shadow
-opportunities for review only after Gemma 4 accepts the checklist; broad
-semantic acceptance is never owned by regex/keywords.
+recommendation contexts from `trip-recomendation` requirements. Route retrieval
+intentionally includes loose phrasing such as “что посмотреть за день”, “куда
+поехать на выходных из Калининграда”, “маршрут по области”, trains, castles and
+coast hints so route opportunities are not missed before Gemma does the semantic
+gate. These remain shadow opportunities for review only after Gemma 4 accepts
+the checklist; broad semantic acceptance is never owned by regex/keywords.
 
 ## Operator map
 

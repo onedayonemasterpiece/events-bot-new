@@ -38,7 +38,7 @@
   extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated
   `GOOGLE_API_KEY3` lane by default) must accept a structured checklist before a
   reply candidate reaches review. Review cards display the Gemma checklist.
-- Subscriber Acquisition discovery now covers the `trip-recomendation` social-discovery requirement: one-day route/trip contexts are emitted as `trip_route_recommendation` review opportunities that require a concrete route target rather than falling back to the general announcements channel.
+- Subscriber Acquisition discovery now covers the `trip-recomendation` social-discovery requirement: one-day route/trip contexts are emitted as `trip_route_recommendation` review opportunities that require a concrete route target rather than falling back to the general announcements channel, and route retrieval now covers looser natural phrasing such as “что посмотреть за день”, “куда поехать на выходных из Калининграда”, and “маршрут по области”.
 - Subscriber Acquisition discovery now region-gates obvious out-of-Kaliningrad surfaces before queueing them, and broadens shadow opportunity topics beyond event recommendations to static-site search/listing, organizer partnership/submission, and event badge/filter hooks from the latest static-site documentation.
 - Subscriber Acquisition discovery now performs a bounded same-run Telegram frontier walk for deterministically discovered links, adds human-like read pauses, prefers/falls back across configured VK token lanes for read-only VK scans, documents VK seeds from existing monitoring groups, and records the Yandex/PostgreSQL storage direction as analysis rather than a hard requirement.
 - Subscriber Acquisition review cards now make rejection comments explicit:
@@ -77,6 +77,11 @@
   praise/thanks/report comments and event-local logistics questions by failing
   closed unless the Gemma 4 acquisition gate finds an explicit current/future
   need and clear native reply target beyond the currently discussed event/post.
+- Fixed Subscriber Acquisition false-positive review cards from specific venue
+  policy questions (`у вас есть льготы/скидки/билеты/доступность/...`): they no
+  longer become badge/filter candidates unless the user asks for a city-wide
+  search or selection of accessible/free events. Telegram bot/service links are
+  also ignored as monitoring surfaces.
 - Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
   longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
   is preserved over seed placeholders so future Kaggle runs advance through the

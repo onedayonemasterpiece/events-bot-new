@@ -41,6 +41,9 @@ contract:
   comments first (`sort=desc`), skip non-community VK links
   (`album*`/`app*`/`market*`/`away.php`/personal `id*`), and expose `vk_scan`
   counters for posts/comments inspected and VK rate-limit backoffs;
+- Telegram link discovery skips bot/service handles (`*bot`, `addstickers`,
+  `share`, etc.) so the frontier only grows through public groups, chats,
+  channels with comments, and VK communities;
 - Gemma 4 calls are visible and bounded: `ACQ_MAX_LLM_CALLS_PER_RUN` caps
   semantic checklist calls, and each payload reports `llm_gate` and
   `llm_gate_limits` counters so operator/status review can see how much of the
@@ -134,7 +137,16 @@ in the recent static-site work:
   video recording/streaming, free-entry questions;
 - trip recommendations: one-day route/where-to-go-outside-Kaliningrad contexts
   from `docs/features/trip-recomendation/requirements.md`, where the correct
-  target is a concrete route, not the general announcements public.
+  target is a concrete route, not the general announcements public. Retrieval
+  must include looser natural questions (“что посмотреть за день”, “куда
+  поехать на выходных из Калининграда”, “маршрут по области”, trains/castles/
+  coast hints), while Gemma remains responsible for final semantic acceptance.
+
+Specific-place policy questions are not acquisition candidates. For example,
+“у вас есть льготы/скидки/билеты/доступность/пандус/можно с коляской/для
+инвалидов?” in a venue/community thread is local venue policy and should be
+rejected unless the person explicitly asks for a city-wide search, filter or
+selection of accessible/free events.
 
 These deterministic matches are low-cost shadow prefilters. Final classification
 and reply wording remain LLM-first before any public response.

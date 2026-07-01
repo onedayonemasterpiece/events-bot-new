@@ -25,6 +25,19 @@ def test_extract_candidate_surfaces_from_public_links():
     assert by_external["vk:club12345"]["url"] == "https://vk.com/club12345"
 
 
+def test_extract_candidate_surfaces_skips_telegram_bots_and_service_links():
+    runtime = load_runtime()
+
+    surfaces = runtime.extract_candidate_surfaces(
+        "https://t.me/somehelperbot https://t.me/addstickers/Foo "
+        "https://t.me/share/url?url=x https://t.me/real_kgd_chat"
+    )
+
+    assert [surface["external_id"] for surface in surfaces] == ["tg:real_kgd_chat"]
+    assert runtime._is_tg_discovery_bot_or_service_handle("weatherbot") is True
+    assert runtime._is_tg_discovery_bot_or_service_handle("real_kgd_chat") is False
+
+
 def test_vk_surface_extractor_skips_non_community_links():
     runtime = load_runtime()
 
@@ -80,6 +93,26 @@ def test_trip_recommendation_requirement_is_acquisition_topic():
     assert opp["link_target"]["url"] is None
     assert "Конкретный маршрут" in opp["link_target"]["label"]
     assert opp["fallback_link_target"]["url"] is None
+
+
+def test_trip_recommendation_prefilter_covers_looser_route_questions():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+
+    examples = [
+        "Что посмотреть за день в области с детьми?",
+        "Куда поехать на выходных из Калининграда?",
+        "Посоветуйте маршрут по области: замки и побережье",
+    ]
+
+    for index, text in enumerate(examples, start=40):
+        opp = runtime.build_opportunity_from_message(
+            surface,
+            SimpleNamespace(id=index, message=text),
+            default_target_url="https://t.me/kenigevents",
+        )
+        assert opp is not None, text
+        assert opp["topic_cluster"] == "trip_route_recommendation"
 
 
 def test_acquisition_intent_covers_site_filters_and_partnership(monkeypatch):
@@ -168,6 +201,36 @@ def test_existing_event_logistics_comment_is_not_acquisition_opportunity():
         comment={"id": 3, "text": "Подскажите, до скольки мероприятие?"},
         default_target_url="https://t.me/kenigevents",
     ) is None
+
+
+def test_venue_policy_question_is_not_badge_filter_opportunity():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/yunost_park", platform="vk")
+
+    assert runtime.build_vk_opportunity(
+        surface,
+        owner_id=-1,
+        post_id=2,
+        comment={"id": 3, "text": "Здравствуйте, есть ли у вас какие-то льготы для детей-инвалидов????"},
+        default_target_url="https://t.me/kenigevents",
+    ) is None
+
+
+def test_citywide_accessible_event_search_is_still_badge_filter_opportunity():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/example", platform="vk")
+
+    opp = runtime.build_vk_opportunity(
+        surface,
+        owner_id=-1,
+        post_id=2,
+        comment={"id": 4, "text": "Где найти мероприятия с льготами и доступностью для детей-инвалидов в Калининграде?"},
+        default_target_url="https://t.me/kenigevents",
+    )
+
+    assert opp is not None
+    assert opp["matched_intent"] == "event_badge_or_filter_request"
+    assert opp["topic_cluster"] == "event_badges_filters"
 
 
 def test_generic_where_comment_is_not_event_opportunity():
@@ -390,6 +453,8 @@ def test_llm_gate_prompt_rejects_event_local_schedule_logistics():
     assert "афиша/программа/расписание 1 дня" in prompt
     assert "локальная логистика текущего события" in prompt
     assert "общий канал" in prompt
+    assert "льготы/скидки/билеты/условия/доступность" in prompt
+    assert "venue policy" in prompt
 
 
 def test_llm_gate_rejects_post_event_praise(monkeypatch):
