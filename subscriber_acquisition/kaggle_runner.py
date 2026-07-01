@@ -381,7 +381,10 @@ async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict
 
     slug_cipher = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id), f"Acq Discovery Cipher {slug_suffix}", write_cipher)
     slug_key = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_KEY, run_id), f"Acq Discovery Key {slug_suffix}", write_key)
-    await await_dataset_ready(client, slug_cipher, expected_files=["config.json", "secrets.enc", "kaggle_run.json", "kaggle_status_client.py"])
+    expected_cipher_files = ["config.json", "secrets.enc"]
+    if kaggle_run_config:
+        expected_cipher_files.extend(["kaggle_run.json", "kaggle_status_client.py"])
+    await await_dataset_ready(client, slug_cipher, expected_files=expected_cipher_files)
     await await_dataset_ready(client, slug_key, expected_files=["fernet.key"])
     return slug_cipher, slug_key
 
