@@ -223,8 +223,11 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_GOOGLE_KEY_ENV": os.getenv("ACQ_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3"),
         "ACQ_ALLOW_GOOGLE_KEY_FALLBACKS": os.getenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", "0"),
         "ACQ_LLM_GATE_MIN_RELEVANCE": os.getenv("ACQ_LLM_GATE_MIN_RELEVANCE", "0.85"),
+        "ACQ_MAX_LLM_CALLS_PER_RUN": os.getenv("ACQ_MAX_LLM_CALLS_PER_RUN", "80"),
         "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "1200"),
         "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
+        "ACQ_TG_SEARCH_QUERIES_JSON": os.getenv("ACQ_TG_SEARCH_QUERIES_JSON", ""),
+        "ACQ_TG_SEARCH_MESSAGES_PER_QUERY": os.getenv("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", "0"),
     }
     seen_context_urls = [
         str(item.get("context_url") or "").strip()
@@ -510,6 +513,10 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
         )
         await update_job_meta("subscriber_acquisition_discovery", kernel_ref, meta_updates={"last_status": status, "last_status_at": datetime.now(timezone.utc).isoformat()})
         if status != "complete":
+            try:
+                client._get_api().kernels_delete(kernel_ref, no_confirm=True)
+            except Exception:
+                pass
             raise RuntimeError(f"Subscriber Acquisition Kaggle kernel did not complete: {status} {status_payload}")
         output_path = _download_kaggle_output(client, kernel_ref, run_id=run_id)
         payload = json.loads(output_path.read_text(encoding="utf-8"))

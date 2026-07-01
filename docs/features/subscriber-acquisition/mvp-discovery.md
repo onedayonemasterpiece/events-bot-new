@@ -28,6 +28,14 @@ contract:
 - server import keeps seed-only queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces and later runs walk the remaining frontier rather than the same first seeds;
 - seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
 - optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
+- Telegram channels without accessible linked discussion/comments are marked
+  `rejected_no_comments` after scan, because reply acquisition requires a
+  confirmed comment/chat surface; channels with comments are scanned through the
+  linked discussion, while groups/chats are scanned directly;
+- Gemma 4 calls are visible and bounded: `ACQ_MAX_LLM_CALLS_PER_RUN` caps
+  semantic checklist calls, and each payload reports `llm_gate` and
+  `llm_gate_limits` counters so operator/status review can see how much of the
+  acquisition Gemma budget was spent or blocked;
 - Telegraph report renderer/publisher and JSON schema for Kaggle output import;
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;

@@ -131,7 +131,35 @@ _OUT_OF_REGION_HINT_RE = re.compile(
 )
 
 DEFAULT_ACQ_LLM_MODEL = "models/gemma-4-31b-it"
-LLM_GATE_STATS: dict[str, int] = {"calls": 0, "accepted": 0, "rejected": 0, "rejected_low_confidence": 0, "errors": 0, "skipped_no_key": 0}
+DEFAULT_TG_SEARCH_QUERIES = [
+    "куда сходить",
+    "куда пойти",
+    "с детьми",
+    "на выходных",
+    "афиша",
+    "выставки",
+    "концерт",
+    "мероприятия",
+    "куда съездить",
+    "маршрут",
+    "Пушкинская карта",
+    "бесплатно",
+    "добавить событие",
+]
+LLM_GATE_STATS: dict[str, int] = {
+    "prefilter_candidates": 0,
+    "calls": 0,
+    "reserved": 0,
+    "accepted": 0,
+    "rejected": 0,
+    "rejected_low_confidence": 0,
+    "errors": 0,
+    "skipped_no_key": 0,
+    "skipped_seen_context": 0,
+    "skipped_same_run_context": 0,
+    "blocked_rate_limit": 0,
+    "estimated_input_tokens": 0,
+}
 
 LLM_GATE_SCHEMA = {
     "type": "object",
@@ -201,6 +229,17 @@ def _human_pause_sync(*, multiplier: float = 1.0) -> None:
     if max_s <= 0:
         return
     time.sleep(random.uniform(min_s, max_s) * max(0.0, multiplier))
+
+
+def _deadline_after_seconds() -> float | None:
+    seconds = _int_env("ACQ_RUNTIME_DEADLINE_SECONDS", 0, min_value=0)
+    if seconds <= 0:
+        return None
+    return time.monotonic() + float(seconds)
+
+
+def _deadline_reached(deadline: float | None) -> bool:
+    return deadline is not None and time.monotonic() >= deadline
 
 
 def _truthy_env(name: str, default: bool = False) -> bool:
@@ -357,6 +396,48 @@ def _acq_llm_model() -> str:
     return (os.getenv("ACQ_LLM_MODEL") or DEFAULT_ACQ_LLM_MODEL).strip() or DEFAULT_ACQ_LLM_MODEL
 
 
+def _estimate_llm_input_tokens(prompt: str) -> int:
+    # Conservative enough for budget visibility without depending on provider tokenizers.
+    return max(1, int(len(prompt.encode("utf-8")) / 4) + 1)
+
+
+def _llm_gate_max_calls_per_run() -> int:
+    return _int_env("ACQ_MAX_LLM_CALLS_PER_RUN", 80, min_value=1)
+
+
+def _llm_limit_snapshot() -> dict[str, Any]:
+    return {
+        "scope": "kaggle_process",
+        "max_calls_per_run": _llm_gate_max_calls_per_run(),
+        "calls_used_this_run": int(LLM_GATE_STATS.get("calls", 0)),
+        "calls_reserved_this_run": int(LLM_GATE_STATS.get("reserved", 0)),
+        "blocked_rate_limit": int(LLM_GATE_STATS.get("blocked_rate_limit", 0)),
+        "estimated_input_tokens_this_run": int(LLM_GATE_STATS.get("estimated_input_tokens", 0)),
+        "key_env": _google_api_key()[1],
+        "model": _acq_llm_model(),
+    }
+
+
+def _reserve_llm_gate_call(prompt: str, diagnostics: list[str]) -> bool:
+    """Fail-fast local budget gate for Gemma calls made by this Kaggle process.
+
+    The project-wide Google AI gateway is still preferred where available, but
+    the Kaggle discovery script must never call Gemma from an unbounded loop.
+    This guard is intentionally before the provider request and is reported in
+    the payload so the operator can see today's/run spending instead of guessing.
+    """
+    used = int(LLM_GATE_STATS.get("calls", 0))
+    max_calls = _llm_gate_max_calls_per_run()
+    if used >= max_calls:
+        LLM_GATE_STATS["blocked_rate_limit"] += 1
+        diagnostics.append(f"acq llm gate budget exhausted: calls {used}/{max_calls}")
+        return False
+    estimated = _estimate_llm_input_tokens(prompt)
+    LLM_GATE_STATS["reserved"] += 1
+    LLM_GATE_STATS["estimated_input_tokens"] += estimated
+    return True
+
+
 def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
     checklist_questions = [
         "Есть явный вопрос, просьба, поиск рекомендации или нерешённая потребность?",
@@ -431,9 +512,10 @@ def _call_acq_llm_gate_sync(opp: dict[str, Any], surface: dict[str, Any]) -> dic
     client = genai.Client(api_key=api_key)
     model = _acq_llm_model()
     logger.info("acq.llm_gate_call model=%s key_env=%s", model, key_env)
+    prompt = _llm_gate_prompt(opp, surface)
     response = client.models.generate_content(
         model=model,
-        contents=_llm_gate_prompt(opp, surface),
+        contents=prompt,
         config=gtypes.GenerateContentConfig(
             temperature=0,
             max_output_tokens=_int_env("ACQ_LLM_GATE_MAX_OUTPUT_TOKENS", 900, min_value=256),
@@ -506,11 +588,15 @@ def _apply_llm_gate_result(opp: dict[str, Any], review: dict[str, Any]) -> dict[
 
 
 def _llm_review_opportunity_sync(opp: dict[str, Any], surface: dict[str, Any], diagnostics: list[str]) -> dict[str, Any] | None:
+    LLM_GATE_STATS["prefilter_candidates"] += 1
     if not _llm_gate_enabled():
         return opp
     if not _google_api_key()[0]:
         LLM_GATE_STATS["skipped_no_key"] += 1
         diagnostics.append("acq llm gate skipped candidate: Google API key is not configured")
+        return None
+    prompt = _llm_gate_prompt(opp, surface)
+    if not _reserve_llm_gate_call(prompt, diagnostics):
         return None
     try:
         LLM_GATE_STATS["calls"] += 1
@@ -706,6 +792,27 @@ def is_comment_opportunity_message(message: Any, *, surface_type: str | None, re
     return normalized_surface_type in {"group", "chat", "megagroup", "linked_discussion"}
 
 
+def _should_skip_opportunity_before_llm(
+    opp: dict[str, Any],
+    *,
+    seen_contexts: set[str],
+    opportunity_keys: set[str],
+    diagnostics: list[str],
+) -> bool:
+    context_url = str(opp.get("context_url") or "")
+    key = f"{opp.get('platform')}|{context_url}|{(opp.get('context_text_snippet') or '')[:120]}"
+    if context_url and context_url in seen_contexts:
+        LLM_GATE_STATS["skipped_seen_context"] += 1
+        diagnostics.append(f"skip already analyzed context before Gemma: {context_url}")
+        return True
+    if key in opportunity_keys:
+        LLM_GATE_STATS["skipped_same_run_context"] += 1
+        diagnostics.append(f"skip same-run duplicate before Gemma: {context_url or key[:80]}")
+        return True
+    opportunity_keys.add(key)
+    return False
+
+
 
 VK_READ_METHODS = {"wall.get", "wall.getComments"}
 
@@ -874,15 +981,17 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
                 if opp:
                     opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
-                    opp = _llm_review_opportunity_sync(opp, surface, diagnostics)
+                    if _should_skip_opportunity_before_llm(
+                        opp,
+                        seen_contexts=seen_contexts,
+                        opportunity_keys=opportunity_keys,
+                        diagnostics=diagnostics,
+                    ):
+                        opp = None
+                    else:
+                        opp = _llm_review_opportunity_sync(opp, surface, diagnostics)
                 if opp:
-                    context_url = str(opp.get("context_url") or "")
-                    key = f"{opp.get('platform')}|{context_url}|{(opp.get('context_text_snippet') or '')[:120]}"
-                    if context_url in seen_contexts:
-                        diagnostics.append(f"skip already analyzed context: {context_url}")
-                    elif key not in opportunity_keys:
-                        opportunity_keys.add(key)
-                        opportunities.append(opp)
+                    opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
                     break
     return list(surfaces.values()), opportunities, diagnostics
@@ -1024,6 +1133,8 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
     max_messages = _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 25, min_value=1)
     max_threads = _int_env("ACQ_MAX_THREADS_PER_SURFACE", 5, min_value=1)
     max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 30, min_value=1)
+    search_queries = [str(q).strip() for q in list(_json_env("ACQ_TG_SEARCH_QUERIES_JSON", DEFAULT_TG_SEARCH_QUERIES) or []) if str(q).strip()]
+    search_limit = _int_env("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", 0, min_value=0)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
@@ -1055,6 +1166,8 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 "surfaces_total": max_surfaces,
                 "tg_frontier_queued": discovered_queued,
                 "opportunities_found": len(opportunities),
+                "llm_calls": int(LLM_GATE_STATS.get("calls", 0)),
+                "llm_call_limit": _llm_gate_max_calls_per_run(),
             }
             _status_event("alive", phase="telegram_scan", status="running", progress=progress)
             await _human_pause_async(multiplier=0.8 if processed > 1 else 0.2)
@@ -1081,6 +1194,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
 
             scan_entities: list[tuple[Any, dict[str, Any], str | None]] = [(entity, surface, None)]
             if surface_type == "channel":
+                linked_comment_scan_added = False
                 try:
                     full = await client(GetFullChannelRequest(entity))
                     linked_chat_id = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
@@ -1104,8 +1218,66 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         else:
                             surfaces[linked_surface["external_id"]] = linked_surface
                             scan_entities.append((linked, linked_surface, "linked_discussion"))
+                            linked_comment_scan_added = True
                 except Exception as exc:
                     diagnostics.append(f"{handle}: linked discussion lookup failed: {exc}")
+                if not linked_comment_scan_added:
+                    surface = dict(surface)
+                    surface["status"] = "rejected_no_comments"
+                    surface["topic_cluster"] = "telegram_channel_without_comments"
+                    surface["risk"] = {
+                        "spam_risk": "high",
+                        "safety_risk": "low",
+                        "level": "rejected",
+                        "reason": "Telegram channel has no accessible linked discussion/comments; reply acquisition requires comments/chat",
+                    }
+                    surfaces[surface["external_id"]] = surface
+                    scan_entities = []
+                    diagnostics.append(f"{handle}: rejected channel without accessible comments")
+
+            async def process_tg_message(message: Any, scan_surface: dict[str, Any], relation: str | None, *, retrieval: str, search_query: str | None = None) -> bool:
+                nonlocal discovered_queued
+                text = str(getattr(message, "message", None) or "")
+                for discovered in extract_candidate_surfaces(text):
+                    discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
+                    if _is_out_of_region_surface(discovered):
+                        discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in Telegram message")
+                    surfaces.setdefault(discovered["external_id"], discovered)
+                    if (
+                        discovered.get("platform") == "tg"
+                        and _is_surface_scan_candidate(discovered)
+                        and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier)
+                    ):
+                        discovered_queued += 1
+                if not is_comment_opportunity_message(
+                    message,
+                    surface_type=str(scan_surface.get("surface_type") or ""),
+                    relation=relation,
+                ):
+                    return False
+                opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
+                if not opp:
+                    return False
+                opp["evidence"] = {
+                    **(opp.get("evidence") or {}),
+                    "relation": relation or "surface",
+                    "scanner": "telegram_shadow",
+                    "retrieval": retrieval,
+                    "search_query": search_query,
+                    "comment_only": True,
+                }
+                if _should_skip_opportunity_before_llm(
+                    opp,
+                    seen_contexts=seen_contexts,
+                    opportunity_keys=opportunity_keys,
+                    diagnostics=diagnostics,
+                ):
+                    return False
+                reviewed = await _llm_review_opportunity_async(opp, scan_surface, diagnostics)
+                if reviewed:
+                    opportunities.append(reviewed)
+                    return True
+                return False
 
             for scan_entity, scan_surface, relation in scan_entities:
                 seen = 0
@@ -1115,35 +1287,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             diagnostics.append("telegram message scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                             break
                         seen += 1
-                        text = str(getattr(message, "message", None) or "")
-                        for discovered in extract_candidate_surfaces(text):
-                            discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
-                            if _is_out_of_region_surface(discovered):
-                                discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in Telegram message")
-                            surfaces.setdefault(discovered["external_id"], discovered)
-                            if (
-                                discovered.get("platform") == "tg"
-                                and _is_surface_scan_candidate(discovered)
-                                and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier)
-                            ):
-                                discovered_queued += 1
-                        if is_comment_opportunity_message(
-                            message,
-                            surface_type=str(scan_surface.get("surface_type") or ""),
-                            relation=relation,
-                        ):
-                            opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
-                            if opp:
-                                opp["evidence"] = {**(opp.get("evidence") or {}), "relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
-                                opp = await _llm_review_opportunity_async(opp, scan_surface, diagnostics)
-                            if opp:
-                                context_url = str(opp.get("context_url") or "")
-                                key = f"{opp.get('platform')}|{context_url}|{(opp.get('context_text_snippet') or '')[:120]}"
-                                if context_url in seen_contexts:
-                                    diagnostics.append(f"skip already analyzed context: {context_url}")
-                                elif key not in opportunity_keys:
-                                    opportunity_keys.add(key)
-                                    opportunities.append(opp)
+                        await process_tg_message(message, scan_surface, relation, retrieval="latest")
                         if len(opportunities) >= max_opportunities:
                             break
                         if seen % 8 == 0:
@@ -1154,6 +1298,30 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     diagnostics.append(f"{handle}: iter_messages failed: {exc}")
                 if relation == "linked_discussion" and seen >= max_threads:
                     diagnostics.append(f"{handle}: linked discussion scan capped at {max_threads} threads")
+                if search_limit > 0 and search_queries and len(opportunities) < max_opportunities:
+                    if str(scan_surface.get("surface_type") or "").casefold() != "channel":
+                        for query in search_queries:
+                            if _deadline_reached(deadline):
+                                diagnostics.append("telegram search scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                                break
+                            if len(opportunities) >= max_opportunities:
+                                break
+                            found = 0
+                            try:
+                                async for message in client.iter_messages(scan_entity, search=query, limit=search_limit):
+                                    if _deadline_reached(deadline):
+                                        diagnostics.append("telegram search message scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                                        break
+                                    found += 1
+                                    await process_tg_message(message, scan_surface, relation, retrieval="telegram_search", search_query=query)
+                                    if len(opportunities) >= max_opportunities:
+                                        break
+                                    if found % 5 == 0:
+                                        await _human_pause_async(multiplier=0.2)
+                            except Exception as exc:
+                                diagnostics.append(f"{handle}: iter_messages search={query!r} failed: {exc}")
+                            if found:
+                                diagnostics.append(f"{handle}: telegram_search {query!r} inspected {found} messages")
             if len(opportunities) >= max_opportunities:
                 diagnostics.append(f"telegram opportunity scan capped at {max_opportunities} candidates")
                 break
@@ -1212,6 +1380,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "llm_gate_enabled": _llm_gate_enabled(),
             "llm_gate_model": _acq_llm_model(),
             "llm_gate": dict(LLM_GATE_STATS),
+            "llm_gate_limits": _llm_limit_snapshot(),
             "external_sends": 0,
             "comments_posted": 0,
             "stickers_sent": 0,

@@ -57,15 +57,23 @@ frontier/monitoring groups instead of restarting from the same head of the seed
 list. The server also passes already analyzed `context_url` values into Kaggle
 (`ACQ_SEEN_CONTEXT_URLS_JSON`) so the runtime skips repeated comment/message
 analysis except for explicit retry/error cases.
+Telegram broadcast channels are kept in the discovery map only after their
+commentability is checked: if a channel has no accessible linked discussion /
+comments, the scanner marks it `rejected_no_comments` and does not keep scanning
+it for reply opportunities. Review opportunities are built only from confirmed
+chat/comment surfaces.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic
 gate; it must not be treated as the final candidate decision. Kaggle opportunity
 acceptance is LLM-first through the Gemma 4 acquisition gate
 (`ACQ_ENABLE_LLM_GATE=1`, `ACQ_LLM_MODEL`, default `models/gemma-4-31b-it`,
-Google key lane `GOOGLE_API_KEY3`). If the configured Google key is absent, the
-runtime fails closed for opportunities instead of showing regex-owned semantic
-cards. The review card stores and displays the Gemma checklist, including
+Google key lane `GOOGLE_API_KEY3`). Gemma calls are also protected by a visible
+per-run budget gate (`ACQ_MAX_LLM_CALLS_PER_RUN`, default `80`) and the runtime
+reports `llm_gate` / `llm_gate_limits` counters in the Kaggle payload, including
+calls used/reserved, blocked limit attempts and estimated input tokens. If the
+configured Google key is absent, the runtime fails closed for opportunities
+instead of showing regex-owned semantic cards. The review card stores and displays the Gemma checklist, including
 whether the comment is a real current/future need and not just a post-event
 thank-you/report or local logistics for the currently discussed event/post
 (schedule/programme of one day, exact time/address/entrance).

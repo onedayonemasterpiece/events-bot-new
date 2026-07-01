@@ -40,6 +40,14 @@ def test_out_of_region_telegram_surface_is_rejected_not_queued():
     assert runtime._is_surface_scan_candidate(surface) is False
 
 
+def test_rejected_no_comments_surface_is_not_scan_candidate():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/no_comments_channel", platform="tg")
+    surface["status"] = "rejected_no_comments"
+
+    assert runtime._is_surface_scan_candidate(surface) is False
+
+
 
 
 def test_trip_recommendation_requirement_is_acquisition_topic():
@@ -256,6 +264,56 @@ def test_tg_frontier_queue_dedupes_and_respects_limit():
     assert queue == ["https://t.me/first", "https://t.me/second"]
 
 
+def test_runtime_deadline_helpers_stop_after_budget(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_RUNTIME_DEADLINE_SECONDS", "1")
+
+    deadline = runtime._deadline_after_seconds()
+
+    assert isinstance(deadline, float)
+    assert runtime._deadline_reached(deadline - 10) is True
+    assert runtime._deadline_reached(None) is False
+
+
+def test_seen_context_is_skipped_before_spending_gemma(monkeypatch):
+    runtime = load_runtime()
+    runtime.LLM_GATE_STATS["skipped_seen_context"] = 0
+    opp = {"platform": "tg", "context_url": "https://t.me/example/1", "context_text_snippet": "Куда сходить?"}
+    keys = set()
+    diagnostics = []
+
+    assert runtime._should_skip_opportunity_before_llm(
+        opp,
+        seen_contexts={"https://t.me/example/1"},
+        opportunity_keys=keys,
+        diagnostics=diagnostics,
+    ) is True
+
+    assert runtime.LLM_GATE_STATS["skipped_seen_context"] == 1
+    assert not keys
+    assert "before Gemma" in diagnostics[0]
+
+
+def test_llm_gate_has_visible_per_run_budget(monkeypatch):
+    runtime = load_runtime()
+    runtime.LLM_GATE_STATS["calls"] = 0
+    runtime.LLM_GATE_STATS["reserved"] = 0
+    runtime.LLM_GATE_STATS["blocked_rate_limit"] = 0
+    runtime.LLM_GATE_STATS["estimated_input_tokens"] = 0
+    monkeypatch.setenv("ACQ_MAX_LLM_CALLS_PER_RUN", "1")
+
+    diagnostics = []
+    assert runtime._reserve_llm_gate_call("Куда сходить?", diagnostics) is True
+    runtime.LLM_GATE_STATS["calls"] = 1
+    assert runtime._reserve_llm_gate_call("Куда сходить?", diagnostics) is False
+
+    snapshot = runtime._llm_limit_snapshot()
+    assert snapshot["max_calls_per_run"] == 1
+    assert snapshot["calls_used_this_run"] == 1
+    assert snapshot["blocked_rate_limit"] == 1
+    assert snapshot["estimated_input_tokens_this_run"] > 0
+
+
 def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
     runtime = load_runtime()
     config_path = tmp_path / "config.json"
@@ -433,6 +491,8 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert env["ACQ_LLM_MODEL"].startswith("models/gemma-4")
     assert env["ACQ_LLM_GATE_MIN_RELEVANCE"]
     assert env["ACQ_RUNTIME_DEADLINE_SECONDS"]
+    assert env["ACQ_MAX_LLM_CALLS_PER_RUN"]
+    assert "ACQ_TG_SEARCH_MESSAGES_PER_QUERY" in env
 
 
 def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):
