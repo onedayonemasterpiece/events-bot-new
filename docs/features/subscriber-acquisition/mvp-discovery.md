@@ -65,12 +65,11 @@ Normalize these Telegram URLs into `@username` seeds:
 - `https://t.me/pereezd_v_kaliningrad_legko`
 
 
-VK is also part of the MVP, but the initial VK allowlist is intentionally empty
-until product seeds are selected. MVP support should still include VK in the
-schema, queue, report, review UI, and runtime config so an operator can add
-starting VK communities later without redesign. Discovery may also discover VK
-community links from Telegram/VK evidence, but new VK surfaces remain
-`candidate` until reviewed.
+VK is also part of the MVP. The current starting VK seed set is imported from
+existing `vk_source` monitoring communities so the operator does not have to
+manually curate the first list. Discovery may also find VK community links from
+Telegram/VK evidence; new VK surfaces are stored as `candidate` and should be
+scanned in shadow mode before any reply/post decision.
 
 For each Telegram seed:
 
@@ -104,20 +103,34 @@ The first production rollout writes **review data only**:
 Posting, reply drafting for publication, VK personal-wall monitoring, sticker
 packs, and unattended approval are explicitly post-MVP.
 
-## Data ownership decision
+## Data ownership analysis
 
-Use the existing **core Fly SQLite DB** for MVP data:
+Current implementation keeps discovery/review state in the existing **core Fly
+SQLite DB** only as an MVP/prototype shortcut because it is already wired to the
+bot UI, `ops_run`, `kaggle_run_ledger`, `kaggle_registry`, review commands and
+remote Telegram session guard.
 
-- acquisition discovery is tied to bot operations, Telegram/VK source state,
-  event inventory, review UI, scheduler runs, and future publication safety;
-- it should reuse `ops_run`, `kaggle_run_ledger`, `kaggle_registry`, and the
-  existing bot admin UI/session boundaries;
-- the personalization Supabase/Postgres DB is for anonymous site telemetry,
-  profiles and recommendation caches, not core bot crawling/review queues.
+This is not a final product decision. For a growing discovery graph the better
+long-term direction is a separate operational discovery store, preferably a
+managed relational database in Yandex Cloud, behind a repository/storage
+abstraction. The reasons are product/operational rather than ideological:
 
-Do **not** create a separate bot or separate database for the MVP. Revisit a
-separate worker/bot only if discovery volume or policy boundaries grow enough to
-need independent deployment, credentials and operator workflows.
+| Option | Strengths | Weaknesses for discovery | Fit |
+| --- | --- | --- | --- |
+| Core Fly SQLite | Zero new infrastructure; easiest review UI integration; good for first E2E/prototype | Single-volume operational DB becomes a crawler graph store; weak concurrent writes/report exports; harder retention/analytics; backup/restore couples acquisition experiments with event operations | Temporary MVP only |
+| Personalization Supabase/Postgres | Existing Postgres-like analytics surface | Wrong ownership boundary: that DB is for site users/profiles/recommendation caches, not Telegram/VK crawling/review queues | Avoid |
+| Yandex Managed PostgreSQL | Relational model fits surfaces/edges/runs/opportunities/feedback; SQL/XLSX/report queries stay simple; mature migrations/backups/monitoring; easy future read replicas/BI | New YC resource and secrets; cross-network access from Fly/Kaggle must be configured; costs scale with allocated cluster resources | Recommended target if we move beyond prototype |
+| YDB serverless/dedicated | Good for large sparse key-value/event workloads and serverless scaling; strict consistency/ACID available | More custom data-access code; graph/report joins and ad-hoc analytics are less convenient than PostgreSQL for this feature; less reuse of SQLModel/Postgres ecosystem | Consider only if discovery becomes high-volume event log first |
+
+Recommended decision: keep the current SQLite tables as an MVP compatibility
+layer, but treat `acq_*` as a storage interface that can migrate to Yandex
+Managed PostgreSQL if/when frontier growth, report generation, or concurrent
+Kaggle imports outgrow local SQLite. Do not silently declare this as a hard
+requirement until a separate migration task is accepted.
+
+Do **not** create a separate bot for the MVP. Revisit a separate worker/bot only
+if discovery volume or policy boundaries grow enough to need independent
+deployment, credentials and operator workflows.
 
 Suggested MVP tables in core SQLite:
 

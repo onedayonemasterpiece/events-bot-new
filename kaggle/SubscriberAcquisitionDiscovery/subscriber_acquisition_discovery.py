@@ -7,6 +7,7 @@ import json
 import re
 import logging
 import os
+import random
 import subprocess
 import sys
 import time
@@ -58,6 +59,44 @@ _VK_WALL_RE = re.compile(r"(?i)^wall-(?P<group_id>\d+)_\d+$")
 _EVENT_INTENT_RE = re.compile(
     r"(?i)\b(что\s+посетить|афиша|концерт|выставк|спектакл|детям|с детьми|выходные|мероприят|событи|куда\s+(?:сходить|пойти)|где\s+(?:афиша|концерт|выставк|спектакл|мероприят))")
 _STICKER_HINT_RE = re.compile(r"(?i)\b(стикер|sticker|😂|👍|🔥|🤣|❤️|❤|👏)")
+
+
+def _int_env(name: str, default: int, *, min_value: int = 0) -> int:
+    try:
+        return max(min_value, int(os.getenv(name) or default))
+    except Exception:
+        return max(min_value, int(default))
+
+
+def _float_env(name: str, default: float, *, min_value: float = 0.0, max_value: float | None = None) -> float:
+    try:
+        value = float(os.getenv(name) or default)
+    except Exception:
+        value = float(default)
+    value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def _human_delay_bounds() -> tuple[float, float]:
+    min_s = _float_env("ACQ_HUMAN_DELAY_MIN_SECONDS", 0.35, min_value=0.0, max_value=5.0)
+    max_s = _float_env("ACQ_HUMAN_DELAY_MAX_SECONDS", 1.4, min_value=min_s, max_value=8.0)
+    return min_s, max_s
+
+
+async def _human_pause_async(*, multiplier: float = 1.0) -> None:
+    min_s, max_s = _human_delay_bounds()
+    if max_s <= 0:
+        return
+    await asyncio.sleep(random.uniform(min_s, max_s) * max(0.0, multiplier))
+
+
+def _human_pause_sync(*, multiplier: float = 1.0) -> None:
+    min_s, max_s = _human_delay_bounds()
+    if max_s <= 0:
+        return
+    time.sleep(random.uniform(min_s, max_s) * max(0.0, multiplier))
 
 
 def _truthy_env(name: str, default: bool = False) -> bool:
@@ -248,6 +287,23 @@ def is_comment_opportunity_message(message: Any, *, surface_type: str | None, re
 VK_READ_METHODS = {"wall.get", "wall.getComments"}
 
 
+def _vk_token_lanes() -> list[tuple[str, str]]:
+    """Return VK read-token lanes without exposing token values.
+
+    `VK_ACCESS_TOKEN4` is the publishing/monitoring lane used elsewhere in this
+    project and has historically been less likely to be IP-restricted than the
+    generic `VK_ACCESS_TOKEN`, so discovery tries it first and falls back safely.
+    """
+    lanes: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for name in ["VK_ACCESS_TOKEN4", "VK_ACCESS_TOKEN"]:
+        token = (os.getenv(name) or "").strip()
+        if token and token not in seen:
+            lanes.append((name, token))
+            seen.add(token)
+    return lanes
+
+
 def _vk_api(method: str, *, token: str, params: dict[str, Any]) -> dict[str, Any]:
     if method not in VK_READ_METHODS:
         raise RuntimeError(f"forbidden VK method in acquisition shadow scanner: {method}")
@@ -262,6 +318,16 @@ def _vk_api(method: str, *, token: str, params: dict[str, Any]) -> dict[str, Any
     if data.get("error"):
         raise RuntimeError(f"VK {method} error: {data['error']}")
     return data.get("response") or {}
+
+
+def _vk_api_with_fallback(method: str, *, token_lanes: list[tuple[str, str]], params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    errors: list[str] = []
+    for lane_name, token in token_lanes:
+        try:
+            return _vk_api(method, token=token, params=params), lane_name
+        except Exception as exc:
+            errors.append(f"{lane_name}: {exc}")
+    raise RuntimeError("; ".join(errors) if errors else "no VK token lanes configured")
 
 
 def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int, comment: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
@@ -309,15 +375,15 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     write methods, joins, or personal-wall expansion are available here.
     """
     diagnostics: list[str] = []
-    token = (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or "").strip()
+    token_lanes = _vk_token_lanes()
     allowed = {str(x).strip().lower() for x in allowlist if str(x).strip()}
     if not seed_urls or not allowed:
         return [], [], diagnostics
-    if not token:
+    if not token_lanes:
         return [], [], ["VK allowlist is non-empty but VK token is not configured; emitted VK seeds only"]
-    max_surfaces = int(os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN") or os.getenv("ACQ_MAX_SURFACES_PER_RUN") or "5")
-    max_posts = int(os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE") or os.getenv("ACQ_MAX_MESSAGES_PER_SURFACE") or "10")
-    max_comments = int(os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST") or os.getenv("ACQ_MAX_THREADS_PER_SURFACE") or "15")
+    max_surfaces = _int_env("ACQ_MAX_VK_SURFACES_PER_RUN", _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1), min_value=1)
+    max_posts = _int_env("ACQ_MAX_VK_POSTS_PER_SURFACE", _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 10, min_value=1), min_value=1)
+    max_comments = _int_env("ACQ_MAX_VK_COMMENTS_PER_POST", _int_env("ACQ_MAX_THREADS_PER_SURFACE", 15, min_value=1), min_value=1)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
@@ -336,10 +402,12 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
         })
         surfaces[surface["external_id"]] = surface
         try:
-            wall = _vk_api("wall.get", token=token, params={"domain": domain, "count": max_posts})
+            wall, wall_lane = _vk_api_with_fallback("wall.get", token_lanes=token_lanes, params={"domain": domain, "count": max_posts})
+            diagnostics.append(f"vk {domain}: wall.get ok via {wall_lane}")
         except Exception as exc:
             diagnostics.append(f"vk {domain}: wall.get failed: {exc}")
             continue
+        _human_pause_sync(multiplier=0.6)
         for post in wall.get("items") or []:
             owner_id = int(post.get("owner_id") or 0)
             post_id = int(post.get("id") or 0)
@@ -350,10 +418,13 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             if not owner_id or not post_id:
                 continue
             try:
-                comments = _vk_api("wall.getComments", token=token, params={"owner_id": owner_id, "post_id": post_id, "count": max_comments, "need_likes": 1})
+                comments, comments_lane = _vk_api_with_fallback("wall.getComments", token_lanes=token_lanes, params={"owner_id": owner_id, "post_id": post_id, "count": max_comments, "need_likes": 1})
+                if comments_lane != wall_lane:
+                    diagnostics.append(f"vk {domain}: wall.getComments {post_id} ok via {comments_lane}")
             except Exception as exc:
                 diagnostics.append(f"vk {domain}: wall.getComments {post_id} failed: {exc}")
                 continue
+            _human_pause_sync(multiplier=0.35)
             for comment in comments.get("items") or []:
                 if not isinstance(comment, dict):
                     continue
@@ -445,8 +516,30 @@ def _seed_surface(url: str, *, platform: str = "tg") -> dict[str, Any]:
 
 
 
+def _tg_queue_key(url: str) -> str:
+    handle = _handle_from_url(url, platform="tg")
+    return handle.casefold() if handle else str(url or "").strip().rstrip("/").casefold()
+
+
+def _enqueue_tg_url(
+    queue: list[str],
+    queued: set[str],
+    url: str,
+    *,
+    limit: int,
+) -> bool:
+    if len(queued) >= limit:
+        return False
+    key = _tg_queue_key(url)
+    if not key or key in queued:
+        return False
+    queued.add(key)
+    queue.append(url)
+    return True
+
+
 async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    """Read-only Telegram discovery.
+    """Read-only Telegram discovery with bounded frontier walk.
 
     The function never sends messages, never joins private chats, and only calls
     public read APIs. If credentials/dependencies are absent it returns seed-only
@@ -477,27 +570,39 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         diagnostics.append("telegram credentials are not configured; emitted seed-only shadow payload")
         return [], [], diagnostics
 
-    max_surfaces = int(os.getenv("ACQ_MAX_SURFACES_PER_RUN") or "5")
-    max_messages = int(os.getenv("ACQ_MAX_MESSAGES_PER_SURFACE") or "25")
-    max_threads = int(os.getenv("ACQ_MAX_THREADS_PER_SURFACE") or "5")
+    max_surfaces = _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1)
+    max_frontier = _int_env("ACQ_MAX_TG_FRONTIER_PER_RUN", max(20, max_surfaces * 4), min_value=max_surfaces)
+    max_messages = _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 25, min_value=1)
+    max_threads = _int_env("ACQ_MAX_THREADS_PER_SURFACE", 5, min_value=1)
+    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 30, min_value=1)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
+    queue: list[str] = []
+    queued: set[str] = set()
+    for raw in seed_urls:
+        _enqueue_tg_url(queue, queued, str(raw), limit=max_frontier)
+    discovered_queued = 0
+    processed = 0
 
     async with TelegramClient(StringSession(session_string), int(api_id), api_hash, flood_sleep_threshold=60, **device_config) as client:
-        for index, raw_url in enumerate(seed_urls[:max_surfaces], start=1):
+        while queue and processed < max_surfaces:
+            raw_url = queue.pop(0)
             handle = _handle_from_url(raw_url)
             if not handle:
                 diagnostics.append(f"skip invalid tg seed: {raw_url}")
                 continue
+            processed += 1
             progress = {
-                "progress_percent": min(90, 20 + int(index / max(1, len(seed_urls[:max_surfaces])) * 60)),
-                "progress_label": f"telegram {index}/{min(len(seed_urls), max_surfaces)}",
-                "surfaces_done": index - 1,
-                "surfaces_total": min(len(seed_urls), max_surfaces),
+                "progress_percent": min(90, 20 + int(processed / max(1, max_surfaces) * 60)),
+                "progress_label": f"telegram {processed}/{max_surfaces} · frontier +{discovered_queued}",
+                "surfaces_done": processed - 1,
+                "surfaces_total": max_surfaces,
+                "tg_frontier_queued": discovered_queued,
                 "opportunities_found": len(opportunities),
             }
             _status_event("alive", phase="telegram_scan", status="running", progress=progress)
+            await _human_pause_async(multiplier=0.8 if processed > 1 else 0.2)
             try:
                 entity = await client.get_entity(int(handle) if str(handle).isdigit() else handle)
             except Exception as exc:
@@ -545,6 +650,8 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         for discovered in extract_candidate_surfaces(text):
                             discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
                             surfaces.setdefault(discovered["external_id"], discovered)
+                            if discovered.get("platform") == "tg" and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier):
+                                discovered_queued += 1
                         if is_comment_opportunity_message(
                             message,
                             surface_type=str(scan_surface.get("surface_type") or ""),
@@ -554,14 +661,20 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             if opp:
                                 opp["evidence"] = {"relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
                                 opportunities.append(opp)
-                        if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
+                        if len(opportunities) >= max_opportunities:
                             break
+                        if seen % 8 == 0:
+                            await _human_pause_async(multiplier=0.25)
                         if relation == "linked_discussion" and seen >= max_threads:
                             break
                 except Exception as exc:
                     diagnostics.append(f"{handle}: iter_messages failed: {exc}")
                 if relation == "linked_discussion" and seen >= max_threads:
                     diagnostics.append(f"{handle}: linked discussion scan capped at {max_threads} threads")
+            if len(opportunities) >= max_opportunities:
+                diagnostics.append(f"telegram opportunity scan capped at {max_opportunities} candidates")
+                break
+    diagnostics.append(f"telegram frontier walk processed {processed} surfaces; queued {discovered_queued} newly discovered tg links")
     return list(surfaces.values()), opportunities, diagnostics
 
 
@@ -588,17 +701,22 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             continue
         seed = {**_seed_surface(normalized, platform="vk"), "status": "approved"}
         surfaces_by_external[seed["external_id"]] = seed
+    scanned_list = list(scanned_surfaces or [])
+    scanned_tg = [s for s in scanned_list if s.get("platform") == "tg"]
+    scanned_vk = [s for s in scanned_list if s.get("platform") == "vk"]
     return {
         "run_id": os.getenv("KAGGLE_RUN_ID") or f"acq-shadow-{int(time.time())}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "surfaces": list(surfaces_by_external.values()),
         "opportunities": list(scanned_opportunities or []),
         "stats": {
-            "mode": "telegram_shadow_scan" if scanned_surfaces or scanned_opportunities else "shadow_preflight",
+            "mode": "telegram_vk_shadow_scan" if scanned_surfaces or scanned_opportunities else "shadow_preflight",
             "surfaces_total": len(surfaces_by_external),
             "telegram_seeds": len(list(tg_seeds or [])),
             "vk_seeds": len(list(vk_seeds or [])),
             "vk_allowlist": len(allowed_vk),
+            "telegram_scanned_or_discovered_surfaces": len(scanned_tg),
+            "vk_scanned_or_discovered_surfaces": len(scanned_vk),
             "telegram_live_scan_enabled": _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False),
             "vk_allowlist_scan_enabled": bool(allowed_vk),
             "external_sends": 0,

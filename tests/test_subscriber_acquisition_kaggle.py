@@ -105,6 +105,31 @@ def test_vk_allowlist_without_token_is_safe_seed_only(monkeypatch):
     assert diagnostics and "token is not configured" in diagnostics[0]
 
 
+
+def test_vk_token_lanes_prefer_monitoring_token_without_leaking_values(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("VK_ACCESS_TOKEN", "generic-token")
+    monkeypatch.setenv("VK_ACCESS_TOKEN4", "monitoring-token")
+
+    lanes = runtime._vk_token_lanes()
+
+    assert [name for name, _token in lanes] == ["VK_ACCESS_TOKEN4", "VK_ACCESS_TOKEN"]
+    assert [token for _name, token in lanes] == ["monitoring-token", "generic-token"]
+
+
+def test_tg_frontier_queue_dedupes_and_respects_limit():
+    runtime = load_runtime()
+    queue = []
+    queued = set()
+
+    assert runtime._enqueue_tg_url(queue, queued, "https://t.me/first", limit=2) is True
+    assert runtime._enqueue_tg_url(queue, queued, "https://t.me/first/", limit=2) is False
+    assert runtime._enqueue_tg_url(queue, queued, "https://t.me/second", limit=2) is True
+    assert runtime._enqueue_tg_url(queue, queued, "https://t.me/third", limit=2) is False
+
+    assert queue == ["https://t.me/first", "https://t.me/second"]
+
+
 def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
     runtime = load_runtime()
     config_path = tmp_path / "config.json"

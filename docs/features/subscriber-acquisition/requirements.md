@@ -66,9 +66,10 @@ Initial Telegram seeds for MVP discovery:
 - `https://t.me/zhest_kaliningrada`
 - `https://t.me/pereezd_v_kaliningrad_legko`
 
-VK is included in MVP scope, but the initial VK seed list is empty until product
-seeds are selected. The schema, runtime config, review queue, and report must be
-VK-ready from the first MVP so VK communities can be added without redesign.
+VK is included in MVP scope. For the first automated discovery runs, seed VK from
+all communities already present in existing VK monitoring (`vk_source`), then add
+new discovered VK community links to the same frontier as candidates. The schema,
+runtime config, review queue, and report must stay VK-ready from the first MVP.
 
 For broadcast channels, discovery should inspect the linked discussion/comment
 chat where available and scan comments/replies, not only top-level channel
@@ -78,9 +79,12 @@ directly. The detailed MVP design and work estimate are in
 
 Storage/runtime decision for MVP:
 
-- Store acquisition discovery/review state in the existing core Fly SQLite DB,
-  because it is operational bot state tied to sources, events, scheduler runs,
-  review UI, and future publication safety.
+- The current code uses core Fly SQLite as an MVP compatibility layer because it
+  is already wired to the bot review UI and Kaggle status/runtime tables.
+- This is not a final storage requirement. The accepted analysis in
+  [`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) recommends a
+  migration path to a separate Yandex Managed PostgreSQL discovery store once the
+  frontier graph/report workload grows beyond prototype size.
 - Do not use the personalization Supabase/Postgres DB for this surface; that DB
   owns anonymous site telemetry/profiles/recommendation caches.
 - Do not create a separate bot for MVP; revisit only if volume/policy boundaries
@@ -129,7 +133,6 @@ LLM requirement:
 
 ## Open questions
 
-- Which VK communities should be used as the first approved MVP seeds?
 - What exact rate limits and cooldown windows should apply per community, per thread, and globally after the first live discovery calibration?
 - Who is the long-term owner for approving newly discovered acquisition surfaces after MVP shadow mode?
 - Which event-link surface is canonical when multiple links exist for the same event and platform context?
@@ -142,9 +145,10 @@ LLM requirement:
 - 2026-06-27: Treated sticker/sticker-pack generation as a related follow-up idea rather than part of the first implementation scope.
 - 2026-06-27: Reconciled the 21:10 voice-note intake as an operational request to review/check requirements; no new product requirement delta was found.
 - 2026-06-29: Selected Discovery-only shadow mode as the MVP slice: scan public Telegram chats/comment threads, discover new surfaces, and write manual-review candidates; no automatic posting/DMs/user harvesting.
-- 2026-06-29: Chose existing core Fly SQLite DB and existing bot UI for MVP acquisition review state; personalization Supabase/Postgres and a separate bot are out of scope for MVP.
+- 2026-06-29: Used existing core Fly SQLite DB and existing bot UI as the MVP compatibility layer; personalization Supabase/Postgres and a separate bot are out of scope for MVP.
+- 2026-07-01: Reopened final storage ownership as an explicit decision after operator feedback; analysis recommends Yandex Managed PostgreSQL as the target discovery-state store if the MVP graph grows beyond prototype size, but this is not a hard requirement until a migration task is accepted.
 - 2026-06-29: Chose existing Kaggle Telegram Monitoring-style infrastructure with `TELEGRAM_AUTH_BUNDLE_S22`, `telegram_session:s22` lease, `kaggle_status`, `kaggle_registry`, remote-session guard, and heavy-job idle scheduling.
-- 2026-06-29: Added VK communities/comment threads to MVP scope while leaving the initial VK seed list empty until product seeds are selected.
+- 2026-06-29: Added VK communities/comment threads to MVP scope; 2026-07-01 update uses existing `vk_source` monitoring communities as the first automated seed set.
 - 2026-06-29: Added conservative potential-reach scoring as a product-prioritization signal for opportunities and surfaces.
 - 2026-06-29: Added Telegraph report output as the primary link-heavy manual/external review artifact.
 - 2026-06-29: Added sticker-strategy suitability analysis as research-only MVP output; sticker creation/sending remains follow-up.

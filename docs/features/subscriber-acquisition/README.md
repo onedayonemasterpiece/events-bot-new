@@ -34,7 +34,14 @@ is collected by pressing `Нет + причина` and replying to the review ca
 reply text is stored in acquisition feedback export. Runtime seed collection
 prioritizes newly discovered and linked-discussion surfaces before older seed
 surfaces, so repeated Kaggle runs walk the frontier instead of rechecking only
-the original seed list. The review chat receives a no-approval frontier summary when new surfaces are
+the original seed list. Inside a Kaggle run, Telegram scanning also performs a
+bounded deterministic frontier walk: links found in scanned messages are queued
+for the same run up to `ACQ_MAX_TG_FRONTIER_PER_RUN` and
+`ACQ_MAX_SURFACES_PER_RUN`, without spending LLM budget on link extraction. VK
+seeds come from existing `vk_source` monitoring groups and the read-only scanner
+tries configured VK token lanes with fallback. Human-like randomized pauses are
+applied between read operations; the runtime still performs zero sends, joins,
+comments, or reactions. The review chat receives a no-approval frontier summary when new surfaces are
 found; this keeps discovery visible without forcing the operator to approve
 analysis of every new link.
 
@@ -46,3 +53,14 @@ platform/type/title/url/status, `scan_state`, `reply_policy`, source, topic hint
 last/next scan timestamps, and opportunity counts. This map is for visibility;
 newly discovered links do not require manual approval before future analysis.
 Manual approval/rejection is reserved for concrete reply/post opportunities.
+
+## Storage ownership note
+
+The current `acq_*` tables in core Fly SQLite are an MVP compatibility layer, not
+a final storage requirement. The storage analysis in
+[`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) recommends keeping
+SQLite only while the discovery graph is small and moving discovery-state to a
+separate Yandex Managed PostgreSQL store behind a storage abstraction if frontier
+growth, report/XLSX exports, or concurrent Kaggle imports make the crawler graph
+larger than core bot operational state. Supabase personalization storage remains
+out of scope for acquisition crawling/review queues.

@@ -11,6 +11,7 @@
 
 ### Changed
 
+- Subscriber Acquisition discovery now performs a bounded same-run Telegram frontier walk for deterministically discovered links, adds human-like read pauses, prefers/falls back across configured VK token lanes for read-only VK scans, documents VK seeds from existing monitoring groups, and records the Yandex/PostgreSQL storage direction as analysis rather than a hard requirement.
 - Subscriber Acquisition review cards now make rejection comments explicit:
   `Нет` is labelled as `Нет + причина`, a comment button explains that the
   operator should reply to the card, and the reply is stored as feedback.
