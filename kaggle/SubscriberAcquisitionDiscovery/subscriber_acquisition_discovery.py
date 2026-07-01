@@ -239,8 +239,8 @@ def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int
 def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only VK discovery for explicitly allowlisted communities.
 
-    Uses only `wall.get` and `wall.getComments`; no wall.post, comments.create,
-    messages.send, joins, or personal-wall expansion are available here.
+    Uses only `wall.get` and `wall.getComments`; no VK wall/comment/message
+    write methods, joins, or personal-wall expansion are available here.
     """
     diagnostics: list[str] = []
     token = (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or "").strip()

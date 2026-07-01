@@ -79,3 +79,27 @@ def test_vk_allowlist_without_token_is_safe_seed_only(monkeypatch):
     assert surfaces == []
     assert opportunities == []
     assert diagnostics and "token is not configured" in diagnostics[0]
+
+
+def test_kaggle_runtime_static_no_external_write_calls():
+    source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
+    forbidden_snippets = [
+        ".send_message(",
+        ".send_file(",
+        ".send_reaction(",
+        "JoinChannelRequest",
+        "ImportChatInviteRequest",
+        "messages.send",
+        "wall.post",
+        "wall.createComment",
+        "stories.",
+    ]
+    for snippet in forbidden_snippets:
+        assert snippet not in source
+
+
+def test_review_module_only_sends_to_configured_review_chat_static():
+    source = Path("subscriber_acquisition/review.py").read_text(encoding="utf-8")
+    assert "bot.send_message" in source
+    assert "cfg.review_chat_id" in source
+    assert "ensure_review_chat(sent_chat_id" in source
