@@ -393,9 +393,13 @@ GOOGLE_API_KEY, GEMINI_API_KEY`.
   OPTIONS; local runtime env contract must show embedding lanes all five keys,
   LLM active lanes `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`
   and LLM reserve `GOOGLE_API_KEY2`;
-- final live Edge smoke after the all-keys embedding/shared-LLM fix is recorded
-  in the rollout log; smoke auth users, quota ledgers and audit rows are cleaned
-  up after each run.
+- final live Edge smoke after the all-keys embedding/shared-LLM fix
+  (`интересно детям`, JSON response) returned HTTP 200 in `2587ms` wall /
+  `2306ms` backend, `retrieved_count=20`, `items=11`, `fallback_items=6`,
+  `llm_model=gemini-3.1-flash-lite`, `policy=lite_first_gemma_overflow`,
+  embedding key `GOOGLE_API_KEY5`, first LLM attempt key `GOOGLE_API_KEY3` `ok`
+  in `1202ms`, quota `999/999` remaining; smoke auth user, quota ledger and
+  audit rows were cleaned up after the run.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 

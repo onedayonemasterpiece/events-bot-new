@@ -233,7 +233,9 @@ External gate completed on 2026-07-01 from branch
 `EVENT_SEARCH_LLM_KEY_ENVS` uses the non-guide shared pool, `GOOGLE_API_KEY2` is
 configured as `EVENT_SEARCH_LLM_RESERVE_KEY_ENVS`, the quota migration is
 applied, and `event-search` is deployed with the Lite-first/Gemma-overflow code
-path.
+path. Final live smoke used the all-key embedding pool and an active shared LLM
+lane (`GOOGLE_API_KEY3`) with `11` exact items and quota `999/999` remaining
+after the smoke.
 
 ## v59 strict static-related process and evidence
 
