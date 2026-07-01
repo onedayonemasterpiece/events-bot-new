@@ -21,23 +21,25 @@ type OrganizerMedallion = {
 };
 
 type Token = {
-  kind: 'organizer' | 'pushkin' | 'pill';
+  kind: 'organizer' | 'source' | 'pushkin' | 'pill';
   key: string;
   label: string;
   shortLabel?: string;
   ariaLabel: string;
+  title?: string;
   imageUrl?: string;
   fallbackImageUrl?: string;
   icon?: 'ticket' | 'spark' | 'info';
   background?: string;
   ring?: string;
   tone?: 'green' | 'brown' | 'blue' | 'purple' | 'neutral';
+  slug?: string;
 };
 
 const { event } = Astro.props;
 
 function normalize(value: unknown): string {
-  return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/\s+/gu, ' ').trim();
+  return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
 }
 
 function includesAlias(haystack: string, aliases: string[] | undefined): boolean {
@@ -48,14 +50,19 @@ function includesAlias(haystack: string, aliases: string[] | undefined): boolean
 }
 
 const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
+const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map((url) => String(url))));
+const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
 const organizerHaystack = normalize([
   event.venue_name,
   event.festival,
+  event.city,
   event.description_html,
   event.summary,
   event.source_url,
+  ...sourceUrls,
 ].filter(Boolean).join(' '));
 const organizer = (manifest.items || []).find((item) => includesAlias(organizerHaystack, item.aliases || [item.name, item.shortName || '']));
+const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
 const explicitText = normalize([event.title, event.event_type, event.summary, ...(event.topics || [])].join(' '));
@@ -69,11 +76,27 @@ if (organizer) {
     key: `organizer:${organizer.slug}`,
     label: organizer.shortName || organizer.name,
     shortLabel: organizer.shortName || organizer.name,
+    title: organizer.name,
     ariaLabel: organizer.ariaLabel || `Организатор или площадка: ${organizer.name}`,
     imageUrl: organizer.avatarUrl,
     fallbackImageUrl: organizer.fallbackPngUrl,
     background: organizer.background,
     ring: organizer.ring,
+    slug: organizer.slug,
+  });
+}
+if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
+  tokens.push({
+    kind: 'source',
+    key: 'source:meow-afisha',
+    label: 'MEOW Афиша',
+    title: 'MEOW Афиша',
+    ariaLabel: 'Источник события: MEOW Афиша',
+    imageUrl: '/assets/sources/meow-afisha.webp',
+    fallbackImageUrl: '/assets/sources/meow-afisha.png',
+    background: '#FFFFFF',
+    ring: '#282828',
+    slug: 'meow-afisha',
   });
 }
 if (event.pushkin_card) {
@@ -81,8 +104,10 @@ if (event.pushkin_card) {
     kind: 'pushkin',
     key: 'pushkin-card',
     label: 'Пушкинская карта',
-    shortLabel: 'Пушкинская\nкарта',
+    shortLabel: 'Пушкинская карта',
+    title: 'Пушкинская карта',
     ariaLabel: 'Можно оплатить Пушкинской картой',
+    imageUrl: '/assets/badges/pushkin-card-medallion.png',
     tone: 'purple',
   });
 }
@@ -148,27 +173,26 @@ const visibleTokens = tokens.slice(0, 6);
 
 function tokenStyle(token: Token): string | undefined {
   const parts: string[] = [];
-  if (token.background) parts.push(`--token-bg:${token.background}`);
-  if (token.ring) parts.push(`--token-ring:${token.ring}`);
+  if (token.background) parts.push(`--token-brand-bg:${token.background}`);
+  if (token.ring) parts.push(`--token-brand-ring:${token.ring}`);
   return parts.length ? parts.join(';') : undefined;
 }
 ---
 {visibleTokens.length > 0 && (
-  <div class="event-token-row-wrap" aria-label="Краткие признаки события">
+  <section class="event-token-section" aria-label="Быстрые признаки события">
     <ul class="event-token-row" role="list">
       {visibleTokens.map((token) => (
-        <li class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'}`} style={tokenStyle(token)}>
-          {token.kind === 'organizer' && token.imageUrl ? (
-            <span class="event-token__circle" aria-label={token.ariaLabel} title={token.label}>
+        <li class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`} style={tokenStyle(token)}>
+          {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
+            <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
               <picture>
-                {token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
+                {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
                 <img src={withBase(token.fallbackImageUrl || token.imageUrl)} alt="" loading="lazy" decoding="async" />
               </picture>
             </span>
-          ) : token.kind === 'pushkin' ? (
-            <span class="event-token__circle event-token__circle--text" aria-label={token.ariaLabel} title={token.label}>
-              <span>Пушкинская</span>
-              <strong>карта</strong>
+          ) : token.kind === 'pushkin' && token.imageUrl ? (
+            <span class="event-token__pushkin-frame" aria-label={token.ariaLabel} title={token.label}>
+              <img class="event-token__pushkin-composite" src={withBase(token.imageUrl)} alt="" loading="lazy" decoding="async" />
             </span>
           ) : (
             <span class="event-token__pill" aria-label={token.ariaLabel} title={token.label}>
@@ -179,5 +203,5 @@ function tokenStyle(token: Token): string | undefined {
         </li>
       ))}
     </ul>
-  </div>
+  </section>
 )}

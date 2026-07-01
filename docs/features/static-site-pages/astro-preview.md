@@ -15,6 +15,10 @@ Required URLs for the current preview once bucket/CDN public-read is restored:
 - Tomorrow listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/zavtra/>
 - Weekend listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/vyhodnye/>
 - Search page: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/poisk/>
+- Exhibitions/long-running listing: `/vystavki/`.
+- Popular-by-source-engagement listing: `/populyarnoe/`.
+- Information partnership/reference block page: `/partnerstvo/`.
+- Event-token medallion QA lab: `/lab/medallions/`.
 - Urban-planning golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
 - Music golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/pesni-sssr-svetlogorsk-5878/>
 - Art golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/tochka-i-liniya-kaliningrad-5370/>
@@ -39,9 +43,14 @@ site/
   src/pages/segodnya/index.astro
   src/pages/zavtra/index.astro
   src/pages/vyhodnye/index.astro
+  src/pages/vystavki/index.astro
+  src/pages/populyarnoe/index.astro
+  src/pages/poisk/index.astro
+  src/pages/partnerstvo/index.astro
   src/pages/sobytiya/[slug].astro
   src/pages/sobytiya/[slug]/event.ics.ts
   src/pages/data/discovery/[eventId].json.ts
+  src/pages/lab/medallions/index.astro
   src/pages/lab/hero/index.astro
   src/pages/lab/hero/review/index.astro
   src/pages/sitemap.xml.ts

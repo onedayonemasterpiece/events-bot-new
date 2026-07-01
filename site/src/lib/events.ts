@@ -76,6 +76,21 @@ function formatRuDate(value: string, includeYear: boolean): string {
   return `${parts.day} ${RU_MONTHS[parts.month - 1]}${includeYear ? ` ${parts.year}` : ''}`;
 }
 
+export function displayDateValue(value: string, currentYear = Number(getCurrentDate().slice(0, 4))): string {
+  const parts = parseIsoDateParts(value);
+  if (!parts) return value;
+  return formatRuDate(value, parts.year !== currentYear);
+}
+
+export function displayDateRange(startDate: string, endDate: string): string {
+  const currentYear = Number(getCurrentDate().slice(0, 4));
+  const start = parseIsoDateParts(startDate);
+  const end = parseIsoDateParts(endDate);
+  if (!start || !end) return `${startDate} — ${endDate}`;
+  const crossesYear = start.year !== end.year;
+  return `${formatRuDate(startDate, crossesYear || start.year !== currentYear)} — ${formatRuDate(endDate, crossesYear || end.year !== currentYear)}`;
+}
+
 export function displayDate(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): string {
   const currentYear = Number(getCurrentDate().slice(0, 4));
   const start = parseIsoDateParts(event.start_date);
@@ -168,10 +183,63 @@ export function isCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end
   return !event.end_date || event.end_date === event.start_date;
 }
 
+function isFutureStartingEvent(event: Pick<PreviewEvent, 'start_date'>): boolean {
+  return event.start_date >= getCurrentDate();
+}
+
+function normalizeSessionKeyPart(value: string | null | undefined): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function linkedSessionKey(event: Pick<PreviewEvent, 'title' | 'event_type' | 'venue_name' | 'city'>): string {
+  return [event.title, event.event_type || '', event.venue_name || event.city || ''].map(normalizeSessionKeyPart).join('|');
+}
+
+function eventTimeSortValue(event: Pick<PreviewEvent, 'start_time' | 'display_time' | 'id'>): string {
+  const raw = event.start_time || event.display_time || '';
+  const match = /(\d{1,2}):(\d{2})/u.exec(raw);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : `99:${String(event.id || 0).padStart(8, '0')}`;
+}
+
+export function getLinkedSessionIds(event: PreviewEvent): number[] {
+  const explicit = event.other_date_ids.map(Number).filter((id) => Number.isFinite(id));
+  const key = linkedSessionKey(event);
+  if (!key.split('|')[0]) return explicit;
+  const inferred = getEvents()
+    .filter((candidate) => candidate.id !== event.id)
+    .filter((candidate) => linkedSessionKey(candidate) === key)
+    .map((candidate) => candidate.id);
+  return Array.from(new Set([...explicit, ...inferred]));
+}
+
+export function collapseLinkedSessionEvents(events: PreviewEvent[]): PreviewEvent[] {
+  const grouped = new Map<string, PreviewEvent[]>();
+  for (const event of events) {
+    const key = `${linkedSessionKey(event)}|${event.start_date}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)?.push(event);
+  }
+  const collapsed: PreviewEvent[] = [];
+  for (const group of grouped.values()) {
+    group.sort((left, right) => eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id);
+    collapsed.push(group[0]);
+  }
+  return collapsed.sort((left, right) => {
+    const av = left.starts_at || left.start_date;
+    const bv = right.starts_at || right.start_date;
+    return av.localeCompare(bv) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id;
+  });
+}
+
 export function getOtherDates(event: PreviewEvent): PreviewEvent[] {
-  return event.other_date_ids
+  return getLinkedSessionIds(event)
     .map((id) => getEventById(id))
-    .filter((candidate): candidate is PreviewEvent => Boolean(candidate));
+    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && isFutureStartingEvent(candidate) && (!candidate.lifecycle_status || candidate.lifecycle_status === 'active'))
+    .sort((left, right) => (left.start_date.localeCompare(right.start_date) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id));
 }
 
 export function getRelatedEvents(event: PreviewEvent, kind: 'similar' | 'explore'): PreviewEvent[] {
@@ -333,10 +401,10 @@ function staticRelatedScore(current: PreviewEvent, candidate: PreviewEvent): { s
 function eligibleRelatedCandidate(current: PreviewEvent, candidate: PreviewEvent | undefined): candidate is PreviewEvent {
   if (!candidate) return false;
   if (candidate.id === current.id) return false;
-  if (current.other_date_ids.includes(candidate.id)) return false;
-  if (candidate.other_date_ids.includes(current.id)) return false;
+  if (getLinkedSessionIds(current).includes(candidate.id)) return false;
+  if (getLinkedSessionIds(candidate).includes(current.id)) return false;
   if (candidate.lifecycle_status && candidate.lifecycle_status !== 'active') return false;
-  return eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31');
+  return isFutureStartingEvent(candidate);
 }
 
 function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload {
@@ -471,6 +539,23 @@ export function getPreloadedDiscoveryEvents(event: PreviewEvent, limit = 10): Pr
     .filter((candidate): candidate is PreviewEvent => Boolean(candidate));
 }
 
+export function getAdjacentDiscoveryEvents(event: PreviewEvent, excludeIds: Iterable<number> = [], limit = 6): PreviewEvent[] {
+  const excluded = new Set([event.id, ...getLinkedSessionIds(event), ...Array.from(excludeIds)]);
+  const adjacent = getStaticRelatedCandidates(event, 40)
+    .filter((candidate) => candidate.slot_type === 'adjacent_discovery' || candidate.exploration_candidate || Number(candidate.base_similarity) < 0.76)
+    .map((candidate) => getEventById(candidate.event_id))
+    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && !excluded.has(candidate.id));
+  const fallback = getEvents()
+    .filter((candidate) => eligibleRelatedCandidate(event, candidate) && !excluded.has(candidate.id))
+    .sort((left, right) => dayDistanceScore(event, right) - dayDistanceScore(event, left) || left.id - right.id);
+  const byId = new Map<number, PreviewEvent>();
+  for (const candidate of [...adjacent, ...fallback]) {
+    if (!byId.has(candidate.id)) byId.set(candidate.id, candidate);
+    if (byId.size >= limit) break;
+  }
+  return [...byId.values()];
+}
+
 export interface DiscoveryEventPayloadItem {
   id: number;
   title: string;
@@ -520,6 +605,45 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
   };
 }
 
+function median(values: number[]): number {
+  const sorted = values.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+  if (!sorted.length) return 0;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function eventPopularityScore(event: PreviewEvent): number {
+  const activeEvents = getEvents().filter((candidate) => eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31'));
+  const medianLikes = median(activeEvents.map((candidate) => candidate.source_likes_count || candidate.likes_count || 0));
+  const medianShares = median(activeEvents.map((candidate) => candidate.shares_count || 0));
+  const medianViews = median(activeEvents.map((candidate) => candidate.source_views_count || 0));
+  const likes = event.source_likes_count || event.likes_count || 0;
+  const serviceLikes = event.service_likes_count || 0;
+  const shares = event.shares_count || 0;
+  const views = event.source_views_count || 0;
+  const sources = event.source_engagement_sources_count || 0;
+  const likeScore = medianLikes > 0 ? clamp(likes / medianLikes, 0, 4) : Math.log1p(likes);
+  const shareScore = medianShares > 0 ? clamp(shares / medianShares, 0, 4) : Math.log1p(shares);
+  const viewScore = medianViews > 0 ? clamp(views / medianViews, 0, 4) : (views > 0 ? 1 : 0);
+  const localScore = Math.log1p(serviceLikes);
+  const sourceScore = Math.min(2, sources) / 2;
+  return Number((likeScore * 0.38 + shareScore * 0.24 + viewScore * 0.24 + sourceScore * 0.10 + localScore * 0.04).toFixed(4));
+}
+
+export function getPopularEvents(limit = 60): PreviewEvent[] {
+  return getEvents()
+    .filter((event) => eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31'))
+    .map((event) => ({ event, score: eventPopularityScore(event) }))
+    .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
+    .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
+    .slice(0, Math.max(0, limit))
+    .map((item) => item.event);
+}
+
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -547,6 +671,15 @@ export function isContinuingListingEvent(event: Pick<PreviewEvent, 'title' | 'ev
   return /выстав|экспозиц|музей|галере|фестив|ярмарк|маркет|лагер/u.test(haystack);
 }
 
+export function isExhibitionLikeEvent(event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics'>): boolean {
+  const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
+  return /выстав|экспозиц|музей|галере|арт[-\s]?простран|инсталляц|экзамен/u.test(haystack);
+}
+
+export function isLongRunningListingEvent(event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics' | 'start_date' | 'end_date'>): boolean {
+  return isMultiDayEvent(event) && (event.start_date !== event.end_date);
+}
+
 export type EventDaypart = 'morning' | 'day' | 'evening' | 'night';
 
 export function getTomorrowDate(): string {
@@ -558,9 +691,24 @@ export function getTodayEvents(): PreviewEvent[] {
   return getEvents().filter((event) => eventIntersectsDateRange(event, current, current));
 }
 
+export function getTodayPrimaryEvents(): PreviewEvent[] {
+  const current = getCurrentDate();
+  return collapseLinkedSessionEvents(getTodayEvents().filter((event) => event.start_date === current && !isLongRunningListingEvent(event) && !isExhibitionLikeEvent(event)));
+}
+
+export function getTodayContinuingEvents(): PreviewEvent[] {
+  const current = getCurrentDate();
+  return collapseLinkedSessionEvents(getTodayEvents().filter((event) => event.start_date !== current || isLongRunningListingEvent(event) || isExhibitionLikeEvent(event)));
+}
+
+export function getOngoingExhibitionEvents(): PreviewEvent[] {
+  const current = getCurrentDate();
+  return collapseLinkedSessionEvents(getEvents().filter((event) => eventIntersectsDateRange(event, current, '9999-12-31') && (isExhibitionLikeEvent(event) || isContinuingListingEvent(event))));
+}
+
 export function getTomorrowEvents(): PreviewEvent[] {
   const tomorrow = getTomorrowDate();
-  return getEvents().filter((event) => eventIntersectsDateRange(event, tomorrow, tomorrow));
+  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date === tomorrow && !isLongRunningListingEvent(event)));
 }
 
 export function eventDaypart(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): EventDaypart {
@@ -582,12 +730,12 @@ export function getWeekendRange(): { start: string; end: string; label: string }
   const sunday = addDays(saturday, 1);
   const start = toIsoDate(saturday);
   const end = toIsoDate(sunday);
-  return { start, end, label: `${start} — ${end}` };
+  return { start, end, label: displayDateRange(start, end) };
 }
 
 export function getWeekendEvents(): PreviewEvent[] {
   const range = getWeekendRange();
-  return getEvents().filter((event) => eventIntersectsDateRange(event, range.start, range.end));
+  return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date >= range.start && event.start_date <= range.end && !isLongRunningListingEvent(event)));
 }
 
 export function isExternalHttpUrl(href: string | null | undefined): boolean {

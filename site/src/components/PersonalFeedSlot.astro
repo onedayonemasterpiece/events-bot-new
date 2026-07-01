@@ -1,6 +1,6 @@
 ---
 interface Props {
-  context: 'today' | 'tomorrow' | 'weekend';
+  context: 'today' | 'tomorrow' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
 }
 const { context } = Astro.props;
 ---
@@ -9,7 +9,7 @@ const { context } = Astro.props;
     <p class="eyebrow">Личная лента</p>
     <h2>Дальше — под ваши интересы</h2>
     <p class="muted-note personal-feed-section__status" data-personal-feed-status>Подбираем события…</p>
-    <div class="cards-grid cards-grid--feed personal-feed-section__feed" data-personal-feed-slot data-feed-card-variant="split-actions" data-listing-context={context}></div>
+    <div class="cards-grid cards-grid--personal-feed personal-feed-section__feed" data-personal-feed-slot data-feed-card-variant="split-actions" data-listing-context={context}></div>
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
   </div>
 </section>

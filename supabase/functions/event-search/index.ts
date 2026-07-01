@@ -202,11 +202,22 @@ type GoogleApiKeyGroups = {
   reserve: GoogleApiKeyCandidate[];
 };
 
-const DEFAULT_GOOGLE_KEY_ENVS = [
+const DEFAULT_EMBEDDING_KEY_ENVS = [
+  "GOOGLE_API_KEY5",
   "GOOGLE_API_KEY4",
+  "GOOGLE_API_KEY3",
+  "GOOGLE_API_KEY2",
   "GOOGLE_API_KEY",
-  "GEMINI_API_KEY",
 ];
+
+const DEFAULT_LLM_KEY_ENVS = [
+  "GOOGLE_API_KEY5",
+  "GOOGLE_API_KEY4",
+  "GOOGLE_API_KEY3",
+  "GOOGLE_API_KEY",
+];
+
+const DEFAULT_LLM_RESERVE_KEY_ENVS = ["GOOGLE_API_KEY2"];
 
 function parseProviderKeyEnvNames(value: string, fallback: string[]): string[] {
   const rawNames = String(value || "")
@@ -238,7 +249,9 @@ function googleProviderKeyCandidates(names: string[]): GoogleApiKeyCandidate[] {
 
 function googleProviderKeyGroups(
   kind: "EMBEDDING" | "LLM",
-  fallback = DEFAULT_GOOGLE_KEY_ENVS,
+  fallback = kind === "EMBEDDING"
+    ? DEFAULT_EMBEDDING_KEY_ENVS
+    : DEFAULT_LLM_KEY_ENVS,
 ): GoogleApiKeyGroups {
   const specific = env(`EVENT_SEARCH_${kind}_KEY_ENVS`);
   const shared = env("EVENT_SEARCH_GOOGLE_KEY_ENVS");
@@ -247,7 +260,7 @@ function googleProviderKeyGroups(
   const activeNames = parseProviderKeyEnvNames(specific || shared, fallback);
   const reserveNames = parseProviderKeyEnvNames(
     reserveSpecific || reserveShared,
-    [],
+    kind === "LLM" ? DEFAULT_LLM_RESERVE_KEY_ENVS : [],
   );
   const reserveNameSet = new Set(reserveNames);
   const reserve = googleProviderKeyCandidates(reserveNames);

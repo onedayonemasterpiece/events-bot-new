@@ -1,0 +1,48 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventListItem from '../../components/EventListItem.astro';
+import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
+import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import { absoluteUrl, getCurrentDate, getOngoingExhibitionEvents, SITE_NAME, withBase } from '../../lib/events';
+
+const currentDate = getCurrentDate();
+const events = getOngoingExhibitionEvents();
+const canonicalUrl = absoluteUrl('/vystavki/');
+const title = `Выставки и долгие форматы в Калининграде | ${SITE_NAME}`;
+const description = `Отдельная static-страница выставок и долгих форматов, доступных с ${currentDate}, чтобы они не забивали быстрый список событий сегодня.`;
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Выставки</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Отдельный раздел</p>
+          <h1 style="max-width: 13ch;">Выставки и долгие форматы</h1>
+          <p class="lead">Сюда вынесены события, которые идут много дней или доступны почти ежедневно. В быстрых списках “Сегодня” они не должны вытеснять разовые события.</p>
+          <div class="source-links">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/zavtra/')}>Завтра</a>
+            <a href={withBase('/vyhodnye/')}>Выходные</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <ListingPersonalFilter total={events.length} label="выставки" />
+          <h2>{events.length ? `Найдено: ${events.length}` : 'Сейчас выставки в fixture не найдены'}</h2>
+          <div class="listing-stack">
+            {events.map((event) => <EventListItem event={event} />)}
+          </div>
+        </div>
+      </section>
+
+      <PersonalFeedSlot context="exhibitions" />
+    </div>
+  </main>
+</EventLayout>

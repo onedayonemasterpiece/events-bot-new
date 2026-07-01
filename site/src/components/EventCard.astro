@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateWithWeekday, displayDateTimeWithWeekday, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, isCalendarEligible } from '../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 type CardVariant = 'overlay-controls' | 'split-actions';
 interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
@@ -9,8 +9,8 @@ const { event, label, variant = 'split-actions' } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
-const dateLabel = displayDateWithWeekday(event);
-const dateTimeLabel = displayDateTimeWithWeekday(event);
+const dateLabel = displayDate(event);
+const dateTimeLabel = displayDateTime(event);
 const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
 const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
@@ -19,6 +19,10 @@ const imageUrl = eventImageUrl(event.image_url);
 const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), statusLabel].filter(Boolean).join('\n');
 const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
+function eventTypeLabel(value: string | null | undefined) {
+  const raw = String(value || '').trim().replace(/\s+/gu, ' ');
+  return raw ? raw.toLowerCase() : '';
+}
 function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
@@ -34,7 +38,11 @@ const canAddToCalendar = isCalendarEligible(event);
 const calendarHref = eventCalendarHref(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
-const eventTypeLabel = String(event.event_type || '').trim();
+const eventTypeTag = eventTypeLabel(event.event_type);
+const otherTimeLabels = getOtherDates(event)
+  .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
+  .map((item) => item.display_time)
+  .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 ---
 <article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
@@ -53,10 +61,11 @@ const eventTypeLabel = String(event.event_type || '').trim();
   <div class="event-card__body">
     <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     <div class="event-card__meta-row">
-      {eventTypeLabel && <span class="event-card__tag">{eventTypeLabel}</span>}
+      {eventTypeTag && <span class="event-card__tag">{eventTypeTag}</span>}
       <span class="event-card__meta">{metaLabel}</span>
       <span class="event-card__status">{statusLabel}</span>
     </div>
+    {otherTimeLabels.length > 0 && <div class="event-card__other-times" aria-label="Другие сеансы">Также: {otherTimeLabels.join(' · ')}</div>}
     {place && <span class="event-card__footer">{place}</span>}
   </div>
 

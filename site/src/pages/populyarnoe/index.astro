@@ -1,0 +1,47 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventCard from '../../components/EventCard.astro';
+import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
+import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
+
+const events = getPopularEvents(80);
+const canonicalUrl = absoluteUrl('/populyarnoe/');
+const title = `Популярные события Калининграда | ${SITE_NAME}`;
+const description = 'Лента популярных событий по социальной активности: лайки, репосты, просмотры и реакции источников нормализуются в компактный скоринг.';
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Популярное</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">По реакции аудитории</p>
+          <h1 style="max-width: 12ch;">Популярное</h1>
+          <p class="lead">События, которые заметнее откликнулись в источниках: реакции, репосты и просмотры учитываются относительно общего уровня, а не как голые абсолютные числа.</p>
+          <div class="source-links">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/vystavki/')}>Выставки</a>
+            <a href={withBase('/poisk/')}>Поиск</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <ListingPersonalFilter total={events.length} label="популярное" />
+          <h2>{events.length ? `Найдено: ${events.length}` : 'Пока нет событий с заметной соцактивностью'}</h2>
+          <div class="cards-grid cards-grid--immersive" data-feed-card-variant="split-actions">
+            {events.map((event) => <EventCard event={event} label="Популярное" variant="split-actions" />)}
+          </div>
+        </div>
+      </section>
+
+      <PersonalFeedSlot context="popular" />
+    </div>
+  </main>
+</EventLayout>

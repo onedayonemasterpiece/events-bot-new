@@ -68,6 +68,8 @@ export interface PreviewEvent {
   map_query: string | null;
   ticket: TicketInfo;
   source_url: string | null;
+  source_urls?: string[];
+  source_count?: number;
   telegraph_url: string | null;
   image_url: string | null;
   image_alt: string;

@@ -372,8 +372,9 @@ pool is `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`; the
 function hash-rotates within that active group by query/model so spend is
 balanced. `GOOGLE_API_KEY2` is appended only after every active LLM key fails
 with quota/capacity/retryable provider errors. If no explicit key lists are
-configured, the function preserves the legacy fallback chain `GOOGLE_API_KEY4,
-GOOGLE_API_KEY, GEMINI_API_KEY`.
+configured, the function defaults to the same capacity plan: all five keys for
+embedding, four non-guide keys for normal Lite verification, and `GOOGLE_API_KEY2`
+as LLM reserve/failover.
 
 2026-07-01 live rollout evidence from branch
 `feature/smart-search-quota-key5-site`:

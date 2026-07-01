@@ -38,10 +38,19 @@ def first_env(*names: str) -> str:
     return ""
 
 
-DEFAULT_EVENT_SEARCH_GOOGLE_KEY_ENVS = (
+DEFAULT_EVENT_SEARCH_EMBEDDING_KEY_ENVS = (
+    "GOOGLE_API_KEY5",
     "GOOGLE_API_KEY4",
+    "GOOGLE_API_KEY3",
+    "GOOGLE_API_KEY2",
     "GOOGLE_API_KEY",
-    "GEMINI_API_KEY",
+)
+
+DEFAULT_EVENT_SEARCH_LLM_KEY_ENVS = (
+    "GOOGLE_API_KEY5",
+    "GOOGLE_API_KEY4",
+    "GOOGLE_API_KEY3",
+    "GOOGLE_API_KEY",
 )
 
 
@@ -54,7 +63,7 @@ def event_search_google_key_envs(kind: str) -> list[str]:
     names = (
         [item.strip() for item in raw.split(",") if item.strip()]
         if raw
-        else list(DEFAULT_EVENT_SEARCH_GOOGLE_KEY_ENVS)
+        else list(DEFAULT_EVENT_SEARCH_EMBEDDING_KEY_ENVS if kind == "EMBEDDING" else DEFAULT_EVENT_SEARCH_LLM_KEY_ENVS)
     )
     out: list[str] = []
     seen: set[str] = set()

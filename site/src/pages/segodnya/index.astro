@@ -4,23 +4,19 @@ import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro'
 import EventListItem from '../../components/EventListItem.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { absoluteUrl, eventDaypart, getCurrentDate, getTodayEvents, isContinuingListingEvent, isMultiDayEvent, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, eventDaypart, getCurrentDate, getTodayContinuingEvents, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
 import type { EventDaypart } from '../../lib/events';
 
 const currentDate = getCurrentDate();
-const allTodayEvents = getTodayEvents();
-const exactTodayEvents = allTodayEvents.filter((event) => !isMultiDayEvent(event) || event.start_date === currentDate);
-const continuingEvents = allTodayEvents.filter((event) => event.start_date !== currentDate && isContinuingListingEvent(event));
-const shouldSeparateContinuing = continuingEvents.length > 0 && (exactTodayEvents.length >= 4 || continuingEvents.length >= 4);
-const events = shouldSeparateContinuing ? exactTodayEvents : [...exactTodayEvents, ...continuingEvents];
-const continuingSectionEvents = shouldSeparateContinuing ? continuingEvents : [];
-const displayedEventsCount = events.length + continuingSectionEvents.length;
+const events = getTodayPrimaryEvents();
+const continuingSectionEvents = getTodayContinuingEvents();
+const displayedEventsCount = events.length;
 const foundLabel = continuingSectionEvents.length
-  ? `Сегодня: ${events.length} · идут сейчас: ${continuingSectionEvents.length}`
+  ? `Сегодня: ${events.length} · отдельно выставки и долгие форматы: ${continuingSectionEvents.length}`
   : (displayedEventsCount ? `Найдено: ${displayedEventsCount}` : 'На сегодня в fixture нет событий');
 const canonicalUrl = absoluteUrl('/segodnya/');
 const title = `События сегодня в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ${currentDate}: афиша по утру, дню, вечеру и ночи, с длинными выставками в отдельном блоке, когда их много.`;
+const description = `Статический preview-листинг событий на ${currentDate}: быстрые события сегодня отдельно от выставок и долгих форматов.`;
 const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
   { key: 'morning', label: 'Утро', note: '06:00–11:59' },
   { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
@@ -42,11 +38,11 @@ const sections = dayparts
         <div class="section-card__inner">
           <p class="eyebrow">Сегодня</p>
           <h1 style="max-width: 14ch;">Что идёт сегодня</h1>
-          <p class="lead">События, которые начинаются {currentDate}. Длинные выставки и продолжающиеся форматы вынесены отдельно, когда их много, чтобы не забивать быстрый список “сегодня”.</p>
+          <p class="lead">Сначала показываем события, которые начинаются сегодня. Выставки и длинные ежедневные форматы вынесены ниже и в отдельную страницу, чтобы они не забивали быстрый список.</p>
           <div class="source-links">
             <a href={withBase('/zavtra/')}>Смотреть завтра</a>
             <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
-            <a href={withBase('/poisk/')}>Умный поиск</a>
+            <a href={withBase('/vystavki/')}>Выставки</a>
             <a href={withBase('/__preview/')}>Все тестовые страницы</a>
           </div>
         </div>
@@ -86,14 +82,14 @@ const sections = dayparts
             <section class="listing-daypart listing-daypart--continuing" data-listing-daypart aria-labelledby="today-continuing">
               <div class="listing-daypart__header">
                 <div>
-                  <p class="eyebrow">Продолжаются</p>
-                  <h3 id="today-continuing">Идут сейчас</h3>
+                  <p class="eyebrow">Отдельно</p>
+                  <h3 id="today-continuing">Выставки и долгие форматы</h3>
                 </div>
                 <span class="listing-daypart__count" data-listing-daypart-count>{continuingSectionEvents.length}</span>
               </div>
-              <p class="muted-note">Длинные выставки и форматы, которые не начинаются сегодня, но доступны сейчас.</p>
-              <div class="listing-stack">
-                {continuingSectionEvents.map((event) => <EventListItem event={event} />)}
+              <p class="muted-note">Эти события доступны сегодня, но идут много дней или повторяются ежедневно. Для быстрого выбора “куда сегодня” они не смешиваются с разовыми событиями.</p>
+              <div class="source-links">
+                <a href={withBase('/vystavki/')}>Открыть раздел выставок и долгих форматов</a>
               </div>
             </section>
           ) : null}

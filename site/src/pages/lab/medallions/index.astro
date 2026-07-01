@@ -1,0 +1,102 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import medallionData from '../../../data/organizerMedallions.json';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/medallions/');
+const title = `Лаборатория медальонов | ${SITE_NAME}`;
+const description = 'Визуальная проверка медальонов организаторов и быстрых признаков событий для статических страниц KenigEvents.';
+const organizers = (medallionData as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; fallbackPngUrl?: string; ariaLabel?: string; renderNote?: string; background?: string; ring?: string; sourcePage?: string }> }).items;
+const webpSource = (url: string) => url.endsWith('.webp');
+const sourceTokens = [
+  {
+    slug: 'meow-afisha',
+    name: 'MEOW Афиша',
+    avatarUrl: '/assets/sources/meow-afisha.webp',
+    fallbackPngUrl: '/assets/sources/meow-afisha.png',
+    ariaLabel: 'Источник события: MEOW Афиша',
+    renderNote: 'Показывается только для событий из @meowafisha, если у события не больше двух источников.',
+  },
+];
+const pushkin = {
+  slug: 'pushkin-card',
+  name: 'Пушкинская карта',
+  shortName: 'Пушкинская карта',
+  avatarUrl: '/assets/badges/pushkin-card-medallion.png',
+  fallbackPngUrl: '/assets/badges/pushkin-card-medallion.png',
+  ariaLabel: 'Можно оплатить Пушкинской картой',
+  renderNote: 'Единый композитный PNG из исходников: бюст внутри круглого медальона, исходная надпись «Пушкинская карта» наложена поверх круга и выступает вправо.',
+};
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Лаборатория медальонов</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Визуальный QA</p>
+          <h1>Медальоны событий</h1>
+          <p class="lead">Страница для проверки размеров, цветовой гаммы и читаемости медальонов. «Дом китобоя» собран как простой стековый знак из исходных слов логотипа: «дом» над «Китобоя», а синий фон и светлое кольцо взяты из публичной социальной палитры.</p>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Организаторы</h2>
+          <ul class="event-token-row" role="list">
+            {organizers.map((item) => (
+              <li class={`event-token event-token--organizer event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                <span class="event-token__circle" aria-hidden="true">
+                  <picture>
+                    {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
+                    <img src={withBase(item.fallbackPngUrl || item.avatarUrl)} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div class="source-links">
+            {organizers.filter((item) => item.slug === 'dom-kitoboya').map((item) => (
+              <a href={item.sourcePage} target="_blank" rel="noopener noreferrer">Источник палитры: Telegram «Дом китобоя»</a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Программы и признаки</h2>
+          <ul class="event-token-row" role="list">
+            <li class="event-token event-token--pushkin" aria-label={pushkin.ariaLabel} title={pushkin.name}>
+              <span class="event-token__pushkin-frame" aria-hidden="true">
+                <img class="event-token__pushkin-composite" src={withBase(pushkin.avatarUrl)} alt="" loading="lazy" decoding="async" />
+              </span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Источник</h2>
+          <ul class="event-token-row" role="list">
+            {sourceTokens.map((item) => (
+              <li class={`event-token event-token--source event-token--${item.slug}`} aria-label={item.ariaLabel} title={item.name} style="--token-brand-bg: #fff; --token-brand-ring: #282828;">
+                <span class="event-token__circle" aria-hidden="true">
+                  <picture>
+                    <source srcset={withBase(item.avatarUrl)} type="image/webp" />
+                    <img src={withBase(item.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

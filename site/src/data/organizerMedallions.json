@@ -99,15 +99,100 @@
       "ring": "#5D776B",
       "logoCrop": "cathedral-mark-from-official-horizontal-logo",
       "fitBox": [
-        165,
-        205
+        218,
+        454
       ],
       "ariaLabel": "Организатор: Остров Канта",
-      "renderNote": "Из официального горизонтального SVG-логотипа взят знак Кафедрального собора — самая узнаваемая часть для круглого медальона.",
+      "renderNote": "Из официального SVG-логотипа взят знак Кафедрального собора; для mobile-медальона знак увеличен, чтобы собор читался заметно лучше.",
       "avatarUrl": "/assets/organizers/kant-island.webp",
       "fallbackPngUrl": "/assets/organizers/kant-island.png",
       "sourcePath": "site/src/assets/organizers/source/kant-island.sobor-logo.svg",
       "retrievedAt": "2026-06-29"
+    },
+    {
+      "slug": "dom-kitoboya",
+      "name": "Дом китобоя",
+      "shortName": "Дом китобоя",
+      "aliases": [
+        "Дом китобоя",
+        "domkitoboya",
+        "Дом Китобоя"
+      ],
+      "sourcePage": "https://t.me/domkitoboya",
+      "sourceUrl": "https://domkitoboya.ru/ (site logo snapshot) + https://t.me/domkitoboya (public social palette), retrieved 2026-07-01",
+      "sourceFile": "dom-kitoboya.logo.webp",
+      "background": "#5060A0",
+      "ring": "#CFD6EA",
+      "logoCrop": "stacked-words-dom-over-kitoboya-dom-enlarged-left-shifted-v2",
+      "fitBox": [
+        640,
+        640
+      ],
+      "ariaLabel": "Локация: Дом китобоя",
+      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA.",
+      "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.png",
+      "fallbackPngUrl": "/assets/organizers/dom-kitoboya-stacked.png",
+      "sourcePath": "site/src/assets/organizers/source/dom-kitoboya.logo.webp",
+      "retrievedAt": "2026-07-01",
+      "brandBackgroundSource": "https://t.me/domkitoboya",
+      "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette."
+    },
+    {
+      "slug": "tretyakovka-kaliningrad",
+      "name": "Филиал Третьяковской галереи",
+      "shortName": "Третьяковка",
+      "aliases": [
+        "Филиал Третьяковской галереи",
+        "Третьяковская галерея",
+        "Государственная Третьяковская галерея",
+        "Третьяковка",
+        "tretyakovka_kaliningrad"
+      ],
+      "sourcePage": "https://t.me/tretyakovka_kaliningrad",
+      "sourceUrl": "https://t.me/tretyakovka_kaliningrad (public Telegram profile avatar), retrieved 2026-07-01",
+      "sourceFile": "tretyakovka-kaliningrad.telegram-avatar-20260701.jpg",
+      "background": "#FAF6EC",
+      "ring": "#D09A43",
+      "logoCrop": "telegram-profile-avatar-centered-t-mark",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Локация: филиал Третьяковской галереи",
+      "renderNote": "Медальон использует публичный Telegram-аватар @tretyakovka_kaliningrad: золотой знак «Т» на светлом фоне, без дополнительных подписей, вписан в круг без перерисовки.",
+      "avatarUrl": "/assets/organizers/tretyakovka-kaliningrad.webp",
+      "fallbackPngUrl": "/assets/organizers/tretyakovka-kaliningrad.png",
+      "sourcePath": "site/src/assets/organizers/source/tretyakovka-kaliningrad.telegram-avatar-20260701.jpg",
+      "retrievedAt": "2026-07-01",
+      "brandBackgroundSource": "https://t.me/tretyakovka_kaliningrad",
+      "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01."
+    },
+    {
+      "slug": "konb",
+      "name": "Калининградская областная научная библиотека",
+      "shortName": "КОНБ",
+      "aliases": [
+        "Калининградская областная научная библиотека",
+        "Областная научная библиотека",
+        "Научная библиотека",
+        "КОНБ"
+      ],
+      "sourcePage": "local docs/reference/лого КОНБ (1)(1).png",
+      "sourceUrl": "docs/reference/лого КОНБ (1)(1).png",
+      "sourceFile": "konb.logo.png",
+      "background": "#F7F1E8",
+      "ring": "#151515",
+      "logoCrop": "left-konb-building-only-right-text-removed",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Локация: Калининградская областная научная библиотека",
+      "renderNote": "Из исходного логотипа удалена правая текстовая часть «Калининградская областная научная библиотека»; в медальоне оставлены только рисунок здания и надпись «КОНБ» сверху.",
+      "avatarUrl": "/assets/organizers/konb.webp",
+      "fallbackPngUrl": "/assets/organizers/konb.png",
+      "sourcePath": "site/src/assets/organizers/source/konb.logo.png",
+      "retrievedAt": "2026-07-01"
     }
   ]
 }
