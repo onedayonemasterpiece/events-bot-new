@@ -115,6 +115,58 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
     assert opp2.status == "approved"
 
 
+@pytest.mark.asyncio
+async def test_review_cards_are_hard_capped_at_20_and_have_required_buttons(db, sample_payload):
+    bulk = json.loads(json.dumps(sample_payload))
+    base = bulk["opportunities"][0]
+    bulk["opportunities"] = []
+    for i in range(25):
+        item = json.loads(json.dumps(base))
+        item["context_url"] = f"https://t.me/example/{1000 + i}"
+        item["context_external_id"] = str(1000 + i)
+        item["context_text_snippet"] = f"Где событие #{i}?"
+        bulk["opportunities"].append(item)
+    result = await import_discovery_result(db, bulk)
+    cfg = AcqConfig(review_chat_id=777, review_group_max_cards_per_run=50)
+    bot = FakeBot()
+
+    posted = await publish_review_cards(db, bot, result.opportunities, config=cfg)
+
+    assert posted == 20
+    assert len(bot.calls) == 20
+    keyboard = bot.calls[0][2]["reply_markup"].inline_keyboard
+    texts = [button.text for row in keyboard for button in row]
+    assert texts == ["✅ Да", "❌ Нет", "🕒 Потом", "🔗 Контекст", "🎯 Куда"]
+
+
+@pytest.mark.asyncio
+async def test_shadow_run_with_configured_fixture_path_creates_review_artifacts(db, sample_payload, tmp_path, monkeypatch):
+    async def fake_report(run, surfaces, opportunities):
+        return "https://telegra.ph/acq-report"
+
+    fixture = tmp_path / "acq_result.json"
+    fixture.write_text(json.dumps(sample_payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr("subscriber_acquisition.service.publish_telegraph_report", fake_report)
+    cfg = AcqConfig(review_chat_id=777, fixture_path=str(fixture))
+    bot = FakeBot()
+
+    result = await run_acq_discovery_shadow(db, bot=bot, config=cfg)
+    opp_id = result.opportunities[0].id
+    fb = await record_feedback(db, opportunity_id=opp_id, reviewer_id=42, action="approve", review_message_chat_id=777, review_message_id=101)
+
+    async with db.get_session() as session:
+        runs = (await session.execute(select(AcqDiscoveryRun))).scalars().all()
+        surfaces = (await session.execute(select(AcqSurface))).scalars().all()
+        opportunities = (await session.execute(select(AcqOpportunity))).scalars().all()
+        targets = (await session.execute(select(AcqLinkTarget))).scalars().all()
+        feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+
+    assert result.run.telegraph_url == "https://telegra.ph/acq-report"
+    assert result.run.stats_json["review_cards_posted"] == 1
+    assert len(bot.calls) == 1
+    assert runs and surfaces and opportunities and targets and feedback
+    assert fb.action == "approve"
+
 def test_no_send_guard_blocks_external_targets():
     ensure_review_chat(777, review_chat_id=777)
     with pytest.raises(AcquisitionSafetyError):

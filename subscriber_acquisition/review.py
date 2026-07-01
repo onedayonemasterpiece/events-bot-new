@@ -60,9 +60,10 @@ async def publish_review_cards(db, bot: Any, opportunities: list[AcqOpportunity]
     if not opportunities or not cfg.review_chat_id or cfg.review_group_max_cards_per_run <= 0:
         return 0
     ensure_review_chat(cfg.review_chat_id, review_chat_id=cfg.review_chat_id)
+    max_cards = min(int(cfg.review_group_max_cards_per_run or 0), 20)
     posted = 0
     async with db.get_session() as session:
-        for opp in opportunities[: cfg.review_group_max_cards_per_run]:
+        for opp in opportunities[:max_cards]:
             surface = await session.get(AcqSurface, opp.surface_id) if opp.surface_id else None
             sent = await bot.send_message(
                 cfg.review_chat_id,

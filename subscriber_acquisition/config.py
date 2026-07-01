@@ -77,7 +77,7 @@ def load_config() -> AcqConfig:
         shadow_mode=_bool("ACQ_DISCOVERY_SHADOW_MODE", True),
         review_chat_id=int(review_chat_raw) if review_chat_raw.lstrip("-").isdigit() else None,
         review_thread_id=int(thread_raw) if thread_raw.isdigit() else None,
-        review_group_max_cards_per_run=_int("ACQ_REVIEW_GROUP_MAX_CARDS_PER_RUN", 20, min_value=0, max_value=50),
+        review_group_max_cards_per_run=_int("ACQ_REVIEW_GROUP_MAX_CARDS_PER_RUN", 20, min_value=0, max_value=20),
         max_surfaces_per_run=_int("ACQ_MAX_SURFACES_PER_RUN", 30, min_value=1),
         max_messages_per_surface=_int("ACQ_MAX_MESSAGES_PER_SURFACE", 200, min_value=1),
         max_threads_per_surface=_int("ACQ_MAX_THREADS_PER_SURFACE", 20, min_value=1),
