@@ -28,11 +28,13 @@ contract:
 
 Live Telegram/VK scanning remains constrained to the Kaggle runtime path and must
 run in shadow mode first. The initial `kaggle/SubscriberAcquisitionDiscovery/`
-runtime is a safe preflight/output scaffold that writes an importable
-`acq_discovery_result.json` with seed surfaces and zero outbound sends; live
-Telethon/VK crawling is the next calibration step. VK is schema/config/report-ready,
-but actual VK scans must stay disabled until explicit allowlisted VK communities
-are provided.
+runtime writes an importable `acq_discovery_result.json` with seed surfaces and
+zero outbound sends. When `ACQ_ENABLE_LIVE_TG_SCAN=1` and the existing S22
+Telegram credentials are mounted, it also performs a bounded read-only Telegram
+shadow scan of public seed surfaces, linked discussion chats where resolvable,
+public links discovered in messages, deterministic opportunity prefiltering, and
+sticker-fit observations. VK is schema/config/report-ready, but actual VK scans
+must stay disabled until explicit allowlisted VK communities are provided.
 
 ## Goal
 
