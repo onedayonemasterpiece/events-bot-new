@@ -46,7 +46,10 @@ VK token lanes with fallback. Human-like randomized pauses are applied between
 read operations; the runtime still performs zero sends, joins, comments, or
 reactions. The review chat receives a no-approval frontier summary when new surfaces are
 found; this keeps discovery visible without forcing the operator to approve
-analysis of every new link.
+analysis of every new link. Import now distinguishes seed-only queued surfaces
+from actually scanned surfaces, so subsequent Kaggle runs prioritize unscanned
+frontier/monitoring groups instead of restarting from the same head of the seed
+list.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic

@@ -1016,6 +1016,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             "title": getattr(linked, "title", None),
                             "source": "linked_discussion",
                             "topic_hint": f"linked discussion for {handle}",
+                            "reach": {"members": getattr(linked, "participants_count", None), "confidence": "low", "basis": "telegram_linked_discussion"},
                             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only linked discussion scan"},
                         })
                         if _is_out_of_region_surface(linked_surface):
@@ -1081,10 +1082,9 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
     for url in list(tg_seeds or []):
         seed = _seed_surface(str(url), platform="tg")
         surfaces_by_external[seed["external_id"]] = seed
-    for scanned in scanned_surfaces or []:
-        if scanned.get("external_id"):
-            surfaces_by_external[str(scanned["external_id"])] = scanned
-    # VK-ready but disabled unless explicit allowlist is provided.
+    # VK-ready but disabled unless explicit allowlist is provided. Seed rows are
+    # stored for map/queue visibility, but scanned rows must overwrite them below
+    # so the server can mark only actually touched surfaces as scanned.
     allowed_vk = {str(x).strip().lower() for x in list(vk_allowlist or []) if str(x).strip()}
     for url in list(vk_seeds or []):
         normalized = str(url).strip()
@@ -1096,6 +1096,9 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             continue
         seed = {**_seed_surface(normalized, platform="vk"), "status": "approved"}
         surfaces_by_external[seed["external_id"]] = seed
+    for scanned in scanned_surfaces or []:
+        if scanned.get("external_id"):
+            surfaces_by_external[str(scanned["external_id"])] = scanned
     scanned_list = list(scanned_surfaces or [])
     scanned_tg = [s for s in scanned_list if s.get("platform") == "tg"]
     scanned_vk = [s for s in scanned_list if s.get("platform") == "vk"]

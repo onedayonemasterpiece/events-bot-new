@@ -185,6 +185,20 @@ def test_shadow_payload_keeps_vk_seed_candidate_without_allowlist(monkeypatch):
     assert payload["stats"]["stickers_sent"] == 0
 
 
+def test_shadow_payload_preserves_scanned_vk_surface_metadata(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_VK_SEEDS_JSON", '["https://vk.com/vagonka39"]')
+    monkeypatch.setenv("ACQ_VK_ALLOWLIST_JSON", '["https://vk.com/vagonka39"]')
+
+    scanned = runtime._seed_surface("https://vk.com/vagonka39", platform="vk")
+    scanned.update({"source": "allowlist", "status": "approved", "reach": {"basis": "vk_wall", "confidence": "low"}})
+    payload = runtime.build_shadow_payload(scanned_surfaces=[scanned], scanned_opportunities=[])
+
+    by_external = {s["external_id"]: s for s in payload["surfaces"]}
+    assert by_external["vk:vagonka39"]["source"] == "allowlist"
+    assert by_external["vk:vagonka39"]["reach"]["basis"] == "vk_wall"
+
+
 def test_build_vk_opportunity_is_read_only_review_payload():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://vk.com/test_public", platform="vk")

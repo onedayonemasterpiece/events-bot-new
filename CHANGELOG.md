@@ -54,6 +54,10 @@
 - Fixed Subscriber Acquisition false-positive review cards from post-event
   praise/thanks/report comments by failing closed unless the Gemma 4 acquisition
   gate finds an explicit current/future need and clear native reply target.
+- Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
+  longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
+  is preserved over seed placeholders so future Kaggle runs advance through the
+  unscanned frontier instead of restarting from the same comments/groups.
 - Tightened Subscriber Acquisition deterministic opportunity prefilter so existing-event logistics comments such as “до скольки мероприятие?” do not become acquisition reply candidates.
 - Fixed Subscriber Acquisition real Kaggle launch preflight: dataset slugs now
   and titles respect Kaggle's current 50-character API limits, and the Kaggle

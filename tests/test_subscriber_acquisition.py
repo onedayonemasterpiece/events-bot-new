@@ -58,6 +58,46 @@ async def test_import_discovery_result_creates_schema_rows(db, sample_payload):
 
 
 @pytest.mark.asyncio
+async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "vk",
+            "surface_type": "community",
+            "url": "https://vk.com/scanned",
+            "handle": "scanned",
+            "external_id": "vk:scanned",
+            "status": "approved",
+            "source": "allowlist",
+            "reach": {"basis": "vk_wall", "confidence": "low"},
+            "risk": {},
+        },
+        {
+            "platform": "vk",
+            "surface_type": "community",
+            "url": "https://vk.com/waiting",
+            "handle": "waiting",
+            "external_id": "vk:waiting",
+            "status": "approved",
+            "source": "seed",
+            "reach": {"basis": "seed_only", "confidence": "low"},
+            "risk": {},
+        },
+    ]
+    payload["opportunities"] = []
+
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        rows = (await session.execute(select(AcqSurface))).scalars().all()
+    by_external = {row.external_id: row for row in rows}
+    assert by_external["vk:scanned"].last_scan_at is not None
+    assert by_external["vk:scanned"].next_scan_after is not None
+    assert by_external["vk:waiting"].last_scan_at is None
+    assert by_external["vk:waiting"].next_scan_after is None
+
+
+@pytest.mark.asyncio
 async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sample_payload):
     first = json.loads(json.dumps(sample_payload))
     first["surfaces"][0]["external_id"] = "tg:visitNavahrudak"

@@ -25,6 +25,7 @@ contract:
   dev/test fallback only; sample fixture import requires `ACQ_DISCOVERY_USE_SAMPLE=1`
   so production does not review fake evidence;
 - review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
+- server import keeps seed-only queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces and later runs walk the remaining frontier rather than the same first seeds;
 - Telegraph report renderer/publisher and JSON schema for Kaggle output import;
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;

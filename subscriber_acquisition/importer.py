@@ -40,6 +40,19 @@ def _dedupe_key(platform: str, context_url: str, snippet: str | None = None) -> 
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _surface_was_scanned(item: dict[str, Any]) -> bool:
+    """Return True only for surfaces the runtime actually touched this run.
+
+    Runtime payloads intentionally include many seed/frontier links so the map can
+    show the backlog. Those seed-only rows must not be marked as scanned, or the
+    next Kaggle run will keep starting from the same head of the seed list instead
+    of walking the unscanned frontier.
+    """
+    reach = item.get("reach") if isinstance(item, dict) else None
+    basis = str((reach or {}).get("basis") or "").strip().lower()
+    return bool(basis and basis != "seed_only")
+
+
 @dataclass
 class ImportResult:
     run: AcqDiscoveryRun
@@ -75,6 +88,7 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 )).scalar_one_or_none()
             reach = _jsonable(item.get("reach"), {})
             risk = _jsonable(item.get("risk"), {})
+            scanned_this_run = _surface_was_scanned(item)
             if existing is None:
                 surface = AcqSurface(
                     platform=platform,
@@ -89,8 +103,8 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                     topic_cluster=item.get("topic_cluster"),
                     reach_json=reach,
                     risk_json=risk,
-                    last_scan_at=generated_at,
-                    next_scan_after=next_surface_scan_after(str(item.get("status") or "candidate"), now=generated_at),
+                    last_scan_at=generated_at if scanned_this_run else None,
+                    next_scan_after=next_surface_scan_after(str(item.get("status") or "candidate"), now=generated_at) if scanned_this_run else None,
                 )
                 session.add(surface)
                 await session.flush()
@@ -106,8 +120,9 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 surface.topic_cluster = item.get("topic_cluster") or surface.topic_cluster
                 surface.reach_json = reach or surface.reach_json
                 surface.risk_json = risk or surface.risk_json
-                surface.last_scan_at = generated_at
-                surface.next_scan_after = next_surface_scan_after(surface.status, now=generated_at)
+                if scanned_this_run:
+                    surface.last_scan_at = generated_at
+                    surface.next_scan_after = next_surface_scan_after(surface.status, now=generated_at)
                 session.add(surface)
             await session.flush()
             surfaces.append(surface)
