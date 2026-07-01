@@ -13,7 +13,7 @@ from .cooldowns import next_surface_scan_after, opportunity_expires_at
 from .link_targets import VALID_LINK_TARGET_KINDS
 from .scoring import conservative_reach_low
 from .sticker import sticker_fit_from_observation
-from .surface_filters import is_tg_bot_or_service_surface
+from .surface_filters import is_tg_bot_or_service_surface, is_vk_community_surface
 
 
 def _dt(value: Any) -> datetime | None:
@@ -90,6 +90,14 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 risk_in = dict(item.get("risk") or {})
                 risk_in.setdefault("level", "rejected")
                 risk_in.setdefault("reason", "telegram_bot_or_service")
+                item["risk"] = risk_in
+            elif platform == "vk" and not is_vk_community_surface(url=item.get("url"), handle=item.get("handle"), external_id=external_id):
+                incoming_status = "rejected_non_community"
+                item = dict(item)
+                item["status"] = incoming_status
+                risk_in = dict(item.get("risk") or {})
+                risk_in.setdefault("level", "rejected")
+                risk_in.setdefault("reason", "vk_non_community")
                 item["risk"] = risk_in
             existing = None
             if external_id:

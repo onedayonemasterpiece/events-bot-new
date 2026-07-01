@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AcqConfig
-from .surface_filters import is_tg_bot_or_service_surface
+from .surface_filters import is_tg_bot_or_service_surface, is_vk_community_surface, vk_handle_from_surface
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "kaggle" / "SubscriberAcquisitionDiscovery"
@@ -47,6 +47,9 @@ SMARTIK_KALININGRAD_VK_SEEDS = [
     ("club80149142", "ЧС - Калининград и область", "https://smartik.ru/kaliningrad/group/80149142"),
     ("club186019893", "ДТП и ЧП | Калининград | KADAUTO", "https://smartik.ru/kaliningrad/group/186019893"),
 ]
+SMARTIK_KALININGRAD_VK_BY_HANDLE = {handle.casefold(): (title, source_url) for handle, title, source_url in SMARTIK_KALININGRAD_VK_SEEDS}
+
+
 
 
 def live_telegram_scan_enabled() -> bool:
@@ -178,6 +181,8 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
             continue
         if platform == "tg" and is_tg_bot_or_service_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
             continue
+        if platform == "vk" and not is_vk_community_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
+            continue
         if platform == "vk":
             vk.append(url)
         else:
@@ -207,16 +212,19 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
         def _surface_priority(row: AcqSurface) -> tuple[int, int, int, float, int]:
             source = str(row.source or "").strip().lower()
             status = str(row.status or "").strip().lower()
-            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in"}
+            vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold() if str(row.platform or "").lower() == "vk" else ""
+            is_smartik = vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE
+            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog"} or is_smartik
             reach = row.reach_json if isinstance(row.reach_json, dict) else {}
             basis = str((reach or {}).get("basis") or "").strip().lower()
-            is_seed_only = basis in {"", "seed_only", "vk_source_seed", "telega_in_seed"}
+            is_seed_only = basis in {"", "seed_only", "vk_source_seed", "telega_in_seed", "smartik_catalog_seed"}
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
+            source_rank = 0 if is_smartik else (1 if is_new_frontier else 2)
             return (
                 0 if is_seed_only else 1,
-                0 if is_new_frontier else 1,
+                source_rank,
                 0 if status == "candidate" else 1,
                 next_scan.timestamp(),
                 int(row.id or 0),
@@ -224,19 +232,33 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
 
         pending_existing: list[dict[str, Any]] = []
         for row in sorted(rows, key=_surface_priority):
-            if (
-                str(row.platform or "").strip().lower() == "tg"
-                and is_tg_bot_or_service_surface(url=row.url, handle=row.handle, external_id=row.external_id)
-            ):
+            platform = str(row.platform or "").strip().lower()
+            if platform == "tg" and is_tg_bot_or_service_surface(url=row.url, handle=row.handle, external_id=row.external_id):
                 row.status = "rejected_bot_or_service"
                 row.review_note = "Telegram bot/service links are not monitoring surfaces for acquisition discovery."
                 session.add(row)
                 continue
+            if platform == "vk" and not is_vk_community_surface(url=row.url, handle=row.handle, external_id=row.external_id):
+                row.status = "rejected_non_community"
+                row.review_note = "VK album/app/market/away/personal links are not monitoring communities for acquisition discovery."
+                session.add(row)
+                continue
+            if platform == "vk":
+                vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold()
+                if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE:
+                    title, source_url = SMARTIK_KALININGRAD_VK_BY_HANDLE[vk_handle]
+                    row.source = "smartik_kaliningrad_catalog"
+                    row.title = row.title or title
+                    row.topic_hint = row.topic_hint or f"Smartik Kaliningrad public catalog seed: {source_url}"
+                    reach = row.reach_json if isinstance(row.reach_json, dict) else {}
+                    if str((reach or {}).get("basis") or "").strip().lower() in {"", "seed_only"}:
+                        row.reach_json = {"confidence": "low", "basis": "smartik_catalog_seed"}
+                    session.add(row)
             item = row.model_dump()
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             source = str(item.get("source") or "").strip().lower()
-            if source in {"discovered", "linked_discussion", "telega_in"}:
+            if source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog"}:
                 surfaces.append(item)
             else:
                 pending_existing.append(item)

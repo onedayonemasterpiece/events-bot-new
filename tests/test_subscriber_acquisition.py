@@ -135,6 +135,22 @@ async def test_import_rejects_telegram_bot_surfaces(db, sample_payload):
 
 
 @pytest.mark.asyncio
+async def test_import_rejects_vk_non_community_surfaces(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"][0]["platform"] = "vk"
+    payload["surfaces"][0]["external_id"] = "vk:album-1_2"
+    payload["surfaces"][0]["url"] = "https://vk.com/album-1_2"
+    payload["surfaces"][0]["handle"] = "album-1_2"
+    payload["opportunities"] = []
+
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "vk:album-1_2"))).scalar_one()
+    assert surface.status == "rejected_non_community"
+
+
+@pytest.mark.asyncio
 async def test_import_dedupes_context(db, sample_payload):
     first = await import_discovery_result(db, sample_payload)
     second = await import_discovery_result(db, sample_payload)
@@ -457,6 +473,30 @@ async def test_runtime_seed_payload_rejects_existing_telegram_bots(db):
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_rejects_existing_vk_non_communities(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="vk",
+            surface_type="community",
+            url="https://vk.com/album-123_456",
+            handle="album-123_456",
+            external_id="vk:album-123_456",
+            status="candidate",
+            source="discovered",
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+
+    assert "vk:album-123_456" not in {item["external_id"] for item in payload["surfaces"]}
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "vk:album-123_456"))).scalar_one()
+    assert surface.status == "rejected_non_community"
+
+
+@pytest.mark.asyncio
 async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
     from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
 
@@ -484,6 +524,41 @@ async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
     assert payload["surfaces"][0]["external_id"] == "tg:123"
     assert any(item["external_id"] == "tg:anons39" for item in payload["surfaces"][:14])
     assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:old_seed")) > 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_prioritizes_smartik_communities(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _runtime_env_from_config
+
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="vk",
+            surface_type="community",
+            url="https://vk.com/club42481124",
+            handle="club42481124",
+            external_id="vk:club42481124",
+            status="approved",
+            source="seed",
+        ))
+        for idx in range(8):
+            session.add(AcqSurface(
+                platform="vk",
+                surface_type="community",
+                url=f"https://vk.com/club9{idx}",
+                handle=f"club9{idx}",
+                external_id=f"vk:club9{idx}",
+                status="candidate",
+                source="discovered",
+            ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=10), payload)
+    vk_seeds = json.loads(env["ACQ_VK_SEEDS_JSON"])
+
+    assert vk_seeds[0] == "https://vk.com/club42481124"
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    assert by_external["vk:club42481124"]["source"] == "smartik_kaliningrad_catalog"
 
 
 @pytest.mark.asyncio

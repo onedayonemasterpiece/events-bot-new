@@ -40,7 +40,9 @@ contract:
   VK budgets into Kaggle config, skip wall posts with no comments, fetch newest
   comments first (`sort=desc`), skip non-community VK links
   (`album*`/`app*`/`market*`/`away.php`/personal `id*`), and expose `vk_scan`
-  counters for posts/comments inspected and VK rate-limit backoffs;
+  counters for posts/comments inspected and VK rate-limit backoffs; existing
+  non-community VK rows are marked `rejected_non_community`, and Smartik
+  Kaliningrad community seeds are prioritized before noisy discovered links;
 - Telegram link discovery skips bot/service handles (`*bot`, `addstickers`,
   `share`, etc.) so the frontier only grows through public groups, chats,
   channels with comments, and VK communities; existing bot/service rows are

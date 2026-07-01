@@ -77,6 +77,9 @@ blocked by the static no-send guard. To get beyond official event-source
 comments, the server seed payload also includes a small Smartik Kaliningrad
 public-catalog set of VK communities (`Подслушано`, `Типичный Калининград`,
 `Попутчики`, `ЧС`, `KADAUTO`) as `source=smartik_kaliningrad_catalog`.
+Smartik community seeds are prioritized ahead of noisy discovered VK links, and
+existing VK album/app/market/away/personal rows are marked
+`rejected_non_community` before the next Kaggle seed payload/import.
 Telegram bot/service links (`*bot`, `addstickers`, `share`, etc.) are not queued
 as monitoring surfaces: discovery is for public groups/chats/comment threads,
 not bot accounts. If such a surface was already collected by an older run, the
