@@ -212,25 +212,26 @@ Implemented source pieces:
 - `site/src/components/AuthorizedEventSearch.astro` — one-line search UI, Yandex OAuth entry, quota/status text, same EventCard contract.
 - `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, direct multi-key Google provider rotation/failover for Gemini query embedding, pgvector RPC, Gemini Lite verifier first, optional Gemma 4 26B overflow and fallback cards.
 
-2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from five
-registered Google key lanes with protected reserves for static generation and
-other services. Product registration is counted from `auth.identities.provider='custom:yandex'`, not from all historical `auth.users` rows; on 2026-07-01 this
-means `1` effective Yandex-registered site user, not `47` total Auth rows. The
-canary limit is therefore `1000/day` search and `1000/day` verifier calls per
-registered Yandex user (`10000/month` each), which still fits inside the
-protected fast Lite capacity for today's user count. The plan is applied by
+2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from the
+single non-reserved online search lane (`GOOGLE_API_KEY5`) with protected
+reserves for static related/vector sync (`GOOGLE_API_KEY4`), Telegram Monitoring
+(`GOOGLE_API_KEY3`), guide monitoring (`GOOGLE_API_KEY2`) and existing Smart
+Update/shared traffic (`GOOGLE_API_KEY`). Product registration is counted from
+`auth.identities.provider='custom:yandex'`, not from all historical
+`auth.users` rows; on 2026-07-01 this means `1` effective Yandex-registered site
+user, not `47` total Auth rows. The canary limit is therefore `350/day` search
+and `350/day` verifier calls per registered Yandex user (`3500/month` each),
+which fits inside KEY5's active fast Lite pool for today's user count while
+leaving `100` Lite RPD and `200` embedding RPD as buffers. The plan is applied by
 `supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
 
 External gate completed on 2026-07-01 from branch
-`feature/smart-search-quota-key5-site` / SHA `4bc1b5b0`: all five Google key
-secrets and explicit `EVENT_SEARCH_*_KEY_ENVS` lists are present in the
-personalization Edge Function environment, the quota migration is applied, and
-`event-search` is deployed with the Lite-first/Gemma-overflow code path. Live
-Edge smoke for `интересно детям` returned HTTP `200`, `retrieved_count=20`,
-`items=11`, verifier `model=gemini-3.1-flash-lite`,
-`policy=lite_first_gemma_overflow`, first Lite attempt `ok` in `1608ms`, and
-registered quota remaining `999/999` after the smoke reservation.
-
+`feature/smart-search-quota-key5-site`: Google key secrets are present, active
+`EVENT_SEARCH_*_KEY_ENVS` lists are limited to `GOOGLE_API_KEY5`,
+reserve/failover lanes are configured separately as
+`GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`, the quota
+migration is applied, and `event-search` is deployed with the
+Lite-first/Gemma-overflow code path.
 
 ## v59 strict static-related process and evidence
 

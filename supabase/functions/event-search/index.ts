@@ -43,8 +43,7 @@ function normalizeQuery(value: unknown): string {
 const MAX_QUERY_LENGTH = 180;
 
 type QueryValidation =
-  | { ok: true; query: string }
-  | { ok: false; error: string; detail: string };
+  { ok: true; query: string } | { ok: false; error: string; detail: string };
 
 function validateSearchQuery(value: unknown): QueryValidation {
   const query = normalizeQuery(value);
@@ -198,6 +197,11 @@ type GoogleApiKeyCandidate = {
   value: string;
 };
 
+type GoogleApiKeyGroups = {
+  active: GoogleApiKeyCandidate[];
+  reserve: GoogleApiKeyCandidate[];
+};
+
 const DEFAULT_GOOGLE_KEY_ENVS = [
   "GOOGLE_API_KEY4",
   "GOOGLE_API_KEY",
@@ -220,13 +224,7 @@ function parseProviderKeyEnvNames(value: string, fallback: string[]): string[] {
   return out;
 }
 
-function googleProviderKeys(
-  kind: "EMBEDDING" | "LLM",
-  fallback = DEFAULT_GOOGLE_KEY_ENVS,
-): GoogleApiKeyCandidate[] {
-  const specific = env(`EVENT_SEARCH_${kind}_KEY_ENVS`);
-  const shared = env("EVENT_SEARCH_GOOGLE_KEY_ENVS");
-  const names = parseProviderKeyEnvNames(specific || shared, fallback);
+function googleProviderKeyCandidates(names: string[]): GoogleApiKeyCandidate[] {
   const keys: GoogleApiKeyCandidate[] = [];
   const seenValues = new Set<string>();
   for (const envName of names) {
@@ -236,6 +234,29 @@ function googleProviderKeys(
     keys.push({ env_name: envName, value });
   }
   return keys;
+}
+
+function googleProviderKeyGroups(
+  kind: "EMBEDDING" | "LLM",
+  fallback = DEFAULT_GOOGLE_KEY_ENVS,
+): GoogleApiKeyGroups {
+  const specific = env(`EVENT_SEARCH_${kind}_KEY_ENVS`);
+  const shared = env("EVENT_SEARCH_GOOGLE_KEY_ENVS");
+  const reserveSpecific = env(`EVENT_SEARCH_${kind}_RESERVE_KEY_ENVS`);
+  const reserveShared = env("EVENT_SEARCH_GOOGLE_RESERVE_KEY_ENVS");
+  const activeNames = parseProviderKeyEnvNames(specific || shared, fallback);
+  const reserveNames = parseProviderKeyEnvNames(
+    reserveSpecific || reserveShared,
+    [],
+  );
+  const reserveNameSet = new Set(reserveNames);
+  const reserve = googleProviderKeyCandidates(reserveNames);
+  const reserveValueSet = new Set(reserve.map((key) => key.value));
+  const active = googleProviderKeyCandidates(activeNames).filter(
+    (key) =>
+      !reserveNameSet.has(key.env_name) && !reserveValueSet.has(key.value),
+  );
+  return { active, reserve };
 }
 
 function seedOffset(seed: string, size: number): number {
@@ -254,6 +275,17 @@ function rotateProviderKeys(
   if (keys.length <= 1) return keys;
   const offset = seedOffset(seed, keys.length);
   return [...keys.slice(offset), ...keys.slice(0, offset)];
+}
+
+function providerKeyAttempts(
+  kind: "EMBEDDING" | "LLM",
+  seed: string,
+): GoogleApiKeyCandidate[] {
+  const groups = googleProviderKeyGroups(kind);
+  return [
+    ...rotateProviderKeys(groups.active, `${kind}:active:${seed}`),
+    ...rotateProviderKeys(groups.reserve, `${kind}:reserve:${seed}`),
+  ];
 }
 
 function shouldTryNextGoogleKey(status: number): boolean {
@@ -332,10 +364,7 @@ async function embedQuery(
   query: string,
   keySeed: string,
 ): Promise<EmbeddingResult> {
-  const keys = rotateProviderKeys(
-    googleProviderKeys("EMBEDDING"),
-    `embedding:${keySeed}`,
-  );
+  const keys = providerKeyAttempts("EMBEDDING", `embedding:${keySeed}`);
   if (keys.length === 0) throw new Error("embedding_api_key_missing");
   const model = googleModelId(
     env("EVENT_SEARCH_EMBEDDING_MODEL"),
@@ -408,8 +437,7 @@ function extractGeminiText(payload: Record<string, unknown>): string {
   const parts =
     ((
       (payload?.candidates as Candidate[] | undefined)?.[0]?.content as
-        | Candidate
-        | undefined
+        Candidate | undefined
     )?.parts as Candidate[] | undefined) || [];
   return parts
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
@@ -835,7 +863,7 @@ async function llmVerify(
       used: false,
     };
   }
-  const llmKeys = googleProviderKeys("LLM");
+  const llmKeys = providerKeyAttempts("LLM", "availability");
   if (llmKeys.length === 0)
     return {
       exact: [],
@@ -941,8 +969,8 @@ async function llmVerify(
     attemptNumber: number,
     timeoutMs: number,
   ): Promise<ParsedLlmClassification | null> => {
-    const keys = rotateProviderKeys(
-      llmKeys,
+    const keys = providerKeyAttempts(
+      "LLM",
       `llm:${model}:${role}:${attemptNumber}:${promptChars}`,
     );
     for (const key of keys) {
