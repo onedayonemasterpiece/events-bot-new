@@ -75,18 +75,28 @@ async def publish_review_cards(db, bot: Any, opportunities: list[AcqOpportunity]
             )
             if sent is not None:
                 db_opp = await session.get(AcqOpportunity, opp.id)
+                sent_chat_id = int(getattr(getattr(sent, "chat", None), "id", cfg.review_chat_id))
+                sent_message_id = int(getattr(sent, "message_id", 0) or 0)
+                ensure_review_chat(sent_chat_id, review_chat_id=cfg.review_chat_id)
                 if db_opp is not None:
-                    db_opp.review_message_chat_id = int(getattr(getattr(sent, "chat", None), "id", cfg.review_chat_id))
-                    db_opp.review_message_id = int(getattr(sent, "message_id", 0) or 0)
+                    db_opp.review_message_chat_id = sent_chat_id
+                    db_opp.review_message_id = sent_message_id
                     db_opp.last_shown_at = datetime.now(timezone.utc)
                     session.add(db_opp)
+                    session.add(AcqReviewFeedback(
+                        opportunity_id=db_opp.id,
+                        surface_id=db_opp.surface_id,
+                        action="shown",
+                        review_message_chat_id=sent_chat_id,
+                        review_message_id=sent_message_id,
+                    ))
                 posted += 1
         await session.commit()
     return posted
 
 
 async def record_feedback(db, *, opportunity_id: int | None, surface_id: int | None = None, reviewer_id: int | None = None, action: str, note: str | None = None, review_message_chat_id: int | None = None, review_message_id: int | None = None) -> AcqReviewFeedback:
-    if action not in {"approve", "reject", "keep", "comment"}:
+    if action not in {"approve", "reject", "keep", "comment", "shown"}:
         raise ValueError("invalid acquisition feedback action")
     async with db.get_session() as session:
         opp = await session.get(AcqOpportunity, opportunity_id) if opportunity_id else None

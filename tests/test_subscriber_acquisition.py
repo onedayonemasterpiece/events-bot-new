@@ -111,9 +111,8 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
     async with db.get_session() as session:
         fbs = (await session.execute(select(AcqReviewFeedback))).scalars().all()
         opp2 = await session.get(AcqOpportunity, opp.id)
-    assert len(fbs) == 2
+    assert [fb.action for fb in fbs] == ["shown", "approve", "comment"]
     assert opp2.status == "approved"
-
 
 
 @pytest.mark.asyncio
@@ -133,6 +132,7 @@ async def test_surface_seed_add_and_review_feedback(db):
     async with db.get_session() as session:
         stored_feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
     assert stored_feedback[0].surface_id == surface.id
+
 
 @pytest.mark.asyncio
 async def test_review_cards_are_hard_capped_at_20_and_have_required_buttons(db, sample_payload):
@@ -184,7 +184,23 @@ async def test_shadow_run_with_configured_fixture_path_creates_review_artifacts(
     assert result.run.stats_json["review_cards_posted"] == 1
     assert len(bot.calls) == 1
     assert runs and surfaces and opportunities and targets and feedback
+    assert {row.action for row in feedback} == {"shown", "approve"}
     assert fb.action == "approve"
+
+
+class FakeWrongChatBot:
+    async def send_message(self, chat_id, text, **kwargs):
+        return SimpleNamespace(chat=SimpleNamespace(id=123), message_id=999)
+
+
+@pytest.mark.asyncio
+async def test_review_card_send_verifies_returned_review_chat(db, sample_payload):
+    result = await import_discovery_result(db, sample_payload)
+    cfg = AcqConfig(review_chat_id=777, review_group_max_cards_per_run=20)
+
+    with pytest.raises(AcquisitionSafetyError):
+        await publish_review_cards(db, FakeWrongChatBot(), result.opportunities, config=cfg)
+
 
 def test_no_send_guard_blocks_external_targets():
     ensure_review_chat(777, review_chat_id=777)
@@ -206,3 +222,6 @@ async def test_shadow_run_publishes_report_and_review_cards(db, sample_payload, 
     assert result.run.telegraph_url == "https://telegra.ph/acq-report"
     assert result.run.stats_json["review_cards_posted"] == 1
     assert len(bot.calls) == 1
+    async with db.get_session() as session:
+        feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+    assert [row.action for row in feedback] == ["shown"]

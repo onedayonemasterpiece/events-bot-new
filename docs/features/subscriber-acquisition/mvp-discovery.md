@@ -19,7 +19,7 @@ contract:
 - `/acq_run` imports an explicit `ACQ_DISCOVERY_RESULTS_PATH` or
   `ACQ_DISCOVERY_FIXTURE_PATH`; sample fixture import requires
   `ACQ_DISCOVERY_USE_SAMPLE=1` so production does not review fake evidence;
-- button feedback and reply comments are persisted to `acq_review_feedback`;
+- review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
 - Telegraph report renderer/publisher and JSON schema for Kaggle output import;
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;
