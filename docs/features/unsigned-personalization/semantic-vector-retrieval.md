@@ -15,8 +15,8 @@ The old `local_tfidf_sparse_v1` layer could rank “Музыка нашего г
 
 Authorized search is a two-stage semantic pipeline, not a deterministic keyword gate:
 
-1. **pgvector retrieval** returns nearest event candidates from `gemini-embedding-2` vectors over compact event search documents.
-2. **LLM verifier** receives only the retrieved candidate IDs plus compact public facts and decides which candidates are exact matches for the user query. It may return fewer than the requested limit, including zero.
+1. **pgvector retrieval** returns nearest event candidates from `gemini-embedding-2` vectors over compact event search documents. pgvector is the index/search engine; it does not create vectors by itself, so the current implementation still creates one `gemini-embedding-2` query vector per explicit authorized search.
+2. **LLM verifier** receives only the retrieved candidate IDs plus compact public facts and decides which candidates are exact matches for the user query. The online verifier is Gemini Lite first, with Gemma 4 26B only as slower overflow. It may return fewer than the requested limit, including zero.
 
 High-match invariant: raw pgvector candidates are not exact search results until the LLM explicitly approves them. On LLM timeout/error/quota miss/insufficient facts/over-approval, exact results are empty and candidates are downgraded to the separately headed possible/discovery section. For audience-sensitive queries such as “интересно детям”, relevance must be decided by the LLM from event facts rather than by regex filters. Adult/professional urban-planning events are rejected by the verifier when the facts do not support child/family suitability; they can still appear later only under the separately headed fallback/discovery section, not as exact search results.
 
@@ -210,13 +210,14 @@ Design doc: `docs/features/unsigned-personalization/authorized-event-search.md`.
 Implemented source pieces:
 
 - `site/src/components/AuthorizedEventSearch.astro` — one-line search UI, Yandex OAuth entry, quota/status text, same EventCard contract.
-- `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, direct multi-key Google provider rotation/failover for Gemini query embedding and Gemma verification, pgvector RPC, optional Gemma verifier/rerank and fallback cards.
+- `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, direct multi-key Google provider rotation/failover for Gemini query embedding, pgvector RPC, Gemini Lite verifier first, optional Gemma 4 26B overflow and fallback cards.
 
 2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from five
 registered Google key lanes with protected reserves for static generation and
 other services. For the current 47 registered users the canary limit is
-`80/day` search and `80/day` Gemma verifier calls per registered user
-(`800/month` each), applied by
+`80/day` search and `80/day` verifier calls per registered user
+(`800/month` each). Roughly the first `25/day` can fit the fast Lite lane if
+usage is uniform, with Gemma handling slower overflow. The plan is applied by
 `supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
 
 Remaining external gate for this change: deploy the updated Edge Function with

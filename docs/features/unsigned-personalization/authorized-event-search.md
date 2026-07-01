@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation and recalculates the registered-user canary quota to `80/day` search + `80/day` Gemma verifier calls after protected reserves. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the registered-user canary quota to `80/day` search + `80/day` verifier calls after protected reserves. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
 
 ## Product contract
 
@@ -112,13 +112,25 @@ Regression guard: `scripts/check_authorized_search_readiness.py --probe-yandex-u
 ```text
 Fly SQLite / static export
   -> scripts/sync_event_search_vectors_to_supabase.py
+  -> Google embedding for each public event document
   -> event_search_documents + event_embeddings(vector(768)) in personalization Supabase
   -> authenticated Edge Function event-search
-  -> Gemini query embedding
+  -> Google embedding for the user's query
   -> RPC search_events_by_embedding_v1
-  -> optional LLM verifier/reranker over returned IDs only
+  -> pgvector HNSW/cosine recall over stored event vectors
+  -> Gemini Lite verifier first, Gemma 4 26B only as overflow
   -> event-card snapshots in browser
 ```
+
+Important implementation fact: pgvector is the Postgres vector index/search
+engine; it does **not** create semantic vectors by itself. In the current P0
+implementation, vectors are created by `gemini-embedding-2`: offline for event
+documents in `scripts/sync_event_search_vectors_to_supabase.py`, and online once
+per explicit authenticated query in `supabase/functions/event-search/index.ts`.
+The Edge Function passes that query vector to `search_events_by_embedding_v1` as
+`p_query_embedding`; the RPC orders candidates by `event_embeddings.embedding <=>
+p_query_embedding`. Gemini Lite/Gemma do not replace this recall step: they
+classify the pgvector candidate IDs after recall.
 
 ### pgvector schema
 
@@ -171,18 +183,17 @@ Authorized search uses only `embedding_doc_kind=search_v3`. Static event-page re
 The Edge Function runs an LLM verifier after pgvector retrieval when the user has LLM quota. This verifier is an operational classifier over already retrieved IDs, not an external consultant review. Runtime contract:
 
 - `EVENT_SEARCH_LLM_ENABLED=1` enables the verifier;
-- primary verifier model is Gemma 4 26B (`EVENT_SEARCH_LLM_PRIMARY_MODEL=gemma-4-26b-a4b-it`; legacy `EVENT_SEARCH_LLM_MODEL` is still accepted). This protects the scarce `gemini-3.1-flash-lite` lane, which has only `500 RPD` and is shared with other critical processes;
-- fallback verifier model is `EVENT_SEARCH_LLM_FALLBACK_MODEL=gemini-3.1-flash-lite`, but it is a protected rescue lane, not the normal runtime;
-- `EVENT_SEARCH_VERIFICATION_WINDOW=48` by default for the current high-match canary (bounded by the Edge Function and UI request);
-- model policy is user-state aware:
-  - first/onboarding searches may use `fast_onboarding_fallback`: one short Gemma attempt, then Lite fallback if Gemma quickly returns `5xx/429/timeout`;
-  - after the user has already spent several searches today, the function switches to `gemma_priority_late_fallback`: multiple longer Gemma attempts with backoff before any Lite fallback;
-  - the threshold is controlled by `EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN` (default `45` after quota reservation for the current `80/day` canary plan).
+- primary online verifier is fast Gemini Lite (`EVENT_SEARCH_LLM_LITE_MODEL=gemini-3.1-flash-lite`), because it can classify the compact candidate batch in about a second and has enough effective quota after KEY5 rotation;
+- overflow verifier is Gemma 4 26B (`EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL=gemma-4-26b-a4b-it`), used only if all configured Lite key lanes fail with quota/capacity/retryable provider errors or Lite returns an unusable classification;
+- legacy `EVENT_SEARCH_LLM_MODEL` is no longer used as the primary model in the Lite-first strategy; if present, it is treated only as an overflow fallback source after the explicit `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_*` envs;
+- `EVENT_SEARCH_VERIFICATION_WINDOW=20` and `EVENT_SEARCH_LLM_MAX_CANDIDATES=20` by default for the fast online batch. The UI still returns up to `12` cards, but the verifier can judge a wider recall window in one model call;
+- model policy is `lite_first_gemma_overflow`: try Gemini Lite first across all configured Google key lanes, then Gemma 4 26B overflow.
 
-Operational knobs: `EVENT_SEARCH_LLM_FAST_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_FAST_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_FALLBACK_TIMEOUT_MS`, `EVENT_SEARCH_LLM_PRIMARY_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_FALLBACK_ENABLED`, `EVENT_SEARCH_LLM_LATE_FALLBACK_ENABLED`.
+Operational knobs: `EVENT_SEARCH_LLM_LITE_MODEL(S)`, `EVENT_SEARCH_LLM_LITE_ATTEMPTS`, `EVENT_SEARCH_LLM_LITE_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LITE_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL(S)`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_TIMEOUT_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_ENABLED`.
 Prompt/latency knobs: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `768`),
-`EVENT_SEARCH_LLM_THINKING_LEVEL` (default `MINIMAL`) and
-`EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `320`).
+`EVENT_SEARCH_LLM_THINKING_LEVEL` (default `MINIMAL`),
+`EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `320`) and
+`EVENT_SEARCH_LLM_MAX_CANDIDATES` (default `20`).
 
 High-match contract:
 
@@ -195,7 +206,7 @@ High-match contract:
 
 P1 progressive UX target:
 
-- first response should return the high-confidence Gemma-verified window as soon
+- first response should return the high-confidence Gemini-Lite-verified window as soon
   as the first verifier pass completes;
 - while the user starts reading/scrolling, the backend may continue verifying
   the next candidate window(s) and append accepted cards below the current list;
@@ -212,11 +223,11 @@ The verifier uses Gemini structured output (`responseMimeType: application/json`
 Every provider try is recorded in `llm_verifier.attempts[]` and search metadata
 with `{model, role: primary|fallback, attempt, status, elapsed_ms}`. The response
 also exposes `llm_verifier.model`, `llm_verifier.policy` and
-`llm_verifier.fast_fallback_allowed` so product/debug review can see whether a
-Lite fallback was spent intentionally. If all attempts fail, the high-match
+`llm_verifier.gemma_overflow_allowed` so product/debug review can see whether
+Gemma overflow was available after the Lite-first attempt. If all attempts fail, the high-match
 contract still fails closed: exact `items=[]`, possible candidates remain under
 the separate fallback/discovery heading.
-For Gemma 4 26B latency analysis, each attempt also records
+For Lite/Gemma latency analysis, each attempt also records
 `timeout_ms`, `prompt_chars`, `prompt_fact_chars` and
 `compact_candidate_count`. A direct SQL probe can summarize the history:
 
@@ -234,7 +245,7 @@ select
   metadata->>'llm_policy' as llm_policy
 from public.event_search_requests
 cross join lateral jsonb_array_elements(metadata->'llm_attempts') as attempt
-where attempt->>'model' = 'gemma-4-26b-a4b-it'
+where attempt->>'model' in ('gemini-3.1-flash-lite', 'gemma-4-26b-a4b-it')
 order by created_at desc;
 ```
 
@@ -244,26 +255,11 @@ order by created_at desc;
 - `Чтобы было интересно детям`: exact `4512 С чего начинается Родина`, 3 possible, urban-planning events no longer appear as exact results.
 - `джаз на выходных`: 0 exact, 4 possible; with the current limited corpus this is preferable to showing non-jazz music as exact.
 - NDJSON/progress path emits backend stages: `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `finalize`, `result`.
-- After the 2026-06-29 model-cascade fix, live Edge JSON smoke proves both
-  policies:
-  - fresh user / first search: `policy=fast_onboarding_fallback`, Gemma 4 26B
-    primary attempt timed out at `3502ms`, Lite fallback returned `ok` in
-    `1027ms`, exact `[5201]`;
-  - same-user late path after 5 non-LLM searches:
-    `policy=gemma_priority_late_fallback`, `fast_fallback_allowed=false`,
-    Gemma 4 26B was tried twice at about `6500ms` each before Lite fallback
-    returned `ok` in `991ms`, exact `[5201]`.
-- Prompt-size/timeout follow-up on the same day showed the earlier failures were
-  timeout/telemetry configuration problems, not proof that Gemma 26B cannot do
-  the task. Direct provider probes returned the full 12-candidate verifier prompt
-  in about `3.5–3.8s`. After deploying `maxOutputTokens=768`,
-  `thinkingLevel=MINIMAL`, `EVENT_SEARCH_LLM_FACT_MAX_CHARS=320`,
-  `FAST_PRIMARY_TIMEOUT_MS=5000` and `LATE_PRIMARY_TIMEOUT_MS=12000`, live Edge
-  searches returned through Gemma 4 26B itself:
-  `fast_onboarding_fallback` in `3379ms` and `gemma_priority_late_fallback` in
-  `3394ms`, both with `prompt_chars=8508`, `prompt_fact_chars=3839`,
-  `compact_candidate_count=12`, exact `[5201, 5478, 5479, 3730]`, and no Lite
-  fallback spent.
+- Historical 2026-06-29/2026-07-01 audit rows prove why the KEY5 branch switches
+  the runtime order: the deployed Gemma-first cascade often spends `3.3–4.9s` on
+  Gemma, and one late path spent about `25.6s` before Lite returned `ok` in
+  about `1.1s`. The branch corrects this to Lite-first and keeps Gemma only as
+  slower overflow.
 
 Consultant traceability:
 
@@ -288,8 +284,8 @@ Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
 `search_quota_plans.registered` from the current Supabase Auth user count,
 provider RPD inputs, reserves for non-search workloads and per-user abuse caps.
 Migration `20260701180316_event_search_key5_quota_capacity.sql` updates the
-default inputs after `GOOGLE_API_KEY5` was added and smoke-tested for both the
-query embedding model and the Gemma verifier lane.
+default inputs after `GOOGLE_API_KEY5` was added and smoke-tested for query
+embedding, Gemini Lite verification and Gemma overflow.
 
 2026-07-01 quota calculation for smart search uses registered users as the
 unit of allocation:
@@ -297,25 +293,29 @@ unit of allocation:
 | Component | Provider/day fact | Active key lanes | Gross RPD | Protected reserve | Online search RPD |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Query embedding (`gemini-embedding-2`) | `1000` | `5` | `5000` | `1000` | `4000` |
-| LLM verifier (`gemma-4-26b-a4b-it`) | `1500` | `5` | `7500` | `2500` | `5000` |
+| Fast verifier (`gemini-3.1-flash-lite`) | defensive `450` | `5` | `2250` | `1000` | `1250` |
+| Overflow verifier (`gemma-4-26b-a4b-it`) | `1500` | `5` | `7500` | `2500` | `5000` |
 
-The bottleneck is embedding capacity: `min(4000, 5000) = 4000` fully verified
-searches/day. With the current `47` registered users, `floor(4000 / 47) = 85`
-verified searches/user/day. The applied canary ceiling is intentionally lower:
-`80` searches/day and `80` LLM verifications/day per registered user, with the
-existing `x10` monthly multiplier (`800/month` for both counters). At 47 users
-this consumes at most `3760` online embedding calls/day and `3760` Gemma calls/day,
-leaving about `240` embedding calls plus the full protected reserves for other
-services.
+The fast Lite tier can serve about `floor(1250 / 47) = 26` verified
+searches/user/day if usage is uniform; use `25/day` as the practical fast-lane
+mental model. After that, Gemma 4 26B is the slower overflow. Total verified
+search capacity is still bounded by online query embeddings:
+`min(4000 embedding, 1250 Lite + 5000 Gemma) = 4000` searches/day. With the
+current `47` registered users, `floor(4000 / 47) = 85` total verified
+searches/user/day. The applied canary ceiling remains `80` searches/day and
+`80` LLM verifications/day per registered user, with the existing `x10` monthly
+multiplier (`800/month` for both counters). At 47 users this consumes at most
+`3760` query embeddings/day; approximately the first `1175` can be fast Lite
+verifications and the remaining demand can fit into Gemma overflow.
 
 Reserve rationale:
 
 - embedding reserve is one full key lane (`1000 RPD`) for vector backfills,
   diagnostics and static-site related syncs;
-- LLM reserve is `2500 RPD`, covering the observed 5-day peak static related
-  Gemma 4 26B usage (`1205` calls on 2026-06-30 UTC) with more than `2x` headroom;
-- `gemini-3.1-flash-lite` remains a protected fallback/rescue lane and is not
-  counted as normal smart-search capacity.
+- Lite reserve is `1000 RPD`, covering observed Smart Update/other Lite usage
+  with a conservative buffer;
+- Gemma reserve is `2500 RPD`, covering the observed 5-day peak static related
+  Gemma 4 26B usage (`1205` calls on 2026-06-30 UTC) with more than `2x` headroom.
 
 The Edge Function now supports direct multi-key rotation/failover for this
 site path without exposing secrets to the browser:
@@ -325,7 +325,7 @@ site path without exposing secrets to the browser:
 - `EVENT_SEARCH_LLM_KEY_ENVS` — optional LLM-specific list.
 
 The current recommended deployment order is to start online search from
-`GOOGLE_API_KEY5`, keep `GOOGLE_API_KEY4` late for LLM so static related builds
+`GOOGLE_API_KEY5`, keep `GOOGLE_API_KEY4` late for LLM overflow so static related builds
 retain their historical lane, and log only non-secret env names such as
 `embedding_key_env` / `llm_attempts[].key_env` in audit metadata. If the key list
 is not configured, the function preserves the legacy fallback chain

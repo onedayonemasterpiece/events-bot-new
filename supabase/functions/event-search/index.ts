@@ -641,7 +641,7 @@ type LlmVerifyResult = {
 };
 
 type LlmVerifyOptions = {
-  fast_fallback_allowed: boolean;
+  gemma_overflow_allowed: boolean;
 };
 
 type LlmAttempt = {
@@ -804,7 +804,7 @@ async function llmVerify(
   query: string,
   candidates: Candidate[],
   candidateDigests: Map<number, string> = new Map(),
-  options: LlmVerifyOptions = { fast_fallback_allowed: false },
+  options: LlmVerifyOptions = { gemma_overflow_allowed: true },
 ): Promise<LlmVerifyResult> {
   const enabled = ["1", "true", "yes", "on"].includes(
     env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
@@ -845,50 +845,47 @@ async function llmVerify(
       used: false,
     };
   const primaryModels = parseModelList(
-    env("EVENT_SEARCH_LLM_PRIMARY_MODELS") ||
-      env("EVENT_SEARCH_LLM_PRIMARY_MODEL") ||
+    env("EVENT_SEARCH_LLM_LITE_MODELS") || env("EVENT_SEARCH_LLM_LITE_MODEL"),
+    "gemini-3.1-flash-lite",
+  );
+  const fallbackModels = parseModelList(
+    env("EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODELS") ||
+      env("EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL") ||
+      env("EVENT_SEARCH_LLM_FALLBACK_MODELS") ||
+      env("EVENT_SEARCH_LLM_FALLBACK_MODEL") ||
       env("EVENT_SEARCH_LLM_MODEL"),
     "gemma-4-26b-a4b-it",
   );
-  const fallbackModels = parseModelList(
-    env("EVENT_SEARCH_LLM_FALLBACK_MODELS") ||
-      env("EVENT_SEARCH_LLM_FALLBACK_MODEL"),
-    "gemini-3.1-flash-lite",
-  );
   const fallbackEnabled = ["1", "true", "yes", "on"].includes(
-    env("EVENT_SEARCH_LLM_FALLBACK_ENABLED", "1").toLowerCase(),
+    env("EVENT_SEARCH_LLM_GEMMA_OVERFLOW_ENABLED", "1").toLowerCase(),
   );
-  const lateFallbackEnabled = ["1", "true", "yes", "on"].includes(
-    env("EVENT_SEARCH_LLM_LATE_FALLBACK_ENABLED", "1").toLowerCase(),
-  );
-  const policy = options.fast_fallback_allowed
-    ? "fast_onboarding_fallback"
-    : "gemma_priority_late_fallback";
-  const primaryAttempts = options.fast_fallback_allowed
-    ? envInt("EVENT_SEARCH_LLM_FAST_PRIMARY_ATTEMPTS", 1, 1, 4)
-    : envInt("EVENT_SEARCH_LLM_LATE_PRIMARY_ATTEMPTS", 2, 1, 4);
-  const primaryTimeoutMs = options.fast_fallback_allowed
-    ? envInt("EVENT_SEARCH_LLM_FAST_PRIMARY_TIMEOUT_MS", 3500, 500, 12000)
-    : envInt("EVENT_SEARCH_LLM_LATE_PRIMARY_TIMEOUT_MS", 6500, 500, 20000);
-  const fallbackTimeoutMs = envInt(
-    "EVENT_SEARCH_LLM_FALLBACK_TIMEOUT_MS",
-    3000,
+  const policy = "lite_first_gemma_overflow";
+  const primaryAttempts = envInt("EVENT_SEARCH_LLM_LITE_ATTEMPTS", 1, 1, 4);
+  const primaryTimeoutMs = envInt(
+    "EVENT_SEARCH_LLM_LITE_TIMEOUT_MS",
+    3500,
     500,
     12000,
   );
+  const fallbackTimeoutMs = envInt(
+    "EVENT_SEARCH_LLM_GEMMA_OVERFLOW_TIMEOUT_MS",
+    9000,
+    1000,
+    30000,
+  );
   const retryBackoffMs = envInt(
-    "EVENT_SEARCH_LLM_PRIMARY_RETRY_BACKOFF_MS",
-    450,
+    "EVENT_SEARCH_LLM_LITE_RETRY_BACKOFF_MS",
+    250,
     0,
     5000,
   );
   const shouldTryFallback =
+    options.gemma_overflow_allowed &&
     fallbackEnabled &&
-    fallbackModels.length > 0 &&
-    (options.fast_fallback_allowed || lateFallbackEnabled);
+    fallbackModels.length > 0;
   const factMaxChars = envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 320, 120, 800);
   const compact = candidates
-    .slice(0, envInt("EVENT_SEARCH_LLM_MAX_CANDIDATES", 48, 1, 60))
+    .slice(0, envInt("EVENT_SEARCH_LLM_MAX_CANDIDATES", 20, 1, 60))
     .map((candidate, index) => {
       const display = (candidate.display as Candidate | undefined) || {};
       const id = candidateId(candidate);
@@ -1204,7 +1201,7 @@ async function runEventSearch(
   const offset = clampInt(body.offset, 0, 0, 500);
   const verificationWindow = clampInt(
     body.candidate_window,
-    envInt("EVENT_SEARCH_VERIFICATION_WINDOW", 48, 12, 60),
+    envInt("EVENT_SEARCH_VERIFICATION_WINDOW", 20, 12, 60),
     limit,
     60,
   );
@@ -1266,19 +1263,7 @@ async function runEventSearch(
   const llmQuotaReserved = Boolean(
     (quotaState as Record<string, unknown> | null)?.llm_reserved,
   );
-  const quotaDayRemaining = Number(
-    (quotaState as Record<string, unknown> | null)?.day_remaining ?? 0,
-  );
-  const llmFastFallbackDayRemainingMin = envInt(
-    "EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN",
-    45,
-    0,
-    100000,
-  );
-  const llmFastFallbackAllowed =
-    useLlmVerifier &&
-    llmQuotaReserved &&
-    quotaDayRemaining >= llmFastFallbackDayRemainingMin;
+  const llmGemmaOverflowAllowed = useLlmVerifier && llmQuotaReserved;
 
   try {
     const embeddingModel = googleModelId(
@@ -1351,7 +1336,7 @@ async function runEventSearch(
       timings.digest_ms = nowMs() - Math.round(digestStartedAt);
       const llmStartedAt = performance.now();
       llmResult = await llmVerify(query, items, candidateDigests, {
-        fast_fallback_allowed: llmFastFallbackAllowed,
+        gemma_overflow_allowed: llmGemmaOverflowAllowed,
       });
       timings.llm_ms = nowMs() - Math.round(llmStartedAt);
     } else {
@@ -1423,7 +1408,7 @@ async function runEventSearch(
         query_facets: queryFacets,
         llm_status: llmResult.status,
         llm_quota_reserved: llmQuotaReserved,
-        llm_fast_fallback_allowed: llmFastFallbackAllowed,
+        llm_gemma_overflow_allowed: llmGemmaOverflowAllowed,
         llm_model: llmResult.model || null,
         llm_policy: llmResult.policy || null,
         llm_attempts: llmResult.attempts || [],
@@ -1455,7 +1440,7 @@ async function runEventSearch(
       llm_status: llmResult.status,
       llm_used: llmResult.used,
       llm_quota_reserved: llmQuotaReserved,
-      llm_fast_fallback_allowed: llmFastFallbackAllowed,
+      llm_gemma_overflow_allowed: llmGemmaOverflowAllowed,
       llm_model: llmResult.model || null,
       llm_policy: llmResult.policy || null,
       llm_attempts: llmResult.attempts || [],
@@ -1494,7 +1479,7 @@ async function runEventSearch(
           model: llmResult.model || null,
           policy: llmResult.policy || null,
           attempts: llmResult.attempts || [],
-          fast_fallback_allowed: llmFastFallbackAllowed,
+          gemma_overflow_allowed: llmGemmaOverflowAllowed,
           prompt_chars: llmResult.prompt_chars ?? null,
           prompt_fact_chars: llmResult.prompt_fact_chars ?? null,
           compact_candidate_count: llmResult.compact_candidate_count ?? null,

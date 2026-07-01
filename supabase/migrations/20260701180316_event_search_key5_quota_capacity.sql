@@ -1,18 +1,25 @@
 -- Expand authorized event-search daily quota after adding GOOGLE_API_KEY5.
 -- 2026-07-01 facts:
--- - 5 Google AI key lanes passed live smoke for gemini-embedding-2 and gemma-4-26b-a4b-it.
+-- - 5 Google AI key lanes passed live smoke for gemini-embedding-2,
+--   gemini-3.1-flash-lite and gemma-4-26b-a4b-it.
 -- - gemini-embedding-2: 1000 RPD per key lane => 5000 RPD total.
--- - gemma-4-26b-a4b-it: 1500 RPD per key lane => 7500 RPD total.
--- - Reserve 1000 embedding RPD and 2500 LLM RPD for static generation,
---   backfills, diagnostics, and other services before allocating site search.
--- With 47 registered users this yields floor(min(4000, 5000) / 47) = 85
--- verified searches/day, capped to 80/day as a canary safety ceiling.
+-- - fast verifier gemini-3.1-flash-lite: defensive 450 RPD per key lane
+--   => 2250 RPD total, with 1000 RPD reserved for other services.
+-- - overflow verifier gemma-4-26b-a4b-it: 1500 RPD per key lane
+--   => 7500 RPD total, with 2500 RPD reserved for other services/static related.
+-- - Effective verifier capacity after reserves is 1250 fast Lite RPD +
+--   5000 Gemma overflow RPD = 6250 RPD; embedding remains the overall
+--   online bottleneck at 4000 RPD after reserve.
+-- With 47 registered users this yields floor(4000 / 47) = 85 verified
+-- searches/day, capped to 80/day as a canary safety ceiling. The first
+-- roughly 25 searches/user/day can be served by fast Lite if usage is uniform;
+-- the rest is Gemma overflow.
 
 create or replace function public.refresh_registered_search_quota_v1(
   p_embedding_rpd integer default 5000,
-  p_llm_rpd integer default 7500,
+  p_llm_rpd integer default 9750,
   p_embedding_static_reserve integer default 1000,
-  p_llm_static_reserve integer default 2500,
+  p_llm_static_reserve integer default 3500,
   p_min_daily_search integer default 10,
   p_max_daily_search integer default 80,
   p_min_daily_llm integer default 5,
