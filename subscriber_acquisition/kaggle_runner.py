@@ -45,6 +45,8 @@ def live_telegram_scan_enabled() -> bool:
 
 
 def discovery_remote_auth_scope() -> str:
+    if not live_telegram_scan_enabled():
+        return "none"
     if (os.getenv("TELEGRAM_AUTH_BUNDLE_S22") or "").strip():
         return "TELEGRAM_AUTH_BUNDLE_S22"
     if (os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip():
@@ -583,7 +585,7 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
             meta={
                 "run_id": run_id,
                 "pid": os.getpid(),
-                "remote_telegram_auth_scope": discovery_remote_auth_scope(),
+                "remote_telegram_auth_scope": discovery_remote_auth_scope() if live_telegram_scan_enabled() else None,
                 "dataset_slugs": [dataset_cipher, dataset_key],
                 "runner": "kaggle",
             },

@@ -704,15 +704,20 @@ def _is_surface_scan_candidate(surface: dict[str, Any]) -> bool:
 
 
 def _vk_surface_from_handle(handle: str) -> dict[str, Any] | None:
-    clean = str(handle or "").strip().strip("/")
+    clean = str(handle or "").strip().strip("/").rstrip(".,)")
     if not clean:
         return None
     wall = _VK_WALL_RE.match(clean)
     if wall:
         clean = f"club{wall.group('group_id')}"
-    if clean.lower().startswith(("wall", "photo", "video", "topic", "im")):
+    lowered = clean.lower()
+    if lowered.startswith(("wall", "photo", "video", "topic", "im", "album", "app", "market", "away.php", "id")):
         return None
     return _seed_surface(f"https://vk.com/{clean}", platform="vk") | {"source": "discovered"}
+
+
+def _is_vk_scan_domain_candidate(domain: str) -> bool:
+    return _vk_surface_from_handle(domain) is not None
 
 
 def extract_candidate_surfaces(text: str) -> list[dict[str, Any]]:
@@ -954,6 +959,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             continue
         VK_SCAN_STATS["surfaces_attempted"] += 1
         domain = _handle_from_url(normalized, platform="vk")
+        if not _is_vk_scan_domain_candidate(domain):
+            diagnostics.append(f"vk {domain}: skipped non-community surface")
+            continue
         surface = _seed_surface(f"https://vk.com/{domain}", platform="vk")
         surface.update({
             "surface_type": "community",

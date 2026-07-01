@@ -25,6 +25,19 @@ def test_extract_candidate_surfaces_from_public_links():
     assert by_external["vk:club12345"]["url"] == "https://vk.com/club12345"
 
 
+def test_vk_surface_extractor_skips_non_community_links():
+    runtime = load_runtime()
+
+    surfaces = runtime.extract_candidate_surfaces(
+        "https://vk.com/album-123_456 https://vk.com/app7070938_-1 https://vk.com/market-1 "
+        "https://vk.com/away.php https://vk.com/id6786438 https://vk.com/club123"
+    )
+
+    assert [surface["external_id"] for surface in surfaces] == ["vk:club123"]
+    assert runtime._is_vk_scan_domain_candidate("album-123_456") is False
+    assert runtime._is_vk_scan_domain_candidate("club123") is True
+
+
 
 
 def test_out_of_region_telegram_surface_is_rejected_not_queued():
@@ -542,6 +555,14 @@ def test_remote_session_marker_cooldown_blocks_fast_reuse(monkeypatch, tmp_path)
     assert remaining > 0
     assert payload["run_id"] == "run-1"
     assert payload["state"] == "complete"
+
+
+def test_discovery_auth_scope_none_when_tg_scan_disabled(monkeypatch):
+    from subscriber_acquisition import kaggle_runner
+
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "0")
+
+    assert kaggle_runner.discovery_remote_auth_scope() == "none"
 
 
 def test_seen_context_urls_env_parser(monkeypatch):

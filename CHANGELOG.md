@@ -26,7 +26,9 @@
 - Subscriber Acquisition VK discovery now sends explicit VK scan budgets to
   Kaggle, prioritizes still-`seed_only` frontier rows, skips zero-comment wall
   posts, fetches newest comments first, backs off on VK API rate-limit code 6,
-  and reports `vk_scan` counters in the output payload.
+  skips non-community VK links such as albums/apps/market/away/personal ids, and
+  reports `vk_scan` counters in the output payload. VK-only Kaggle runs no
+  longer advertise the shared S22 auth scope in registry metadata.
 - Subscriber Acquisition Discovery opportunity acceptance is now LLM-first in
   the Kaggle runtime: cheap regex/keyword filtering only controls frontier/link
   extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated

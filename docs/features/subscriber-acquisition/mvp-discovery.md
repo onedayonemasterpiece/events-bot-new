@@ -38,8 +38,9 @@ contract:
   start a second Telethon client on the same auth key;
 - VK read-only scans prefer surfaces that are still `seed_only`, pass explicit
   VK budgets into Kaggle config, skip wall posts with no comments, fetch newest
-  comments first (`sort=desc`), and expose `vk_scan` counters for posts/comments
-  inspected and VK rate-limit backoffs;
+  comments first (`sort=desc`), skip non-community VK links
+  (`album*`/`app*`/`market*`/`away.php`/personal `id*`), and expose `vk_scan`
+  counters for posts/comments inspected and VK rate-limit backoffs;
 - Gemma 4 calls are visible and bounded: `ACQ_MAX_LLM_CALLS_PER_RUN` caps
   semantic checklist calls, and each payload reports `llm_gate` and
   `llm_gate_limits` counters so operator/status review can see how much of the
