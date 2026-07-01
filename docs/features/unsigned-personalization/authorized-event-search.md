@@ -377,19 +377,24 @@ the legacy fallback chain `GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
 `feature/smart-search-quota-key5-site`:
 
 - initial rollout SHA `4bc1b5b0` proved Lite-first behavior but still used one
-  five-key rotating list; follow-up SHA updates split active vs reserve lanes;
+  five-key rotating list; follow-up SHA `d75e8820` splits active vs reserve lanes
+  and is deployed;
 - quota migration `20260701180316_event_search_key5_quota_capacity.sql` is sized
-  for the non-reserved active pool: `auth.users=47`, effective
+  for the non-reserved active pool and applied live: `auth.users=47`, effective
   `custom:yandex=1`, registered plan `350/day`, `3500/month`, LLM verifier
   `350/day`, `3500/month`;
 - Edge Function `event-search` is deployed with `--no-verify-jwt` and the
-  Lite-first code path;
+  Lite-first code path from SHA `d75e8820`;
 - readiness probe covers auth config, Yandex provider, userinfo adapter and Edge
   OPTIONS; local runtime env contract must show active lane `GOOGLE_API_KEY5`
   and reserve lanes
   `GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`;
-- live Edge smoke evidence is recorded below after each rollout; smoke users,
-  quota ledgers and audit rows are cleaned up after the run.
+- final live Edge smoke (`интересно детям`, JSON response) returned HTTP 200 in
+  `3960ms` wall / `3672ms` backend, `retrieved_count=20`, `items=11`,
+  `fallback_items=6`, `llm_model=gemini-3.1-flash-lite`,
+  `policy=lite_first_gemma_overflow`, embedding key `GOOGLE_API_KEY5`, first LLM
+  attempt key `GOOGLE_API_KEY5` `ok` in `2199ms`, quota `349/349` remaining;
+  smoke auth user, quota ledger and audit rows were cleaned up after the run.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 
