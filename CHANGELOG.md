@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
 - **Static site pages / expanded medallions**: added the next event-detail medallion assets and QA lab for Дом китобоя, Третьяковка, КОНБ, MEOW Афиша and the Pushkin-card composite, while preserving existing ticket/family/charity/festival fact pills on event pages.
 - **Personalization / authorized search key rotation**: added direct multi-key Google provider rotation/failover to the `event-search` Edge Function for `gemini-embedding-2` query embeddings, Gemini Lite verification and Gemma overflow calls, with non-secret key-lane telemetry in audit metadata.

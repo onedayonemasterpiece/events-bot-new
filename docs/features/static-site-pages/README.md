@@ -13,10 +13,14 @@
 
 
 
-
 ### Brand mark / root announcement landing
 
 The live static announcement site root (`https://static.kenigevents.ru/`, bucket root `/`) uses the warm two-color brand mark from `site/public/favicon.svg`: graphite `#2d3035`, terracotta `#af481f`, cream backing `#fff6ea`. The drawing follows the T-000053 transparent SVG redraw shape (left monogram, `К`, heart tile, right tile and signal bars) rather than the earlier rejected calendar/church silhouette. The compact transparent variant lives at `site/public/brand-mark.svg`; both assets are hand-authored SVG paths with no embedded raster images, and `site/scripts/check-preview.mjs` guards the expected ids/colors. On 2026-06-29 the root `index.html`, `favicon.svg`, and `brand-mark.svg` were manually published to the static-site bucket root as a product-visible logo correction, then the root landing was refined to remove decorative shadows/borders, use the graphite mark, align the hero/actions consistently, and replace implementation-heavy copy with a short public-facing value statement. The preview/event-page prefixes were not modified by that root-only upload.
+
+### Информационные партнёры
+
+Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для статуса «информационный партнёр». Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro`, попадает в `sitemap.xml` и доступен из footer-навигации как `Инфопартнёры`. Внешние ссылки партнёров помечены `rel="nofollow noopener noreferrer"`; до production-gate используются текстовые logo-lockup-заглушки вместо несогласованных официальных логотипов. Каноника фичи: `docs/features/info-partners/README.md`.
+
 
 ### Kaggle CPU build handoff
 

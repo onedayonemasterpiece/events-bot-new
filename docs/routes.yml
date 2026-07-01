@@ -223,6 +223,17 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  info_partners:
+    status: draft_preview
+    docs: docs/features/info-partners/README.md
+    related_promo_campaigns: docs/features/promo-campaigns/README.md
+    related_static_site: docs/features/static-site-pages/README.md
+    entrypoints:
+      - site/src/data/info-partners.ts
+      - site/src/pages/partners/index.astro
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/sitemap.xml.ts
+      - site/scripts/check-preview.mjs
   tg_publishing:
     status: mvp
     docs: docs/features/tg-publishing/README.md
