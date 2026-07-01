@@ -122,7 +122,7 @@ async def test_surface_seed_add_and_review_feedback(db):
     assert surface.status == "candidate"
     keyboard = build_surface_keyboard(surface)
     texts = [button.text for row in keyboard.inline_keyboard for button in row]
-    assert texts == ["✅ Да", "❌ Нет", "🕒 Потом", "🔗 Открыть"]
+    assert texts == ["✅ Да", "❌ Нет + причина", "🕒 Потом", "💬 Оставить причину", "🔗 Открыть"]
 
     feedback = await record_surface_feedback(db, surface_id=surface.id, reviewer_id=42, action="approve")
     surfaces = await list_surfaces(db, limit=5)
@@ -155,7 +155,7 @@ async def test_review_cards_are_hard_capped_at_20_and_have_required_buttons(db, 
     assert len(bot.calls) == 20
     keyboard = bot.calls[0][2]["reply_markup"].inline_keyboard
     texts = [button.text for row in keyboard for button in row]
-    assert texts == ["✅ Да", "❌ Нет", "🕒 Потом", "🔗 Контекст", "🎯 Куда"]
+    assert texts == ["✅ Да", "❌ Нет + причина", "🕒 Потом", "💬 Оставить причину", "🔗 Контекст", "🎯 Куда"]
 
 
 @pytest.mark.asyncio

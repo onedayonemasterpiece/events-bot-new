@@ -207,6 +207,26 @@ def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, def
     }
 
 
+def is_comment_opportunity_message(message: Any, *, surface_type: str | None, relation: str | None) -> bool:
+    """Return whether a Telegram message is a human comment/reply candidate.
+
+    Acquisition replies should target conversations, not source/channel ad
+    posts.  We still read channel posts to discover links and linked discussion
+    chats, but candidate opportunities come from group/chat comments only.
+    """
+    if getattr(message, "post", False):
+        return False
+    if getattr(message, "fwd_from", None):
+        return False
+    normalized_surface_type = str(surface_type or "").casefold()
+    normalized_relation = str(relation or "").casefold()
+    if normalized_surface_type == "channel":
+        return False
+    if normalized_relation == "linked_discussion" or normalized_surface_type == "linked_discussion":
+        return bool(getattr(message, "reply_to", None))
+    return normalized_surface_type in {"group", "chat", "megagroup", "linked_discussion"}
+
+
 
 VK_READ_METHODS = {"wall.get", "wall.getComments"}
 
@@ -507,15 +527,22 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         for discovered in extract_candidate_surfaces(text):
                             discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
                             surfaces.setdefault(discovered["external_id"], discovered)
-                        opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
-                        if opp:
-                            opp["evidence"] = {"relation": relation or "surface", "scanner": "telegram_shadow"}
-                            opportunities.append(opp)
+                        if is_comment_opportunity_message(
+                            message,
+                            surface_type=str(scan_surface.get("surface_type") or ""),
+                            relation=relation,
+                        ):
+                            opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
+                            if opp:
+                                opp["evidence"] = {"relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
+                                opportunities.append(opp)
                         if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
+                            break
+                        if relation == "linked_discussion" and seen >= max_threads:
                             break
                 except Exception as exc:
                     diagnostics.append(f"{handle}: iter_messages failed: {exc}")
-                if relation == "linked_discussion" and seen > max_threads:
+                if relation == "linked_discussion" and seen >= max_threads:
                     diagnostics.append(f"{handle}: linked discussion scan capped at {max_threads} threads")
     return list(surfaces.values()), opportunities, diagnostics
 

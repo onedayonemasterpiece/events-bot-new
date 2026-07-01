@@ -36,6 +36,20 @@ def test_build_opportunity_from_message_is_review_only_with_sticker_observation(
     assert opp["sticker_observation"]["fit"] == "possible"
 
 
+def test_telegram_opportunity_filter_requires_comments_not_channel_posts():
+    runtime = load_runtime()
+
+    channel_post = SimpleNamespace(post=True, fwd_from=None, reply_to=None)
+    copied_discussion_post = SimpleNamespace(post=False, fwd_from=object(), reply_to=object())
+    linked_comment = SimpleNamespace(post=False, fwd_from=None, reply_to=object())
+    group_message = SimpleNamespace(post=False, fwd_from=None, reply_to=None)
+
+    assert runtime.is_comment_opportunity_message(channel_post, surface_type="channel", relation=None) is False
+    assert runtime.is_comment_opportunity_message(copied_discussion_post, surface_type="linked_discussion", relation="linked_discussion") is False
+    assert runtime.is_comment_opportunity_message(linked_comment, surface_type="linked_discussion", relation="linked_discussion") is True
+    assert runtime.is_comment_opportunity_message(group_message, surface_type="group", relation=None) is True
+
+
 def test_shadow_payload_keeps_vk_seed_candidate_without_allowlist(monkeypatch):
     runtime = load_runtime()
     monkeypatch.setenv("ACQ_TG_SEEDS_JSON", '["https://t.me/a_public"]')

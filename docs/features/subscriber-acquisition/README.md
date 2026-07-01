@@ -26,3 +26,9 @@ default (`ACQ_DISCOVERY_RUNNER=kaggle`) and can import an explicit result JSON.
 the same Kaggle API dependency lane as Telegram Monitoring; `kagglesdk==0.1.30`
 is pinned because newer 0.1.31+ wheels currently break Kaggle API imports before
 the kernel can be pushed.
+
+Telegram opportunity discovery is comment-first: source/channel posts are read
+to discover linked discussion chats and outbound links, but review opportunities
+are created only from human group/comment messages. Operator rejection feedback
+is collected by pressing `Нет + причина` and replying to the review card; the
+reply text is stored in acquisition feedback export.

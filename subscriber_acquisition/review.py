@@ -19,8 +19,11 @@ def build_review_keyboard(opp: AcqOpportunity) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(text="✅ Да", callback_data=f"acq:approve:{opp.id}"),
-            InlineKeyboardButton(text="❌ Нет", callback_data=f"acq:reject:{opp.id}"),
+            InlineKeyboardButton(text="❌ Нет + причина", callback_data=f"acq:reject:{opp.id}"),
             InlineKeyboardButton(text="🕒 Потом", callback_data=f"acq:keep:{opp.id}"),
+        ],
+        [
+            InlineKeyboardButton(text="💬 Оставить причину", callback_data=f"acq:comment:{opp.id}"),
         ],
     ]
     link_row = []
@@ -52,6 +55,7 @@ def format_review_card(opp: AcqOpportunity, surface: AcqSurface | None = None) -
         f"<b>Охват:</b> ~{int(opp.reach_low or 0)}\n"
         f"<b>Риск:</b> spam={html.escape(opp.spam_risk)} / safety={html.escape(opp.safety_risk)}\n\n"
         f"<b>Почему:</b>\n{html.escape(snippet or opp.link_target_reason or '—')}"
+        f"\n\n<i>Если жмёте «Нет», причину можно оставить ответом на эту карточку.</i>"
     )
 
 
@@ -147,9 +151,12 @@ _SURFACE_ACTION_TO_STATUS = {"approve": "approved", "reject": "rejected", "pause
 def build_surface_keyboard(surface: AcqSurface) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Да", callback_data=f"acqsurf:approve:{surface.id}"),
-        InlineKeyboardButton(text="❌ Нет", callback_data=f"acqsurf:reject:{surface.id}"),
+        InlineKeyboardButton(text="❌ Нет + причина", callback_data=f"acqsurf:reject:{surface.id}"),
         InlineKeyboardButton(text="🕒 Потом", callback_data=f"acqsurf:pause:{surface.id}"),
-    ], [InlineKeyboardButton(text="🔗 Открыть", url=surface.url)]])
+    ], [
+        InlineKeyboardButton(text="💬 Оставить причину", callback_data=f"acqsurf:comment:{surface.id}"),
+        InlineKeyboardButton(text="🔗 Открыть", url=surface.url),
+    ]])
 
 
 def format_surface_card(surface: AcqSurface) -> str:

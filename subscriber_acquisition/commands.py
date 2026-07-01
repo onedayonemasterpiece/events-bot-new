@@ -162,6 +162,12 @@ async def acq_review_callback(callback: CallbackQuery) -> None:
     except Exception:
         await callback.answer("Некорректная кнопка", show_alert=True)
         return
+    if action == "comment":
+        await callback.answer(
+            "Чтобы сохранить причину, ответьте обычным сообщением-реплаем на эту карточку. Например: «рекламный пост, нужен комментарий».",
+            show_alert=True,
+        )
+        return
     await record_feedback(
         db,
         opportunity_id=opp_id,
@@ -171,7 +177,10 @@ async def acq_review_callback(callback: CallbackQuery) -> None:
         review_message_id=int(callback.message.message_id) if callback.message else None,
     )
     label = {"approve": "✅ Да", "reject": "❌ Нет", "keep": "🕒 Потом"}.get(action, action)
-    await callback.answer(f"Сохранено: {label}")
+    if action == "reject":
+        await callback.answer("Сохранено: ❌ Нет. Причину можно оставить реплаем на эту карточку.", show_alert=True)
+    else:
+        await callback.answer(f"Сохранено: {label}")
 
 
 @acq_router.callback_query(lambda c: bool(c.data) and c.data.startswith("acqsurf:"))
@@ -186,6 +195,12 @@ async def acq_surface_callback(callback: CallbackQuery) -> None:
     except Exception:
         await callback.answer("Некорректная кнопка", show_alert=True)
         return
+    if action == "comment":
+        await callback.answer(
+            "Для surface-причины ответьте реплаем на карточку или используйте экспорт feedback; отдельное поле причины будет добавлено в следующий UI-pass.",
+            show_alert=True,
+        )
+        return
     try:
         await record_surface_feedback(
             db,
@@ -197,7 +212,10 @@ async def acq_surface_callback(callback: CallbackQuery) -> None:
         await callback.answer(f"Ошибка: {exc}", show_alert=True)
         return
     label = {"approve": "✅ Да", "reject": "❌ Нет", "pause": "🕒 Потом"}.get(action, action)
-    await callback.answer(f"Surface сохранён: {label}")
+    if action == "reject":
+        await callback.answer("Surface сохранён: ❌ Нет. Причину можно оставить реплаем на карточку.", show_alert=True)
+    else:
+        await callback.answer(f"Surface сохранён: {label}")
 
 
 @acq_router.callback_query(lambda c: bool(c.data) and c.data.startswith("acqmenu:"))

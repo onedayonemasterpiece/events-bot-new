@@ -10,6 +10,12 @@
 
 ### Changed
 
+- Subscriber Acquisition review cards now make rejection comments explicit:
+  `Нет` is labelled as `Нет + причина`, a comment button explains that the
+  operator should reply to the card, and the reply is stored as feedback.
+  Telegram discovery now creates opportunity candidates only from human
+  group/comment messages, not from source channel posts or copied ad posts;
+  channel posts are still read for linked-discussion and new-link discovery.
 - Telegram event posts keep permanent footer links to Max and VK next to the
   `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual
   offset); only explicit button-highlight posts where `Подробнее` moves to an
