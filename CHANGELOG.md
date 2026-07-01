@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Restored the visual guide digest brand lockup from the accepted v18 SVG as a
+  committed PNG asset, so `Ух ты, Калининград!` no longer drifts in italic
+  direction, stroke weight or letter proportions between renders; the issue
+  badge now draws `№...` as one consistent font run.
 - Refined the production visual guide digest after VK mobile review: restored a
   safer slanted/glowing `Ух ты, Калининград!` lockup with carousel-counter
   clearance, enlarged guide avatars, raised date numerals inside calendar tiles,

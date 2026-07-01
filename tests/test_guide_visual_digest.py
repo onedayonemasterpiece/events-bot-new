@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from guide_excursions.visual_digest import (
+    _BRAND_LOCKUP_FILE,
     _avatar_key,
+    _brand_lockup,
     _source_name,
     _visual_item_state,
     _visual_selection_reason,
@@ -81,6 +83,12 @@ def test_render_visual_digest_card_smoke():
     payload = render_visual_digest_card(SAMPLE_ROWS, issue_id=42, all_rows=SAMPLE_ROWS)
     assert payload.startswith(b"\xff\xd8")
     assert len(payload) > 30_000
+
+
+def test_brand_lockup_uses_committed_v18_asset():
+    logo = _brand_lockup()
+    assert _BRAND_LOCKUP_FILE.is_file()
+    assert logo.size == (358, 141)
 
 
 def test_render_visual_digest_cards_chunks_by_five():

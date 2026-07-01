@@ -17,6 +17,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -63,6 +64,8 @@ _FONT_DIR = _REPO_ROOT / "assets" / "fonts"
 _ASSET_DIR = _MODULE_DIR / "assets"
 _ICON_DIR = _ASSET_DIR / "visual_digest_icons"
 _AVATAR_DIR = _ASSET_DIR / "visual_digest_avatars"
+_BRAND_DIR = _ASSET_DIR / "visual_digest_brand"
+_BRAND_LOCKUP_FILE = _BRAND_DIR / "uhty_kaliningrad_v18.png"
 _MAIN_FONT = _FONT_DIR / "Cygre-ExtraBold.ttf"
 _BOLD_FONT = _FONT_DIR / "Cygre-Bold.ttf"
 _SEMI_FONT = _FONT_DIR / "Cygre-SemiBold.ttf"
@@ -335,7 +338,29 @@ def _skew_text_layer(layer: Image.Image, *, skew: float = -0.10) -> Image.Image:
     return layer.transform((new_w, h), Image.Transform.AFFINE, coeff, resample=Image.Resampling.BICUBIC)
 
 
-def _brand_lockup(scale: float = 0.96) -> Image.Image:
+@lru_cache(maxsize=1)
+def _brand_lockup_asset() -> Image.Image | None:
+    if not _BRAND_LOCKUP_FILE.is_file():
+        return None
+    return Image.open(_BRAND_LOCKUP_FILE).convert("RGBA")
+
+
+def _brand_lockup(scale: float = 1.0) -> Image.Image:
+    """Return the accepted `Ух ты, Калининград!` lockup.
+
+    The lockup is intentionally a committed bitmap rendered from the previously
+    approved v18 SVG prototype.  Do not recreate it with Pillow text transforms:
+    different rasterizers changed the italic direction, stroke weight and
+    `УХ ТЫ` proportions in review.
+    """
+
+    asset = _brand_lockup_asset()
+    if asset is not None:
+        img = asset.copy()
+        if scale != 1:
+            img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
+        return img
+
     base_w, base_h = 380, 160
     img = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -827,19 +852,20 @@ def render_visual_digest_card(
     img.alpha_composite(shadow)
     draw.rounded_rectangle((55, 54, 291, 152), radius=30, fill=_hex(palette.issue))
     draw.text((83, 72), "ВЫПУСК", font=_font(_MAIN_FONT, 22), fill=(255, 255, 255))
-    # Cygre lacks the numero glyph on the production image; draw it with a
-    # system fallback and keep the digits in the brand font.
-    no_font = _fallback_font(_DEJAVU_BOLD, 52)
-    num_font = _font(_MAIN_FONT, 58)
-    draw.text((80, 96), "№", font=no_font, fill=(255, 255, 255))
-    draw.text((146, 100), f"{int(issue_id)}", font=num_font, fill=(255, 255, 255))
+    # Keep the numero sign and digits in one font; mixing fallback `№` with
+    # Cygre digits made the badge look uneven in VK preview.
+    issue_font = _fallback_font(_DEJAVU_BOLD, 54)
+    issue_text = f"№{int(issue_id)}"
+    issue_bb = draw.textbbox((0, 0), issue_text, font=issue_font)
+    issue_w = issue_bb[2] - issue_bb[0]
+    draw.text((55 + (236 - issue_w) / 2, 89), issue_text, font=issue_font, fill=(255, 255, 255))
     title_font = _font(_MAIN_FONT, 50)
     draw.text((320, 56), "Дайджест", font=title_font, fill=_hex(palette.text))
     draw.text((320, 108), "экскурсий", font=title_font, fill=_hex(palette.text))
     draw.text((322, 173), "куда · с кем · как", font=_font(_MAIN_FONT, 23), fill=_hex(palette.sub))
-    # Keep the native VK carousel counter area free while returning the brand
-    # lockup to the earlier, right-aligned slanted prototype.
-    img.alpha_composite(_brand_lockup(1.06), (610, 100))
+    # Exact accepted v18 brand asset: lower than the native VK carousel counter,
+    # with the original right-leaning italic lockup and stroke weight.
+    img.alpha_composite(_brand_lockup(1.0), (640, 120))
 
     page_period = _period_of(page_rows)
     draw.text((58, 220), page_period, font=_font(_MAIN_FONT, 56), fill=_hex(palette.text))
