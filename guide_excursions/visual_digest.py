@@ -285,23 +285,28 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
         return []
     lines: list[str] = []
     current = ""
-    for word in words:
+    truncated = False
+    consumed = 0
+    for idx, word in enumerate(words):
         candidate = f"{current} {word}".strip()
         if not current or draw.textlength(candidate, font=font) <= max_width:
             current = candidate
+            consumed = idx + 1
             continue
+        if len(lines) >= max_lines - 1:
+            truncated = True
+            break
         lines.append(current)
         current = word
-        if len(lines) >= max_lines:
-            break
+        consumed = idx
     if current and len(lines) < max_lines:
         lines.append(current)
-    if len(lines) == max_lines and words:
-        # Ensure the last line does not overflow; trim character-wise if needed.
+    if len(lines) == max_lines and (truncated or consumed < len(words)):
+        # Ensure visibly truncated titles end with ellipsis, not an abrupt word.
         last = lines[-1]
         while last and draw.textlength(last + "…", font=font) > max_width:
             last = last[:-1].rstrip()
-        lines[-1] = (last + "…") if last != lines[-1] else last
+        lines[-1] = (last + "…") if last else "…"
     return lines
 
 
@@ -653,21 +658,26 @@ def _draw_date_tile(draw: ImageDraw.ImageDraw, row: Mapping[str, Any], row_h: in
     x, y, w = 22, 14, 166
     bar_h = 46
     draw.rounded_rectangle((x, y, x + w, y + tile_h), radius=28, fill=_hex(pal.date_fill), outline=_hex(pal.date_stroke), width=1)
-    # Top bar with rounded top corners.
-    draw.rounded_rectangle((x, y, x + w, y + bar_h + 14), radius=28, fill=_hex(accent))
-    draw.rectangle((x, y + bar_h, x + w, y + bar_h + 14), fill=_hex(accent))
+    # Top-only rounded bar.  Drawing a full rounded rectangle and covering its
+    # lower corners creates small "ears" on the date tile sides; build the bar
+    # from explicit top corner arcs instead.
+    r = 28
+    draw.rectangle((x, y + r, x + w, y + bar_h), fill=_hex(accent))
+    draw.rectangle((x + r, y, x + w - r, y + r), fill=_hex(accent))
+    draw.pieslice((x, y, x + 2 * r, y + 2 * r), 180, 270, fill=_hex(accent))
+    draw.pieslice((x + w - 2 * r, y, x + w, y + 2 * r), 270, 360, fill=_hex(accent))
     f_mon = _font(_MAIN_FONT, 23 if len(mon) > 4 else 27)
-    f_day = _font(_MAIN_FONT, 70)
-    f_meta = _font(_MAIN_FONT, 22 if time_text else 20)
+    f_day = _font(_MAIN_FONT, 68 if row_h <= 190 else 70)
+    f_meta = _font(_MAIN_FONT, 21 if time_text else 18)
     mon_txt = mon.upper()
     bb = draw.textbbox((0, 0), mon_txt, font=f_mon)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, y + 12 - (bb[1] / 2)), mon_txt, font=f_mon, fill=(255, 255, 255))
-    day_y = y + (110 if row_h <= 190 else 124)
+    day_y = y + (103 if row_h <= 190 else 124)
     bb = draw.textbbox((0, 0), day, font=f_day)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, day_y - (bb[3] - bb[1]) / 2 - 16), day, font=f_day, fill=_hex(pal.text))
     meta = " · ".join(p for p in (wd, time_text) if p) if time_text else wdf
     bb = draw.textbbox((0, 0), meta, font=f_meta)
-    meta_y = y + (150 if row_h <= 190 else 174)
+    meta_y = y + tile_h - (18 if row_h <= 190 else 22)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, meta_y - (bb[3] - bb[1]) / 2 - 2), meta, font=f_meta, fill=_hex(pal.route))
 
 
@@ -684,7 +694,6 @@ def render_visual_digest_card(
     page_rows = [dict(r) for r in rows[:VISUAL_DIGEST_CARD_LIMIT]]
     if not page_rows:
         raise ValueError("visual digest card requires at least one row")
-    all_items = [dict(r) for r in (all_rows or page_rows)]
     palette = palette or _palette_for_issue(issue_id + card_index - 1)
     img = _gradient((W, H), palette.bg1, palette.bg2).convert("RGBA")
     img.alpha_composite(_alpha_circle_layer((W, H), (700, -62, 1160, 398), palette.halo, 42))
@@ -709,34 +718,23 @@ def render_visual_digest_card(
     draw.text((320, 56), "Дайджест", font=title_font, fill=_hex(palette.text))
     draw.text((320, 108), "экскурсий", font=title_font, fill=_hex(palette.text))
     draw.text((322, 173), "куда · с кем · как", font=_font(_MAIN_FONT, 23), fill=_hex(palette.sub))
-    # Keep the native VK carousel counter area (top-right) free: the logo stays
-    # large but ends before the usual overlay pill.
-    img.alpha_composite(_brand_lockup(.96), (600, 124))
+    # Keep the native VK carousel counter area free while returning the brand
+    # lockup closer to the earlier right-aligned prototype.
+    img.alpha_composite(_brand_lockup(1.04), (640, 120))
 
     page_period = _period_of(page_rows)
-    full_period = _period_of(all_items)
-    draw.text((58, 223), page_period, font=_font(_MAIN_FONT, 52), fill=_hex(palette.text))
-    start_no = (card_index - 1) * VISUAL_DIGEST_CARD_LIMIT + 1
-    end_no = min(start_no + len(page_rows) - 1, len(all_items))
-    if total_cards > 1:
-        count = f"{start_no}–{end_no} из {len(all_items)}"
-    else:
-        count = f"{len(page_rows)} из {len(all_items)}"
-    draw.text((58, 268), count, font=_font(_MAIN_FONT, 26), fill=_hex(palette.count))
-    extra = ""
-    if len(all_items) > end_no and total_cards <= card_index:
-        extra = f"ещё {len(all_items) - end_no} в тексте"
-    elif total_cards <= 1 and full_period and full_period != page_period:
-        extra = full_period
-    if extra:
-        draw.text((178, 268), extra, font=_font(_MAIN_FONT, 26), fill=_hex(palette.count))
-    draw.line((58, 306, 1022, 306), fill=_rgba(palette.divider, 180), width=2)
+    draw.text((58, 220), page_period, font=_font(_MAIN_FONT, 56), fill=_hex(palette.text))
+    # Do not show "1–5 из 15": in VK each carousel card must read as a
+    # self-contained mini-digest, not as a fragment of a technical list.
+    draw.line((58, 296, 1022, 296), fill=_rgba(palette.divider, 180), width=2)
 
     expanded = len(page_rows) <= 4
     row_h = 236 if expanded else 174
     gap = 18 if expanded else 12
-    y0 = 326 if expanded else 332
-    title_font = _font(_MAIN_FONT, 34 if expanded else 29)
+    if not expanded:
+        row_h = 180
+    y0 = 318 if expanded else 314
+    title_font = _font(_MAIN_FONT, 36 if expanded else 32)
     guide_font = _font(_MAIN_FONT, 24 if expanded else 21)
     route_font = _font(_MAIN_FONT, 23 if expanded else 20)
     focus_font = _font(_BOLD_FONT, 20 if expanded else 18)
@@ -756,11 +754,11 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        ty = 42 if expanded else 34
+        ty = 42 if expanded else 28
         title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", title_font, 555, 2)
         for line in title_lines:
             rd.text((tx, ty), line, font=title_font, fill=_hex(palette.text))
-            ty += 39 if expanded else 32
+            ty += 40 if expanded else 34
         guide = _source_name(row)
         if guide:
             rd.text((tx, ty + 2), _fit(guide, 48 if expanded else 44), font=guide_font, fill=_hex(palette.guide))
@@ -782,14 +780,6 @@ def render_visual_digest_card(
         modes = _modes_for(row)
         _draw_icon_badges(img, modes, 42 + 918, av_y + (8 if len(modes) > 1 else 68), palette)
 
-    foot_y = y0 + len(page_rows) * (row_h + gap) + 10
-    if len(all_items) > end_no and total_cards <= card_index:
-        draw.text(
-            (58, min(1260, foot_y)),
-            "Остальные даты — ниже в посте. В карточке только ближайшие/дефицитные.",
-            font=_font(_MAIN_FONT, 20),
-            fill=_hex(palette.count),
-        )
     draw.text((58, 1290), "Подробности и запись — в тексте поста ↓", font=_font(_MAIN_FONT, 24), fill=_hex(palette.text))
 
     rgb = img.convert("RGB")

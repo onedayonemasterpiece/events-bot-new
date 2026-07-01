@@ -6,6 +6,10 @@
 - VK user-token actor resolution now honors the existing `VK_ACCESS_TOKEN4`
   fallback for helper API calls such as `utils.getShortLink`, so visual guide
   digest links can be shortened without requiring a duplicate `VK_USER_TOKEN` env.
+- Fixed visual guide digest card regressions found during review: restored the
+  right-aligned brand lockup, kept weekday/time labels inside date tiles,
+  removed technical `1–5 из 15` carousel ranges, eliminated month-bar corner
+  artifacts, and increased excursion title readability.
 - **Incident / kraftmarket317 poster-only zero-events (INC-2026-06-30)**:
   TelegramMonitor now routes empty-caption poster-only posts through OCR-backed
   LLM extraction instead of returning `events=[]`; Telegram import now preserves
