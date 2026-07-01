@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Fixed
+- Refined the production visual guide digest after VK mobile review: restored a
+  safer slanted/glowing `Ух ты, Калининград!` lockup with carousel-counter
+  clearance, enlarged guide avatars, raised date numerals inside calendar tiles,
+  and resolved `@progulki_s_katey` rows to `Катя Костюгова` with a channel
+  avatar.
+- Visual guide digest repeat selection now stores a per-card fact snapshot and
+  republishes already-covered excursions only for serious viewer-facing changes
+  (date/time/status/title/place/meeting/booking/price, last call, or low seats),
+  not for ordinary `updated_at` churn.
 - VK user-token actor resolution now honors the existing `VK_ACCESS_TOKEN4`
   fallback for helper API calls such as `utils.getShortLink`, so visual guide
   digest links can be shortened without requiring a duplicate `VK_USER_TOKEN` env.

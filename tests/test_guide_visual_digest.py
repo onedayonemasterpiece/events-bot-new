@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 
 from guide_excursions.visual_digest import (
+    _avatar_key,
+    _source_name,
+    _visual_item_state,
+    _visual_selection_reason,
     build_visual_digest_vk_text,
     render_visual_digest_cards,
     render_visual_digest_card,
@@ -90,3 +94,35 @@ def test_render_visual_digest_cards_chunks_by_five():
     cards = render_visual_digest_cards(rows, issue_id=44)
     assert len(cards) == 2
     assert all(card.startswith(b"\xff\xd8") for card in cards)
+
+
+def test_visual_digest_repeat_policy_requires_serious_change():
+    published = {
+        **SAMPLE_ROWS[0],
+        "published_visual_digest_issue_id": 10,
+    }
+    state = _visual_item_state(published)
+
+    unchanged = {**published, "updated_at": "2026-07-01 12:00:00", "published_visual_digest_state": state}
+    assert _visual_selection_reason(unchanged) == ""
+
+    last_seats = {
+        **published,
+        "seats_text": "осталось 2 места",
+        "published_visual_digest_state": {**state, "seats_text": "12 мест", "seats_count": 12},
+    }
+    assert _visual_selection_reason(last_seats) == "low_seats"
+
+    moved = {**published, "date": "2026-07-05", "published_visual_digest_state": state}
+    assert _visual_selection_reason(moved) == "changed_date"
+
+
+def test_visual_digest_katya_identity_uses_surname_and_avatar():
+    row = {
+        "guide_names": ["Катя"],
+        "organizer_names": ["ПРОгулки с Катей"],
+        "source_username": "progulki_s_katey",
+        "booking_url": "https://t.me/katerinakostiugova",
+    }
+    assert _source_name(row) == "Катя Костюгова"
+    assert _avatar_key(row) == "katya_kostyugova"

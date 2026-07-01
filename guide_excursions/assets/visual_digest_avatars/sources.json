@@ -124,5 +124,18 @@
     "title": "Татьяна Удовенко",
     "path": "artifacts/codex/guide-digest-universal-card-20260630/avatars/tatyana_udovenko_face.jpg",
     "bytes": 29604
+  },
+  {
+    "key": "katya_kostyugova",
+    "kind": "telegram_channel_avatar_crop",
+    "file": "katya_kostyugova.jpg",
+    "title": "Катя Костюгова / ПРОгулки с Катей",
+    "source": "Telegram channel avatar @progulki_s_katey cropped around guide; personal profile @katerinakostiugova confirmed surname via local E2E Telethon session on 2026-07-01",
+    "url": "https://t.me/progulki_s_katey",
+    "channel_url": "https://t.me/progulki_s_katey",
+    "path": "artifacts/codex/guide-visual-refine-20260701/telegram/katya_channel_face_a.jpg",
+    "bytes": 95076,
+    "content_type": "image/jpeg",
+    "profile_url": "https://t.me/katerinakostiugova"
   }
 ]

@@ -173,6 +173,7 @@ _AVATAR_FILES = {
     "twometerguide": "twometerguide.jpg",
     "natakkaz": "natakkaz.jpg",
     "katimartihobby": "katimartihobby.jpg",
+    "katya_kostyugova": "katya_kostyugova.jpg",
     "gid_zelenogradsk": "gid_zelenogradsk.jpg",
     "murnikovat": "murnikovat.jpg",
     "ruin_keepers": "ruin_keepers.jpg",
@@ -335,48 +336,48 @@ def _skew_text_layer(layer: Image.Image, *, skew: float = -0.10) -> Image.Image:
 
 
 def _brand_lockup(scale: float = 0.96) -> Image.Image:
-    base_w, base_h = 350, 146
+    base_w, base_h = 380, 160
     img = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     halo = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     hd = ImageDraw.Draw(halo)
-    hd.ellipse((0, 4, 330, 124), fill=(255, 190, 90, 80))
-    hd.ellipse((36, 10, 310, 120), fill=(15, 220, 210, 55))
-    halo = halo.filter(ImageFilter.GaussianBlur(8))
+    hd.ellipse((0, 2, 354, 134), fill=(255, 190, 90, 92))
+    hd.ellipse((42, 8, 330, 130), fill=(15, 220, 210, 68))
+    halo = halo.filter(ImageFilter.GaussianBlur(10))
     img.alpha_composite(halo)
 
     shape = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shape)
-    sd.polygon([(34, 12), (244, 12), (232, 48), (20, 48)], fill=(242, 103, 39, 255))
-    sd.polygon([(52, 4), (286, 4), (270, 24), (38, 24)], fill=(255, 190, 50, 238))
-    sd.polygon([(6, 42), (300, 42), (278, 108), (28, 108)], fill=(5, 72, 82, 255))
-    sd.polygon([(10, 38), (288, 38), (281, 53), (7, 53)], fill=(14, 205, 205, 248))
-    sd.polygon([(244, 80), (318, 80), (292, 118), (226, 118)], fill=(233, 91, 54, 255))
+    sd.polygon([(38, 14), (266, 14), (252, 54), (22, 54)], fill=(242, 103, 39, 255))
+    sd.polygon([(58, 5), (312, 5), (296, 28), (42, 28)], fill=(255, 190, 50, 240))
+    sd.polygon([(6, 47), (328, 47), (304, 119), (30, 119)], fill=(5, 72, 82, 255))
+    sd.polygon([(10, 42), (316, 42), (308, 60), (7, 60)], fill=(14, 205, 205, 248))
+    sd.polygon([(268, 88), (348, 88), (320, 130), (246, 130)], fill=(233, 91, 54, 255))
     shadow = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
-    shadow.alpha_composite(shape, (0, 7))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(5))
+    shadow.alpha_composite(shape, (0, 8))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(8))
     # darken shadow alpha only
     sh = Image.new("RGBA", (base_w, base_h), (36, 18, 11, 0))
-    sh.putalpha(shadow.split()[-1].point(lambda v: int(v * 0.36)))
+    sh.putalpha(shadow.split()[-1].point(lambda v: int(v * 0.30)))
     img.alpha_composite(sh)
     img.alpha_composite(shape)
 
     text_layer = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     td = ImageDraw.Draw(text_layer)
-    top_font = _font(_MAIN_FONT, 32)
-    main_font = _font(_MAIN_FONT, 29)
+    top_font = _font(_MAIN_FONT, 35)
+    main_font = _font(_MAIN_FONT, 32)
     # glow strokes on a separate blurred layer
     glow = Image.new("RGBA", (base_w, base_h), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.text((58, 20), "УХ ТЫ,", font=top_font, fill=(0, 0, 0, 0), stroke_width=8, stroke_fill=(255, 216, 109, 90))
-    gd.text((36, 70), "КАЛИНИНГРАД!", font=main_font, fill=(0, 0, 0, 0), stroke_width=8, stroke_fill=(17, 226, 213, 80))
-    glow = glow.filter(ImageFilter.GaussianBlur(3))
+    gd.text((64, 23), "УХ ТЫ,", font=top_font, fill=(0, 0, 0, 0), stroke_width=10, stroke_fill=(255, 218, 92, 106))
+    gd.text((42, 78), "КАЛИНИНГРАД!", font=main_font, fill=(0, 0, 0, 0), stroke_width=10, stroke_fill=(14, 224, 214, 96))
+    glow = glow.filter(ImageFilter.GaussianBlur(4))
     text_layer.alpha_composite(glow)
-    td.text((58, 20), "УХ ТЫ,", font=top_font, fill=(255, 250, 241, 255), stroke_width=3, stroke_fill=(75, 34, 22, 255))
-    td.text((36, 70), "КАЛИНИНГРАД!", font=main_font, fill=(255, 250, 241, 255), stroke_width=3, stroke_fill=(75, 34, 22, 255))
-    skewed = _skew_text_layer(text_layer, skew=-0.08)
+    td.text((64, 23), "УХ ТЫ,", font=top_font, fill=(255, 250, 241, 255), stroke_width=4, stroke_fill=(72, 35, 23, 255))
+    td.text((42, 78), "КАЛИНИНГРАД!", font=main_font, fill=(255, 250, 241, 255), stroke_width=4, stroke_fill=(72, 35, 23, 255))
+    skewed = _skew_text_layer(text_layer, skew=-0.14)
     img.alpha_composite(skewed.crop((0, 0, base_w, base_h)))
-    img = img.rotate(-2, resample=Image.Resampling.BICUBIC, expand=False)
+    img = img.rotate(-6, resample=Image.Resampling.BICUBIC, expand=False)
     if scale != 1:
         img = img.resize((int(base_w * scale), int(base_h * scale)), Image.Resampling.LANCZOS)
     return img
@@ -413,9 +414,43 @@ def _period_of(rows: Sequence[Mapping[str, Any]]) -> str:
     return f"{start.day} {RU_MONTH_SHORT.get(start.month, '')}–{end.day} {RU_MONTH_SHORT.get(end.month, '')}".strip()
 
 
+def _row_source_blob(row: Mapping[str, Any]) -> str:
+    guides = " ".join(_plain(x) for x in (row.get("guide_names") or []) if _plain(x)) if isinstance(row.get("guide_names"), list) else ""
+    orgs = " ".join(_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)) if isinstance(row.get("organizer_names"), list) else ""
+    values = [
+        row.get("source_username"),
+        row.get("primary_source_username"),
+        row.get("source_title"),
+        row.get("primary_source_title"),
+        row.get("guide_line"),
+        row.get("organizer_line"),
+        row.get("guide_profile_marketing_name"),
+        row.get("booking_url"),
+        row.get("source_post_url"),
+        row.get("channel_url"),
+        guides,
+        orgs,
+    ]
+    return " ".join(_plain(value) for value in values if _plain(value)).lower().replace("ё", "е")
+
+
+def _is_katya_kostyugova(row: Mapping[str, Any]) -> bool:
+    src = _row_source_blob(row)
+    return bool(
+        re.search(
+            r"progulki_s_katey|katerinakostiugova|kostiugova|прогулки с катей|катя костюгова|екатерина костюгова",
+            src,
+        )
+    )
+
+
 def _source_name(row: Mapping[str, Any]) -> str:
     guides = [_plain(x) for x in (row.get("guide_names") or []) if _plain(x)] if isinstance(row.get("guide_names"), list) else []
     orgs = [_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)] if isinstance(row.get("organizer_names"), list) else []
+    if guides and _is_katya_kostyugova(row):
+        normalized = [g.lower().replace("ё", "е") for g in guides]
+        if normalized == ["катя"] or normalized == ["екатерина"] or normalized == ["катерина"]:
+            return "Катя Костюгова"
     if guides:
         return ", ".join(guides)
     if orgs:
@@ -557,21 +592,105 @@ def _seats_text(row: Mapping[str, Any]) -> str:
     return f"{n} {word}"
 
 
+def _seats_count(value: Any) -> int | None:
+    text = _plain(value)
+    if not text:
+        return None
+    m = re.search(r"\d+", text)
+    if not m:
+        return None
+    try:
+        return int(m.group(0))
+    except Exception:
+        return None
+
+
+def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Fact subset that defines whether a visual digest repeat is meaningful."""
+
+    seats = _seats_text(row) or _plain(row.get("seats_text") or row.get("seats_line"))
+    state = {
+        "title": _plain(row.get("canonical_title")),
+        "date": _plain(row.get("date")),
+        "time": _plain(row.get("time")),
+        "status": _plain(row.get("status")),
+        "place": _place_line(row),
+        "meeting_point": _plain(_fact(row, "meeting_point") or row.get("meeting_point")),
+        "route": _route_raw(row),
+        "booking_url": _plain(row.get("booking_url")),
+        "price_text": _plain(row.get("price_text")),
+        "seats_text": seats,
+        "seats_count": _seats_count(seats),
+        "is_last_call": bool(int(row.get("is_last_call") or 0)) if str(row.get("is_last_call") or "").strip().isdigit() else bool(row.get("is_last_call")),
+    }
+    return {key: value for key, value in state.items() if value not in ("", None, False)}
+
+
+def _visual_issue_state_map(media_items_json: Any) -> dict[str, dict[str, Any]]:
+    media = _safe_json_object(media_items_json)
+    raw = media.get("item_states")
+    if not isinstance(raw, Mapping):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for key, value in raw.items():
+        if isinstance(value, Mapping):
+            out[str(key)] = dict(value)
+    return out
+
+
+def _is_low_seats_count(value: int | None) -> bool:
+    return value is not None and value <= 4
+
+
+def _visual_selection_reason(row: Mapping[str, Any]) -> str:
+    """Return why this occurrence should enter the daily visual digest.
+
+    A row is eligible if it has never appeared in the visual digest, or if the
+    stored visual fact snapshot differs in a product-important way.  Plain
+    `updated_at` churn is intentionally not enough: it otherwise burns the
+    five daily slots on already-shown excursions without viewer-facing change.
+    """
+
+    published_id = int(row.get("published_visual_digest_issue_id") or 0)
+    if published_id <= 0:
+        return "new"
+
+    current = _visual_item_state(row)
+    previous = row.get("published_visual_digest_state")
+    previous = dict(previous) if isinstance(previous, Mapping) else {}
+    current_seats = current.get("seats_count")
+    previous_seats = previous.get("seats_count")
+    try:
+        previous_seats_i = int(previous_seats) if previous_seats is not None else None
+    except Exception:
+        previous_seats_i = None
+    try:
+        current_seats_i = int(current_seats) if current_seats is not None else None
+    except Exception:
+        current_seats_i = None
+
+    if not previous:
+        if current.get("is_last_call"):
+            return "last_call"
+        if _is_low_seats_count(current_seats_i):
+            return "low_seats"
+        return ""
+
+    for key in ("date", "time", "status", "title", "place", "meeting_point", "booking_url", "price_text"):
+        if current.get(key) != previous.get(key):
+            return f"changed_{key}"
+    if current.get("is_last_call") and not previous.get("is_last_call"):
+        return "last_call"
+    if _is_low_seats_count(current_seats_i) and (previous_seats_i is None or current_seats_i < previous_seats_i):
+        return "low_seats"
+    return ""
+
+
 def _avatar_key(row: Mapping[str, Any]) -> str:
-    guides = " ".join(_plain(x) for x in (row.get("guide_names") or []) if _plain(x)) if isinstance(row.get("guide_names"), list) else ""
-    orgs = " ".join(_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)) if isinstance(row.get("organizer_names"), list) else ""
-    src = " ".join(
-        [
-            _plain(row.get("source_username")),
-            _plain(row.get("primary_source_username")),
-            _plain(row.get("source_title")),
-            _plain(row.get("primary_source_title")),
-            guides,
-            orgs,
-        ]
-    ).lower().replace("ё", "е")
+    src = _row_source_blob(row)
     checks = [
         (r"татьяна удовенко|tanja_from_koenigsberg", "tatyana_udovenko_face"),
+        (r"progulki_s_katey|katerinakostiugova|kostiugova|прогулки с катей|катя костюгова|екатерина костюгова", "katya_kostyugova"),
         (r"twometerguide|двухметров", "twometerguide"),
         (r"natakkaz|наталья казакова", "natakkaz"),
         (r"katimartihobby|катя марти|шаги кати", "katimartihobby"),
@@ -672,12 +791,12 @@ def _draw_date_tile(draw: ImageDraw.ImageDraw, row: Mapping[str, Any], row_h: in
     mon_txt = mon.upper()
     bb = draw.textbbox((0, 0), mon_txt, font=f_mon)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, y + 12 - (bb[1] / 2)), mon_txt, font=f_mon, fill=(255, 255, 255))
-    day_y = y + (103 if row_h <= 190 else 124)
+    day_y = y + (97 if row_h <= 190 else 118)
     bb = draw.textbbox((0, 0), day, font=f_day)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, day_y - (bb[3] - bb[1]) / 2 - 16), day, font=f_day, fill=_hex(pal.text))
     meta = " · ".join(p for p in (wd, time_text) if p) if time_text else wdf
     bb = draw.textbbox((0, 0), meta, font=f_meta)
-    meta_y = y + tile_h - (18 if row_h <= 190 else 22)
+    meta_y = y + tile_h - (25 if row_h <= 190 else 30)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, meta_y - (bb[3] - bb[1]) / 2 - 2), meta, font=f_meta, fill=_hex(pal.route))
 
 
@@ -719,8 +838,8 @@ def render_visual_digest_card(
     draw.text((320, 108), "экскурсий", font=title_font, fill=_hex(palette.text))
     draw.text((322, 173), "куда · с кем · как", font=_font(_MAIN_FONT, 23), fill=_hex(palette.sub))
     # Keep the native VK carousel counter area free while returning the brand
-    # lockup closer to the earlier right-aligned prototype.
-    img.alpha_composite(_brand_lockup(1.04), (640, 120))
+    # lockup to the earlier, right-aligned slanted prototype.
+    img.alpha_composite(_brand_lockup(1.06), (610, 100))
 
     page_period = _period_of(page_rows)
     draw.text((58, 220), page_period, font=_font(_MAIN_FONT, 56), fill=_hex(palette.text))
@@ -773,12 +892,12 @@ def render_visual_digest_card(
         if seats:
             _draw_chip(rd, seats, 654, row_h - (54 if expanded else 52), accent)
         img.alpha_composite(row_layer, (42, y))
-        av_size = 118
-        av_x = 42 + 806
+        av_size = 140
+        av_x = 42 + 778
         av_y = y + round((row_h - av_size) / 2)
         _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
-        _draw_icon_badges(img, modes, 42 + 918, av_y + (8 if len(modes) > 1 else 68), palette)
+        _draw_icon_badges(img, modes, 42 + 920, av_y + (12 if len(modes) > 1 else 76), palette)
 
     draw.text((58, 1290), "Подробности и запись — в тексте поста ↓", font=_font(_MAIN_FONT, 24), fill=_hex(palette.text))
 
@@ -819,7 +938,8 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
             gp.display_name AS guide_profile_display_name,
             gp.marketing_name AS guide_profile_marketing_name,
             gp.summary_short AS guide_profile_summary,
-            gp.facts_rollup_json AS guide_profile_facts_rollup_json
+            gp.facts_rollup_json AS guide_profile_facts_rollup_json,
+            gdi.media_items_json AS visual_issue_media_items_json
         FROM guide_occurrence go
         LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
         LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
@@ -868,6 +988,8 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
             if not item.get(key) and item["fact_pack"].get(key) is not None:
                 item[key] = item["fact_pack"].get(key)
         item["source_flags"] = _safe_json_object(item.get("source_flags_json"))
+        state_map = _visual_issue_state_map(item.get("visual_issue_media_items_json"))
+        item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
         post_cur = await conn.execute(
             """
             SELECT gmp.text, gmp.source_url
@@ -883,7 +1005,10 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
         payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
         item["source_post_url"] = _source_post_url(payload_url, (post_row["source_url"] if post_row else None) or item.get("channel_url"))
-        out.append(item)
+        reason = _visual_selection_reason(item)
+        if reason:
+            item["visual_selection_reason"] = reason
+            out.append(item)
     return out
 
 
@@ -927,6 +1052,12 @@ async def build_visual_digest_issue(
 ) -> dict[str, Any]:
     max_items = max(1, min(int(max_cards), 10)) * max(1, int(card_limit))
     rows = await select_visual_digest_rows(db, max_items=max_items)
+    media_payload = {
+        "kind": "visual_schedule_card",
+        "card_limit": int(card_limit),
+        "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+        "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
+    }
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         await ensure_visual_digest_schema(conn)
@@ -941,7 +1072,7 @@ async def build_visual_digest_issue(
                 f"Дайджест экскурсий · {len(rows)}" if rows else "Дайджест экскурсий · пусто",
                 "",
                 _json_dump([int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]),
-                _json_dump({"kind": "visual_schedule_card", "card_limit": int(card_limit)}),
+                _json_dump(media_payload),
                 int(run_id) if run_id is not None else None,
             ),
         )
@@ -1329,7 +1460,7 @@ async def publish_visual_digest_to_vk(
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         await ensure_visual_digest_schema(conn)
-        cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
+        cur = await conn.execute("SELECT published_targets_json, media_items_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
         current = await cur.fetchone()
         targets_raw = _json_load(current["published_targets_json"] if current else None, {})
         targets = dict(targets_raw) if isinstance(targets_raw, Mapping) else {}
@@ -1345,13 +1476,23 @@ async def publish_visual_digest_to_vk(
             "publish_date": int(publish_date) if publish_date else None,
             "story": story_payload,
         }
+        media_raw = _json_load(current["media_items_json"] if current else None, {})
+        media_payload = dict(media_raw) if isinstance(media_raw, Mapping) else {}
+        media_payload.update(
+            {
+                "kind": "visual_schedule_card",
+                "card_limit": VISUAL_DIGEST_CARD_LIMIT,
+                "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+                "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
+            }
+        )
         await conn.execute(
             """
             UPDATE guide_digest_issue
-            SET status='published', target_chat=?, text=?, published_at=CURRENT_TIMESTAMP, published_targets_json=?
+            SET status='published', target_chat=?, text=?, published_at=CURRENT_TIMESTAMP, published_targets_json=?, media_items_json=?
             WHERE id=?
             """,
-            (target or VISUAL_DIGEST_VK_TARGET, text, _json_dump(targets), int(issue_id)),
+            (target or VISUAL_DIGEST_VK_TARGET, text, _json_dump(targets), _json_dump(media_payload), int(issue_id)),
         )
         if occurrence_ids:
             placeholders = ",".join("?" for _ in occurrence_ids)
