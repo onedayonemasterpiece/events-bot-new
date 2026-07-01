@@ -36,10 +36,11 @@ zero outbound sends. When `ACQ_ENABLE_LIVE_TG_SCAN=1` and the existing S22
 Telegram credentials are mounted, it also performs a bounded read-only Telegram
 shadow scan of public seed surfaces, linked discussion chats where resolvable,
 public links discovered in messages, deterministic opportunity prefiltering, and
-sticker-fit observations. VK is schema/config/report-ready and has a bounded
-read-only `wall.get`/`wall.getComments` scanner path, but it is active only when
-explicit allowlisted VK communities are provided; no VK write methods are
-available in the runtime.
+sticker-fit observations. `/acq_run` also seeds the runtime from existing
+`vk_source` monitoring groups. VK is schema/config/report-ready and has a
+bounded read-only `wall.get`/`wall.getComments` scanner path, but comment scans
+are active only when explicit allowlisted VK communities are provided; no VK
+write methods are available in the runtime.
 
 ## Goal
 

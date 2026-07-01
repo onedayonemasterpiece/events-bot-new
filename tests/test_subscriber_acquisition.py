@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from db import Database
 from models import AcqDiscoveryRun, AcqLinkTarget, AcqOpportunity, AcqReviewFeedback, AcqSurface
@@ -208,6 +208,25 @@ def test_no_send_guard_blocks_external_targets():
         ensure_review_chat(123, review_chat_id=777)
     with pytest.raises(AcquisitionSafetyError):
         ensure_vk_read_only("wall.createComment")
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_includes_existing_vk_monitoring_groups(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    async with db.get_session() as session:
+        await session.execute(text(
+            "CREATE TABLE vk_source(group_id INTEGER, screen_name TEXT, name TEXT, owner_type TEXT)"
+        ))
+        await session.execute(text(
+            "INSERT INTO vk_source(group_id, screen_name, name, owner_type) VALUES (123, 'club123', 'VK Club', 'group'), (456, 'person456', 'VK Person', 'user')"
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    assert by_external["vk:club123"]["source"] == "vk_source"
+    assert "vk:person456" not in by_external
 
 
 @pytest.mark.asyncio

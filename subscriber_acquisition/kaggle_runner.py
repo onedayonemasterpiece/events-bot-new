@@ -73,21 +73,64 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
 
 
 async def collect_runtime_seed_payload(db) -> dict[str, Any]:
-    """Collect reviewed/acquisition surfaces for the Kaggle runtime config.
+    """Collect reviewed/acquisition and existing VK-monitoring surfaces.
 
     This is read-only DB access. It intentionally does not approve or reject
     anything; the runtime remains shadow-mode and only returns JSON for import.
     """
     try:
-        from sqlalchemy import select
+        from sqlalchemy import select, text
         from models import AcqSurface
     except Exception:
         return {"surfaces": []}
+    surfaces: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     async with db.get_session() as session:
         rows = (await session.execute(
-            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(50)
+            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(100)
         )).scalars().all()
-    return {"surfaces": [row.model_dump() for row in rows]}
+        for row in rows:
+            item = row.model_dump()
+            key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
+            seen.add(key)
+            surfaces.append(item)
+        table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='vk_source'"))).scalar_one_or_none()
+        if table_exists:
+            info = (await session.execute(text("PRAGMA table_info(vk_source)"))).all()
+            columns = {str(row[1]) for row in info}
+            select_cols = ["group_id"]
+            for col in ["screen_name", "name", "owner_type"]:
+                if col in columns:
+                    select_cols.append(col)
+            result = await session.execute(text(f"SELECT {', '.join(select_cols)} FROM vk_source ORDER BY group_id LIMIT 250"))
+            for row in result.mappings().all():
+                owner_type = str(row.get("owner_type") or "group").strip().lower()
+                if owner_type and owner_type != "group":
+                    continue
+                screen_name = str(row.get("screen_name") or "").strip()
+                group_id = row.get("group_id")
+                handle = screen_name or (f"club{int(group_id)}" if group_id is not None else "")
+                if not handle:
+                    continue
+                external_id = f"vk:{handle}"
+                key = ("vk", external_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                surfaces.append({
+                    "platform": "vk",
+                    "surface_type": "community",
+                    "url": f"https://vk.com/{handle}",
+                    "title": row.get("name"),
+                    "handle": handle,
+                    "external_id": external_id,
+                    "status": "candidate",
+                    "source": "vk_source",
+                    "topic_hint": "existing VK monitoring source",
+                    "reach": {"confidence": "low", "basis": "vk_source_seed"},
+                    "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+                })
+    return {"surfaces": surfaces}
 
 
 def run_local_discovery_runtime(*, config: AcqConfig, seed_payload: dict[str, Any] | None = None) -> DiscoveryRuntimeResult:
