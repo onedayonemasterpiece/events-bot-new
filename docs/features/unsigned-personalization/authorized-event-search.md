@@ -354,16 +354,35 @@ site path without exposing secrets to the browser:
 - `EVENT_SEARCH_EMBEDDING_KEY_ENVS` — optional embedding-specific list;
 - `EVENT_SEARCH_LLM_KEY_ENVS` — optional LLM-specific list.
 
-The current recommended deployment order is to start online search from
-`GOOGLE_API_KEY5`, keep `GOOGLE_API_KEY4` late for LLM overflow so static related builds
-retain their historical lane, and log only non-secret env names such as
+The current deployment order starts online search from `GOOGLE_API_KEY5`, keeps
+`GOOGLE_API_KEY4` late in the configured list so static related builds retain
+their historical lane, and logs only non-secret env names such as
 `embedding_key_env` / `llm_attempts[].key_env` in audit metadata. If the key list
 is not configured, the function preserves the legacy fallback chain
-`GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`. Live secret inventory on
-2026-07-01 still showed only `GOOGLE_API_KEY4` in the personalization Edge
-Function environment and no `EVENT_SEARCH_*_KEY_ENVS` lists, so this branch must
-be deployed with all five Google key secrets plus explicit rotation lists before
-claiming the extra Lite capacity is active on `/poisk/`.
+`GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
+
+2026-07-01 live rollout evidence from branch
+`feature/smart-search-quota-key5-site` / SHA `4bc1b5b0`:
+
+- the personalization Supabase project now has all five Google key env names
+  present plus `EVENT_SEARCH_GOOGLE_KEY_ENVS`,
+  `EVENT_SEARCH_EMBEDDING_KEY_ENVS` and `EVENT_SEARCH_LLM_KEY_ENVS` with the
+  non-secret order
+  `GOOGLE_API_KEY5,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY,GOOGLE_API_KEY4`;
+- quota migration `20260701180316_event_search_key5_quota_capacity.sql` was
+  applied: `auth.users=47`, effective `custom:yandex=1`, registered plan
+  `1000/day`, `10000/month`, LLM verifier `1000/day`, `10000/month`;
+- Edge Function `event-search` was deployed with `--no-verify-jwt` and the
+  Lite-first code path;
+- readiness probe passed for auth config, Yandex provider, userinfo adapter,
+  Edge OPTIONS and local five-lane runtime env contract;
+- live Edge smoke for `интересно детям` returned HTTP `200`, algorithm
+  `pgvector_gemini_embedding_2_llm_high_match_v1`, `retrieved_count=20`,
+  `items=11`, quota day/LLM remaining `999/999`, verifier
+  `model=gemini-3.1-flash-lite`, `policy=lite_first_gemma_overflow`, first Lite
+  attempt `ok` in `1608ms` on `GOOGLE_API_KEY3`, total backend timing about
+  `3.64s`. The temporary smoke user, quota ledger and audit rows were cleaned
+  up; post-cleanup counts stayed `auth.users=47`, `custom:yandex=1`.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 

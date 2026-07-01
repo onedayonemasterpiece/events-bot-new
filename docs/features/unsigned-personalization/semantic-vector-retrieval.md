@@ -221,13 +221,15 @@ registered Yandex user (`10000/month` each), which still fits inside the
 protected fast Lite capacity for today's user count. The plan is applied by
 `supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
 
-Remaining external gate for this change: deploy the updated Edge Function with
-all five Google key secrets plus `EVENT_SEARCH_EMBEDDING_KEY_ENVS` /
-`EVENT_SEARCH_LLM_KEY_ENVS` in the personalization Supabase project, then apply
-the quota migration. A 2026-07-01 live secret inventory still showed only
-`GOOGLE_API_KEY4` and legacy model-order secrets in the deployed Edge Function,
-so the extra Lite capacity is not active on `/poisk/` until that deploy/config
-step is completed.
+External gate completed on 2026-07-01 from branch
+`feature/smart-search-quota-key5-site` / SHA `4bc1b5b0`: all five Google key
+secrets and explicit `EVENT_SEARCH_*_KEY_ENVS` lists are present in the
+personalization Edge Function environment, the quota migration is applied, and
+`event-search` is deployed with the Lite-first/Gemma-overflow code path. Live
+Edge smoke for `интересно детям` returned HTTP `200`, `retrieved_count=20`,
+`items=11`, verifier `model=gemini-3.1-flash-lite`,
+`policy=lite_first_gemma_overflow`, first Lite attempt `ok` in `1608ms`, and
+registered quota remaining `999/999` after the smoke reservation.
 
 
 ## v59 strict static-related process and evidence
