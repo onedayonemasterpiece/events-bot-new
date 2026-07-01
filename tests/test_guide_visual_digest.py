@@ -12,7 +12,9 @@ from guide_excursions.visual_digest import (
     _visual_start_iso,
     _visual_item_state,
     _visual_selection_reason,
+    build_visual_digest_telegram_text,
     build_visual_digest_vk_text,
+    render_visual_digest_story_image,
     render_visual_digest_cards,
     render_visual_digest_card,
 )
@@ -62,6 +64,18 @@ async def test_visual_digest_vk_text_uses_vk_clickable_and_shortens_external_lin
 
 
 @pytest.mark.asyncio
+async def test_visual_digest_telegram_text_uses_title_links_without_shortener():
+    text = await build_visual_digest_telegram_text(SAMPLE_ROWS, issue_id=42)
+
+    assert text.splitlines()[0] == "<b>Дайджест экскурсий №42</b>"
+    assert '<a href="https://vk.com/wall-1_2">Самые красивые виллы Амалиенау</a>' in text
+    assert '<a href="https://t.me/example/10">Вармийское кольцо</a>' in text
+    assert "vk.cc" not in text
+    assert "#Калининград" in text
+    assert "#Амалиенау" in text
+
+
+@pytest.mark.asyncio
 async def test_visual_digest_vk_text_keeps_phone_without_shortener():
     calls = []
 
@@ -86,6 +100,17 @@ def test_render_visual_digest_card_smoke():
     payload = render_visual_digest_card(SAMPLE_ROWS, issue_id=42, all_rows=SAMPLE_ROWS)
     assert payload.startswith(b"\xff\xd8")
     assert len(payload) > 30_000
+
+
+def test_render_visual_digest_story_image_keeps_full_width_card():
+    payload = render_visual_digest_card(SAMPLE_ROWS, issue_id=42, all_rows=SAMPLE_ROWS)
+    story = render_visual_digest_story_image(payload)
+    assert story.startswith(b"\xff\xd8")
+    from PIL import Image
+    import io
+
+    img = Image.open(io.BytesIO(story))
+    assert img.size == (1080, 1920)
 
 
 def test_brand_lockup_uses_committed_v18_asset():

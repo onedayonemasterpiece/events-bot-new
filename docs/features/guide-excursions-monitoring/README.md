@@ -330,8 +330,9 @@ Production contract:
   `canonical_title`, `date/time`, `guide_names/organizer_names`,
   `meeting_point`, `route_summary`, `seats_text`, `fact_pack_json`;
 - один production-выпуск содержит максимум 5 экскурсий (`GUIDE_VISUAL_DIGEST_MAX_CARDS=1`);
-  ручной тестовый запуск может собрать несколько карточек-каруселью, но каждая
-  карточка всё равно содержит не больше 5 строк;
+  production-пост теперь однокартиночный; ручной review может рендерить
+  несколько карточек для сравнения, но scheduled daily публикует только первую
+  карточку с максимум 5 строками;
 - окно отбора начинается с завтрашней даты в timezone мониторинга
   (`GUIDE_EXCURSIONS_TZ`, по умолчанию `Europe/Kaliningrad`): сегодняшние
   экскурсии в визуальный дайджест не попадают, потому что зрителю уже слишком
@@ -361,24 +362,33 @@ Production contract:
   самодостаточным мини-дайджестом: не показываем техническую пагинацию вида
   `1–5 из 15`, не добавляем строку «остальные даты ниже», а заголовки строк
   остаются главным визуальным якорем;
+- Telegram-публикация идёт в те же каналы, что обычный guide digest
+  (`GUIDE_VISUAL_DIGEST_TARGET_CHATS` или fallback `GUIDE_DIGEST_TARGET_CHATS`):
+  одна картинка + HTML-caption, где названия экскурсий являются ссылками
+  (`<a href="...">название</a>`), без отдельных URL рядом и без VK shortener;
 - VK-текст: первая строка `Дайджест экскурсий №…`, короткая вводная, затем строки
   `название — ссылка`. VK-ссылки оформляются кликабельным названием (`[vk-url|title]`),
   внешние URL сокращаются через `utils.getShortLink`, телефонные контакты не
   сокращаются;
+- хештеги в Telegram/VK включают базовые `#экскурсии #Калининград
+  #УхтыКалининград` плюс упомянутые города/узнаваемые локации карточки
+  (`#Зеленоградск`, `#Балтийск`, `#КуршскаяКоса`, `#Амалиенау` и т.п.);
 - публикация идёт через `post_to_vk(..., carousel=True)`, чтобы VK оставил
-  листалку, а не принудительную медиагруппу/grid. Для review/test используется
-  отложка; production может включить immediate wall post + VK story для первой
-  карточки (`GUIDE_VISUAL_DIGEST_VK_IMMEDIATE=1`, `ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES=1`).
+  листалку, а не принудительную медиагруппу/grid. Scheduled VK wall post
+  ставится в отложку на 10 минут (`GUIDE_VISUAL_DIGEST_VK_DELAY_SECONDS=600`);
+  после выхода из отложки due-job публикует VK Story примерно через 15 минут
+  (`GUIDE_VISUAL_DIGEST_VK_STORY_DELAY_SECONDS=900`) с той же карточкой,
+  помещённой на 1080×1920 без уменьшения текста, и ссылкой на wall post.
 
 Код: `guide_excursions/visual_digest.py`, ручной CLI
 `scripts/guide_visual_digest.py`, scheduler gate
-`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1` после scheduled full scan. На Fly
-пайплайн включён в review-режиме: `GUIDE_VISUAL_DIGEST_MAX_CARDS=1`,
-`GUIDE_VISUAL_DIGEST_VK_IMMEDIATE=0`, `ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES=0`,
-то есть ежедневный production-выпуск пока попадает в VK-отложку, а stories
-останутся выключенными до перехода на immediate-публикацию. Визуальный QA перед
-первым тестом был проведён через `agy --model "Gemini 3.1 Pro (High)"`;
-Gemini verdict: `PASS` для contact sheet production renderer.
+`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1`. На Fly отдельный slot:
+`GUIDE_VISUAL_DIGEST_TIME_LOCAL=10:30`, `GUIDE_VISUAL_DIGEST_TZ=Europe/Kaliningrad`,
+`GUIDE_VISUAL_DIGEST_MAX_CARDS=1`, VK target `uhtykaliningrad`, Telegram targets
+из `GUIDE_DIGEST_TARGET_CHATS`. Старый Telegram/VK guide digest остаётся
+отдельным и не отменяется. Визуальный QA перед первым тестом был проведён через
+`agy --model "Gemini 3.1 Pro (High)"`; Gemini verdict: `PASS` для contact sheet
+production renderer.
 
 ### Hook-карточки (engagement cards)
 

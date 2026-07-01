@@ -9,6 +9,7 @@ prototype without relying on paid image generation.
 from __future__ import annotations
 
 import io
+import html
 import json
 import logging
 import math
@@ -23,6 +24,7 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
+from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
@@ -50,9 +52,28 @@ VISUAL_DIGEST_VK_TARGET = collapse_ws(os.getenv("GUIDE_VISUAL_DIGEST_VK_TARGET")
 VISUAL_DIGEST_VK_TARGET_GROUP_ID = collapse_ws(
     os.getenv("GUIDE_VISUAL_DIGEST_VK_TARGET_GROUP_ID") or os.getenv("GUIDE_DIGEST_VK_TARGET_GROUP_ID")
 )
+VISUAL_DIGEST_VK_DELAY_SECONDS = max(
+    60,
+    min(int((os.getenv("GUIDE_VISUAL_DIGEST_VK_DELAY_SECONDS") or "600") or 600), 86400),
+)
+VISUAL_DIGEST_VK_STORY_DELAY_SECONDS = max(
+    60,
+    min(int((os.getenv("GUIDE_VISUAL_DIGEST_VK_STORY_DELAY_SECONDS") or "900") or 900), 86400),
+)
 VISUAL_DIGEST_REVIEW_DELAY_DAYS = max(
     1,
     min(int((os.getenv("GUIDE_VISUAL_DIGEST_REVIEW_DELAY_DAYS") or "3") or 3), 30),
+)
+VISUAL_DIGEST_TG_TARGET_CHATS_RAW = (
+    os.getenv("GUIDE_VISUAL_DIGEST_TARGET_CHATS")
+    or os.getenv("GUIDE_VISUAL_DIGEST_TARGET_CHAT")
+    or os.getenv("GUIDE_DIGEST_TARGET_CHATS")
+    or os.getenv("GUIDE_DIGEST_TARGET_CHAT")
+    or "@wheretogo39"
+)
+VISUAL_DIGEST_TELEGRAM_ENABLED = (
+    (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_TELEGRAM") or "1").strip().lower()
+    in {"1", "true", "yes", "on"}
 )
 VISUAL_DIGEST_STORIES_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES") or "").strip().lower()
@@ -224,6 +245,27 @@ def _visual_start_iso(today: date | None = None) -> str:
 def _future_cutoff_iso(today: date | None = None) -> str:
     base = today or _visual_today()
     return (base + timedelta(days=VISUAL_DIGEST_WINDOW_DAYS)).isoformat()
+
+
+def _parse_target_chats(value: str | Sequence[str] | None) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raw = re.split(r"[\n,;]+", value)
+    elif isinstance(value, Sequence):
+        raw = [str(item) for item in value]
+    else:
+        raw = []
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in raw:
+        target = collapse_ws(item)
+        if not target or target in seen:
+            continue
+        seen.add(target)
+        out.append(target)
+    return tuple(out or ["@wheretogo39"])
+
+
+VISUAL_DIGEST_TG_TARGET_CHATS = _parse_target_chats(VISUAL_DIGEST_TG_TARGET_CHATS_RAW)
 
 
 def _json_dump(value: Any) -> str:
@@ -1266,6 +1308,160 @@ def render_visual_digest_cards(rows: Sequence[Mapping[str, Any]], *, issue_id: i
     return cards
 
 
+def render_visual_digest_story_image(card_jpeg: bytes) -> bytes:
+    """Prepare the card for VK Stories without shrinking the schedule text.
+
+    The schedule card is already 1080px wide.  For story readability we keep it
+    at native width and place it inside a 1080×1920 canvas below the VK top UI
+    chrome instead of scaling it down to fit a full-bleed story.
+    """
+
+    card = Image.open(io.BytesIO(card_jpeg)).convert("RGBA")
+    if card.width != W:
+        card = card.resize((W, int(card.height * (W / max(1, card.width)))), Image.Resampling.LANCZOS)
+    canvas = _gradient((1080, 1920), "#f7fbff", "#fff4e9").convert("RGBA")
+    canvas.alpha_composite(_alpha_circle_layer((1080, 1920), (632, -140, 1210, 438), "#f1c9b8", 38))
+    canvas.alpha_composite(_alpha_circle_layer((1080, 1920), (-280, 1360, 260, 1960), "#b9dceb", 26))
+    y = 165
+    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    sd.rounded_rectangle((22, y + 16, 1058, y + card.height + 16), radius=34, fill=(0, 0, 0, 42))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(18))
+    canvas.alpha_composite(shadow)
+    canvas.alpha_composite(card, (0, y))
+    draw = ImageDraw.Draw(canvas)
+    footer = "Подробности и запись — по ссылке в истории"
+    f = _font(_MAIN_FONT, 34)
+    bb = draw.textbbox((0, 0), footer, font=f)
+    draw.text((540 - (bb[2] - bb[0]) / 2, 1605), footer, font=f, fill=(28, 42, 48))
+    rgb = canvas.convert("RGB")
+    buf = io.BytesIO()
+    rgb.save(buf, format="JPEG", quality=94, optimize=True)
+    return buf.getvalue()
+
+
+def _tg_public_target_key(target: str) -> str:
+    return f"tg:{collapse_ws(target)}:visual"
+
+
+async def _update_visual_issue_publication_state(
+    db: Database,
+    *,
+    issue_id: int,
+    target_chat: str,
+    text: str | None,
+    targets_update: Mapping[str, Mapping[str, Any]],
+    occurrence_ids: Sequence[int],
+    status: str = "published",
+) -> None:
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        await ensure_visual_digest_schema(conn)
+        cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
+        current = await cur.fetchone()
+        targets_raw = _json_load(current["published_targets_json"] if current else None, {})
+        targets = dict(targets_raw) if isinstance(targets_raw, Mapping) else {}
+        for key, payload in targets_update.items():
+            targets[str(key)] = dict(payload)
+        primary_payload = next(iter(targets_update.values()), {})
+        primary_message_ids = [int(v) for v in (primary_payload.get("message_ids") or []) if str(v).strip()]
+        await conn.execute(
+            """
+            UPDATE guide_digest_issue
+            SET status=?, target_chat=?, text=COALESCE(?, text), published_at=CURRENT_TIMESTAMP,
+                published_message_ids_json=?, published_targets_json=?
+            WHERE id=?
+            """,
+            (
+                status,
+                target_chat,
+                text,
+                _json_dump(primary_message_ids),
+                _json_dump(targets),
+                int(issue_id),
+            ),
+        )
+        ids = [int(x) for x in occurrence_ids if int(x or 0) > 0]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            await conn.execute(
+                f"UPDATE guide_occurrence SET published_visual_digest_issue_id=? WHERE id IN ({placeholders})",
+                (int(issue_id), *ids),
+            )
+        await conn.commit()
+
+
+async def publish_visual_digest_to_telegram(
+    db: Database,
+    bot: Any | None,
+    *,
+    issue_id: int | None = None,
+    max_cards: int = 1,
+    target_chats: str | Sequence[str] | None = None,
+) -> dict[str, Any]:
+    if bot is None:
+        return {"published": False, "reason": "missing_bot", "family": VISUAL_DIGEST_FAMILY}
+    if issue_id is None:
+        built = await build_visual_digest_issue(db, max_cards=max_cards)
+        issue_id = int(built["issue_id"])
+        rows = list(built.get("items") or [])
+    else:
+        issue = await load_visual_digest_issue(db, issue_id)
+        if not issue:
+            return {"published": False, "reason": "no_issue", "issue_id": issue_id, "family": VISUAL_DIGEST_FAMILY}
+        rows = list(issue.get("items") or [])
+    rows = rows[: max(1, min(int(max_cards), 1)) * VISUAL_DIGEST_CARD_LIMIT]
+    if not rows:
+        return {"published": False, "reason": "no_items", "issue_id": int(issue_id), "family": VISUAL_DIGEST_FAMILY}
+
+    targets = list(_parse_target_chats(target_chats if target_chats is not None else VISUAL_DIGEST_TG_TARGET_CHATS))
+    caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id))
+    card = render_visual_digest_cards(rows, issue_id=int(issue_id))[0]
+    occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
+    published_targets: dict[str, dict[str, Any]] = {}
+    errors: dict[str, str] = {}
+    for target in targets:
+        try:
+            upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
+            msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
+            message_id = int(getattr(msg, "message_id", 0) or 0)
+            published_targets[_tg_public_target_key(target)] = {
+                "message_ids": [message_id] if message_id else [],
+                "text_message_ids": [],
+                "media_message_ids": [message_id] if message_id else [],
+                "post_urls": [],
+                "target_chat": target,
+                "transport": "telegram_photo",
+                "attachments_count": 1,
+                "cards_count": 1,
+            }
+        except Exception as exc:
+            logger.exception("guide_visual_digest_tg_publish_failed issue_id=%s target=%s", issue_id, target)
+            errors[target] = str(exc) or type(exc).__name__
+    if published_targets:
+        await _update_visual_issue_publication_state(
+            db,
+            issue_id=int(issue_id),
+            target_chat=targets[0],
+            text=caption,
+            targets_update=published_targets,
+            occurrence_ids=occurrence_ids,
+            status="partial" if errors else "published",
+        )
+    return {
+        "published": bool(published_targets),
+        "reason": "partial_failed" if published_targets and errors else ("send_failed" if errors else None),
+        "issue_id": int(issue_id),
+        "family": VISUAL_DIGEST_FAMILY,
+        "target_chats": targets,
+        "published_targets": published_targets,
+        "message_ids": [mid for payload in published_targets.values() for mid in (payload.get("message_ids") or [])],
+        "errors": errors,
+        "text": caption,
+        "occurrence_ids": occurrence_ids,
+    }
+
+
 def _is_vk_url(url: str | None) -> bool:
     raw = _plain(url).lower()
     return bool(re.match(r"^(?:https?://)?(?:m\.)?vk\.(?:com|ru)/", raw))
@@ -1358,6 +1554,129 @@ def _primary_link(row: Mapping[str, Any]) -> tuple[str | None, bool]:
     return None, False
 
 
+_HASHTAG_LOCATIONS: tuple[str, ...] = (
+    "Калининград",
+    "Зеленоградск",
+    "Балтийск",
+    "Светлогорск",
+    "Пионерский",
+    "Янтарный",
+    "Черняховск",
+    "Гвардейск",
+    "Гусев",
+    "Советск",
+    "Неман",
+    "Полесск",
+    "Багратионовск",
+    "Ладушкин",
+    "Мамоново",
+    "Правдинск",
+    "Железнодорожный",
+    "Гурьевск",
+    "Светлый",
+    "Приморск",
+    "Куршская коса",
+    "Балтийская коса",
+    "Амалиенау",
+)
+
+
+def _hashtag_token(label: str) -> str:
+    parts = re.findall(r"[0-9A-Za-zА-Яа-яЁё]+", label)
+    if not parts:
+        return ""
+    return "#" + "".join(part[:1].upper() + part[1:] for part in parts)
+
+
+def _digest_hashtags(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    tags: list[str] = ["#экскурсии", "#Калининград", "#УхтыКалининград"]
+    blob_parts: list[str] = []
+    for row in rows:
+        blob_parts.extend(
+            [
+                _plain(row.get("canonical_title")),
+                _plain(row.get("city")),
+                _plain(row.get("route_summary")),
+                _plain(row.get("meeting_point")),
+                _route_raw(row),
+                _place_line(row),
+            ]
+        )
+    blob = " ".join(part for part in blob_parts if part).lower().replace("ё", "е")
+    seen = {tag.lower().replace("ё", "е") for tag in tags}
+    for name in _HASHTAG_LOCATIONS:
+        normalized = name.lower().replace("ё", "е")
+        if normalized not in blob:
+            continue
+        tag = _hashtag_token(name)
+        key = tag.lower().replace("ё", "е")
+        if tag and key not in seen:
+            tags.append(tag)
+            seen.add(key)
+        if len(tags) >= 9:
+            break
+    return tags
+
+
+def _tg_link(label: str, url: str) -> str:
+    href = html.escape(_ensure_https(url), quote=True)
+    text = html.escape(label, quote=False)
+    return f'<a href="{href}">{text}</a>'
+
+
+async def build_visual_digest_telegram_text(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    issue_id: int,
+) -> str:
+    items = [dict(r) for r in rows]
+    period = _period_of(items)
+    lines = [
+        f"<b>Дайджест экскурсий №{int(issue_id)}</b>",
+        "",
+        html.escape(
+            f"Коротко: {len(items)} будущих экскурсий" + (f" на {period}" if period else "") + ". Смотрите карточку, детали и запись — ниже.",
+            quote=False,
+        ),
+        "",
+    ]
+    for idx, row in enumerate(items, start=1):
+        title = _plain(row.get("canonical_title")) or "Экскурсия"
+        link, is_phone = _primary_link(row)
+        if link and is_phone:
+            display = _normalize_phone(link) or _plain(link)
+            line = f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}"
+        elif link:
+            line = f"{idx}. {_tg_link(title, link)}"
+        else:
+            line = f"{idx}. {html.escape(title, quote=False)}"
+        lines.append(line)
+    lines.extend(["", " ".join(_digest_hashtags(items))])
+    text = "\n".join(lines).strip()
+    if len(text) <= 1024:
+        return text
+    # Caption hard-limit guard: keep linked titles, shorten only intro/overflow.
+    compact_lines = [lines[0], ""]
+    for idx, row in enumerate(items, start=1):
+        title = _fit(_plain(row.get("canonical_title")) or "Экскурсия", 44)
+        link, is_phone = _primary_link(row)
+        if link and not is_phone:
+            compact_lines.append(f"{idx}. {_tg_link(title, link)}")
+        elif link:
+            display = _normalize_phone(link) or _plain(link)
+            compact_lines.append(f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}")
+        else:
+            compact_lines.append(f"{idx}. {html.escape(title, quote=False)}")
+    compact_lines.extend(["", " ".join(_digest_hashtags(items))])
+    while len("\n".join(compact_lines).strip()) > 1024 and len(compact_lines) > 4:
+        # Drop the last excursion line first, keep valid HTML and the hashtag footer.
+        footer = compact_lines[-2:]
+        body = compact_lines[:-2]
+        body.pop()
+        compact_lines = body + footer
+    return "\n".join(compact_lines).strip()
+
+
 async def build_visual_digest_vk_text(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -1392,7 +1711,7 @@ async def build_visual_digest_vk_text(
         else:
             line = f"{idx}. {title}"
         lines.append(line)
-    lines.extend(["", "#экскурсии #Калининград #УхтыКалининград"])
+    lines.extend(["", " ".join(_digest_hashtags(items))])
     return "\n".join(lines).strip()
 
 
@@ -1505,7 +1824,13 @@ async def publish_visual_digest_to_vk(
     story_payload: dict[str, Any] | None = None
     if publish_stories or VISUAL_DIGEST_STORIES_ENABLED:
         if publish_date:
-            story_payload = {"published": False, "reason": "wall_post_is_postponed"}
+            story_payload = {
+                "published": False,
+                "pending": True,
+                "reason": "wall_post_is_postponed",
+                "due_at": int(publish_date) + VISUAL_DIGEST_VK_STORY_DELAY_SECONDS,
+                "delay_seconds": VISUAL_DIGEST_VK_STORY_DELAY_SECONDS,
+            }
         else:
             try:
                 from promo import _publish_vk_story_photo
@@ -1514,7 +1839,7 @@ async def publish_visual_digest_to_vk(
                     db,
                     bot,
                     target_group_id=int(group),
-                    image_bytes=card_bytes[0],
+                    image_bytes=render_visual_digest_story_image(card_bytes[0]),
                     source_url=url,
                     link_text="К дайджесту",
                     include_source_link=True,
@@ -1557,7 +1882,8 @@ async def publish_visual_digest_to_vk(
         await conn.execute(
             """
             UPDATE guide_digest_issue
-            SET status='published', target_chat=?, text=?, published_at=CURRENT_TIMESTAMP, published_targets_json=?, media_items_json=?
+            SET status='published', target_chat=COALESCE(NULLIF(target_chat, ''), ?), text=?,
+                published_at=CURRENT_TIMESTAMP, published_targets_json=?, media_items_json=?
             WHERE id=?
             """,
             (target or VISUAL_DIGEST_VK_TARGET, text, _json_dump(targets), _json_dump(media_payload), int(issue_id)),
@@ -1582,6 +1908,211 @@ async def publish_visual_digest_to_vk(
         "text": text,
         "story": story_payload,
     }
+
+
+def default_vk_publish_date(*, delay_seconds: int = VISUAL_DIGEST_VK_DELAY_SECONDS) -> int:
+    return int(time.time()) + max(60, int(delay_seconds))
+
+
+async def publish_visual_digest_daily(
+    db: Database,
+    bot: Any | None = None,
+    *,
+    max_cards: int = 1,
+    target_chats: str | Sequence[str] | None = None,
+    vk_group_id: str | int | None = None,
+    vk_target: str | None = None,
+    vk_delay_seconds: int = VISUAL_DIGEST_VK_DELAY_SECONDS,
+    publish_stories: bool | None = None,
+) -> dict[str, Any]:
+    """Build and publish the one-card daily visual digest to Telegram + VK."""
+
+    built = await build_visual_digest_issue(db, max_cards=max_cards, card_limit=VISUAL_DIGEST_CARD_LIMIT)
+    issue_id = int(built["issue_id"])
+    rows = list(built.get("items") or [])
+    if not rows:
+        return {"published": False, "reason": "no_items", "issue_id": issue_id, "family": VISUAL_DIGEST_FAMILY}
+
+    tg_result: dict[str, Any] | None = None
+    if VISUAL_DIGEST_TELEGRAM_ENABLED:
+        tg_result = await publish_visual_digest_to_telegram(
+            db,
+            bot,
+            issue_id=issue_id,
+            max_cards=1,
+            target_chats=target_chats,
+        )
+    vk_publish_date = default_vk_publish_date(delay_seconds=vk_delay_seconds)
+    vk_result = await publish_visual_digest_to_vk(
+        db,
+        bot,
+        issue_id=issue_id,
+        max_cards=1,
+        group_id=vk_group_id,
+        target=vk_target,
+        publish_date=vk_publish_date,
+        publish_stories=VISUAL_DIGEST_STORIES_ENABLED if publish_stories is None else bool(publish_stories),
+    )
+    return {
+        "published": bool((tg_result or {}).get("published") or vk_result.get("published")),
+        "issue_id": issue_id,
+        "family": VISUAL_DIGEST_FAMILY,
+        "items": len(rows),
+        "telegram": tg_result,
+        "vk": vk_result,
+        "vk_publish_date": vk_publish_date,
+        "occurrence_ids": [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0],
+    }
+
+
+async def _vk_wall_post_is_live(
+    db: Database,
+    bot: Any | None,
+    *,
+    owner_id: int,
+    post_id: int,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+) -> bool:
+    if vk_api_fn is None:
+        import main
+
+        vk_api_fn = main._vk_api  # type: ignore[attr-defined]
+    try:
+        import main
+
+        response = await vk_api_fn(
+            "wall.getById",
+            {"posts": f"{int(owner_id)}_{int(post_id)}", "extended": 0},
+            db,
+            bot,
+            token=main._vk_user_token(),
+            token_kind="user",
+        )
+    except Exception:
+        logger.warning("guide_visual_digest_story_live_probe_failed owner_id=%s post_id=%s", owner_id, post_id, exc_info=True)
+        return False
+    payload = response.get("response", response) if isinstance(response, dict) else response
+    if isinstance(payload, Mapping):
+        items = payload.get("items") or []
+    else:
+        items = payload if isinstance(payload, list) else []
+    return any(int(item.get("id") or 0) == int(post_id) for item in items if isinstance(item, Mapping))
+
+
+async def publish_due_visual_digest_vk_stories(
+    db: Database,
+    bot: Any | None = None,
+    *,
+    now_ts: int | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Publish pending VK Stories for visual digest wall posts that are live."""
+
+    if not VISUAL_DIGEST_STORIES_ENABLED:
+        return {"published": False, "reason": "disabled", "stories": []}
+    now_value = int(now_ts or time.time())
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        cur = await conn.execute(
+            """
+            SELECT id, published_targets_json
+            FROM guide_digest_issue
+            WHERE family=? AND status IN ('published','partial')
+              AND published_targets_json IS NOT NULL
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (VISUAL_DIGEST_FAMILY, max(1, int(limit))),
+        )
+        issues = await cur.fetchall()
+
+    published: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for issue in issues:
+        issue_id = int(issue["id"])
+        targets = _json_load(issue["published_targets_json"], {})
+        if not isinstance(targets, Mapping):
+            continue
+        next_targets = dict(targets)
+        changed = False
+        issue_rows: list[dict[str, Any]] | None = None
+        issue_card: bytes | None = None
+        for target_key, payload_raw in list(targets.items()):
+            payload = dict(payload_raw) if isinstance(payload_raw, Mapping) else {}
+            story = dict(payload.get("story") or {}) if isinstance(payload.get("story"), Mapping) else {}
+            if not story or story.get("published") or not story.get("pending"):
+                continue
+            due_at = int(story.get("due_at") or 0)
+            retry_after = int(story.get("retry_after") or 0)
+            if due_at > now_value or retry_after > now_value:
+                continue
+            post_urls = [collapse_ws(x) for x in (payload.get("post_urls") or []) if collapse_ws(x)]
+            post_url = post_urls[0] if post_urls else ""
+            post_id = _extract_wall_post_id(post_url)
+            group_id = int(payload.get("group_id") or 0)
+            if not post_url or not post_id or not group_id:
+                story.update({"pending": False, "published": False, "reason": "missing_post_url_or_group"})
+                payload["story"] = story
+                next_targets[str(target_key)] = payload
+                changed = True
+                continue
+            owner_id = -abs(int(group_id))
+            if not await _vk_wall_post_is_live(db, bot, owner_id=owner_id, post_id=int(post_id)):
+                story["retry_after"] = now_value + 300
+                story["reason"] = "wall_post_not_live_yet"
+                payload["story"] = story
+                next_targets[str(target_key)] = payload
+                changed = True
+                skipped.append({"issue_id": issue_id, "target": str(target_key), "reason": "wall_post_not_live_yet"})
+                continue
+            if issue_rows is None:
+                loaded = await load_visual_digest_issue(db, issue_id)
+                issue_rows = list((loaded or {}).get("items") or [])[:VISUAL_DIGEST_CARD_LIMIT]
+            if not issue_rows:
+                story["retry_after"] = now_value + 900
+                story["reason"] = "no_issue_rows"
+                payload["story"] = story
+                next_targets[str(target_key)] = payload
+                changed = True
+                continue
+            if issue_card is None:
+                issue_card = render_visual_digest_cards(issue_rows, issue_id=issue_id)[0]
+            try:
+                from promo import _publish_vk_story_photo
+
+                result = await _publish_vk_story_photo(
+                    db,
+                    bot,
+                    target_group_id=group_id,
+                    image_bytes=render_visual_digest_story_image(issue_card),
+                    source_url=post_url,
+                    link_text="К дайджесту",
+                    include_source_link=True,
+                )
+                story.update(result)
+                story.update({"published": True, "pending": False, "published_at": now_value})
+                payload["story"] = story
+                next_targets[str(target_key)] = payload
+                changed = True
+                published.append({"issue_id": issue_id, "target": str(target_key), "url": result.get("url")})
+            except Exception as exc:  # pragma: no cover - production integration
+                logger.warning("guide_visual_digest_due_story_failed issue_id=%s target=%s: %s", issue_id, target_key, exc, exc_info=True)
+                story["pending"] = True
+                story["published"] = False
+                story["last_error"] = str(exc) or type(exc).__name__
+                story["attempts"] = int(story.get("attempts") or 0) + 1
+                story["retry_after"] = now_value + 900
+                payload["story"] = story
+                next_targets[str(target_key)] = payload
+                changed = True
+        if changed:
+            async with db.raw_conn() as conn:
+                await conn.execute(
+                    "UPDATE guide_digest_issue SET published_targets_json=? WHERE id=?",
+                    (_json_dump(next_targets), issue_id),
+                )
+                await conn.commit()
+    return {"published": bool(published), "stories": published, "skipped": skipped}
 
 
 def visual_digest_enabled() -> bool:
