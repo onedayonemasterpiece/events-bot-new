@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the registered-user canary quota to `80/day` search + `80/day` verifier calls after protected reserves. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls after protected reserves. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
 
 ## Product contract
 
@@ -131,6 +131,22 @@ The Edge Function passes that query vector to `search_events_by_embedding_v1` as
 `p_query_embedding`; the RPC orders candidates by `event_embeddings.embedding <=>
 p_query_embedding`. Gemini Lite/Gemma do not replace this recall step: they
 classify the pgvector candidate IDs after recall.
+
+Postgres-native text search is a different tool. `to_tsvector`/`tsquery` can
+build a lexical full-text index over titles/digests, and `pg_trgm` can help with
+fuzzy string matching, but neither creates the semantic 768-dimensional vector
+that pgvector compares. The 2026-07-01 Supabase extension check found `vector`
+installed and `pg_trgm` available, but no installed/available `pgai`,
+`pg_vectorize` or `vectorize` extension in this personalization project. A quick
+A/B probe over the current public/searchable catalogue showed why we should not
+remove `gemini-embedding-2` without a golden-quality replacement: lexical FTS
+returned `0` rows for `интересно детям`, only the exact-title event for
+`урбанистика будущее города`, and only one literal jazz title for
+`джаз на выходных`, while the current semantic vector recall returned relevant
+families such as children/family events, urban-planning events and jazz-related
+events for the same natural-language queries. FTS/trigram may become a cheap
+hybrid prefilter or fallback, but not a no-quality-loss replacement until a
+proper golden-query evaluation proves parity.
 
 ### pgvector schema
 
@@ -281,14 +297,18 @@ The facets are not used to store raw query text. They are passed to `search_even
 Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
 `20260629_event_search_quota_plan_dynamic.sql` added service-role RPC
 `refresh_registered_search_quota_v1(...)`, which recalculates
-`search_quota_plans.registered` from the current Supabase Auth user count,
-provider RPD inputs, reserves for non-search workloads and per-user abuse caps.
-Migration `20260701180316_event_search_key5_quota_capacity.sql` updates the
-default inputs after `GOOGLE_API_KEY5` was added and smoke-tested for query
-embedding, Gemini Lite verification and Gemma overflow.
+`search_quota_plans.registered` from effective product registrations, provider
+RPD inputs, reserves for non-search workloads and per-user abuse caps. Migration
+`20260701180316_event_search_key5_quota_capacity.sql` updates the default inputs
+after `GOOGLE_API_KEY5` was added and smoke-tested for query embedding, Gemini
+Lite verification and Gemma overflow. It also fixes the user-count basis: the
+site product registration count is the number of distinct `auth.users` with a
+`custom:yandex` identity, not every historical `auth.users` row. On 2026-07-01
+Supabase Auth had `47` rows, but only `1` `custom:yandex` identity; the other
+`46` rows were email/test/smoke users and must not dilute the product quota.
 
-2026-07-01 quota calculation for smart search uses registered users as the
-unit of allocation:
+2026-07-01 quota calculation for smart search uses effective Yandex-registered
+site users as the unit of allocation:
 
 | Component | Provider/day fact | Active key lanes | Gross RPD | Protected reserve | Online search RPD |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -296,17 +316,27 @@ unit of allocation:
 | Fast verifier (`gemini-3.1-flash-lite`) | defensive `450` | `5` | `2250` | `1000` | `1250` |
 | Overflow verifier (`gemma-4-26b-a4b-it`) | `1500` | `5` | `7500` | `2500` | `5000` |
 
-The fast Lite tier can serve about `floor(1250 / 47) = 26` verified
-searches/user/day if usage is uniform; use `25/day` as the practical fast-lane
-mental model. After that, Gemma 4 26B is the slower overflow. Total verified
-search capacity is still bounded by online query embeddings:
-`min(4000 embedding, 1250 Lite + 5000 Gemma) = 4000` searches/day. With the
-current `47` registered users, `floor(4000 / 47) = 85` total verified
-searches/user/day. The applied canary ceiling remains `80` searches/day and
-`80` LLM verifications/day per registered user, with the existing `x10` monthly
-multiplier (`800/month` for both counters). At 47 users this consumes at most
-`3760` query embeddings/day; approximately the first `1175` can be fast Lite
-verifications and the remaining demand can fit into Gemma overflow.
+For the current `1` effective registered site user, the protected fast Lite tier
+alone can serve `1250` searches/day and total embedding capacity after reserve
+is `4000` searches/day. The applied safety/abuse ceiling is therefore
+`1000` searches/day and `1000` LLM verifications/day per registered Yandex user,
+with the existing `x10` monthly multiplier (`10000/month` for both counters).
+This keeps today's full user-facing cap inside the fast Lite reserve-adjusted
+capacity and leaves about `250` Lite RPD plus all Gemma overflow and the
+embedding reserve for other services, diagnostics and static generation.
+
+Dynamic formula after this fix:
+
+```text
+daily_search_limit = min(1000, max(10, floor(4000 / effective_yandex_users)))
+daily_llm_rerank_limit = min(1000, max(5, floor(6250 / effective_yandex_users)))
+```
+
+If the product later has enough registered users that `1000/user/day` no longer
+fits the fast Lite lane, the existing runtime behavior remains Lite-first and
+uses Gemma 4 26B only as slower overflow; a separate fast-only quota can be added
+if the UX contract needs to guarantee sub-second verification for every allowed
+search.
 
 Reserve rationale:
 
@@ -329,7 +359,11 @@ The current recommended deployment order is to start online search from
 retain their historical lane, and log only non-secret env names such as
 `embedding_key_env` / `llm_attempts[].key_env` in audit metadata. If the key list
 is not configured, the function preserves the legacy fallback chain
-`GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
+`GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`. Live secret inventory on
+2026-07-01 still showed only `GOOGLE_API_KEY4` in the personalization Edge
+Function environment and no `EVENT_SEARCH_*_KEY_ENVS` lists, so this branch must
+be deployed with all five Google key secrets plus explicit rotation lists before
+claiming the extra Lite capacity is active on `/poisk/`.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 

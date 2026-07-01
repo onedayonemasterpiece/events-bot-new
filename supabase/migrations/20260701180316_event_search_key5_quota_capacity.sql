@@ -10,10 +10,14 @@
 -- - Effective verifier capacity after reserves is 1250 fast Lite RPD +
 --   5000 Gemma overflow RPD = 6250 RPD; embedding remains the overall
 --   online bottleneck at 4000 RPD after reserve.
--- With 47 registered users this yields floor(4000 / 47) = 85 verified
--- searches/day, capped to 80/day as a canary safety ceiling. The first
--- roughly 25 searches/user/day can be served by fast Lite if usage is uniform;
--- the rest is Gemma overflow.
+-- Product "registered users" are counted by the live Yandex site identity
+-- provider, not by all auth.users rows: on 2026-07-01 auth.users had 47 rows,
+-- but only 1 custom:yandex identity; the other 46 were email/test/smoke users.
+-- With the current 1 effective site user, floor(4000 / 1) would be 4000
+-- verified searches/day, capped to 1000/day as an abuse/ops safety ceiling.
+-- This keeps today's whole user-facing cap inside the protected fast Lite
+-- budget (1250 RPD), while leaving 250 Lite RPD plus all Gemma overflow and
+-- the embedding reserve for other services/diagnostics.
 
 create or replace function public.refresh_registered_search_quota_v1(
   p_embedding_rpd integer default 5000,
@@ -21,9 +25,9 @@ create or replace function public.refresh_registered_search_quota_v1(
   p_embedding_static_reserve integer default 1000,
   p_llm_static_reserve integer default 3500,
   p_min_daily_search integer default 10,
-  p_max_daily_search integer default 80,
+  p_max_daily_search integer default 1000,
   p_min_daily_llm integer default 5,
-  p_max_daily_llm integer default 80,
+  p_max_daily_llm integer default 1000,
   p_month_multiplier integer default 10
 )
 returns table (
@@ -42,9 +46,11 @@ declare
   v_daily_search integer;
   v_daily_llm integer;
 begin
-  select greatest(count(*)::integer, 1)
+  select greatest(count(distinct u.id)::integer, 1)
     into v_user_count
-  from auth.users;
+  from auth.users u
+  join auth.identities i on i.user_id = u.id
+  where i.provider = 'custom:yandex';
 
   v_daily_search := least(
     greatest(((greatest(p_embedding_rpd - p_embedding_static_reserve, 0)) / v_user_count)::integer, p_min_daily_search),
@@ -91,7 +97,8 @@ $$;
 revoke all on function public.refresh_registered_search_quota_v1(integer, integer, integer, integer, integer, integer, integer, integer, integer) from public, anon, authenticated;
 grant execute on function public.refresh_registered_search_quota_v1(integer, integer, integer, integer, integer, integer, integer, integer, integer) to service_role;
 
--- Apply the updated plan during migration. For 47 registered users this writes:
--- daily_search_limit=80, monthly_search_limit=800,
--- daily_llm_rerank_limit=80, monthly_llm_rerank_limit=800.
+-- Apply the updated plan during migration. For the current 1 effective
+-- custom:yandex site user this writes:
+-- daily_search_limit=1000, monthly_search_limit=10000,
+-- daily_llm_rerank_limit=1000, monthly_llm_rerank_limit=10000.
 select * from public.refresh_registered_search_quota_v1();

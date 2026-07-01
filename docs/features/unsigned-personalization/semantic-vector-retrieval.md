@@ -214,16 +214,20 @@ Implemented source pieces:
 
 2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from five
 registered Google key lanes with protected reserves for static generation and
-other services. For the current 47 registered users the canary limit is
-`80/day` search and `80/day` verifier calls per registered user
-(`800/month` each). Roughly the first `25/day` can fit the fast Lite lane if
-usage is uniform, with Gemma handling slower overflow. The plan is applied by
+other services. Product registration is counted from `auth.identities.provider='custom:yandex'`, not from all historical `auth.users` rows; on 2026-07-01 this
+means `1` effective Yandex-registered site user, not `47` total Auth rows. The
+canary limit is therefore `1000/day` search and `1000/day` verifier calls per
+registered Yandex user (`10000/month` each), which still fits inside the
+protected fast Lite capacity for today's user count. The plan is applied by
 `supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
 
 Remaining external gate for this change: deploy the updated Edge Function with
-`GOOGLE_API_KEY5` plus `EVENT_SEARCH_EMBEDDING_KEY_ENVS` /
-`EVENT_SEARCH_LLM_KEY_ENVS` secrets in the personalization Supabase project,
-then apply the quota migration.
+all five Google key secrets plus `EVENT_SEARCH_EMBEDDING_KEY_ENVS` /
+`EVENT_SEARCH_LLM_KEY_ENVS` in the personalization Supabase project, then apply
+the quota migration. A 2026-07-01 live secret inventory still showed only
+`GOOGLE_API_KEY4` and legacy model-order secrets in the deployed Edge Function,
+so the extra Lite capacity is not active on `/poisk/` until that deploy/config
+step is completed.
 
 
 ## v59 strict static-related process and evidence
