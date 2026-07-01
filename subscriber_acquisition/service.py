@@ -95,3 +95,67 @@ async def export_feedback_jsonl(db) -> str:
             "created_at": fb.created_at.isoformat() if fb.created_at else None,
         }, ensure_ascii=False))
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+async def list_surfaces(db, *, status: str | None = None, limit: int = 10) -> list[AcqSurface]:
+    async with db.get_session() as session:
+        stmt = select(AcqSurface).order_by(AcqSurface.updated_at.desc(), AcqSurface.id.desc()).limit(max(1, min(int(limit), 25)))
+        if status:
+            stmt = select(AcqSurface).where(AcqSurface.status == status).order_by(AcqSurface.updated_at.desc(), AcqSurface.id.desc()).limit(max(1, min(int(limit), 25)))
+        return list((await session.execute(stmt)).scalars().all())
+
+
+def normalize_surface_seed(url: str) -> dict[str, str]:
+    raw = str(url or "").strip()
+    if not raw:
+        raise ValueError("surface url is required")
+    lowered = raw.lower()
+    platform = "vk" if "vk.com/" in lowered else "tg"
+    if platform == "tg" and raw.startswith("@"):
+        raw = "https://t.me/" + raw.lstrip("@")
+    if platform == "tg" and "t.me/" not in raw.lower():
+        raise ValueError("Telegram seed must be @username or https://t.me/... URL")
+    handle = raw.rstrip("/").split("/")[-1].split("?")[0].lstrip("@")
+    if not handle:
+        raise ValueError("could not extract surface handle")
+    return {
+        "platform": platform,
+        "surface_type": "community" if platform == "vk" else "unknown_public",
+        "url": raw,
+        "handle": handle,
+        "external_id": f"{platform}:{handle}",
+    }
+
+
+async def add_surface_seed(db, url: str, *, reviewer_id: int | None = None, note: str | None = None) -> AcqSurface:
+    seed = normalize_surface_seed(url)
+    async with db.get_session() as session:
+        existing = (await session.execute(
+            select(AcqSurface).where(
+                AcqSurface.platform == seed["platform"],
+                AcqSurface.external_id == seed["external_id"],
+            )
+        )).scalar_one_or_none()
+        if existing is None:
+            surface = AcqSurface(
+                platform=seed["platform"],
+                surface_type=seed["surface_type"],
+                url=seed["url"],
+                handle=seed["handle"],
+                external_id=seed["external_id"],
+                status="candidate",
+                source="manual",
+                review_note=note,
+            )
+        else:
+            surface = existing
+            surface.url = seed["url"]
+            surface.handle = seed["handle"]
+            surface.source = surface.source or "manual"
+            surface.review_note = note or surface.review_note
+        if reviewer_id:
+            surface.reviewed_by = reviewer_id
+        session.add(surface)
+        await session.commit()
+        await session.refresh(surface)
+        return surface

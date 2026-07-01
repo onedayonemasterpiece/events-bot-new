@@ -7,8 +7,8 @@ from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, Inli
 
 from runtime import require_main_attr
 from .config import load_config
-from .review import find_opportunity_by_review_message, record_feedback
-from .service import export_feedback_jsonl, latest_report_url, queue_counts, run_acq_discovery_shadow, surface_counts
+from .review import build_surface_keyboard, find_opportunity_by_review_message, format_surface_card, record_feedback, record_surface_feedback
+from .service import add_surface_seed, export_feedback_jsonl, latest_report_url, list_surfaces, queue_counts, run_acq_discovery_shadow, surface_counts
 
 logger = logging.getLogger(__name__)
 acq_router = Router(name="subscriber_acquisition")
@@ -97,8 +97,30 @@ async def cmd_acq_surfaces(message: Message) -> None:
     if not db or not ok:
         await message.answer("❌ Команда доступна только администраторам")
         return
-    s = await surface_counts(db)
-    await message.answer("🧭 Места: " + ", ".join(f"{k}={v}" for k, v in sorted(s.items())) or "пусто")
+    counts = await surface_counts(db)
+    text = ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "пусто"
+    await message.answer("🧭 Места: " + text)
+    surfaces = await list_surfaces(db, limit=10)
+    for surface in surfaces:
+        await message.answer(format_surface_card(surface), parse_mode="HTML", reply_markup=build_surface_keyboard(surface), disable_web_page_preview=True)
+
+
+@acq_router.message(Command("acq_surface_add"))
+async def cmd_acq_surface_add(message: Message) -> None:
+    db, ok = await _db_and_auth(message)
+    if not db or not ok:
+        await message.answer("❌ Команда доступна только администраторам")
+        return
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Использование: /acq_surface_add https://t.me/... или https://vk.com/...")
+        return
+    try:
+        surface = await add_surface_seed(db, parts[1], reviewer_id=int(message.from_user.id) if message.from_user else None)
+    except Exception as exc:
+        await message.answer(f"❌ Не удалось добавить surface: {exc}")
+        return
+    await message.answer(format_surface_card(surface), parse_mode="HTML", reply_markup=build_surface_keyboard(surface), disable_web_page_preview=True)
 
 
 @acq_router.message(Command("acq_report"))
@@ -152,6 +174,32 @@ async def acq_review_callback(callback: CallbackQuery) -> None:
     await callback.answer(f"Сохранено: {label}")
 
 
+@acq_router.callback_query(lambda c: bool(c.data) and c.data.startswith("acqsurf:"))
+async def acq_surface_callback(callback: CallbackQuery) -> None:
+    db, ok = await _db_and_auth(callback)
+    if not db or not ok:
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    try:
+        _, action, raw_id = str(callback.data).split(":", 2)
+        surface_id = int(raw_id)
+    except Exception:
+        await callback.answer("Некорректная кнопка", show_alert=True)
+        return
+    try:
+        await record_surface_feedback(
+            db,
+            surface_id=surface_id,
+            reviewer_id=int(callback.from_user.id) if callback.from_user else None,
+            action=action,
+        )
+    except Exception as exc:
+        await callback.answer(f"Ошибка: {exc}", show_alert=True)
+        return
+    label = {"approve": "✅ Да", "reject": "❌ Нет", "pause": "🕒 Потом"}.get(action, action)
+    await callback.answer(f"Surface сохранён: {label}")
+
+
 @acq_router.callback_query(lambda c: bool(c.data) and c.data.startswith("acqmenu:"))
 async def acq_menu_callback(callback: CallbackQuery) -> None:
     action = str(callback.data).split(":", 1)[1]
@@ -188,6 +236,8 @@ async def acq_menu_callback(callback: CallbackQuery) -> None:
         s = await surface_counts(db)
         text = ", ".join(f"{k}={v}" for k, v in sorted(s.items())) or "пусто"
         await callback.message.answer("🧭 Места: " + text)
+        for surface in await list_surfaces(db, limit=10):
+            await callback.message.answer(format_surface_card(surface), parse_mode="HTML", reply_markup=build_surface_keyboard(surface), disable_web_page_preview=True)
     elif action == "report":
         url = await latest_report_url(db)
         await callback.message.answer(f"📄 Последний отчёт: {url or '—'}", disable_web_page_preview=True)

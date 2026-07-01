@@ -10,8 +10,10 @@ contract:
 
 - SQLite/SQLModel tables: `acq_discovery_run`, `acq_surface`, `acq_link_target`,
   `acq_opportunity`, `acq_review_feedback`;
-- `/acq`, `/acq_run`, `/acq_queue`, `/acq_surfaces`, `/acq_report`,
-  `/acq_export` superadmin commands;
+- `/acq`, `/acq_run`, `/acq_queue`, `/acq_surfaces`, `/acq_surface_add`,
+  `/acq_report`, `/acq_export` superadmin commands;
+- candidate surface review cards with approve/reject/pause actions persisted as
+  `acq_review_feedback` rows;
 - review cards capped by `ACQ_REVIEW_GROUP_MAX_CARDS_PER_RUN` with buttons
   `✅ Да`, `❌ Нет`, `🕒 Потом`, `🔗 Контекст`, `🎯 Куда`;
 - `/acq_run` imports an explicit `ACQ_DISCOVERY_RESULTS_PATH` or

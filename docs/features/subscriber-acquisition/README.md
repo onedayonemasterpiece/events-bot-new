@@ -9,7 +9,8 @@ Source materials: [source/](source/).
 ## Implementation entrypoints
 
 Shadow-mode MVP scaffolding is implemented in `subscriber_acquisition/` and is
-wired into the bot through `main_part2.py` as `/acq*` superadmin commands. Core
+wired into the bot through `main_part2.py` as `/acq*` superadmin commands,
+including `/acq_surface_add` and `/acq_surfaces` candidate review cards. Core
 state is stored in Fly SQLite tables with SQLModel models in `models.py` and raw
 bootstrap DDL in `db.py`. The import payload contract is documented in
 [`schemas/acq_discovery_result.schema.json`](schemas/acq_discovery_result.schema.json).

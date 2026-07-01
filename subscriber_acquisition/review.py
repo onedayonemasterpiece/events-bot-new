@@ -129,3 +129,51 @@ async def find_opportunity_by_review_message(db, *, chat_id: int, message_id: in
                 AcqOpportunity.review_message_id == int(message_id),
             )
         )).scalar_one_or_none()
+
+
+_SURFACE_ACTION_TO_STATUS = {"approve": "approved", "reject": "rejected", "pause": "paused", "candidate": "candidate"}
+
+
+def build_surface_keyboard(surface: AcqSurface) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Да", callback_data=f"acqsurf:approve:{surface.id}"),
+        InlineKeyboardButton(text="❌ Нет", callback_data=f"acqsurf:reject:{surface.id}"),
+        InlineKeyboardButton(text="🕒 Потом", callback_data=f"acqsurf:pause:{surface.id}"),
+    ], [InlineKeyboardButton(text="🔗 Открыть", url=surface.url)]])
+
+
+def format_surface_card(surface: AcqSurface) -> str:
+    reach = surface.reach_json or {}
+    risk = surface.risk_json or {}
+    return (
+        f"🧭 <b>Surface #{surface.id}</b>\n"
+        f"<b>Где:</b> {html.escape(surface.platform)}/{html.escape(surface.surface_type)}\n"
+        f"<b>Название:</b> {html.escape(surface.title or surface.handle or surface.url)}\n"
+        f"<b>Статус:</b> {html.escape(surface.status)}\n"
+        f"<b>Охват:</b> {html.escape(str(reach.get('low') or reach.get('members') or reach.get('confidence') or 'unknown'))}\n"
+        f"<b>Риск:</b> {html.escape(str(risk.get('level') or risk.get('spam_risk') or 'unknown'))}\n"
+        f"<b>Источник:</b> {html.escape(surface.source or '—')}"
+    )
+
+
+async def record_surface_feedback(db, *, surface_id: int, reviewer_id: int | None = None, action: str, note: str | None = None) -> AcqReviewFeedback:
+    if action not in _SURFACE_ACTION_TO_STATUS:
+        raise ValueError("invalid acquisition surface feedback action")
+    async with db.get_session() as session:
+        surface = await session.get(AcqSurface, surface_id)
+        if surface is None:
+            raise ValueError("surface not found")
+        surface.status = _SURFACE_ACTION_TO_STATUS[action]
+        surface.reviewed_by = reviewer_id
+        surface.reviewed_at = datetime.now(timezone.utc)
+        surface.review_note = note or surface.review_note
+        if action == "approve":
+            surface.approved_score = float(surface.approved_score or 0) + 1
+        elif action == "reject":
+            surface.rejected_score = float(surface.rejected_score or 0) + 1
+        session.add(surface)
+        fb = AcqReviewFeedback(surface_id=surface_id, reviewer_id=reviewer_id, action=f"surface_{action}", note=note)
+        session.add(fb)
+        await session.commit()
+        await session.refresh(fb)
+        return fb

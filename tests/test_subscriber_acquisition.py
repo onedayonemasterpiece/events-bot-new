@@ -13,10 +13,10 @@ from models import AcqDiscoveryRun, AcqLinkTarget, AcqOpportunity, AcqReviewFeed
 from subscriber_acquisition.config import AcqConfig
 from subscriber_acquisition.importer import import_discovery_result
 from subscriber_acquisition.link_targets import select_link_target
-from subscriber_acquisition.review import find_opportunity_by_review_message, publish_review_cards, record_feedback
+from subscriber_acquisition.review import build_surface_keyboard, find_opportunity_by_review_message, publish_review_cards, record_feedback, record_surface_feedback
 from subscriber_acquisition.safety import AcquisitionSafetyError, ensure_review_chat, ensure_vk_read_only
 from subscriber_acquisition.scoring import conservative_reach_low, priority_score
-from subscriber_acquisition.service import run_acq_discovery_shadow
+from subscriber_acquisition.service import add_surface_seed, list_surfaces, run_acq_discovery_shadow
 
 
 @pytest_asyncio.fixture
@@ -114,6 +114,25 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
     assert len(fbs) == 2
     assert opp2.status == "approved"
 
+
+
+@pytest.mark.asyncio
+async def test_surface_seed_add_and_review_feedback(db):
+    surface = await add_surface_seed(db, "https://t.me/new_public", reviewer_id=42)
+    assert surface.external_id == "tg:new_public"
+    assert surface.status == "candidate"
+    keyboard = build_surface_keyboard(surface)
+    texts = [button.text for row in keyboard.inline_keyboard for button in row]
+    assert texts == ["✅ Да", "❌ Нет", "🕒 Потом", "🔗 Открыть"]
+
+    feedback = await record_surface_feedback(db, surface_id=surface.id, reviewer_id=42, action="approve")
+    surfaces = await list_surfaces(db, limit=5)
+
+    assert feedback.action == "surface_approve"
+    assert surfaces[0].status == "approved"
+    async with db.get_session() as session:
+        stored_feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+    assert stored_feedback[0].surface_id == surface.id
 
 @pytest.mark.asyncio
 async def test_review_cards_are_hard_capped_at_20_and_have_required_buttons(db, sample_payload):
