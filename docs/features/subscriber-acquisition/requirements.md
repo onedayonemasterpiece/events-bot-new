@@ -77,6 +77,23 @@ posts. For groups/supergroups, discovery scans recent public chat messages
 directly. The detailed MVP design and work estimate are in
 [`mvp-discovery.md`](mvp-discovery.md).
 
+Additional discovery topics from the 2026-07-01 static-site documentation update:
+
+- event-site search/listing needs: people asking for a site, search, calendar, exhibitions list, popular events, or similar navigation help;
+- organizer-side acquisition: people asking where to add/send/publish an event announcement or how to arrange information partnership;
+- quick-filter/badge needs: Pushkin card, kids/family, charity, recording/stream, free-entry questions that map to event-token medallions and future filters.
+
+These topics are discovery/review candidates, not automatic replies. Broad semantic
+classification and final reply suitability remain LLM-first.
+
+Region requirement:
+
+- Discovery is Kaliningrad Oblast scoped. Deterministic surface filtering should
+  reject obvious out-of-region communities/channels before adding them to the
+  future scan queue; e.g. `visitNavahrudak`/Novogrudok is not a Kaliningrad
+  surface. Unknown region is a diagnostic/review state, not an excuse to crawl
+  arbitrary foreign/regional publics aggressively.
+
 Storage/runtime decision for MVP:
 
 - The current code uses core Fly SQLite as an MVP compatibility layer because it

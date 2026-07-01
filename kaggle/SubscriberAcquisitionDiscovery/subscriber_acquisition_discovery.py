@@ -66,7 +66,39 @@ _EVENT_INTENT_RE = re.compile(
     r"(?:на\s+выходные|с\s+детьми|детям)\b.*(?:куда|что\s+посмотреть|что\s+посетить)"
     r")"
 )
+_SITE_SEARCH_INTENT_RE = re.compile(
+    r"(?i)\b("
+    r"(?:есть|где|какой)\s+(?:сайт|поиск|каталог|календарь|подборк).*?(?:афиш|событи|мероприят|концерт|выставк)|"
+    r"(?:поиск|каталог|календарь|подборк|популярное|топ)\s+(?:событи|мероприят|афиш|концерт|выставк)|"
+    r"(?:все|найти|посмотреть)\s+(?:выставки|концерты|спектакли|события|мероприятия)\b"
+    r")"
+)
+_PARTNER_INTENT_RE = re.compile(
+    r"(?i)\b("
+    r"(?:как|куда|где)\s+(?:добавить|прислать|отправить|разместить|опубликовать)\s+(?:афишу|анонс|мероприятие|событие)|"
+    r"(?:добавить|разместить|опубликовать)\s+(?:афишу|анонс|мероприятие|событие)|"
+    r"(?:инфо[-\s]?партн[её]р|информационн(?:ое|ым)\s+партн[её]р|организатор(?:ам|ы)?)"
+    r")"
+)
+_BADGE_FILTER_INTENT_RE = re.compile(
+    r"(?i)\b("
+    r"пушкинск(?:ая|ой)\s+карт|по\s+пушкинской|"
+    r"(?:для\s+детей|детям|семейн(?:ое|ые|ый)|с\s+детьми)|"
+    r"благотворительн|"
+    r"(?:будет|есть)\s+(?:запись|трансляция)|онлайн[-\s]?(?:трансляц|показ)|"
+    r"(?:бесплатн|свободный\s+вход)"
+    r")"
+)
 _STICKER_HINT_RE = re.compile(r"(?i)\b(стикер|sticker|😂|👍|🔥|🤣|❤️|❤|👏)")
+_KGD_REGION_HINT_RE = re.compile(
+    r"(?i)(калининград|к[её]ниг|kenig|kgd|\b39\b|светлогорск|svetlogorsk|зеленоградск|zelenogradsk|"
+    r"балтийск|baltiysk|гурьевск|guryevsk|черняховск|chernyakhovsk|советск|sovetsk|янтарн|yantarn|"
+    r"гусев|gusev|гвардейск|gvardeysk|багратионовск|мамоново|неман|пионерск|полесск|правдинск|славск)"
+)
+_OUT_OF_REGION_HINT_RE = re.compile(
+    r"(?i)(navahrudak|novogrud|новогруд|минск|minsk|гродно|grodno|брест|brest|витебск|vitebsk|"
+    r"гомель|gomel|могил[её]в|mogilev|москва|moscow|петербург|spb|казань|kazan|челябинск|chelyabinsk)"
+)
 
 
 def _int_env(name: str, default: int, *, min_value: int = 0) -> int:
@@ -199,6 +231,96 @@ def _handle_from_url(url: str, platform: str = "tg") -> str:
     return raw.split("/")[-1].split("?")[0].lstrip("@")
 
 
+def _surface_region_text(surface: dict[str, Any]) -> str:
+    return " ".join(str(surface.get(key) or "") for key in ["url", "handle", "title", "topic_hint", "external_id"])
+
+
+def _is_out_of_region_surface(surface: dict[str, Any]) -> bool:
+    text = _surface_region_text(surface)
+    if not text:
+        return False
+    # A positive Kaliningrad signal wins over broad foreign/city words in titles,
+    # but pure out-of-region handles such as visitNavahrudak are rejected early.
+    return bool(_OUT_OF_REGION_HINT_RE.search(text) and not _KGD_REGION_HINT_RE.search(text))
+
+
+def _mark_out_of_region_surface(surface: dict[str, Any], *, reason: str = "deterministic_region_filter") -> dict[str, Any]:
+    updated = dict(surface)
+    updated["status"] = "rejected_out_of_region"
+    updated["topic_cluster"] = "out_of_region"
+    updated["risk"] = {
+        "spam_risk": "high",
+        "safety_risk": "low",
+        "level": "rejected",
+        "reason": reason,
+    }
+    return updated
+
+
+def _static_site_base_url() -> str:
+    return (os.getenv("ACQ_STATIC_SITE_BASE_URL") or "https://kenigevents.ru").strip().rstrip("/")
+
+
+def _classify_acq_intent(text: str) -> dict[str, Any] | None:
+    compact = " ".join(str(text or "").split())
+    if not compact:
+        return None
+    base = _static_site_base_url()
+    if _PARTNER_INTENT_RE.search(compact):
+        return {
+            "matched_intent": "organizer_submission_or_partnership",
+            "topic_cluster": "organizer_partnership",
+            "target_url": os.getenv("ACQ_PARTNER_PAGE_URL") or f"{base}/partnerstvo/",
+            "target_kind": "topic_landing",
+            "target_label": "Добавить событие / инфопартнёрство",
+            "reason": "question about adding or publishing an event announcement",
+            "relevance": 0.62,
+        }
+    if _BADGE_FILTER_INTENT_RE.search(compact):
+        return {
+            "matched_intent": "event_badge_or_filter_request",
+            "topic_cluster": "event_badges_filters",
+            "target_url": os.getenv("ACQ_SEARCH_PAGE_URL") or f"{base}/poisk/",
+            "target_kind": "topic_landing",
+            "target_label": "Поиск событий с быстрыми признаками",
+            "reason": "question matches recent site badge/filter features: Pushkin card, kids/family, charity, recording, free",
+            "relevance": 0.58,
+        }
+    if _SITE_SEARCH_INTENT_RE.search(compact):
+        url = os.getenv("ACQ_SEARCH_PAGE_URL") or f"{base}/poisk/"
+        label = "Поиск событий KenigEvents"
+        if re.search(r"(?i)\bвыставк", compact):
+            url = os.getenv("ACQ_EXHIBITIONS_PAGE_URL") or f"{base}/vystavki/"
+            label = "Выставки KenigEvents"
+        elif re.search(r"(?i)\b(?:популярное|топ)", compact):
+            url = os.getenv("ACQ_POPULAR_PAGE_URL") or f"{base}/populyarnoe/"
+            label = "Популярное KenigEvents"
+        return {
+            "matched_intent": "event_site_search_or_listing",
+            "topic_cluster": "event_site_search",
+            "target_url": url,
+            "target_kind": "topic_landing",
+            "target_label": label,
+            "reason": "question matches recent static-site search/listing pages",
+            "relevance": 0.6,
+        }
+    if _EVENT_INTENT_RE.search(compact):
+        return {
+            "matched_intent": "event_recommendation_question",
+            "topic_cluster": "local_events",
+            "target_url": os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents",
+            "target_kind": "pka_channel",
+            "target_label": "Полюбить Калининград Анонсы",
+            "reason": "contextual local event recommendation question",
+            "relevance": 0.55,
+        }
+    return None
+
+
+def _is_surface_scan_candidate(surface: dict[str, Any]) -> bool:
+    return not str(surface.get("status") or "").startswith("rejected")
+
+
 def _vk_surface_from_handle(handle: str) -> dict[str, Any] | None:
     clean = str(handle or "").strip().strip("/")
     if not clean:
@@ -221,17 +343,23 @@ def extract_candidate_surfaces(text: str) -> list[dict[str, Any]]:
             handle = tg.group("handle")
             if handle.lower() in {"c", "s", "joinchat"}:
                 continue
-            out[f"tg:{handle}"] = _seed_surface(f"https://t.me/{handle}", platform="tg") | {"source": "discovered"}
+            surface = _seed_surface(f"https://t.me/{handle}", platform="tg") | {"source": "discovered"}
+            if _is_out_of_region_surface(surface):
+                surface = _mark_out_of_region_surface(surface, reason="out-of-region Telegram handle discovered in scanned text")
+            out[f"tg:{handle}"] = surface
         elif vk:
             surface = _vk_surface_from_handle(vk.group("handle"))
             if surface:
+                if _is_out_of_region_surface(surface):
+                    surface = _mark_out_of_region_surface(surface, reason="out-of-region VK handle discovered in scanned text")
                 out[str(surface["external_id"])] = surface
     return list(out.values())
 
 
 def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, default_target_url: str) -> dict[str, Any] | None:
     text = str(getattr(message, "message", None) or getattr(message, "text", None) or "").strip()
-    if not text or not _EVENT_INTENT_RE.search(text):
+    intent = _classify_acq_intent(text)
+    if not intent:
         return None
     msg_id = int(getattr(message, "id", 0) or 0)
     url = surface.get("url") or ""
@@ -250,19 +378,19 @@ def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, def
         "context_external_id": str(msg_id) if msg_id else None,
         "context_created_at": date.astimezone(timezone.utc).isoformat() if hasattr(date, "astimezone") else None,
         "context_text_snippet": " ".join(text.split())[:500],
-        "matched_intent": "event_recommendation_question",
-        "topic_cluster": "local_events",
+        "matched_intent": intent["matched_intent"],
+        "topic_cluster": intent["topic_cluster"],
         "event_ids": [],
         "candidate_events": [],
         "link_target": {
-            "kind": "pka_channel",
-            "url": default_target_url,
-            "label": "Полюбить Калининград Анонсы",
-            "reason": "shadow discovery found a contextual event question",
+            "kind": intent.get("target_kind") or "topic_landing",
+            "url": intent.get("target_url") or default_target_url,
+            "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
+            "reason": intent.get("reason") or "shadow discovery found an acquisition opportunity",
         },
         "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
         "reach": {"low": 5, "confidence": "low", "formula": "shadow_group_low"},
-        "scores": {"relevance": 0.55, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
+        "scores": {"relevance": intent.get("relevance") or 0.55, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
         "sticker_observation": {
             "fit": "possible" if sticker_possible else "weak",
             "stickers_seen": 1 if sticker_possible else 0,
@@ -340,7 +468,8 @@ def _vk_api_with_fallback(method: str, *, token_lanes: list[tuple[str, str]], pa
 
 def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int, comment: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
     text = str(comment.get("text") or "").strip()
-    if not text or not _EVENT_INTENT_RE.search(text):
+    intent = _classify_acq_intent(text)
+    if not intent:
         return None
     comment_id = int(comment.get("id") or 0)
     context_url = f"https://vk.com/wall{owner_id}_{post_id}"
@@ -355,19 +484,19 @@ def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int
         "context_external_id": f"{post_id}:{comment_id}" if comment_id else str(post_id),
         "context_created_at": datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
         "context_text_snippet": " ".join(text.split())[:500],
-        "matched_intent": "event_recommendation_question",
-        "topic_cluster": "local_events",
+        "matched_intent": intent["matched_intent"],
+        "topic_cluster": intent["topic_cluster"],
         "event_ids": [],
         "candidate_events": [],
         "link_target": {
-            "kind": "pka_channel",
-            "url": default_target_url,
-            "label": "Полюбить Калининград Анонсы",
-            "reason": "VK shadow discovery found a contextual event question",
+            "kind": intent.get("target_kind") or "topic_landing",
+            "url": intent.get("target_url") or default_target_url,
+            "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
+            "reason": intent.get("reason") or "VK shadow discovery found an acquisition opportunity",
         },
         "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
         "reach": {"low": 3, "confidence": "low", "formula": "vk_comment_thread_low"},
-        "scores": {"relevance": 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
+        "scores": {"relevance": intent.get("relevance") or 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
         "sticker_observation": {
             "fit": "possible" if sticker_possible else "weak",
             "stickers_seen": 1 if sticker_possible else 0,
@@ -422,6 +551,8 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             post_text = str(post.get("text") or "")
             for discovered in extract_candidate_surfaces(post_text):
                 discovered["topic_hint"] = f"discovered in vk:{domain}"
+                if _is_out_of_region_surface(discovered):
+                    discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK post")
                 surfaces.setdefault(discovered["external_id"], discovered)
             if not owner_id or not post_id:
                 continue
@@ -438,6 +569,8 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     continue
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
+                    if _is_out_of_region_surface(discovered):
+                        discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK comments")
                     surfaces.setdefault(discovered["external_id"], discovered)
                 opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
                 if opp:
@@ -625,6 +758,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 "reach": {"members": getattr(entity, "participants_count", None), "confidence": "low", "basis": "telegram_entity"},
                 "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only public scan"},
             })
+            if _is_out_of_region_surface(surface):
+                surface = _mark_out_of_region_surface(surface, reason="resolved Telegram title/handle is outside Kaliningrad Oblast")
+                surfaces[surface["external_id"]] = surface
+                diagnostics.append(f"{handle}: rejected out-of-region surface")
+                continue
             surfaces[surface["external_id"]] = surface
 
             scan_entities: list[tuple[Any, dict[str, Any], str | None]] = [(entity, surface, None)]
@@ -644,8 +782,13 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             "topic_hint": f"linked discussion for {handle}",
                             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only linked discussion scan"},
                         })
-                        surfaces[linked_surface["external_id"]] = linked_surface
-                        scan_entities.append((linked, linked_surface, "linked_discussion"))
+                        if _is_out_of_region_surface(linked_surface):
+                            linked_surface = _mark_out_of_region_surface(linked_surface, reason="linked discussion title/handle is outside Kaliningrad Oblast")
+                            surfaces[linked_surface["external_id"]] = linked_surface
+                            diagnostics.append(f"{linked_handle}: rejected out-of-region linked discussion")
+                        else:
+                            surfaces[linked_surface["external_id"]] = linked_surface
+                            scan_entities.append((linked, linked_surface, "linked_discussion"))
                 except Exception as exc:
                     diagnostics.append(f"{handle}: linked discussion lookup failed: {exc}")
 
@@ -657,8 +800,14 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         text = str(getattr(message, "message", None) or "")
                         for discovered in extract_candidate_surfaces(text):
                             discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
+                            if _is_out_of_region_surface(discovered):
+                                discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in Telegram message")
                             surfaces.setdefault(discovered["external_id"], discovered)
-                            if discovered.get("platform") == "tg" and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier):
+                            if (
+                                discovered.get("platform") == "tg"
+                                and _is_surface_scan_candidate(discovered)
+                                and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier)
+                            ):
                                 discovered_queued += 1
                         if is_comment_opportunity_message(
                             message,

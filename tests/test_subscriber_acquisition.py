@@ -55,6 +55,30 @@ async def test_import_discovery_result_creates_schema_rows(db, sample_payload):
     assert runs[0].status == "done"
 
 
+
+
+@pytest.mark.asyncio
+async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sample_payload):
+    first = json.loads(json.dumps(sample_payload))
+    first["surfaces"][0]["external_id"] = "tg:visitNavahrudak"
+    first["surfaces"][0]["url"] = "https://t.me/visitNavahrudak"
+    first["surfaces"][0]["handle"] = "visitNavahrudak"
+    first["opportunities"] = []
+    await import_discovery_result(db, first)
+
+    rejected = json.loads(json.dumps(first))
+    rejected["run_id"] = "second-run"
+    rejected["surfaces"][0]["status"] = "rejected_out_of_region"
+    rejected["surfaces"][0]["topic_cluster"] = "out_of_region"
+    rejected["surfaces"][0]["risk"] = {"level": "rejected", "reason": "out-of-region"}
+    await import_discovery_result(db, rejected)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:visitNavahrudak"))).scalar_one()
+    assert surface.status == "rejected_out_of_region"
+    assert surface.topic_cluster == "out_of_region"
+
+
 @pytest.mark.asyncio
 async def test_import_dedupes_context(db, sample_payload):
     first = await import_discovery_result(db, sample_payload)

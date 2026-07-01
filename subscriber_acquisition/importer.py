@@ -96,6 +96,9 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 await session.flush()
             else:
                 surface = existing
+                incoming_status = str(item.get("status") or "").strip()
+                if incoming_status.startswith("rejected"):
+                    surface.status = incoming_status
                 surface.title = item.get("title") or surface.title
                 surface.url = str(item.get("url") or surface.url or "")
                 surface.handle = item.get("handle") or surface.handle

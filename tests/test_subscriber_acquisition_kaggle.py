@@ -25,6 +25,50 @@ def test_extract_candidate_surfaces_from_public_links():
     assert by_external["vk:club12345"]["url"] == "https://vk.com/club12345"
 
 
+
+
+def test_out_of_region_telegram_surface_is_rejected_not_queued():
+    runtime = load_runtime()
+
+    surfaces = runtime.extract_candidate_surfaces("Смотрите ещё https://t.me/visitNavahrudak")
+
+    assert len(surfaces) == 1
+    surface = surfaces[0]
+    assert surface["external_id"] == "tg:visitNavahrudak"
+    assert surface["status"] == "rejected_out_of_region"
+    assert surface["topic_cluster"] == "out_of_region"
+    assert runtime._is_surface_scan_candidate(surface) is False
+
+
+def test_acquisition_intent_covers_site_filters_and_partnership(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_STATIC_SITE_BASE_URL", "https://kenigevents.ru")
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+
+    partner = runtime.build_opportunity_from_message(
+        surface,
+        SimpleNamespace(id=21, message="Куда прислать афишу и как добавить мероприятие?"),
+        default_target_url="https://t.me/kenigevents",
+    )
+    badge = runtime.build_opportunity_from_message(
+        surface,
+        SimpleNamespace(id=22, message="Есть поиск мероприятий по Пушкинской карте и для детей?"),
+        default_target_url="https://t.me/kenigevents",
+    )
+    exhibitions = runtime.build_opportunity_from_message(
+        surface,
+        SimpleNamespace(id=23, message="Где посмотреть все выставки в Калининграде?"),
+        default_target_url="https://t.me/kenigevents",
+    )
+
+    assert partner["topic_cluster"] == "organizer_partnership"
+    assert partner["link_target"]["url"] == "https://kenigevents.ru/partnerstvo/"
+    assert badge["topic_cluster"] == "event_badges_filters"
+    assert badge["matched_intent"] == "event_badge_or_filter_request"
+    assert exhibitions["topic_cluster"] == "event_site_search"
+    assert exhibitions["link_target"]["url"] == "https://kenigevents.ru/vystavki/"
+
+
 def test_build_opportunity_from_message_is_review_only_with_sticker_observation():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://t.me/example", platform="tg")

@@ -87,6 +87,29 @@ VK personal walls are a post-MVP expansion unless explicitly allowlisted: the
 MVP should model them as a possible `surface_type`, but not crawl them by
 default.
 
+
+### Region gate
+
+Discovery remains scoped to Kaliningrad Oblast. Link extraction is deterministic,
+but obvious out-of-region Telegram/VK surfaces must not inflate the frontier. The
+runtime marks such surfaces as `rejected_out_of_region` and does not enqueue them
+for same-run or future scanning. Known example: `https://t.me/visitNavahrudak`
+(Novogrudok/Navahrudak) is outside the target region.
+
+### Non-event acquisition hooks
+
+The discovery scanner should not only look for generic “where to go” event
+questions. It should also surface review candidates for product hooks documented
+in the recent static-site work:
+
+- `/poisk/`, `/vystavki/`, `/populyarnoe/`: search/listing/navigation questions;
+- `/partnerstvo/`: organizer and information-partnership submission questions;
+- event-token medallions / future filters: Pushkin card, kids/family, charity,
+  video recording/streaming, free-entry questions.
+
+These deterministic matches are low-cost shadow prefilters. Final classification
+and reply wording remain LLM-first before any public response.
+
 ## MVP output
 
 The first production rollout writes **review data only**:

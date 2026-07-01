@@ -37,13 +37,25 @@ surfaces, so repeated Kaggle runs walk the frontier instead of rechecking only
 the original seed list. Inside a Kaggle run, Telegram scanning also performs a
 bounded deterministic frontier walk: links found in scanned messages are queued
 for the same run up to `ACQ_MAX_TG_FRONTIER_PER_RUN` and
-`ACQ_MAX_SURFACES_PER_RUN`, without spending LLM budget on link extraction. VK
-seeds come from existing `vk_source` monitoring groups and the read-only scanner
-tries configured VK token lanes with fallback. Human-like randomized pauses are
-applied between read operations; the runtime still performs zero sends, joins,
-comments, or reactions. The review chat receives a no-approval frontier summary when new surfaces are
+`ACQ_MAX_SURFACES_PER_RUN`, without spending LLM budget on link extraction.
+Discovered surfaces are region-gated for Kaliningrad Oblast before further
+analysis: obvious out-of-region links such as `visitNavahrudak` are marked
+`rejected_out_of_region` and are not queued for scanning. VK seeds come from
+existing `vk_source` monitoring groups and the read-only scanner tries configured
+VK token lanes with fallback. Human-like randomized pauses are applied between
+read operations; the runtime still performs zero sends, joins, comments, or
+reactions. The review chat receives a no-approval frontier summary when new surfaces are
 found; this keeps discovery visible without forcing the operator to approve
 analysis of every new link.
+
+Discovery opportunity topics are broader than direct event recommendations. The
+MVP deterministic prefilter also routes recent static-site product hooks from the
+2026-07-01 docs update: organizer submission/partnership questions
+(`/partnerstvo/`), site search/listing questions (`/poisk/`, `/vystavki/`,
+`/populyarnoe/`), and event badge/filter questions around Pushkin card,
+kids/family, charity, recordings/streams, and free entry. These remain shadow
+opportunities for review; broad semantic acceptance is still LLM-first before
+any reply is published.
 
 ## Operator map
 
