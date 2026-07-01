@@ -3,13 +3,16 @@
 ## [Unreleased]
 
 ### Fixed
+- Visual guide digest production selection now starts from tomorrow in the
+  guide timezone, so same-day excursions no longer enter the daily card; the
+  issue badge was rebalanced with centered number-only typography and cleaner
+  padding.
 - Tuned the visual guide digest header: the issue badge is now smaller and
   number-only (without `№`), while the main `Дайджест экскурсий` heading is
   slightly larger for faster VK preview scanning.
 - Restored the visual guide digest brand lockup from the accepted v18 SVG as a
   committed PNG asset, so `Ух ты, Калининград!` no longer drifts in italic
-  direction, stroke weight or letter proportions between renders; the issue
-  badge now draws `№...` as one consistent font run.
+  direction, stroke weight or letter proportions between renders.
 - Refined the production visual guide digest after VK mobile review: restored a
   safer slanted/glowing `Ух ты, Калининград!` lockup with carousel-counter
   clearance, enlarged guide avatars, raised date numerals inside calendar tiles,
