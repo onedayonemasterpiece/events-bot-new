@@ -20580,6 +20580,8 @@ def create_app() -> web.Application:
     dp.include_router(admin_assist_router)
     from handlers.recent_imports_cmd import recent_imports_router
     dp.include_router(recent_imports_router)
+    from subscriber_acquisition.commands import acq_router
+    dp.include_router(acq_router)
     from handlers.popular_posts_cmd import popular_posts_router
     dp.include_router(popular_posts_router)
     from handlers.kenigsberg_stories_cmd import kenigsberg_stories_router

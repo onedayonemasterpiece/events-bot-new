@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added safe shadow-mode Subscriber Acquisition Discovery MVP scaffolding: core SQLite/SQLModel acquisition tables, JSON import contract, conservative reach scoring, link-target/sticker-fit helpers, Telegraph report rendering, `/acq*` superadmin commands, review-card publishing, feedback/reply capture, no-send safety guards, and a Kaggle shadow preflight runtime scaffold.
 - Telegram post metrics now store available open-discussion comment counts, and Telegram daily `ДОБАВИЛИ В АНОНС` can show audience labels for popular events using summed Telegram+VK source metrics.
 - Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
 

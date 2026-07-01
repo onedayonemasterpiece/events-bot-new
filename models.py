@@ -1271,6 +1271,145 @@ class OcrUsage(SQLModel, table=True):
     spent_tokens: int = 0
 
 
+class AcqDiscoveryRun(SQLModel, table=True):
+    __tablename__ = "acq_discovery_run"
+    __table_args__ = (
+        Index("ix_acq_run_status_started", "status", "started_at"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    started_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    finished_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    status: str = "running"
+    source_config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    stats_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    telegraph_url: Optional[str] = None
+    error_text: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class AcqSurface(SQLModel, table=True):
+    __tablename__ = "acq_surface"
+    __table_args__ = (
+        Index("ix_acq_surface_platform_external", "platform", "external_id"),
+        Index("ix_acq_surface_status_next_scan", "status", "next_scan_after"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    platform: str
+    surface_type: str
+    url: str
+    title: Optional[str] = None
+    handle: Optional[str] = None
+    external_id: Optional[str] = None
+    status: str = "candidate"
+    source: str = "discovered"
+    topic_hint: Optional[str] = None
+    topic_cluster: Optional[str] = None
+    reach_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    risk_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    last_scan_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    next_scan_after: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    approved_score: float = 0.0
+    rejected_score: float = 0.0
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    review_note: Optional[str] = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class AcqLinkTarget(SQLModel, table=True):
+    __tablename__ = "acq_link_target"
+    __table_args__ = (
+        Index("ix_acq_link_target_kind_active", "kind", "active"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    kind: str
+    url: str
+    label: str
+    topic_cluster: Optional[str] = None
+    event_id: Optional[int] = None
+    active: bool = Field(default=True, sa_column=Column(Boolean, default=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class AcqOpportunity(SQLModel, table=True):
+    __tablename__ = "acq_opportunity"
+    __table_args__ = (
+        Index("ix_acq_opp_status_score", "status", "relevance_score"),
+        Index("ix_acq_opp_surface_created", "surface_id", "created_at"),
+        Index("ix_acq_opp_dedupe", "dedupe_key"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: Optional[int] = Field(default=None, foreign_key="acq_discovery_run.id")
+    platform: str
+    surface_id: Optional[int] = Field(default=None, foreign_key="acq_surface.id")
+    context_url: str
+    context_external_id: Optional[str] = None
+    context_created_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    context_text_snippet: Optional[str] = None
+    evidence_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    matched_intent: Optional[str] = None
+    topic_cluster: Optional[str] = None
+    event_ids_json: list[int] = Field(default_factory=list, sa_column=Column(JSON))
+    candidate_events_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    link_target_kind: str = "none"
+    link_target_url: Optional[str] = None
+    link_target_label: Optional[str] = None
+    link_target_reason: Optional[str] = None
+    fallback_link_target_url: Optional[str] = None
+    reach_low: int = 0
+    reach_confidence: str = "low"
+    relevance_score: float = 0.0
+    safety_risk: str = "low"
+    spam_risk: str = "low"
+    sticker_fit: str = "no"
+    sticker_observation_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    status: str = "pending"
+    expires_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    dedupe_key: Optional[str] = None
+    last_shown_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    review_reason: Optional[str] = None
+    review_note: Optional[str] = None
+    review_message_chat_id: Optional[int] = None
+    review_message_id: Optional[int] = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class AcqReviewFeedback(SQLModel, table=True):
+    __tablename__ = "acq_review_feedback"
+    __table_args__ = (
+        Index("ix_acq_feedback_created", "created_at"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    opportunity_id: Optional[int] = Field(default=None, foreign_key="acq_opportunity.id")
+    surface_id: Optional[int] = Field(default=None, foreign_key="acq_surface.id")
+    reviewer_id: Optional[int] = None
+    action: str
+    reason_code: Optional[str] = None
+    note: Optional[str] = None
+    review_message_chat_id: Optional[int] = None
+    review_message_id: Optional[int] = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
 def create_all(engine) -> None:
     SQLModel.metadata.create_all(engine)
 

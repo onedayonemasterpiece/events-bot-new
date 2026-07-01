@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Subscriber Acquisition Discovery Result",
+  "type": "object",
+  "required": ["run_id", "generated_at", "surfaces", "opportunities"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["platform", "surface_type", "url", "external_id"],
+        "properties": {
+          "platform": {"enum": ["tg", "vk"]},
+          "surface_type": {"type": "string"},
+          "url": {"type": "string"},
+          "title": {"type": ["string", "null"]},
+          "handle": {"type": ["string", "null"]},
+          "external_id": {"type": "string"},
+          "source": {"enum": ["seed", "discovered", "manual"]},
+          "topic_hint": {"type": ["string", "null"]},
+          "topic_cluster": {"type": ["string", "null"]},
+          "reach": {"type": "object"},
+          "risk": {"type": "object"}
+        }
+      }
+    },
+    "opportunities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["platform", "surface_external_id", "context_url", "context_text_snippet", "link_target"],
+        "properties": {
+          "platform": {"enum": ["tg", "vk"]},
+          "surface_external_id": {"type": "string"},
+          "context_url": {"type": "string"},
+          "context_created_at": {"type": ["string", "null"]},
+          "context_text_snippet": {"type": "string"},
+          "matched_intent": {"type": ["string", "null"]},
+          "topic_cluster": {"type": ["string", "null"]},
+          "event_ids": {"type": "array", "items": {"type": "integer"}},
+          "candidate_events": {"type": "array"},
+          "link_target": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {"enum": ["event_site", "pka_channel", "pka_afisha_event", "event_telegraph", "event_source", "topic_landing", "sticker_pack", "other", "none"]},
+              "url": {"type": ["string", "null"]},
+              "label": {"type": ["string", "null"]},
+              "reason": {"type": ["string", "null"]}
+            }
+          },
+          "fallback_link_target": {"type": "object"},
+          "reach": {"type": "object"},
+          "scores": {"type": "object"},
+          "sticker_observation": {"type": "object"}
+        }
+      }
+    }
+  }
+}

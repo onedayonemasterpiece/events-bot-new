@@ -1,0 +1,14 @@
+{
+  "id": "zigomaro/subscriber-acquisition-discovery",
+  "title": "Subscriber Acquisition Discovery",
+  "code_file": "subscriber_acquisition_discovery.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "slug": "subscriber-acquisition-discovery"
+}

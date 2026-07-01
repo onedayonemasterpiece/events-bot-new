@@ -1,0 +1,39 @@
+{
+  "run_id": "2026-07-01T10-00-00Z",
+  "generated_at": "2026-07-01T10:00:00Z",
+  "surfaces": [
+    {
+      "platform": "tg",
+      "surface_type": "group",
+      "url": "https://t.me/example",
+      "title": "Example public group",
+      "handle": "example",
+      "external_id": "tg:example",
+      "source": "seed",
+      "topic_hint": "concerts",
+      "topic_cluster": "organ_concerts",
+      "reach": {"members": 1200, "recent_views_p10": null, "confidence": "low"},
+      "risk": {"spam_risk": "low", "safety_risk": "low", "reason": "public discussion"}
+    }
+  ],
+  "opportunities": [
+    {
+      "platform": "tg",
+      "surface_external_id": "tg:example",
+      "context_url": "https://t.me/example/123",
+      "context_created_at": "2026-07-01T09:30:00Z",
+      "context_text_snippet": "Где можно послушать орган на этой неделе?",
+      "matched_intent": "organ concert recommendation",
+      "topic_cluster": "organ_concerts",
+      "event_ids": [123, 456],
+      "candidate_events": [
+        {"event_id": 123, "title": "Органный концерт", "date": "2026-07-05", "time": "19:00", "location_name": "Кафедральный собор"}
+      ],
+      "link_target": {"kind": "topic_landing", "url": "https://t.me/kenigevents", "label": "Органные концерты", "reason": "вопрос про направление, а не одно событие"},
+      "fallback_link_target": {"kind": "pka_channel", "url": "https://t.me/kenigevents", "label": "Полюбить Калининград Анонсы"},
+      "reach": {"low": 12, "confidence": "low", "formula": "unknown_group_low"},
+      "scores": {"relevance": 0.82, "spam_risk": "low", "safety_risk": "low"},
+      "sticker_observation": {"fit": "possible", "reason": "узкая тема, есть будущие события и афиши"}
+    }
+  ]
+}

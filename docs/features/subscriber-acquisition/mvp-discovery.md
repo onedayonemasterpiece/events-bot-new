@@ -1,7 +1,36 @@
 # Subscriber Acquisition Discovery MVP
 
-Status: discovery/MVP design, not implemented  
-Date: 2026-06-29
+Status: shadow-mode MVP scaffolding implemented; live scanner calibration pending
+Date: 2026-07-01
+
+## Implemented shadow-mode slice
+
+The first code slice now provides the server-side review loop and safe import
+contract:
+
+- SQLite/SQLModel tables: `acq_discovery_run`, `acq_surface`, `acq_link_target`,
+  `acq_opportunity`, `acq_review_feedback`;
+- `/acq`, `/acq_run`, `/acq_queue`, `/acq_surfaces`, `/acq_report`,
+  `/acq_export` superadmin commands;
+- review cards capped by `ACQ_REVIEW_GROUP_MAX_CARDS_PER_RUN` with buttons
+  `✅ Да`, `❌ Нет`, `🕒 Потом`, `🔗 Контекст`, `🎯 Куда`;
+- `/acq_run` imports an explicit `ACQ_DISCOVERY_RESULTS_PATH` or
+  `ACQ_DISCOVERY_FIXTURE_PATH`; sample fixture import requires
+  `ACQ_DISCOVERY_USE_SAMPLE=1` so production does not review fake evidence;
+- button feedback and reply comments are persisted to `acq_review_feedback`;
+- Telegraph report renderer/publisher and JSON schema for Kaggle output import;
+- conservative reach scoring, link-target selection, sticker-fit observation,
+  and no-send/VK-read-only guard helpers;
+- `subscriber_acquisition_discovery` is registered as a heavy Kaggle job type and
+  as an S22 remote Telegram session consumer.
+
+Live Telegram/VK scanning remains constrained to the Kaggle runtime path and must
+run in shadow mode first. The initial `kaggle/SubscriberAcquisitionDiscovery/`
+runtime is a safe preflight/output scaffold that writes an importable
+`acq_discovery_result.json` with seed surfaces and zero outbound sends; live
+Telethon/VK crawling is the next calibration step. VK is schema/config/report-ready,
+but actual VK scans must stay disabled until explicit allowlisted VK communities
+are provided.
 
 ## Goal
 

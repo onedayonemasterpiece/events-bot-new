@@ -3099,6 +3099,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "nightly_page_sync",
     "telegraph_cache_sanitize",
     "vk_post_prune",
+    "subscriber_acquisition_discovery",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {

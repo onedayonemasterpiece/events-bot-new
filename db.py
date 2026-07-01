@@ -1107,6 +1107,161 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_ops_run_status_started_at ON ops_run(status, started_at)"
             )
 
+            dbg("acq_discovery_run")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS acq_discovery_run(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    finished_at TIMESTAMP,
+                    status TEXT NOT NULL DEFAULT 'running',
+                    source_config_json JSON NOT NULL DEFAULT '{}',
+                    stats_json JSON NOT NULL DEFAULT '{}',
+                    telegraph_url TEXT,
+                    error_text TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_run_status_started ON acq_discovery_run(status, started_at)"
+            )
+
+            dbg("acq_surface")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS acq_surface(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform TEXT NOT NULL,
+                    surface_type TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    title TEXT,
+                    handle TEXT,
+                    external_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'candidate',
+                    source TEXT NOT NULL DEFAULT 'discovered',
+                    topic_hint TEXT,
+                    topic_cluster TEXT,
+                    reach_json JSON NOT NULL DEFAULT '{}',
+                    risk_json JSON NOT NULL DEFAULT '{}',
+                    last_scan_at TIMESTAMP,
+                    next_scan_after TIMESTAMP,
+                    approved_score REAL NOT NULL DEFAULT 0,
+                    rejected_score REAL NOT NULL DEFAULT 0,
+                    reviewed_by INTEGER,
+                    reviewed_at TIMESTAMP,
+                    review_note TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_surface_platform_external ON acq_surface(platform, external_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_surface_status_next_scan ON acq_surface(status, next_scan_after)"
+            )
+
+            dbg("acq_link_target")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS acq_link_target(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    kind TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    topic_cluster TEXT,
+                    event_id INTEGER,
+                    active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_link_target_kind_active ON acq_link_target(kind, active)"
+            )
+
+            dbg("acq_opportunity")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS acq_opportunity(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER,
+                    platform TEXT NOT NULL,
+                    surface_id INTEGER,
+                    context_url TEXT NOT NULL,
+                    context_external_id TEXT,
+                    context_created_at TIMESTAMP,
+                    context_text_snippet TEXT,
+                    evidence_json JSON NOT NULL DEFAULT '{}',
+                    matched_intent TEXT,
+                    topic_cluster TEXT,
+                    event_ids_json JSON NOT NULL DEFAULT '[]',
+                    candidate_events_json JSON NOT NULL DEFAULT '[]',
+                    link_target_kind TEXT NOT NULL DEFAULT 'none',
+                    link_target_url TEXT,
+                    link_target_label TEXT,
+                    link_target_reason TEXT,
+                    fallback_link_target_url TEXT,
+                    reach_low INTEGER NOT NULL DEFAULT 0,
+                    reach_confidence TEXT NOT NULL DEFAULT 'low',
+                    relevance_score REAL NOT NULL DEFAULT 0,
+                    safety_risk TEXT NOT NULL DEFAULT 'low',
+                    spam_risk TEXT NOT NULL DEFAULT 'low',
+                    sticker_fit TEXT NOT NULL DEFAULT 'no',
+                    sticker_observation_json JSON NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    expires_at TIMESTAMP,
+                    dedupe_key TEXT,
+                    last_shown_at TIMESTAMP,
+                    reviewed_by INTEGER,
+                    reviewed_at TIMESTAMP,
+                    review_reason TEXT,
+                    review_note TEXT,
+                    review_message_chat_id INTEGER,
+                    review_message_id INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(run_id) REFERENCES acq_discovery_run(id) ON DELETE SET NULL,
+                    FOREIGN KEY(surface_id) REFERENCES acq_surface(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_opp_status_score ON acq_opportunity(status, relevance_score)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_opp_surface_created ON acq_opportunity(surface_id, created_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_opp_dedupe ON acq_opportunity(dedupe_key)"
+            )
+
+            dbg("acq_review_feedback")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS acq_review_feedback(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    opportunity_id INTEGER,
+                    surface_id INTEGER,
+                    reviewer_id INTEGER,
+                    action TEXT NOT NULL,
+                    reason_code TEXT,
+                    note TEXT,
+                    review_message_chat_id INTEGER,
+                    review_message_id INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(opportunity_id) REFERENCES acq_opportunity(id) ON DELETE SET NULL,
+                    FOREIGN KEY(surface_id) REFERENCES acq_surface(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_acq_feedback_created ON acq_review_feedback(created_at)"
+            )
+
             # Telegram web preview (Instant View) probe results for Telegraph pages.
             # Used by the Telegraph cache sanitizer to track pages missing `cached_page`/photo
             # (often leads to “black screen” in Telegram clients).

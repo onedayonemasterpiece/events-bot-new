@@ -228,11 +228,20 @@ features:
       - main.py
       - main_part2.py
   subscriber_acquisition:
-    status: discovery
+    status: shadow_mvp
     docs: docs/features/subscriber-acquisition/README.md
     requirements: docs/features/subscriber-acquisition/requirements.md
     mvp_discovery: docs/features/subscriber-acquisition/mvp-discovery.md
+    schema: docs/features/subscriber-acquisition/schemas/acq_discovery_result.schema.json
     source_materials: docs/features/subscriber-acquisition/source/
+    entrypoints:
+      - subscriber_acquisition/
+      - models.py
+      - db.py
+      - main_part2.py
+      - remote_telegram_session.py
+      - scheduling.py
+      - kaggle/SubscriberAcquisitionDiscovery/
   afishaengagement:
     status: debug_shadow
     docs: docs/features/afishaengagement/README.md

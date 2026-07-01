@@ -20,6 +20,7 @@ REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
         "kenigsberg_story",
         "tg_monitoring",
         "telegraph_cache_probe",
+        "subscriber_acquisition_discovery",
     }
 )
 UNKNOWN_STATUS_STALE_MINUTES_ENV = "REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES"
