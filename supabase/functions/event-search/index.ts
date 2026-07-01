@@ -43,7 +43,8 @@ function normalizeQuery(value: unknown): string {
 const MAX_QUERY_LENGTH = 180;
 
 type QueryValidation =
-  { ok: true; query: string } | { ok: false; error: string; detail: string };
+  | { ok: true; query: string }
+  | { ok: false; error: string; detail: string };
 
 function validateSearchQuery(value: unknown): QueryValidation {
   const query = normalizeQuery(value);
@@ -192,6 +193,73 @@ function envInt(
   return clampInt(env(name), fallback, min, max);
 }
 
+type GoogleApiKeyCandidate = {
+  env_name: string;
+  value: string;
+};
+
+const DEFAULT_GOOGLE_KEY_ENVS = [
+  "GOOGLE_API_KEY4",
+  "GOOGLE_API_KEY",
+  "GEMINI_API_KEY",
+];
+
+function parseProviderKeyEnvNames(value: string, fallback: string[]): string[] {
+  const rawNames = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const names = rawNames.length > 0 ? rawNames : fallback;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
+function googleProviderKeys(
+  kind: "EMBEDDING" | "LLM",
+  fallback = DEFAULT_GOOGLE_KEY_ENVS,
+): GoogleApiKeyCandidate[] {
+  const specific = env(`EVENT_SEARCH_${kind}_KEY_ENVS`);
+  const shared = env("EVENT_SEARCH_GOOGLE_KEY_ENVS");
+  const names = parseProviderKeyEnvNames(specific || shared, fallback);
+  const keys: GoogleApiKeyCandidate[] = [];
+  const seenValues = new Set<string>();
+  for (const envName of names) {
+    const value = env(envName).trim();
+    if (!value || seenValues.has(value)) continue;
+    seenValues.add(value);
+    keys.push({ env_name: envName, value });
+  }
+  return keys;
+}
+
+function seedOffset(seed: string, size: number): number {
+  if (size <= 1) return 0;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return hash % size;
+}
+
+function rotateProviderKeys(
+  keys: GoogleApiKeyCandidate[],
+  seed: string,
+): GoogleApiKeyCandidate[] {
+  if (keys.length <= 1) return keys;
+  const offset = seedOffset(seed, keys.length);
+  return [...keys.slice(offset), ...keys.slice(0, offset)];
+}
+
+function shouldTryNextGoogleKey(status: number): boolean {
+  return status === 401 || status === 403 || status === 429 || status >= 500;
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -204,7 +272,7 @@ async function fetchWithTimeout(
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted) throw new Error(`${label}_timeout`);
-    throw error;
+    throw new Error(`${label}_network:${errorMessage(error).slice(0, 120)}`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -255,50 +323,93 @@ function bearerToken(header: string | null): string | null {
   return match ? match[1] : null;
 }
 
-async function embedQuery(query: string): Promise<number[]> {
-  const apiKey =
-    env("GOOGLE_API_KEY4") || env("GOOGLE_API_KEY") || env("GEMINI_API_KEY");
-  if (!apiKey) throw new Error("embedding_api_key_missing");
+type EmbeddingResult = {
+  values: number[];
+  key_env: string;
+};
+
+async function embedQuery(
+  query: string,
+  keySeed: string,
+): Promise<EmbeddingResult> {
+  const keys = rotateProviderKeys(
+    googleProviderKeys("EMBEDDING"),
+    `embedding:${keySeed}`,
+  );
+  if (keys.length === 0) throw new Error("embedding_api_key_missing");
   const model = googleModelId(
     env("EVENT_SEARCH_EMBEDDING_MODEL"),
     "gemini-embedding-2",
   );
   const text = `task: search result | query: ${query}`;
-  const response = await fetchWithTimeout(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        model: `models/${model}`,
-        content: { parts: [{ text }] },
-        outputDimensionality: EMBEDDING_DIM,
-      }),
-    },
-    envInt("EVENT_SEARCH_EMBEDDING_TIMEOUT_MS", 8000, 1000, 20000),
-    "embedding_provider",
+  const timeoutMs = envInt(
+    "EVENT_SEARCH_EMBEDDING_TIMEOUT_MS",
+    8000,
+    1000,
+    20000,
   );
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(
-      `embedding_provider_${response.status}:${detail.slice(0, 300)}`,
-    );
+  const errors: string[] = [];
+  for (const key of keys) {
+    try {
+      const response = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key.value,
+          },
+          body: JSON.stringify({
+            model: `models/${model}`,
+            content: { parts: [{ text }] },
+            outputDimensionality: EMBEDDING_DIM,
+          }),
+        },
+        timeoutMs,
+        "embedding_provider",
+      );
+      if (!response.ok) {
+        const detail = await response.text();
+        const status = `embedding_provider_${response.status}`;
+        errors.push(`${key.env_name}:${status}`);
+        if (!shouldTryNextGoogleKey(response.status)) {
+          throw new Error(`${status}:${detail.slice(0, 300)}`);
+        }
+        continue;
+      }
+      const payload = await response.json();
+      const values = payload?.embedding?.values;
+      if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
+        throw new Error(
+          `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
+        );
+      }
+      return {
+        values: values.map((value: unknown) => Number(value)),
+        key_env: key.env_name,
+      };
+    } catch (error) {
+      const message = errorMessage(error).slice(0, 120);
+      errors.push(`${key.env_name}:${message}`);
+      if (
+        !message.includes("embedding_provider_timeout") &&
+        !message.includes("embedding_provider_")
+      ) {
+        throw error;
+      }
+    }
   }
-  const payload = await response.json();
-  const values = payload?.embedding?.values;
-  if (!Array.isArray(values) || values.length !== EMBEDDING_DIM) {
-    throw new Error(
-      `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
-    );
-  }
-  return values.map((value: unknown) => Number(value));
+  throw new Error(
+    `embedding_provider_all_keys_failed:${errors.slice(-3).join("|")}`,
+  );
 }
 
 function extractGeminiText(payload: Record<string, unknown>): string {
   const parts =
     ((
       (payload?.candidates as Candidate[] | undefined)?.[0]?.content as
-        Candidate | undefined
+        | Candidate
+        | undefined
     )?.parts as Candidate[] | undefined) || [];
   return parts
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
@@ -543,6 +654,7 @@ type LlmAttempt = {
   prompt_chars: number;
   prompt_fact_chars: number;
   compact_candidate_count: number;
+  key_env?: string;
 };
 
 type ParsedLlmClassification = {
@@ -639,9 +751,12 @@ function classifyLlmPayload(
   const overApprovalDemoteEnabled = ["1", "true", "yes", "on"].includes(
     env("EVENT_SEARCH_LLM_OVER_APPROVAL_DEMOTE_ENABLED", "0").toLowerCase(),
   );
-  const overApprovalRatio = Number(env("EVENT_SEARCH_LLM_OVER_APPROVAL_RATIO", "0.9"));
+  const overApprovalRatio = Number(
+    env("EVENT_SEARCH_LLM_OVER_APPROVAL_RATIO", "0.9"),
+  );
   const exactApprovalLimit = Math.ceil(
-    candidates.length * (Number.isFinite(overApprovalRatio) ? overApprovalRatio : 0.9),
+    candidates.length *
+      (Number.isFinite(overApprovalRatio) ? overApprovalRatio : 0.9),
   );
   if (
     overApprovalDemoteEnabled &&
@@ -720,9 +835,8 @@ async function llmVerify(
       used: false,
     };
   }
-  const apiKey =
-    env("GOOGLE_API_KEY4") || env("GOOGLE_API_KEY") || env("GEMINI_API_KEY");
-  if (!apiKey)
+  const llmKeys = googleProviderKeys("LLM");
+  if (llmKeys.length === 0)
     return {
       exact: [],
       possible: candidates,
@@ -830,35 +944,75 @@ async function llmVerify(
     attemptNumber: number,
     timeoutMs: number,
   ): Promise<ParsedLlmClassification | null> => {
-    const startedAt = performance.now();
-    try {
-      const response = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0,
-              maxOutputTokens,
-              responseMimeType: "application/json",
-              responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
-              thinkingConfig: {
-                includeThoughts: false,
-                thinkingLevel,
-              },
+    const keys = rotateProviderKeys(
+      llmKeys,
+      `llm:${model}:${role}:${attemptNumber}:${promptChars}`,
+    );
+    for (const key of keys) {
+      const startedAt = performance.now();
+      try {
+        const response = await fetchWithTimeout(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": key.value,
             },
-          }),
-        },
-        timeoutMs,
-        "llm_provider",
-      );
-      if (!response.ok) {
-        const status = `degraded:provider_${response.status}`;
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0,
+                maxOutputTokens,
+                responseMimeType: "application/json",
+                responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
+                thinkingConfig: {
+                  includeThoughts: false,
+                  thinkingLevel,
+                },
+              },
+            }),
+          },
+          timeoutMs,
+          "llm_provider",
+        );
+        if (!response.ok) {
+          const status = `degraded:provider_${response.status}`;
+          attempts.push({
+            model,
+            role,
+            attempt: attemptNumber,
+            status,
+            elapsed_ms: nowMs() - Math.round(startedAt),
+            timeout_ms: timeoutMs,
+            prompt_chars: promptChars,
+            prompt_fact_chars: promptFactChars,
+            compact_candidate_count: compactCandidateCount,
+            key_env: key.env_name,
+          });
+          if (shouldTryNextGoogleKey(response.status)) continue;
+          return null;
+        }
+        const payload = await response.json();
+        const text = extractGeminiText(payload);
+        const result = classifyLlmPayload(text, candidates);
+        attempts.push({
+          model,
+          role,
+          attempt: attemptNumber,
+          status: result.status,
+          elapsed_ms: nowMs() - Math.round(startedAt),
+          timeout_ms: timeoutMs,
+          prompt_chars: promptChars,
+          prompt_fact_chars: promptFactChars,
+          compact_candidate_count: compactCandidateCount,
+          key_env: key.env_name,
+        });
+        if (result.used) return result;
+        return null;
+      } catch (error) {
+        const message = errorMessage(error).slice(0, 80);
+        const status = `degraded:${message}`;
         attempts.push({
           model,
           role,
@@ -869,41 +1023,18 @@ async function llmVerify(
           prompt_chars: promptChars,
           prompt_fact_chars: promptFactChars,
           compact_candidate_count: compactCandidateCount,
+          key_env: key.env_name,
         });
+        if (
+          message.includes("llm_provider_timeout") ||
+          message.includes("provider_network")
+        ) {
+          continue;
+        }
         return null;
       }
-      const payload = await response.json();
-      const text = extractGeminiText(payload);
-      const result = classifyLlmPayload(text, candidates);
-      attempts.push({
-        model,
-        role,
-        attempt: attemptNumber,
-        status: result.status,
-        elapsed_ms: nowMs() - Math.round(startedAt),
-        timeout_ms: timeoutMs,
-        prompt_chars: promptChars,
-        prompt_fact_chars: promptFactChars,
-        compact_candidate_count: compactCandidateCount,
-      });
-      if (result.used) return result;
-      return null;
-    } catch (error) {
-      const message = errorMessage(error).slice(0, 80);
-      const status = `degraded:${message}`;
-      attempts.push({
-        model,
-        role,
-        attempt: attemptNumber,
-        status,
-        elapsed_ms: nowMs() - Math.round(startedAt),
-        timeout_ms: timeoutMs,
-        prompt_chars: promptChars,
-        prompt_fact_chars: promptFactChars,
-        compact_candidate_count: compactCandidateCount,
-      });
-      return null;
     }
+    return null;
   };
 
   for (const model of primaryModels) {
@@ -1160,7 +1291,8 @@ async function runEventSearch(
       label: "Понимаю смысл запроса",
     });
     const embeddingStartedAt = performance.now();
-    const embedding = await embedQuery(query);
+    const embeddingResult = await embedQuery(query, queryHash);
+    const embedding = embeddingResult.values;
     timings.embedding_ms = nowMs() - Math.round(embeddingStartedAt);
 
     await progress?.({
@@ -1184,7 +1316,10 @@ async function runEventSearch(
         p_weekday_iso: queryFacets.weekday_iso,
         p_time_of_day_filter: queryFacets.time_of_day,
         p_admission_filter: queryFacets.admission,
-        p_embedding_doc_kind: env("EVENT_SEARCH_EMBEDDING_DOC_KIND", "search_v3"),
+        p_embedding_doc_kind: env(
+          "EVENT_SEARCH_EMBEDDING_DOC_KIND",
+          "search_v3",
+        ),
       },
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
@@ -1284,6 +1419,7 @@ async function runEventSearch(
         verification_window: verificationWindow,
         next_offset: nextOffset,
         embedding_model: embeddingModel,
+        embedding_key_env: embeddingResult.key_env,
         query_facets: queryFacets,
         llm_status: llmResult.status,
         llm_quota_reserved: llmQuotaReserved,
@@ -1310,6 +1446,7 @@ async function runEventSearch(
       query_hash: shortHash(queryHash),
       query_length: query.length,
       embedding_model: embeddingModel,
+      embedding_key_env: embeddingResult.key_env,
       query_facets: queryFacets,
       result_count: items.length,
       retrieved_count: retrievedCount,

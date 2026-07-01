@@ -38,6 +38,38 @@ def first_env(*names: str) -> str:
     return ""
 
 
+DEFAULT_EVENT_SEARCH_GOOGLE_KEY_ENVS = (
+    "GOOGLE_API_KEY4",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+)
+
+
+def event_search_google_key_envs(kind: str) -> list[str]:
+    raw = (
+        os.getenv(f"EVENT_SEARCH_{kind}_KEY_ENVS")
+        or os.getenv("EVENT_SEARCH_GOOGLE_KEY_ENVS")
+        or ""
+    ).strip()
+    names = (
+        [item.strip() for item in raw.split(",") if item.strip()]
+        if raw
+        else list(DEFAULT_EVENT_SEARCH_GOOGLE_KEY_ENVS)
+    )
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
+def present_event_search_google_key_envs(kind: str) -> list[str]:
+    return [name for name in event_search_google_key_envs(kind) if present(name)]
+
+
 @dataclass
 class Check:
     name: str
@@ -63,6 +95,8 @@ def check_env() -> list[Check]:
         "PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
         "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
     )
+    embedding_key_envs = present_event_search_google_key_envs("EMBEDDING")
+    llm_key_envs = present_event_search_google_key_envs("LLM")
     return [
         Check(
             "static_build_public_auth_env",
@@ -89,12 +123,14 @@ def check_env() -> list[Check]:
             "edge_function_runtime_env",
             present("PERSONALIZATION_SUPABASE_URL")
             and present("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY")
-            and bool(first_env("GOOGLE_API_KEY4", "GOOGLE_API_KEY", "GEMINI_API_KEY")),
-            "Edge Function runtime env can call Supabase Auth/RPC and Gemini embeddings"
+            and bool(embedding_key_envs)
+            and bool(llm_key_envs),
+            f"Edge Function runtime env can call Supabase Auth/RPC and Google providers (embedding lanes={embedding_key_envs}, llm lanes={llm_key_envs})"
             if present("PERSONALIZATION_SUPABASE_URL")
             and present("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY")
-            and bool(first_env("GOOGLE_API_KEY4", "GOOGLE_API_KEY", "GEMINI_API_KEY"))
-            else "Need personalization Supabase URL/publishable key and a Google embedding key",
+            and bool(embedding_key_envs)
+            and bool(llm_key_envs)
+            else "Need personalization Supabase URL/publishable key and configured Google key envs for event-search embedding/LLM rotation",
         ),
         Check(
             "vector_sync_backend_env",

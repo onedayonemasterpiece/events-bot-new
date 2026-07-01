@@ -210,9 +210,19 @@ Design doc: `docs/features/unsigned-personalization/authorized-event-search.md`.
 Implemented source pieces:
 
 - `site/src/components/AuthorizedEventSearch.astro` — one-line search UI, Yandex OAuth entry, quota/status text, same EventCard contract.
-- `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, Gemini query embedding, pgvector RPC, optional Gemma verifier/rerank and fallback cards.
+- `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, direct multi-key Google provider rotation/failover for Gemini query embedding and Gemma verification, pgvector RPC, optional Gemma verifier/rerank and fallback cards.
 
-Remaining external gates: Supabase custom OAuth provider `custom:yandex`, Yandex app credentials and Edge Function deployment/env configuration.
+2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from five
+registered Google key lanes with protected reserves for static generation and
+other services. For the current 47 registered users the canary limit is
+`80/day` search and `80/day` Gemma verifier calls per registered user
+(`800/month` each), applied by
+`supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
+
+Remaining external gate for this change: deploy the updated Edge Function with
+`GOOGLE_API_KEY5` plus `EVENT_SEARCH_EMBEDDING_KEY_ENVS` /
+`EVENT_SEARCH_LLM_KEY_ENVS` secrets in the personalization Supabase project,
+then apply the quota migration.
 
 
 ## v59 strict static-related process and evidence

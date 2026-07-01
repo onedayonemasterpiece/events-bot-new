@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation and recalculates the registered-user canary quota to `80/day` search + `80/day` Gemma verifier calls after protected reserves. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
 
 ## Product contract
 
@@ -177,7 +177,7 @@ The Edge Function runs an LLM verifier after pgvector retrieval when the user ha
 - model policy is user-state aware:
   - first/onboarding searches may use `fast_onboarding_fallback`: one short Gemma attempt, then Lite fallback if Gemma quickly returns `5xx/429/timeout`;
   - after the user has already spent several searches today, the function switches to `gemma_priority_late_fallback`: multiple longer Gemma attempts with backoff before any Lite fallback;
-  - the threshold is controlled by `EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN` (default `45` after quota reservation for the current `50/day` canary plan).
+  - the threshold is controlled by `EVENT_SEARCH_LLM_FAST_FALLBACK_DAY_REMAINING_MIN` (default `45` after quota reservation for the current `80/day` canary plan).
 
 Operational knobs: `EVENT_SEARCH_LLM_FAST_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_FAST_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_ATTEMPTS`, `EVENT_SEARCH_LLM_LATE_PRIMARY_TIMEOUT_MS`, `EVENT_SEARCH_LLM_FALLBACK_TIMEOUT_MS`, `EVENT_SEARCH_LLM_PRIMARY_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_FALLBACK_ENABLED`, `EVENT_SEARCH_LLM_LATE_FALLBACK_ENABLED`.
 Prompt/latency knobs: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `768`),
@@ -283,29 +283,53 @@ The facets are not used to store raw query text. They are passed to `search_even
 ## Quotas and privacy
 
 Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
-`20260629_event_search_quota_plan_dynamic.sql` adds service-role RPC
+`20260629_event_search_quota_plan_dynamic.sql` added service-role RPC
 `refresh_registered_search_quota_v1(...)`, which recalculates
-`search_quota_plans.registered` from:
+`search_quota_plans.registered` from the current Supabase Auth user count,
+provider RPD inputs, reserves for non-search workloads and per-user abuse caps.
+Migration `20260701180316_event_search_key5_quota_capacity.sql` updates the
+default inputs after `GOOGLE_API_KEY5` was added and smoke-tested for both the
+query embedding model and the Gemma verifier lane.
 
-- current Supabase Auth user count (`auth.users`);
-- documented current provider project limits:
-  - `gemini-embedding-2`: `100 RPM / 30k TPM / 1000 RPD`;
-  - `gemma-4-26b-a4b-it` / `gemma-4-31b-it`: `15 RPM / unlimited TPM / 1500 RPD`; Gemma 4 26B is the primary online verifier lane;
-  - `gemini-3.1-flash-lite`: `15 RPM / 250k TPM / 500 RPD`; this is a protected fallback/rescue lane because the same project already uses it for other critical processes.
-- reserves for static generation/backfill (`400` embedding RPD, `500` LLM RPD by default);
-- abuse caps for the still-private canary (`max 50` searches/day and `max 40` LLM reranks/day per registered user).
+2026-07-01 quota calculation for smart search uses registered users as the
+unit of allocation:
 
-Current applied plan after the 2026-06-29 recalculation:
+| Component | Provider/day fact | Active key lanes | Gross RPD | Protected reserve | Online search RPD |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Query embedding (`gemini-embedding-2`) | `1000` | `5` | `5000` | `1000` | `4000` |
+| LLM verifier (`gemma-4-26b-a4b-it`) | `1500` | `5` | `7500` | `2500` | `5000` |
 
-- search: `50/day`, `500/month`;
-- LLM verifier: `40/day`, `400/month`.
+The bottleneck is embedding capacity: `min(4000, 5000) = 4000` fully verified
+searches/day. With the current `47` registered users, `floor(4000 / 47) = 85`
+verified searches/user/day. The applied canary ceiling is intentionally lower:
+`80` searches/day and `80` LLM verifications/day per registered user, with the
+existing `x10` monthly multiplier (`800/month` for both counters). At 47 users
+this consumes at most `3760` online embedding calls/day and `3760` Gemma calls/day,
+leaving about `240` embedding calls plus the full protected reserves for other
+services.
 
-Important boundary: the Edge Function currently uses a direct Google key path
-(`GOOGLE_API_KEY4 || GOOGLE_API_KEY || GEMINI_API_KEY`) rather than the shared
-Python `GoogleAIClient` limiter/key-rotation stack. Therefore the dynamic plan
-conservatively counts one available provider lane plus reserves. If/when
-`event-search` is routed through a central multi-key limiter, the same RPC can be
-called with higher effective RPD inputs instead of hardcoding a new plan.
+Reserve rationale:
+
+- embedding reserve is one full key lane (`1000 RPD`) for vector backfills,
+  diagnostics and static-site related syncs;
+- LLM reserve is `2500 RPD`, covering the observed 5-day peak static related
+  Gemma 4 26B usage (`1205` calls on 2026-06-30 UTC) with more than `2x` headroom;
+- `gemini-3.1-flash-lite` remains a protected fallback/rescue lane and is not
+  counted as normal smart-search capacity.
+
+The Edge Function now supports direct multi-key rotation/failover for this
+site path without exposing secrets to the browser:
+
+- `EVENT_SEARCH_GOOGLE_KEY_ENVS` — shared comma-separated default list;
+- `EVENT_SEARCH_EMBEDDING_KEY_ENVS` — optional embedding-specific list;
+- `EVENT_SEARCH_LLM_KEY_ENVS` — optional LLM-specific list.
+
+The current recommended deployment order is to start online search from
+`GOOGLE_API_KEY5`, keep `GOOGLE_API_KEY4` late for LLM so static related builds
+retain their historical lane, and log only non-secret env names such as
+`embedding_key_env` / `llm_attempts[].key_env` in audit metadata. If the key list
+is not configured, the function preserves the legacy fallback chain
+`GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 
@@ -395,6 +419,7 @@ production mobile UX should not depend on streamed final payload delivery.
 - `served_list_id` — UUID for the returned list;
 - `served_list_hash` — SHA-256 over `query_hash`, returned event ids and fallback ids;
 - `query_facets` — compact parsed facets (`weekday_iso`, `weekday_ru`, `time_of_day`, `admission`), never raw query text;
+- `embedding_key_env` and `llm_attempts[].key_env` — non-secret key lane names used for provider rotation/failover analysis;
 - `timings_ms` — quota, embedding provider, pgvector RPC, optional LLM verifier, fallback RPC and total latency;
 - `llm_verifier` — `{requested, used, status}` so a search can be distinguished between pure pgvector and verified/reranked results.
 
