@@ -847,22 +847,25 @@ def render_visual_digest_card(
     # Header badge and title.
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
-    sd.rounded_rectangle((55, 62, 291, 160), radius=30, fill=(0, 0, 0, 30))
+    issue_x, issue_y, issue_w, issue_h = 55, 58, 210, 88
+    sd.rounded_rectangle((issue_x, issue_y + 8, issue_x + issue_w, issue_y + issue_h + 8), radius=28, fill=(0, 0, 0, 30))
     shadow = shadow.filter(ImageFilter.GaussianBlur(8))
     img.alpha_composite(shadow)
-    draw.rounded_rectangle((55, 54, 291, 152), radius=30, fill=_hex(palette.issue))
-    draw.text((83, 72), "ВЫПУСК", font=_font(_MAIN_FONT, 22), fill=(255, 255, 255))
-    # Keep the numero sign and digits in one font; mixing fallback `№` with
-    # Cygre digits made the badge look uneven in VK preview.
-    issue_font = _fallback_font(_DEJAVU_BOLD, 54)
-    issue_text = f"№{int(issue_id)}"
+    draw.rounded_rectangle((issue_x, issue_y, issue_x + issue_w, issue_y + issue_h), radius=28, fill=_hex(palette.issue))
+    issue_label_font = _font(_MAIN_FONT, 19)
+    issue_label = "ВЫПУСК"
+    label_bb = draw.textbbox((0, 0), issue_label, font=issue_label_font)
+    draw.text((issue_x + (issue_w - (label_bb[2] - label_bb[0])) / 2, issue_y + 17), issue_label, font=issue_label_font, fill=(255, 255, 255))
+    # No numero sign: a compact number-only badge reads cleaner in VK preview.
+    issue_font = _font(_MAIN_FONT, 58)
+    issue_text = f"{int(issue_id)}"
     issue_bb = draw.textbbox((0, 0), issue_text, font=issue_font)
-    issue_w = issue_bb[2] - issue_bb[0]
-    draw.text((55 + (236 - issue_w) / 2, 89), issue_text, font=issue_font, fill=(255, 255, 255))
-    title_font = _font(_MAIN_FONT, 50)
-    draw.text((320, 56), "Дайджест", font=title_font, fill=_hex(palette.text))
-    draw.text((320, 108), "экскурсий", font=title_font, fill=_hex(palette.text))
-    draw.text((322, 173), "куда · с кем · как", font=_font(_MAIN_FONT, 23), fill=_hex(palette.sub))
+    text_w = issue_bb[2] - issue_bb[0]
+    draw.text((issue_x + (issue_w - text_w) / 2, issue_y + 35), issue_text, font=issue_font, fill=(255, 255, 255))
+    title_font = _font(_MAIN_FONT, 54)
+    draw.text((320, 54), "Дайджест", font=title_font, fill=_hex(palette.text))
+    draw.text((320, 109), "экскурсий", font=title_font, fill=_hex(palette.text))
+    draw.text((322, 178), "куда · с кем · как", font=_font(_MAIN_FONT, 23), fill=_hex(palette.sub))
     # Exact accepted v18 brand asset: lower than the native VK carousel counter,
     # with the original right-leaning italic lockup and stroke weight.
     img.alpha_composite(_brand_lockup(1.0), (640, 120))

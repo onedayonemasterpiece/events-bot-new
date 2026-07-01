@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Tuned the visual guide digest header: the issue badge is now smaller and
+  number-only (without `№`), while the main `Дайджест экскурсий` heading is
+  slightly larger for faster VK preview scanning.
 - Restored the visual guide digest brand lockup from the accepted v18 SVG as a
   committed PNG asset, so `Ух ты, Калининград!` no longer drifts in italic
   direction, stroke weight or letter proportions between renders; the issue
