@@ -47,3 +47,35 @@ def test_shadow_payload_keeps_vk_seed_candidate_without_allowlist(monkeypatch):
     assert payload["stats"]["external_sends"] == 0
     assert payload["stats"]["comments_posted"] == 0
     assert payload["stats"]["stickers_sent"] == 0
+
+
+def test_build_vk_opportunity_is_read_only_review_payload():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/test_public", platform="vk")
+    comment = {"id": 7, "date": 1782900000, "text": "Где найти афишу на выходные?", "attachments": [{"type": "sticker"}]}
+    opp = runtime.build_vk_opportunity(surface, owner_id=-123, post_id=55, comment=comment, default_target_url="https://t.me/kenigevents")
+    assert opp is not None
+    assert opp["platform"] == "vk"
+    assert opp["context_url"] == "https://vk.com/wall-123_55?reply=7"
+    assert opp["sticker_observation"]["fit"] == "possible"
+    assert opp["scores"]["source"] == "deterministic_shadow_prefilter"
+
+
+def test_vk_api_guard_rejects_write_method():
+    runtime = load_runtime()
+    try:
+        runtime._vk_api("wall.createComment", token="x", params={})
+    except RuntimeError as exc:
+        assert "forbidden VK method" in str(exc)
+    else:
+        raise AssertionError("VK write method was not rejected")
+
+
+def test_vk_allowlist_without_token_is_safe_seed_only(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.delenv("VK_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("VK_ACCESS_TOKEN4", raising=False)
+    surfaces, opportunities, diagnostics = runtime.scan_vk_shadow_surfaces(["https://vk.com/test_public"], ["https://vk.com/test_public"])
+    assert surfaces == []
+    assert opportunities == []
+    assert diagnostics and "token is not configured" in diagnostics[0]

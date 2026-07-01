@@ -178,6 +178,129 @@ def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, def
     }
 
 
+
+VK_READ_METHODS = {"wall.get", "wall.getComments"}
+
+
+def _vk_api(method: str, *, token: str, params: dict[str, Any]) -> dict[str, Any]:
+    if method not in VK_READ_METHODS:
+        raise RuntimeError(f"forbidden VK method in acquisition shadow scanner: {method}")
+    import requests
+
+    payload = dict(params)
+    payload.setdefault("access_token", token)
+    payload.setdefault("v", os.getenv("ACQ_VK_API_VERSION") or "5.199")
+    response = requests.get(f"https://api.vk.com/method/{method}", params=payload, timeout=20)
+    response.raise_for_status()
+    data = response.json()
+    if data.get("error"):
+        raise RuntimeError(f"VK {method} error: {data['error']}")
+    return data.get("response") or {}
+
+
+def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int, comment: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
+    text = str(comment.get("text") or "").strip()
+    if not text or not _OPPORTUNITY_RE.search(text):
+        return None
+    comment_id = int(comment.get("id") or 0)
+    context_url = f"https://vk.com/wall{owner_id}_{post_id}"
+    if comment_id:
+        context_url += f"?reply={comment_id}"
+    attachments = comment.get("attachments") or []
+    sticker_possible = any((a.get("type") == "sticker") for a in attachments if isinstance(a, dict))
+    return {
+        "platform": "vk",
+        "surface_external_id": surface.get("external_id"),
+        "context_url": context_url,
+        "context_external_id": f"{post_id}:{comment_id}" if comment_id else str(post_id),
+        "context_created_at": datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
+        "context_text_snippet": " ".join(text.split())[:500],
+        "matched_intent": "event_recommendation_question",
+        "topic_cluster": "local_events",
+        "event_ids": [],
+        "candidate_events": [],
+        "link_target": {
+            "kind": "pka_channel",
+            "url": default_target_url,
+            "label": "Полюбить Калининград Анонсы",
+            "reason": "VK shadow discovery found a contextual event question",
+        },
+        "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
+        "reach": {"low": 3, "confidence": "low", "formula": "vk_comment_thread_low"},
+        "scores": {"relevance": 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
+        "sticker_observation": {
+            "fit": "possible" if sticker_possible else "weak",
+            "stickers_seen": 1 if sticker_possible else 0,
+            "reason": "VK shadow prefilter only; needs LLM review before any reply",
+        },
+    }
+
+
+def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """Read-only VK discovery for explicitly allowlisted communities.
+
+    Uses only `wall.get` and `wall.getComments`; no wall.post, comments.create,
+    messages.send, joins, or personal-wall expansion are available here.
+    """
+    diagnostics: list[str] = []
+    token = (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or "").strip()
+    allowed = {str(x).strip().lower() for x in allowlist if str(x).strip()}
+    if not seed_urls or not allowed:
+        return [], [], diagnostics
+    if not token:
+        return [], [], ["VK allowlist is non-empty but VK token is not configured; emitted VK seeds only"]
+    max_posts = int(os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE") or os.getenv("ACQ_MAX_MESSAGES_PER_SURFACE") or "10")
+    max_comments = int(os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST") or os.getenv("ACQ_MAX_THREADS_PER_SURFACE") or "15")
+    default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
+    surfaces: dict[str, dict[str, Any]] = {}
+    opportunities: list[dict[str, Any]] = []
+    for raw_url in seed_urls:
+        normalized = str(raw_url or "").strip()
+        if not normalized or normalized.lower() not in allowed:
+            continue
+        domain = _handle_from_url(normalized, platform="vk")
+        surface = _seed_surface(f"https://vk.com/{domain}", platform="vk")
+        surface.update({
+            "surface_type": "community",
+            "status": "approved",
+            "source": "allowlist",
+            "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only VK wall/comment scan"},
+            "reach": {"confidence": "low", "basis": "vk_wall"},
+        })
+        surfaces[surface["external_id"]] = surface
+        try:
+            wall = _vk_api("wall.get", token=token, params={"domain": domain, "count": max_posts})
+        except Exception as exc:
+            diagnostics.append(f"vk {domain}: wall.get failed: {exc}")
+            continue
+        for post in wall.get("items") or []:
+            owner_id = int(post.get("owner_id") or 0)
+            post_id = int(post.get("id") or 0)
+            post_text = str(post.get("text") or "")
+            for discovered in extract_candidate_surfaces(post_text):
+                discovered["topic_hint"] = f"discovered in vk:{domain}"
+                surfaces.setdefault(discovered["external_id"], discovered)
+            if not owner_id or not post_id:
+                continue
+            try:
+                comments = _vk_api("wall.getComments", token=token, params={"owner_id": owner_id, "post_id": post_id, "count": max_comments, "need_likes": 1})
+            except Exception as exc:
+                diagnostics.append(f"vk {domain}: wall.getComments {post_id} failed: {exc}")
+                continue
+            for comment in comments.get("items") or []:
+                if not isinstance(comment, dict):
+                    continue
+                for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
+                    discovered["topic_hint"] = f"discovered in vk:{domain} comments"
+                    surfaces.setdefault(discovered["external_id"], discovered)
+                opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
+                if opp:
+                    opp["evidence"] = {"relation": "vk_comment", "scanner": "vk_shadow"}
+                    opportunities.append(opp)
+                if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
+                    break
+    return list(surfaces.values()), opportunities, diagnostics
+
 def _load_status_loader():
     try:
         from kaggle_status_client import load_status_client as loader
@@ -402,6 +525,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "vk_seeds": len(list(vk_seeds or [])),
             "vk_allowlist": len(allowed_vk),
             "telegram_live_scan_enabled": _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False),
+            "vk_allowlist_scan_enabled": bool(allowed_vk),
             "external_sends": 0,
             "comments_posted": 0,
             "stickers_sent": 0,
@@ -420,10 +544,24 @@ def main() -> None:
     if _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False):
         try:
             tg_seeds = [str(x) for x in list(_json_env("ACQ_TG_SEEDS_JSON", DEFAULT_TG_SEEDS) or [])]
-            scanned_surfaces, scanned_opportunities, diagnostics = asyncio.run(scan_telegram_shadow_surfaces(tg_seeds))
+            tg_surfaces, tg_opportunities, tg_diagnostics = asyncio.run(scan_telegram_shadow_surfaces(tg_seeds))
+            scanned_surfaces.extend(tg_surfaces)
+            scanned_opportunities.extend(tg_opportunities)
+            diagnostics.extend(tg_diagnostics)
         except Exception as exc:
             diagnostics.append(f"telegram shadow scan failed: {exc}")
             logger.exception("telegram shadow scan failed")
+    vk_seeds = [str(x) for x in list(_json_env("ACQ_VK_SEEDS_JSON", []) or [])]
+    vk_allowlist = [str(x) for x in list(_json_env("ACQ_VK_ALLOWLIST_JSON", []) or [])]
+    if vk_allowlist:
+        try:
+            vk_surfaces, vk_opportunities, vk_diagnostics = scan_vk_shadow_surfaces(vk_seeds, vk_allowlist)
+            scanned_surfaces.extend(vk_surfaces)
+            scanned_opportunities.extend(vk_opportunities)
+            diagnostics.extend(vk_diagnostics)
+        except Exception as exc:
+            diagnostics.append(f"vk shadow scan failed: {exc}")
+            logger.exception("vk shadow scan failed")
     payload = build_shadow_payload(scanned_surfaces=scanned_surfaces, scanned_opportunities=scanned_opportunities, diagnostics=diagnostics)
     _status_event(
         "preflight_ok",
