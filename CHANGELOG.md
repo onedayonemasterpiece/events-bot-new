@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
 - **Static site pages / expanded medallions**: added the next event-detail medallion assets and QA lab for Дом китобоя, Третьяковка, КОНБ, MEOW Афиша and the Pushkin-card composite, while preserving existing ticket/family/charity/festival fact pills on event pages.
 - **Personalization / authorized search key rotation**: added direct multi-key Google provider rotation/failover to the `event-search` Edge Function for `gemini-embedding-2` query embeddings, Gemini Lite verification and Gemma overflow calls, with non-secret key-lane telemetry in audit metadata.
 - **Personalization / two-document pgvector retrieval**: implemented `search_v3` and `related_v1` embedding document kinds in Supabase (`embedding_doc_kind`, related digest/hash, partial HNSW indexes and doc-kind-aware RPCs), updated the vector sync to maintain both representations incrementally, and wired static related generation to use the cleaner `related_v1` recall layer before Gemma verification.
