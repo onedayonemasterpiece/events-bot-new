@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from guide_excursions.visual_digest import (
@@ -7,6 +9,7 @@ from guide_excursions.visual_digest import (
     _avatar_key,
     _brand_lockup,
     _source_name,
+    _visual_start_iso,
     _visual_item_state,
     _visual_selection_reason,
     build_visual_digest_vk_text,
@@ -89,6 +92,10 @@ def test_brand_lockup_uses_committed_v18_asset():
     logo = _brand_lockup()
     assert _BRAND_LOCKUP_FILE.is_file()
     assert logo.size == (358, 141)
+
+
+def test_visual_digest_candidate_window_starts_tomorrow():
+    assert _visual_start_iso(date(2026, 7, 1)) == "2026-07-02"
 
 
 def test_render_visual_digest_cards_chunks_by_five():

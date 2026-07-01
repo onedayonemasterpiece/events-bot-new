@@ -20,6 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
@@ -195,12 +196,34 @@ _ICON_FILES = {
 }
 
 
-def _today_iso() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+def _visual_tz() -> ZoneInfo:
+    name = collapse_ws(os.getenv("GUIDE_EXCURSIONS_TZ") or "Europe/Kaliningrad")
+    try:
+        return ZoneInfo(name or "Europe/Kaliningrad")
+    except ZoneInfoNotFoundError:
+        logger.warning("guide_visual_digest_invalid_tz value=%r; using UTC", name)
+        return ZoneInfo("UTC")
 
 
-def _future_cutoff_iso() -> str:
-    return (datetime.now(timezone.utc).date() + timedelta(days=VISUAL_DIGEST_WINDOW_DAYS)).isoformat()
+def _visual_today() -> date:
+    return datetime.now(_visual_tz()).date()
+
+
+def _visual_start_iso(today: date | None = None) -> str:
+    """Earliest date for a visual schedule digest.
+
+    Same-day excursions are intentionally skipped: a daily VK digest should leave
+    at least overnight decision time, so the production window starts tomorrow
+    in the guide monitoring timezone.
+    """
+
+    base = today or _visual_today()
+    return (base + timedelta(days=1)).isoformat()
+
+
+def _future_cutoff_iso(today: date | None = None) -> str:
+    base = today or _visual_today()
+    return (base + timedelta(days=VISUAL_DIGEST_WINDOW_DAYS)).isoformat()
 
 
 def _json_dump(value: Any) -> str:
@@ -847,21 +870,37 @@ def render_visual_digest_card(
     # Header badge and title.
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
-    issue_x, issue_y, issue_w, issue_h = 55, 58, 210, 88
-    sd.rounded_rectangle((issue_x, issue_y + 8, issue_x + issue_w, issue_y + issue_h + 8), radius=28, fill=(0, 0, 0, 30))
+    issue_x, issue_y, issue_w, issue_h = 55, 58, 196, 92
+    sd.rounded_rectangle((issue_x, issue_y + 8, issue_x + issue_w, issue_y + issue_h + 8), radius=30, fill=(0, 0, 0, 30))
     shadow = shadow.filter(ImageFilter.GaussianBlur(8))
     img.alpha_composite(shadow)
-    draw.rounded_rectangle((issue_x, issue_y, issue_x + issue_w, issue_y + issue_h), radius=28, fill=_hex(palette.issue))
-    issue_label_font = _font(_MAIN_FONT, 19)
+    draw.rounded_rectangle((issue_x, issue_y, issue_x + issue_w, issue_y + issue_h), radius=30, fill=_hex(palette.issue))
+    issue_label_font = _font(_MAIN_FONT, 18)
     issue_label = "ВЫПУСК"
     label_bb = draw.textbbox((0, 0), issue_label, font=issue_label_font)
-    draw.text((issue_x + (issue_w - (label_bb[2] - label_bb[0])) / 2, issue_y + 17), issue_label, font=issue_label_font, fill=(255, 255, 255))
     # No numero sign: a compact number-only badge reads cleaner in VK preview.
-    issue_font = _font(_MAIN_FONT, 58)
+    issue_font = _font(_MAIN_FONT, 54)
     issue_text = f"{int(issue_id)}"
     issue_bb = draw.textbbox((0, 0), issue_text, font=issue_font)
-    text_w = issue_bb[2] - issue_bb[0]
-    draw.text((issue_x + (issue_w - text_w) / 2, issue_y + 35), issue_text, font=issue_font, fill=(255, 255, 255))
+    label_w = label_bb[2] - label_bb[0]
+    label_h = label_bb[3] - label_bb[1]
+    num_w = issue_bb[2] - issue_bb[0]
+    num_h = issue_bb[3] - issue_bb[1]
+    group_gap = 3
+    group_h = label_h + group_gap + num_h
+    group_y = issue_y + (issue_h - group_h) / 2 - 1
+    draw.text(
+        (issue_x + (issue_w - label_w) / 2 - label_bb[0], group_y - label_bb[1]),
+        issue_label,
+        font=issue_label_font,
+        fill=(255, 255, 255),
+    )
+    draw.text(
+        (issue_x + (issue_w - num_w) / 2 - issue_bb[0], group_y + label_h + group_gap - issue_bb[1]),
+        issue_text,
+        font=issue_font,
+        fill=(255, 255, 255),
+    )
     title_font = _font(_MAIN_FONT, 54)
     draw.text((320, 54), "Дайджест", font=title_font, fill=_hex(palette.text))
     draw.text((320, 109), "экскурсий", font=title_font, fill=_hex(palette.text))
@@ -986,7 +1025,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
         LIMIT ?
     """
-    cur = await conn.execute(sql, (_today_iso(), _future_cutoff_iso(), int(limit)))
+    cur = await conn.execute(sql, (_visual_start_iso(), _future_cutoff_iso(), int(limit)))
     rows = await cur.fetchall()
     out: list[dict[str, Any]] = []
     for row in rows:
