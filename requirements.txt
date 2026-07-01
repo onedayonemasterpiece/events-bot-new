@@ -11,6 +11,7 @@ icalendar==6.0.1
 cachetools>=5.3.1
 APScheduler>=3.10.4
 Pillow>=10.0.0
+openpyxl>=3.1.5
 kaggle>=1.8.2
 # Kaggle 2.2.x currently imports a broken competitions host stub from
 # kagglesdk 0.1.31+ in local Python launchers (`kagglesdk.competitions.legacy`).

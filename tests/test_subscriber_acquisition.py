@@ -13,10 +13,10 @@ from models import AcqDiscoveryRun, AcqLinkTarget, AcqOpportunity, AcqReviewFeed
 from subscriber_acquisition.config import AcqConfig
 from subscriber_acquisition.importer import import_discovery_result
 from subscriber_acquisition.link_targets import select_link_target
-from subscriber_acquisition.review import build_surface_keyboard, find_opportunity_by_review_message, publish_review_cards, publish_surface_cards, record_feedback, record_surface_feedback
+from subscriber_acquisition.review import build_surface_keyboard, find_opportunity_by_review_message, publish_frontier_summary, publish_review_cards, record_feedback, record_surface_feedback
 from subscriber_acquisition.safety import AcquisitionSafetyError, ensure_review_chat, ensure_vk_read_only
 from subscriber_acquisition.scoring import conservative_reach_low, priority_score
-from subscriber_acquisition.service import add_surface_seed, list_surfaces, run_acq_discovery_shadow
+from subscriber_acquisition.service import add_surface_seed, export_surface_map_xlsx, list_surfaces, run_acq_discovery_shadow
 
 
 @pytest_asyncio.fixture
@@ -116,7 +116,7 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
 
 
 @pytest.mark.asyncio
-async def test_surface_cards_publish_new_frontier_results(db):
+async def test_frontier_summary_publishes_new_surfaces_without_approval_buttons(db):
     async with db.get_session() as session:
         new_surface = AcqSurface(
             platform="tg",
@@ -143,13 +143,16 @@ async def test_surface_cards_publish_new_frontier_results(db):
         await session.refresh(old_seed)
 
     bot = FakeBot()
-    posted = await publish_surface_cards(db, bot, [old_seed, new_surface], config=AcqConfig(review_chat_id=777))
+    shown = await publish_frontier_summary(db, bot, [old_seed, new_surface], config=AcqConfig(review_chat_id=777))
 
-    assert posted == 1
+    assert shown == 1
+    assert len(bot.calls) == 1
     assert "New linked chat" in bot.calls[0][1]
+    assert "Согласование не требуется" in bot.calls[0][1]
+    assert bot.calls[0][2].get("reply_markup") is None
     async with db.get_session() as session:
         feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
-    assert [row.action for row in feedback] == ["surface_shown"]
+    assert [row.action for row in feedback] == ["frontier_summary_shown"]
 
 
 @pytest.mark.asyncio
@@ -245,6 +248,26 @@ def test_no_send_guard_blocks_external_targets():
         ensure_review_chat(123, review_chat_id=777)
     with pytest.raises(AcquisitionSafetyError):
         ensure_vk_read_only("wall.createComment")
+
+
+@pytest.mark.asyncio
+async def test_surface_map_xlsx_has_clickable_group_links(db):
+    surface = await add_surface_seed(db, "https://t.me/map_test", reviewer_id=42)
+    await record_surface_feedback(db, surface_id=surface.id, reviewer_id=42, action="approve")
+
+    path = await export_surface_map_xlsx(db)
+
+    from openpyxl import load_workbook
+    wb = load_workbook(path)
+    ws = wb["groups"]
+    headers = [cell.value for cell in ws[1]]
+    assert "reply_policy" in headers
+    assert "scan_state" in headers
+    rows = list(ws.iter_rows(min_row=2, values_only=False))
+    row = next(row for row in rows if row[4].value == "https://t.me/map_test")
+    assert row[4].hyperlink.target == "https://t.me/map_test"
+    assert row[8].value == "confirmed_can_reply_after_human_review"
+    assert "summary" in wb.sheetnames
 
 
 @pytest.mark.asyncio

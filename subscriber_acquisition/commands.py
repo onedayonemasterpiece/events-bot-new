@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, Inli
 from runtime import require_main_attr
 from .config import load_config
 from .review import build_surface_keyboard, find_opportunity_by_review_message, format_surface_card, record_feedback, record_surface_feedback
-from .service import add_surface_seed, export_feedback_jsonl, latest_report_url, list_surfaces, queue_counts, run_acq_discovery_shadow, surface_counts
+from .service import add_surface_seed, export_feedback_jsonl, export_surface_map_xlsx, latest_report_url, list_surfaces, queue_counts, run_acq_discovery_shadow, surface_counts
 
 logger = logging.getLogger(__name__)
 acq_router = Router(name="subscriber_acquisition")
@@ -18,7 +18,8 @@ def _menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="▶️ Запуск", callback_data="acqmenu:run"), InlineKeyboardButton(text="📥 Очередь", callback_data="acqmenu:queue")],
         [InlineKeyboardButton(text="🧭 Места", callback_data="acqmenu:surfaces"), InlineKeyboardButton(text="📄 Отчёт", callback_data="acqmenu:report")],
-        [InlineKeyboardButton(text="⬇️ Экспорт", callback_data="acqmenu:export")],
+        [InlineKeyboardButton(text="🗺 Карта групп XLSX", callback_data="acqmenu:map")],
+        [InlineKeyboardButton(text="⬇️ Feedback", callback_data="acqmenu:export")],
     ])
 
 
@@ -131,6 +132,16 @@ async def cmd_acq_report(message: Message) -> None:
         return
     url = await latest_report_url(db)
     await message.answer(f"📄 Последний отчёт: {url or '—'}", disable_web_page_preview=True)
+
+
+@acq_router.message(Command("acq_map"))
+async def cmd_acq_map(message: Message) -> None:
+    db, ok = await _db_and_auth(message)
+    if not db or not ok:
+        await message.answer("❌ Команда доступна только администраторам")
+        return
+    path = await export_surface_map_xlsx(db)
+    await message.answer_document(FSInputFile(path), caption="🗺 Карта групп acquisition discovery: статусы, очередь скана, clickable links")
 
 
 @acq_router.message(Command("acq_export"))
@@ -259,6 +270,9 @@ async def acq_menu_callback(callback: CallbackQuery) -> None:
     elif action == "report":
         url = await latest_report_url(db)
         await callback.message.answer(f"📄 Последний отчёт: {url or '—'}", disable_web_page_preview=True)
+    elif action == "map":
+        path = await export_surface_map_xlsx(db)
+        await callback.message.answer_document(FSInputFile(path), caption="🗺 Карта групп acquisition discovery: статусы, очередь скана, clickable links")
     elif action == "export":
         data = await export_feedback_jsonl(db)
         if not data:

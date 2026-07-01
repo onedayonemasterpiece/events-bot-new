@@ -99,41 +99,61 @@ async def publish_review_cards(db, bot: Any, opportunities: list[AcqOpportunity]
     return posted
 
 
-async def publish_surface_cards(db, bot: Any, surfaces: list[AcqSurface], *, config: AcqConfig | None = None) -> int:
-    cfg = config or load_config()
-    if not surfaces or not cfg.review_chat_id or cfg.review_group_max_cards_per_run <= 0:
-        return 0
-    ensure_review_chat(cfg.review_chat_id, review_chat_id=cfg.review_chat_id)
-    frontier = [
+def _frontier_surfaces(surfaces: list[AcqSurface]) -> list[AcqSurface]:
+    return [
         surface for surface in surfaces
         if str(surface.source or "").strip().lower() in {"discovered", "linked_discussion"}
         and str(surface.status or "").strip().lower() == "candidate"
     ]
-    max_cards = min(int(cfg.review_group_max_cards_per_run or 0), 10)
-    posted = 0
-    async with db.get_session() as session:
-        for surface in frontier[:max_cards]:
-            sent = await bot.send_message(
-                cfg.review_chat_id,
-                format_surface_card(surface),
-                parse_mode="HTML",
-                reply_markup=build_surface_keyboard(surface),
-                message_thread_id=cfg.review_thread_id,
-                disable_web_page_preview=True,
-            )
-            if sent is not None:
-                sent_chat_id = int(getattr(getattr(sent, "chat", None), "id", cfg.review_chat_id))
-                sent_message_id = int(getattr(sent, "message_id", 0) or 0)
-                ensure_review_chat(sent_chat_id, review_chat_id=cfg.review_chat_id)
+
+
+def format_frontier_summary(surfaces: list[AcqSurface], *, limit: int = 12) -> str:
+    frontier = _frontier_surfaces(surfaces)
+    lines = [
+        "🧭 <b>Discovery: новые ссылки поставлены в очередь</b>",
+        "Согласование не требуется — следующие запуски будут сами анализировать эти чаты/паблики. Ручная калибровка нужна только для reply-кандидатов.",
+        f"Найдено новых surfaces: <b>{len(frontier)}</b>",
+    ]
+    for surface in frontier[:max(1, limit)]:
+        label = surface.title or surface.handle or surface.external_id or surface.url
+        url = surface.url or ""
+        link = f'<a href="{html.escape(url, quote=True)}">{html.escape(label)}</a>' if url else html.escape(label)
+        lines.append(
+            f"• {html.escape(surface.platform)}/{html.escape(surface.surface_type)} · {link} "
+            f"<i>({html.escape(surface.source or 'discovered')})</i>"
+        )
+    if len(frontier) > limit:
+        lines.append(f"…ещё {len(frontier) - limit} в очереди")
+    return "\n".join(lines)
+
+
+async def publish_frontier_summary(db, bot: Any, surfaces: list[AcqSurface], *, config: AcqConfig | None = None) -> int:
+    cfg = config or load_config()
+    frontier = _frontier_surfaces(surfaces)
+    if not frontier or not cfg.review_chat_id:
+        return 0
+    ensure_review_chat(cfg.review_chat_id, review_chat_id=cfg.review_chat_id)
+    sent = await bot.send_message(
+        cfg.review_chat_id,
+        format_frontier_summary(surfaces),
+        parse_mode="HTML",
+        message_thread_id=cfg.review_thread_id,
+        disable_web_page_preview=True,
+    )
+    if sent is not None:
+        sent_chat_id = int(getattr(getattr(sent, "chat", None), "id", cfg.review_chat_id))
+        sent_message_id = int(getattr(sent, "message_id", 0) or 0)
+        ensure_review_chat(sent_chat_id, review_chat_id=cfg.review_chat_id)
+        async with db.get_session() as session:
+            for surface in frontier[:12]:
                 session.add(AcqReviewFeedback(
                     surface_id=surface.id,
-                    action="surface_shown",
+                    action="frontier_summary_shown",
                     review_message_chat_id=sent_chat_id,
                     review_message_id=sent_message_id,
                 ))
-                posted += 1
-        await session.commit()
-    return posted
+            await session.commit()
+    return len(frontier)
 
 
 async def record_feedback(db, *, opportunity_id: int | None, surface_id: int | None = None, reviewer_id: int | None = None, action: str, note: str | None = None, review_message_chat_id: int | None = None, review_message_id: int | None = None) -> AcqReviewFeedback:

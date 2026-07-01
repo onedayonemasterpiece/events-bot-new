@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `/acq_map` and the `🗺 Карта групп XLSX` acquisition menu action: operators can download a clickable spreadsheet of all discovered groups/communities with scan state, pending/approved/rejected reply policy, source, next scan time, and opportunity counts.
 - Added safe shadow-mode Subscriber Acquisition Discovery MVP scaffolding: core SQLite/SQLModel acquisition tables, JSON import contract, conservative reach scoring, link-target/sticker-fit helpers, Telegraph report rendering, `/acq*` superadmin commands, review-card publishing, feedback/reply capture, no-send safety guards, and a Kaggle shadow preflight runtime scaffold, and surface add/approve/reject/pause review actions, plus review-card shown feedback audit rows and read-only Telegram/VK shadow scanners in the Kaggle runtime, and a `/acq_run` local-shadow runtime import fallback with remote Telegram session-busy preflight and automatic VK seed collection from existing `vk_source` monitoring groups, and real Kaggle runner wiring for `/acq_run` with encrypted config/key datasets, status dataset, registry, polling, and output import.
 - Telegram post metrics now store available open-discussion comment counts, and Telegram daily `ДОБАВИЛИ В АНОНС` can show audience labels for popular events using summed Telegram+VK source metrics.
 - Added the `tg-premium-emojis-update` Telethon editor and project skill for replacing Telegram daily announcement free markers (`🟡 Бесплатно`, added-block `🚩 🟡`) with the saved four-custom-emoji premium `Бесплатно` label after publication.
@@ -19,10 +20,10 @@
   Newly discovered/linked discussion surfaces are prioritized in the next
   runtime seed payload, generic `где ...` transport-style comments no longer
   become event opportunities, and discovered VK wall links are normalized to
-  community URLs such as `vk.com/club...` for future analysis. Runs now publish
-  newly discovered frontier surfaces into the review chat even when no reply
-  opportunities were found, so discovery results are visible before the analysis
-  stage finds good comments.
+  community URLs such as `vk.com/club...` for future analysis. Runs now
+  publish a no-approval frontier summary into the review chat when new surfaces
+  are found, while analysis continues automatically on later runs; only
+  reply/post opportunities get calibration buttons.
 - Telegram event posts keep permanent footer links to Max and VK next to the
   `🔎 Подробнее` Telegraph link (`Max · Вконтакте` with a 12-space visual
   offset); only explicit button-highlight posts where `Подробнее` moves to an

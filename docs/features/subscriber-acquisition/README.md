@@ -34,6 +34,15 @@ is collected by pressing `Нет + причина` and replying to the review ca
 reply text is stored in acquisition feedback export. Runtime seed collection
 prioritizes newly discovered and linked-discussion surfaces before older seed
 surfaces, so repeated Kaggle runs walk the frontier instead of rechecking only
-the original seed list. The review chat receives cards for newly discovered
-frontier surfaces even when no comment opportunity is found in that run; this
-keeps the discovery stage visible separately from the reply-opportunity stage.
+the original seed list. The review chat receives a no-approval frontier summary when new surfaces are
+found; this keeps discovery visible without forcing the operator to approve
+analysis of every new link.
+
+## Operator map
+
+Use `/acq_map` or the `🗺 Карта групп XLSX` button in `/acq` to download a
+clickable spreadsheet of the discovery frontier. The `groups` sheet includes
+platform/type/title/url/status, `scan_state`, `reply_policy`, source, topic hint,
+last/next scan timestamps, and opportunity counts. This map is for visibility;
+newly discovered links do not require manual approval before future analysis.
+Manual approval/rejection is reserved for concrete reply/post opportunities.
