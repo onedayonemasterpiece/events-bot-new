@@ -17,6 +17,29 @@ RUNTIME_SCRIPT = RUNTIME_DIR / "subscriber_acquisition_discovery.py"
 OUTPUT_FILENAME = "acq_discovery_result.json"
 
 
+def live_telegram_scan_enabled() -> bool:
+    return (os.getenv("ACQ_ENABLE_LIVE_TG_SCAN") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def discovery_remote_auth_scope() -> str:
+    if (os.getenv("TELEGRAM_AUTH_BUNDLE_S22") or "").strip():
+        return "TELEGRAM_AUTH_BUNDLE_S22"
+    if (os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip():
+        return "TG_SESSION"
+    return "TELEGRAM_AUTH_BUNDLE_S22"
+
+
+async def ensure_remote_telegram_session_available_for_discovery() -> None:
+    if not live_telegram_scan_enabled():
+        return
+    from remote_telegram_session import raise_if_remote_telegram_session_busy
+
+    await raise_if_remote_telegram_session_busy(
+        current_job_type="subscriber_acquisition_discovery",
+        current_auth_scope=discovery_remote_auth_scope(),
+    )
+
+
 @dataclass(frozen=True)
 class DiscoveryRuntimeResult:
     payload: dict[str, Any]

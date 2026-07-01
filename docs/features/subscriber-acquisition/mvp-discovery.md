@@ -26,7 +26,8 @@ contract:
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;
 - `subscriber_acquisition_discovery` is registered as a heavy Kaggle job type and
-  as an S22 remote Telegram session consumer.
+  as an S22 remote Telegram session consumer; `/acq_run` checks the remote
+  Telegram session-busy guard before any live Telegram scan can start.
 
 Live Telegram/VK scanning remains constrained to the Kaggle runtime path and must
 run in shadow mode first. The initial `kaggle/SubscriberAcquisitionDiscovery/`

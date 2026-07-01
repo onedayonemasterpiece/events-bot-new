@@ -211,6 +211,24 @@ def test_no_send_guard_blocks_external_targets():
 
 
 @pytest.mark.asyncio
+async def test_shadow_run_refuses_live_scan_when_remote_session_busy(db, monkeypatch):
+    class Busy(RuntimeError):
+        pass
+
+    async def fake_busy():
+        raise Busy("remote session busy")
+
+    def should_not_run(*, config, seed_payload=None):
+        raise AssertionError("runtime must not start while remote session is busy")
+
+    monkeypatch.setattr("subscriber_acquisition.service.ensure_remote_telegram_session_available_for_discovery", fake_busy)
+    monkeypatch.setattr("subscriber_acquisition.service.run_local_discovery_runtime", should_not_run)
+
+    with pytest.raises(Busy):
+        await run_acq_discovery_shadow(db, bot=None, config=AcqConfig(runner="local"))
+
+
+@pytest.mark.asyncio
 async def test_shadow_run_without_payload_uses_local_runtime(db, sample_payload, monkeypatch):
     async def fake_report(run, surfaces, opportunities):
         return "https://telegra.ph/acq-report"
