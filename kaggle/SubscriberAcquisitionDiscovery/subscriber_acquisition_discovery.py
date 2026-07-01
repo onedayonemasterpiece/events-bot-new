@@ -812,7 +812,11 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
     opportunity_keys: set[str] = set()
+    deadline = _deadline_after_seconds()
     for raw_url in seed_urls[:max_surfaces]:
+        if _deadline_reached(deadline):
+            diagnostics.append("vk scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+            break
         normalized = str(raw_url or "").strip()
         if not normalized or normalized.lower() not in allowed:
             continue
@@ -834,6 +838,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             continue
         _human_pause_sync(multiplier=0.6)
         for post in wall.get("items") or []:
+            if _deadline_reached(deadline):
+                diagnostics.append("vk post scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                break
             owner_id = int(post.get("owner_id") or 0)
             post_id = int(post.get("id") or 0)
             post_text = str(post.get("text") or "")
@@ -853,6 +860,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 continue
             _human_pause_sync(multiplier=0.35)
             for comment in comments.get("items") or []:
+                if _deadline_reached(deadline):
+                    diagnostics.append("vk comment scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                    break
                 if not isinstance(comment, dict):
                     continue
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
@@ -1020,9 +1030,13 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         _enqueue_tg_url(queue, queued, str(raw), limit=max_frontier)
     discovered_queued = 0
     processed = 0
+    deadline = _deadline_after_seconds()
 
     async with TelegramClient(StringSession(session_string), int(api_id), api_hash, flood_sleep_threshold=60, **device_config) as client:
         while queue and processed < max_surfaces:
+            if _deadline_reached(deadline):
+                diagnostics.append("telegram scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                break
             raw_url = queue.pop(0)
             handle = _handle_from_url(raw_url)
             if not handle:
@@ -1092,6 +1106,9 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 seen = 0
                 try:
                     async for message in client.iter_messages(scan_entity, limit=max_messages):
+                        if _deadline_reached(deadline):
+                            diagnostics.append("telegram message scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                            break
                         seen += 1
                         text = str(getattr(message, "message", None) or "")
                         for discovered in extract_candidate_surfaces(text):
