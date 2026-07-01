@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `350/day` search + `350/day` verifier calls from the non-reserved KEY5 fast Lite lane. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
 
 ## Product contract
 
@@ -308,93 +308,94 @@ Supabase Auth had `47` rows, but only `1` `custom:yandex` identity; the other
 `46` rows were email/test/smoke users and must not dilute the product quota.
 
 2026-07-01 quota calculation for smart search uses effective Yandex-registered
-site users as the unit of allocation and **does not count reserved legacy lanes**
-into the normal `/poisk/` budget:
+site users as the unit of allocation and keeps only the guide fixed lane out of
+the normal LLM verifier budget:
 
-| Component                                           |         Provider/day fact |                                                          Active key lanes |                     Gross RPD |                                                                                                                      Protected reserve | Online search RPD |
-| --------------------------------------------------- | ------------------------: | ------------------------------------------------------------------------: | ----------------------------: | -------------------------------------------------------------------------------------------------------------------------------------: | ----------------: |
-| Query embedding (`gemini-embedding-2`)              |            `1000` on KEY5 |                                       `1` search lane (`GOOGLE_API_KEY5`) |                        `1000` |                                                                                             `200` KEY5 buffer for diagnostics/canaries |             `800` |
-| Normal fast verifier pool (`gemini-3.1-flash-lite`) |   defensive `450` on KEY5 |                                       `1` search lane (`GOOGLE_API_KEY5`) |                         `450` |                                                                                                                 `100` KEY5 Lite buffer |             `350` |
-| Reserved/overflow verifier lanes                    | mixed Lite/Gemma capacity | `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY` | not counted into normal quota | reserved for static related/vector sync, Telegram Monitoring, guide monitoring, Smart Update/shared bot traffic and emergency failover |     failover only |
+| Component                                           |         Provider/day fact |                                                                                          Active key lanes |                     Gross RPD |                                                                                    Protected reserve | Online search RPD |
+| --------------------------------------------------- | ------------------------: | --------------------------------------------------------------------------------------------------------: | ----------------------------: | ---------------------------------------------------------------------------------------------------: | ----------------: |
+| Query embedding (`gemini-embedding-2`)              |            `1000` per key | all 5 lanes: `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY` |                        `5000` |                                           `1000` for static/vector backfills, diagnostics and bursts |            `4000` |
+| Normal fast verifier pool (`gemini-3.1-flash-lite`) |   defensive `450` per key |         shared non-guide lanes: `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY` |                        `1800` | `800` for Smart Update, Telegram Monitoring/static overlap, emergency capacity and provider variance |            `1000` |
+| Guide fixed / LLM reserve lane                      | mixed Lite/Gemma capacity |                                                                                         `GOOGLE_API_KEY2` | not counted into normal quota |                                                                      guide monitoring fixed-key path |     failover only |
 
-For the current `1` effective registered site user, the normal non-reserved
-search pool can serve `350` fast Lite-verified searches/day while KEY5 query
-embedding has `800` searches/day after buffer. The applied safety/abuse ceiling
-is therefore `350` searches/day and `350` LLM verifications/day per registered
-Yandex user, with the existing `x10` monthly multiplier (`3500/month` for both
-counters). This keeps today's whole user-facing cap inside the newly added
-unreserved KEY5 lane and does not plan ordinary search traffic onto the older
-reserved lanes.
+For the current `1` effective registered site user, the normal shared search
+pool can serve `1000` fast Lite-verified searches/day while query embedding has
+`4000` searches/day after buffer. The applied safety/abuse ceiling is therefore
+`1000` searches/day and `1000` LLM verifications/day per registered Yandex user,
+with the existing `x10` monthly multiplier (`10000/month` for both counters).
+This keeps user-facing quota inside the shared non-guide Lite pool while leaving
+substantial capacity for the other production services.
 
 Dynamic formula after this fix:
 
 ```text
 daily_search_limit = min(
-  350,
-  max(10, floor(800 / effective_yandex_users)),
-  max(10, floor(350 / effective_yandex_users))
+  1000,
+  max(10, floor(4000 / effective_yandex_users)),
+  max(10, floor(1000 / effective_yandex_users))
 )
-daily_llm_rerank_limit = min(daily_search_limit, 350)
+daily_llm_rerank_limit = min(daily_search_limit, 1000)
 ```
 
-If the active search pool is provider-degraded or exhausted, the Edge Function
-may try reserved lanes as late failover, then Gemma 4 26B as slower verifier
+If the active Lite pool is provider-degraded or exhausted, the Edge Function may
+try the guide reserve lane as late failover, then Gemma 4 26B as slower verifier
 overflow. That fallback protects availability but is not included in the normal
 quota budget.
 
 Reserve rationale:
 
-- KEY5 embedding reserve is `200 RPD` for diagnostics/canaries and burst safety;
-- KEY5 Lite reserve/buffer is `100 RPD`, so normal search spends at most
-  `350/day` before failover;
-- `GOOGLE_API_KEY4` remains primarily for static related/vector sync,
-  `GOOGLE_API_KEY3` for Telegram Monitoring, `GOOGLE_API_KEY2` for guide
-  monitoring, and `GOOGLE_API_KEY` for existing Smart Update/shared bot traffic;
-  those lanes are configured only as late online search failover.
+- embedding is model-specific/new for online search, so it rotates across all
+  five keys and still keeps `1000 RPD` for backfills/diagnostics;
+- Lite verification rotates across the same shared non-guide style as other
+  Google AI consumers instead of artificially pinning `/poisk/` to KEY5;
+- `GOOGLE_API_KEY2` remains the fixed guide-monitoring lane and is LLM
+  reserve/failover only for `/poisk/`;
+- the `800 RPD` Lite buffer is intentionally large enough to leave room for
+  Smart Update, Telegram Monitoring/static overlap, emergency bursts and uneven
+  hash distribution.
 
-The Edge Function now supports direct multi-key rotation/failover for this
-site path without exposing secrets to the browser:
+The Edge Function supports direct multi-key rotation/failover for this site path
+without exposing secrets to the browser:
 
 - `EVENT_SEARCH_GOOGLE_KEY_ENVS` — shared comma-separated active list;
-- `EVENT_SEARCH_EMBEDDING_KEY_ENVS` — optional embedding-specific active list;
-- `EVENT_SEARCH_LLM_KEY_ENVS` — optional LLM-specific active list;
-- `EVENT_SEARCH_GOOGLE_RESERVE_KEY_ENVS` — shared reserve/failover list tried
-  only after the active list fails;
-- `EVENT_SEARCH_EMBEDDING_RESERVE_KEY_ENVS` / `EVENT_SEARCH_LLM_RESERVE_KEY_ENVS`
-  — optional kind-specific reserve/failover overrides.
+- `EVENT_SEARCH_EMBEDDING_KEY_ENVS` — embedding-specific active list; current
+  live value uses all five keys;
+- `EVENT_SEARCH_LLM_KEY_ENVS` — LLM-specific active list; current live value uses
+  `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`;
+- `EVENT_SEARCH_LLM_RESERVE_KEY_ENVS` — LLM reserve/failover list; current live
+  value is `GOOGLE_API_KEY2`;
+- `EVENT_SEARCH_GOOGLE_RESERVE_KEY_ENVS` / `EVENT_SEARCH_EMBEDDING_RESERVE_KEY_ENVS`
+  — optional shared/embedding reserve overrides, intentionally unused for the
+  current embedding-all rotation.
 
-The current active online search pool is `GOOGLE_API_KEY5`. The reserve order is
-`GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`; those lanes are
-appended only after every active key fails with quota/capacity/retryable provider
-errors. This means none of the reserved lanes is merely “late in the same
-rotating list”: they should not be touched by normal `/poisk/` traffic. If the
-active list later contains multiple unreserved keys, the function hash-rotates
-within the active group first and only then appends the fixed-priority reserve
-order. If no explicit key lists are configured, the function preserves
-the legacy fallback chain `GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
+The current query-embedding pool is all five Google keys. The current LLM active
+pool is `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`; the
+function hash-rotates within that active group by query/model so spend is
+balanced. `GOOGLE_API_KEY2` is appended only after every active LLM key fails
+with quota/capacity/retryable provider errors. If no explicit key lists are
+configured, the function preserves the legacy fallback chain `GOOGLE_API_KEY4,
+GOOGLE_API_KEY, GEMINI_API_KEY`.
 
 2026-07-01 live rollout evidence from branch
 `feature/smart-search-quota-key5-site`:
 
 - initial rollout SHA `4bc1b5b0` proved Lite-first behavior but still used one
-  five-key rotating list; follow-up SHA `72c69421` splits active vs reserve lanes
-  and is deployed;
+  five-key rotating list; SHA `72c69421` fixed active-vs-reserve ordering;
+- follow-up rollout restores the intended capacity model: embedding all keys,
+  LLM active non-guide shared pool, guide key reserve only;
 - quota migration `20260701180316_event_search_key5_quota_capacity.sql` is sized
-  for the non-reserved active pool and applied live: `auth.users=47`, effective
-  `custom:yandex=1`, registered plan `350/day`, `3500/month`, LLM verifier
-  `350/day`, `3500/month`;
+  and applied live for that model: `auth.users=47`, effective `custom:yandex=1`,
+  registered plan `1000/day`, `10000/month`, LLM verifier `1000/day`,
+  `10000/month`;
 - Edge Function `event-search` is deployed with `--no-verify-jwt` and the
-  Lite-first code path from SHA `72c69421`;
+  Lite-first code path; the runtime behavior is controlled by live secrets for
+  active/reserve key lists;
 - readiness probe covers auth config, Yandex provider, userinfo adapter and Edge
-  OPTIONS; local runtime env contract must show active lane `GOOGLE_API_KEY5`
-  and reserve lanes
-  `GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`;
-- final live Edge smoke (`интересно детям`, JSON response) returned HTTP 200 in
-  `3803ms` wall / `2911ms` backend, `retrieved_count=20`, `items=11`,
-  `fallback_items=6`, `llm_model=gemini-3.1-flash-lite`,
-  `policy=lite_first_gemma_overflow`, embedding key `GOOGLE_API_KEY5`, first LLM
-  attempt key `GOOGLE_API_KEY5` `ok` in `1280ms`, quota `349/349` remaining;
-  smoke auth user, quota ledger and audit rows were cleaned up after the run.
+  OPTIONS; local runtime env contract must show embedding lanes all five keys,
+  LLM active lanes `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`
+  and LLM reserve `GOOGLE_API_KEY2`;
+- final live Edge smoke after the all-keys embedding/shared-LLM fix is recorded
+  in the rollout log; smoke auth users, quota ledgers and audit rows are cleaned
+  up after each run.
 
 Search quota is reserved **before** Gemini embedding provider calls. The optional LLM verifier has a separate day/month quota; if that verifier quota is exhausted while ordinary search quota remains, the Edge Function must still answer, but in high-match mode it fails closed: exact `items=[]`, unverified pgvector candidates are placed in `fallback_items` with `llm_verifier.status=llm_quota_exhausted` and `llm_verifier.used=false`. Query text is never stored; only SHA-256 hash, length, result count and status are written to `event_search_requests`.
 

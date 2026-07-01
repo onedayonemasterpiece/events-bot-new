@@ -212,28 +212,28 @@ Implemented source pieces:
 - `site/src/components/AuthorizedEventSearch.astro` — one-line search UI, Yandex OAuth entry, quota/status text, same EventCard contract.
 - `supabase/functions/event-search/index.ts` — authenticated Edge Function source: quota reservation before provider call, direct multi-key Google provider rotation/failover for Gemini query embedding, pgvector RPC, Gemini Lite verifier first, optional Gemma 4 26B overflow and fallback cards.
 
-2026-07-01 KEY5 capacity gate: the smart-search quota plan is sized from the
-single non-reserved online search lane (`GOOGLE_API_KEY5`) with protected
-reserves for static related/vector sync (`GOOGLE_API_KEY4`), Telegram Monitoring
-(`GOOGLE_API_KEY3`), guide monitoring (`GOOGLE_API_KEY2`) and existing Smart
-Update/shared traffic (`GOOGLE_API_KEY`). Product registration is counted from
+2026-07-01 smart-search capacity gate: query embedding rotates across all five
+Google keys because online query embedding is a new workload and can safely use
+the full `gemini-embedding-2` pool with a `1000 RPD` buffer for
+static/vector/backfill work. Gemini Lite verification rotates across the shared
+non-guide pool (`GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`,
+`GOOGLE_API_KEY`) and keeps `GOOGLE_API_KEY2` as the fixed guide-monitoring
+reserve/failover lane. Product registration is counted from
 `auth.identities.provider='custom:yandex'`, not from all historical
 `auth.users` rows; on 2026-07-01 this means `1` effective Yandex-registered site
-user, not `47` total Auth rows. The canary limit is therefore `350/day` search
-and `350/day` verifier calls per registered Yandex user (`3500/month` each),
-which fits inside KEY5's active fast Lite pool for today's user count while
-leaving `100` Lite RPD and `200` embedding RPD as buffers. The plan is applied by
+user, not `47` total Auth rows. The canary limit is therefore `1000/day` search
+and `1000/day` verifier calls per registered Yandex user (`10000/month` each),
+leaving `800` Lite RPD as cross-service buffer and `1000` embedding RPD as
+backfill/diagnostic buffer. The plan is applied by
 `supabase/migrations/20260701180316_event_search_key5_quota_capacity.sql`.
 
 External gate completed on 2026-07-01 from branch
-`feature/smart-search-quota-key5-site`: Google key secrets are present, active
-`EVENT_SEARCH_*_KEY_ENVS` lists are limited to `GOOGLE_API_KEY5`,
-reserve/failover lanes are configured separately as
-`GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`, the quota
-migration is applied, and `event-search` is deployed from SHA `72c69421` with
-the Lite-first/Gemma-overflow code path. Final live smoke used only KEY5 for both
-query embedding and Gemini Lite verification (`11` exact items, quota `349/349`
-remaining after the smoke).
+`feature/smart-search-quota-key5-site`: Google key secrets are present,
+`EVENT_SEARCH_EMBEDDING_KEY_ENVS` uses all five keys,
+`EVENT_SEARCH_LLM_KEY_ENVS` uses the non-guide shared pool, `GOOGLE_API_KEY2` is
+configured as `EVENT_SEARCH_LLM_RESERVE_KEY_ENVS`, the quota migration is
+applied, and `event-search` is deployed with the Lite-first/Gemma-overflow code
+path.
 
 ## v59 strict static-related process and evidence
 

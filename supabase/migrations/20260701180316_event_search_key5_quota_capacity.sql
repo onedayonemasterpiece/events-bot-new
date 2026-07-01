@@ -1,37 +1,37 @@
 -- Expand authorized event-search daily quota after adding GOOGLE_API_KEY5.
 -- 2026-07-01 facts:
 -- - all 5 Google AI key secrets passed live smoke for gemini-embedding-2,
---   gemini-3.1-flash-lite and gemma-4-26b-a4b-it, but four older lanes are
---   reserved for other production surfaces and must not be budgeted for normal
---   /poisk/ traffic.
--- - normal online search intentionally uses only the new non-reserved lane
---   GOOGLE_API_KEY5: gemini-embedding-2 has 1000 RPD on that lane, with
---   200 RPD kept as search/diagnostic buffer; gemini-3.1-flash-lite uses the
---   defensive repo cap 450 RPD, with 100 RPD kept as a search-lane buffer.
--- - GOOGLE_API_KEY4 (static related/vector sync), GOOGLE_API_KEY3 (Telegram
---   Monitoring), GOOGLE_API_KEY2 (guide monitoring) and GOOGLE_API_KEY
---   (Smart Update/shared bot traffic) are reserve/failover only.
+--   gemini-3.1-flash-lite and gemma-4-26b-a4b-it.
+-- - Query embedding is a new online-search workload and uses all five lanes:
+--   5 * 1000 RPD = 5000 gross, with 1000 RPD kept for static/vector backfills,
+--   diagnostics and burst safety => 4000 online query embeddings/day.
+-- - Normal online fast verifier pool follows the existing shared-key rotation
+--   pattern and excludes only the guide fixed lane GOOGLE_API_KEY2:
+--   active Lite lanes are GOOGLE_API_KEY5, GOOGLE_API_KEY4, GOOGLE_API_KEY3 and
+--   GOOGLE_API_KEY. At the defensive 450 RPD/key this is 1800 gross Lite RPD.
+-- - Keep 800 Lite RPD as cross-service buffer for Smart Update, Telegram
+--   Monitoring/static/emergency overlap and provider variance, leaving 1000
+--   normal fast Lite-verified searches/day for /poisk/.
+-- - GOOGLE_API_KEY2 stays a fixed guide-monitoring reserve/failover lane for
+--   LLM verification and is not counted into the normal search quota.
 -- - overflow verifier gemma-4-26b-a4b-it stays a resilience path only; it is not
 --   counted into the normal fast-search quota because it is much slower than
 --   Gemini Lite.
--- - Effective normal verifier capacity after the search-lane buffer is
---   350 fast Lite RPD; embedding has 800 RPD after the KEY5 query buffer.
 -- Product "registered users" are counted by the live Yandex site identity
 -- provider, not by all auth.users rows: on 2026-07-01 auth.users had 47 rows,
 -- but only 1 custom:yandex identity; the other 46 were email/test/smoke users.
--- With the current 1 effective site user, floor(350 / 1) gives 350 fast
--- verified searches/day. Reserved/shared lanes are configured only as late
--- failover after the active search pool is exhausted or provider-degraded.
+-- With the current 1 effective site user, floor(1000 / 1) gives 1000 fast
+-- verified searches/day.
 
 create or replace function public.refresh_registered_search_quota_v1(
-  p_embedding_rpd integer default 1000,
-  p_llm_rpd integer default 450,
-  p_embedding_static_reserve integer default 200,
-  p_llm_static_reserve integer default 100,
+  p_embedding_rpd integer default 5000,
+  p_llm_rpd integer default 1800,
+  p_embedding_static_reserve integer default 1000,
+  p_llm_static_reserve integer default 800,
   p_min_daily_search integer default 10,
-  p_max_daily_search integer default 350,
+  p_max_daily_search integer default 1000,
   p_min_daily_llm integer default 5,
-  p_max_daily_llm integer default 350,
+  p_max_daily_llm integer default 1000,
   p_month_multiplier integer default 10
 )
 returns table (
@@ -116,6 +116,6 @@ grant execute on function public.refresh_registered_search_quota_v1(integer, int
 
 -- Apply the updated plan during migration. For the current 1 effective
 -- custom:yandex site user this writes:
--- daily_search_limit=350, monthly_search_limit=3500,
--- daily_llm_rerank_limit=350, monthly_llm_rerank_limit=3500.
+-- daily_search_limit=1000, monthly_search_limit=10000,
+-- daily_llm_rerank_limit=1000, monthly_llm_rerank_limit=10000.
 select * from public.refresh_registered_search_quota_v1();
