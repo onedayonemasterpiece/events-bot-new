@@ -77,9 +77,10 @@ _PARTNER_INTENT_RE = re.compile(
     r"(?i)\b("
     r"(?:как|куда|где)\s+(?:добавить|прислать|отправить|разместить|опубликовать)\s+(?:афишу|анонс|мероприятие|событие)|"
     r"(?:добавить|разместить|опубликовать)\s+(?:афишу|анонс|мероприятие|событие)|"
-    r"(?:инфо[-\s]?партн[её]р|информационн(?:ое|ым)\s+партн[её]р|организатор(?:ам|ы)?)"
+    r"(?:инфо[-\s]?партн[её]р|информационн(?:ое|ым)\s+партн[её]р)"
     r")"
 )
+_REQUEST_HINT_RE = re.compile(r"(?i)(\?|\b(?:подскажите|подскажи|где|как|куда|есть|ищу|нуж(?:ен|на|но)|интересует|можно\s+ли|поиск|найти|посмотреть)\b)")
 _BADGE_FILTER_INTENT_RE = re.compile(
     r"(?i)\b("
     r"пушкинск(?:ая|ой)\s+карт|по\s+пушкинской|"
@@ -276,7 +277,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "reason": "question about adding or publishing an event announcement",
             "relevance": 0.62,
         }
-    if _BADGE_FILTER_INTENT_RE.search(compact):
+    if _BADGE_FILTER_INTENT_RE.search(compact) and _REQUEST_HINT_RE.search(compact):
         return {
             "matched_intent": "event_badge_or_filter_request",
             "topic_cluster": "event_badges_filters",
