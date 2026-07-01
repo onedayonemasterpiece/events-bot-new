@@ -311,12 +311,16 @@ Use deterministic filters only as a narrow guardrail:
 - discard inaccessible/private/non-public surfaces;
 - deprioritize obvious spam, crypto, adult, unrelated geography, inactive rooms;
 - dedupe by normalized platform+username/id and by source URL/message id;
+- extract links/frontier candidates and apply hard safety/region gates;
 - never make the broad semantic decision with regex alone.
 
 ### Phase 3 — LLM surface triage
 
-Use Gemma through the existing Google AI client/rate limiter. Prompt output should
-be strict JSON:
+Use Gemma through the configured Google key lane. The current Kaggle MVP uses the
+same isolated monitoring key convention (`GOOGLE_API_KEY3`, `ACQ_GOOGLE_KEY_ENV`)
+and native structured JSON output; the model is configurable through
+`ACQ_LLM_MODEL` and defaults to the repo-proven `models/gemma-4-31b-it`. Prompt
+output should be strict JSON:
 
 ```json
 {
@@ -330,9 +334,10 @@ be strict JSON:
 }
 ```
 
-Gemma 4 / 26B-class model is preferred for this stage; Lite is acceptable only as
-a supplementary fallback/probe and must be marked as lower-confidence in stored
-metadata.
+Gemma 4 is required for high-confidence review decisions. 26B-class variants can
+be configured for this bounded short-comment task, but Lite/Flash/Lite-class
+models are acceptable only as supplementary probes and must be marked as
+lower-confidence in stored metadata.
 
 ### Phase 4 — opportunity triage
 
@@ -341,9 +346,18 @@ contextual chance to recommend an event. Output should include:
 
 - intent label (`asking_where_to_go`, `looking_for_children_event`,
   `tourist_question`, `relocation_local_tip`, `event_comparison`, `other`);
+- a checklist: explicit question/need, future/current need rather than
+  post-event praise, clear useful reply target, native short reply viability,
+  low spam risk;
 - confidence and anti-spam risk;
 - direct evidence quote/snippet;
 - optional candidate event query terms.
+
+If the checklist is all or mostly negative — for example “спасибо
+организаторам”, “погода была отличная”, “были гостями, молодцы” — the Gemma gate
+must return `is_candidate=false`, and the runtime must not show an operator card.
+Missing Google key or provider/schema failure also fails closed for opportunities
+and is recorded in run diagnostics/stats.
 
 Reply text generation is optional in MVP and should remain `draft_only`; no
 publication action is available from the runtime.

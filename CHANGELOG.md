@@ -11,6 +11,11 @@
 
 ### Changed
 
+- Subscriber Acquisition Discovery opportunity acceptance is now LLM-first in
+  the Kaggle runtime: cheap regex/keyword filtering only controls frontier/link
+  extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated
+  `GOOGLE_API_KEY3` lane by default) must accept a structured checklist before a
+  reply candidate reaches review. Review cards display the Gemma checklist.
 - Subscriber Acquisition discovery now covers the `trip-recomendation` social-discovery requirement: one-day route/trip contexts are emitted as `trip_route_recommendation` review opportunities that require a concrete route target rather than falling back to the general announcements channel.
 - Subscriber Acquisition discovery now region-gates obvious out-of-Kaliningrad surfaces before queueing them, and broadens shadow opportunity topics beyond event recommendations to static-site search/listing, organizer partnership/submission, and event badge/filter hooks from the latest static-site documentation.
 - Subscriber Acquisition discovery now performs a bounded same-run Telegram frontier walk for deterministically discovered links, adds human-like read pauses, prefers/falls back across configured VK token lanes for read-only VK scans, documents VK seeds from existing monitoring groups, and records the Yandex/PostgreSQL storage direction as analysis rather than a hard requirement.
@@ -46,6 +51,9 @@
 
 ### Fixed
 
+- Fixed Subscriber Acquisition false-positive review cards from post-event
+  praise/thanks/report comments by failing closed unless the Gemma 4 acquisition
+  gate finds an explicit current/future need and clear native reply target.
 - Tightened Subscriber Acquisition deterministic opportunity prefilter so existing-event logistics comments such as “до скольки мероприятие?” do not become acquisition reply candidates.
 - Fixed Subscriber Acquisition real Kaggle launch preflight: dataset slugs now
   and titles respect Kaggle's current 50-character API limits, and the Kaggle

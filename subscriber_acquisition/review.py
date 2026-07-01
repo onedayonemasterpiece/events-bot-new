@@ -37,6 +37,31 @@ def build_review_keyboard(opp: AcqOpportunity) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _format_llm_checklist(evidence: dict | None) -> str:
+    gate = (evidence or {}).get("llm_gate") or {}
+    checklist = gate.get("checklist") or []
+    if not isinstance(checklist, list) or not checklist:
+        return ""
+    lines: list[str] = []
+    for item in checklist[:5]:
+        if not isinstance(item, dict):
+            continue
+        mark = "✅" if bool(item.get("answer")) else "❌"
+        label = str(item.get("question") or item.get("id") or "проверка").strip()
+        note = str(item.get("note") or "").strip()
+        text = label
+        # Keep operator-facing cards Russian-readable even if the provider slips
+        # an English note despite the prompt. The canonical checklist questions
+        # are already in Russian; non-Cyrillic notes are retained in evidence JSON
+        # but hidden from the compact Telegram card.
+        if note and note != label and any("А" <= ch <= "я" or ch in "Ёё" for ch in note):
+            text = f"{label}: {note}"
+        lines.append(f"{mark} {html.escape(text[:180])}")
+    if not lines:
+        return ""
+    return "<b>Контрольный список Gemma:</b>\n" + "\n".join(lines) + "\n\n"
+
+
 def format_review_card(opp: AcqOpportunity, surface: AcqSurface | None = None) -> str:
     where = f"{opp.platform.upper()}"
     if surface:
@@ -45,6 +70,7 @@ def format_review_card(opp: AcqOpportunity, surface: AcqSurface | None = None) -
     target_kind = opp.link_target_kind or "none"
     target_label = opp.link_target_label or target_kind
     snippet = " ".join((opp.context_text_snippet or "").split())[:260]
+    checklist = _format_llm_checklist(opp.evidence_json)
     return (
         f"🧭 <b>Кандидат #{opp.id}</b>\n\n"
         f"<b>Где:</b> {html.escape(where)}\n"
@@ -54,6 +80,7 @@ def format_review_card(opp: AcqOpportunity, surface: AcqSurface | None = None) -
         f"<b>Куда вести:</b> {html.escape(target_label)} ({html.escape(target_kind)})\n"
         f"<b>Охват:</b> ~{int(opp.reach_low or 0)}\n"
         f"<b>Риск:</b> spam={html.escape(opp.spam_risk)} / safety={html.escape(opp.safety_risk)}\n\n"
+        f"{checklist}"
         f"<b>Почему:</b>\n{html.escape(snippet or opp.link_target_reason or '—')}"
         f"\n\n<i>Если жмёте «Нет», причину можно оставить ответом на эту карточку.</i>"
     )

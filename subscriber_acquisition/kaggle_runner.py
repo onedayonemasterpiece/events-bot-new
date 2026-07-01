@@ -167,6 +167,10 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_THREADS_PER_SURFACE": str(config.max_threads_per_surface),
         "ACQ_MAX_OPPORTUNITIES_PER_RUN": str(config.max_opportunities_per_run),
         "ACQ_ENABLE_LIVE_TG_SCAN": os.getenv("ACQ_ENABLE_LIVE_TG_SCAN", "0"),
+        "ACQ_ENABLE_LLM_GATE": os.getenv("ACQ_ENABLE_LLM_GATE", "1"),
+        "ACQ_LLM_MODEL": os.getenv("ACQ_LLM_MODEL", "models/gemma-4-31b-it"),
+        "ACQ_GOOGLE_KEY_ENV": os.getenv("ACQ_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3"),
+        "ACQ_ALLOW_GOOGLE_KEY_FALLBACKS": os.getenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", "0"),
     }
     if tg_seeds:
         env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
@@ -267,7 +271,17 @@ def _build_secrets_payload() -> str:
         "TG_API_HASH",
         "VK_ACCESS_TOKEN",
         "VK_ACCESS_TOKEN4",
+        "GOOGLE_API_KEY3",
+        "GOOGLE_API_KEY_3",
+        "GOOGLE_API_LOCALNAME3",
     ]
+    configured_google_key = (os.getenv("ACQ_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY3").strip()
+    if configured_google_key and configured_google_key not in keys:
+        keys.append(configured_google_key)
+    if (os.getenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        for key in ["GOOGLE_API_KEY", "GOOGLE_API_KEY4", "GOOGLE_API_KEY_4"]:
+            if key not in keys:
+                keys.append(key)
     payload = {key: os.getenv(key) for key in keys if (os.getenv(key) or "").strip()}
     if live_telegram_scan_enabled():
         missing = [key for key in ["TELEGRAM_AUTH_BUNDLE_S22", "TG_API_ID", "TG_API_HASH"] if not payload.get(key)]

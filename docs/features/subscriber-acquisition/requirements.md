@@ -148,6 +148,11 @@ LLM requirement:
   LLM-first. Use Google/Gemma through the existing quota/rate-limit layer; Lite
   models can be a lower-confidence fallback/probe but not a replacement for
   high-confidence review decisions.
+- Discovery regex/keywords may only extract links, apply hard safety/region
+  gates, dedupe, and build cheap prefilter hints for LLM budget control. They
+  must not be the owner of semantic suitability. In particular, post-event
+  thanks/reports/praise must be rejected by the Gemma checklist gate unless there
+  is a separate explicit current/future need and a clear native reply target.
 
 ## Open questions
 

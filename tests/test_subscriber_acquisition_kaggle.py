@@ -255,6 +255,78 @@ def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
     assert runtime.os.environ["ACQ_ENABLE_LIVE_TG_SCAN"] == "1"
 
 
+def test_llm_gate_rejects_post_event_praise(monkeypatch):
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/example", platform="vk")
+    opp = {
+        "platform": "vk",
+        "surface_external_id": surface["external_id"],
+        "context_url": "https://vk.com/wall-1_2?reply=3",
+        "context_text_snippet": "Погода была отличная, компания веселая. Спасибо организаторам за прекрасно проведенное время❤",
+        "matched_intent": "organizer_partnership",
+        "topic_cluster": "organizer_partnership",
+        "link_target": {"kind": "topic_landing", "label": "Добавить событие", "url": "https://kenigevents.ru/partnerstvo/"},
+        "scores": {"relevance": 0.6, "spam_risk": "low", "safety_risk": "low"},
+    }
+    monkeypatch.setattr(runtime, "_google_api_key", lambda: ("test-key", "GOOGLE_API_KEY3"))
+    monkeypatch.setattr(runtime, "_call_acq_llm_gate_sync", lambda _opp, _surface: {
+        "is_candidate": False,
+        "matched_intent": "none",
+        "topic_cluster": "none",
+        "best_reply_strategy": "no_reply",
+        "target_kind": "none",
+        "target_label": "",
+        "target_url": "",
+        "reason": "Постфактум-отзыв и благодарность, нет вопроса или полезного acquisition-ответа.",
+        "relevance": 0.0,
+        "spam_risk": "low",
+        "safety_risk": "low",
+        "checklist": [{"id": "need", "question": "Есть потребность?", "answer": False, "note": "только благодарность"}],
+    })
+
+    diagnostics = []
+    assert runtime._llm_review_opportunity_sync(opp, surface, diagnostics) is None
+    assert runtime.LLM_GATE_STATS["rejected"] == 1
+    assert "rejected" in diagnostics[0]
+
+
+def test_llm_gate_accepts_and_persists_checklist(monkeypatch):
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+    opp = runtime.build_opportunity_from_message(
+        surface,
+        SimpleNamespace(id=44, message="Куда сходить с ребёнком на выходных в Калининграде?", date=datetime(2026, 7, 1, tzinfo=timezone.utc)),
+        default_target_url="https://t.me/kenigevents",
+    )
+    assert opp is not None
+    monkeypatch.setattr(runtime, "_google_api_key", lambda: ("test-key", "GOOGLE_API_KEY3"))
+    monkeypatch.setattr(runtime, "_call_acq_llm_gate_sync", lambda _opp, _surface: {
+        "is_candidate": True,
+        "matched_intent": "event_recommendation_request",
+        "topic_cluster": "kids_weekend_events",
+        "best_reply_strategy": "short_native_reply_with_one_relevant_link",
+        "target_kind": "pka_channel",
+        "target_label": "Полюбить Калининград Анонсы",
+        "target_url": "https://t.me/kenigevents",
+        "reason": "Есть явный запрос куда сходить с ребёнком на выходных.",
+        "relevance": 0.92,
+        "spam_risk": "low",
+        "safety_risk": "low",
+        "checklist": [
+            {"id": "question", "question": "Есть вопрос?", "answer": True, "note": "куда сходить"},
+            {"id": "future_need", "question": "Будущая потребность?", "answer": True, "note": "на выходных"},
+        ],
+    })
+
+    accepted = runtime._llm_review_opportunity_sync(opp, surface, [])
+
+    assert accepted is not None
+    assert accepted["scores"]["source"] == "gemma4_acquisition_gate"
+    assert accepted["scores"]["relevance"] == 0.92
+    assert accepted["evidence"]["llm_gate"]["model"].startswith("models/gemma-4")
+    assert accepted["evidence"]["llm_gate"]["checklist"][0]["answer"] is True
+
+
 def test_kaggle_runtime_static_no_external_write_calls():
     source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
     forbidden_snippets = [
@@ -290,6 +362,22 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     env = _runtime_env_from_config(AcqConfig(), payload)
     assert env["ACQ_VK_SEEDS_JSON"] == '["https://vk.com/club1", "https://vk.com/club2"]'
     assert env["ACQ_VK_ALLOWLIST_JSON"] == env["ACQ_VK_SEEDS_JSON"]
+    assert env["ACQ_ENABLE_LLM_GATE"] == "1"
+    assert env["ACQ_GOOGLE_KEY_ENV"] == "GOOGLE_API_KEY3"
+    assert env["ACQ_LLM_MODEL"].startswith("models/gemma-4")
+
+
+def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):
+    from subscriber_acquisition.kaggle_runner import _build_secrets_payload
+
+    monkeypatch.setenv("GOOGLE_API_KEY3", "key3")
+    monkeypatch.setenv("GOOGLE_API_KEY", "generic-key")
+    monkeypatch.delenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", raising=False)
+
+    payload = json.loads(_build_secrets_payload())
+
+    assert payload["GOOGLE_API_KEY3"] == "key3"
+    assert "GOOGLE_API_KEY" not in payload
 
 
 def test_kaggle_dataset_slug_stays_within_current_api_limit():

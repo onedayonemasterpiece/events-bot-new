@@ -139,6 +139,59 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
     assert opp2.status == "approved"
 
 
+def test_review_card_renders_gemma_checklist():
+    from subscriber_acquisition.review import format_review_card
+
+    opp = AcqOpportunity(
+        id=5,
+        platform="vk",
+        context_url="https://vk.com/wall-1_2?reply=3",
+        context_text_snippet="А где афиша на выходные?",
+        evidence_json={"llm_gate": {"checklist": [
+            {"id": "question", "question": "Есть явный вопрос?", "answer": True, "note": "спрашивает афишу"},
+            {"id": "post_factum", "question": "Не постфактум-отзыв?", "answer": True, "note": "запрос будущей афиши"},
+        ]}},
+        matched_intent="event_recommendation_request",
+        topic_cluster="local_events",
+        link_target_kind="pka_channel",
+        link_target_label="Полюбить Калининград Анонсы",
+        reach_low=3,
+        spam_risk="low",
+        safety_risk="low",
+    )
+
+    card = format_review_card(opp)
+
+    assert "Контрольный список Gemma" in card
+    assert "✅ Есть явный вопрос" in card
+    assert "спрашивает афишу" in card
+
+
+def test_review_card_hides_non_russian_gemma_notes():
+    from subscriber_acquisition.review import format_review_card
+
+    opp = AcqOpportunity(
+        id=6,
+        platform="tg",
+        context_url="https://t.me/example/1",
+        context_text_snippet="А где афиша 1 дня?",
+        evidence_json={"llm_gate": {"checklist": [
+            {"id": "question", "question": "Есть явный вопрос?", "answer": True, "note": "User asks where the schedule is"},
+        ]}},
+        matched_intent="event_recommendation_question",
+        topic_cluster="local_events",
+        link_target_kind="pka_channel",
+        reach_low=3,
+        spam_risk="low",
+        safety_risk="low",
+    )
+
+    card = format_review_card(opp)
+
+    assert "✅ Есть явный вопрос?" in card
+    assert "User asks" not in card
+
+
 @pytest.mark.asyncio
 async def test_frontier_summary_publishes_new_surfaces_without_approval_buttons(db):
     async with db.get_session() as session:

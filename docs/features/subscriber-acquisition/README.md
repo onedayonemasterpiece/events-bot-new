@@ -49,14 +49,24 @@ found; this keeps discovery visible without forcing the operator to approve
 analysis of every new link.
 
 Discovery opportunity topics are broader than direct event recommendations. The
-MVP deterministic prefilter also routes recent static-site product hooks from the
+MVP cheap prefilter only proposes possible comments for the expensive semantic
+gate; it must not be treated as the final candidate decision. Kaggle opportunity
+acceptance is LLM-first through the Gemma 4 acquisition gate
+(`ACQ_ENABLE_LLM_GATE=1`, `ACQ_LLM_MODEL`, default `models/gemma-4-31b-it`,
+Google key lane `GOOGLE_API_KEY3`). If the configured Google key is absent, the
+runtime fails closed for opportunities instead of showing regex-owned semantic
+cards. The review card stores and displays the Gemma checklist, including
+whether the comment is a real current/future need and not just a post-event
+thank-you/report.
+
+The cheap prefilter also routes recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
 (`/partnerstvo/`), site search/listing questions (`/poisk/`, `/vystavki/`,
 `/populyarnoe/`), event badge/filter questions around Pushkin card,
 kids/family, charity, recordings/streams, and free entry, plus trip-route
 recommendation contexts from `trip-recomendation` requirements. These remain shadow
-opportunities for review; broad semantic acceptance is still LLM-first before
-any reply is published.
+opportunities for review only after Gemma 4 accepts the checklist; broad
+semantic acceptance is never owned by regex/keywords.
 
 ## Operator map
 

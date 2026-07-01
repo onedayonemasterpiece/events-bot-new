@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import importlib
 import importlib.util
 import json
 import re
@@ -29,12 +30,12 @@ def ensure_libs() -> None:
     Mirrors the TelegramMonitor notebook pattern: Kaggle base images do not
     always include Telethon, while local/E2E venvs normally do.
     """
-    modules = [("telethon", "telethon")]
+    modules = [("telethon", "telethon"), ("google.genai", "google-genai")]
     missing: list[str] = []
     for module_name, package_name in modules:
         try:
-            __import__(module_name)
-        except Exception:
+            importlib.import_module(module_name)
+        except ImportError:
             missing.append(package_name)
     if missing:
         print(f"Installing Python packages: {', '.join(missing)}", flush=True)
@@ -109,6 +110,40 @@ _OUT_OF_REGION_HINT_RE = re.compile(
     r"(?i)(navahrudak|novogrud|новогруд|минск|minsk|гродно|grodno|брест|brest|витебск|vitebsk|"
     r"гомель|gomel|могил[её]в|mogilev|москва|moscow|петербург|spb|казань|kazan|челябинск|chelyabinsk)"
 )
+
+DEFAULT_ACQ_LLM_MODEL = "models/gemma-4-31b-it"
+LLM_GATE_STATS: dict[str, int] = {"calls": 0, "accepted": 0, "rejected": 0, "errors": 0, "skipped_no_key": 0}
+
+LLM_GATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_candidate": {"type": "boolean"},
+        "matched_intent": {"type": "string"},
+        "topic_cluster": {"type": "string"},
+        "best_reply_strategy": {"type": "string"},
+        "target_kind": {"type": "string"},
+        "target_label": {"type": "string"},
+        "target_url": {"type": "string"},
+        "reason": {"type": "string"},
+        "relevance": {"type": "number"},
+        "spam_risk": {"type": "string"},
+        "safety_risk": {"type": "string"},
+        "checklist": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "question": {"type": "string"},
+                    "answer": {"type": "boolean"},
+                    "note": {"type": "string"},
+                },
+                "required": ["id", "question", "answer", "note"],
+            },
+        },
+    },
+    "required": ["is_candidate", "matched_intent", "topic_cluster", "best_reply_strategy", "target_kind", "target_label", "target_url", "reason", "relevance", "spam_risk", "safety_risk", "checklist"],
+}
 
 
 def _int_env(name: str, default: int, *, min_value: int = 0) -> int:
@@ -269,6 +304,184 @@ def _mark_out_of_region_surface(surface: dict[str, Any], *, reason: str = "deter
 
 def _static_site_base_url() -> str:
     return (os.getenv("ACQ_STATIC_SITE_BASE_URL") or "https://kenigevents.ru").strip().rstrip("/")
+
+
+def _llm_gate_enabled() -> bool:
+    return _truthy_env("ACQ_ENABLE_LLM_GATE", True)
+
+
+def _google_key_env_names() -> list[str]:
+    # Keep acquisition discovery on the same isolated Google key lane as the
+    # Gemma 4 Telegram-monitoring Kaggle path by default. Generic fallback keys
+    # are intentionally opt-in so semantic candidate gating is not silently run
+    # on an unrelated provider/key pool.
+    configured = (os.getenv("ACQ_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY3").strip() or "GOOGLE_API_KEY3"
+    names = [configured]
+    if configured == "GOOGLE_API_KEY3":
+        names.append("GOOGLE_API_KEY_3")
+    if _truthy_env("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", False):
+        for fallback in ["GOOGLE_API_KEY", "GOOGLE_API_KEY4", "GOOGLE_API_KEY_4"]:
+            if fallback not in names:
+                names.append(fallback)
+    return names
+
+
+def _google_api_key() -> tuple[str | None, str | None]:
+    for name in _google_key_env_names():
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value, name
+    return None, None
+
+
+def _acq_llm_model() -> str:
+    return (os.getenv("ACQ_LLM_MODEL") or DEFAULT_ACQ_LLM_MODEL).strip() or DEFAULT_ACQ_LLM_MODEL
+
+
+def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
+    checklist_questions = [
+        "Есть явный вопрос, просьба, поиск рекомендации или нерешённая потребность?",
+        "Это будущая/актуальная потребность, а не постфактум-отзыв, спасибо или отчёт о прошедшем событии?",
+        "Понятно, что именно полезно ответить: конкретное событие, конкретный маршрут, поиск/подборка, фильтр или страница добавления события?",
+        "Ответ может быть коротким, нативным и не выглядеть рекламой?",
+        "Риск спама низкий при единичном аккуратном reply?",
+    ]
+    payload = {
+        "platform": opp.get("platform"),
+        "surface": {
+            "title": surface.get("title"),
+            "handle": surface.get("handle"),
+            "url": surface.get("url"),
+            "surface_type": surface.get("surface_type"),
+        },
+        "comment_text": opp.get("context_text_snippet"),
+        "prefilter_intent": opp.get("matched_intent"),
+        "prefilter_topic_cluster": opp.get("topic_cluster"),
+        "prefilter_target": opp.get("link_target"),
+        "checklist_questions": checklist_questions,
+    }
+    return (
+        "Ты оцениваешь кандидата для Subscriber Acquisition в Калининградской области. "
+        "Нужно решить, стоит ли показывать оператору карточку потенциального аккуратного reply. "
+        "Не создавай кандидат, если комментарий — просто благодарность, отзыв, похвала организаторам, отчёт о прошедшем событии, эмоция без вопроса, логистический вопрос внутри уже известного события без полезного acquisition-ответа, или если непонятно что полезно сообщить. "
+        "Если все ключевые вопросы checklist дают нет, верни is_candidate=false. "
+        "Для маршрутов: кандидат только если уместно рекомендовать конкретный уже собранный маршрут, не общий паблик. "
+        "Для обычных событий: кандидат только если человеку реально нужна афиша/рекомендация/подборка. "
+        "Для организаторов: кандидат только если человек спрашивает как добавить/разместить/прислать событие или про инфопартнёрство. "
+        "Верни строго JSON по схеме, без markdown. target_url может быть пустой строкой, если нужен будущий конкретный маршрут без готовой ссылки.\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+
+
+def _extract_llm_text(response: Any) -> str:
+    text = getattr(response, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    parts: list[str] = []
+    try:
+        for candidate in getattr(response, "candidates", []) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", []) or []:
+                if bool(getattr(part, "thought", False)):
+                    continue
+                value = getattr(part, "text", None)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+    except Exception:
+        pass
+    return "\n".join(parts).strip()
+
+
+def _parse_llm_json(raw: str) -> dict[str, Any]:
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I).strip()
+        text = re.sub(r"\s*```$", "", text).strip()
+    return json.loads(text)
+
+
+def _call_acq_llm_gate_sync(opp: dict[str, Any], surface: dict[str, Any]) -> dict[str, Any]:
+    api_key, key_env = _google_api_key()
+    if not api_key:
+        raise RuntimeError("no Google API key configured for acquisition LLM gate")
+    from google import genai
+    from google.genai import types as gtypes
+
+    client = genai.Client(api_key=api_key)
+    model = _acq_llm_model()
+    logger.info("acq.llm_gate_call model=%s key_env=%s", model, key_env)
+    response = client.models.generate_content(
+        model=model,
+        contents=_llm_gate_prompt(opp, surface),
+        config=gtypes.GenerateContentConfig(
+            temperature=0,
+            max_output_tokens=_int_env("ACQ_LLM_GATE_MAX_OUTPUT_TOKENS", 900, min_value=256),
+            response_mime_type="application/json",
+            response_schema=LLM_GATE_SCHEMA,
+        ),
+    )
+    return _parse_llm_json(_extract_llm_text(response))
+
+
+def _apply_llm_gate_result(opp: dict[str, Any], review: dict[str, Any]) -> dict[str, Any] | None:
+    if not bool(review.get("is_candidate")):
+        return None
+    updated = dict(opp)
+    if review.get("matched_intent"):
+        updated["matched_intent"] = str(review.get("matched_intent"))
+    if review.get("topic_cluster"):
+        updated["topic_cluster"] = str(review.get("topic_cluster"))
+    link = dict(updated.get("link_target") or {})
+    link["kind"] = str(review.get("target_kind") or link.get("kind") or "other")
+    link["label"] = str(review.get("target_label") or link.get("label") or link["kind"])
+    if "target_url" in review:
+        link["url"] = str(review.get("target_url") or "") or None
+    link["reason"] = str(review.get("reason") or link.get("reason") or "Gemma acquisition gate accepted")
+    updated["link_target"] = link
+    scores = dict(updated.get("scores") or {})
+    scores["source"] = "gemma4_acquisition_gate"
+    scores["relevance"] = float(review.get("relevance") or scores.get("relevance") or 0.0)
+    scores["spam_risk"] = str(review.get("spam_risk") or scores.get("spam_risk") or "low")
+    scores["safety_risk"] = str(review.get("safety_risk") or scores.get("safety_risk") or "low")
+    updated["scores"] = scores
+    evidence = dict(updated.get("evidence") or {})
+    evidence["llm_gate"] = {
+        "model": _acq_llm_model(),
+        "is_candidate": True,
+        "checklist": review.get("checklist") or [],
+        "reason": review.get("reason"),
+        "best_reply_strategy": review.get("best_reply_strategy"),
+    }
+    updated["evidence"] = evidence
+    return updated
+
+
+def _llm_review_opportunity_sync(opp: dict[str, Any], surface: dict[str, Any], diagnostics: list[str]) -> dict[str, Any] | None:
+    if not _llm_gate_enabled():
+        return opp
+    if not _google_api_key()[0]:
+        LLM_GATE_STATS["skipped_no_key"] += 1
+        diagnostics.append("acq llm gate skipped candidate: Google API key is not configured")
+        return None
+    try:
+        LLM_GATE_STATS["calls"] += 1
+        review = _call_acq_llm_gate_sync(opp, surface)
+        accepted = _apply_llm_gate_result(opp, review)
+        if accepted is None:
+            LLM_GATE_STATS["rejected"] += 1
+            diagnostics.append(f"acq llm gate rejected: {(opp.get('context_text_snippet') or '')[:120]}")
+        else:
+            LLM_GATE_STATS["accepted"] += 1
+        return accepted
+    except Exception as exc:
+        LLM_GATE_STATS["errors"] += 1
+        diagnostics.append(f"acq llm gate error: {type(exc).__name__}: {str(exc)[:300]}")
+        logger.warning("acq llm gate failed", exc_info=True)
+        return None
+
+
+async def _llm_review_opportunity_async(opp: dict[str, Any], surface: dict[str, Any], diagnostics: list[str]) -> dict[str, Any] | None:
+    return await asyncio.to_thread(_llm_review_opportunity_sync, opp, surface, diagnostics)
 
 
 def _classify_acq_intent(text: str) -> dict[str, Any] | None:
@@ -595,7 +808,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     surfaces.setdefault(discovered["external_id"], discovered)
                 opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
                 if opp:
-                    opp["evidence"] = {"relation": "vk_comment", "scanner": "vk_shadow"}
+                    opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
+                    opp = _llm_review_opportunity_sync(opp, surface, diagnostics)
+                if opp:
                     opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
                     break
@@ -837,7 +1052,9 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         ):
                             opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
                             if opp:
-                                opp["evidence"] = {"relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
+                                opp["evidence"] = {**(opp.get("evidence") or {}), "relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
+                                opp = await _llm_review_opportunity_async(opp, scan_surface, diagnostics)
+                            if opp:
                                 opportunities.append(opp)
                         if len(opportunities) >= max_opportunities:
                             break
@@ -897,6 +1114,9 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "vk_scanned_or_discovered_surfaces": len(scanned_vk),
             "telegram_live_scan_enabled": _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False),
             "vk_allowlist_scan_enabled": bool(allowed_vk),
+            "llm_gate_enabled": _llm_gate_enabled(),
+            "llm_gate_model": _acq_llm_model(),
+            "llm_gate": dict(LLM_GATE_STATS),
             "external_sends": 0,
             "comments_posted": 0,
             "stickers_sent": 0,
