@@ -1,0 +1,3 @@
+display_name: Yandex Cloud Infra
+short_description: KenigEvents YC CDN/DNS checks
+default_prompt: Use the local yc profile to inspect KenigEvents CDN, DNS, Object Storage and TLS without printing secrets.
