@@ -81,7 +81,8 @@ Additional discovery topics from the 2026-07-01 static-site documentation update
 
 - event-site search/listing needs: people asking for a site, search, calendar, exhibitions list, popular events, or similar navigation help;
 - organizer-side acquisition: people asking where to add/send/publish an event announcement or how to arrange information partnership;
-- quick-filter/badge needs: Pushkin card, kids/family, charity, recording/stream, free-entry questions that map to event-token medallions and future filters.
+- quick-filter/badge needs: Pushkin card, kids/family, charity, recording/stream, free-entry questions that map to event-token medallions and future filters;
+- trip-route recommendation contexts from `trip-recomendation`: questions like where to go/sъездить for one day from Kaliningrad by train/car, where a concrete collected route should be recommended instead of a general public.
 
 These topics are discovery/review candidates, not automatic replies. Broad semantic
 classification and final reply suitability remain LLM-first.

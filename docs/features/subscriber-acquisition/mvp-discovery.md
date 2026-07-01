@@ -105,7 +105,10 @@ in the recent static-site work:
 - `/poisk/`, `/vystavki/`, `/populyarnoe/`: search/listing/navigation questions;
 - `/partnerstvo/`: organizer and information-partnership submission questions;
 - event-token medallions / future filters: Pushkin card, kids/family, charity,
-  video recording/streaming, free-entry questions.
+  video recording/streaming, free-entry questions;
+- trip recommendations: one-day route/where-to-go-outside-Kaliningrad contexts
+  from `docs/features/trip-recomendation/requirements.md`, where the correct
+  target is a concrete route, not the general announcements public.
 
 These deterministic matches are low-cost shadow prefilters. Final classification
 and reply wording remain LLM-first before any public response.

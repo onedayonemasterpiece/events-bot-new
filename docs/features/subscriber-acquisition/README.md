@@ -52,8 +52,9 @@ Discovery opportunity topics are broader than direct event recommendations. The
 MVP deterministic prefilter also routes recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
 (`/partnerstvo/`), site search/listing questions (`/poisk/`, `/vystavki/`,
-`/populyarnoe/`), and event badge/filter questions around Pushkin card,
-kids/family, charity, recordings/streams, and free entry. These remain shadow
+`/populyarnoe/`), event badge/filter questions around Pushkin card,
+kids/family, charity, recordings/streams, and free entry, plus trip-route
+recommendation contexts from `trip-recomendation` requirements. These remain shadow
 opportunities for review; broad semantic acceptance is still LLM-first before
 any reply is published.
 

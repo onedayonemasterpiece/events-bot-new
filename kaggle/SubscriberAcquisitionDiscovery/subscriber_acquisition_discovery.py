@@ -81,6 +81,15 @@ _PARTNER_INTENT_RE = re.compile(
     r")"
 )
 _REQUEST_HINT_RE = re.compile(r"(?i)(\?|\b(?:подскажите|подскажи|где|как|куда|ищу|нуж(?:ен|на|но)|интересует|можно\s+ли|поиск|найти|посмотреть)\b)")
+_TRIP_ROUTE_INTENT_RE = re.compile(
+    r"(?i)\b("
+    r"(?:куда|как)\s+(?:съездить|поехать|прокатиться)(?:\b|.*(?:на\s+день|за\s+день|из\s+калининграда|на\s+электричк|маршрут|выходн))|"
+    r"(?:что|где)\s+(?:посмотреть|посетить).*?(?:в|во|на)\s+(?:зеленоградск|светлогорск|балтийск|янтарн|черняховск|советск|гусев|георгенбург)|"
+    r"(?:однодневн(?:ая|ый|ое)|на\s+один\s+день|за\s+день)\b.*(?:маршрут|поездк|съездить|поехать)|"
+    r"(?:маршрут|поездк[аи]|трип|trip)\b.*(?:зеленоградск|светлогорск|балтийск|янтарн|черняховск|советск|гусев|георгенбург|электричк|пригородн|из\s+калининграда)|"
+    r"(?:электричк|пригородн(?:ый|ая)\s+поезд)\b.*(?:куда|маршрут|съездить|поехать|выходн)"
+    r")"
+)
 _BADGE_FILTER_INTENT_RE = re.compile(
     r"(?i)\b("
     r"пушкинск(?:ая|ой)\s+карт|по\s+пушкинской|"
@@ -267,6 +276,17 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
     if not compact:
         return None
     base = _static_site_base_url()
+    if _TRIP_ROUTE_INTENT_RE.search(compact):
+        return {
+            "matched_intent": "trip_route_recommendation_context",
+            "topic_cluster": "trip_route_recommendation",
+            "target_url": None,
+            "target_kind": "other",
+            "target_label": "Конкретный маршрут из базы маршрутов",
+            "fallback_url": None,
+            "reason": "trip-recomendation requirements: recommend a concrete route where the discussion context makes it useful",
+            "relevance": 0.64,
+        }
     if _PARTNER_INTENT_RE.search(compact):
         return {
             "matched_intent": "organizer_submission_or_partnership",
@@ -385,11 +405,11 @@ def build_opportunity_from_message(surface: dict[str, Any], message: Any, *, def
         "candidate_events": [],
         "link_target": {
             "kind": intent.get("target_kind") or "topic_landing",
-            "url": intent.get("target_url") or default_target_url,
+            "url": intent["target_url"] if "target_url" in intent else default_target_url,
             "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
             "reason": intent.get("reason") or "shadow discovery found an acquisition opportunity",
         },
-        "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
+        "fallback_link_target": {"kind": "pka_channel", "url": intent.get("fallback_url", default_target_url), "label": "Полюбить Калининград Анонсы"},
         "reach": {"low": 5, "confidence": "low", "formula": "shadow_group_low"},
         "scores": {"relevance": intent.get("relevance") or 0.55, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
         "sticker_observation": {
@@ -491,11 +511,11 @@ def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int
         "candidate_events": [],
         "link_target": {
             "kind": intent.get("target_kind") or "topic_landing",
-            "url": intent.get("target_url") or default_target_url,
+            "url": intent["target_url"] if "target_url" in intent else default_target_url,
             "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
             "reason": intent.get("reason") or "VK shadow discovery found an acquisition opportunity",
         },
-        "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
+        "fallback_link_target": {"kind": "pka_channel", "url": intent.get("fallback_url", default_target_url), "label": "Полюбить Калининград Анонсы"},
         "reach": {"low": 3, "confidence": "low", "formula": "vk_comment_thread_low"},
         "scores": {"relevance": intent.get("relevance") or 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
         "sticker_observation": {

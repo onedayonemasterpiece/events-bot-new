@@ -11,6 +11,7 @@
 
 ### Changed
 
+- Subscriber Acquisition discovery now covers the `trip-recomendation` social-discovery requirement: one-day route/trip contexts are emitted as `trip_route_recommendation` review opportunities that require a concrete route target rather than falling back to the general announcements channel.
 - Subscriber Acquisition discovery now region-gates obvious out-of-Kaliningrad surfaces before queueing them, and broadens shadow opportunity topics beyond event recommendations to static-site search/listing, organizer partnership/submission, and event badge/filter hooks from the latest static-site documentation.
 - Subscriber Acquisition discovery now performs a bounded same-run Telegram frontier walk for deterministically discovered links, adds human-like read pauses, prefers/falls back across configured VK token lanes for read-only VK scans, documents VK seeds from existing monitoring groups, and records the Yandex/PostgreSQL storage direction as analysis rather than a hard requirement.
 - Subscriber Acquisition review cards now make rejection comments explicit:

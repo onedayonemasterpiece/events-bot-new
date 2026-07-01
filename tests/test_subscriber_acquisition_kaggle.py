@@ -40,6 +40,27 @@ def test_out_of_region_telegram_surface_is_rejected_not_queued():
     assert runtime._is_surface_scan_candidate(surface) is False
 
 
+
+
+def test_trip_recommendation_requirement_is_acquisition_topic():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+
+    opp = runtime.build_opportunity_from_message(
+        surface,
+        SimpleNamespace(id=31, message="Куда съездить на один день из Калининграда на электричке в выходные?"),
+        default_target_url="https://t.me/kenigevents",
+    )
+
+    assert opp is not None
+    assert opp["matched_intent"] == "trip_route_recommendation_context"
+    assert opp["topic_cluster"] == "trip_route_recommendation"
+    assert opp["link_target"]["kind"] == "other"
+    assert opp["link_target"]["url"] is None
+    assert "Конкретный маршрут" in opp["link_target"]["label"]
+    assert opp["fallback_link_target"]["url"] is None
+
+
 def test_acquisition_intent_covers_site_filters_and_partnership(monkeypatch):
     runtime = load_runtime()
     monkeypatch.setenv("ACQ_STATIC_SITE_BASE_URL", "https://kenigevents.ru")
