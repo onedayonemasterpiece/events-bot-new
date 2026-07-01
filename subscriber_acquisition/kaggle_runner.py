@@ -118,7 +118,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
         def _surface_priority(row: AcqSurface) -> tuple[int, int, float, int]:
             source = str(row.source or "").strip().lower()
             status = str(row.status or "").strip().lower()
-            is_new_frontier = source in {"discovered", "linked_discussion"}
+            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in"}
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
@@ -129,11 +129,16 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 int(row.id or 0),
             )
 
+        pending_existing: list[dict[str, Any]] = []
         for row in sorted(rows, key=_surface_priority):
             item = row.model_dump()
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
-            surfaces.append(item)
+            source = str(item.get("source") or "").strip().lower()
+            if source in {"discovered", "linked_discussion", "telega_in"}:
+                surfaces.append(item)
+            else:
+                pending_existing.append(item)
         for handle, title, source_url in TELEGA_IN_KALININGRAD_TG_SEEDS:
             external_id = f"tg:{handle}"
             key = ("tg", external_id)
@@ -153,6 +158,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "reach": {"confidence": "low", "basis": "telega_in_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
+        surfaces.extend(pending_existing)
         table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='vk_source'"))).scalar_one_or_none()
         if table_exists:
             info = (await session.execute(text("PRAGMA table_info(vk_source)"))).all()

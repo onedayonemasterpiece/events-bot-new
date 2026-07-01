@@ -442,7 +442,9 @@ async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
 
     payload = await collect_runtime_seed_payload(db)
 
-    assert [item["external_id"] for item in payload["surfaces"][:2]] == ["tg:123", "tg:old_seed"]
+    assert payload["surfaces"][0]["external_id"] == "tg:123"
+    assert any(item["external_id"] == "tg:anons39" for item in payload["surfaces"][:14])
+    assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:old_seed")) > 1
 
 
 @pytest.mark.asyncio
