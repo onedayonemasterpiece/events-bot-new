@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
 - **Static site pages / expanded medallions**: added the next event-detail medallion assets and QA lab for Дом китобоя, Третьяковка, КОНБ, MEOW Афиша and the Pushkin-card composite, while preserving existing ticket/family/charity/festival fact pills on event pages.
@@ -14,6 +15,7 @@
 
 ### Changed
 
+- **Static site pages / full-preview export recovery**: restored the latest static export safety guards for source URL arrays/counts, truncated-description fallback, hero image dimension probing/quality rescue and JSON-LD paid-price extraction without rolling back the two-document pgvector/Gemma related-chain contract.
 - **Personalization / smart-search key defaults**: aligned the `event-search` Edge Function and readiness probe defaults with the live KEY5 quota plan: embedding rotates across `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY`; Lite verification rotates across the four non-guide lanes and keeps `GOOGLE_API_KEY2` as LLM reserve/failover.
 - **Personalization / smart-search live rollout**: applied the KEY5 quota migration to the personalization Supabase project, set all five Google key-lane secrets, configured query embeddings to rotate across all five keys, configured Gemini Lite verification to rotate across the shared non-guide pool (`GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY`) with `GOOGLE_API_KEY2` as guide reserve/failover, deployed `event-search` from `feature/smart-search-quota-key5-site`, and verified live Lite-first search for `интересно детям` (`20` candidates, `11` exact items, embedding on `GOOGLE_API_KEY5`, first Lite attempt on active shared key `GOOGLE_API_KEY3` `ok` in `1202ms`, quota `999/999` remaining after the smoke).
 - **Personalization / smart-search KEY5 quota**: recalculated registered-user smart-search capacity after adding `GOOGLE_API_KEY5`; the Supabase quota migration now uses all five keys for query embedding, the non-guide shared pool for fast Gemini Lite verification, counts effective site registrations from `custom:yandex` identities instead of all historical Auth rows, and raises the canary plan to `1000/day` search + `1000/day` verifier calls per registered Yandex user (`10000/month` each) while keeping cross-service reserves.
@@ -28,6 +30,11 @@
 
 ### Fixed
 
+- **Static site pages / event-detail discovery feed**: restored the accepted single neutral `Смотрите дальше` continuation feed on event pages and removed the visible extra exploration block from the recovered branch so preview checks match the event-detail product contract.
+- **Static site pages / popular listing contract**: restored `/populyarnoe/` to the same compact `listing-stack` item renderer as the other static listing pages so the preview gate covers it as a real listing surface, not a discovery-card grid.
+- **Static site pages / today continuing section**: restored the `Идут сейчас` continuation section with real compact listing items for same-day long-running events instead of a link-only placeholder.
+- **Static site pages / same-day listing filter**: tightened the continuing-day filter so false long-range lecture rows do not appear in `/segodnya/`; only exhibition-like or continuing listing formats move into `Идут сейчас`.
+- **Static site pages / OCR hero parallax recovery**: restored the stronger constant-scale poster-stage vertical parallax so OCR-safe heroes move as one full-width visual without gray internal gaps.
 - **Personalization / pgvector search documentation**: documented that pgvector stores/searches vectors but does not generate semantic embeddings, recorded the 2026-07-01 FTS-vs-vector probe, and kept Postgres `to_tsvector`/`pg_trgm` as hybrid/fallback candidates rather than no-quality-loss replacements for `gemini-embedding-2`.
 - **Static site pages / Kaggle builder failure cleanup**: added failure-path cleanup for transient `node22` and extracted site directories in the StaticSiteBuilder kernel, preserving recoverable `event_related_chain_cache.json`/SQLite outputs while preventing large failed Kaggle artifacts.
 - **Static site pages / related-cache safety and deploy checks**: the exporter now refuses to overwrite a larger expensive related cache with a smaller canary run unless explicitly allowed, and the Yandex preview deploy script now verifies public preview URLs after upload and reports missing bucket/CDN public-read access instead of silently printing an unusable link.

@@ -18,6 +18,7 @@ Required URLs for the current preview once bucket/CDN public-read is restored:
 - Exhibitions/long-running listing: `/vystavki/`.
 - Popular-by-source-engagement listing: `/populyarnoe/`.
 - Information partnership/reference block page: `/partnerstvo/`.
+- Information partners directory: `/partners/`.
 - Event-token medallion QA lab: `/lab/medallions/`.
 - Urban-planning golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
 - Music golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/pesni-sssr-svetlogorsk-5878/>
@@ -47,6 +48,7 @@ site/
   src/pages/populyarnoe/index.astro
   src/pages/poisk/index.astro
   src/pages/partnerstvo/index.astro
+  src/pages/partners/index.astro
   src/pages/sobytiya/[slug].astro
   src/pages/sobytiya/[slug]/event.ics.ts
   src/pages/data/discovery/[eventId].json.ts

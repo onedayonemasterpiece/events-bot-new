@@ -13,7 +13,10 @@ const required = [
   'segodnya/index.html',
   'zavtra/index.html',
   'vyhodnye/index.html',
+  'vystavki/index.html',
+  'populyarnoe/index.html',
   'poisk/index.html',
+  'partnerstvo/index.html',
   'partners/index.html',
   'sitemap.xml',
   'robots.txt',
@@ -256,7 +259,10 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/zavtra/`)) throw new Error('Sitemap misses tomorrow listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vystavki/`)) throw new Error('Sitemap misses exhibitions listing URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/populyarnoe/`)) throw new Error('Sitemap misses popular listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/poisk/`)) throw new Error('Sitemap misses authorized search URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/partnerstvo/`)) throw new Error('Sitemap misses partnership URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/partners/`)) throw new Error('Sitemap misses info partners URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
@@ -273,7 +279,9 @@ const bundledCss = readdirSync(join(root, '_astro')).filter((name) => name.endsW
 if (!/\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/iu.test(bundledCss)) throw new Error('Authorized search build must include a strong hidden rule so unauthenticated form/results/buttons stay hidden');
 if (!searchVisibleHtml.includes('authorized-search__yandex-icon') || !searchVisibleHtml.includes('>Я</span>') || !searchVisibleHtml.includes('Войти через Яндекс')) throw new Error('Authorized search login button must expose recognizable Yandex branding/icon text');
 if (searchVisibleHtml.includes('Пока без запроса') || searchVisibleHtml.includes('cards-grid') || /<article class="event-card/u.test(searchVisibleHtml)) throw new Error('Dedicated search page must not show prefilled static result cards before a query');
+if (!searchVisibleHtml.includes('Поисковые теги') || !bundledJs.includes('ke_search_feedback_queue_v1') || !bundledJs.includes('record_event_search_feedback_v1')) throw new Error('Search page must include feedback/tag candidate UX and RPC wiring');
 if (!controlHtml.includes('/poisk/')) throw new Error('Mobile/desktop navigation must expose the authorized search page link');
+if (!controlHtml.includes('/vystavki/') || !controlHtml.includes('/populyarnoe/') || !controlHtml.includes('/partnerstvo/')) throw new Error('Navigation must expose exhibitions, popular and partnership pages');
 if (!controlHtml.includes('/partners/') || !controlHtml.includes('Инфопартнёры')) throw new Error('Footer/mobile navigation must expose the info partners page link');
 
 const partnersHtml = readFileSync(join(root, 'partners/index.html'), 'utf8');
@@ -285,6 +293,12 @@ for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https:
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }
 if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('Info partners external links must be nofollow/noopener/noreferrer');
+const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
+if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
+const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
+const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
+if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

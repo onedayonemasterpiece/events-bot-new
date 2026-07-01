@@ -16,6 +16,21 @@ When vector results are exhausted, the UI starts a separate section **«Возм
 
 Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
 
+## Search feedback and public tag candidates
+
+The dedicated `/poisk/` page now exposes seed query chips and, after enough
+cards are rendered, asks the signed-in user whether the results matched their
+intent. The browser always writes a small local fallback item to
+`ke_search_feedback_queue_v1`; when the Supabase session is available it also
+calls `record_event_search_feedback_v1(...)`.
+
+Migration `20260701_event_search_feedback_tags.sql` adds private
+`event_search_feedback` rows and aggregated `event_search_tag_candidates`.
+Raw feedback stays server-side: browser roles do not get table access, RLS is
+enabled, and the only browser grant is authenticated execute on the compact RPC.
+Positive feedback increments a candidate query hash; a later LLM/moderation job
+must canonicalize, merge and approve tags before a public static page is built.
+
 ## P1 product idea: saved search as public tag page
 
 Registered users should be able to save a successful search as a compact public tag candidate:
@@ -154,7 +169,8 @@ Migrations: `supabase/migrations/20260628_event_search_pgvector.sql` plus harden
 `20260628_event_search_weekday_and_related_rpc.sql`,
 `20260628_event_search_public_fields_and_model_filter.sql`,
 `20260629_event_search_query_facets.sql` and
-`20260630_event_search_embedding_doc_kind.sql`.
+`20260630_event_search_embedding_doc_kind.sql`, plus
+`20260701_event_search_feedback_tags.sql` for feedback/tag-candidate intake.
 
 Tables:
 
@@ -163,6 +179,8 @@ Tables:
 - `public.search_quota_plans` — default registered quota plan;
 - `public.user_search_quota_ledger` — day/month counters per Supabase user;
 - `public.event_search_requests` — audit log with query hash and length only, no raw query text.
+- `public.event_search_feedback` — private authenticated feedback rows with raw query text for moderation only;
+- `public.event_search_tag_candidates` — private aggregated candidate tags keyed by query hash.
 
 RPCs:
 
@@ -171,6 +189,7 @@ RPCs:
 - `get_event_search_quota_v1(...)` — visible quota state;
 - `reserve_event_search_quota_v1(...)` — atomic quota reservation before provider calls;
 - `record_event_search_request_v1(...)` — compact search audit.
+- `record_event_search_feedback_v1(...)` — authenticated feedback intake; records local result ids/count and updates a candidate tag aggregate, but exposes no raw feedback tables to browser roles.
 
 Direct browser `select` on raw tables is forbidden and currently rejected by grants/RLS. Browser access is through Auth + Edge Function/RPC only.
 

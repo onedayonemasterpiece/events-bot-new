@@ -693,12 +693,15 @@ export function getTodayEvents(): PreviewEvent[] {
 
 export function getTodayPrimaryEvents(): PreviewEvent[] {
   const current = getCurrentDate();
-  return collapseLinkedSessionEvents(getTodayEvents().filter((event) => event.start_date === current && !isLongRunningListingEvent(event) && !isExhibitionLikeEvent(event)));
+  return collapseLinkedSessionEvents(
+    getTodayEvents().filter((event) => event.start_date === current && !isContinuingListingEvent(event) && !isExhibitionLikeEvent(event)),
+  );
 }
 
 export function getTodayContinuingEvents(): PreviewEvent[] {
-  const current = getCurrentDate();
-  return collapseLinkedSessionEvents(getTodayEvents().filter((event) => event.start_date !== current || isLongRunningListingEvent(event) || isExhibitionLikeEvent(event)));
+  return collapseLinkedSessionEvents(
+    getTodayEvents().filter((event) => isContinuingListingEvent(event) || isExhibitionLikeEvent(event)),
+  );
 }
 
 export function getOngoingExhibitionEvents(): PreviewEvent[] {

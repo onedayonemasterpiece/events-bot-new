@@ -9,7 +9,7 @@ import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { eventImageUrl } from '../../lib/assets';
-import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getAdjacentDiscoveryEvents, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -30,7 +30,6 @@ if (!event) {
   return Astro.redirect(withBase('/__preview/'));
 }
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
-const explorationFeed = getAdjacentDiscoveryEvents(event, discoveryFeed.map((candidate) => candidate.id), 6);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
@@ -114,7 +113,7 @@ const galleryCta = galleryCtaEvent ? {
 
       <section id="discovery-feed" class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
-          <h2>Вам могут быть интересны</h2>
+          <h2>Смотрите дальше</h2>
           <div
             class="cards-grid cards-grid--immersive"
             data-discovery-feed
@@ -130,18 +129,6 @@ const galleryCta = galleryCtaEvent ? {
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>
       </section>
-
-      {explorationFeed.length > 0 && (
-        <section class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
-          <div class="section-card__inner">
-            <p class="eyebrow">Чтобы не замыкаться в одном жанре</p>
-            <h2>Ещё может быть интересно</h2>
-            <div class="cards-grid cards-grid--immersive" data-feed-card-variant={feedCardVariant}>
-              {explorationFeed.map((candidate) => <EventCard event={candidate} variant={feedCardVariant} />)}
-            </div>
-          </div>
-        </section>
-      )}
 
       <PersonalFeedSlot context="event-detail" />
     </div>

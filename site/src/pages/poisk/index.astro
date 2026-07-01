@@ -5,7 +5,13 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/poisk/');
 const title = `Умный поиск событий | ${SITE_NAME}`;
-const description = 'Поиск событий по естественному запросу через авторизацию Яндекс, pgvector и проверку нейросетью.';
+const description = 'Векторный поиск по событиям Калининграда после входа через Яндекс: результаты выдаются карточками с лайками, календарём и поделиться.';
+const seedSearchTags = [
+  { label: 'Джаз на выходных', query: 'джаз на выходных' },
+  { label: 'С детьми', query: 'чтобы было интересно детям' },
+  { label: 'Бесплатно сегодня', query: 'бесплатные события сегодня' },
+  { label: 'Концерт классической музыки', query: 'концерт классической музыки' },
+];
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <main id="main">
@@ -16,6 +22,19 @@ const description = 'Поиск событий по естественному �
         <span>Поиск</span>
       </nav>
       <AuthorizedEventSearch standalone headingLevel="h1" />
+      <section class="section-card" style="margin-top: 1rem;" data-nosnippet>
+        <div class="section-card__inner">
+          <p class="eyebrow">Поисковые теги</p>
+          <h2>Запросы, которые могут стать страницами</h2>
+          <p class="muted-note">Когда авторизованные пользователи оценивают хорошую выдачу, запрос попадает в очередь: LLM унифицирует формулировку, убирает пересечения и после модерации создаёт общую статическую страницу. Ниже — первые seed-теги для проверки UX.</p>
+          <div class="source-links search-tag-links">
+            {seedSearchTags.map((tag) => (
+              <a href={withBase(`/poisk/?q=${encodeURIComponent(tag.query)}`)}>{tag.label}</a>
+            ))}
+          </div>
+          <p class="muted-note" data-search-local-feedback-note>Ваши оценки поиска сохраняются в Supabase; если сеть недоступна — временно в локальной очереди браузера.</p>
+        </div>
+      </section>
     </div>
   </main>
 </EventLayout>

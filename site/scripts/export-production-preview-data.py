@@ -136,6 +136,24 @@ def clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def description_looks_truncated(description: str, source_text: str) -> bool:
+    """Detect an incomplete LLM-written description and safely fall back to source text.
+
+    This guard does not rewrite meaning; it only prevents an obviously cut-off
+    generated field from replacing the fuller source fact text on static pages.
+    """
+    text = clean_text(description)
+    source = clean_text(source_text)
+    if not text or not source or len(source) <= len(text) + 80:
+        return False
+    if len(text) < 320 and not re.search(r"[.!?…»)]$", text):
+        return True
+    tail = text[-32:].lower()
+    if re.search(r"\b[а-яёa-z]{1,3}$", tail, re.I) and not re.search(r"[.!?…»)]$", text):
+        return True
+    return False
+
+
 def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
     try:
         return row[key]
@@ -350,6 +368,160 @@ def meaningful_ocr(value: Any) -> bool:
     return len(letters) >= 20
 
 
+IMAGE_DIMENSION_CACHE: dict[str, tuple[int | None, int | None]] = {}
+
+
+def parse_png_dimensions(data: bytes) -> tuple[int, int] | None:
+    if data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
+        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    return None
+
+
+def parse_webp_dimensions(data: bytes) -> tuple[int, int] | None:
+    if len(data) < 30 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        return None
+    kind = data[12:16]
+    if kind == b"VP8X" and len(data) >= 30:
+        width = 1 + int.from_bytes(data[24:27], "little")
+        height = 1 + int.from_bytes(data[27:30], "little")
+        return width, height
+    if kind == b"VP8 " and len(data) >= 30:
+        # Lossy VP8 frame header after chunk header. Signature 9d 01 2a.
+        start = 20
+        sig = data.find(b"\x9d\x01\x2a", 20, 64)
+        if sig >= 0 and len(data) >= sig + 7:
+            width = int.from_bytes(data[sig + 3:sig + 5], "little") & 0x3fff
+            height = int.from_bytes(data[sig + 5:sig + 7], "little") & 0x3fff
+            return width, height
+    if kind == b"VP8L" and len(data) >= 25:
+        b0, b1, b2, b3 = data[21], data[22], data[23], data[24]
+        width = 1 + (((b1 & 0x3F) << 8) | b0)
+        height = 1 + (((b3 & 0x0F) << 10) | (b2 << 2) | ((b1 & 0xC0) >> 6))
+        return width, height
+    return None
+
+
+def parse_jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    if not data.startswith(b"\xff\xd8"):
+        return None
+    i = 2
+    n = len(data)
+    while i + 9 < n:
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        while i < n and data[i] == 0xFF:
+            i += 1
+        if i >= n:
+            break
+        marker = data[i]
+        i += 1
+        if marker in {0xD8, 0xD9, 0x01} or 0xD0 <= marker <= 0xD7:
+            continue
+        if i + 2 > n:
+            break
+        length = int.from_bytes(data[i:i + 2], "big")
+        if length < 2 or i + length > n:
+            break
+        if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF} and length >= 7:
+            height = int.from_bytes(data[i + 3:i + 5], "big")
+            width = int.from_bytes(data[i + 5:i + 7], "big")
+            return width, height
+        i += length
+    return None
+
+
+def parse_image_dimensions(data: bytes) -> tuple[int, int] | None:
+    return parse_png_dimensions(data) or parse_webp_dimensions(data) or parse_jpeg_dimensions(data)
+
+
+def probe_image_dimensions(url: str, timeout: float = 4.0) -> tuple[int | None, int | None]:
+    """Best-effort remote image dimension probe without full image decoding.
+
+    Static previews need to avoid picking a tiny/blurred first media item as the
+    hero when a later same-event image is much sharper. The probe reads only an
+    initial byte range and parses PNG/JPEG/WebP headers. If networking or parsing
+    fails, the caller falls back to the legacy 1080x1350 preview contract.
+    """
+    key = image_url_key(url)
+    if key in IMAGE_DIMENSION_CACHE:
+        return IMAGE_DIMENSION_CACHE[key]
+    result: tuple[int | None, int | None] = (None, None)
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "KenigEventsStaticPreview/1.0 (+https://kenigevents.ru)",
+                "Range": "bytes=0-65535",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            head = response.read(65536)
+        parsed = parse_image_dimensions(head)
+        if parsed and parsed[0] > 0 and parsed[1] > 0:
+            result = parsed
+    except Exception:
+        result = (None, None)
+    IMAGE_DIMENSION_CACHE[key] = result
+    return result
+
+
+def image_area(asset: dict[str, Any]) -> int:
+    try:
+        width = int(asset.get("width") or 0)
+        height = int(asset.get("height") or 0)
+    except Exception:
+        return 0
+    return max(0, width) * max(0, height)
+
+
+def hero_image_quality_score(asset: dict[str, Any]) -> float:
+    area = image_area(asset)
+    width = int(asset.get("width") or 0)
+    height = int(asset.get("height") or 0)
+    min_side = min(width, height) if width and height else 0
+    score = math.log1p(area) if area else 0.0
+    if min_side and min_side < 360:
+        score -= 4.0
+    elif min_side and min_side < 640:
+        score -= 1.3
+    if asset.get("image_text_mode") == "visual_only":
+        score += 0.15
+    if str(asset.get("src") or "").startswith("https://storage.yandexcloud.net/kenigevents/"):
+        score += 0.04
+    return score
+
+
+def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not assets:
+        return None
+    first = assets[0]
+    first_area = image_area(first)
+    first_score = hero_image_quality_score(first)
+    # If the first item is tiny, rescue it with the earliest adequate later image,
+    # not necessarily the largest one: source order still carries editorial intent.
+    if first_area < 300_000:
+        for candidate in assets[1:]:
+            candidate_area = image_area(candidate)
+            try:
+                min_side = min(int(candidate.get("width") or 0), int(candidate.get("height") or 0))
+            except Exception:
+                min_side = 0
+            if candidate_area >= 900_000 and min_side >= 720:
+                return candidate
+    best = max(assets, key=hero_image_quality_score)
+    best_area = image_area(best)
+    best_score = hero_image_quality_score(best)
+    if best is first:
+        return first
+    if first.get("image_text_mode") == "ocr_text" and best.get("image_text_mode") != "ocr_text" and first_area >= 500_000:
+        return first
+    # Strong quality rescue: low-quality first image vs a clearly better later image.
+    if first_area and best_area >= max(first_area * 2.25, first_area + 600_000) and best_score >= first_score + 1.0:
+        return best
+    return first
+
+
 def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, list[dict[str, Any]]]:
     rows = con.execute(
         "select supabase_url, catbox_url, ocr_text from eventposter where event_id=? order by id asc", (event_id,)
@@ -376,33 +548,84 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     override_url = IMAGE_URL_OVERRIDES.get(event_id)
     if override_url:
         urls = [override_url] + [url for url in urls if image_url_key(url) != image_url_key(override_url)]
-    primary = urls[0] if urls else None
     assets: list[dict[str, Any]] = []
-    for url in urls[:12]:
+    first_width: int | None = None
+    first_height: int | None = None
+    needs_rescue_scan = False
+    if len(urls) > 1:
+        probed_width, probed_height = probe_image_dimensions(urls[0])
+        first_width = int(probed_width or 0) or None
+        first_height = int(probed_height or 0) or None
+        if first_width and first_height:
+            first_area = first_width * first_height
+            needs_rescue_scan = first_area < 900_000 or min(first_width, first_height) < 720
+        else:
+            needs_rescue_scan = True
+    for index, url in enumerate(urls[:12]):
         ocr = ocr_by_url.get(image_url_key(url), "")
         mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
-        assets.append({
+        if index == 0:
+            probed_width, probed_height = first_width, first_height
+        elif needs_rescue_scan:
+            probed_width, probed_height = probe_image_dimensions(url)
+        else:
+            probed_width, probed_height = (None, None)
+        width = int(probed_width or 1080)
+        height = int(probed_height or 1350)
+        asset = {
             "src": url,
-            "width": 1080,
-            "height": 1350,
+            "width": width,
+            "height": height,
             "alt": f"Афиша события «{title}»",
             "image_text_mode": mode,
             "image_kind": "poster" if mode == "ocr_text" else "photo",
             "recommended_hero_fit": "contain" if mode == "ocr_text" else "cover",
             "safe_crop": mode != "ocr_text",
-        })
+            "source_order": index,
+        }
+        asset["quality_score"] = round(hero_image_quality_score(asset), 4)
+        assets.append(asset)
+    primary_asset = choose_primary_image_asset(assets)
+    if primary_asset and assets and primary_asset is not assets[0]:
+        log_stage(
+            "hero_image_promoted",
+            event_id=event_id,
+            old_src=assets[0].get("src"),
+            old_width=assets[0].get("width"),
+            old_height=assets[0].get("height"),
+            old_quality=assets[0].get("quality_score"),
+            new_src=primary_asset.get("src"),
+            new_width=primary_asset.get("width"),
+            new_height=primary_asset.get("height"),
+            new_quality=primary_asset.get("quality_score"),
+        )
+        assets = [primary_asset] + [asset for asset in assets if asset is not primary_asset]
+    primary = assets[0]["src"] if assets else None
     primary_mode = assets[0]["image_text_mode"] if assets else "unknown"
     return primary, primary_mode, assets
 
 
-def source_metrics(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> tuple[int, int, int, int]:
-    urls = set()
-    for value in [row["source_post_url"], row["source_vk_post_url"]]:
-        if clean_text(value):
-            urls.add(clean_text(value))
-    for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
-        if clean_text(src["source_url"]):
-            urls.add(clean_text(src["source_url"]))
+def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: Any) -> None:
+        url = clean_text(value)
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+
+    add(row["source_post_url"])
+    add(row["source_vk_post_url"])
+    try:
+        for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
+            add(src["source_url"])
+    except sqlite3.OperationalError:
+        pass
+    return urls
+
+
+def source_metrics(con: sqlite3.Connection, urls: list[str]) -> tuple[int, int, int, int]:
     likes = views = shares = sources = 0
     for url in urls:
         best = None
@@ -421,7 +644,6 @@ def source_metrics(con: sqlite3.Connection, event_id: int, row: sqlite3.Row) -> 
             views += int(best["views"] or 0)
             shares += int(best["reposts"] or 0)
     return likes, views, shares, sources
-
 
 def split_current_datetime(value: str | None, current_date: str) -> tuple[str, str | None]:
     raw = str(value or "").strip()
@@ -570,12 +792,15 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     status = status_label(row, ticket)
     ticket, status = apply_preview_overrides(event_id, ticket, status)
     primary_image, image_mode, image_assets = collect_images(con, event_id, row["photo_urls"], title)
-    source_likes, source_views, source_shares, engagement_sources = source_metrics(con, event_id, row)
+    source_urls = collect_source_urls(con, event_id, row)
+    source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
     summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
     description = str(row["description"] or row["source_text"] or summary or "").strip()
+    if description_looks_truncated(description, str(row["source_text"] or "")):
+        description = str(row["source_text"] or description).strip()
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
-    source_url = clean_text(row["source_post_url"]) or clean_text(row["source_vk_post_url"]) or None
+    source_url = source_urls[0] if source_urls else None
     return {
         "id": event_id,
         "source_prod_id": event_id,
@@ -600,6 +825,8 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "map_query": ", ".join([part for part in [city, venue, address] if part]) or None,
         "ticket": ticket,
         "source_url": source_url,
+        "source_urls": source_urls,
+        "source_count": len(source_urls),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,
         "image_url": primary_image,
         "image_alt": f"Афиша события «{title}»",

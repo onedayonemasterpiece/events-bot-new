@@ -1,6 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import EventCard from '../../components/EventCard.astro';
+import EventListItem from '../../components/EventListItem.astro';
 import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
@@ -35,8 +35,8 @@ const description = 'Лента популярных событий по соц�
         <div class="section-card__inner">
           <ListingPersonalFilter total={events.length} label="популярное" />
           <h2>{events.length ? `Найдено: ${events.length}` : 'Пока нет событий с заметной соцактивностью'}</h2>
-          <div class="cards-grid cards-grid--immersive" data-feed-card-variant="split-actions">
-            {events.map((event) => <EventCard event={event} label="Популярное" variant="split-actions" />)}
+          <div class="listing-stack">
+            {events.map((event) => <EventListItem event={event} />)}
           </div>
         </div>
       </section>

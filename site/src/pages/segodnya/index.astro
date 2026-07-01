@@ -82,14 +82,14 @@ const sections = dayparts
             <section class="listing-daypart listing-daypart--continuing" data-listing-daypart aria-labelledby="today-continuing">
               <div class="listing-daypart__header">
                 <div>
-                  <p class="eyebrow">Отдельно</p>
-                  <h3 id="today-continuing">Выставки и долгие форматы</h3>
+                  <p class="eyebrow">Продолжаются</p>
+                  <h3 id="today-continuing">Идут сейчас</h3>
                 </div>
                 <span class="listing-daypart__count" data-listing-daypart-count>{continuingSectionEvents.length}</span>
               </div>
-              <p class="muted-note">Эти события доступны сегодня, но идут много дней или повторяются ежедневно. Для быстрого выбора “куда сегодня” они не смешиваются с разовыми событиями.</p>
-              <div class="source-links">
-                <a href={withBase('/vystavki/')}>Открыть раздел выставок и долгих форматов</a>
+              <p class="muted-note">Длинные выставки и форматы, которые не начинаются сегодня, но доступны сейчас.</p>
+              <div class="listing-stack">
+                {continuingSectionEvents.map((event) => <EventListItem event={event} />)}
               </div>
             </section>
           ) : null}

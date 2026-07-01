@@ -86,6 +86,8 @@ const HeadingTag = headingLevel;
     let offset = 0;
     let loading = false;
     let fallbackStarted = false;
+    let feedbackShown = false;
+    let lastResultEventIds = [];
     let authCallbackHadError = false;
     let progressValue = 0;
     const searchTimeoutMs = 60000;
@@ -287,6 +289,9 @@ const HeadingTag = headingLevel;
       root.classList.toggle('is-authorized', signedIn);
       root.classList.toggle('is-auth-checking', checking);
       if (signedIn) {
+        const params = new URLSearchParams(window.location.search);
+        const initialQuery = params.get('q');
+        if (initialQuery && input && !input.value) input.value = initialQuery.slice(0, 160);
         markAuthIntent('signed_in', { user_hint: displayUserName(session.user) });
       } else if (checking) {
         markAuthIntent('checking');
@@ -388,6 +393,65 @@ const HeadingTag = headingLevel;
       results.appendChild(heading);
     }
 
+    function candidateEventId(item) {
+      const value = item?.event_id || item?.id || item?.display?.event_id || item?.display?.id;
+      const id = Number(value);
+      return Number.isFinite(id) && id > 0 ? id : null;
+    }
+
+    function enqueueLocalFeedback(query, verdict, eventIds) {
+      try {
+        const key = 'ke_search_feedback_queue_v1';
+        const queue = JSON.parse(window.localStorage.getItem(key) || '[]');
+        queue.push({ query, verdict, event_ids: eventIds || [], ts: new Date().toISOString() });
+        window.localStorage.setItem(key, JSON.stringify(queue.slice(-80)));
+      } catch (_error) {
+        // Local fallback is best-effort only.
+      }
+    }
+
+    async function sendSearchFeedback(query, verdict) {
+      const eventIds = lastResultEventIds.slice(0, 40);
+      enqueueLocalFeedback(query, verdict, eventIds);
+      if (!supabase) return { ok: false, localOnly: true };
+      try {
+        const { error } = await supabase.rpc('record_event_search_feedback_v1', {
+          p_query: query,
+          p_verdict: verdict,
+          p_result_event_ids: eventIds,
+          p_result_count: eventIds.length,
+          p_metadata: { surface: 'authorized_event_search', client_ts: new Date().toISOString() },
+        });
+        if (error) return { ok: false, error };
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    }
+
+    function appendFeedbackPrompt(query) {
+      if (!results || feedbackShown || lastResultEventIds.length < 3) return;
+      feedbackShown = true;
+      const wrap = document.createElement('div');
+      wrap.className = 'authorized-search__feedback';
+      wrap.innerHTML = `<strong>Похоже на то, что вы искали?</strong><div class="authorized-search__feedback-actions"><button type="button" data-search-feedback="matched">Совпало с ожиданиями</button><button type="button" data-search-feedback="missed">Не совпало</button></div><p class="muted-note">Хорошие запросы попадут в очередь поисковых тегов: после LLM-унификации для них будет создана статическая страница.</p>`;
+      wrap.querySelectorAll('[data-search-feedback]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const verdict = button.dataset.searchFeedback || 'missed';
+          wrap.classList.add('is-saving');
+          wrap.querySelectorAll('button').forEach((item) => { item.disabled = true; });
+          const saved = await sendSearchFeedback(query, verdict);
+          wrap.innerHTML = saved.ok
+            ? '<strong>Спасибо. Запрос сохранён для анализа поисковых тегов.</strong><p class="muted-note">Если похожих оценок станет достаточно, появится общая статическая страница и тег поиска.</p>'
+            : '<strong>Спасибо. Запрос сохранён в браузере.</strong><p class="muted-note">Не удалось отправить на сервер сейчас; локальная очередь не блокирует поиск.</p>';
+        });
+      });
+      const cards = results.querySelectorAll('[data-event-card]');
+      const anchor = cards[Math.min(3, cards.length - 1)];
+      if (anchor?.parentElement === results) anchor.insertAdjacentElement('afterend', wrap);
+      else results.appendChild(wrap);
+    }
+
     function setResultContext(data) {
       if (!results) return;
       results.dataset.surface = 'authorized_event_search';
@@ -437,6 +501,8 @@ const HeadingTag = headingLevel;
       if (more) more.hidden = true;
       offset = 0;
       fallbackStarted = false;
+      feedbackShown = false;
+      lastResultEventIds = [];
     }
 
     async function invokeEventSearch(body, session) {
@@ -549,6 +615,8 @@ const HeadingTag = headingLevel;
           currentQuery = query;
           offset = 0;
           fallbackStarted = false;
+          feedbackShown = false;
+          lastResultEventIds = [];
           if (results) {
             results.innerHTML = '';
             setResultContext({});
@@ -587,6 +655,7 @@ const HeadingTag = headingLevel;
           }
           const html = renderCards(items, offset);
           if (html) results.insertAdjacentHTML('beforeend', html);
+          lastResultEventIds.push(...items.map(candidateEventId).filter((id) => id != null));
           if (items.length === 0 && !fallbackStarted) {
             appendSectionHeading('Возможно, вам будет интересно');
             fallbackStarted = true;
@@ -597,7 +666,9 @@ const HeadingTag = headingLevel;
               fallbackStarted = true;
             }
             results.insertAdjacentHTML('beforeend', renderCards(fallbackItems, offset + items.length));
+            lastResultEventIds.push(...fallbackItems.map(candidateEventId).filter((id) => id != null));
           }
+          appendFeedbackPrompt(query);
           results.hidden = !results.children.length;
         }
         const nextOffset = Number(data?.next_offset);
@@ -734,6 +805,7 @@ const HeadingTag = headingLevel;
       logout?.addEventListener('click', async () => {
         await supabase.auth.signOut();
         clearResults();
+        lastResultEventIds = [];
         clearAuthIntent();
         authCallbackHadError = false;
         renderAuthState(null);

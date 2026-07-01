@@ -3477,10 +3477,10 @@ const FOOTER_SOCIAL_LINKS = [
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
               const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
-              const maxOffset = isPosterStage ? 28 : 64;
+              const maxOffset = isPosterStage ? 56 : 64;
               const offset = -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
-                visual.style.setProperty('--hero-poster-parallax-y', `${(offset * 0.45).toFixed(1)}px`);
+                visual.style.setProperty('--hero-poster-parallax-y', `${offset.toFixed(1)}px`);
               } else {
                 images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));
               }

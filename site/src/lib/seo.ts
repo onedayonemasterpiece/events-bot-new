@@ -15,6 +15,18 @@ function toJsonLdDateTime(value: string | null | undefined): string | undefined 
   return raw;
 }
 
+function parseRublePriceLabel(label: string | null | undefined): { low: number; high: number } | null {
+  const raw = label?.trim();
+  if (!raw) return null;
+  const values = [...raw.matchAll(/\d+(?:[.,]\d+)?/gu)]
+    .map((match) => Number(match[0].replace(',', '.')))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!values.length) return null;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  return { low, high };
+}
+
 export function eventTitle(event: PreviewEvent): string {
   const place = [displayDate(event), event.venue_name || event.city].filter(Boolean).join(', ');
   return `${event.title} — ${place} | ${SITE_NAME}`;
@@ -34,16 +46,27 @@ export function buildEventJsonLd(event: PreviewEvent) {
   } : undefined;
   const imageList = Array.from(new Set([event.image_url, ...(event.image_assets || []).map((image) => image.src)].map((image) => eventImageUrl(image)).filter(Boolean))) as string[];
   const offerUrl = isExternalHttpUrl(event.ticket.href) ? event.ticket.href : (isExternalHttpUrl(event.source_url) ? event.source_url : undefined);
-  const offer = offerUrl ? {
+  const priceRange = !event.ticket.is_free ? parseRublePriceLabel(event.ticket.price_label) : null;
+  const offer = offerUrl ? (priceRange && priceRange.high > priceRange.low ? {
+    '@type': 'AggregateOffer',
+    url: offerUrl,
+    availability: event.ticket.status === 'sold_out'
+      ? 'https://schema.org/SoldOut'
+      : 'https://schema.org/InStock',
+    lowPrice: String(priceRange.low),
+    highPrice: String(priceRange.high),
+    priceCurrency: 'RUB',
+    validFrom: toJsonLdDateTime(event.updated_at),
+  } : {
     '@type': 'Offer',
     url: offerUrl,
     availability: event.ticket.status === 'sold_out'
       ? 'https://schema.org/SoldOut'
       : 'https://schema.org/InStock',
-    price: event.ticket.is_free ? '0' : undefined,
-    priceCurrency: event.ticket.is_free ? 'RUB' : undefined,
+    price: event.ticket.is_free ? '0' : priceRange ? String(priceRange.low) : undefined,
+    priceCurrency: event.ticket.is_free || priceRange ? 'RUB' : undefined,
     validFrom: toJsonLdDateTime(event.updated_at),
-  } : undefined;
+  }) : undefined;
 
   return {
     '@context': 'https://schema.org',
