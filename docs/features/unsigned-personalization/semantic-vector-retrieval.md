@@ -230,7 +230,7 @@ External gate completed on 2026-07-01 from branch
 `EVENT_SEARCH_*_KEY_ENVS` lists are limited to `GOOGLE_API_KEY5`,
 reserve/failover lanes are configured separately as
 `GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2,GOOGLE_API_KEY`, the quota
-migration is applied, and `event-search` is deployed from SHA `d75e8820` with
+migration is applied, and `event-search` is deployed from SHA `72c69421` with
 the Lite-first/Gemma-overflow code path. Final live smoke used only KEY5 for both
 query embedding and Gemini Lite verification (`11` exact items, quota `349/349`
 remaining after the smoke).
