@@ -8,7 +8,7 @@ import time as _time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Set
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -96,7 +96,10 @@ async def _run_scheduled_guide_excursions(
         send_progress=bool(target_chat_id),
     )
     auto_publish = _env_enabled("ENABLE_GUIDE_DIGEST_SCHEDULED", default=False)
-    visual_auto_publish = _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED", default=False)
+    # The visual one-card digest has its own morning scheduler.  Keep the old
+    # after-scan hook behind an explicit legacy flag to avoid double-publishing
+    # the same visual digest in the evening full monitor slot.
+    visual_auto_publish = _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_AFTER_SCAN", default=False)
     warnings = [str(item) for item in (getattr(result, "warnings", None) or []) if str(item).strip()]
     if mode != "full" or result.errors or bot is None or not (auto_publish or visual_auto_publish):
         return
@@ -237,6 +240,86 @@ async def _run_scheduled_guide_excursions(
             )
         except Exception:
             logging.exception("SCHED failed to notify admin about scheduled guide visual digest")
+
+
+async def _run_scheduled_guide_visual_digest(
+    db,
+    bot,
+    *,
+    run_id: str | None = None,
+    trigger: str = "scheduled",
+) -> dict[str, Any]:
+    from guide_excursions.visual_digest import publish_visual_digest_daily
+
+    details: dict[str, Any] = {
+        "scheduler_run_id": run_id,
+        "max_cards": 1,
+        "vk_delay_seconds": int(os.getenv("GUIDE_VISUAL_DIGEST_VK_DELAY_SECONDS", "600") or 600),
+        "story_delay_seconds": int(os.getenv("GUIDE_VISUAL_DIGEST_VK_STORY_DELAY_SECONDS", "900") or 900),
+    }
+    ops_run_id = await start_ops_run(
+        db,
+        kind="guide_visual_digest",
+        trigger=trigger,
+        operator_id=0,
+        details=details,
+    )
+    target_chat_id = await resolve_superadmin_chat_id(db)
+    try:
+        result = await publish_visual_digest_daily(
+            db,
+            bot,
+            max_cards=1,
+            vk_delay_seconds=details["vk_delay_seconds"],
+        )
+        details["result"] = result
+        status = "success" if result.get("published") else "empty" if result.get("reason") == "no_items" else "failed"
+        await finish_ops_run(db, run_id=ops_run_id, status=status, details=details)
+        if target_chat_id and bot is not None:
+            try:
+                vk_result = dict(result.get("vk") or {}) if isinstance(result.get("vk"), Mapping) else {}
+                tg_result = dict(result.get("telegram") or {}) if isinstance(result.get("telegram"), Mapping) else {}
+                await bot.send_message(
+                    int(target_chat_id),
+                    (
+                        "📣 Visual guide digest\n"
+                        f"status={status}\n"
+                        f"issue_id={result.get('issue_id')}\n"
+                        f"tg={','.join(tg_result.get('target_chats') or []) if tg_result else 'skipped'}\n"
+                        f"vk={vk_result.get('url') or vk_result.get('reason') or 'skipped'}"
+                    ),
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                logging.exception("SCHED failed to notify admin about visual guide digest")
+        return result
+    except Exception as exc:
+        details["error"] = str(exc) or type(exc).__name__
+        await finish_ops_run(db, run_id=ops_run_id, status="failed", details=details)
+        if target_chat_id and bot is not None:
+            try:
+                await bot.send_message(
+                    int(target_chat_id),
+                    "❌ Visual guide digest failed\n" f"reason={details['error']}",
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                logging.exception("SCHED failed to notify admin about visual guide digest failure")
+        raise
+
+
+async def _run_scheduled_guide_visual_digest_stories_due(
+    db,
+    bot,
+    *,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    del run_id
+    from guide_excursions.visual_digest import publish_due_visual_digest_vk_stories
+
+    result = await publish_due_visual_digest_vk_stories(db, bot)
+    logging.info("SCHED guide_visual_digest_stories_due result=%s", result)
+    return result
 
 
 async def _run_poll_to_forward_debug_tick(db, bot, run_id: str | None = None) -> None:
@@ -2524,6 +2607,7 @@ def runtime_health_status() -> dict[str, Any]:
     enabled, _, _, _, _ = _video_tomorrow_schedule_settings()
     popular_review_enabled, _, _ = _popular_review_schedule_settings()
     guide_enabled, _, _ = _guide_monitoring_schedule_settings()
+    guide_visual_enabled = _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED", default=False)
     promo_vk_enabled = _env_enabled("ENABLE_PROMO_VK_SCHEDULER", default=True)
     is_prod = os.getenv("DEV_MODE") != "1" and os.getenv("PYTEST_CURRENT_TEST") is None
     tg_monitoring_enabled = _env_enabled("ENABLE_TG_MONITORING", default=is_prod)
@@ -2543,6 +2627,8 @@ def runtime_health_status() -> dict[str, Any]:
         "promo_vk": "disabled",
         "guide_excursions_light": "disabled",
         "guide_excursions_full": "disabled",
+        "guide_visual_digest": "disabled",
+        "guide_visual_digest_vk_story_due": "disabled",
         "kenigsberg_story_daily": "disabled" if os.getenv("DEV_MODE") == "1" else "unknown",
     }
     if scheduler is None:
@@ -2562,6 +2648,10 @@ def runtime_health_status() -> dict[str, Any]:
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
+        if guide_visual_enabled:
+            payload["guide_visual_digest"] = "missing_scheduler"
+            if _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES", default=False):
+                payload["guide_visual_digest_vk_story_due"] = "missing_scheduler"
         return payload
 
     try:
@@ -2667,6 +2757,11 @@ def runtime_health_status() -> dict[str, Any]:
                 payload["guide_excursions_light_next_run"] = (
                     first_next.isoformat() if hasattr(first_next, "isoformat") else str(first_next)
                 )
+
+    if guide_visual_enabled:
+        _set_job_health("guide_visual_digest", "guide_visual_digest")
+        if _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES", default=False):
+            _set_job_health("guide_visual_digest_vk_story_due", "guide_visual_digest_vk_story_due")
 
     if os.getenv("DEV_MODE") != "1":
         try:
@@ -3142,6 +3237,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "vk_auto_import",
     "guide_excursions_light",
     "guide_excursions_full",
+    "guide_visual_digest",
     "source_parsing",
     "source_parsing_day",
     "festival_queue",
@@ -3154,6 +3250,7 @@ _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
     "3di_scheduler": "3di",
     "guide_excursions_light": "guide_monitoring",
     "guide_excursions_full": "guide_monitoring",
+    "guide_visual_digest": "guide_visual_digest",
     "source_parsing": "parse",
     "source_parsing_day": "parse",
 }
@@ -4040,6 +4137,59 @@ def startup(
     else:
         logging.info("SCHED skipping guide_excursions (ENABLE_GUIDE_EXCURSIONS_SCHEDULED!=1)")
         _notify_admin_skip("guide_excursions", "ENABLE_GUIDE_EXCURSIONS_SCHEDULED!=1")
+
+    enable_guide_visual_digest = _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED", default=False)
+    if enable_guide_visual_digest:
+        async def guide_visual_digest_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await _run_scheduled_guide_visual_digest(db_obj, bot_obj, run_id=run_id)
+
+        guide_visual_tz_name = (
+            os.getenv("GUIDE_VISUAL_DIGEST_TZ")
+            or os.getenv("GUIDE_EXCURSIONS_TZ")
+            or "Europe/Kaliningrad"
+        ).strip()
+        guide_visual_time_raw = (os.getenv("GUIDE_VISUAL_DIGEST_TIME_LOCAL") or "10:30").strip() or "10:30"
+        visual_hour, visual_minute = _cron_from_local(
+            guide_visual_time_raw,
+            guide_visual_tz_name,
+            default_hour="10",
+            default_minute="30",
+            label="GUIDE_VISUAL_DIGEST_TIME_LOCAL",
+        )
+        _register_job(
+            "guide_visual_digest",
+            _job_wrapper("guide_visual_digest", guide_visual_digest_scheduler, notify_skip=_notify_admin_skip),
+            "cron",
+            id="guide_visual_digest",
+            hour=visual_hour,
+            minute=visual_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=_guide_monitoring_misfire_grace_seconds(),
+        )
+        if _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES", default=False):
+            _register_job(
+                "guide_visual_digest_vk_story_due",
+                _job_wrapper("guide_visual_digest_vk_story_due", _run_scheduled_guide_visual_digest_stories_due, notify_skip=_notify_admin_skip),
+                "interval",
+                id="guide_visual_digest_vk_story_due",
+                minutes=5,
+                args=[db, bot],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=300,
+            )
+    else:
+        logging.info("SCHED skipping guide_visual_digest (ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED!=1)")
+        _notify_admin_skip("guide_visual_digest", "ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED!=1")
 
     enable_video_tomorrow, video_tz_name, video_time_raw, video_profile_key, video_test_mode = (
         _video_tomorrow_schedule_settings()

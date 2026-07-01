@@ -30,9 +30,21 @@ from guide_excursions.visual_digest import (
     build_visual_digest_vk_text,
     default_review_publish_date,
     load_visual_digest_issue,
+    publish_due_visual_digest_vk_stories,
+    publish_visual_digest_daily,
+    publish_visual_digest_to_telegram,
     publish_visual_digest_to_vk,
     render_visual_digest_cards,
 )
+
+
+def _telegram_bot_from_env():
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        return None
+    from aiogram import Bot
+
+    return Bot(token)
 
 
 def _load_env() -> None:
@@ -118,6 +130,60 @@ async def _publish(args: argparse.Namespace) -> int:
         await db.close()
 
 
+async def _publish_daily(args: argparse.Namespace) -> int:
+    db = Database(_db_path(args))
+    bot = _telegram_bot_from_env()
+    try:
+        result = await publish_visual_digest_daily(
+            db,
+            bot,
+            max_cards=1,
+            target_chats=args.target_chats,
+            vk_group_id=args.group_id,
+            vk_target=args.target,
+            vk_delay_seconds=int(args.vk_delay_seconds),
+            publish_stories=True if args.stories else None,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("published") else 1
+    finally:
+        if bot is not None:
+            await bot.session.close()
+        await db.close()
+
+
+async def _publish_tg(args: argparse.Namespace) -> int:
+    db = Database(_db_path(args))
+    bot = _telegram_bot_from_env()
+    try:
+        result = await publish_visual_digest_to_telegram(
+            db,
+            bot,
+            issue_id=args.issue_id,
+            max_cards=1,
+            target_chats=args.target_chats,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("published") else 1
+    finally:
+        if bot is not None:
+            await bot.session.close()
+        await db.close()
+
+
+async def _publish_stories_due(args: argparse.Namespace) -> int:
+    db = Database(_db_path(args))
+    bot = _telegram_bot_from_env()
+    try:
+        result = await publish_due_visual_digest_vk_stories(db, bot, now_ts=args.now_ts, limit=args.limit)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    finally:
+        if bot is not None:
+            await bot.session.close()
+        await db.close()
+
+
 def main() -> int:
     _load_env()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -139,6 +205,24 @@ def main() -> int:
     publish.add_argument("--review-delay-days", type=int, default=3, help="Schedule to postponed queue this many days ahead")
     publish.add_argument("--stories", action="store_true", help="Also publish first card to VK stories when wall post is immediate")
     publish.set_defaults(func=_publish)
+
+    daily = sub.add_parser("publish-daily")
+    daily.add_argument("--target-chats", help="Comma-separated Telegram targets; defaults to GUIDE_VISUAL/GUIDE_DIGEST targets")
+    daily.add_argument("--group-id")
+    daily.add_argument("--target")
+    daily.add_argument("--vk-delay-seconds", type=int, default=600)
+    daily.add_argument("--stories", action="store_true", help="Queue VK story after the postponed VK wall post becomes live")
+    daily.set_defaults(func=_publish_daily)
+
+    publish_tg = sub.add_parser("publish-telegram")
+    publish_tg.add_argument("--issue-id", type=int)
+    publish_tg.add_argument("--target-chats")
+    publish_tg.set_defaults(func=_publish_tg)
+
+    stories_due = sub.add_parser("publish-stories-due")
+    stories_due.add_argument("--now-ts", type=int)
+    stories_due.add_argument("--limit", type=int, default=10)
+    stories_due.set_defaults(func=_publish_stories_due)
 
     args = parser.parse_args()
     return asyncio.run(args.func(args))

@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Promoted the visual guide digest to its final scheduled production flow: a
+  separate morning one-card Telegram+VK digest, Telegram title-links without
+  vk.cc, VK wall postponed by 10 minutes, dynamic city/location hashtags, and a
+  follow-up VK Story due after the wall post is live.
 - Visual guide digest production selection now starts from tomorrow in the
   guide timezone, so same-day excursions no longer enter the daily card; the
   issue badge was rebalanced with centered number-only typography and cleaner
