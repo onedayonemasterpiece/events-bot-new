@@ -90,6 +90,12 @@ existing `vk_source` monitoring communities so the operator does not have to
 manually curate the first list. Discovery may also find VK community links from
 Telegram/VK evidence; new VK surfaces are stored as `candidate` and should be
 scanned in shadow mode before any reply/post decision.
+For discovery coverage beyond official event-source comments, the runtime seed
+payload may additionally include public Kaliningrad VK communities found in
+catalog/research sources. The current MVP adds Smartik Kaliningrad catalog seeds
+for `Подслушано в Калининграде`, `Типичный Калининград`, `Попутчики`,
+`ЧС - Калининград и область`, and `KADAUTO`; these are still shadow candidates
+and only concrete reply opportunities get operator calibration cards.
 
 For each Telegram seed:
 

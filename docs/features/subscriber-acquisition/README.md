@@ -73,7 +73,10 @@ methods, requests `filter=all` wall posts, skips posts with zero comments, reads
 comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`
 errors, skips non-community links such as albums/apps/market/away/personal `id*`
 surfaces, and reports `vk_scan` counters in the payload. VK write methods remain
-blocked by the static no-send guard.
+blocked by the static no-send guard. To get beyond official event-source
+comments, the server seed payload also includes a small Smartik Kaliningrad
+public-catalog set of VK communities (`Подслушано`, `Типичный Калининград`,
+`Попутчики`, `ЧС`, `KADAUTO`) as `source=smartik_kaliningrad_catalog`.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic

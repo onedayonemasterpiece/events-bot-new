@@ -511,6 +511,16 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
 
 
+def test_smartik_vk_seeds_are_configured():
+    from subscriber_acquisition.kaggle_runner import SMARTIK_KALININGRAD_VK_SEEDS
+
+    handles = {handle for handle, _title, _url in SMARTIK_KALININGRAD_VK_SEEDS}
+
+    assert "club42481124" in handles
+    assert "club31556867" in handles
+    assert all(url.startswith("https://smartik.ru/kaliningrad/group/") for _handle, _title, url in SMARTIK_KALININGRAD_VK_SEEDS)
+
+
 def test_vk_scanner_prefers_live_comment_threads_static():
     source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
     assert '"filter": "all"' in source

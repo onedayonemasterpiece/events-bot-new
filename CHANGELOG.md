@@ -29,6 +29,10 @@
   skips non-community VK links such as albums/apps/market/away/personal ids, and
   reports `vk_scan` counters in the output payload. VK-only Kaggle runs no
   longer advertise the shared S22 auth scope in registry metadata.
+- Subscriber Acquisition seed collection now includes a small Smartik
+  Kaliningrad VK public-catalog seed set (`Подслушано`, `Типичный Калининград`,
+  `Попутчики`, `ЧС`, `KADAUTO`) so discovery can inspect livelier local
+  community comment threads in addition to existing monitored VK event sources.
 - Subscriber Acquisition Discovery opportunity acceptance is now LLM-first in
   the Kaggle runtime: cheap regex/keyword filtering only controls frontier/link
   extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated

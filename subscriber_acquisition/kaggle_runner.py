@@ -39,6 +39,14 @@ TELEGA_IN_KALININGRAD_TG_SEEDS = [
     ("kaliningrad_now_ru", "Калининград Новостной", "https://telega.in/channels/kaliningrad_now_ru/card_max"),
 ]
 
+SMARTIK_KALININGRAD_VK_SEEDS = [
+    ("club42481124", "Подслушано в Калининграде (ПВК)", "https://smartik.ru/kaliningrad/group/42481124"),
+    ("club31556867", "Типичный Калининград", "https://smartik.ru/kaliningrad/group/31556867"),
+    ("club86855358", "Попутчики | Калининград и область", "https://smartik.ru/kaliningrad/group/86855358"),
+    ("club80149142", "ЧС - Калининград и область", "https://smartik.ru/kaliningrad/group/80149142"),
+    ("club186019893", "ДТП и ЧП | Калининград | KADAUTO", "https://smartik.ru/kaliningrad/group/186019893"),
+]
+
 
 def live_telegram_scan_enabled() -> bool:
     return (os.getenv("ACQ_ENABLE_LIVE_TG_SCAN") or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -237,6 +245,25 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "source": "telega_in",
                 "topic_hint": f"Telega.in Kaliningrad regional catalog seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "telega_in_seed"},
+                "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+            })
+        for handle, title, source_url in SMARTIK_KALININGRAD_VK_SEEDS:
+            external_id = f"vk:{handle}"
+            key = ("vk", external_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            surfaces.append({
+                "platform": "vk",
+                "surface_type": "community",
+                "url": f"https://vk.com/{handle}",
+                "title": title,
+                "handle": handle,
+                "external_id": external_id,
+                "status": "candidate",
+                "source": "smartik_kaliningrad_catalog",
+                "topic_hint": f"Smartik Kaliningrad public catalog seed: {source_url}",
+                "reach": {"confidence": "low", "basis": "smartik_catalog_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
         surfaces.extend(pending_existing)
