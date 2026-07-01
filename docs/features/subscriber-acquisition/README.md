@@ -68,6 +68,11 @@ commentability is checked: if a channel has no accessible linked discussion /
 comments, the scanner marks it `rejected_no_comments` and does not keep scanning
 it for reply opportunities. Review opportunities are built only from confirmed
 chat/comment surfaces.
+VK discovery is also comment-first: the runtime reads only public wall/comment
+methods, requests `filter=all` wall posts, skips posts with zero comments, reads
+comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`
+errors, and reports `vk_scan` counters in the payload. VK write methods remain
+blocked by the static no-send guard.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic

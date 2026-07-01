@@ -493,6 +493,17 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert env["ACQ_RUNTIME_DEADLINE_SECONDS"]
     assert env["ACQ_MAX_LLM_CALLS_PER_RUN"]
     assert "ACQ_TG_SEARCH_MESSAGES_PER_QUERY" in env
+    assert "ACQ_MAX_VK_SURFACES_PER_RUN" in env
+    assert "ACQ_MAX_VK_POSTS_PER_SURFACE" in env
+    assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
+
+
+def test_vk_scanner_prefers_live_comment_threads_static():
+    source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
+    assert '"filter": "all"' in source
+    assert '"sort": "desc"' in source
+    assert "posts_without_comments_skipped" in source
+    assert "rate_limit_backoffs" in source
 
 
 def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):

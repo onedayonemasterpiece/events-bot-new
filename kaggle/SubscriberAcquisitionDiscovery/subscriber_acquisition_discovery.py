@@ -160,6 +160,15 @@ LLM_GATE_STATS: dict[str, int] = {
     "blocked_rate_limit": 0,
     "estimated_input_tokens": 0,
 }
+VK_SCAN_STATS: dict[str, int] = {
+    "surfaces_attempted": 0,
+    "wall_posts_seen": 0,
+    "posts_with_comments": 0,
+    "posts_without_comments_skipped": 0,
+    "comments_seen": 0,
+    "comment_prefilter_candidates": 0,
+    "rate_limit_backoffs": 0,
+}
 
 LLM_GATE_SCHEMA = {
     "type": "object",
@@ -817,6 +826,14 @@ def _should_skip_opportunity_before_llm(
 VK_READ_METHODS = {"wall.get", "wall.getComments"}
 
 
+class VKApiError(RuntimeError):
+    def __init__(self, method: str, error: dict[str, Any]):
+        self.method = method
+        self.error = error
+        self.error_code = int(error.get("error_code") or 0)
+        super().__init__(f"VK {method} error: {error}")
+
+
 def _vk_token_lanes() -> list[tuple[str, str]]:
     """Return VK read-token lanes without exposing token values.
 
@@ -846,7 +863,7 @@ def _vk_api(method: str, *, token: str, params: dict[str, Any]) -> dict[str, Any
     response.raise_for_status()
     data = response.json()
     if data.get("error"):
-        raise RuntimeError(f"VK {method} error: {data['error']}")
+        raise VKApiError(method, data["error"])
     return data.get("response") or {}
 
 
@@ -856,6 +873,13 @@ def _vk_api_with_fallback(method: str, *, token_lanes: list[tuple[str, str]], pa
         try:
             return _vk_api(method, token=token, params=params), lane_name
         except Exception as exc:
+            if isinstance(exc, VKApiError) and exc.error_code == 6:
+                VK_SCAN_STATS["rate_limit_backoffs"] += 1
+                _human_pause_sync(multiplier=2.5)
+                try:
+                    return _vk_api(method, token=token, params=params), lane_name
+                except Exception as retry_exc:
+                    exc = retry_exc
             errors.append(f"{lane_name}: {exc}")
     raise RuntimeError("; ".join(errors) if errors else "no VK token lanes configured")
 
@@ -928,6 +952,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
         normalized = str(raw_url or "").strip()
         if not normalized or normalized.lower() not in allowed:
             continue
+        VK_SCAN_STATS["surfaces_attempted"] += 1
         domain = _handle_from_url(normalized, platform="vk")
         surface = _seed_surface(f"https://vk.com/{domain}", platform="vk")
         surface.update({
@@ -939,7 +964,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
         })
         surfaces[surface["external_id"]] = surface
         try:
-            wall, wall_lane = _vk_api_with_fallback("wall.get", token_lanes=token_lanes, params={"domain": domain, "count": max_posts})
+            wall, wall_lane = _vk_api_with_fallback("wall.get", token_lanes=token_lanes, params={"domain": domain, "count": max_posts, "filter": "all"})
             diagnostics.append(f"vk {domain}: wall.get ok via {wall_lane}")
         except Exception as exc:
             diagnostics.append(f"vk {domain}: wall.get failed: {exc}")
@@ -952,6 +977,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             owner_id = int(post.get("owner_id") or 0)
             post_id = int(post.get("id") or 0)
             post_text = str(post.get("text") or "")
+            VK_SCAN_STATS["wall_posts_seen"] += 1
             for discovered in extract_candidate_surfaces(post_text):
                 discovered["topic_hint"] = f"discovered in vk:{domain}"
                 if _is_out_of_region_surface(discovered):
@@ -959,8 +985,13 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 surfaces.setdefault(discovered["external_id"], discovered)
             if not owner_id or not post_id:
                 continue
+            comment_count = int(((post.get("comments") or {}).get("count") or 0) if isinstance(post.get("comments"), dict) else 0)
+            if comment_count <= 0:
+                VK_SCAN_STATS["posts_without_comments_skipped"] += 1
+                continue
+            VK_SCAN_STATS["posts_with_comments"] += 1
             try:
-                comments, comments_lane = _vk_api_with_fallback("wall.getComments", token_lanes=token_lanes, params={"owner_id": owner_id, "post_id": post_id, "count": max_comments, "need_likes": 1})
+                comments, comments_lane = _vk_api_with_fallback("wall.getComments", token_lanes=token_lanes, params={"owner_id": owner_id, "post_id": post_id, "count": max_comments, "need_likes": 1, "sort": "desc"})
                 if comments_lane != wall_lane:
                     diagnostics.append(f"vk {domain}: wall.getComments {post_id} ok via {comments_lane}")
             except Exception as exc:
@@ -973,6 +1004,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     break
                 if not isinstance(comment, dict):
                     continue
+                VK_SCAN_STATS["comments_seen"] += 1
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
                     if _is_out_of_region_surface(discovered):
@@ -980,6 +1012,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     surfaces.setdefault(discovered["external_id"], discovered)
                 opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
                 if opp:
+                    VK_SCAN_STATS["comment_prefilter_candidates"] += 1
                     opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
                     if _should_skip_opportunity_before_llm(
                         opp,
@@ -1381,6 +1414,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "llm_gate_model": _acq_llm_model(),
             "llm_gate": dict(LLM_GATE_STATS),
             "llm_gate_limits": _llm_limit_snapshot(),
+            "vk_scan": dict(VK_SCAN_STATS),
             "external_sends": 0,
             "comments_posted": 0,
             "stickers_sent": 0,

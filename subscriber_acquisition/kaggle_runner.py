@@ -190,14 +190,18 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(250)
         )).scalars().all()
 
-        def _surface_priority(row: AcqSurface) -> tuple[int, int, float, int]:
+        def _surface_priority(row: AcqSurface) -> tuple[int, int, int, float, int]:
             source = str(row.source or "").strip().lower()
             status = str(row.status or "").strip().lower()
             is_new_frontier = source in {"discovered", "linked_discussion", "telega_in"}
+            reach = row.reach_json if isinstance(row.reach_json, dict) else {}
+            basis = str((reach or {}).get("basis") or "").strip().lower()
+            is_seed_only = basis in {"", "seed_only", "vk_source_seed", "telega_in_seed"}
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
             return (
+                0 if is_seed_only else 1,
                 0 if is_new_frontier else 1,
                 0 if status == "candidate" else 1,
                 next_scan.timestamp(),
@@ -303,6 +307,9 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
         "ACQ_TG_SEARCH_QUERIES_JSON": os.getenv("ACQ_TG_SEARCH_QUERIES_JSON", ""),
         "ACQ_TG_SEARCH_MESSAGES_PER_QUERY": os.getenv("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", "0"),
+        "ACQ_MAX_VK_SURFACES_PER_RUN": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", ""),
+        "ACQ_MAX_VK_POSTS_PER_SURFACE": os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE", ""),
+        "ACQ_MAX_VK_COMMENTS_PER_POST": os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST", ""),
     }
     seen_context_urls = [
         str(item.get("context_url") or "").strip()
