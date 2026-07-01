@@ -295,6 +295,28 @@ def test_build_vk_opportunity_is_read_only_review_payload():
     assert opp["scores"]["source"] == "deterministic_shadow_prefilter"
 
 
+def test_vk_social_wall_post_can_be_reply_opportunity_but_official_post_cannot():
+    runtime = load_runtime()
+    social_surface = runtime._seed_surface("https://vk.com/club42481124", platform="vk")
+    official_surface = runtime._seed_surface("https://vk.com/shaman_kaliningrad", platform="vk")
+    post = {
+        "owner_id": -42481124,
+        "id": 101,
+        "date": 1782900000,
+        "text": "Подскажите, куда съездить на один день из Калининграда с детьми?",
+        "comments": {"count": 3},
+        "views": {"count": 1200},
+    }
+
+    opp = runtime.build_vk_wall_post_opportunity(social_surface, post=post, default_target_url="https://t.me/kenigevents")
+
+    assert opp is not None
+    assert opp["context_url"] == "https://vk.com/wall-42481124_101"
+    assert opp["topic_cluster"] == "trip_route_recommendation"
+    assert opp["evidence"]["relation"] == "vk_social_wall_post"
+    assert runtime.build_vk_wall_post_opportunity(official_surface, post=post, default_target_url="https://t.me/kenigevents") is None
+
+
 def test_vk_api_guard_rejects_write_method():
     runtime = load_runtime()
     try:

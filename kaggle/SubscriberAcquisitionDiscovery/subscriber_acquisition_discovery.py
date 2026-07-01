@@ -142,6 +142,14 @@ _OUT_OF_REGION_HINT_RE = re.compile(
 )
 
 DEFAULT_ACQ_LLM_MODEL = "models/gemma-4-31b-it"
+VK_SOCIAL_DISCOVERY_HANDLES = {
+    "club42481124",  # Подслушано в Калининграде
+    "club31556867",  # Типичный Калининград
+    "club80149142",  # ЧС - Калининград и область
+    "club186019893",  # ДТП и ЧП | KADAUTO
+}
+
+
 DEFAULT_TG_SEARCH_QUERIES = [
     "куда сходить",
     "куда пойти",
@@ -973,6 +981,64 @@ def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int
     }
 
 
+def _is_vk_social_discovery_surface(surface: dict[str, Any]) -> bool:
+    handle = str(surface.get("handle") or "").strip().strip("/").rstrip(".,)").casefold()
+    external = str(surface.get("external_id") or "").strip().casefold()
+    if external.startswith("vk:"):
+        handle = external.split(":", 1)[1].rstrip(".,)") or handle
+    return handle in VK_SOCIAL_DISCOVERY_HANDLES
+
+
+def build_vk_wall_post_opportunity(surface: dict[str, Any], *, post: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
+    if not _is_vk_social_discovery_surface(surface):
+        return None
+    text = str(post.get("text") or "").strip()
+    intent = _classify_acq_intent(text)
+    if not intent:
+        return None
+    owner_id = int(post.get("owner_id") or 0)
+    post_id = int(post.get("id") or 0)
+    if not owner_id or not post_id:
+        return None
+    # UGC/community wall posts are replyable by writing a comment to the post.
+    # Official event-source wall posts are deliberately excluded by
+    # _is_vk_social_discovery_surface to avoid ad-post false positives.
+    context_url = f"https://vk.com/wall{owner_id}_{post_id}"
+    views = (post.get("views") or {}).get("count") if isinstance(post.get("views"), dict) else None
+    comments_count = (post.get("comments") or {}).get("count") if isinstance(post.get("comments"), dict) else None
+    reach_low = 3
+    try:
+        if views:
+            reach_low = max(3, min(25, int(views) // 200))
+        elif comments_count:
+            reach_low = max(3, min(15, int(comments_count) + 2))
+    except Exception:
+        reach_low = 3
+    return {
+        "platform": "vk",
+        "surface_external_id": surface.get("external_id"),
+        "context_url": context_url,
+        "context_external_id": str(post_id),
+        "context_created_at": datetime.fromtimestamp(int(post.get("date") or 0), tz=timezone.utc).isoformat() if post.get("date") else None,
+        "context_text_snippet": " ".join(text.split())[:500],
+        "matched_intent": intent["matched_intent"],
+        "topic_cluster": intent["topic_cluster"],
+        "event_ids": [],
+        "candidate_events": [],
+        "link_target": {
+            "kind": intent.get("target_kind") or "topic_landing",
+            "url": intent["target_url"] if "target_url" in intent else default_target_url,
+            "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
+            "reason": intent.get("reason") or "VK social community post can be answered by a native comment",
+        },
+        "fallback_link_target": {"kind": "pka_channel", "url": intent.get("fallback_url", default_target_url), "label": "Полюбить Калининград Анонсы"},
+        "reach": {"low": reach_low, "confidence": "low", "formula": "vk_social_wall_post_conservative_low"},
+        "scores": {"relevance": intent.get("relevance") or 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
+        "sticker_observation": {"fit": "weak", "stickers_seen": 0, "reason": "VK social wall-post prefilter only; needs LLM review before any reply"},
+        "evidence": {"relation": "vk_social_wall_post", "scanner": "vk_shadow", "comments_count": comments_count, "views": views},
+    }
+
+
 def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only VK discovery for explicitly allowlisted communities.
 
@@ -1036,6 +1102,20 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 if _is_out_of_region_surface(discovered):
                     discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK post")
                 surfaces.setdefault(discovered["external_id"], discovered)
+            post_opp = build_vk_wall_post_opportunity(surface, post=post, default_target_url=default_target_url)
+            if post_opp:
+                VK_SCAN_STATS["comment_prefilter_candidates"] += 1
+                if not _should_skip_opportunity_before_llm(
+                    post_opp,
+                    seen_contexts=seen_contexts,
+                    opportunity_keys=opportunity_keys,
+                    diagnostics=diagnostics,
+                ):
+                    reviewed_post_opp = _llm_review_opportunity_sync(post_opp, surface, diagnostics)
+                    if reviewed_post_opp:
+                        opportunities.append(reviewed_post_opp)
+                        if len(opportunities) >= _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 20, min_value=1):
+                            return list(surfaces.values()), opportunities, diagnostics
             if not owner_id or not post_id:
                 continue
             comment_count = int(((post.get("comments") or {}).get("count") or 0) if isinstance(post.get("comments"), dict) else 0)

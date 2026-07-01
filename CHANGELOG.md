@@ -87,6 +87,9 @@
   community seeds are scanned before noisy discovered VK album/app/market/away/
   personal links, and existing non-community VK rows are marked
   `rejected_non_community` before future Kaggle seed payloads/imports.
+- Subscriber Acquisition now allows human-question wall posts on social VK
+  communities as Gemma-gated reply opportunities, while keeping official
+  event-source wall posts excluded to avoid ad-post candidates.
 - Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
   longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
   is preserved over seed placeholders so future Kaggle runs advance through the

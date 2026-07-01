@@ -80,6 +80,10 @@ public-catalog set of VK communities (`Подслушано`, `Типичный 
 Smartik community seeds are prioritized ahead of noisy discovered VK links, and
 existing VK album/app/market/away/personal rows are marked
 `rejected_non_community` before the next Kaggle seed payload/import.
+For these social/community VK surfaces only, a wall post that is itself a human
+question/request may be treated as a reply opportunity because the acquisition
+action is a public comment under that post; official event-source wall posts are
+not eligible for this path.
 Telegram bot/service links (`*bot`, `addstickers`, `share`, etc.) are not queued
 as monitoring surfaces: discovery is for public groups/chats/comment threads,
 not bot accounts. If such a surface was already collected by an older run, the

@@ -43,6 +43,10 @@ contract:
   counters for posts/comments inspected and VK rate-limit backoffs; existing
   non-community VK rows are marked `rejected_non_community`, and Smartik
   Kaliningrad community seeds are prioritized before noisy discovered links;
+- on social/community VK surfaces only, a wall post that is itself a human
+  question/request may be passed to Gemma as a reply opportunity because the
+  reply action would be a public comment under that post; official event-source
+  wall posts remain excluded from this path;
 - Telegram link discovery skips bot/service handles (`*bot`, `addstickers`,
   `share`, etc.) so the frontier only grows through public groups, chats,
   channels with comments, and VK communities; existing bot/service rows are
