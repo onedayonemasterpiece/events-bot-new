@@ -147,6 +147,15 @@ VK_SOCIAL_DISCOVERY_HANDLES = {
     "club31556867",  # Типичный Калининград
     "club80149142",  # ЧС - Калининград и область
     "club186019893",  # ДТП и ЧП | KADAUTO
+    "kuda_go_kld",
+    "club_topplace",
+    "kuda_dety39",
+    "kidsreview_kaliningrad",
+    "visit.kaliningrad",
+    "peshiytur",
+    "tourguilde39",
+    "blog_batsev",
+    "otextour",
 }
 
 
@@ -194,6 +203,9 @@ VK_SCAN_STATS: dict[str, int] = {
     "posts_with_comments": 0,
     "posts_without_comments_skipped": 0,
     "comments_seen": 0,
+    "board_topics_seen": 0,
+    "board_comments_seen": 0,
+    "wall_search_posts_seen": 0,
     "comment_prefilter_candidates": 0,
     "rate_limit_backoffs": 0,
 }
@@ -881,7 +893,7 @@ def _should_skip_opportunity_before_llm(
 
 
 
-VK_READ_METHODS = {"wall.get", "wall.getComments"}
+VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "board.getTopics", "board.getComments"}
 
 
 class VKApiError(RuntimeError):
@@ -989,6 +1001,33 @@ def _is_vk_social_discovery_surface(surface: dict[str, Any]) -> bool:
     return handle in VK_SOCIAL_DISCOVERY_HANDLES
 
 
+def _vk_group_id_from_domain(domain: str, token_lanes: list[tuple[str, str]], diagnostics: list[str]) -> int | None:
+    clean = str(domain or "").strip().strip("/").rstrip(".,)")
+    if not clean:
+        return None
+    m = re.match(r"(?i)^club(\d+)$", clean)
+    if m:
+        return int(m.group(1))
+    try:
+        response, _lane = _vk_api_with_fallback("groups.getById", token_lanes=token_lanes, params={"group_ids": clean})
+        groups = response.get("groups") if isinstance(response, dict) else None
+        if not groups and isinstance(response, list):
+            groups = response
+        if groups:
+            gid = int((groups[0] or {}).get("id") or 0)
+            return gid if gid > 0 else None
+    except Exception as exc:
+        diagnostics.append(f"vk {clean}: groups.getById failed: {exc}")
+    return None
+
+
+def _vk_topic_context_url(group_id: int, topic_id: int, comment_id: int | None = None) -> str:
+    url = f"https://vk.com/topic-{group_id}_{topic_id}"
+    if comment_id:
+        url += f"?post={comment_id}"
+    return url
+
+
 def build_vk_wall_post_opportunity(surface: dict[str, Any], *, post: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
     if not _is_vk_social_discovery_surface(surface):
         return None
@@ -1039,6 +1078,123 @@ def build_vk_wall_post_opportunity(surface: dict[str, Any], *, post: dict[str, A
     }
 
 
+def build_vk_board_opportunity(
+    surface: dict[str, Any],
+    *,
+    group_id: int,
+    topic: dict[str, Any],
+    comment: dict[str, Any],
+    default_target_url: str,
+) -> dict[str, Any] | None:
+    text = str(comment.get("text") or "").strip()
+    intent = _classify_acq_intent(text)
+    if not intent:
+        return None
+    topic_id = int(topic.get("id") or 0)
+    comment_id = int(comment.get("id") or 0)
+    if not group_id or not topic_id or not comment_id:
+        return None
+    title = str(topic.get("title") or "").strip()
+    return {
+        "platform": "vk",
+        "surface_external_id": surface.get("external_id"),
+        "context_url": _vk_topic_context_url(group_id, topic_id, comment_id),
+        "context_external_id": f"{topic_id}:{comment_id}",
+        "context_created_at": datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
+        "context_text_snippet": " ".join(text.split())[:500],
+        "matched_intent": intent["matched_intent"],
+        "topic_cluster": intent["topic_cluster"],
+        "event_ids": [],
+        "candidate_events": [],
+        "link_target": {
+            "kind": intent.get("target_kind") or "topic_landing",
+            "url": intent["target_url"] if "target_url" in intent else default_target_url,
+            "label": intent.get("target_label") or "Полюбить Калининград Анонсы",
+            "reason": intent.get("reason") or "VK discussion-board comment can be answered natively in the topic",
+        },
+        "fallback_link_target": {"kind": "pka_channel", "url": intent.get("fallback_url", default_target_url), "label": "Полюбить Калининград Анонсы"},
+        "reach": {"low": 3, "confidence": "low", "formula": "vk_board_topic_comment_low"},
+        "scores": {"relevance": intent.get("relevance") or 0.5, "spam_risk": "low", "safety_risk": "low", "source": "deterministic_shadow_prefilter"},
+        "sticker_observation": {"fit": "weak", "stickers_seen": 0, "reason": "VK discussion-board prefilter only; needs LLM review before any reply"},
+        "evidence": {"relation": "vk_board_comment", "scanner": "vk_shadow", "topic_title": title, "topic_comments": topic.get("comments")},
+    }
+
+
+def _scan_vk_board_discussions(
+    *,
+    surface: dict[str, Any],
+    domain: str,
+    token_lanes: list[tuple[str, str]],
+    default_target_url: str,
+    seen_contexts: set[str],
+    opportunity_keys: set[str],
+    diagnostics: list[str],
+    opportunities: list[dict[str, Any]],
+    deadline: float | None,
+) -> bool:
+    max_topics = _int_env("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", 3, min_value=0)
+    max_comments = _int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 20, min_value=1)
+    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 20, min_value=1)
+    if max_topics <= 0 or _deadline_reached(deadline):
+        return False
+    group_id = _vk_group_id_from_domain(domain, token_lanes, diagnostics)
+    if not group_id:
+        return False
+    try:
+        topics, topics_lane = _vk_api_with_fallback(
+            "board.getTopics",
+            token_lanes=token_lanes,
+            params={"group_id": group_id, "count": max_topics, "extended": 0, "order": 1},
+        )
+    except Exception as exc:
+        diagnostics.append(f"vk {domain}: board.getTopics failed: {exc}")
+        return False
+    items = list((topics or {}).get("items") or [])
+    if items:
+        diagnostics.append(f"vk {domain}: board.getTopics ok via {topics_lane}, topics={len(items)}")
+    for topic in items[:max_topics]:
+        if _deadline_reached(deadline):
+            diagnostics.append("vk board scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+            break
+        if not isinstance(topic, dict):
+            continue
+        VK_SCAN_STATS["board_topics_seen"] += 1
+        topic_id = int(topic.get("id") or 0)
+        if not topic_id:
+            continue
+        try:
+            comments, comments_lane = _vk_api_with_fallback(
+                "board.getComments",
+                token_lanes=token_lanes,
+                params={"group_id": group_id, "topic_id": topic_id, "count": max_comments, "sort": "desc"},
+            )
+            if comments_lane != topics_lane:
+                diagnostics.append(f"vk {domain}: board.getComments {topic_id} ok via {comments_lane}")
+        except Exception as exc:
+            diagnostics.append(f"vk {domain}: board.getComments {topic_id} failed: {exc}")
+            continue
+        _human_pause_sync(multiplier=0.25)
+        for comment in comments.get("items") or []:
+            if _deadline_reached(deadline):
+                diagnostics.append("vk board comment scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
+                break
+            if not isinstance(comment, dict):
+                continue
+            VK_SCAN_STATS["board_comments_seen"] += 1
+            opp = build_vk_board_opportunity(surface, group_id=group_id, topic=topic, comment=comment, default_target_url=default_target_url)
+            if not opp:
+                continue
+            VK_SCAN_STATS["comment_prefilter_candidates"] += 1
+            if _should_skip_opportunity_before_llm(opp, seen_contexts=seen_contexts, opportunity_keys=opportunity_keys, diagnostics=diagnostics):
+                continue
+            reviewed = _llm_review_opportunity_sync(opp, surface, diagnostics)
+            if reviewed:
+                opportunities.append(reviewed)
+                if len(opportunities) >= max_opportunities:
+                    return True
+    return False
+
+
 def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only VK discovery for explicitly allowlisted communities.
 
@@ -1087,6 +1243,18 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             diagnostics.append(f"vk {domain}: wall.get ok via {wall_lane}")
         except Exception as exc:
             diagnostics.append(f"vk {domain}: wall.get failed: {exc}")
+            if _scan_vk_board_discussions(
+                surface=surface,
+                domain=domain,
+                token_lanes=token_lanes,
+                default_target_url=default_target_url,
+                seen_contexts=seen_contexts,
+                opportunity_keys=opportunity_keys,
+                diagnostics=diagnostics,
+                opportunities=opportunities,
+                deadline=deadline,
+            ):
+                return list(surfaces.values()), opportunities, diagnostics
             continue
         _human_pause_sync(multiplier=0.6)
         for post in wall.get("items") or []:
@@ -1160,6 +1328,18 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
                     break
+        if _scan_vk_board_discussions(
+            surface=surface,
+            domain=domain,
+            token_lanes=token_lanes,
+            default_target_url=default_target_url,
+            seen_contexts=seen_contexts,
+            opportunity_keys=opportunity_keys,
+            diagnostics=diagnostics,
+            opportunities=opportunities,
+            deadline=deadline,
+        ):
+            return list(surfaces.values()), opportunities, diagnostics
     return list(surfaces.values()), opportunities, diagnostics
 
 def _load_status_loader():

@@ -562,6 +562,17 @@ async def test_runtime_seed_payload_prioritizes_smartik_communities(db):
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_includes_vk_social_search_seeds(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    payload = await collect_runtime_seed_payload(db)
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+
+    assert by_external["vk:kuda_go_kld"]["source"] == "vk_social_search"
+    assert "Калининград куда сходить" in by_external["vk:kuda_go_kld"]["topic_hint"]
+
+
+@pytest.mark.asyncio
 async def test_shadow_run_without_payload_uses_kaggle_runner_by_default(db, sample_payload, monkeypatch):
     async def fake_report(run, surfaces, opportunities):
         return "https://telegra.ph/acq-report"

@@ -317,6 +317,30 @@ def test_vk_social_wall_post_can_be_reply_opportunity_but_official_post_cannot()
     assert runtime.build_vk_wall_post_opportunity(official_surface, post=post, default_target_url="https://t.me/kenigevents") is None
 
 
+def test_vk_board_comment_can_be_reply_opportunity():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/kidsreview_kaliningrad", platform="vk")
+    topic = {"id": 55, "title": "Вопросы родителей", "comments": 12}
+    comment = {
+        "id": 77,
+        "date": 1782900000,
+        "text": "Подскажите, что посмотреть с детьми за день в Калининградской области?",
+    }
+
+    opp = runtime.build_vk_board_opportunity(
+        surface,
+        group_id=56154842,
+        topic=topic,
+        comment=comment,
+        default_target_url="https://t.me/kenigevents",
+    )
+
+    assert opp is not None
+    assert opp["context_url"] == "https://vk.com/topic-56154842_55?post=77"
+    assert opp["topic_cluster"] == "trip_route_recommendation"
+    assert opp["evidence"]["relation"] == "vk_board_comment"
+
+
 def test_vk_api_guard_rejects_write_method():
     runtime = load_runtime()
     try:
@@ -614,6 +638,8 @@ def test_vk_scanner_prefers_live_comment_threads_static():
     assert '"sort": "desc"' in source
     assert "posts_without_comments_skipped" in source
     assert "rate_limit_backoffs" in source
+    assert "board.getTopics" in source
+    assert "board.getComments" in source
 
 
 def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):

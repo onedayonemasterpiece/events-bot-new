@@ -49,6 +49,19 @@ SMARTIK_KALININGRAD_VK_SEEDS = [
 ]
 SMARTIK_KALININGRAD_VK_BY_HANDLE = {handle.casefold(): (title, source_url) for handle, title, source_url in SMARTIK_KALININGRAD_VK_SEEDS}
 
+VK_SOCIAL_SEARCH_VK_SEEDS = [
+    ("kuda_go_kld", "Куда сходить Калининград", "vk groups.search: Калининград куда сходить"),
+    ("club_topplace", "Куда сходить в Калининграде", "vk groups.search: Калининград куда сходить"),
+    ("kuda_dety39", "Куда пойти с ребенком в Калининграде", "vk groups.search: Калининград куда сходить"),
+    ("kidsreview_kaliningrad", "Куда сходить с ребенком в Калининграде?", "vk groups.search: Калининград куда сходить"),
+    ("visit.kaliningrad", "Путеводитель по Калининградской области", "vk groups.search: Калининград что посмотреть"),
+    ("peshiytur", "Пеший туризм в Калининграде", "vk groups.search: Калининград куда съездить"),
+    ("tourguilde39", "Калининградская гильдия туризма", "vk groups.search: Калининград туристы"),
+    ("blog_batsev", "Калининград: туризм, культура, спорт", "vk groups.search: Калининград туристы"),
+    ("otextour", "Калининград отдых и экскурсии", "vk groups.search: Калининград отдых"),
+]
+VK_SOCIAL_SEARCH_VK_BY_HANDLE = {handle.casefold(): (title, source_url) for handle, title, source_url in VK_SOCIAL_SEARCH_VK_SEEDS}
+
 
 
 
@@ -214,14 +227,16 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             status = str(row.status or "").strip().lower()
             vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold() if str(row.platform or "").lower() == "vk" else ""
             is_smartik = vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE
-            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog"} or is_smartik
+            is_social_search = vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE
+            is_curated_social = is_smartik or is_social_search
+            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
             reach = row.reach_json if isinstance(row.reach_json, dict) else {}
             basis = str((reach or {}).get("basis") or "").strip().lower()
             is_seed_only = basis in {"", "seed_only", "vk_source_seed", "telega_in_seed", "smartik_catalog_seed"}
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
-            source_rank = 0 if is_smartik else (1 if is_new_frontier else 2)
+            source_rank = 0 if is_curated_social else (1 if is_new_frontier else 2)
             return (
                 0 if is_seed_only else 1,
                 source_rank,
@@ -245,20 +260,28 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 continue
             if platform == "vk":
                 vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold()
-                if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE:
-                    title, source_url = SMARTIK_KALININGRAD_VK_BY_HANDLE[vk_handle]
-                    row.source = "smartik_kaliningrad_catalog"
+                if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE or vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE:
+                    if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE:
+                        title, source_url = SMARTIK_KALININGRAD_VK_BY_HANDLE[vk_handle]
+                        row.source = "smartik_kaliningrad_catalog"
+                        hint = f"Smartik Kaliningrad public catalog seed: {source_url}"
+                        basis = "smartik_catalog_seed"
+                    else:
+                        title, source_url = VK_SOCIAL_SEARCH_VK_BY_HANDLE[vk_handle]
+                        row.source = "vk_social_search"
+                        hint = f"VK social/search seed: {source_url}"
+                        basis = "vk_social_search_seed"
                     row.title = row.title or title
-                    row.topic_hint = row.topic_hint or f"Smartik Kaliningrad public catalog seed: {source_url}"
+                    row.topic_hint = row.topic_hint or hint
                     reach = row.reach_json if isinstance(row.reach_json, dict) else {}
                     if str((reach or {}).get("basis") or "").strip().lower() in {"", "seed_only"}:
-                        row.reach_json = {"confidence": "low", "basis": "smartik_catalog_seed"}
+                        row.reach_json = {"confidence": "low", "basis": basis}
                     session.add(row)
             item = row.model_dump()
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             source = str(item.get("source") or "").strip().lower()
-            if source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog"}:
+            if source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"}:
                 surfaces.append(item)
             else:
                 pending_existing.append(item)
@@ -298,6 +321,25 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "source": "smartik_kaliningrad_catalog",
                 "topic_hint": f"Smartik Kaliningrad public catalog seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "smartik_catalog_seed"},
+                "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+            })
+        for handle, title, source_url in VK_SOCIAL_SEARCH_VK_SEEDS:
+            external_id = f"vk:{handle}"
+            key = ("vk", external_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            surfaces.append({
+                "platform": "vk",
+                "surface_type": "community",
+                "url": f"https://vk.com/{handle}",
+                "title": title,
+                "handle": handle,
+                "external_id": external_id,
+                "status": "candidate",
+                "source": "vk_social_search",
+                "topic_hint": f"VK social/search seed: {source_url}",
+                "reach": {"confidence": "low", "basis": "vk_social_search_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
         surfaces.extend(pending_existing)

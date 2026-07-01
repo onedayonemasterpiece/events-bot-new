@@ -84,6 +84,12 @@ For these social/community VK surfaces only, a wall post that is itself a human
 question/request may be treated as a reply opportunity because the acquisition
 action is a public comment under that post; official event-source wall posts are
 not eligible for this path.
+The VK read-only scanner also checks community discussion boards
+(`board.getTopics`/`board.getComments`) and additional VK social/search seeds
+found by Kaliningrad queries (`kuda_go_kld`, `club_topplace`, `kuda_dety39`,
+`kidsreview_kaliningrad`, `visit.kaliningrad`, route/tourism communities). Board
+comments can become Gemma-gated reply opportunities with direct `topic-...`
+links.
 Telegram bot/service links (`*bot`, `addstickers`, `share`, etc.) are not queued
 as monitoring surfaces: discovery is for public groups/chats/comment threads,
 not bot accounts. If such a surface was already collected by an older run, the

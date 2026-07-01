@@ -90,6 +90,10 @@
 - Subscriber Acquisition now allows human-question wall posts on social VK
   communities as Gemma-gated reply opportunities, while keeping official
   event-source wall posts excluded to avoid ad-post candidates.
+- Subscriber Acquisition VK discovery now scans community discussion boards
+  read-only (`board.getTopics`/`board.getComments`) and adds Kaliningrad
+  social/search VK seeds for route/family/where-to-go communities, with board
+  comments still passed through the same Gemma 4 checklist and limit counters.
 - Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
   longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
   is preserved over seed placeholders so future Kaggle runs advance through the

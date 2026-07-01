@@ -47,6 +47,14 @@ contract:
   question/request may be passed to Gemma as a reply opportunity because the
   reply action would be a public comment under that post; official event-source
   wall posts remain excluded from this path;
+- VK discussion boards are scanned read-only through `board.getTopics` and
+  `board.getComments`; matching board comments are linked with `topic-...`
+  evidence URLs and still require Gemma acceptance before review;
+- the seed payload includes extra VK social/search communities found by
+  Kaliningrad discovery queries (`kuda_go_kld`, `club_topplace`, `kuda_dety39`,
+  `kidsreview_kaliningrad`, `visit.kaliningrad`, route/tourism publics) so the
+  crawler reaches places where people ask “куда сходить/съездить/что
+  посмотреть”, not only official event-source comment threads;
 - Telegram link discovery skips bot/service handles (`*bot`, `addstickers`,
   `share`, etc.) so the frontier only grows through public groups, chats,
   channels with comments, and VK communities; existing bot/service rows are
