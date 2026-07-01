@@ -23,6 +23,21 @@ CONFIG_DATASET_KEY = os.getenv("ACQ_DISCOVERY_CONFIG_KEY", "subscriber-acquisiti
 TERMINAL_COMPLETE = {"COMPLETE", "SUCCEEDED", "SUCCESS"}
 TERMINAL_FAILED = {"ERROR", "FAILED", "CANCELED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}
 
+TELEGA_IN_KALININGRAD_TG_SEEDS = [
+    ("Kaliningrad_jenskiy", "Женский чат Калининград", "https://telega.in/channels/Kaliningrad_jenskiy/card"),
+    ("kpkld", "КП Калининград | Новости региона", "https://telega.in/channels/kpkld/card"),
+    ("gokaliningrad_ru", "Едем в Калининград", "https://telega.in/channels/gokaliningrad_ru/card"),
+    ("kenig01", "Калининград №1", "https://telega.in/channels/kenig01/card"),
+    ("Davai_KLD", "А давай в Калининград?!", "https://telega.in/channels/Davai_KLD/card"),
+    ("kaliklove", "в Калининграде любят", "https://telega.in/channels/kaliklove/card"),
+    ("jobs39", "Работа в Калининграде", "https://telega.in/channels/jobs39/card"),
+    ("anons39", "АНОНС 39 Калининград Афиша", "https://telega.in/channels/anons39/card_max"),
+    ("nedvizhimostkalinigrad", "Недвижимость Калининград Live", "https://telega.in/channels/nedvizhimostkalinigrad/card"),
+    ("remont3939", "Чат. Стройка и ремонт в Калининграде", "https://telega.in/channels/remont3939/card"),
+    ("autoclub_kld", "Автоканал Калининград", "https://telega.in/channels/autoclub_kld/card"),
+    ("kaliningrad_now_ru", "Калининград Новостной", "https://telega.in/channels/kaliningrad_now_ru/card_max"),
+]
+
 
 def live_telegram_scan_enabled() -> bool:
     return (os.getenv("ACQ_ENABLE_LIVE_TG_SCAN") or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -119,6 +134,25 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             surfaces.append(item)
+        for handle, title, source_url in TELEGA_IN_KALININGRAD_TG_SEEDS:
+            external_id = f"tg:{handle}"
+            key = ("tg", external_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            surfaces.append({
+                "platform": "tg",
+                "surface_type": "unknown_public",
+                "url": f"https://t.me/{handle}",
+                "title": title,
+                "handle": handle,
+                "external_id": external_id,
+                "status": "candidate",
+                "source": "telega_in",
+                "topic_hint": f"Telega.in Kaliningrad regional catalog seed: {source_url}",
+                "reach": {"confidence": "low", "basis": "telega_in_seed"},
+                "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+            })
         table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='vk_source'"))).scalar_one_or_none()
         if table_exists:
             info = (await session.execute(text("PRAGMA table_info(vk_source)"))).all()

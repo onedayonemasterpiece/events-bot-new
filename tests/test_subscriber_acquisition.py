@@ -388,6 +388,17 @@ async def test_surface_map_xlsx_has_clickable_group_links(db):
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_includes_telega_in_kaliningrad_seeds(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    payload = await collect_runtime_seed_payload(db)
+
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    assert by_external["tg:anons39"]["source"] == "telega_in"
+    assert "telega.in/channels/anons39" in by_external["tg:anons39"]["topic_hint"]
+
+
+@pytest.mark.asyncio
 async def test_runtime_seed_payload_includes_existing_vk_monitoring_groups(db):
     from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
 
@@ -442,7 +453,7 @@ async def test_shadow_run_without_payload_uses_kaggle_runner_by_default(db, samp
     async def fake_kaggle(db_arg, *, config, seed_payload=None):
         assert db_arg is db
         assert config.runner == "kaggle"
-        assert seed_payload == {"surfaces": []}
+        assert seed_payload and any(item.get("source") == "telega_in" for item in seed_payload.get("surfaces", []))
         return SimpleNamespace(payload=sample_payload, output_path=Path("/tmp/acq.json"), runner="kaggle", kernel_ref="user/subscriber-acquisition-discovery", run_id="test-run", status="complete")
 
     monkeypatch.setattr("subscriber_acquisition.service.publish_telegraph_report", fake_report)
@@ -485,7 +496,7 @@ async def test_shadow_run_without_payload_uses_local_runtime(db, sample_payload,
 
     def fake_runtime(*, config, seed_payload=None):
         assert config.runner == "local"
-        assert seed_payload == {"surfaces": []}
+        assert seed_payload and any(item.get("source") == "telega_in" for item in seed_payload.get("surfaces", []))
         return SimpleNamespace(payload=sample_payload, output_path=Path("/tmp/acq.json"), runner="local_shadow_runtime")
 
     monkeypatch.setattr("subscriber_acquisition.service.publish_telegraph_report", fake_report)
@@ -520,3 +531,24 @@ async def test_shadow_run_publishes_report_and_review_cards(db, sample_payload, 
     async with db.get_session() as session:
         feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
     assert [row.action for row in feedback] == ["shown"]
+
+
+def test_ydb_stats_disabled_by_default(monkeypatch):
+    from subscriber_acquisition.ydb_stats import ydb_stats_enabled
+
+    monkeypatch.delenv("ACQ_YDB_STATS_ENABLED", raising=False)
+    assert ydb_stats_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_import_records_ydb_export_when_enabled(db, sample_payload, monkeypatch):
+    async def fake_export(payload, *, run_db_id=None):
+        return {"run_uid": payload["run_id"], "surfaces": len(payload["surfaces"]), "opportunities": len(payload["opportunities"])}
+
+    monkeypatch.setenv("ACQ_YDB_STATS_ENABLED", "1")
+    monkeypatch.setattr("subscriber_acquisition.ydb_stats.export_discovery_payload_to_ydb", fake_export)
+
+    result = await import_discovery_result(db, sample_payload)
+
+    assert result.run.stats_json["ydb_export"]["run_uid"] == sample_payload["run_id"]
+    assert result.run.stats_json["ydb_export"]["surfaces"] == 1

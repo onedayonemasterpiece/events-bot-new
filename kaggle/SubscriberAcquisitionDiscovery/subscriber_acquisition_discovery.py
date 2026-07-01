@@ -44,13 +44,32 @@ def ensure_libs() -> None:
 
 ensure_libs()
 
+TELEGA_IN_KALININGRAD_TG_SEEDS = [
+    # Public handles discovered from Telega.in regional/Kaliningrad cards.
+    "https://t.me/Kaliningrad_jenskiy",
+    "https://t.me/kpkld",
+    "https://t.me/gokaliningrad_ru",
+    "https://t.me/kenig01",
+    "https://t.me/Davai_KLD",
+    "https://t.me/kaliklove",
+    "https://t.me/jobs39",
+    "https://t.me/anons39",
+    "https://t.me/nedvizhimostkalinigrad",
+    "https://t.me/remont3939",
+    "https://t.me/autoclub_kld",
+    "https://t.me/kaliningrad_now_ru",
+]
+
 DEFAULT_TG_SEEDS = [
     "https://t.me/tg_kgd",
     "https://t.me/chatkalin",
     "https://t.me/kenig01chat",
     "https://t.me/zhest_kaliningrada",
     "https://t.me/pereezd_v_kaliningrad_legko",
+    *TELEGA_IN_KALININGRAD_TG_SEEDS,
 ]
+
+_TELEGA_IN_TG_HANDLES = {url.rstrip("/").rsplit("/", 1)[-1].lower() for url in TELEGA_IN_KALININGRAD_TG_SEEDS}
 
 
 _LINK_RE = re.compile(r"(?i)\b(?:https?://)?(?:t\.me|telegram\.me|vk\.com)/[A-Za-z0-9_./?=&-]+")
@@ -112,7 +131,7 @@ _OUT_OF_REGION_HINT_RE = re.compile(
 )
 
 DEFAULT_ACQ_LLM_MODEL = "models/gemma-4-31b-it"
-LLM_GATE_STATS: dict[str, int] = {"calls": 0, "accepted": 0, "rejected": 0, "errors": 0, "skipped_no_key": 0}
+LLM_GATE_STATS: dict[str, int] = {"calls": 0, "accepted": 0, "rejected": 0, "rejected_low_confidence": 0, "errors": 0, "skipped_no_key": 0}
 
 LLM_GATE_SCHEMA = {
     "type": "object",
@@ -425,8 +444,35 @@ def _call_acq_llm_gate_sync(opp: dict[str, Any], surface: dict[str, Any]) -> dic
     return _parse_llm_json(_extract_llm_text(response))
 
 
+def _review_is_high_confidence(review: dict[str, Any]) -> tuple[bool, str]:
+    min_relevance = float(os.getenv("ACQ_LLM_GATE_MIN_RELEVANCE") or "0.85")
+    try:
+        relevance = float(review.get("relevance") or 0.0)
+    except Exception:
+        relevance = 0.0
+    if relevance < min_relevance:
+        return False, f"relevance {relevance:.2f} < {min_relevance:.2f}"
+    if str(review.get("spam_risk") or "low").strip().lower() not in {"none", "low"}:
+        return False, f"spam_risk={review.get('spam_risk')}"
+    if str(review.get("safety_risk") or "low").strip().lower() not in {"none", "low"}:
+        return False, f"safety_risk={review.get('safety_risk')}"
+    checklist = review.get("checklist") or []
+    if isinstance(checklist, list):
+        false_required = []
+        for item in checklist[:5]:
+            if isinstance(item, dict) and item.get("answer") is False:
+                false_required.append(str(item.get("id") or item.get("question") or "check"))
+        if false_required:
+            return False, "checklist_false=" + ",".join(false_required[:3])
+    return True, "high_confidence"
+
+
 def _apply_llm_gate_result(opp: dict[str, Any], review: dict[str, Any]) -> dict[str, Any] | None:
     if not bool(review.get("is_candidate")):
+        return None
+    high_confidence, confidence_reason = _review_is_high_confidence(review)
+    if not high_confidence:
+        review["confidence_reject_reason"] = confidence_reason
         return None
     updated = dict(opp)
     if review.get("matched_intent"):
@@ -450,6 +496,7 @@ def _apply_llm_gate_result(opp: dict[str, Any], review: dict[str, Any]) -> dict[
     evidence["llm_gate"] = {
         "model": _acq_llm_model(),
         "is_candidate": True,
+        "confidence": "very_high",
         "checklist": review.get("checklist") or [],
         "reason": review.get("reason"),
         "best_reply_strategy": review.get("best_reply_strategy"),
@@ -470,8 +517,12 @@ def _llm_review_opportunity_sync(opp: dict[str, Any], surface: dict[str, Any], d
         review = _call_acq_llm_gate_sync(opp, surface)
         accepted = _apply_llm_gate_result(opp, review)
         if accepted is None:
-            LLM_GATE_STATS["rejected"] += 1
-            diagnostics.append(f"acq llm gate rejected: {(opp.get('context_text_snippet') or '')[:120]}")
+            reason = str(review.get("confidence_reject_reason") or "semantic_not_candidate")
+            if "confidence_reject_reason" in review:
+                LLM_GATE_STATS["rejected_low_confidence"] += 1
+            else:
+                LLM_GATE_STATS["rejected"] += 1
+            diagnostics.append(f"acq Gemma understanding rejected ({reason}): {(opp.get('context_text_snippet') or '')[:120]}")
         else:
             LLM_GATE_STATS["accepted"] += 1
         return accepted
@@ -760,6 +811,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
+    opportunity_keys: set[str] = set()
     for raw_url in seed_urls[:max_surfaces]:
         normalized = str(raw_url or "").strip()
         if not normalized or normalized.lower() not in allowed:
@@ -813,7 +865,10 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
                     opp = _llm_review_opportunity_sync(opp, surface, diagnostics)
                 if opp:
-                    opportunities.append(opp)
+                    key = f"{opp.get('platform')}|{opp.get('context_url')}|{(opp.get('context_text_snippet') or '')[:120]}"
+                    if key not in opportunity_keys:
+                        opportunity_keys.add(key)
+                        opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
                     break
     return list(surfaces.values()), opportunities, diagnostics
@@ -880,6 +935,7 @@ def _seed_surface(url: str, *, platform: str = "tg") -> dict[str, Any]:
     handle = url.rstrip("/").split("/")[-1].lstrip("@")
     external_id = f"{platform}:{handle}" if handle else url
     surface_type = "community" if platform == "vk" else "unknown_public"
+    source = "telega_in" if platform == "tg" and handle.lower() in _TELEGA_IN_TG_HANDLES else "seed"
     return {
         "platform": platform,
         "surface_type": surface_type,
@@ -887,8 +943,8 @@ def _seed_surface(url: str, *, platform: str = "tg") -> dict[str, Any]:
         "handle": handle or None,
         "external_id": external_id,
         "status": "candidate",
-        "source": "seed",
-        "topic_hint": "Kaliningrad public/community seed",
+        "source": source,
+        "topic_hint": "Telega.in Kaliningrad regional catalog seed" if source == "telega_in" else "Kaliningrad public/community seed",
         "reach": {"confidence": "low", "basis": "seed_only"},
         "risk": {"level": "unknown", "reason": "not scanned yet"},
     }
@@ -957,6 +1013,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
+    opportunity_keys: set[str] = set()
     queue: list[str] = []
     queued: set[str] = set()
     for raw in seed_urls:
@@ -1058,7 +1115,10 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                                 opp["evidence"] = {**(opp.get("evidence") or {}), "relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
                                 opp = await _llm_review_opportunity_async(opp, scan_surface, diagnostics)
                             if opp:
-                                opportunities.append(opp)
+                                key = f"{opp.get('platform')}|{opp.get('context_url')}|{(opp.get('context_text_snippet') or '')[:120]}"
+                                if key not in opportunity_keys:
+                                    opportunity_keys.add(key)
+                                    opportunities.append(opp)
                         if len(opportunities) >= max_opportunities:
                             break
                         if seen % 8 == 0:

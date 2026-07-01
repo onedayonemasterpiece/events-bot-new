@@ -11,6 +11,9 @@
 
 ### Changed
 
+- Subscriber Acquisition Discovery now has an optional Yandex Managed Service
+  for YDB serverless stats sink for run/surface/opportunity state, plus
+  Telega.in Kaliningrad regional Telegram seeds for broader frontier discovery.
 - Subscriber Acquisition Discovery opportunity acceptance is now LLM-first in
   the Kaggle runtime: cheap regex/keyword filtering only controls frontier/link
   extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated

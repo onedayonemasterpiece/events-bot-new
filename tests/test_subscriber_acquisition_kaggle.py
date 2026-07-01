@@ -269,6 +269,49 @@ def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
     assert runtime.os.environ["ACQ_ENABLE_LIVE_TG_SCAN"] == "1"
 
 
+def test_telega_in_kaliningrad_seeds_are_tagged():
+    runtime = load_runtime()
+    assert "https://t.me/anons39" in runtime.DEFAULT_TG_SEEDS
+    surface = runtime._seed_surface("https://t.me/anons39", platform="tg")
+    assert surface["source"] == "telega_in"
+    assert "Telega.in" in surface["topic_hint"]
+
+
+def test_llm_gate_rejects_low_confidence_acceptance(monkeypatch):
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example", platform="tg")
+    opp = {
+        "platform": "tg",
+        "surface_external_id": surface["external_id"],
+        "context_url": "https://t.me/example/44",
+        "context_text_snippet": "Куда сходить?",
+        "matched_intent": "event_recommendation_question",
+        "topic_cluster": "local_events",
+        "link_target": {"kind": "pka_channel", "label": "ПКА", "url": "https://t.me/kenigevents"},
+        "scores": {"relevance": 0.5, "spam_risk": "low", "safety_risk": "low"},
+    }
+    monkeypatch.setattr(runtime, "_google_api_key", lambda: ("test-key", "GOOGLE_API_KEY3"))
+    monkeypatch.setattr(runtime, "_call_acq_llm_gate_sync", lambda _opp, _surface: {
+        "is_candidate": True,
+        "matched_intent": "event_recommendation_question",
+        "topic_cluster": "local_events",
+        "best_reply_strategy": "unclear",
+        "target_kind": "pka_channel",
+        "target_label": "ПКА",
+        "target_url": "https://t.me/kenigevents",
+        "reason": "weak",
+        "relevance": 0.4,
+        "spam_risk": "low",
+        "safety_risk": "low",
+        "checklist": [{"id": "need", "question": "Есть потребность?", "answer": True, "note": "да"}],
+    })
+
+    diagnostics = []
+    assert runtime._llm_review_opportunity_sync(opp, surface, diagnostics) is None
+    assert runtime.LLM_GATE_STATS["rejected_low_confidence"] == 1
+    assert "relevance" in diagnostics[0]
+
+
 def test_llm_gate_prompt_rejects_event_local_schedule_logistics():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://vk.com/vagonka39", platform="vk")

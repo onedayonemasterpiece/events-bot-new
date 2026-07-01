@@ -26,6 +26,8 @@ contract:
   so production does not review fake evidence;
 - review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
 - server import keeps seed-only queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces and later runs walk the remaining frontier rather than the same first seeds;
+- seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
+- optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
 - Telegraph report renderer/publisher and JSON schema for Kaggle output import;
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;

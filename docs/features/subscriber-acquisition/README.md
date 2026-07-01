@@ -38,6 +38,11 @@ the original seed list. Inside a Kaggle run, Telegram scanning also performs a
 bounded deterministic frontier walk: links found in scanned messages are queued
 for the same run up to `ACQ_MAX_TG_FRONTIER_PER_RUN` and
 `ACQ_MAX_SURFACES_PER_RUN`, without spending LLM budget on link extraction.
+The server seed payload is enriched with public Kaliningrad Telegram handles from
+Telega.in regional cards (`Kaliningrad_jenskiy`, `kpkld`, `gokaliningrad_ru`,
+`kenig01`, `Davai_KLD`, `kaliklove`, `jobs39`, `anons39`,
+`nedvizhimostkalinigrad`, `remont3939`, `autoclub_kld`,
+`kaliningrad_now_ru`) and marks them as `source=telega_in` in the group map.
 Discovered surfaces are region-gated for Kaliningrad Oblast before further
 analysis: obvious out-of-region links such as `visitNavahrudak` are marked
 `rejected_out_of_region` and are not queued for scanning. VK seeds come from
@@ -82,6 +87,17 @@ newly discovered links do not require manual approval before future analysis.
 Manual approval/rejection is reserved for concrete reply/post opportunities.
 
 ## Storage ownership note
+
+Discovery statistics/state target is Yandex Managed Service for YDB in serverless
+mode, because this workload is small append/upsert stats and YDB has a monthly
+free tier for the first 1,000,000 request units and 1 GB storage. Managed
+PostgreSQL remains better for heavy ad-hoc relational joins, but would require
+paid cluster resources for this MVP. The created target database is
+`events-bot-acq-discovery` (`/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9`).
+When `ACQ_YDB_STATS_ENABLED=1` and `ACQ_YDB_ENDPOINT`/`ACQ_YDB_DATABASE` plus
+YDB credentials are configured, imports upsert run/surface/opportunity stats into
+YDB tables `acq_discovery_runs`, `acq_discovery_surfaces`, and
+`acq_discovery_opportunities`.
 
 The current `acq_*` tables in core Fly SQLite are an MVP compatibility layer, not
 a final storage requirement. The storage analysis in

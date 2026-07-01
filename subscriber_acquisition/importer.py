@@ -196,9 +196,15 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                     active=True,
                 ))
             opportunities.append(opp)
+        ydb_export = None
+        try:
+            from .ydb_stats import export_discovery_payload_to_ydb
+            ydb_export = await export_discovery_payload_to_ydb(payload, run_db_id=run.id)
+        except Exception:
+            ydb_export = None
         run.status = "done"
         run.finished_at = datetime.now(timezone.utc)
-        run.stats_json = {"surfaces": len(surfaces), "opportunities": len(opportunities), "skipped_duplicate_contexts": skipped}
+        run.stats_json = {"surfaces": len(surfaces), "opportunities": len(opportunities), "skipped_duplicate_contexts": skipped, "ydb_export": ydb_export}
         session.add(run)
         await session.commit()
         await session.refresh(run)
