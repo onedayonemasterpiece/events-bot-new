@@ -52,8 +52,9 @@
 ### Fixed
 
 - Fixed Subscriber Acquisition false-positive review cards from post-event
-  praise/thanks/report comments by failing closed unless the Gemma 4 acquisition
-  gate finds an explicit current/future need and clear native reply target.
+  praise/thanks/report comments and event-local logistics questions by failing
+  closed unless the Gemma 4 acquisition gate finds an explicit current/future
+  need and clear native reply target beyond the currently discussed event/post.
 - Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
   longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
   is preserved over seed placeholders so future Kaggle runs advance through the

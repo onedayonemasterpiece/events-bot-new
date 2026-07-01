@@ -269,6 +269,15 @@ def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
     assert runtime.os.environ["ACQ_ENABLE_LIVE_TG_SCAN"] == "1"
 
 
+def test_llm_gate_prompt_rejects_event_local_schedule_logistics():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://vk.com/vagonka39", platform="vk")
+    prompt = runtime._llm_gate_prompt({"platform": "vk", "context_text_snippet": "А где афиша 1 дня ?", "matched_intent": "event_recommendation_question", "topic_cluster": "local_events", "link_target": {}}, surface)
+    assert "афиша/программа/расписание 1 дня" in prompt
+    assert "локальная логистика текущего события" in prompt
+    assert "общий канал" in prompt
+
+
 def test_llm_gate_rejects_post_event_praise(monkeypatch):
     runtime = load_runtime()
     surface = runtime._seed_surface("https://vk.com/example", platform="vk")

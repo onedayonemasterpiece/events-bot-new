@@ -60,7 +60,8 @@ Google key lane `GOOGLE_API_KEY3`). If the configured Google key is absent, the
 runtime fails closed for opportunities instead of showing regex-owned semantic
 cards. The review card stores and displays the Gemma checklist, including
 whether the comment is a real current/future need and not just a post-event
-thank-you/report.
+thank-you/report or local logistics for the currently discussed event/post
+(schedule/programme of one day, exact time/address/entrance).
 
 The cheap prefilter also routes recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
