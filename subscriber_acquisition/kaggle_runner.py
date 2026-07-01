@@ -178,10 +178,22 @@ def _json_env_value(items: list[str]) -> str:
     return json.dumps([str(item) for item in items if str(item).strip()], ensure_ascii=False)
 
 
+def _vk_seed_item_priority(item: dict[str, Any], index: int) -> tuple[int, int]:
+    handle = vk_handle_from_surface(url=item.get("url"), handle=item.get("handle"), external_id=item.get("external_id")).casefold()
+    source = str(item.get("source") or "").strip().lower()
+    if handle in SMARTIK_KALININGRAD_VK_BY_HANDLE:
+        return (0, index)
+    if handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE:
+        return (1, index)
+    if source in {"smartik_kaliningrad_catalog", "vk_social_search"}:
+        return (2, index)
+    return (3, index)
+
+
 def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
     tg: list[str] = []
-    vk: list[str] = []
-    for item in payload.get("surfaces") or []:
+    vk_items: list[tuple[int, str, dict[str, Any]]] = []
+    for index, item in enumerate(payload.get("surfaces") or []):
         if not isinstance(item, dict):
             continue
         url = str(item.get("url") or "").strip()
@@ -197,9 +209,10 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
         if platform == "vk" and not is_vk_community_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
             continue
         if platform == "vk":
-            vk.append(url)
+            vk_items.append((index, url, item))
         else:
             tg.append(url)
+    vk = [url for index, url, item in sorted(vk_items, key=lambda row: _vk_seed_item_priority(row[2], row[0]))]
     return tg, vk
 
 
@@ -238,8 +251,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
             source_rank = 0 if is_curated_social else (1 if is_new_frontier else 2)
             return (
-                0 if is_seed_only else 1,
                 source_rank,
+                0 if is_seed_only else 1,
                 0 if status == "candidate" else 1,
                 next_scan.timestamp(),
                 int(row.id or 0),
