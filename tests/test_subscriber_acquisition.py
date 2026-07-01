@@ -230,6 +230,32 @@ async def test_runtime_seed_payload_includes_existing_vk_monitoring_groups(db):
 
 
 @pytest.mark.asyncio
+async def test_shadow_run_without_payload_uses_kaggle_runner_by_default(db, sample_payload, monkeypatch):
+    async def fake_report(run, surfaces, opportunities):
+        return "https://telegra.ph/acq-report"
+
+    async def fake_kaggle(db_arg, *, config, seed_payload=None):
+        assert db_arg is db
+        assert config.runner == "kaggle"
+        assert seed_payload == {"surfaces": []}
+        return SimpleNamespace(payload=sample_payload, output_path=Path("/tmp/acq.json"), runner="kaggle", kernel_ref="user/subscriber-acquisition-discovery", run_id="test-run", status="complete")
+
+    monkeypatch.setattr("subscriber_acquisition.service.publish_telegraph_report", fake_report)
+    monkeypatch.setattr("subscriber_acquisition.service.run_kaggle_discovery_runtime", fake_kaggle)
+    cfg = AcqConfig(review_chat_id=777)
+    bot = FakeBot()
+
+    result = await run_acq_discovery_shadow(db, bot=bot, config=cfg)
+
+    assert result.run.telegraph_url == "https://telegra.ph/acq-report"
+    assert len(result.surfaces) == 1
+    assert len(result.opportunities) == 1
+    async with db.get_session() as session:
+        feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+    assert [row.action for row in feedback] == ["shown"]
+
+
+@pytest.mark.asyncio
 async def test_shadow_run_refuses_live_scan_when_remote_session_busy(db, monkeypatch):
     class Busy(RuntimeError):
         pass

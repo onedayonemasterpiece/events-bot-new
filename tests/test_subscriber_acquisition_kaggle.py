@@ -103,3 +103,16 @@ def test_review_module_only_sends_to_configured_review_chat_static():
     assert "bot.send_message" in source
     assert "cfg.review_chat_id" in source
     assert "ensure_review_chat(sent_chat_id" in source
+
+
+def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    payload = {"surfaces": [
+        {"platform": "vk", "url": "https://vk.com/club1", "external_id": "vk:club1", "status": "candidate", "source": "vk_source"},
+        {"platform": "vk", "url": "https://vk.com/club2", "external_id": "vk:club2", "status": "candidate", "source": "vk_source"},
+    ]}
+    env = _runtime_env_from_config(AcqConfig(), payload)
+    assert env["ACQ_VK_SEEDS_JSON"] == '["https://vk.com/club1", "https://vk.com/club2"]'
+    assert env["ACQ_VK_ALLOWLIST_JSON"] == env["ACQ_VK_SEEDS_JSON"]

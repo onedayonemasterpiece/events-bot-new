@@ -67,7 +67,7 @@ class AcqConfig:
     discovery_results_path: str = ""
     fixture_path: str = ""
     use_sample_fixture: bool = False
-    runner: str = "local"
+    runner: str = "kaggle"
 
 
 def load_config() -> AcqConfig:
@@ -100,5 +100,5 @@ def load_config() -> AcqConfig:
         discovery_results_path=(os.getenv("ACQ_DISCOVERY_RESULTS_PATH") or "").strip(),
         fixture_path=(os.getenv("ACQ_DISCOVERY_FIXTURE_PATH") or "").strip(),
         use_sample_fixture=_bool("ACQ_DISCOVERY_USE_SAMPLE", False),
-        runner=(os.getenv("ACQ_DISCOVERY_RUNNER") or "local").strip().lower(),
+        runner=(os.getenv("ACQ_DISCOVERY_RUNNER") or "kaggle").strip().lower(),
     )

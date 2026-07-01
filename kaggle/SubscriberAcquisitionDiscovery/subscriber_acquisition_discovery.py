@@ -249,12 +249,13 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
         return [], [], diagnostics
     if not token:
         return [], [], ["VK allowlist is non-empty but VK token is not configured; emitted VK seeds only"]
+    max_surfaces = int(os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN") or os.getenv("ACQ_MAX_SURFACES_PER_RUN") or "5")
     max_posts = int(os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE") or os.getenv("ACQ_MAX_MESSAGES_PER_SURFACE") or "10")
     max_comments = int(os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST") or os.getenv("ACQ_MAX_THREADS_PER_SURFACE") or "15")
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
-    for raw_url in seed_urls:
+    for raw_url in seed_urls[:max_surfaces]:
         normalized = str(raw_url or "").strip()
         if not normalized or normalized.lower() not in allowed:
             continue

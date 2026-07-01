@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +18,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "kaggle" / "SubscriberAcquisitionDiscovery"
 RUNTIME_SCRIPT = RUNTIME_DIR / "subscriber_acquisition_discovery.py"
 OUTPUT_FILENAME = "acq_discovery_result.json"
+CONFIG_DATASET_CIPHER = os.getenv("ACQ_DISCOVERY_CONFIG_CIPHER", "subscriber-acquisition-discovery-cipher")
+CONFIG_DATASET_KEY = os.getenv("ACQ_DISCOVERY_CONFIG_KEY", "subscriber-acquisition-discovery-key")
+TERMINAL_COMPLETE = {"COMPLETE", "SUCCEEDED", "SUCCESS"}
+TERMINAL_FAILED = {"ERROR", "FAILED", "CANCELED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}
 
 
 def live_telegram_scan_enabled() -> bool:
@@ -45,6 +52,9 @@ class DiscoveryRuntimeResult:
     payload: dict[str, Any]
     output_path: Path
     runner: str
+    kernel_ref: str | None = None
+    run_id: str | None = None
+    status: str | None = None
 
 
 def _json_env_value(items: list[str]) -> str:
@@ -63,7 +73,7 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
         platform = str(item.get("platform") or "").strip().lower()
         status = str(item.get("status") or "").strip().lower()
         source = str(item.get("source") or "").strip().lower()
-        if status not in {"seed", "candidate", "approved"} and source != "seed":
+        if status not in {"seed", "candidate", "approved"} and source not in {"seed", "vk_source"}:
             continue
         if platform == "vk":
             vk.append(url)
@@ -133,30 +143,42 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     return {"surfaces": surfaces}
 
 
-def run_local_discovery_runtime(*, config: AcqConfig, seed_payload: dict[str, Any] | None = None) -> DiscoveryRuntimeResult:
-    """Run the Kaggle script locally as the same safe shadow runtime.
+def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) -> dict[str, str]:
+    tg_seeds, vk_seeds = _approved_seed_urls_from_payload(seed_payload)
+    env: dict[str, str] = {
+        "ACQ_DEFAULT_LINK_TARGET_URL": config.default_link_target_url,
+        "ACQ_MAX_SURFACES_PER_RUN": str(config.max_surfaces_per_run),
+        "ACQ_MAX_MESSAGES_PER_SURFACE": str(config.max_messages_per_surface),
+        "ACQ_MAX_THREADS_PER_SURFACE": str(config.max_threads_per_surface),
+        "ACQ_MAX_OPPORTUNITIES_PER_RUN": str(config.max_opportunities_per_run),
+        "ACQ_ENABLE_LIVE_TG_SCAN": os.getenv("ACQ_ENABLE_LIVE_TG_SCAN", "0"),
+    }
+    if tg_seeds:
+        env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
+    if vk_seeds:
+        env["ACQ_VK_SEEDS_JSON"] = _json_env_value(vk_seeds)
+        # Product request: start VK discovery from all existing monitored VK groups.
+        # The runtime still applies per-run budgets and uses read-only methods only.
+        env["ACQ_VK_ALLOWLIST_JSON"] = os.getenv("ACQ_VK_ALLOWLIST_JSON") or _json_env_value(vk_seeds)
+    return env
 
-    This is the deterministic no-Kaggle fallback used by `/acq_run` in dev/test
-    and by production only when explicitly configured. The script itself owns all
-    TG/VK no-send constraints and writes the same JSON artifact as Kaggle.
-    """
+
+def _artifact_dir() -> Path:
+    path = PROJECT_ROOT / "artifacts" / "codex" / "subscriber-acquisition-discovery"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def run_local_discovery_runtime(*, config: AcqConfig, seed_payload: dict[str, Any] | None = None) -> DiscoveryRuntimeResult:
+    """Run the Kaggle script locally as explicit dev/test fallback only."""
     if not RUNTIME_SCRIPT.exists():
         raise FileNotFoundError(f"acquisition runtime script not found: {RUNTIME_SCRIPT}")
     seed_payload = seed_payload or {}
-    tg_seeds, vk_seeds = _approved_seed_urls_from_payload(seed_payload)
     with tempfile.TemporaryDirectory(prefix="acq-discovery-") as tmp:
         output_dir = Path(tmp)
         env = os.environ.copy()
         env["ACQ_OUTPUT_DIR"] = str(output_dir)
-        env.setdefault("ACQ_DEFAULT_LINK_TARGET_URL", config.default_link_target_url)
-        env.setdefault("ACQ_MAX_SURFACES_PER_RUN", str(config.max_surfaces_per_run))
-        env.setdefault("ACQ_MAX_MESSAGES_PER_SURFACE", str(config.max_messages_per_surface))
-        env.setdefault("ACQ_MAX_THREADS_PER_SURFACE", str(config.max_threads_per_surface))
-        env.setdefault("ACQ_MAX_OPPORTUNITIES_PER_RUN", str(config.max_opportunities_per_run))
-        if tg_seeds and "ACQ_TG_SEEDS_JSON" not in env:
-            env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
-        if vk_seeds and "ACQ_VK_SEEDS_JSON" not in env:
-            env["ACQ_VK_SEEDS_JSON"] = _json_env_value(vk_seeds)
+        env.update(_runtime_env_from_config(config, seed_payload))
         completed = subprocess.run(
             [sys.executable, str(RUNTIME_SCRIPT)],
             cwd=str(PROJECT_ROOT),
@@ -173,9 +195,206 @@ def run_local_discovery_runtime(*, config: AcqConfig, seed_payload: dict[str, An
         if not output_path.exists():
             raise FileNotFoundError(f"acquisition runtime did not write {OUTPUT_FILENAME}")
         payload = json.loads(output_path.read_text(encoding="utf-8"))
-        # Preserve a durable artifact copy for diagnostics without committing it.
-        artifact_dir = PROJECT_ROOT / "artifacts" / "codex" / "subscriber-acquisition-discovery"
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        durable_path = artifact_dir / OUTPUT_FILENAME
+        durable_path = _artifact_dir() / OUTPUT_FILENAME
         durable_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return DiscoveryRuntimeResult(payload=payload, output_path=durable_path, runner="local_shadow_runtime")
+
+
+def _slugify(value: str, *, max_len: int = 48) -> str:
+    import re
+
+    raw = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "").strip().lower()).strip("-")
+    if not raw:
+        raw = "run"
+    return raw[:max_len].rstrip("-")
+
+
+def _build_dataset_slug(prefix: str, run_id: str) -> str:
+    return f"{_slugify(prefix, max_len=38)}-{_slugify(run_id, max_len=18)}"[:60].rstrip("-")
+
+
+def _require_kaggle_username() -> str:
+    username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    if not username:
+        raise RuntimeError("KAGGLE_USERNAME not set")
+    return username
+
+
+def _kernel_ref_from_meta() -> str:
+    meta_path = RUNTIME_DIR / "kernel-metadata.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    kernel_id = str(meta.get("id") or meta.get("slug") or "subscriber-acquisition-discovery").strip()
+    username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    if username:
+        slug = kernel_id.split("/", 1)[-1]
+        return f"{username}/{slug}"
+    return kernel_id
+
+
+def _build_secrets_payload() -> str:
+    keys = [
+        "TELEGRAM_AUTH_BUNDLE_S22",
+        "TG_API_ID",
+        "TG_API_HASH",
+        "VK_ACCESS_TOKEN",
+        "VK_ACCESS_TOKEN4",
+    ]
+    payload = {key: os.getenv(key) for key in keys if (os.getenv(key) or "").strip()}
+    if live_telegram_scan_enabled():
+        missing = [key for key in ["TELEGRAM_AUTH_BUNDLE_S22", "TG_API_ID", "TG_API_HASH"] if not payload.get(key)]
+        if missing:
+            raise RuntimeError(f"missing Telegram S22 credentials for acquisition Kaggle run: {', '.join(missing)}")
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _create_dataset(client: Any, username: str, slug_suffix: str, title: str, writer) -> str:
+    slug = f"{username}/{slug_suffix}"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        writer(tmp_path)
+        (tmp_path / "dataset-metadata.json").write_text(
+            json.dumps({"title": title, "id": slug, "licenses": [{"name": "CC0-1.0"}]}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        try:
+            client.create_dataset(tmp_path)
+        except Exception:
+            try:
+                client.create_dataset_version(tmp_path, version_notes=f"refresh {slug_suffix}", quiet=True, convert_to_csv=False, dir_mode="zip")
+                return slug
+            except Exception:
+                try:
+                    client.delete_dataset(slug, no_confirm=True)
+                except Exception:
+                    pass
+                client.create_dataset(tmp_path)
+    return slug
+
+
+async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict[str, str], secrets_payload: str, run_id: str) -> tuple[str, str]:
+    from kaggle_status import create_kaggle_run_config, write_kaggle_status_files
+    from source_parsing.telegram.split_secrets import encrypt_secret
+    from video_announce.kaggle_client import await_dataset_ready
+
+    encrypted, fernet_key = encrypt_secret(secrets_payload)
+    username = _require_kaggle_username()
+    slug_suffix = _slugify(run_id, max_len=18)
+    kaggle_run_config = await create_kaggle_run_config(
+        db,
+        run_id=f"acq_discovery:{run_id}",
+        session_id=None,
+        kind="subscriber_acquisition_discovery",
+        notebook="SubscriberAcquisitionDiscovery",
+        resource_leases=["telegram_session:s22"] if live_telegram_scan_enabled() else [],
+    )
+
+    def write_cipher(path: Path) -> None:
+        (path / "config.json").write_text(json.dumps(config_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (path / "secrets.enc").write_bytes(encrypted)
+        write_kaggle_status_files(path, kaggle_run_config)
+
+    def write_key(path: Path) -> None:
+        (path / "fernet.key").write_bytes(fernet_key)
+
+    slug_cipher = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id), f"Subscriber Acquisition Discovery Cipher {slug_suffix}", write_cipher)
+    slug_key = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_KEY, run_id), f"Subscriber Acquisition Discovery Key {slug_suffix}", write_key)
+    await await_dataset_ready(client, slug_cipher, expected_files=["config.json", "secrets.enc", "kaggle_run.json", "kaggle_status_client.py"])
+    await await_dataset_ready(client, slug_key, expected_files=["fernet.key"])
+    return slug_cipher, slug_key
+
+
+def _push_kaggle_kernel(client: Any, dataset_sources: list[str]) -> str:
+    kernel_ref = _kernel_ref_from_meta()
+    client.push_kernel(kernel_path=RUNTIME_DIR, dataset_sources=dataset_sources)
+    return kernel_ref
+
+
+def _status_to_text(status_payload: Any) -> str:
+    if isinstance(status_payload, str):
+        return status_payload.upper()
+    for attr in ["status", "state"]:
+        value = getattr(status_payload, attr, None)
+        if value:
+            return str(value).upper()
+    if isinstance(status_payload, dict):
+        return str(status_payload.get("status") or status_payload.get("state") or "").upper()
+    return str(status_payload or "").upper()
+
+
+async def _poll_kaggle_kernel(client: Any, kernel_ref: str, *, timeout_seconds: int, poll_interval_seconds: int) -> tuple[str, Any]:
+    api = client._get_api()
+    deadline = time.monotonic() + max(1, int(timeout_seconds))
+    last_status: Any = None
+    while time.monotonic() < deadline:
+        last_status = await asyncio.to_thread(api.kernels_status, kernel_ref)
+        status = _status_to_text(last_status)
+        if status in TERMINAL_COMPLETE:
+            return "complete", last_status
+        if status in TERMINAL_FAILED:
+            return status.lower(), last_status
+        await asyncio.sleep(max(1, int(poll_interval_seconds)))
+    return "timeout", last_status
+
+
+def _download_kaggle_output(client: Any, kernel_ref: str, *, run_id: str) -> Path:
+    output_dir = _artifact_dir() / f"kaggle-{_slugify(run_id, max_len=24)}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    files = client.download_kernel_output(kernel_ref, path=str(output_dir), force=True)
+    output_path = output_dir / OUTPUT_FILENAME
+    if not output_path.exists():
+        # Kaggle may return nested/relative names; search defensively.
+        matches = list(output_dir.rglob(OUTPUT_FILENAME))
+        if matches:
+            output_path = matches[0]
+    if not output_path.exists():
+        raise FileNotFoundError(f"{OUTPUT_FILENAME} not found in Kaggle output files={files}")
+    return output_path
+
+
+async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_payload: dict[str, Any] | None = None) -> DiscoveryRuntimeResult:
+    await ensure_remote_telegram_session_available_for_discovery()
+    from kaggle_registry import register_job, remove_job, update_job_meta
+    from video_announce.kaggle_client import KaggleClient
+
+    seed_payload = seed_payload or {}
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    config_payload = _runtime_env_from_config(config, seed_payload)
+    secrets_payload = _build_secrets_payload()
+    client = KaggleClient()
+    dataset_cipher = dataset_key = kernel_ref = ""
+    registered = False
+    try:
+        dataset_cipher, dataset_key = await _prepare_kaggle_datasets(db, client, config_payload=config_payload, secrets_payload=secrets_payload, run_id=run_id)
+        if int(os.getenv("ACQ_KAGGLE_DATASET_WAIT_SECONDS") or "0") > 0:
+            await asyncio.sleep(int(os.getenv("ACQ_KAGGLE_DATASET_WAIT_SECONDS") or "0"))
+        kernel_ref = _push_kaggle_kernel(client, [dataset_cipher, dataset_key])
+        await register_job(
+            "subscriber_acquisition_discovery",
+            kernel_ref,
+            meta={
+                "run_id": run_id,
+                "pid": os.getpid(),
+                "remote_telegram_auth_scope": discovery_remote_auth_scope(),
+                "dataset_slugs": [dataset_cipher, dataset_key],
+                "runner": "kaggle",
+            },
+        )
+        registered = True
+        status, status_payload = await _poll_kaggle_kernel(
+            client,
+            kernel_ref,
+            timeout_seconds=int(os.getenv("ACQ_KAGGLE_TIMEOUT_SECONDS") or "1800"),
+            poll_interval_seconds=int(os.getenv("ACQ_KAGGLE_POLL_INTERVAL_SECONDS") or "30"),
+        )
+        await update_job_meta("subscriber_acquisition_discovery", kernel_ref, meta_updates={"last_status": status, "last_status_at": datetime.now(timezone.utc).isoformat()})
+        if status != "complete":
+            raise RuntimeError(f"Subscriber Acquisition Kaggle kernel did not complete: {status} {status_payload}")
+        output_path = _download_kaggle_output(client, kernel_ref, run_id=run_id)
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        return DiscoveryRuntimeResult(payload=payload, output_path=output_path, runner="kaggle", kernel_ref=kernel_ref, run_id=run_id, status=status)
+    finally:
+        if registered and kernel_ref:
+            try:
+                await remove_job("subscriber_acquisition_discovery", kernel_ref)
+            except Exception:
+                pass
