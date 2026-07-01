@@ -96,31 +96,34 @@ async def _run_scheduled_guide_excursions(
         send_progress=bool(target_chat_id),
     )
     auto_publish = _env_enabled("ENABLE_GUIDE_DIGEST_SCHEDULED", default=False)
+    visual_auto_publish = _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED", default=False)
     warnings = [str(item) for item in (getattr(result, "warnings", None) or []) if str(item).strip()]
-    if not auto_publish or mode != "full" or result.errors or bot is None:
+    if mode != "full" or result.errors or bot is None or not (auto_publish or visual_auto_publish):
         return
-    try:
-        publish_result = await publish_guide_digest(
-            db,
-            bot,
-            family="new_occurrences",
-            chat_id=target_chat_id,
-        )
-    except Exception as exc:
-        logging.exception("SCHED scheduled guide digest publish failed")
-        if target_chat_id:
-            try:
-                await bot.send_message(
-                    int(target_chat_id),
-                    (
-                        "❌ Scheduled guide digest publish stopped\n"
-                        f"reason={str(exc) or type(exc).__name__}"
-                    ),
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                logging.exception("SCHED failed to notify admin about scheduled guide digest publish failure")
-        return
+    publish_result = {"published": False, "reason": "disabled"}
+    if auto_publish:
+        try:
+            publish_result = await publish_guide_digest(
+                db,
+                bot,
+                family="new_occurrences",
+                chat_id=target_chat_id,
+            )
+        except Exception as exc:
+            logging.exception("SCHED scheduled guide digest publish failed")
+            if target_chat_id:
+                try:
+                    await bot.send_message(
+                        int(target_chat_id),
+                        (
+                            "❌ Scheduled guide digest publish stopped\n"
+                            f"reason={str(exc) or type(exc).__name__}"
+                        ),
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    logging.exception("SCHED failed to notify admin about scheduled guide digest publish failure")
+            return
     vk_result = None
     if publish_result.get("published") and guide_digest_vk_enabled():
         try:
@@ -133,6 +136,21 @@ async def _run_scheduled_guide_excursions(
         except Exception as exc:
             logging.exception("SCHED scheduled guide VK digest publish failed")
             vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
+    visual_vk_result = None
+    if visual_auto_publish:
+        try:
+            from guide_excursions.visual_digest import publish_visual_digest_to_vk
+
+            immediate = _env_enabled("GUIDE_VISUAL_DIGEST_VK_IMMEDIATE", default=False)
+            visual_vk_result = await publish_visual_digest_to_vk(
+                db,
+                bot,
+                max_cards=1,
+                publish_date=0 if immediate else None,
+            )
+        except Exception as exc:
+            logging.exception("SCHED scheduled guide visual VK digest publish failed")
+            visual_vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
     recovery_kernel_ref = str(getattr(result, "recovery_kernel_ref", "") or "").strip()
     if recovery_kernel_ref and getattr(result, "import_completed", False):
         try:
@@ -159,6 +177,12 @@ async def _run_scheduled_guide_excursions(
                     )
                     + (
                         "\n"
+                        f"visual_vk={visual_vk_result.get('url') or visual_vk_result.get('reason') or 'skipped'}"
+                        if visual_vk_result
+                        else ""
+                    )
+                    + (
+                        "\n"
                         f"warnings={len(warnings)}\n"
                         f"/guide_report {getattr(result, 'ops_run_id', None)}"
                         if warnings and getattr(result, "ops_run_id", None)
@@ -178,6 +202,12 @@ async def _run_scheduled_guide_excursions(
                     f"issue_id={publish_result.get('issue_id')}"
                     + (
                         "\n"
+                        f"visual_vk={visual_vk_result.get('url') or visual_vk_result.get('reason') or 'skipped'}"
+                        if visual_vk_result
+                        else ""
+                    )
+                    + (
+                        "\n"
                         f"warnings={len(warnings)}\n"
                         f"/guide_report {getattr(result, 'ops_run_id', None)}"
                         if warnings and getattr(result, "ops_run_id", None)
@@ -188,6 +218,25 @@ async def _run_scheduled_guide_excursions(
             )
         except Exception:
             logging.exception("SCHED failed to notify admin about empty scheduled guide digest")
+    elif target_chat_id and visual_vk_result:
+        try:
+            await bot.send_message(
+                int(target_chat_id),
+                (
+                    "📣 Scheduled visual guide digest\n"
+                    f"visual_vk={visual_vk_result.get('url') or visual_vk_result.get('reason') or 'skipped'}"
+                    + (
+                        "\n"
+                        f"warnings={len(warnings)}\n"
+                        f"/guide_report {getattr(result, 'ops_run_id', None)}"
+                        if warnings and getattr(result, "ops_run_id", None)
+                        else ""
+                    )
+                ),
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            logging.exception("SCHED failed to notify admin about scheduled guide visual digest")
 
 
 async def _run_poll_to_forward_debug_tick(db, bot, run_id: str | None = None) -> None:

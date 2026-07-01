@@ -421,6 +421,7 @@ features:
     entrypoints:
       - guide_excursions/commands.py
       - guide_excursions/service.py
+      - guide_excursions/visual_digest.py
       - guide_excursions/kaggle_service.py
       - guide_excursions/dedup.py
       - guide_excursions/editorial.py
@@ -429,6 +430,7 @@ features:
       - guide_excursions/seed.py
       - kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py
       - db.py
+      - scripts/guide_visual_digest.py
       - general_stats.py
       - scheduling.py
       - main.py

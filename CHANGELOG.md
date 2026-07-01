@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- VK user-token actor resolution now honors the existing `VK_ACCESS_TOKEN4`
+  fallback for helper API calls such as `utils.getShortLink`, so visual guide
+  digest links can be shortened without requiring a duplicate `VK_USER_TOKEN` env.
 - **Incident / kraftmarket317 poster-only zero-events (INC-2026-06-30)**:
   TelegramMonitor now routes empty-caption poster-only posts through OCR-backed
   LLM extraction instead of returning `events=[]`; Telegram import now preserves
@@ -12,6 +15,11 @@
 
 ### Added
 
+- Added a separate production VK visual guide digest (`visual_schedule`): a
+  deterministic 1080×1350 schedule card renderer, VK carousel publisher,
+  idempotency column for refreshed future excursions, CLI, scheduler gate,
+  local SVGRepo transport icons, guide/organization avatars, VK short-link text
+  formatting, and optional VK stories fanout.
 - Guide excursions monitoring now seeds `@progulki_s_katey` as a medium-trust
   personal Telegram guide source so future public walking-tour announcements
   are scanned by the scheduled guide pipeline.

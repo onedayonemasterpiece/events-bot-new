@@ -958,6 +958,7 @@ class Database:
                     likes INTEGER,
                     published_new_digest_issue_id INTEGER,
                     published_last_call_digest_issue_id INTEGER,
+                    published_visual_digest_issue_id INTEGER,
                     first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     last_seen_post_at TIMESTAMP,
@@ -977,6 +978,11 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_guide_occurrence_last_call ON guide_occurrence(is_last_call, published_last_call_digest_issue_id)"
             )
             await _add_column(conn, "guide_occurrence", "fact_pack_json JSON")
+            await _add_column(conn, "guide_occurrence", "published_visual_digest_issue_id INTEGER")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_guide_occurrence_visual_digest "
+                "ON guide_occurrence(digest_eligible, published_visual_digest_issue_id, updated_at)"
+            )
 
             dbg("guide_occurrence_source")
             await conn.execute(

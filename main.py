@@ -3480,7 +3480,7 @@ def redact_params(params: dict[str, Any]) -> dict[str, Any]:
 
 def _vk_user_token() -> str | None:
     """Return user token unless it was previously marked invalid."""
-    token = os.getenv("VK_USER_TOKEN")
+    token = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4")
     global _vk_user_token_bad
     if token and _vk_user_token_bad and token != _vk_user_token_bad:
         _vk_user_token_bad = None

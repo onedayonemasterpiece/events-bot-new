@@ -315,6 +315,46 @@ Runtime flags:
 - добавление `vk.com/ruin.keepers` и `vk.com/narodexcursovod` расширяет duplicate surface: Route Matchmaker должен сравнивать VK announcements с Telegram `ruin_keepers` и aggregator mirrors по same-date route/booking anchors, иначе один и тот же выход появится в VK digest второй карточкой;
 - если VK resolve screen_name/group id недоступен из-за token/permission/rate limit, запуск должен остановиться до production-поста и показать оператору, какой source/target не был resolved.
 
+### Отдельный визуальный VK-дайджест расписания
+
+Помимо текстового/афишного guide digest есть отдельный VK-first выпуск
+`visual_schedule`: одна вертикальная карточка 1080×1350 с расписанием до 5
+будущих экскурсий. Это не замена основного дайджеста, а отдельная публикация:
+зритель должен за несколько секунд понять `когда · куда/откуда · с кем · как`
+и перейти в текст поста только если маршрут ему интересен.
+
+Production contract:
+
+- источник данных — уже сохранённые `guide_occurrence` из мониторинга; рендер не
+  придумывает названия, время, места старта или транспорт, а берёт факты из
+  `canonical_title`, `date/time`, `guide_names/organizer_names`,
+  `meeting_point`, `route_summary`, `seats_text`, `fact_pack_json`;
+- один production-выпуск содержит максимум 5 экскурсий (`GUIDE_VISUAL_DIGEST_MAX_CARDS=1`);
+  ручной тестовый запуск может собрать несколько карточек-каруселью, но каждая
+  карточка всё равно содержит не больше 5 строк;
+- idempotency отдельная от старого Telegram/VK digest: после успешного VK
+  `wall.post` occurrence получает `published_visual_digest_issue_id`; если
+  мониторинг позже обновит occurrence (`updated_at` станет новее issue), она
+  снова может попасть в визуальный дайджест как «новая информация»;
+- карточка показывает номер выпуска, крупный период, полный месяц (`июля`), день
+  недели/время (если времени нет — полный день недели), полное имя гида или
+  название организации, локацию/старт/маршрут, короткие впечатления, аватар/логотип
+  известного гида/организации, иконку формата и места только когда они есть;
+- VK-текст: первая строка `Дайджест экскурсий №…`, короткая вводная, затем строки
+  `название — ссылка`. VK-ссылки оформляются кликабельным названием (`[vk-url|title]`),
+  внешние URL сокращаются через `utils.getShortLink`, телефонные контакты не
+  сокращаются;
+- публикация идёт через `post_to_vk(..., carousel=True)`, чтобы VK оставил
+  листалку, а не принудительную медиагруппу/grid. Для review/test используется
+  отложка; production может включить immediate wall post + VK story для первой
+  карточки (`GUIDE_VISUAL_DIGEST_VK_IMMEDIATE=1`, `ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES=1`).
+
+Код: `guide_excursions/visual_digest.py`, ручной CLI
+`scripts/guide_visual_digest.py`, scheduler gate
+`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1` после scheduled full scan. Визуальный
+QA перед первым тестом был проведён через `agy --model "Gemini 3.1 Pro (High)"`;
+Gemini verdict: `PASS` для contact sheet production renderer.
+
 ### Hook-карточки (engagement cards)
 
 Поверх afisha-вложений VK-пост дополняется 1–3 «крючковыми» карточками (1080×1080), на которых крупно вынесена одна цепляющая маркетинговая фраза-вопрос — чтобы в сетке VK пост сразу зацеплял взгляд. Это редакторские текст-карточки в инстаграм-стиле, а не афиши.
