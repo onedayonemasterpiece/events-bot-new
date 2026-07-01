@@ -284,7 +284,9 @@ function providerKeyAttempts(
   const groups = googleProviderKeyGroups(kind);
   return [
     ...rotateProviderKeys(groups.active, `${kind}:active:${seed}`),
-    ...rotateProviderKeys(groups.reserve, `${kind}:reserve:${seed}`),
+    // Reserve lanes are priority-ordered because they belong to other
+    // production surfaces; do not hash-balance normal search onto them.
+    ...groups.reserve,
   ];
 }
 

@@ -369,8 +369,8 @@ appended only after every active key fails with quota/capacity/retryable provide
 errors. This means none of the reserved lanes is merely “late in the same
 rotating list”: they should not be touched by normal `/poisk/` traffic. If the
 active list later contains multiple unreserved keys, the function hash-rotates
-within the active group first and only then appends the independently rotated
-reserve group. If no explicit key lists are configured, the function preserves
+within the active group first and only then appends the fixed-priority reserve
+order. If no explicit key lists are configured, the function preserves
 the legacy fallback chain `GOOGLE_API_KEY4, GOOGLE_API_KEY, GEMINI_API_KEY`.
 
 2026-07-01 live rollout evidence from branch
