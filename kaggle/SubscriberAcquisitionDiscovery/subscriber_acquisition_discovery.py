@@ -811,6 +811,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
+    seen_contexts = _seen_context_urls()
     opportunity_keys: set[str] = set()
     deadline = _deadline_after_seconds()
     for raw_url in seed_urls[:max_surfaces]:
@@ -875,8 +876,11 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                     opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
                     opp = _llm_review_opportunity_sync(opp, surface, diagnostics)
                 if opp:
-                    key = f"{opp.get('platform')}|{opp.get('context_url')}|{(opp.get('context_text_snippet') or '')[:120]}"
-                    if key not in opportunity_keys:
+                    context_url = str(opp.get("context_url") or "")
+                    key = f"{opp.get('platform')}|{context_url}|{(opp.get('context_text_snippet') or '')[:120]}"
+                    if context_url in seen_contexts:
+                        diagnostics.append(f"skip already analyzed context: {context_url}")
+                    elif key not in opportunity_keys:
                         opportunity_keys.add(key)
                         opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
@@ -1023,6 +1027,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
+    seen_contexts = _seen_context_urls()
     opportunity_keys: set[str] = set()
     queue: list[str] = []
     queued: set[str] = set()
@@ -1132,8 +1137,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                                 opp["evidence"] = {**(opp.get("evidence") or {}), "relation": relation or "surface", "scanner": "telegram_shadow", "comment_only": True}
                                 opp = await _llm_review_opportunity_async(opp, scan_surface, diagnostics)
                             if opp:
-                                key = f"{opp.get('platform')}|{opp.get('context_url')}|{(opp.get('context_text_snippet') or '')[:120]}"
-                                if key not in opportunity_keys:
+                                context_url = str(opp.get("context_url") or "")
+                                key = f"{opp.get('platform')}|{context_url}|{(opp.get('context_text_snippet') or '')[:120]}"
+                                if context_url in seen_contexts:
+                                    diagnostics.append(f"skip already analyzed context: {context_url}")
+                                elif key not in opportunity_keys:
                                     opportunity_keys.add(key)
                                     opportunities.append(opp)
                         if len(opportunities) >= max_opportunities:
@@ -1151,6 +1159,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 break
     diagnostics.append(f"telegram frontier walk processed {processed} surfaces; queued {discovered_queued} newly discovered tg links")
     return list(surfaces.values()), opportunities, diagnostics
+
+
+def _seen_context_urls() -> set[str]:
+    raw = _json_env("ACQ_SEEN_CONTEXT_URLS_JSON", [])
+    return {str(x).strip() for x in list(raw or []) if str(x).strip()}
 
 
 def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None, scanned_opportunities: list[dict[str, Any]] | None = None, diagnostics: list[str] | None = None) -> dict[str, Any]:

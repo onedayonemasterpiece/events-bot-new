@@ -159,6 +159,12 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
         surfaces.extend(pending_existing)
+        opp_table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='acq_opportunity'"))).scalar_one_or_none()
+        if opp_table_exists:
+            opp_rows = (await session.execute(text("SELECT context_url FROM acq_opportunity WHERE context_url IS NOT NULL ORDER BY id DESC LIMIT 2000"))).mappings().all()
+            seen_urls = [str(row.get("context_url") or "").strip() for row in opp_rows if str(row.get("context_url") or "").strip()]
+            if seen_urls:
+                surfaces.append({"_kind": "seen_opportunities", "context_urls": seen_urls})
         table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='vk_source'"))).scalar_one_or_none()
         if table_exists:
             info = (await session.execute(text("PRAGMA table_info(vk_source)"))).all()
@@ -195,7 +201,12 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                     "reach": {"confidence": "low", "basis": "vk_source_seed"},
                     "risk": {"safety_risk": "low", "spam_risk": "unknown"},
                 })
-    return {"surfaces": surfaces}
+    seen_payload = [item for item in surfaces if item.get("_kind") == "seen_opportunities"]
+    visible_surfaces = [item for item in surfaces if item.get("_kind") != "seen_opportunities"]
+    payload: dict[str, Any] = {"surfaces": visible_surfaces}
+    if seen_payload:
+        payload["seen_opportunities"] = [{"context_url": url} for url in seen_payload[0].get("context_urls", [])]
+    return payload
 
 
 def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) -> dict[str, str]:
@@ -211,7 +222,17 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_LLM_MODEL": os.getenv("ACQ_LLM_MODEL", "models/gemma-4-31b-it"),
         "ACQ_GOOGLE_KEY_ENV": os.getenv("ACQ_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3"),
         "ACQ_ALLOW_GOOGLE_KEY_FALLBACKS": os.getenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", "0"),
+        "ACQ_LLM_GATE_MIN_RELEVANCE": os.getenv("ACQ_LLM_GATE_MIN_RELEVANCE", "0.85"),
+        "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "1200"),
+        "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
     }
+    seen_context_urls = [
+        str(item.get("context_url") or "").strip()
+        for item in seed_payload.get("seen_opportunities") or []
+        if str(item.get("context_url") or "").strip()
+    ]
+    if seen_context_urls:
+        env["ACQ_SEEN_CONTEXT_URLS_JSON"] = _json_env_value(seen_context_urls[:2000])
     if tg_seeds:
         env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
     if vk_seeds:

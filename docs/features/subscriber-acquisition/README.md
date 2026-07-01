@@ -54,7 +54,9 @@ found; this keeps discovery visible without forcing the operator to approve
 analysis of every new link. Import now distinguishes seed-only queued surfaces
 from actually scanned surfaces, so subsequent Kaggle runs prioritize unscanned
 frontier/monitoring groups instead of restarting from the same head of the seed
-list.
+list. The server also passes already analyzed `context_url` values into Kaggle
+(`ACQ_SEEN_CONTEXT_URLS_JSON`) so the runtime skips repeated comment/message
+analysis except for explicit retry/error cases.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic

@@ -431,6 +431,8 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert env["ACQ_ENABLE_LLM_GATE"] == "1"
     assert env["ACQ_GOOGLE_KEY_ENV"] == "GOOGLE_API_KEY3"
     assert env["ACQ_LLM_MODEL"].startswith("models/gemma-4")
+    assert env["ACQ_LLM_GATE_MIN_RELEVANCE"]
+    assert env["ACQ_RUNTIME_DEADLINE_SECONDS"]
 
 
 def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):
@@ -444,6 +446,22 @@ def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):
 
     assert payload["GOOGLE_API_KEY3"] == "key3"
     assert "GOOGLE_API_KEY" not in payload
+
+
+def test_runtime_env_passes_seen_context_urls():
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    env = _runtime_env_from_config(AcqConfig(), {"surfaces": [], "seen_opportunities": [{"context_url": "https://t.me/example/1"}]})
+
+    assert env["ACQ_SEEN_CONTEXT_URLS_JSON"] == '["https://t.me/example/1"]'
+
+
+def test_seen_context_urls_env_parser(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_SEEN_CONTEXT_URLS_JSON", '["https://t.me/example/1"]')
+
+    assert runtime._seen_context_urls() == {"https://t.me/example/1"}
 
 
 def test_kaggle_dataset_slug_stays_within_current_api_limit():
