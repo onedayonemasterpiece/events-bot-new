@@ -20,6 +20,9 @@
   idempotency column for refreshed future excursions, CLI, scheduler gate,
   local SVGRepo transport icons, guide/organization avatars, VK short-link text
   formatting, and optional VK stories fanout.
+- Enabled the Fly production visual guide digest scheduler in review mode:
+  one VK carousel card per daily full guide scan, targeting `uhtykaliningrad`
+  and posting to the postponed queue while VK stories remain off.
 - Guide excursions monitoring now seeds `@progulki_s_katey` as a medium-trust
   personal Telegram guide source so future public walking-tour announcements
   are scanned by the scheduled guide pipeline.

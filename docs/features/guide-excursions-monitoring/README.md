@@ -351,8 +351,12 @@ Production contract:
 
 Код: `guide_excursions/visual_digest.py`, ручной CLI
 `scripts/guide_visual_digest.py`, scheduler gate
-`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1` после scheduled full scan. Визуальный
-QA перед первым тестом был проведён через `agy --model "Gemini 3.1 Pro (High)"`;
+`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1` после scheduled full scan. На Fly
+пайплайн включён в review-режиме: `GUIDE_VISUAL_DIGEST_MAX_CARDS=1`,
+`GUIDE_VISUAL_DIGEST_VK_IMMEDIATE=0`, `ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES=0`,
+то есть ежедневный production-выпуск пока попадает в VK-отложку, а stories
+останутся выключенными до перехода на immediate-публикацию. Визуальный QA перед
+первым тестом был проведён через `agy --model "Gemini 3.1 Pro (High)"`;
 Gemini verdict: `PASS` для contact sheet production renderer.
 
 ### Hook-карточки (engagement cards)
