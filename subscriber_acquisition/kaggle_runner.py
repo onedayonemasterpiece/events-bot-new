@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AcqConfig
+from .surface_filters import is_tg_bot_or_service_surface
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "kaggle" / "SubscriberAcquisitionDiscovery"
@@ -175,6 +176,8 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
         source = str(item.get("source") or "").strip().lower()
         if status not in {"seed", "candidate", "approved"} and source not in {"seed", "vk_source"}:
             continue
+        if platform == "tg" and is_tg_bot_or_service_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
+            continue
         if platform == "vk":
             vk.append(url)
         else:
@@ -185,8 +188,9 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
 async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     """Collect reviewed/acquisition and existing VK-monitoring surfaces.
 
-    This is read-only DB access. It intentionally does not approve or reject
-    anything; the runtime remains shadow-mode and only returns JSON for import.
+    This is mostly read-only DB access. It may only fail-closed obvious
+    non-monitoring Telegram bot/service surfaces as rejected, because those
+    should never be sent to Kaggle as crawler frontier.
     """
     try:
         from sqlalchemy import select, text
@@ -220,6 +224,14 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
 
         pending_existing: list[dict[str, Any]] = []
         for row in sorted(rows, key=_surface_priority):
+            if (
+                str(row.platform or "").strip().lower() == "tg"
+                and is_tg_bot_or_service_surface(url=row.url, handle=row.handle, external_id=row.external_id)
+            ):
+                row.status = "rejected_bot_or_service"
+                row.review_note = "Telegram bot/service links are not monitoring surfaces for acquisition discovery."
+                session.add(row)
+                continue
             item = row.model_dump()
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
@@ -267,6 +279,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
         surfaces.extend(pending_existing)
+        await session.commit()
         opp_table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='acq_opportunity'"))).scalar_one_or_none()
         if opp_table_exists:
             opp_rows = (await session.execute(text("SELECT context_url FROM acq_opportunity WHERE context_url IS NOT NULL ORDER BY id DESC LIMIT 2000"))).mappings().all()

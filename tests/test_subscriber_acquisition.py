@@ -120,6 +120,21 @@ async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sam
 
 
 @pytest.mark.asyncio
+async def test_import_rejects_telegram_bot_surfaces(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"][0]["external_id"] = "tg:RK39_bot"
+    payload["surfaces"][0]["url"] = "https://t.me/RK39_bot"
+    payload["surfaces"][0]["handle"] = "RK39_bot"
+    payload["opportunities"] = []
+
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:RK39_bot"))).scalar_one()
+    assert surface.status == "rejected_bot_or_service"
+
+
+@pytest.mark.asyncio
 async def test_import_dedupes_context(db, sample_payload):
     first = await import_discovery_result(db, sample_payload)
     second = await import_discovery_result(db, sample_payload)
@@ -415,6 +430,30 @@ async def test_runtime_seed_payload_includes_existing_vk_monitoring_groups(db):
     by_external = {item["external_id"]: item for item in payload["surfaces"]}
     assert by_external["vk:club123"]["source"] == "vk_source"
     assert "vk:person456" not in by_external
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_rejects_existing_telegram_bots(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload
+
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="unknown_public",
+            url="https://t.me/RK39_bot",
+            handle="RK39_bot",
+            external_id="tg:RK39_bot",
+            status="candidate",
+            source="discovered",
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+
+    assert "tg:RK39_bot" not in {item["external_id"] for item in payload["surfaces"]}
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:RK39_bot"))).scalar_one()
+    assert surface.status == "rejected_bot_or_service"
 
 
 @pytest.mark.asyncio

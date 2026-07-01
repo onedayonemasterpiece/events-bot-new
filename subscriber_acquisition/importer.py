@@ -13,6 +13,7 @@ from .cooldowns import next_surface_scan_after, opportunity_expires_at
 from .link_targets import VALID_LINK_TARGET_KINDS
 from .scoring import conservative_reach_low
 from .sticker import sticker_fit_from_observation
+from .surface_filters import is_tg_bot_or_service_surface
 
 
 def _dt(value: Any) -> datetime | None:
@@ -81,6 +82,15 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
         for item in surfaces_in:
             platform = str(item.get("platform") or "").strip().lower() or "tg"
             external_id = str(item.get("external_id") or item.get("url") or "").strip() or None
+            incoming_status = str(item.get("status") or "candidate").strip() or "candidate"
+            if platform == "tg" and is_tg_bot_or_service_surface(url=item.get("url"), handle=item.get("handle"), external_id=external_id):
+                incoming_status = "rejected_bot_or_service"
+                item = dict(item)
+                item["status"] = incoming_status
+                risk_in = dict(item.get("risk") or {})
+                risk_in.setdefault("level", "rejected")
+                risk_in.setdefault("reason", "telegram_bot_or_service")
+                item["risk"] = risk_in
             existing = None
             if external_id:
                 existing = (await session.execute(
@@ -97,20 +107,19 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                     title=item.get("title"),
                     handle=item.get("handle"),
                     external_id=external_id,
-                    status=str(item.get("status") or "candidate"),
+                    status=incoming_status,
                     source=str(item.get("source") or "discovered"),
                     topic_hint=item.get("topic_hint"),
                     topic_cluster=item.get("topic_cluster"),
                     reach_json=reach,
                     risk_json=risk,
                     last_scan_at=generated_at if scanned_this_run else None,
-                    next_scan_after=next_surface_scan_after(str(item.get("status") or "candidate"), now=generated_at) if scanned_this_run else None,
+                    next_scan_after=next_surface_scan_after(incoming_status, now=generated_at) if scanned_this_run else None,
                 )
                 session.add(surface)
                 await session.flush()
             else:
                 surface = existing
-                incoming_status = str(item.get("status") or "").strip()
                 if incoming_status.startswith("rejected"):
                     surface.status = incoming_status
                 surface.title = item.get("title") or surface.title

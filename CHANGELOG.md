@@ -81,7 +81,8 @@
   policy questions (`у вас есть льготы/скидки/билеты/доступность/...`): they no
   longer become badge/filter candidates unless the user asks for a city-wide
   search or selection of accessible/free events. Telegram bot/service links are
-  also ignored as monitoring surfaces.
+  also ignored as monitoring surfaces and existing bot rows are marked
+  `rejected_bot_or_service` before future Kaggle seed payloads/imports.
 - Fixed Subscriber Acquisition scan rotation: seed-only queued surfaces are no
   longer marked as scanned, and scanned VK/Telegram linked-discussion metadata
   is preserved over seed placeholders so future Kaggle runs advance through the

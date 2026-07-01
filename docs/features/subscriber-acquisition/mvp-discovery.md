@@ -43,7 +43,8 @@ contract:
   counters for posts/comments inspected and VK rate-limit backoffs;
 - Telegram link discovery skips bot/service handles (`*bot`, `addstickers`,
   `share`, etc.) so the frontier only grows through public groups, chats,
-  channels with comments, and VK communities;
+  channels with comments, and VK communities; existing bot/service rows are
+  marked `rejected_bot_or_service` before the next seed payload/import;
 - Gemma 4 calls are visible and bounded: `ACQ_MAX_LLM_CALLS_PER_RUN` caps
   semantic checklist calls, and each payload reports `llm_gate` and
   `llm_gate_limits` counters so operator/status review can see how much of the

@@ -79,7 +79,9 @@ public-catalog set of VK communities (`Подслушано`, `Типичный 
 `Попутчики`, `ЧС`, `KADAUTO`) as `source=smartik_kaliningrad_catalog`.
 Telegram bot/service links (`*bot`, `addstickers`, `share`, etc.) are not queued
 as monitoring surfaces: discovery is for public groups/chats/comment threads,
-not bot accounts.
+not bot accounts. If such a surface was already collected by an older run, the
+server marks it `rejected_bot_or_service` before building the next Kaggle seed
+payload and on result import.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic
