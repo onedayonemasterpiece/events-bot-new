@@ -209,8 +209,22 @@ def _slugify(value: str, *, max_len: int = 48) -> str:
     return raw[:max_len].rstrip("-")
 
 
+def _compact_slug_component(value: str, *, max_len: int) -> str:
+    raw = _slugify(value, max_len=200)
+    if len(raw) <= max_len:
+        return raw
+    tail_len = min(10, max(4, max_len // 3))
+    head_len = max(1, max_len - tail_len - 1)
+    return f"{raw[:head_len].rstrip('-')}-{raw[-tail_len:].lstrip('-')}"[:max_len].strip("-") or "run"
+
+
 def _build_dataset_slug(prefix: str, run_id: str) -> str:
-    return f"{_slugify(prefix, max_len=38)}-{_slugify(run_id, max_len=18)}"[:60].rstrip("-")
+    # Kaggle API currently enforces dataset slugs to be at most 50 chars.
+    # Keep the run suffix so frequent E2E/prod runs do not collide while using
+    # the same split-dataset pattern as Telegram Monitoring.
+    safe_run = _slugify(run_id, max_len=18)
+    prefix_budget = max(6, 50 - len(safe_run) - 1)
+    return f"{_compact_slug_component(prefix, max_len=prefix_budget)}-{safe_run}"[:50].rstrip("-")
 
 
 def _require_kaggle_username() -> str:
@@ -296,8 +310,8 @@ async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict
     def write_key(path: Path) -> None:
         (path / "fernet.key").write_bytes(fernet_key)
 
-    slug_cipher = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id), f"Subscriber Acquisition Discovery Cipher {slug_suffix}", write_cipher)
-    slug_key = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_KEY, run_id), f"Subscriber Acquisition Discovery Key {slug_suffix}", write_key)
+    slug_cipher = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id), f"Acq Discovery Cipher {slug_suffix}", write_cipher)
+    slug_key = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_KEY, run_id), f"Acq Discovery Key {slug_suffix}", write_key)
     await await_dataset_ready(client, slug_cipher, expected_files=["config.json", "secrets.enc", "kaggle_run.json", "kaggle_status_client.py"])
     await await_dataset_ready(client, slug_key, expected_files=["fernet.key"])
     return slug_cipher, slug_key
@@ -312,13 +326,25 @@ def _push_kaggle_kernel(client: Any, dataset_sources: list[str]) -> str:
 def _status_to_text(status_payload: Any) -> str:
     if isinstance(status_payload, str):
         return status_payload.upper()
+    if hasattr(status_payload, "to_dict"):
+        try:
+            status_payload = status_payload.to_dict()
+        except Exception:
+            pass
     for attr in ["status", "state"]:
         value = getattr(status_payload, attr, None)
         if value:
-            return str(value).upper()
+            if hasattr(value, "name"):
+                return str(value.name).upper()
+            if hasattr(value, "value"):
+                return str(value.value).upper()
+            return str(value).rsplit(".", 1)[-1].upper()
     if isinstance(status_payload, dict):
-        return str(status_payload.get("status") or status_payload.get("state") or "").upper()
-    return str(status_payload or "").upper()
+        value = status_payload.get("status") or status_payload.get("state") or ""
+        if hasattr(value, "name"):
+            return str(value.name).upper()
+        return str(value).rsplit(".", 1)[-1].upper()
+    return str(status_payload or "").rsplit(".", 1)[-1].upper()
 
 
 async def _poll_kaggle_kernel(client: Any, kernel_ref: str, *, timeout_seconds: int, poll_interval_seconds: int) -> tuple[str, Any]:
@@ -326,7 +352,10 @@ async def _poll_kaggle_kernel(client: Any, kernel_ref: str, *, timeout_seconds: 
     deadline = time.monotonic() + max(1, int(timeout_seconds))
     last_status: Any = None
     while time.monotonic() < deadline:
-        last_status = await asyncio.to_thread(api.kernels_status, kernel_ref)
+        if hasattr(client, "get_kernel_status"):
+            last_status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
+        else:
+            last_status = await asyncio.to_thread(api.kernels_status, kernel_ref)
         status = _status_to_text(last_status)
         if status in TERMINAL_COMPLETE:
             return "complete", last_status

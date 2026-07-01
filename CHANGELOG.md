@@ -29,6 +29,14 @@
 
 ### Fixed
 
+- Fixed Subscriber Acquisition real Kaggle launch preflight: dataset slugs now
+  and titles respect Kaggle's current 50-character API limits, and the Kaggle
+  SDK dependency lane pins `kagglesdk==0.1.30` so local server launchers can
+  import `KaggleApi` before pushing the runtime/status datasets. The Kaggle
+  runtime now treats encrypted `ACQ_*` config values as canonical, so stale
+  notebook/image environment defaults cannot disable the requested live scan,
+  and it installs Telethon on Kaggle using the existing Telegram Monitoring
+  dependency bootstrap pattern when the base image lacks it.
 - Fixed the Telegram premium emoji editor so daily audience `❤️/🔂` rows keep
   `@kenigevents adaptive pack` custom emoji entities after Telethon edits
   instead of falling back to ordinary Unicode emoji.

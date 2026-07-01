@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -81,6 +82,19 @@ def test_vk_allowlist_without_token_is_safe_seed_only(monkeypatch):
     assert diagnostics and "token is not configured" in diagnostics[0]
 
 
+def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
+    runtime = load_runtime()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"ACQ_ENABLE_LIVE_TG_SCAN": "1"}), encoding="utf-8")
+
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "0")
+    monkeypatch.setattr(runtime, "_find_input_file", lambda name: config_path if name == "config.json" else None)
+
+    loaded = runtime._load_kaggle_env()
+    assert loaded["config_loaded"] is True
+    assert runtime.os.environ["ACQ_ENABLE_LIVE_TG_SCAN"] == "1"
+
+
 def test_kaggle_runtime_static_no_external_write_calls():
     source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
     forbidden_snippets = [
@@ -116,3 +130,32 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     env = _runtime_env_from_config(AcqConfig(), payload)
     assert env["ACQ_VK_SEEDS_JSON"] == '["https://vk.com/club1", "https://vk.com/club2"]'
     assert env["ACQ_VK_ALLOWLIST_JSON"] == env["ACQ_VK_SEEDS_JSON"]
+
+
+def test_kaggle_dataset_slug_stays_within_current_api_limit():
+    from subscriber_acquisition.kaggle_runner import (
+        CONFIG_DATASET_CIPHER,
+        CONFIG_DATASET_KEY,
+        _build_dataset_slug,
+    )
+
+    run_id = "20260701T010203Z-abcdef1234567890"
+    for prefix in [CONFIG_DATASET_CIPHER, CONFIG_DATASET_KEY, "subscriber-acquisition-discovery-extra-long-prefix"]:
+        slug = _build_dataset_slug(prefix, run_id)
+        assert 6 <= len(slug) <= 50
+        assert "20260701t010203z" in slug
+
+    assert _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id) != _build_dataset_slug(CONFIG_DATASET_KEY, run_id)
+
+
+def test_kaggle_status_parser_handles_sdk_enum_values():
+    from subscriber_acquisition.kaggle_runner import _status_to_text
+
+    class StatusEnum:
+        name = "COMPLETE"
+
+    class Response:
+        status = StatusEnum()
+
+    assert _status_to_text(Response()) == "COMPLETE"
+    assert _status_to_text({"status": "KernelWorkerStatus.COMPLETE"}) == "COMPLETE"

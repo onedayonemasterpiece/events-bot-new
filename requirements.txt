@@ -12,6 +12,10 @@ cachetools>=5.3.1
 APScheduler>=3.10.4
 Pillow>=10.0.0
 kaggle>=1.8.2
+# Kaggle 2.2.x currently imports a broken competitions host stub from
+# kagglesdk 0.1.31+ in local Python launchers (`kagglesdk.competitions.legacy`).
+# Pin the transitive SDK to the last import-safe version until Kaggle fixes it.
+kagglesdk==0.1.30
 imagekitio>=3.0.0
 # aiogram 3.27 allows pydantic<2.13; google-genai needs pydantic>=2.9.
 pydantic>=2.9,<2.13

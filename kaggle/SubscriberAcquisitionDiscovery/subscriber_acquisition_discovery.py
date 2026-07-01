@@ -7,6 +7,7 @@ import json
 import re
 import logging
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -19,6 +20,27 @@ logger = logging.getLogger("subscriber_acquisition_discovery")
 SCRIPT_DIR = Path(globals().get("__file__", Path.cwd() / "subscriber_acquisition_discovery.py")).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+
+
+def ensure_libs() -> None:
+    """Install the tiny read-only scanner dependencies on Kaggle if absent.
+
+    Mirrors the TelegramMonitor notebook pattern: Kaggle base images do not
+    always include Telethon, while local/E2E venvs normally do.
+    """
+    modules = [("telethon", "telethon")]
+    missing: list[str] = []
+    for module_name, package_name in modules:
+        try:
+            __import__(module_name)
+        except Exception:
+            missing.append(package_name)
+    if missing:
+        print(f"Installing Python packages: {', '.join(missing)}", flush=True)
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *missing])
+
+
+ensure_libs()
 
 DEFAULT_TG_SEEDS = [
     "https://t.me/tg_kgd",
@@ -75,8 +97,15 @@ def _load_kaggle_env() -> dict[str, Any]:
             loaded["config_loaded"] = True
             loaded["config_keys"] = sorted(config.keys())
             for key, value in config.items():
-                if isinstance(value, (str, int, float, bool)) and os.getenv(str(key)) is None:
-                    os.environ[str(key)] = str(value)
+                key_text = str(key)
+                if not isinstance(value, (str, int, float, bool)):
+                    continue
+                # The encrypted per-run config is the canonical source for ACQ_*
+                # budgets/feature flags.  Kaggle images or notebook metadata may
+                # carry stale defaults, so do not let them silently disable the
+                # selected scan mode.
+                if key_text.startswith("ACQ_") or os.getenv(key_text) is None:
+                    os.environ[key_text] = str(value)
         except Exception as exc:
             loaded["config_error"] = str(exc)
     enc_path = _find_input_file("secrets.enc")
@@ -538,6 +567,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
 
 
 def main() -> None:
+    _load_kaggle_env()
     _status_event("kernel_started", phase="bootstrap", status="running", progress={"progress_percent": 1, "progress_label": "bootstrap"})
     scanned_surfaces: list[dict[str, Any]] = []
     scanned_opportunities: list[dict[str, Any]] = []
