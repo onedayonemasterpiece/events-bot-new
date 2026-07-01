@@ -438,6 +438,16 @@ Local build verification (`npm run build:preview` + `npm run check:preview`) pas
 Live public smoke additionally verified HTTP 200 for the preview index and the golden anchor JSON `data/discovery/6447.json`; that JSON returns `6310` as the first related candidate with `vector_similarity≈0.8592` and `llm_semantic_score=0.92`. Like/profile writes remain local-only preview behavior; authorized search UI source is present but live search remains gated on Yandex OAuth and Edge Function deployment.
 
 
+## Verified on 2026-07-01
+
+Recovery preview `preview-20260701t2314-recovery-full` combines the restored full static-site branch work with the `feature/smart-search-quota-key5-site` authorized-search quota/key rollout. It was exported from the current production SQLite snapshot for `2026-07-01`, generated `377` public events, passed `npm run build:preview` and `npm run check:preview`, and was deployed to `https://kenigevents.ru/preview-20260701t2314-recovery-full/__preview/` with `377` stable CDN ICS files.
+
+The export includes a narrow prompt-leak publication guard: rows whose title is obvious prompt/debug leakage are skipped before static pages and search fixtures are built. This is only a stopgap for preview/publication safety; the canonical production row still needs source/Smart Update repair. The recovery run used this guard to exclude event `6518` from the static preview and removed its stale `event_search_documents` / `event_embeddings` personalization rows.
+
+Live search/auth verification for the same build passed through the deployed Supabase `event-search` Edge Function. The browser smoke on `/poisk/` queried `интересно детям`, rendered `18` cards, and the latest audit row recorded `request_kind=llm_rerank`, `status=ok`, `result_count=12`, `embedding_model=gemini-embedding-2`, `embedding_key_env=GOOGLE_API_KEY5`, `llm_model=gemini-3.1-flash-lite`, `llm_policy=lite_first_gemma_overflow`, and first Lite attempt key `GOOGLE_API_KEY3`. This confirms the recovered branch is not running on a single KEY5 lane.
+
+Related/discovery data in this preview uses the two-document pgvector chain `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`. Gemma strict related verification was not rerun for this full end-of-day refresh, so `strict_verified_related=false`; event pages still read the static related JSON and do not spend online embedding/LLM quota on page view.
+
 ## Counter freshness plan
 
 Counter freshness is documented in [Event reaction counters](reaction-counters.md). The decision is manifest-first: static HTML keeps a build-time baseline for SEO/no-JS, while a small same-origin counter manifest should patch counters after first paint. Full page rebuilds are for event content/lifecycle changes, not for every like tick.

@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- **Static site pages / prompt-leak event guard**: added a narrow export-time safety filter for obvious prompt/debug titles so rows like event `6518` cannot be published into static previews or search vector fixtures before the production source row is repaired.
 - **Static site pages / event-detail discovery feed**: restored the accepted single neutral `Смотрите дальше` continuation feed on event pages and removed the visible extra exploration block from the recovered branch so preview checks match the event-detail product contract.
 - **Static site pages / popular listing contract**: restored `/populyarnoe/` to the same compact `listing-stack` item renderer as the other static listing pages so the preview gate covers it as a real listing surface, not a discovery-card grid.
 - **Static site pages / today continuing section**: restored the `Идут сейчас` continuation section with real compact listing items for same-day long-running events instead of a link-only placeholder.

@@ -1,6 +1,6 @@
 {
   "schema_version": "event_pgvector_related_chain_v2",
-  "generated_at": "2026-07-01T22:10:06.101908+00:00",
+  "generated_at": "2026-07-01T23:17:32.691247+00:00",
   "algorithm": "event_pgvector_related_chain_v2_two_doc",
   "fallback_algorithm": "prod_sqlite_static_related_v1",
   "retrieval_method": "supabase_pgvector_hnsw_cosine_v1",
@@ -351,7 +351,6 @@
       6514,
       6515,
       6517,
-      6518,
       6519,
       6520,
       6521,
@@ -438,7 +437,6 @@
         6425,
         6562,
         6466,
-        6518,
         6155,
         5382,
         4648,
@@ -448,7 +446,8 @@
         6467,
         5969,
         5588,
-        5628
+        5628,
+        5570
       ],
       "pure_related": [
         6302,
@@ -470,7 +469,6 @@
         6425,
         6562,
         6466,
-        6518,
         6155,
         5382,
         4648,
@@ -480,7 +478,8 @@
         6467,
         5969,
         5588,
-        5628
+        5628,
+        5570
       ],
       "explore": [
         6514,
@@ -492,7 +491,7 @@
         6425,
         6562,
         6466,
-        6518
+        6155
       ],
       "adjacent_discovery": [
         6514,
@@ -504,7 +503,7 @@
         6425,
         6562,
         6466,
-        6518
+        6155
       ],
       "chain": [
         {
@@ -941,30 +940,6 @@
             "facet:art_exhibition",
             "facet:local_history",
             "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6518,
-          "related_score": 0.8067,
-          "vector_similarity": 0.8191,
-          "deterministic_score": 0.718,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8686,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
           ],
           "retrieval_sources": [
             "supabase_pgvector",
@@ -1410,6 +1385,28 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.8256,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "same_category",
+            "facet:art_exhibition",
+            "same_city"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 5370,
+          "related_score": 0.7782,
+          "vector_similarity": 0.7998,
+          "deterministic_score": 0.698,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.8249,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -94021,26 +94018,6 @@
           "display_eligible": true
         },
         {
-          "event_id": 6518,
-          "related_score": 0.7071,
-          "vector_similarity": 0.7552,
-          "deterministic_score": 0.19,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.7248,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "facet:art_exhibition"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
           "event_id": 5459,
           "related_score": 0.7018,
           "vector_similarity": 0.7577,
@@ -94088,6 +94065,26 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.7247,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "facet:art_exhibition"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 2781,
+          "related_score": 0.6993,
+          "vector_similarity": 0.7577,
+          "deterministic_score": 0.106,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.726,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -278556,7 +278553,6 @@
         5336,
         6222,
         3519,
-        6518,
         6453,
         5459,
         6495,
@@ -278565,7 +278561,8 @@
         6562,
         5703,
         6498,
-        6337
+        6337,
+        698
       ],
       "pure_related": [
         5570,
@@ -278588,7 +278585,6 @@
         5336,
         6222,
         3519,
-        6518,
         6453,
         5459,
         6495,
@@ -278597,7 +278593,8 @@
         6562,
         5703,
         6498,
-        6337
+        6337,
+        698
       ],
       "explore": [
         6301,
@@ -279082,28 +279079,6 @@
           "display_eligible": true
         },
         {
-          "event_id": 6518,
-          "related_score": 0.7948,
-          "vector_similarity": 0.8217,
-          "deterministic_score": 0.674,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8347,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
           "event_id": 6453,
           "related_score": 0.7937,
           "vector_similarity": 0.8048,
@@ -279509,6 +279484,28 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.8276,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "same_category",
+            "facet:art_exhibition",
+            "same_city"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 5971,
+          "related_score": 0.776,
+          "vector_similarity": 0.799,
+          "deterministic_score": 0.674,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.8245,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -280317,29 +280314,6 @@
           "display_eligible": true
         },
         {
-          "event_id": 6518,
-          "related_score": 0.7801,
-          "vector_similarity": 0.7908,
-          "deterministic_score": 0.682,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8558,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
           "event_id": 6505,
           "related_score": 0.7764,
           "vector_similarity": 0.8177,
@@ -280531,6 +280505,28 @@
             "category:festival",
             "facet:kids_family",
             "facet:local_history",
+            "same_city"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 4960,
+          "related_score": 0.757,
+          "vector_similarity": 0.7869,
+          "deterministic_score": 0.6066,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.8191,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "same_category",
+            "facet:art_exhibition",
             "same_city"
           ],
           "retrieval_sources": [
@@ -281543,7 +281539,6 @@
         4648,
         6301,
         5628,
-        6518,
         6384,
         6562,
         6337,
@@ -281557,7 +281552,8 @@
         2781,
         4352,
         2182,
-        5969
+        5969,
+        5581
       ],
       "pure_related": [
         5592,
@@ -281575,7 +281571,6 @@
         4648,
         6301,
         5628,
-        6518,
         6384,
         6562,
         6337,
@@ -281589,7 +281584,8 @@
         2781,
         4352,
         2182,
-        5969
+        5969,
+        5581
       ],
       "explore": [
         5722,
@@ -281597,11 +281593,11 @@
         4648,
         6301,
         5628,
-        6518,
         6384,
         6562,
         6337,
-        5725
+        5725,
+        5370
       ],
       "adjacent_discovery": [
         5722,
@@ -281609,11 +281605,11 @@
         4648,
         6301,
         5628,
-        6518,
         6384,
         6562,
         6337,
-        5725
+        5725,
+        5370
       ],
       "chain": [
         {
@@ -281955,29 +281951,6 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.8673,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6518,
-          "related_score": 0.8023,
-          "vector_similarity": 0.8115,
-          "deterministic_score": 0.626,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8652,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -282529,6 +282502,28 @@
             "same_category",
             "facet:art_exhibition",
             "same_date"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 6053,
+          "related_score": 0.7794,
+          "vector_similarity": 0.8337,
+          "deterministic_score": 0.318,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.7602,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:workshop",
+            "facet:art_exhibition",
+            "same_city",
+            "same_venue"
           ],
           "retrieval_sources": [
             "supabase_pgvector",
@@ -305958,28 +305953,6 @@
           "display_eligible": true
         },
         {
-          "event_id": 6518,
-          "related_score": 0.781,
-          "vector_similarity": 0.7936,
-          "deterministic_score": 0.614,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8571,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
           "event_id": 6511,
           "related_score": 0.78,
           "vector_similarity": 0.8146,
@@ -306095,6 +306068,27 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.8226,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "same_category",
+            "facet:art_exhibition"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 5703,
+          "related_score": 0.768,
+          "vector_similarity": 0.8019,
+          "deterministic_score": 0.574,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.8259,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -319907,7 +319901,6 @@
         4648,
         6384,
         5588,
-        6518,
         3519,
         6425,
         6155,
@@ -319920,7 +319913,8 @@
         4517,
         5898,
         6514,
-        5592
+        5592,
+        2182
       ],
       "pure_related": [
         698,
@@ -319939,7 +319933,6 @@
         4648,
         6384,
         5588,
-        6518,
         3519,
         6425,
         6155,
@@ -319952,7 +319945,8 @@
         4517,
         5898,
         6514,
-        5592
+        5592,
+        2182
       ],
       "explore": [
         5969,
@@ -319961,10 +319955,10 @@
         4648,
         6384,
         5588,
-        6518,
         3519,
         6425,
-        6155
+        6155,
+        5382
       ],
       "adjacent_discovery": [
         5969,
@@ -319973,10 +319967,10 @@
         4648,
         6384,
         5588,
-        6518,
         3519,
         6425,
-        6155
+        6155,
+        5382
       ],
       "chain": [
         {
@@ -320323,28 +320317,6 @@
             "category:exhibition",
             "same_category",
             "facet:art_exhibition"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6518,
-          "related_score": 0.7833,
-          "vector_similarity": 0.8077,
-          "deterministic_score": 0.71,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8284,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
           ],
           "retrieval_sources": [
             "supabase_pgvector",
@@ -320841,6 +320813,28 @@
           "slot_type": "pure_related",
           "similarity_class": "same_domain",
           "confidence": 0.8181,
+          "reason_codes": [
+            "vector:supabase_pgvector_hnsw_cosine_v1",
+            "embedding:gemini-embedding-2",
+            "category:exhibition",
+            "same_category",
+            "facet:art_exhibition",
+            "same_city"
+          ],
+          "retrieval_sources": [
+            "supabase_pgvector",
+            "event_embedding"
+          ],
+          "display_eligible": true
+        },
+        {
+          "event_id": 3788,
+          "related_score": 0.7534,
+          "vector_similarity": 0.7824,
+          "deterministic_score": 0.738,
+          "slot_type": "pure_related",
+          "similarity_class": "same_domain",
+          "confidence": 0.8171,
           "reason_codes": [
             "vector:supabase_pgvector_hnsw_cosine_v1",
             "embedding:gemini-embedding-2",
@@ -322829,1012 +322823,6 @@
             "same_category",
             "facet:art_exhibition",
             "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        }
-      ],
-      "underfilled": false,
-      "strict_verified": false
-    },
-    "6518": {
-      "similar": [
-        698,
-        5570,
-        5592,
-        6062,
-        6466,
-        6088,
-        4930,
-        4512,
-        6302,
-        4648,
-        4989,
-        4913,
-        3519,
-        6423,
-        2781,
-        6155,
-        5898,
-        6562,
-        6032,
-        6453,
-        6033,
-        6337,
-        6301,
-        5725,
-        4517,
-        5628,
-        5336,
-        3216,
-        5969,
-        4327
-      ],
-      "pure_related": [
-        698,
-        5570,
-        5592,
-        6062,
-        6466,
-        6088,
-        4930,
-        4512,
-        6302,
-        4648,
-        4989,
-        4913,
-        3519,
-        6423,
-        2781,
-        6155,
-        5898,
-        6562,
-        6032,
-        6453,
-        6033,
-        6337,
-        6301,
-        5725,
-        4517,
-        5628,
-        5336,
-        3216,
-        5969,
-        4327
-      ],
-      "explore": [
-        4989,
-        4913,
-        3519,
-        6423,
-        2781,
-        6155,
-        5898,
-        6562,
-        6032,
-        6453
-      ],
-      "adjacent_discovery": [
-        4989,
-        4913,
-        3519,
-        6423,
-        2781,
-        6155,
-        5898,
-        6562,
-        6032,
-        6453
-      ],
-      "chain": [
-        {
-          "event_id": 698,
-          "related_score": 0.8105,
-          "vector_similarity": 0.8191,
-          "deterministic_score": 0.718,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8686,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5570,
-          "related_score": 0.8019,
-          "vector_similarity": 0.8115,
-          "deterministic_score": 0.626,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8652,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5592,
-          "related_score": 0.797,
-          "vector_similarity": 0.8217,
-          "deterministic_score": 0.674,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8347,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6062,
-          "related_score": 0.7847,
-          "vector_similarity": 0.7872,
-          "deterministic_score": 0.754,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8543,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6466,
-          "related_score": 0.7814,
-          "vector_similarity": 0.7846,
-          "deterministic_score": 0.74,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8531,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6088,
-          "related_score": 0.7803,
-          "vector_similarity": 0.7936,
-          "deterministic_score": 0.614,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8571,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4930,
-          "related_score": 0.7796,
-          "vector_similarity": 0.7908,
-          "deterministic_score": 0.682,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8558,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4512,
-          "related_score": 0.7779,
-          "vector_similarity": 0.7771,
-          "deterministic_score": 0.798,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8497,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6302,
-          "related_score": 0.7777,
-          "vector_similarity": 0.8077,
-          "deterministic_score": 0.71,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8284,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4648,
-          "related_score": 0.7738,
-          "vector_similarity": 0.7886,
-          "deterministic_score": 0.674,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8549,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4989,
-          "related_score": 0.7726,
-          "vector_similarity": 0.782,
-          "deterministic_score": 0.718,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8519,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4913,
-          "related_score": 0.7712,
-          "vector_similarity": 0.7817,
-          "deterministic_score": 0.706,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8518,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 3519,
-          "related_score": 0.768,
-          "vector_similarity": 0.7826,
-          "deterministic_score": 0.578,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8522,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6423,
-          "related_score": 0.7676,
-          "vector_similarity": 0.766,
-          "deterministic_score": 0.82,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8447,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue",
-            "same_date"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 2781,
-          "related_score": 0.7672,
-          "vector_similarity": 0.7796,
-          "deterministic_score": 0.674,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8508,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6155,
-          "related_score": 0.7666,
-          "vector_similarity": 0.7752,
-          "deterministic_score": 0.634,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8488,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5898,
-          "related_score": 0.7657,
-          "vector_similarity": 0.7721,
-          "deterministic_score": 0.754,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8475,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6562,
-          "related_score": 0.7636,
-          "vector_similarity": 0.7639,
-          "deterministic_score": 0.728,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8438,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6032,
-          "related_score": 0.7627,
-          "vector_similarity": 0.7753,
-          "deterministic_score": 0.662,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8489,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6453,
-          "related_score": 0.7626,
-          "vector_similarity": 0.7742,
-          "deterministic_score": 0.658,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8484,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6033,
-          "related_score": 0.7606,
-          "vector_similarity": 0.7668,
-          "deterministic_score": 0.662,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8451,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6337,
-          "related_score": 0.7578,
-          "vector_similarity": 0.7697,
-          "deterministic_score": 0.59,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8464,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6301,
-          "related_score": 0.7572,
-          "vector_similarity": 0.7657,
-          "deterministic_score": 0.698,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8446,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5725,
-          "related_score": 0.7566,
-          "vector_similarity": 0.7696,
-          "deterministic_score": 0.554,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8463,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4517,
-          "related_score": 0.7566,
-          "vector_similarity": 0.7645,
-          "deterministic_score": 0.626,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.844,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5628,
-          "related_score": 0.7559,
-          "vector_similarity": 0.7658,
-          "deterministic_score": 0.618,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8446,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5336,
-          "related_score": 0.7552,
-          "vector_similarity": 0.7596,
-          "deterministic_score": 0.718,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8418,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 3216,
-          "related_score": 0.7535,
-          "vector_similarity": 0.7569,
-          "deterministic_score": 0.578,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8406,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5969,
-          "related_score": 0.7532,
-          "vector_similarity": 0.7809,
-          "deterministic_score": 0.674,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8164,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 4327,
-          "related_score": 0.752,
-          "vector_similarity": 0.7638,
-          "deterministic_score": 0.538,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8437,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 2182,
-          "related_score": 0.7519,
-          "vector_similarity": 0.7589,
-          "deterministic_score": 0.598,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8415,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6384,
-          "related_score": 0.748,
-          "vector_similarity": 0.7577,
-          "deterministic_score": 0.67,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8409,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6511,
-          "related_score": 0.746,
-          "vector_similarity": 0.7784,
-          "deterministic_score": 0.45,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.7703,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:workshop",
-            "facet:art_exhibition",
-            "facet:local_history",
-            "same_city",
-            "same_venue"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5761,
-          "related_score": 0.745,
-          "vector_similarity": 0.7682,
-          "deterministic_score": 0.5723,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8107,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5745,
-          "related_score": 0.7432,
-          "vector_similarity": 0.772,
-          "deterministic_score": 0.518,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8124,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6214,
-          "related_score": 0.7389,
-          "vector_similarity": 0.7656,
-          "deterministic_score": 0.614,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8095,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6269,
-          "related_score": 0.7387,
-          "vector_similarity": 0.7684,
-          "deterministic_score": 0.494,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8108,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5588,
-          "related_score": 0.7376,
-          "vector_similarity": 0.7633,
-          "deterministic_score": 0.458,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8085,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 6495,
-          "related_score": 0.7373,
-          "vector_similarity": 0.7874,
-          "deterministic_score": 0.31,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.7394,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:workshop",
-            "facet:art_exhibition",
-            "same_city"
-          ],
-          "retrieval_sources": [
-            "supabase_pgvector",
-            "event_embedding"
-          ],
-          "display_eligible": true
-        },
-        {
-          "event_id": 5722,
-          "related_score": 0.7361,
-          "vector_similarity": 0.7639,
-          "deterministic_score": 0.578,
-          "slot_type": "pure_related",
-          "similarity_class": "same_domain",
-          "confidence": 0.8088,
-          "reason_codes": [
-            "vector:supabase_pgvector_hnsw_cosine_v1",
-            "embedding:gemini-embedding-2",
-            "category:exhibition",
-            "same_category",
-            "facet:art_exhibition",
             "same_city"
           ],
           "retrieval_sources": [

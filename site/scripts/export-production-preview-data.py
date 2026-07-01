@@ -154,6 +154,29 @@ def description_looks_truncated(description: str, source_text: str) -> bool:
     return False
 
 
+def title_looks_prompt_leak(title: str) -> bool:
+    """Skip obvious prompt/debug leakage before building public static pages.
+
+    This is a narrow safety guard: it does not infer event semantics or repair
+    titles. Rows caught here must be fixed at the source/Smart Update layer,
+    but a preview export must not publish raw prompt-control text as an event.
+    """
+    text = clean_text(title).lower()
+    if not text:
+        return False
+    prompt_tokens = [
+        "attendee-facing",
+        "event_type=",
+        "message_date",
+        "as-of",
+        "rather than",
+        "ordered_event_ids",
+    ]
+    if text.startswith("//") and any(token in text for token in prompt_tokens):
+        return True
+    return sum(1 for token in prompt_tokens if token in text) >= 3
+
+
 def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
     try:
         return row[key]
@@ -687,6 +710,8 @@ def fetch_rows(
 
     def add_row(row: sqlite3.Row) -> bool:
         if not normalize_date(row["date"]):
+            return False
+        if title_looks_prompt_leak(row["title"]):
             return False
         event_id = int(row["id"])
         if event_id in rows_by_id:
