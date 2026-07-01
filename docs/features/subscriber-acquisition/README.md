@@ -34,4 +34,6 @@ is collected by pressing `Нет + причина` and replying to the review ca
 reply text is stored in acquisition feedback export. Runtime seed collection
 prioritizes newly discovered and linked-discussion surfaces before older seed
 surfaces, so repeated Kaggle runs walk the frontier instead of rechecking only
-the original seed list.
+the original seed list. The review chat receives cards for newly discovered
+frontier surfaces even when no comment opportunity is found in that run; this
+keeps the discovery stage visible separately from the reply-opportunity stage.

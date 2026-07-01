@@ -499,7 +499,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             }
             _status_event("alive", phase="telegram_scan", status="running", progress=progress)
             try:
-                entity = await client.get_entity(handle)
+                entity = await client.get_entity(int(handle) if str(handle).isdigit() else handle)
             except Exception as exc:
                 diagnostics.append(f"{handle}: get_entity failed: {exc}")
                 continue

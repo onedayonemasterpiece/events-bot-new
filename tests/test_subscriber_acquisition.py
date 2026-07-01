@@ -13,7 +13,7 @@ from models import AcqDiscoveryRun, AcqLinkTarget, AcqOpportunity, AcqReviewFeed
 from subscriber_acquisition.config import AcqConfig
 from subscriber_acquisition.importer import import_discovery_result
 from subscriber_acquisition.link_targets import select_link_target
-from subscriber_acquisition.review import build_surface_keyboard, find_opportunity_by_review_message, publish_review_cards, record_feedback, record_surface_feedback
+from subscriber_acquisition.review import build_surface_keyboard, find_opportunity_by_review_message, publish_review_cards, publish_surface_cards, record_feedback, record_surface_feedback
 from subscriber_acquisition.safety import AcquisitionSafetyError, ensure_review_chat, ensure_vk_read_only
 from subscriber_acquisition.scoring import conservative_reach_low, priority_score
 from subscriber_acquisition.service import add_surface_seed, list_surfaces, run_acq_discovery_shadow
@@ -113,6 +113,43 @@ async def test_review_cards_and_feedback_capture(db, sample_payload):
         opp2 = await session.get(AcqOpportunity, opp.id)
     assert [fb.action for fb in fbs] == ["shown", "approve", "comment"]
     assert opp2.status == "approved"
+
+
+@pytest.mark.asyncio
+async def test_surface_cards_publish_new_frontier_results(db):
+    async with db.get_session() as session:
+        new_surface = AcqSurface(
+            platform="tg",
+            surface_type="linked_discussion",
+            url="https://t.me/c/123",
+            external_id="tg:123",
+            title="New linked chat",
+            status="candidate",
+            source="linked_discussion",
+        )
+        old_seed = AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/old",
+            external_id="tg:old",
+            title="Old seed",
+            status="candidate",
+            source="seed",
+        )
+        session.add(new_surface)
+        session.add(old_seed)
+        await session.commit()
+        await session.refresh(new_surface)
+        await session.refresh(old_seed)
+
+    bot = FakeBot()
+    posted = await publish_surface_cards(db, bot, [old_seed, new_surface], config=AcqConfig(review_chat_id=777))
+
+    assert posted == 1
+    assert "New linked chat" in bot.calls[0][1]
+    async with db.get_session() as session:
+        feedback = (await session.execute(select(AcqReviewFeedback))).scalars().all()
+    assert [row.action for row in feedback] == ["surface_shown"]
 
 
 @pytest.mark.asyncio

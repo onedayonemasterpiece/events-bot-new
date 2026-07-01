@@ -11,7 +11,7 @@ from .config import AcqConfig, load_config
 from .importer import ImportResult, import_discovery_result
 from .kaggle_runner import collect_runtime_seed_payload, ensure_remote_telegram_session_available_for_discovery, run_kaggle_discovery_runtime, run_local_discovery_runtime
 from .report import publish_telegraph_report
-from .review import publish_review_cards
+from .review import publish_review_cards, publish_surface_cards
 
 _SAMPLE_FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "acq_discovery_result.sample.json"
 
@@ -42,19 +42,26 @@ async def run_acq_discovery_shadow(db, bot: Any | None = None, *, payload: dict[
             payload = {"run_id": "empty", "surfaces": [], "opportunities": [], "diagnostics": ["ACQ_DISCOVERY_RUNNER disabled or unsupported"]}
     result = await import_discovery_result(db, payload)
     telegraph_url = None
+    review_cards_posted = 0
+    surface_cards_posted = 0
     if result.opportunities:
         try:
             telegraph_url = await publish_telegraph_report(result.run, result.surfaces, result.opportunities)
         except Exception:
             telegraph_url = None
-        posted = 0
-        if bot is not None and cfg.review_chat_id:
-            posted = await publish_review_cards(db, bot, result.opportunities, config=cfg)
+    if bot is not None and cfg.review_chat_id:
+        if result.opportunities:
+            review_cards_posted = await publish_review_cards(db, bot, result.opportunities, config=cfg)
+        surface_cards_posted = await publish_surface_cards(db, bot, result.surfaces, config=cfg)
+    if telegraph_url or review_cards_posted or surface_cards_posted:
         async with db.get_session() as session:
             run = await session.get(AcqDiscoveryRun, result.run.id)
             if run is not None:
                 stats = dict(run.stats_json or {})
-                stats["review_cards_posted"] = posted
+                if review_cards_posted:
+                    stats["review_cards_posted"] = review_cards_posted
+                if surface_cards_posted:
+                    stats["surface_cards_posted"] = surface_cards_posted
                 run.stats_json = stats
                 run.telegraph_url = telegraph_url
                 session.add(run)

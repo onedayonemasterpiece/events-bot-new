@@ -99,6 +99,43 @@ async def publish_review_cards(db, bot: Any, opportunities: list[AcqOpportunity]
     return posted
 
 
+async def publish_surface_cards(db, bot: Any, surfaces: list[AcqSurface], *, config: AcqConfig | None = None) -> int:
+    cfg = config or load_config()
+    if not surfaces or not cfg.review_chat_id or cfg.review_group_max_cards_per_run <= 0:
+        return 0
+    ensure_review_chat(cfg.review_chat_id, review_chat_id=cfg.review_chat_id)
+    frontier = [
+        surface for surface in surfaces
+        if str(surface.source or "").strip().lower() in {"discovered", "linked_discussion"}
+        and str(surface.status or "").strip().lower() == "candidate"
+    ]
+    max_cards = min(int(cfg.review_group_max_cards_per_run or 0), 10)
+    posted = 0
+    async with db.get_session() as session:
+        for surface in frontier[:max_cards]:
+            sent = await bot.send_message(
+                cfg.review_chat_id,
+                format_surface_card(surface),
+                parse_mode="HTML",
+                reply_markup=build_surface_keyboard(surface),
+                message_thread_id=cfg.review_thread_id,
+                disable_web_page_preview=True,
+            )
+            if sent is not None:
+                sent_chat_id = int(getattr(getattr(sent, "chat", None), "id", cfg.review_chat_id))
+                sent_message_id = int(getattr(sent, "message_id", 0) or 0)
+                ensure_review_chat(sent_chat_id, review_chat_id=cfg.review_chat_id)
+                session.add(AcqReviewFeedback(
+                    surface_id=surface.id,
+                    action="surface_shown",
+                    review_message_chat_id=sent_chat_id,
+                    review_message_id=sent_message_id,
+                ))
+                posted += 1
+        await session.commit()
+    return posted
+
+
 async def record_feedback(db, *, opportunity_id: int | None, surface_id: int | None = None, reviewer_id: int | None = None, action: str, note: str | None = None, review_message_chat_id: int | None = None, review_message_id: int | None = None) -> AcqReviewFeedback:
     if action not in {"approve", "reject", "keep", "comment", "shown"}:
         raise ValueError("invalid acquisition feedback action")
