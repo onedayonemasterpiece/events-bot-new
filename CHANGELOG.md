@@ -19,6 +19,10 @@
   Telegram search retrieval for finding real comment opportunities faster, and
   reports visible Gemma 4 budget counters (`llm_gate_limits`) so acquisition
   runs show how many semantic calls were reserved/used/blocked.
+- Subscriber Acquisition Kaggle launches now add an acquisition-specific S22
+  remote-session marker/cooldown and direct kernel-ref check on top of
+  `kaggle_registry`, reducing the chance of reusing the same Telethon auth key
+  while a previous Kaggle run is still stopping.
 - Subscriber Acquisition Discovery opportunity acceptance is now LLM-first in
   the Kaggle runtime: cheap regex/keyword filtering only controls frontier/link
   extraction and preselection, while Gemma 4 (`ACQ_LLM_MODEL`, isolated

@@ -22,6 +22,7 @@ CONFIG_DATASET_CIPHER = os.getenv("ACQ_DISCOVERY_CONFIG_CIPHER", "subscriber-acq
 CONFIG_DATASET_KEY = os.getenv("ACQ_DISCOVERY_CONFIG_KEY", "subscriber-acquisition-discovery-key")
 TERMINAL_COMPLETE = {"COMPLETE", "SUCCEEDED", "SUCCESS"}
 TERMINAL_FAILED = {"ERROR", "FAILED", "CANCELED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}
+REMOTE_SESSION_COOLDOWN_SECONDS_DEFAULT = 600
 
 TELEGA_IN_KALININGRAD_TG_SEEDS = [
     ("Kaliningrad_jenskiy", "Женский чат Калининград", "https://telega.in/channels/Kaliningrad_jenskiy/card"),
@@ -60,6 +61,80 @@ async def ensure_remote_telegram_session_available_for_discovery() -> None:
         current_job_type="subscriber_acquisition_discovery",
         current_auth_scope=discovery_remote_auth_scope(),
     )
+    await _raise_if_acq_kernel_ref_or_cooldown_busy()
+
+
+def _remote_session_marker_path() -> Path:
+    configured = (os.getenv("ACQ_REMOTE_SESSION_MARKER_PATH") or "").strip()
+    if configured:
+        return Path(configured)
+    path = PROJECT_ROOT / "artifacts" / "run"
+    path.mkdir(parents=True, exist_ok=True)
+    return path / "subscriber_acquisition_remote_session.json"
+
+
+def _remote_session_cooldown_seconds() -> int:
+    raw = (os.getenv("ACQ_REMOTE_SESSION_COOLDOWN_SECONDS") or "").strip()
+    if not raw:
+        return REMOTE_SESSION_COOLDOWN_SECONDS_DEFAULT
+    try:
+        return max(0, int(float(raw)))
+    except Exception:
+        return REMOTE_SESSION_COOLDOWN_SECONDS_DEFAULT
+
+
+def _write_remote_session_marker(*, state: str, run_id: str | None = None, kernel_ref: str | None = None) -> None:
+    if not live_telegram_scan_enabled():
+        return
+    path = _remote_session_marker_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "state": state,
+        "run_id": run_id,
+        "kernel_ref": kernel_ref,
+        "auth_scope": discovery_remote_auth_scope(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _remote_session_cooldown_remaining(now: datetime | None = None) -> tuple[int, dict[str, Any] | None]:
+    seconds = _remote_session_cooldown_seconds()
+    if seconds <= 0:
+        return 0, None
+    path = _remote_session_marker_path()
+    if not path.exists():
+        return 0, None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        updated = datetime.fromisoformat(str(payload.get("updated_at") or "").replace("Z", "+00:00"))
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+    except Exception:
+        return 0, None
+    now = now or datetime.now(timezone.utc)
+    elapsed = max(0.0, (now - updated.astimezone(timezone.utc)).total_seconds())
+    remaining = max(0, int(seconds - elapsed))
+    return remaining, payload if remaining > 0 else None
+
+
+async def _raise_if_acq_kernel_ref_or_cooldown_busy() -> None:
+    remaining, marker = _remote_session_cooldown_remaining()
+    if remaining > 0:
+        raise RuntimeError(
+            "remote Telegram session cooldown is active after previous acquisition Kaggle run: "
+            f"{remaining}s remaining state={(marker or {}).get('state')} run_id={(marker or {}).get('run_id')}"
+        )
+    try:
+        ref = _kernel_ref_from_meta()
+        from video_announce.kaggle_client import KaggleClient
+
+        status_payload = await asyncio.to_thread(KaggleClient()._get_api().kernels_status, ref)
+        status = _status_to_text(status_payload)
+    except Exception:
+        return
+    if status and status not in TERMINAL_COMPLETE and status not in TERMINAL_FAILED:
+        raise RuntimeError(f"acquisition Kaggle kernel ref is still non-terminal: {ref} status={status}")
 
 
 @dataclass(frozen=True)
@@ -489,10 +564,12 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
     dataset_cipher = dataset_key = kernel_ref = ""
     registered = False
     try:
+        _write_remote_session_marker(state="preparing", run_id=run_id)
         dataset_cipher, dataset_key = await _prepare_kaggle_datasets(db, client, config_payload=config_payload, secrets_payload=secrets_payload, run_id=run_id)
         if int(os.getenv("ACQ_KAGGLE_DATASET_WAIT_SECONDS") or "0") > 0:
             await asyncio.sleep(int(os.getenv("ACQ_KAGGLE_DATASET_WAIT_SECONDS") or "0"))
         kernel_ref = _push_kaggle_kernel(client, [dataset_cipher, dataset_key])
+        _write_remote_session_marker(state="running", run_id=run_id, kernel_ref=kernel_ref)
         await register_job(
             "subscriber_acquisition_discovery",
             kernel_ref,
@@ -515,12 +592,17 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
         if status != "complete":
             try:
                 client._get_api().kernels_delete(kernel_ref, no_confirm=True)
+                _write_remote_session_marker(state=f"deleted_after_{status}", run_id=run_id, kernel_ref=kernel_ref)
             except Exception:
                 pass
             raise RuntimeError(f"Subscriber Acquisition Kaggle kernel did not complete: {status} {status_payload}")
         output_path = _download_kaggle_output(client, kernel_ref, run_id=run_id)
         payload = json.loads(output_path.read_text(encoding="utf-8"))
+        _write_remote_session_marker(state="complete", run_id=run_id, kernel_ref=kernel_ref)
         return DiscoveryRuntimeResult(payload=payload, output_path=output_path, runner="kaggle", kernel_ref=kernel_ref, run_id=run_id, status=status)
+    except Exception:
+        _write_remote_session_marker(state="error", run_id=run_id, kernel_ref=kernel_ref or None)
+        raise
     finally:
         if registered and kernel_ref:
             try:

@@ -517,6 +517,22 @@ def test_runtime_env_passes_seen_context_urls():
     assert env["ACQ_SEEN_CONTEXT_URLS_JSON"] == '["https://t.me/example/1"]'
 
 
+def test_remote_session_marker_cooldown_blocks_fast_reuse(monkeypatch, tmp_path):
+    from subscriber_acquisition import kaggle_runner
+
+    marker = tmp_path / "remote-session.json"
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "1")
+    monkeypatch.setenv("ACQ_REMOTE_SESSION_MARKER_PATH", str(marker))
+    monkeypatch.setenv("ACQ_REMOTE_SESSION_COOLDOWN_SECONDS", "600")
+
+    kaggle_runner._write_remote_session_marker(state="complete", run_id="run-1", kernel_ref="owner/kernel")
+    remaining, payload = kaggle_runner._remote_session_cooldown_remaining()
+
+    assert remaining > 0
+    assert payload["run_id"] == "run-1"
+    assert payload["state"] == "complete"
+
+
 def test_seen_context_urls_env_parser(monkeypatch):
     runtime = load_runtime()
     monkeypatch.setenv("ACQ_SEEN_CONTEXT_URLS_JSON", '["https://t.me/example/1"]')

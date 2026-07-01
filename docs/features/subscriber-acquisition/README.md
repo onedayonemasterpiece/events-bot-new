@@ -57,6 +57,12 @@ frontier/monitoring groups instead of restarting from the same head of the seed
 list. The server also passes already analyzed `context_url` values into Kaggle
 (`ACQ_SEEN_CONTEXT_URLS_JSON`) so the runtime skips repeated comment/message
 analysis except for explicit retry/error cases.
+For the shared S22 Telegram auth bundle the launcher also keeps a local remote
+session marker/cooldown (`ACQ_REMOTE_SESSION_COOLDOWN_SECONDS`, default 600s)
+and directly checks the acquisition Kaggle kernel ref before a new live TG run.
+This supplements `kaggle_registry` and prevents immediate reuse of the same
+Telethon auth key while a previous Kaggle kernel is still stopping or not yet
+reflected in the registry.
 Telegram broadcast channels are kept in the discovery map only after their
 commentability is checked: if a channel has no accessible linked discussion /
 comments, the scanner marks it `rejected_no_comments` and does not keep scanning

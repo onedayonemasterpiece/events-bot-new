@@ -32,6 +32,10 @@ contract:
   `rejected_no_comments` after scan, because reply acquisition requires a
   confirmed comment/chat surface; channels with comments are scanned through the
   linked discussion, while groups/chats are scanned directly;
+- live Telegram runs use the standard `remote_telegram_session` registry guard
+  plus an acquisition-specific local marker/cooldown and direct kernel-ref check
+  before reusing S22, so a just-deleted/timeout Kaggle kernel cannot immediately
+  start a second Telethon client on the same auth key;
 - Gemma 4 calls are visible and bounded: `ACQ_MAX_LLM_CALLS_PER_RUN` caps
   semantic checklist calls, and each payload reports `llm_gate` and
   `llm_gate_limits` counters so operator/status review can see how much of the
