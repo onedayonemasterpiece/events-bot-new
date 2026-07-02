@@ -54,6 +54,7 @@
   Python recall helper with timeout/top-K controls.
 - Added the Smart Update create-path identity gate behind `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce`, with structured verdict helpers, deterministic create vetoes, vector recall evidence over `related_v1`/`search_v3`, and fail-safe enforce behavior.
 - Added replay-contract tests for the known exhibition duplicate clusters and high-similarity recurring negative controls that motivated the vector identity gate.
+- Smart Update identity gate invocations now persist decision-log rows, create-path rows populate date provenance/confidence fields, and the final pre-insert path reruns a cheap duplicate probe to reduce concurrent duplicate creates.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

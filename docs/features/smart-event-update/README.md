@@ -511,3 +511,13 @@ review/quarantine/rejected lifecycle or moderation statuses, have invalid ISO
 `title`, `location_name`, `location_address`, or `city`.  Missing new columns on
 old SQLite snapshots are treated as absent schema, so old DB rows still export
 if their required public fields are valid.
+
+Identity gate observability is persisted in `event_identity_decision_log` for
+every enabled create-path gate invocation, including allow/veto/fail-safe
+results and compact vector evidence.  Newly created events also store
+`date_provenance`, `date_confidence`, `date_is_inferred`,
+`end_date_provenance`, and `end_date_confidence` derived from source/OCR
+grounding.  Immediately before inserting a new event row, Smart Update reruns a
+cheap duplicate probe inside the create transaction window; if it finds a fresh
+duplicate it records a decision-log row and returns `skipped_identity_gate`
+instead of creating another public row.

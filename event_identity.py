@@ -36,6 +36,8 @@ class IdentityCandidateDocument:
     truncated: bool
     provenance_labels: tuple[str, ...]
     char_count: int
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dim: int = 768
 
 
 @dataclass(frozen=True)
@@ -232,6 +234,8 @@ def build_identity_candidate_document(
     max_chars: int = _DEFAULT_DOC_MAX_CHARS,
     field_max_chars: int = _DEFAULT_FIELD_MAX_CHARS,
     source_text_max_chars: int = _DEFAULT_SOURCE_TEXT_MAX_CHARS,
+    embedding_model: str = "gemini-embedding-2",
+    embedding_dim: int = 768,
 ) -> IdentityCandidateDocument:
     """Build a compact, provenance-labelled identity document for embeddings.
 
@@ -321,6 +325,8 @@ def build_identity_candidate_document(
         truncated=truncated,
         provenance_labels=tuple(dict.fromkeys(labels)),
         char_count=len(clipped_text),
+        embedding_model=embedding_model,
+        embedding_dim=int(embedding_dim),
     )
 
 

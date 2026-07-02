@@ -45,6 +45,8 @@ def test_identity_candidate_document_has_hash_truncation_and_provenance_labels()
     assert len(doc.sha256) == 64
     assert doc.truncated is True
     assert doc.char_count <= 520
+    assert doc.embedding_model == "gemini-embedding-2"
+    assert doc.embedding_dim == 768
     assert "[candidate.title] Большой концерт" in doc.text
     assert "[candidate.source_text]" in doc.text
     assert "[candidate.posters.ocr_title]" in doc.text

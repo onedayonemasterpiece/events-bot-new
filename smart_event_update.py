@@ -24,7 +24,14 @@ from db import Database
 from location_reference import normalise_event_location_from_reference
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
 from media_dedup import compute_dhash_hex, hamming_distance_hex
-from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCache
+from models import (
+    Event,
+    EventIdentityDecisionLog,
+    EventPoster,
+    EventSource,
+    EventSourceFact,
+    PosterOcrCache,
+)
 from sections import MONTHS_RU
 from smart_update_identity import (
     IdentityGateMode,
@@ -7934,6 +7941,62 @@ def _format_day_month_pairs(pairs: set[tuple[int, int]]) -> str:
     return ", ".join(f"{d:02d}/{m:02d}" for d, m in sorted(pairs, key=lambda x: (x[1], x[0])))
 
 
+def _date_provenance_confidence(level: str | None) -> float:
+    level = str(level or DATE_PROVENANCE_UNGROUNDED).strip().lower()
+    return {
+        DATE_PROVENANCE_OPERATOR: 1.0,
+        DATE_PROVENANCE_CANONICAL_SOURCE: 0.95,
+        DATE_PROVENANCE_POSTER_OCR: 0.85,
+        DATE_PROVENANCE_SOURCE_TEXT: 0.8,
+        DATE_PROVENANCE_UNGROUNDED: 0.35,
+        DATE_PROVENANCE_MISSING: 0.0,
+    }.get(level, 0.35)
+
+
+def _candidate_date_is_inferred(candidate: EventCandidate, *, is_canonical_site: bool = False) -> bool:
+    level = _candidate_date_provenance_level(candidate, is_canonical_site=is_canonical_site)
+    return level in {DATE_PROVENANCE_MISSING, DATE_PROVENANCE_UNGROUNDED}
+
+
+def _candidate_end_date_provenance_level(candidate: EventCandidate, *, is_canonical_site: bool = False) -> str:
+    if not candidate.end_date:
+        return DATE_PROVENANCE_MISSING
+    if bool(getattr(candidate, "end_date_is_inferred", False)):
+        return "inferred_default_30d"
+    return _candidate_date_provenance_level(candidate, is_canonical_site=is_canonical_site)
+
+
+async def _record_identity_gate_decision(
+    db: Database,
+    candidate: EventCandidate,
+    *,
+    decision: str,
+    reason: str | None = None,
+    confidence: float | None = None,
+    event_id: int | None = None,
+    candidate_event_id: int | None = None,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    try:
+        async with db.get_session() as session:
+            session.add(
+                EventIdentityDecisionLog(
+                    event_id=event_id,
+                    candidate_event_id=candidate_event_id,
+                    source_type=str(candidate.source_type or "") or None,
+                    source_url=str(candidate.source_url or "") or None,
+                    decision=decision,
+                    decision_reason=reason,
+                    confidence=confidence,
+                    decided_by="smart_update.identity_gate",
+                    decision_payload=payload or {},
+                )
+            )
+            await session.commit()
+    except Exception:
+        logger.warning("smart_update.identity_gate decision log insert failed", exc_info=True)
+
+
 def _far_future_poster_date_mismatch_note(
     *,
     candidate_date: str | None,
@@ -14421,6 +14484,23 @@ async def _smart_event_update_impl(
         if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
             try:
                 vector_evidence = await _smart_update_identity_vector_evidence(candidate)
+                if (
+                    vector_evidence is not None
+                    and vector_evidence.error
+                    and not str(candidate.source_type or "").startswith("parser:")
+                    and not _candidate_date_is_inferred(candidate, is_canonical_site=is_canonical_site)
+                ):
+                    # Failure policy: no auto-merge on infra failure, but low-risk
+                    # source-grounded non-parser candidates may continue through the
+                    # existing Smart Update create path. Parser/weak-date candidates
+                    # keep the error evidence so enforce mode can fail safe.
+                    logger.info(
+                        "smart_update.identity_gate vector_error_low_risk_fallback error=%s source_type=%s title=%s",
+                        vector_evidence.error,
+                        candidate.source_type,
+                        _clip_title(candidate.title),
+                    )
+                    vector_evidence = None
                 gate_existing_events = list(identity_gate_candidates or shortlist)
                 if vector_evidence and vector_evidence.nearest_event_id is not None:
                     known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
@@ -14451,6 +14531,27 @@ async def _smart_event_update_impl(
                     if identity_verdict.candidate is not None
                     else None,
                 )
+                await _record_identity_gate_decision(
+                    db,
+                    candidate,
+                    decision=identity_verdict.action.value,
+                    reason=identity_verdict.reason_code,
+                    confidence=identity_verdict.confidence,
+                    event_id=identity_verdict.matched_event_id,
+                    payload={
+                        "mode": identity_verdict.mode.value,
+                        "reasons": list(identity_verdict.reasons),
+                        "deterministic": identity_verdict.deterministic,
+                        "fail_safe": identity_verdict.fail_safe,
+                        "vector": {
+                            "available": identity_verdict.vector.available,
+                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
+                            "score": identity_verdict.vector.score,
+                            "reason": identity_verdict.vector.reason,
+                            "error": identity_verdict.vector.error,
+                        } if identity_verdict.vector is not None else None,
+                    },
+                )
                 if identity_verdict.should_veto_create:
                     return SmartUpdateResult(
                         status="skipped_identity_gate",
@@ -14462,6 +14563,40 @@ async def _smart_event_update_impl(
                     mode=SMART_UPDATE_IDENTITY_GATE_MODE,
                     candidate=candidate,
                     reason=str(exc) or "identity gate error",
+                )
+                await _record_identity_gate_decision(
+                    db,
+                    candidate,
+                    decision=identity_verdict.action.value,
+                    reason=identity_verdict.reason_code,
+                    confidence=identity_verdict.confidence,
+                    event_id=identity_verdict.matched_event_id,
+                    payload={
+                        "mode": identity_verdict.mode.value,
+                        "reasons": list(identity_verdict.reasons),
+                        "deterministic": identity_verdict.deterministic,
+                        "fail_safe": identity_verdict.fail_safe,
+                        "vector": {
+                            "available": identity_verdict.vector.available,
+                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
+                            "score": identity_verdict.vector.score,
+                            "reason": identity_verdict.vector.reason,
+                            "error": identity_verdict.vector.error,
+                        } if identity_verdict.vector is not None else None,
+                    },
+                )
+                await _record_identity_gate_decision(
+                    db,
+                    candidate,
+                    decision=identity_verdict.action.value,
+                    reason=identity_verdict.reason_code,
+                    confidence=identity_verdict.confidence,
+                    event_id=identity_verdict.matched_event_id,
+                    payload={
+                        "mode": identity_verdict.mode.value,
+                        "reasons": list(identity_verdict.reasons),
+                        "fail_safe": identity_verdict.fail_safe,
+                    },
                 )
                 if identity_verdict.should_veto_create:
                     return SmartUpdateResult(
@@ -15082,6 +15217,11 @@ async def _smart_event_update_impl(
             emoji=candidate.emoji,
             end_date=candidate.end_date,
             end_date_is_inferred=bool(candidate.end_date_is_inferred),
+            date_is_inferred=_candidate_date_is_inferred(candidate, is_canonical_site=is_canonical_site),
+            date_provenance=_candidate_date_provenance_level(candidate, is_canonical_site=is_canonical_site),
+            date_confidence=_date_provenance_confidence(_candidate_date_provenance_level(candidate, is_canonical_site=is_canonical_site)),
+            end_date_provenance=_candidate_end_date_provenance_level(candidate, is_canonical_site=is_canonical_site),
+            end_date_confidence=_date_provenance_confidence(_candidate_end_date_provenance_level(candidate, is_canonical_site=is_canonical_site)),
             is_free=is_free_value,
             pushkin_card=bool(candidate.pushkin_card),
             silent=bool(force_silent_due_to_date_risk),
@@ -15106,6 +15246,35 @@ async def _smart_event_update_impl(
             new_event.source_vk_post_url = candidate.source_url
 
         async with db.get_session() as session:
+            final_lo, final_hi = _candidate_date_range(candidate)
+            if final_lo is not None and final_hi is not None:
+                final_stmt = select(Event).where(
+                    and_(
+                        Event.date <= final_hi.isoformat(),
+                        or_(
+                            and_(Event.end_date.is_(None), Event.date >= final_lo.isoformat()),
+                            Event.end_date >= final_lo.isoformat(),
+                        ),
+                        Event.lifecycle_status == "active",
+                    )
+                )
+                final_stmt = _apply_soft_city_filter(final_stmt, candidate.city)
+                final_res = await session.execute(final_stmt)
+                final_duplicate = _pre_create_duplicate_probe(candidate, list(final_res.scalars().all()))
+                if final_duplicate is not None:
+                    await _record_identity_gate_decision(
+                        db,
+                        candidate,
+                        decision="veto_create",
+                        reason="final_transaction_duplicate_probe",
+                        confidence=0.98,
+                        event_id=getattr(final_duplicate, "id", None),
+                        payload={"stage": "final_pre_insert_probe"},
+                    )
+                    return SmartUpdateResult(
+                        status="skipped_identity_gate",
+                        reason="final_transaction_duplicate_probe",
+                    )
             session.add(new_event)
             await session.commit()
             await session.refresh(new_event)
