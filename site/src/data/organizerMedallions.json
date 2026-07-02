@@ -133,14 +133,14 @@
         640
       ],
       "ariaLabel": "Локация: Дом китобоя",
-      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA. SVG-исходник на сайте не найден (проверены публичные logo.svg-кандидаты); медальон оставлен в исходном PNG/WebP виде по design contract.",
-      "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.png",
+      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA. SVG-исходник на сайте не найден (проверены публичные logo.svg-кандидаты); медальон оставлен в исходном WebP виде с PNG fallback по design contract.",
+      "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.webp",
       "fallbackPngUrl": "/assets/organizers/dom-kitoboya-stacked.png",
       "sourcePath": "site/src/assets/organizers/source/dom-kitoboya.logo.webp",
       "retrievedAt": "2026-07-01",
       "brandBackgroundSource": "https://t.me/domkitoboya",
       "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette.",
-      "assetFormat": "raster-source-only"
+      "assetFormat": "webp-source-only"
     },
     {
       "slug": "tretyakovka-kaliningrad",

@@ -107,7 +107,8 @@ if (event.pushkin_card) {
     shortLabel: 'Пушкинская карта',
     title: 'Пушкинская карта',
     ariaLabel: 'Можно оплатить Пушкинской картой',
-    imageUrl: '/assets/badges/pushkin-card-medallion.png',
+    imageUrl: '/assets/badges/pushkin-card-medallion.webp',
+    fallbackImageUrl: '/assets/badges/pushkin-card-medallion.png',
     tone: 'purple',
   });
 }
@@ -196,7 +197,10 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
             </span>
           ) : token.kind === 'pushkin' && token.imageUrl ? (
             <span class="event-token__pushkin-frame" aria-label={token.ariaLabel} title={token.label}>
-              <img class="event-token__pushkin-composite" src={withBase(token.imageUrl)} alt="" loading="lazy" decoding="async" />
+              <picture>
+                {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
+                <img class="event-token__pushkin-composite" src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
+              </picture>
             </span>
           ) : (
             <span class="event-token__pill" aria-label={token.ariaLabel} title={token.label}>

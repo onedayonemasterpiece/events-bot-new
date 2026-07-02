@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for all starter organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; `konb` stays a raster exception and `dom-kitoboya` stays raster until an official/source SVG is found.
+> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for all starter organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; `konb` stays a raster exception and `dom-kitoboya` stays WebP-first raster until an official/source SVG is found.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -59,7 +59,7 @@ The medallion row stays in normal document flow on the event detail page, not as
 
 ### Sizes
 
-Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels. Organizer medallions should prefer SVG `avatarUrl` assets and keep PNG/WebP files only as QA/fallback unless the item is an explicit raster exception.
+Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels. Organizer medallions should prefer SVG `avatarUrl` assets and keep WebP files as the primary raster format and PNG only as QA/fallback unless the item has an SVG primary asset.
 
 | Surface | Desktop | Tablet | Mobile |
 | --- | --- | --- | --- |
@@ -116,7 +116,7 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Историко-художественный музей | `history-art-museum` | `/assets/organizers/history-art-museum.svg` (`.png` fallback/QA) | official white KOIHM PNG from `koihm.ru`; SVG source was not found on the checked public URLs, so the geometric building/`КОИХМ` mark was locally vectorized into SVG on the accepted contrast circle |
 | Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.svg` (`.png` fallback/QA) | official black SVG logo from `filarmonia39.ru`; yellow background `#FAB534` matched to the current Telegram profile avatar at `t.me/filarmonia_39` |
 | Остров Канта | `kant-island` | `/assets/organizers/kant-island.svg` (`.png` fallback/QA) | official `sobor39.ru` SVG logo; the exact cathedral-mark path is embedded directly into the medallion SVG |
-| Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.png` | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains raster for now |
+| Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains WebP-first raster for now |
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
 
@@ -131,10 +131,10 @@ Asset inventory:
 - `kant-island`, `kaliningrad-philharmonic` and `world-ocean-museum` use local/official SVG source material directly;
 - `history-art-museum` had no public SVG source in the checked KOIHM candidates, so the existing geometric PNG medallion was locally vectorized into SVG;
 - `tretyakovka-kaliningrad` is reconstructed as simple SVG primitives from the geometric Telegram avatar;
-- `dom-kitoboya` is intentionally unchanged because no source SVG was found (`logo.svg` candidates returned 404 while `logo.webp`/`logo.png` exist);
+- `dom-kitoboya` is intentionally not SVG because no source SVG was found (`logo.svg` candidates returned 404); it is WebP-first with PNG fallback;
 - `konb` is intentionally unchanged as the explicit raster exception for this pass.
 
-No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving PNG/WebP fallback export.
+No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
@@ -146,7 +146,7 @@ Asset pipeline:
 
 1. Download and store source provenance in the asset README.
 2. Remove background locally (`rembg`, OpenCV/threshold + manual QA, GIMP/Inkscape); **do not use OpenAI image generation/editing** unless the user gives explicit consent in the current thread.
-3. Export optimized source cutouts under `site/public/assets/badges/`; the runtime asset is a **single composite** `pushkin-card-medallion.png` assembled from the high-quality bust cutout and the original source wordmark. The intermediate bust asset may remain for provenance/QA but must not be composed in CSS at runtime.
+3. Export optimized source cutouts under `site/public/assets/badges/`; the runtime asset is a **single composite** `pushkin-card-medallion.webp` with `pushkin-card-medallion.png` as fallback/QA, assembled from the high-quality bust cutout and the original source wordmark. The intermediate bust asset may remain for provenance/QA but must not be composed in CSS at runtime.
 4. Render the composite so the black circle is the **same visual diameter** as organizer medallion circles; do not enlarge the Pushkin circle relative to other circles. The original `Пушкинская карта` wordmark starts over the lower part of the circle and may protrude to the right. Do **not** add a separate pill/label with duplicated text.
 5. Provide a fallback `ПК` purple-ring medallion if the asset fails visual QA.
 

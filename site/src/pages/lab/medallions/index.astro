@@ -23,7 +23,7 @@ const pushkin = {
   slug: 'pushkin-card',
   name: 'Пушкинская карта',
   shortName: 'Пушкинская карта',
-  avatarUrl: '/assets/badges/pushkin-card-medallion.png',
+  avatarUrl: '/assets/badges/pushkin-card-medallion.webp',
   fallbackPngUrl: '/assets/badges/pushkin-card-medallion.png',
   ariaLabel: 'Можно оплатить Пушкинской картой',
   renderNote: 'Единый композитный PNG из исходников: бюст внутри круглого медальона, исходная надпись «Пушкинская карта» наложена поверх круга и выступает вправо.',
@@ -74,7 +74,10 @@ const pushkin = {
           <ul class="event-token-row" role="list">
             <li class="event-token event-token--pushkin" aria-label={pushkin.ariaLabel} title={pushkin.name}>
               <span class="event-token__pushkin-frame" aria-hidden="true">
-                <img class="event-token__pushkin-composite" src={withBase(pushkin.avatarUrl)} alt="" loading="lazy" decoding="async" />
+                <picture>
+                  <source srcset={withBase(pushkin.avatarUrl)} type="image/webp" />
+                  <img class="event-token__pushkin-composite" src={withBase(pushkin.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
+                </picture>
               </span>
             </li>
           </ul>
