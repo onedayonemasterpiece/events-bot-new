@@ -14484,6 +14484,7 @@ async def _smart_event_update_impl(
         if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
             try:
                 vector_evidence = await _smart_update_identity_vector_evidence(candidate)
+                suppressed_vector_error: dict[str, Any] | None = None
                 if (
                     vector_evidence is not None
                     and vector_evidence.error
@@ -14500,6 +14501,14 @@ async def _smart_event_update_impl(
                         candidate.source_type,
                         _clip_title(candidate.title),
                     )
+                    suppressed_vector_error = {
+                        "error": vector_evidence.error,
+                        "reason": vector_evidence.reason,
+                        "available": vector_evidence.available,
+                        "nearest_event_id": vector_evidence.nearest_event_id,
+                        "score": vector_evidence.score,
+                        "policy": "low_risk_source_grounded_fallback",
+                    }
                     vector_evidence = None
                 gate_existing_events = list(identity_gate_candidates or shortlist)
                 if vector_evidence and vector_evidence.nearest_event_id is not None:
@@ -14550,6 +14559,7 @@ async def _smart_event_update_impl(
                             "reason": identity_verdict.vector.reason,
                             "error": identity_verdict.vector.error,
                         } if identity_verdict.vector is not None else None,
+                        "suppressed_vector_error": suppressed_vector_error,
                     },
                 )
                 if identity_verdict.should_veto_create:
@@ -14583,19 +14593,6 @@ async def _smart_event_update_impl(
                             "reason": identity_verdict.vector.reason,
                             "error": identity_verdict.vector.error,
                         } if identity_verdict.vector is not None else None,
-                    },
-                )
-                await _record_identity_gate_decision(
-                    db,
-                    candidate,
-                    decision=identity_verdict.action.value,
-                    reason=identity_verdict.reason_code,
-                    confidence=identity_verdict.confidence,
-                    event_id=identity_verdict.matched_event_id,
-                    payload={
-                        "mode": identity_verdict.mode.value,
-                        "reasons": list(identity_verdict.reasons),
-                        "fail_safe": identity_verdict.fail_safe,
                     },
                 )
                 if identity_verdict.should_veto_create:

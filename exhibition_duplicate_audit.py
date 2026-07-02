@@ -11,6 +11,7 @@ from typing import Any
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from ops_run import finish_ops_run, start_ops_run
+from scripts.inspect.audit_identity_gate_rollout import build_rollout_payload
 from scripts.inspect.audit_public_exhibition_duplicates import build_audit_payload
 
 logger = logging.getLogger(__name__)
@@ -38,8 +39,12 @@ def _status_from_payload(payload: dict[str, Any]) -> str:
     return "failed" if int(payload.get("high_confidence_duplicate_count") or 0) > 0 else "success"
 
 
-def _metrics_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _metrics_from_payload(
+    payload: dict[str, Any],
+    *,
+    rollout_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metrics = {
         "public_exhibition_count": int(payload.get("public_exhibition_count") or 0),
         "high_confidence_duplicate_count": int(payload.get("high_confidence_duplicate_count") or 0),
         "high_confidence_duplicate_cluster_count": int(
@@ -53,13 +58,31 @@ def _metrics_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "since_days": int(payload.get("since_days") or 14),
     }
+    if rollout_payload:
+        for key in (
+            "identity_gate_decision_count",
+            "identity_gate_veto_create_count",
+            "identity_gate_allow_create_count",
+            "identity_gate_fail_safe_count",
+            "identity_gate_vector_error_count",
+            "identity_gate_vector_available_count",
+            "identity_gate_final_probe_veto_count",
+            "identity_gate_matched_event_count",
+        ):
+            metrics[key] = int(rollout_payload.get(key) or 0)
+    return metrics
 
 
-def _details_from_payload(payload: dict[str, Any], *, run_id: str | None) -> dict[str, Any]:
+def _details_from_payload(
+    payload: dict[str, Any],
+    *,
+    run_id: str | None,
+    rollout_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     max_pairs = _int_env("EXHIBITION_DUPLICATE_AUDIT_MAX_DETAILS_PAIRS", 20, minimum=1)
     duplicates = list(payload.get("duplicates") or [])
     all_duplicates = list(payload.get("all_duplicates") or [])
-    return {
+    details = {
         "scheduler_run_id": run_id,
         "current_date": payload.get("current_date"),
         "since_date": payload.get("since_date"),
@@ -70,6 +93,18 @@ def _details_from_payload(payload: dict[str, Any], *, run_id: str | None) -> dic
         "all_duplicates_truncated": len(all_duplicates) > max_pairs,
         "all_duplicates": all_duplicates[:max_pairs],
     }
+    if rollout_payload:
+        details["identity_gate"] = {
+            "decision_count": rollout_payload.get("identity_gate_decision_count"),
+            "veto_create_count": rollout_payload.get("identity_gate_veto_create_count"),
+            "fail_safe_count": rollout_payload.get("identity_gate_fail_safe_count"),
+            "vector_error_count": rollout_payload.get("identity_gate_vector_error_count"),
+            "modes": rollout_payload.get("identity_gate_modes"),
+            "reasons": rollout_payload.get("identity_gate_reasons"),
+            "recent_fail_safes": rollout_payload.get("recent_fail_safes"),
+            "recent_vector_errors": rollout_payload.get("recent_vector_errors"),
+        }
+    return details
 
 
 async def _notify_admin(
@@ -155,9 +190,10 @@ async def run_exhibition_duplicate_audit_scheduler(
         if not db_path or str(db_path) in {":memory:", ""}:
             raise RuntimeError("exhibition duplicate audit requires a file-backed SQLite DB")
         payload = build_audit_payload(db_path, current=current_date, since_days=since_days)
+        rollout_payload = build_rollout_payload(db_path, current=current_date, since_days=since_days)
         status = _status_from_payload(payload)
-        metrics = _metrics_from_payload(payload)
-        details = _details_from_payload(payload, run_id=run_id)
+        metrics = _metrics_from_payload(payload, rollout_payload=rollout_payload)
+        details = _details_from_payload(payload, run_id=run_id, rollout_payload=rollout_payload)
         await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=details)
         logger.info(
             "exhibition_duplicate_audit status=%s public_exhibitions=%s duplicates=%s clusters=%s",

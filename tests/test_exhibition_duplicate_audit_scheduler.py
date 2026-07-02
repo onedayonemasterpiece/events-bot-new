@@ -52,6 +52,28 @@ async def _insert_event(
         await conn.commit()
 
 
+async def _insert_identity_decision(
+    db: Database,
+    *,
+    decision: str = "veto_create",
+    reason: str = "vector_identity_match",
+    created_at: str = "2026-07-02 10:00:00",
+) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO event_identity_decision_log(
+                event_id, source_type, source_url, decision, decision_reason,
+                confidence, decided_by, decision_payload, created_at
+            )
+            VALUES(1, 'telegram', 'https://t.me/example/identity', ?, ?, 0.95,
+                   'smart_update.identity_gate', ?, ?)
+            """,
+            (decision, reason, json.dumps({"mode": "enforce", "vector": {"available": True}}), created_at),
+        )
+        await conn.commit()
+
+
 @pytest.mark.asyncio
 async def test_exhibition_duplicate_audit_scheduler_records_success(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -59,6 +81,7 @@ async def test_exhibition_duplicate_audit_scheduler_records_success(tmp_path):
         await db.init()
         await _insert_event(db, 1, "Розовый натюрморт", "2026-07-01", "2026-08-01", "Музей")
         await _insert_event(db, 2, "Совсем другая выставка", "2026-07-02", "2026-08-02", "Другая галерея")
+        await _insert_identity_decision(db)
 
         payload = await run_exhibition_duplicate_audit_scheduler(
             db,
@@ -78,8 +101,13 @@ async def test_exhibition_duplicate_audit_scheduler_records_success(tmp_path):
         assert kind == "exhibition_duplicate_audit"
         assert trigger == "scheduled"
         assert status == "success"
-        assert json.loads(metrics_raw)["high_confidence_duplicate_count"] == 0
-        assert json.loads(details_raw)["scheduler_run_id"] == "audit-ok"
+        metrics = json.loads(metrics_raw)
+        assert metrics["high_confidence_duplicate_count"] == 0
+        assert metrics["identity_gate_decision_count"] == 1
+        assert metrics["identity_gate_veto_create_count"] == 1
+        details = json.loads(details_raw)
+        assert details["scheduler_run_id"] == "audit-ok"
+        assert details["identity_gate"]["decision_count"] == 1
     finally:
         await db.close()
 
