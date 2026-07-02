@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-02-buynov-cancellation-lifecycle-gap.md`
+  - Scope: LLM-first cancellation/reschedule lifecycle extraction from VK/TG sources, Smart Update lifecycle merge, exact VK auto-import replay, and public Telegram/VK/Telegraph lifecycle fanout for existing posts.
+  - Must not regress: cancellation/transfer decisions belong to LLM parse/merge (`lifecycle_status`), not default keyword regex shortcuts; replay must target the original external source post; already-public event posts must be edited to show cancellation/postponement while first-time non-active promo posts stay blocked.
 - `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
   - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
   - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.

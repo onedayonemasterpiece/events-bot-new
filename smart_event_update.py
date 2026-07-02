@@ -478,6 +478,7 @@ class EventCandidate:
     ticket_price_min: int | None = None
     ticket_price_max: int | None = None
     ticket_status: str | None = None
+    lifecycle_status: str | None = None
     event_type: str | None = None
     emoji: str | None = None
     is_free: bool | None = None
@@ -541,6 +542,7 @@ MERGE_RESPONSE_FORMAT = {
                 "ticket_price_min": {"type": ["integer", "null"]},
                 "ticket_price_max": {"type": ["integer", "null"]},
                 "ticket_status": {"type": ["string", "null"]},
+                "lifecycle_status": {"type": ["string", "null"]},
                 "added_facts": {"type": "array", "items": {"type": "string"}},
                 "duplicate_facts": {"type": "array", "items": {"type": "string"}},
                 "conflict_facts": {"type": "array", "items": {"type": "string"}},
@@ -9610,6 +9612,7 @@ async def _llm_merge_event(
             "ticket_price_min": event.ticket_price_min,
             "ticket_price_max": event.ticket_price_max,
             "ticket_status": getattr(event, "ticket_status", None),
+            "lifecycle_status": getattr(event, "lifecycle_status", None),
             "source_texts": [
                 _clip(t, 1200)
                 for t in (getattr(event, "source_texts", None) or [])
@@ -9629,6 +9632,7 @@ async def _llm_merge_event(
             "ticket_price_min": candidate.ticket_price_min,
             "ticket_price_max": candidate.ticket_price_max,
             "ticket_status": candidate.ticket_status,
+            "lifecycle_status": getattr(candidate, "lifecycle_status", None),
             "source_url": candidate.source_url,
             "quote_candidates": _extract_quote_candidates(
                 _strip_promo_lines(candidate.source_text) or candidate.source_text,
@@ -9713,8 +9717,12 @@ async def _llm_merge_event(
         "эти данные уже показываются отдельным блоком. "
         "Также верни `search_digest`: 1 предложение, 120–220 символов (макс 260), без эмодзи/хэштегов/списков; "
         "не указывай дату/время/адрес/город/цены/ссылки; не начинай с дословного повторения title. "
+        "Если candidate явно сообщает, что событие отменено или перенесено/отложено, верни lifecycle_status: "
+        "`cancelled` для отмены, `postponed` для переноса/отложения; иначе `null`. "
+        "Не используй ticket_status для статуса отмены события: ticket_status только про доступность билетов "
+        "(`available`/`sold_out`/`unknown`), а отмена/перенос — это lifecycle_status. "
         "Верни JSON с полями title (если нужно улучшить), description (обязательно), search_digest, "
-        "ticket_link, ticket_price_min/max, ticket_status, added_facts, duplicate_facts, conflict_facts, skipped_conflicts. "
+        "ticket_link, ticket_price_min/max, ticket_status, lifecycle_status, added_facts, duplicate_facts, conflict_facts, skipped_conflicts. "
         "added_facts должен содержать список КОНКРЕТНЫХ НОВЫХ фактов (короткими пунктами), которых НЕ было в event_before.facts. "
         "duplicate_facts должен содержать список фактов из candidate, которые уже есть в event_before.facts (дубли). "
         "conflict_facts должен содержать список конфликтов (см. выше) и выбранную сторону по доверию. "
@@ -9831,6 +9839,28 @@ def _apply_ticket_fields(
         event.ticket_trust_level = candidate_trust
         added.append("ticket_status")
     return added
+
+
+def _normalize_lifecycle_status_update(value: str | None) -> str | None:
+    raw = str(value or "").strip().casefold()
+    if not raw:
+        return None
+    if raw in {"active", "активно", "активное", "идет", "идёт"}:
+        return None
+    if raw in {"cancelled", "canceled", "cancel", "отменено", "отменен", "отменён", "отмена"}:
+        return "cancelled"
+    if raw in {
+        "postponed",
+        "rescheduled",
+        "перенесено",
+        "перенесен",
+        "перенесён",
+        "перенос",
+        "отложено",
+        "отложен",
+    }:
+        return "postponed"
+    return None
 
 
 def _candidate_has_new_text(candidate: EventCandidate, event: Event) -> bool:
@@ -14802,6 +14832,7 @@ async def _smart_event_update_impl(
             end_date_is_inferred=bool(candidate.end_date_is_inferred),
             is_free=is_free_value,
             pushkin_card=bool(candidate.pushkin_card),
+            lifecycle_status=_normalize_lifecycle_status_update(candidate.lifecycle_status) or "active",
             silent=bool(force_silent_due_to_date_risk),
             source_text=clean_source_text or "",
             source_texts=[clean_source_text] if clean_source_text else [],
@@ -15765,6 +15796,16 @@ async def _smart_event_update_impl(
                     if ticket_updates:
                         updated_fields = True
                         updated_keys.extend(ticket_updates)
+                    lifecycle_update = _normalize_lifecycle_status_update(
+                        merge_data.get("lifecycle_status")
+                    )
+                    if (
+                        lifecycle_update
+                        and lifecycle_update != (getattr(event_db, "lifecycle_status", None) or "active")
+                    ):
+                        event_db.lifecycle_status = lifecycle_update
+                        updated_fields = True
+                        updated_keys.append("lifecycle_status")
 
                 elif has_new_text or needs_schedule_cleanup:
                     # LLM merge can be unavailable (offline runs, local env, transient outages).
@@ -15864,6 +15905,18 @@ async def _smart_event_update_impl(
                 updated_keys.extend(ticket_updates)
             # Keep original description snapshot for source log snippet.
             before_description = before_description or (event_db.description or "")
+
+        candidate_lifecycle_update = _normalize_lifecycle_status_update(
+            getattr(candidate, "lifecycle_status", None)
+        )
+        if (
+            candidate_lifecycle_update
+            and candidate_lifecycle_update != (getattr(event_db, "lifecycle_status", None) or "active")
+        ):
+            event_db.lifecycle_status = candidate_lifecycle_update
+            updated_fields = True
+            if "lifecycle_status" not in updated_keys:
+                updated_keys.append("lifecycle_status")
 
         if not event_db.location_address and candidate.location_address:
             event_db.location_address = candidate.location_address

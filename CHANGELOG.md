@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **Incident / Buynov cancellation lifecycle gap (INC-2026-07-02)**: made cancellation/postponement LLM-first by carrying `lifecycle_status` through VK event parsing and Smart Update merge, disabled the deterministic VK cancellation matcher by default, allowed existing Telegram/VK event posts to be edited for non-active events, and added exact `target_post_url` VK auto-import replay for incident testing.
 - Promoted the visual guide digest to its final scheduled production flow: a
   separate morning one-card Telegram+VK digest, Telegram title-links without
   vk.cc, VK wall postponed by 10 minutes, dynamic city/location hashtags, and a
@@ -42,6 +43,7 @@
 
 ### Added
 
+- Documented calendar-follow transactional email requirements for Yandex Cloud Postbox serverless delivery, durable queued sending, conservative rate limits, and YDB queue/statistics tracking (`docs/features/event-email-notifications/README.md`).
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

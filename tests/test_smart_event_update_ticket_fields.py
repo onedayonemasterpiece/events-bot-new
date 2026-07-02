@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from models import Event
-from smart_event_update import _apply_ticket_fields
+from smart_event_update import _apply_ticket_fields, _normalize_lifecycle_status_update
+
+
+def test_normalize_lifecycle_status_update_from_llm_values() -> None:
+    assert _normalize_lifecycle_status_update("cancelled") == "cancelled"
+    assert _normalize_lifecycle_status_update("отменено") == "cancelled"
+    assert _normalize_lifecycle_status_update("postponed") == "postponed"
+    assert _normalize_lifecycle_status_update("перенесено") == "postponed"
+    assert _normalize_lifecycle_status_update("active") is None
+    assert _normalize_lifecycle_status_update(None) is None
 
 
 def test_apply_ticket_fields_refines_broad_landing_page_link() -> None:

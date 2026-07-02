@@ -420,6 +420,72 @@ def _vk_wall_url(group_id: int, post_id: int, owner_type: str | None = "group") 
     return _vk_wall_url_helper(group_id, post_id, owner_type)
 
 
+def _parse_vk_wall_target(url: str | None) -> tuple[int, int, str] | None:
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    m = re.search(r"wall(-?)(\d+)_(\d+)", raw)
+    if not m:
+        return None
+    owner_type = "group" if m.group(1) == "-" else "user"
+    return int(m.group(2)), int(m.group(3)), owner_type
+
+
+async def _requeue_and_pick_specific_vk_inbox_post(
+    db: Database,
+    *,
+    target_post_url: str,
+    operator_id: int,
+    batch_id: str,
+) -> Any | None:
+    target = _parse_vk_wall_target(target_post_url)
+    if target is None:
+        raise ValueError(f"invalid target_post_url: {target_post_url}")
+    group_id, post_id, owner_type = target
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, group_id, post_id, date, text, matched_kw, has_date, status,
+                   review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
+            FROM vk_inbox
+            WHERE group_id=? AND post_id=? AND COALESCE(owner_type, 'group')=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (int(group_id), int(post_id), str(owner_type)),
+        )
+        row = await cur.fetchone()
+        if not row:
+            return None
+        inbox_id = int(row[0])
+        await conn.execute(
+            """
+            UPDATE vk_inbox
+            SET status='locked',
+                locked_by=?,
+                locked_at=CURRENT_TIMESTAMP,
+                review_batch=?
+            WHERE id=?
+            """,
+            (int(operator_id), str(batch_id), int(inbox_id)),
+        )
+        await conn.commit()
+    return vk_review.InboxPost(
+        id=int(row[0]),
+        group_id=int(row[1]),
+        post_id=int(row[2]),
+        date=int(row[3] or 0),
+        text=str(row[4] or ""),
+        matched_kw=row[5],
+        has_date=int(row[6] or 0),
+        status="locked",
+        review_batch=str(batch_id),
+        imported_event_id=row[9],
+        event_ts_hint=row[10],
+        owner_type=str(row[11] or owner_type),
+    )
+
+
 def _best_url(sizes: Sequence[Mapping[str, Any]]) -> str:
     if not sizes:
         return ""
@@ -1234,6 +1300,7 @@ async def run_vk_auto_import(
     trigger: str = "manual",
     run_id: str | None = None,
     ops_run_id: int | None = None,
+    target_post_url: str | None = None,
 ) -> VkAutoImportReport:
     """Auto-import VK inbox queue sequentially via Smart Update (LLM).
 
@@ -1255,6 +1322,7 @@ async def run_vk_auto_import(
                 "run_id": run_id,
                 "limit_requested": limit,
                 "include_skipped": int(bool(include_skipped)),
+                "target_post_url": target_post_url,
             },
         )
     _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
@@ -1263,6 +1331,10 @@ async def run_vk_auto_import(
     except Exception:
         limit_int = 25
     unbounded = limit_int <= 0
+    target_post_url = (target_post_url or "").strip() or None
+    if target_post_url:
+        limit_int = 1
+        unbounded = False
 
     await vk_review.release_stale_locks(db)
     await vk_review.release_due_deferred(db, batch_id=batch_id)
@@ -1378,6 +1450,9 @@ async def run_vk_auto_import(
                 total_estimate = min(int(total_estimate), int(limit_int))
     except Exception:
         total_estimate = None
+
+    if target_post_url:
+        total_estimate = 1
 
     start = time.time()
     heavy_mode = _vk_auto_import_heavy_mode(trigger)
@@ -1636,14 +1711,24 @@ async def run_vk_auto_import(
                 prefetch_task = next_prefetch_task
         else:
             remaining = max(1, int(limit_int))
-            post = await vk_review.pick_next(
-                db,
-                operator_id,
-                batch_id,
-                requeue_skipped=False,
-                prefer_oldest=True,
-                strict_chronological=True,
-            )
+            if target_post_url:
+                post = await _requeue_and_pick_specific_vk_inbox_post(
+                    db,
+                    target_post_url=target_post_url,
+                    operator_id=operator_id,
+                    batch_id=batch_id,
+                )
+                if post is None:
+                    report.errors.append(f"target_not_found {target_post_url}")
+            else:
+                post = await vk_review.pick_next(
+                    db,
+                    operator_id,
+                    batch_id,
+                    requeue_skipped=False,
+                    prefer_oldest=True,
+                    strict_chronological=True,
+                )
             prefetch_task = _start_prefetch(post) if post else None
             while post and remaining > 0:
                 if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
@@ -1705,7 +1790,9 @@ async def run_vk_auto_import(
 
                 next_post = None
                 next_prefetch_task = None
-                if remaining > 0:
+                if target_post_url:
+                    remaining = 0
+                elif remaining > 0:
                     if prefetch_enabled:
                         next_post = await vk_review.pick_next(
                             db,
@@ -2016,9 +2103,18 @@ async def _process_vk_inbox_row(
                 exc_info=True,
             )
 
-    # Cancellation/transfer notices: do not create new events. Instead, try to find the
-    # matching existing event and mark it inactive (cancelled/postponed).
-    if _looks_like_cancellation_notice(text):
+    # Cancellation/transfer notices are now LLM-first by default. The normal
+    # event_parse -> Smart Update path must decide lifecycle_status from source
+    # semantics, so a brittle keyword prefilter cannot silently cancel the wrong
+    # event. The legacy deterministic matcher remains only as an explicit
+    # emergency fallback for operators.
+    legacy_cancel_matcher_enabled = (os.getenv("VK_AUTO_IMPORT_LEGACY_CANCEL_MATCHER") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if legacy_cancel_matcher_enabled and _looks_like_cancellation_notice(text):
         event_id, err = await _cancel_matching_event_from_notice(
             db,
             notice_text=text,

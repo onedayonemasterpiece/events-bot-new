@@ -5659,6 +5659,11 @@ def build_tg_event_announcement(
     if _is_tg_rock_concert_event(event):
         emoji_part = "🤘 "
     lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
+    lifecycle = (getattr(event, "lifecycle_status", None) or "active").strip().casefold()
+    if lifecycle == "cancelled":
+        lines.append(html.escape("❌ Отменено"))
+    elif lifecycle == "postponed":
+        lines.append(html.escape("⏸ Перенесено"))
 
     if festival:
         fest_link = festival.telegraph_url or festival.vk_url or festival.vk_post_url
@@ -5950,6 +5955,7 @@ def build_tg_event_source_hash(
                 str(getattr(event, "city", "") or ""),
                 str(getattr(event, "festival", "") or ""),
                 str(getattr(event, "pushkin_card", "") or ""),
+                str(getattr(event, "lifecycle_status", "") or ""),
                 str(getattr(event, "is_free", "") or ""),
                 str(getattr(event, "ticket_status", "") or ""),
                 str(getattr(event, "ticket_link", "") or ""),
@@ -6290,6 +6296,11 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     """Build header lines for VK source post with general event info."""
 
     lines: list[str] = [event.title]
+    lifecycle = (getattr(event, "lifecycle_status", None) or "active").strip().casefold()
+    if lifecycle == "cancelled":
+        lines.append("❌ Отменено")
+    elif lifecycle == "postponed":
+        lines.append("⏸ Перенесено")
 
     if festival:
         link = festival.vk_url or festival.vk_post_url

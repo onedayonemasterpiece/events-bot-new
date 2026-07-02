@@ -1403,6 +1403,7 @@ class EventDraft:
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None
     search_digest: str | None = None
+    lifecycle_status: str | None = None
     reject_reason: str | None = None
 
 
@@ -1907,7 +1908,11 @@ async def build_event_drafts_from_vk(
         "источником для date/time/location и обязательно перенеси эти значения в событие. "
         "Но если сам текст поста явно пишет точную календарную дату (`18 июня`, `18.06`), "
         "не считай афишу автоматически сильнее этой явной даты. "
-        "Не оставляй time пустым, когда афиша явно содержит время начала."
+        "Не оставляй time пустым, когда афиша явно содержит время начала. "
+        "Если пост является уведомлением об отмене/переносе конкретного будущего события, "
+        "НЕ возвращай []: извлеки якоря события и верни lifecycle_status='cancelled' или 'postponed'. "
+        "Решение об отмене/переносе принимает LLM по смыслу текста/афиши; ticket_status не используй для отмены события."
+
     )
     room_probe = "\n".join(
         part
@@ -2401,6 +2406,7 @@ async def build_event_drafts_from_vk(
                 ocr_tokens_spent=ocr_tokens_spent,
                 ocr_tokens_remaining=ocr_tokens_remaining,
                 search_digest=clean_str(data.get("search_digest")),
+                lifecycle_status=clean_str(data.get("lifecycle_status")),
             )
         )
 
@@ -3644,6 +3650,7 @@ async def persist_event_and_pages(
         is_free=bool(draft.is_free),
         pushkin_card=bool(draft.pushkin_card),
         search_digest=draft.search_digest,
+        lifecycle_status=draft.lifecycle_status,
         raw_excerpt=draft.description or "",
         posters=posters,
     )

@@ -120,6 +120,25 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "Подписаться" not in text
 
 
+def test_build_tg_event_announcement_marks_cancelled_event():
+    event = _event(lifecycle_status="cancelled")
+
+    text = main.build_tg_event_announcement(event, "Концерт отменён организатором.")
+
+    assert text.splitlines()[0] == "<b>Камерный концерт</b>"
+    assert "❌ Отменено" in text
+    assert "Концерт отменён организатором." in text
+
+
+def test_build_vk_source_header_marks_cancelled_event():
+    event = _event(lifecycle_status="cancelled")
+
+    header = main.build_vk_source_header(event)
+
+    assert header[0] == "Камерный концерт"
+    assert header[1] == "❌ Отменено"
+
+
 def test_tg_event_hashtag_line_drops_long_title_like_festival_slug():
     event = _event(
         festival="По одёжке встречают: Народный костюм, традиции и смыслы",
@@ -1288,6 +1307,52 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
         deferred_at,
     ) in tasks
     assert (main.JobTask.vk_sync, None, None) in tasks
+
+
+@pytest.mark.asyncio
+async def test_schedule_event_update_tasks_edits_existing_cancelled_public_posts(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append((task, kwargs.get("depends_on"), kwargs.get("next_run_at")))
+        return f"{task.value}:job"
+
+    async def fake_existing_managed_vk(_event):
+        return True
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", fake_existing_managed_vk)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    deferred_at = main.datetime(2026, 6, 20, 5, 0, tzinfo=main.timezone.utc)
+    monkeypatch.setattr(
+        main,
+        "next_tg_event_publish_run_at",
+        lambda db_obj, **_kwargs: main.asyncio.sleep(0, result=deferred_at),
+    )
+
+    event = _event(
+        id=None,
+        lifecycle_status="cancelled",
+        source_vk_post_url="https://vk.com/wall-231920894_5401",
+        tg_event_post_url="https://t.me/c/3954607218/473",
+        tg_event_post_id=473,
+        tg_event_post_mode="photo_caption",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert any(task == main.JobTask.telegraph_build for task, _deps, _run_at in tasks)
+    assert any(task == main.JobTask.vk_sync for task, _deps, _run_at in tasks)
+    tg_publish = [item for item in tasks if item[0] == main.JobTask.tg_event_publish][0]
+    assert f"vk_sync:{event.id}" in tg_publish[1]
 
 
 @pytest.mark.asyncio

@@ -300,28 +300,26 @@ async def test_vk_auto_import_requests_strict_chronological_pick_next(tmp_path, 
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(tmp_path, monkeypatch):
+async def test_vk_auto_import_cancellation_notice_uses_llm_first_path(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
-    # Create an existing upcoming event that should be cancelled/hidden.
     async with db.get_session() as session:
         from models import Event
 
         session.add(
             Event(
-            title="Manhattan Short Online",
-            description="Описание",
-            source_text="src",
-            date="2026-02-15",
-            time="16:00",
-            location_name="арт-пространство «Сигнал»",
-            location_address="ул. К. Леонова, 22",
-            city="Калининград",
+                title="Manhattan Short Online",
+                description="Описание",
+                source_text="src",
+                date="2026-02-15",
+                time="16:00",
+                location_name="арт-пространство «Сигнал»",
+                location_address="ул. К. Леонова, 22",
+                city="Калининград",
             )
         )
         await session.commit()
-        # Reload the inserted event_id via query to avoid relying on ORM identity mechanics.
         from sqlalchemy import select
 
         res = await session.execute(select(Event.id).where(Event.title == "Manhattan Short Online"))
@@ -352,15 +350,56 @@ async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(
             vk_auto_queue.VkFetchStatus(True, "ok"),
         )
 
-    async def should_not_be_called(*_args, **_kwargs):
-        raise AssertionError("build_event_drafts must not be called for cancellation notices")
+    draft_calls = 0
 
+    async def fake_build_event_drafts(text, **_kwargs):
+        nonlocal draft_calls
+        draft_calls += 1
+        assert text == cancel_text
+        return [
+            vk_intake.EventDraft(
+                title="Manhattan Short Online",
+                date="2026-02-15",
+                time="16:00",
+                venue="арт-пространство «Сигнал»",
+                description="Показ кинофестиваля отменён организаторами.",
+                lifecycle_status="cancelled",
+            )
+        ], None
+
+    async def fake_persist(draft, _photos, db_obj, **kwargs):
+        assert draft.lifecycle_status == "cancelled"
+        assert kwargs.get("source_post_url") == "https://vk.com/wall-211997788_2754"
+        async with db_obj.raw_conn() as conn:
+            await conn.execute(
+                "UPDATE event SET lifecycle_status='cancelled' WHERE id=?",
+                (event_id,),
+            )
+            await conn.commit()
+        return vk_intake.PersistResult(
+            event_id=event_id,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date="2026-02-15",
+            event_end_date=None,
+            event_time="16:00",
+            event_type=None,
+            is_free=False,
+            smart_status="updated",
+            smart_created=False,
+            smart_merged=True,
+        )
+
+    monkeypatch.delenv("VK_AUTO_IMPORT_LEGACY_CANCEL_MATCHER", raising=False)
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
-    monkeypatch.setattr(vk_intake, "build_event_drafts", should_not_be_called)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
 
     bot = DummyBot()
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
+    assert draft_calls == 1
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             "SELECT silent, lifecycle_status FROM event WHERE id=?",
@@ -368,7 +407,7 @@ async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(
         )
         silent, lifecycle_status = await cur.fetchone()
         assert int(silent or 0) == 0
-        assert str(lifecycle_status or "") in {"cancelled", "postponed"}
+        assert str(lifecycle_status or "") == "cancelled"
 
         cur = await conn.execute("SELECT status, imported_event_id FROM vk_inbox WHERE id=1")
         status, imported_event_id = await cur.fetchone()
@@ -765,6 +804,75 @@ async def test_vk_auto_import_include_skipped_requeues_and_imports(tmp_path, mon
         operator_id=123,
         include_skipped=True,
     )
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_target_post_url_processes_only_requested_row(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location, default_time, default_ticket_link) VALUES(?,?,?,?,?,?)",
+            (1, "club1", "Test Community", "Научная библиотека", None, None),
+        )
+        await conn.executemany(
+            "INSERT INTO vk_inbox(id, group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status) VALUES(?,?,?,?,?,?,?,?,?)",
+            [
+                (1, 1, 100, 0, "first", "k", 1, None, "pending"),
+                (2, 1, 200, 0, "second", "k", 1, None, "imported"),
+            ],
+        )
+        await conn.commit()
+
+    async def fake_fetch(group_id, post_id, *_args, **_kwargs):
+        assert (group_id, post_id) == (1, 200)
+        return (
+            "text 1_200",
+            [],
+            datetime.now(timezone.utc),
+            {"views": 10, "likes": 1},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build_event_drafts(*_args, **_kwargs):
+        return [vk_intake.EventDraft(title="E", date="2026-12-31", time="18:30", venue="Научная библиотека")], None
+
+    async def fake_persist(*_args, **_kwargs):
+        return vk_intake.PersistResult(
+            event_id=200,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date="2026-12-31",
+            event_end_date=None,
+            event_time="18:30",
+            event_type=None,
+            is_free=False,
+            smart_status="updated",
+            smart_created=False,
+            smart_merged=True,
+        )
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+
+    report = await vk_auto_queue.run_vk_auto_import(
+        db,
+        DummyBot(),
+        chat_id=1,
+        limit=10,
+        operator_id=123,
+        target_post_url="https://vk.com/wall-1_200",
+    )
+
+    assert report.inbox_processed == 1
+    assert report.updated_event_ids == [200]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT id, status, imported_event_id FROM vk_inbox ORDER BY id")
+        rows = await cur.fetchall()
+    assert rows[0][0] == 1 and rows[0][1] == "pending"
+    assert rows[1][0] == 2 and rows[1][1] == "imported" and int(rows[1][2]) == 200
 
 
 @pytest.mark.asyncio

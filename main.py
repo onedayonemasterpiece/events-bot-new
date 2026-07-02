@@ -15055,21 +15055,35 @@ async def schedule_event_update_tasks(
     results: dict[JobTask, str] = {}
     ics_dep: str | None = None
     disable_ics_jobs = (os.getenv("DISABLE_ICS_JOBS") or "").strip().lower() in ("1", "true", "yes", "on")
-    if getattr(ev, "lifecycle_status", "active") != "active":
-        # Cancelled/postponed events must not be announced or published as ICS.
+    lifecycle_status = (getattr(ev, "lifecycle_status", "active") or "active").strip().casefold()
+    lifecycle_is_active = lifecycle_status == "active"
+    has_existing_tg_event_post = bool(
+        (getattr(ev, "tg_event_post_id", None) is not None)
+        or (getattr(ev, "tg_event_post_url", None) or "").strip()
+    )
+    has_existing_managed_vk_post = False
+    if not lifecycle_is_active:
+        try:
+            has_existing_managed_vk_post = await _event_has_existing_managed_vk_post(ev)
+        except Exception:
+            has_existing_managed_vk_post = _event_has_managed_vk_post(ev)
+        # Cancelled/postponed events must not create fresh announcements or ICS.
+        # Existing public VK/TG posts, however, must be edited in place so users
+        # see the cancellation/reschedule instead of the stale active event.
         disable_ics_jobs = True
-        skip_vk_sync = True
+        if not has_existing_managed_vk_post:
+            skip_vk_sync = True
     if getattr(ev, "silent", False):
         # Silent events are hidden from digests/announcements. Do not publish ICS or post
         # calendar messages for them (but keep Telegraph/page rebuilds so they disappear
         # from aggregated pages and the operator can still inspect the record if needed).
         disable_ics_jobs = True
         skip_vk_sync = True
-    if _event_has_ended_before_today(ev):
+    if _event_has_ended_before_today(ev) and not has_existing_managed_vk_post:
         # Fully past events may still need page rebuild cleanup, but they must not create
         # a new managed klgdevents wall post.
         skip_vk_sync = True
-    if _event_start_has_passed_for_publication(ev):
+    if _event_start_has_passed_for_publication(ev) and not has_existing_managed_vk_post:
         # A same-day event that has already started is no longer safe to announce
         # on VK/Telegram; keep page rebuilds only.
         skip_vk_sync = True
@@ -15107,11 +15121,19 @@ async def schedule_event_update_tasks(
         # surfaces keep the same Smart Update contract. Imported VK events keep
         # `source_vk_post_url` pointing at the external source wall post; those
         # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
-        if not await _event_has_existing_managed_vk_post(ev):
+        if (not has_existing_managed_vk_post) and (not await _event_has_existing_managed_vk_post(ev)):
             vk_dep = vk_dep_key
             results[JobTask.vk_sync] = vk_dep
             await enqueue_job(db, eid, JobTask.vk_sync)
-    if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
+        elif has_existing_managed_vk_post:
+            vk_dep = vk_dep_key
+            results[JobTask.vk_sync] = vk_dep
+            await enqueue_job(db, eid, JobTask.vk_sync)
+    should_schedule_tg_event_publish = (
+        (not skip_vk_sync)
+        or ((not lifecycle_is_active) and has_existing_tg_event_post)
+    )
+    if should_schedule_tg_event_publish and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [telegraph_dep_key]
         if JobTask.tg_ics_post in results:
             tg_event_deps.append(tg_ics_dep_key)
@@ -20757,7 +20779,21 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     )
     if not ev:
         return False
-    if _event_has_ended_before_today(ev):
+    lifecycle_status = (getattr(ev, "lifecycle_status", None) or "active").strip().casefold()
+    managed_existing_for_lifecycle_edit = False
+    if lifecycle_status != "active":
+        try:
+            managed_existing_for_lifecycle_edit = await _event_has_existing_managed_vk_post(ev)
+        except Exception:
+            managed_existing_for_lifecycle_edit = _event_has_managed_vk_post(ev)
+        if not managed_existing_for_lifecycle_edit:
+            logging.info(
+                "job_sync_vk_source_post: skip non-active event without existing managed VK post event_id=%s status=%s",
+                event_id,
+                lifecycle_status,
+            )
+            return False
+    if _event_has_ended_before_today(ev) and not managed_existing_for_lifecycle_edit:
         logging.info(
             "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",
             event_id,
@@ -20765,7 +20801,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             getattr(ev, "end_date", None),
         )
         return False
-    if _event_start_has_passed_for_publication(ev):
+    if _event_start_has_passed_for_publication(ev) and not managed_existing_for_lifecycle_edit:
         logging.info(
             "job_sync_vk_source_post: skip already-started event_id=%s date=%s time=%s",
             event_id,
@@ -20804,6 +20840,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 str(getattr(ev, "location_name", "") or ""),
                 str(getattr(ev, "location_address", "") or ""),
                 str(getattr(ev, "city", "") or ""),
+                str(getattr(ev, "lifecycle_status", "") or ""),
                 str(getattr(ev, "ticket_link", "") or ""),
                 json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
                 text_for_vk,
@@ -20887,10 +20924,22 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
         ev = await session.get(Event, event_id)
     if not ev:
         return False
-    if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
+    lifecycle_status = (getattr(ev, "lifecycle_status", "active") or "active").strip().casefold()
+    existing_tg_event_post = bool(
+        (getattr(ev, "tg_event_post_id", None) is not None)
+        or (getattr(ev, "tg_event_post_url", None) or "").strip()
+    )
+    if getattr(ev, "silent", False):
         logging.info("job_publish_tg_event_post: skip hidden event_id=%s", event_id)
         return False
-    if _event_has_ended_before_today(ev):
+    if lifecycle_status != "active" and not existing_tg_event_post:
+        logging.info(
+            "job_publish_tg_event_post: skip non-active event without existing TG post event_id=%s status=%s",
+            event_id,
+            lifecycle_status,
+        )
+        return False
+    if _event_has_ended_before_today(ev) and not existing_tg_event_post:
         logging.info(
             "job_publish_tg_event_post: skip past event_id=%s date=%s end_date=%s",
             event_id,
@@ -20898,7 +20947,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             getattr(ev, "end_date", None),
         )
         return False
-    if _event_start_has_passed_for_publication(ev):
+    if _event_start_has_passed_for_publication(ev) and not existing_tg_event_post:
         logging.info(
             "job_publish_tg_event_post: skip already-started event_id=%s date=%s time=%s",
             event_id,

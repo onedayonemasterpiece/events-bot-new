@@ -61,6 +61,11 @@ sections:
   backlog:
     index: docs/backlog/README.md
     features:
+  event_email_notifications:
+    status: requirements
+    docs: docs/features/event-email-notifications/README.md
+    entrypoints:
+      - docs/features/event-email-notifications/README.md
       cherryflash: docs/backlog/features/cherryflash/README.md
       cherryflash_design: docs/backlog/features/cherryflash/design-brief.md
       cherryflash_reference: docs/reference/09bc959616262101b9cd310629f08b84.jpg

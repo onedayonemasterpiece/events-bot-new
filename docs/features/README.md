@@ -36,6 +36,7 @@
 ## Черновики требований
 
 - `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
+- `docs/features/event-email-notifications/README.md` — требования к transactional email-уведомлениям по добавленным в календарь событиям через Yandex Cloud Postbox и YDB-статистику очереди.
 
 ## Как добавлять новую фичу
 

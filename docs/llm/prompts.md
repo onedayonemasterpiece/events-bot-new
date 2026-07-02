@@ -36,8 +36,15 @@ event_type       - one of: спектакль, выставка, концерт,
 emoji            - an optional emoji representing the event
 end_date         - end date for multi-day events or null
 search_digest    - search summary text (see guidelines below)
+lifecycle_status - one of: active, cancelled, postponed. Use active unless the source itself says this concrete event is cancelled/does not happen/postponed/rescheduled.
 When a range is provided, put the start date in `date` and the end date in `end_date`.
 Always put the emoji at the start of `title` so headings are easily scannable.
+
+**lifecycle_status rules (LLM-first; important):**
+- Decide lifecycle from the source semantics, not from keyword presence alone. A post may mention past cancellations or ticket refunds as background without cancelling the extracted event.
+- If the source itself is an attendee-facing notice that a concrete future event is cancelled / will not take place / tickets are being refunded, still extract the event anchors (title, date/time, venue when present) and set `lifecycle_status="cancelled"`. Do NOT return `[]` for such cancellation notices when the cancelled event can be identified.
+- If the source says the concrete event is postponed/rescheduled/put off and no new exact date is given, set `lifecycle_status="postponed"`; if a new exact date/time is given, extract the new anchors and set `lifecycle_status="active"` unless the post says the event is still postponed.
+- Do not put cancellation/reschedule into `ticket_status`; ticket status is only about ticket availability.
 
 **Money / ticket price rules (important):**
 - `ticket_price_min/max` must describe the **cost to attend** (tickets/entry/participation fee).
@@ -138,6 +145,7 @@ If an array of events is returned, `search_digest` must be present in every obje
   only the future attendable event with its explicit future anchor (date/venue/time/registration/ticket).
 
 **logistics update rule:**
+- Cancellation/reschedule notices are lifecycle updates, not ordinary logistics. If they identify a concrete future event, extract it with `lifecycle_status` as described above.
 - Operational updates for people already attending an event are not standalone new events: "важная информация для
   гостей/зрителей", changed entry route, navigation, parking, queue, cloakroom, seating, or similar instructions.
 - Return no events unless the same post is also a full new invitation with a concrete future date, title, venue,
