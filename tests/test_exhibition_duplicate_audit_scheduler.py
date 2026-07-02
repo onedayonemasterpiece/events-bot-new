@@ -105,6 +105,7 @@ async def test_exhibition_duplicate_audit_scheduler_records_success(tmp_path):
         assert metrics["high_confidence_duplicate_count"] == 0
         assert metrics["identity_gate_decision_count"] == 1
         assert metrics["identity_gate_veto_create_count"] == 1
+        assert "identity_gate_env_ready" in metrics
         details = json.loads(details_raw)
         assert details["scheduler_run_id"] == "audit-ok"
         assert details["identity_gate"]["decision_count"] == 1

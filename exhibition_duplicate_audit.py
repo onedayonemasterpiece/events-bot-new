@@ -70,6 +70,12 @@ def _metrics_from_payload(
             "identity_gate_matched_event_count",
         ):
             metrics[key] = int(rollout_payload.get(key) or 0)
+        env_readiness = rollout_payload.get("env_readiness") or {}
+        metrics["identity_gate_env_ready"] = 1 if bool(env_readiness.get("ready")) else 0
+        for env_key, env_value in env_readiness.items():
+            if env_key == "smart_update_identity_google_key_env":
+                continue
+            metrics[f"identity_gate_env_{env_key}"] = 1 if bool(env_value) else 0
     return metrics
 
 
@@ -103,6 +109,7 @@ def _details_from_payload(
             "reasons": rollout_payload.get("identity_gate_reasons"),
             "recent_fail_safes": rollout_payload.get("recent_fail_safes"),
             "recent_vector_errors": rollout_payload.get("recent_vector_errors"),
+            "env_readiness": rollout_payload.get("env_readiness"),
         }
     return details
 

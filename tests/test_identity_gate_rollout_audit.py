@@ -137,3 +137,28 @@ def test_rollout_audit_cli_prometheus(tmp_path):
     assert result.returncode == 0
     assert 'events_identity_gate_veto_create_count_since_total{window_days="14"} 1' in result.stdout
     assert 'events_identity_gate_final_probe_veto_count_since_total{window_days="14"} 1' in result.stdout
+
+
+def test_rollout_audit_reports_env_readiness_without_secret_values(tmp_path, monkeypatch):
+    db_path = tmp_path / "events.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_GATE", "enforce")
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_VECTOR_RECALL", "1")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY", "secret-service-role")
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV", "GOOGLE_API_KEY_TEST")
+    monkeypatch.setenv("GOOGLE_API_KEY_TEST", "secret-google")
+    monkeypatch.setenv("ENABLE_EXHIBITION_DUPLICATE_AUDIT", "1")
+    monkeypatch.setenv("EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS", "14")
+
+    payload = build_rollout_payload(db_path, current=date(2026, 7, 2), since_days=14)
+    rendered = _rollout.prometheus(payload)
+
+    assert payload["env_readiness"]["ready"] is True
+    assert payload["env_readiness"]["smart_update_identity_google_key_env"] == "GOOGLE_API_KEY_TEST"
+    assert "secret-service-role" not in json.dumps(payload)
+    assert "secret-google" not in json.dumps(payload)
+    assert 'events_identity_gate_env_ready{check="ready"} 1' in rendered

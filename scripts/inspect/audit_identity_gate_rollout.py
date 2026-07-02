@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from dataclasses import dataclass, asdict
@@ -32,6 +33,48 @@ class IdentityGateDecision:
     decided_by: str | None
     decision_payload: dict[str, Any]
     created_at: str | None
+
+
+def _env_enabled(raw: str | None, *, default: bool = False) -> bool:
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def identity_gate_env_readiness() -> dict[str, Any]:
+    google_key_env = (os.getenv("SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY4").strip() or "GOOGLE_API_KEY4"
+    service_role_present = bool(
+        (os.getenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+        or (os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY") or "").strip()
+    )
+    since_days_raw = (os.getenv("EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS") or "14").strip()
+    try:
+        since_days_value = int(since_days_raw)
+    except ValueError:
+        since_days_value = 0
+    readiness = {
+        "smart_update_identity_gate_enforce": (os.getenv("SMART_UPDATE_IDENTITY_GATE") or "").strip().lower() == "enforce",
+        "smart_update_identity_vector_recall_enabled": _env_enabled(os.getenv("SMART_UPDATE_IDENTITY_VECTOR_RECALL"), default=True),
+        "personalization_supabase_url_present": bool((os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip()),
+        "personalization_supabase_service_role_present": service_role_present,
+        "smart_update_identity_google_key_env": google_key_env,
+        "smart_update_identity_google_key_present": bool((os.getenv(google_key_env) or "").strip()),
+        "exhibition_duplicate_audit_enabled": _env_enabled(os.getenv("ENABLE_EXHIBITION_DUPLICATE_AUDIT"), default=False),
+        "exhibition_duplicate_audit_since_days_14": since_days_value == 14,
+    }
+    readiness["ready"] = all(
+        bool(readiness[key])
+        for key in (
+            "smart_update_identity_gate_enforce",
+            "smart_update_identity_vector_recall_enabled",
+            "personalization_supabase_url_present",
+            "personalization_supabase_service_role_present",
+            "smart_update_identity_google_key_present",
+            "exhibition_duplicate_audit_enabled",
+            "exhibition_duplicate_audit_since_days_14",
+        )
+    )
+    return readiness
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -195,6 +238,7 @@ def build_rollout_payload(
         "recent_vetoes": [asdict(row) for row in veto_rows[-20:]],
         "recent_fail_safes": [asdict(row) for row in fail_safe_rows[-20:]],
         "recent_vector_errors": [asdict(row) for row in vector_error_rows[-20:]],
+        "env_readiness": identity_gate_env_readiness(),
     }
 
 
@@ -214,6 +258,11 @@ def prometheus(payload: dict[str, Any]) -> str:
         f'events_identity_gate_{key.removeprefix("identity_gate_")}_since_total{{window_days="{since_days}"}} {int(payload[key])}'
         for key in metric_keys
     ]
+    env_readiness = payload.get("env_readiness") or {}
+    for key, value in sorted(env_readiness.items()):
+        if key == "smart_update_identity_google_key_env":
+            continue
+        lines.append(f'events_identity_gate_env_ready{{check="{key}"}} {1 if bool(value) else 0}')
     for mode, count in sorted((payload.get("identity_gate_modes") or {}).items()):
         lines.append(f'events_identity_gate_decisions_by_mode_since_total{{mode="{mode}",window_days="{since_days}"}} {int(count)}')
     for reason, count in sorted((payload.get("identity_gate_reasons") or {}).items()):

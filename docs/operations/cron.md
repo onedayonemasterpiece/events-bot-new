@@ -201,7 +201,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL` / `EXHIBITION_DUPLICATE_AUDIT_TZ` – audit schedule time in local time zone (default `07:45 Europe/Kaliningrad`).
 - `EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS` – acceptance/reporting window for the Prometheus/ops metrics (default `14`); with `event.added_at` available, the `*_since_total` metrics include duplicate pairs where either row was added inside the window.
 - `EXHIBITION_DUPLICATE_AUDIT_RAISE_ON_DUPLICATES` – when enabled (default), high-confidence pairs finish the ops run as `failed` and raise a scheduler job error.
-- `scripts/inspect/audit_identity_gate_rollout.py` – manual/read-only rollout report for `event_identity_decision_log`; Prometheus output includes `events_identity_gate_*_since_total` counters for decisions, vetoes, fail-safes, vector errors, final duplicate-probe vetoes, modes and reasons.
+- `scripts/inspect/audit_identity_gate_rollout.py` – manual/read-only rollout report for `event_identity_decision_log`; Prometheus output includes `events_identity_gate_*_since_total` counters for decisions, vetoes, fail-safes, vector errors, final duplicate-probe vetoes, modes/reasons, plus `events_identity_gate_env_ready{check=...}` booleans for enforce/vector/Supabase/Google/audit env readiness without printing secret values.
 - `ENABLE_GENERAL_STATS` – enable scheduled `/general_stats` report.
 - `GENERAL_STATS_TIME_LOCAL` / `GENERAL_STATS_TZ` – `/general_stats` schedule time in local time zone.
 - `ENABLE_TELEGRAPH_CACHE_SANITIZER` – enable scheduled Telegraph cache sanitizer.

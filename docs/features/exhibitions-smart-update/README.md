@@ -103,6 +103,7 @@ Scheduled runs are read-only, write `ops_run(kind='exhibition_duplicate_audit')`
 alert the superadmin/admin chat on high-confidence pairs, and by default raise a
 scheduler job error after recording `status='failed'`.
  The scheduled audit also embeds Smart Update identity-gate rollout counters from
-`event_identity_decision_log` (decision/veto/fail-safe/vector-error counts) into
-`ops_run.metrics_json` and `details_json.identity_gate`, so the 14-day evidence
-can show both public duplicate absence and gate/vector health.
+`event_identity_decision_log` (decision/veto/fail-safe/vector-error counts) and
+secret-safe env-readiness booleans into `ops_run.metrics_json` and
+`details_json.identity_gate`, so the 14-day evidence can show both public
+duplicate absence and gate/vector health.
