@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -927,6 +928,77 @@ async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
     assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:123")) < payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:static_catalog_group"))
     assert any(item["external_id"] == "tg:anons39" for item in payload["surfaces"][:14])
     assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:old_seed")) > 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_skips_not_due_scanned_surfaces(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _runtime_env_from_config
+
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="linked_discussion",
+            url="https://t.me/c/111",
+            external_id="tg:111",
+            status="candidate",
+            source="linked_discussion",
+            last_scan_at=now,
+            next_scan_after=now + timedelta(days=1),
+            reach_json={"basis": "telegram_entity"},
+            risk_json={"_telegram_access": {"id": "111", "access_hash": "222"}},
+        ))
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="linked_discussion",
+            url="https://t.me/c/333",
+            external_id="tg:333",
+            status="candidate",
+            source="linked_discussion",
+            reach_json={"basis": "telegram_linked_discussion"},
+            risk_json={"_telegram_access": {"id": "333", "access_hash": "444"}},
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=2), payload)
+    tg_seeds = json.loads(env["ACQ_TG_SEEDS_JSON"])
+
+    assert "https://t.me/c/333" in tg_seeds
+    assert "https://t.me/c/111" not in tg_seeds
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_demotes_legacy_auto_approved_vk(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _runtime_env_from_config
+
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="vk",
+            surface_type="community",
+            url="https://vk.com/club123",
+            handle="club123",
+            external_id="vk:club123",
+            status="approved",
+            source="allowlist",
+            last_scan_at=now,
+            next_scan_after=now + timedelta(days=1),
+            reach_json={"basis": "seed_only"},
+            risk_json={"reason": "not scanned yet"},
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=1), payload)
+
+    assert "https://vk.com/club123" in json.loads(env["ACQ_VK_SEEDS_JSON"])
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "vk:club123"))).scalar_one()
+    assert surface.status == "candidate"
+    assert surface.last_scan_at is None
+    assert surface.next_scan_after is None
+    assert "Legacy auto-approved" in surface.review_note
 
 
 @pytest.mark.asyncio

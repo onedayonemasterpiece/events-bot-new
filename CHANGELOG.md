@@ -26,6 +26,7 @@
 - Subscriber Acquisition import now preserves existing linked-discussion metadata and private Telegram access data when a later Kaggle payload contains only a seed-placeholder row for the same surface, preventing follow-up runs from discarding the previous resolver result.
 - Subscriber Acquisition Kaggle runtime now resolves stored numeric `t.me/c/<id>` linked discussions through the injected Telethon `InputPeerChannel` class instead of a missing global import, and seed-only output rows apply stored linked-discussion metadata for clearer diagnostics.
 - Subscriber Acquisition VK discovery now marks scanned communities as `comments_available`, `rejected_no_comments`, or `rejected_inaccessible` based on wall-comment/discussion-board evidence instead of treating technical allowlist seeds as human-approved reply surfaces.
+- Subscriber Acquisition seed collection now skips surfaces whose `next_scan_after` is still in the future and demotes legacy auto-approved VK discovery seeds back to `candidate`, preventing old prototype rows from repeatedly consuming run budget.
 - Subscriber Acquisition Discovery now has an optional Yandex Managed Service
   for YDB serverless stats sink for run/surface/opportunity state, plus
   Telega.in Kaliningrad regional Telegram seeds for broader frontier discovery.

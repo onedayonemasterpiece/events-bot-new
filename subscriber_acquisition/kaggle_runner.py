@@ -248,9 +248,33 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 handle = tg_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold()
                 if handle:
                     terminal_tg_handles.add(handle)
+        now = datetime.now(timezone.utc)
+
+        def _is_due_for_runtime_seed(row: AcqSurface) -> bool:
+            next_scan = row.next_scan_after
+            if next_scan is None:
+                return True
+            if next_scan.tzinfo is None:
+                next_scan = next_scan.replace(tzinfo=timezone.utc)
+            return next_scan <= now
+
+        def _is_legacy_auto_approved_vk(row: AcqSurface) -> bool:
+            if str(row.platform or "").strip().lower() != "vk":
+                return False
+            status = str(row.status or "").strip().lower()
+            source = str(row.source or "").strip().lower()
+            risk = row.risk_json if isinstance(row.risk_json, dict) else {}
+            reply_policy = str((risk or {}).get("reply_policy") or "").strip().lower()
+            return (
+                status == "approved"
+                and source in {"", "seed", "allowlist", "vk_source", "smartik_kaliningrad_catalog", "vk_social_search"}
+                and reply_policy not in {"confirmed_can_reply_after_human_review", "human_approved"}
+            )
+
         rows = [
             row for row in all_rows
             if str(row.status or "").strip().lower() in {"seed", "candidate", "approved", "needs_comment_resolve"}
+            and (_is_due_for_runtime_seed(row) or _is_legacy_auto_approved_vk(row))
         ][:250]
 
         def _surface_priority(row: AcqSurface) -> tuple[int, int, int, float, int]:
@@ -303,6 +327,19 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 session.add(row)
                 continue
             if platform == "vk":
+                status = str(row.status or "").strip().lower()
+                source = str(row.source or "").strip().lower()
+                reach = row.reach_json if isinstance(row.reach_json, dict) else {}
+                risk = row.risk_json if isinstance(row.risk_json, dict) else {}
+                basis = str((reach or {}).get("basis") or "").strip().lower()
+                reply_policy = str((risk or {}).get("reply_policy") or "").strip().lower()
+                if _is_legacy_auto_approved_vk(row):
+                    row.status = "candidate"
+                    if basis in {"", "seed_only", "vk_wall", "vk_source_seed", "smartik_catalog_seed", "vk_social_search_seed"}:
+                        row.last_scan_at = None
+                        row.next_scan_after = None
+                    row.review_note = "Legacy auto-approved VK discovery seed demoted to candidate; scan result must prove comment availability before review."
+                    session.add(row)
                 vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold()
                 if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE or vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE:
                     if vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE:
