@@ -303,6 +303,23 @@ def test_shadow_payload_preserves_scanned_vk_surface_metadata(monkeypatch):
     assert by_external["vk:vagonka39"]["reach"]["basis"] == "vk_wall"
 
 
+def test_shadow_payload_exposes_opportunity_screening_counters(monkeypatch):
+    runtime = load_runtime()
+    for key in runtime.OPPORTUNITY_SCREENING_STATS:
+        runtime.OPPORTUNITY_SCREENING_STATS[key] = 0
+
+    surface = runtime._seed_surface("https://vk.com/club123", platform="vk")
+    comment = {"id": 7, "date": 1782900000, "text": "Подскажите, куда сходить на выходных?"}
+
+    assert runtime.build_vk_opportunity(surface, owner_id=-123, post_id=55, comment=comment, default_target_url="https://t.me/kenigevents")
+    payload = runtime.build_shadow_payload(scanned_surfaces=[surface], scanned_opportunities=[])
+
+    screening = payload["stats"]["opportunity_screening"]
+    assert screening["texts_screened"] == 1
+    assert screening["matched_event_question"] == 1
+    assert screening["no_intent"] == 0
+
+
 def test_build_vk_opportunity_is_read_only_review_payload():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://vk.com/test_public", platform="vk")

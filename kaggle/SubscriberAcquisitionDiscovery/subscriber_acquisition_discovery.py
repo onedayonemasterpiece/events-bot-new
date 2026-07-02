@@ -197,6 +197,17 @@ LLM_GATE_STATS: dict[str, int] = {
     "blocked_rate_limit": 0,
     "estimated_input_tokens": 0,
 }
+OPPORTUNITY_SCREENING_STATS: dict[str, int] = {
+    "texts_screened": 0,
+    "empty_text": 0,
+    "venue_policy_rejected": 0,
+    "matched_trip_route": 0,
+    "matched_partner": 0,
+    "matched_badge_filter": 0,
+    "matched_site_search": 0,
+    "matched_event_question": 0,
+    "no_intent": 0,
+}
 VK_SCAN_STATS: dict[str, int] = {
     "surfaces_attempted": 0,
     "wall_posts_seen": 0,
@@ -702,13 +713,17 @@ def _is_venue_policy_local_question(compact: str) -> bool:
 
 
 def _classify_acq_intent(text: str) -> dict[str, Any] | None:
+    OPPORTUNITY_SCREENING_STATS["texts_screened"] += 1
     compact = " ".join(str(text or "").split())
     if not compact:
+        OPPORTUNITY_SCREENING_STATS["empty_text"] += 1
         return None
     if _is_venue_policy_local_question(compact):
+        OPPORTUNITY_SCREENING_STATS["venue_policy_rejected"] += 1
         return None
     base = _static_site_base_url()
     if _TRIP_ROUTE_INTENT_RE.search(compact):
+        OPPORTUNITY_SCREENING_STATS["matched_trip_route"] += 1
         return {
             "matched_intent": "trip_route_recommendation_context",
             "topic_cluster": "trip_route_recommendation",
@@ -720,6 +735,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "relevance": 0.64,
         }
     if _PARTNER_INTENT_RE.search(compact):
+        OPPORTUNITY_SCREENING_STATS["matched_partner"] += 1
         return {
             "matched_intent": "organizer_submission_or_partnership",
             "topic_cluster": "organizer_partnership",
@@ -730,6 +746,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "relevance": 0.62,
         }
     if _BADGE_FILTER_INTENT_RE.search(compact) and _REQUEST_HINT_RE.search(compact):
+        OPPORTUNITY_SCREENING_STATS["matched_badge_filter"] += 1
         return {
             "matched_intent": "event_badge_or_filter_request",
             "topic_cluster": "event_badges_filters",
@@ -740,6 +757,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "relevance": 0.58,
         }
     if _SITE_SEARCH_INTENT_RE.search(compact):
+        OPPORTUNITY_SCREENING_STATS["matched_site_search"] += 1
         url = os.getenv("ACQ_SEARCH_PAGE_URL") or f"{base}/poisk/"
         label = "Поиск событий KenigEvents"
         if re.search(r"(?i)\bвыставк", compact):
@@ -758,6 +776,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "relevance": 0.6,
         }
     if _EVENT_INTENT_RE.search(compact):
+        OPPORTUNITY_SCREENING_STATS["matched_event_question"] += 1
         return {
             "matched_intent": "event_recommendation_question",
             "topic_cluster": "local_events",
@@ -767,6 +786,7 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
             "reason": "contextual local event recommendation question",
             "relevance": 0.55,
         }
+    OPPORTUNITY_SCREENING_STATS["no_intent"] += 1
     return None
 
 
@@ -2009,6 +2029,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "llm_gate_model": _acq_llm_model(),
             "llm_gate": dict(LLM_GATE_STATS),
             "llm_gate_limits": _llm_limit_snapshot(),
+            "opportunity_screening": dict(OPPORTUNITY_SCREENING_STATS),
             "tg_scan": dict(TG_SCAN_STATS),
             "vk_scan": dict(VK_SCAN_STATS),
             "external_sends": 0,

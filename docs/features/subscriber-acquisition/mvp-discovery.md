@@ -31,6 +31,7 @@ contract:
 - the Kaggle runtime resolves numeric linked discussions with stored access metadata via Telethon `InputPeerChannel`, and seed-only diagnostic rows apply the stored `linked_discussion` metadata instead of falling back to `unknown_public`;
 - VK allowlist means “safe to scan read-only”, not “human-approved to reply”: scanned VK communities are marked `comments_available` when wall comments or discussion-board comments are readable, `rejected_no_comments` when the bounded scan finds no replyable comments/boards, and `rejected_inaccessible` when the wall and boards are not readable with configured tokens;
 - seed collection excludes not-yet-due scanned surfaces (`next_scan_after` in the future) from the next Kaggle payload and demotes legacy auto-approved VK prototype rows back to `candidate` unless they carry explicit human-review reply policy, so small per-run budgets keep moving to new/pending surfaces;
+- each run reports `opportunity_screening` counters (`texts_screened`, matched trip/event/search/partner/badge buckets, venue-policy rejects, no-intent texts) alongside `llm_gate` counters so a zero-candidate run is explainable without weakening the candidate gate;
 - seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
 - optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
 - Telegram channels without accessible linked discussion/comments are marked
