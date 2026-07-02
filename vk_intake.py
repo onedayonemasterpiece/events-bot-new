@@ -143,6 +143,42 @@ def _truncate_prompt_block(text: str, limit: int) -> str:
     return f"{text[:head].rstrip()}\n...\n{text[-tail:].lstrip()}".strip()
 
 
+_VK_PARSE_POSTER_LOGISTICS_RE = re.compile(
+    r"(?:"
+    r"\b[0-2]?\d[:.][0-5]\d\b|"
+    r"\b[0-3]?\d\s*['’`.\-/]?\s*(?:январ[ьяе]?|феврал[ьяе]?|март[ае]?|апрел[ьяе]?|ма[йяе]|июн[ьяе]?|июл[ьяе]?|август[ае]?|сентябр[ьяе]?|октябр[ьяе]?|ноябр[ьяе]?|декабр[ьяе]?)\b|"
+    r"\b(?:январ[ьяе]?|феврал[ьяе]?|март[ае]?|апрел[ьяе]?|ма[йяе]|июн[ьяе]?|июл[ьяе]?|август[ае]?|сентябр[ьяе]?|октябр[ьяе]?|ноябр[ьяе]?|декабр[ьяе]?)\b|"
+    r"\bг\.\s*|"
+    r"\b(?:г\.|город|адрес|ул\.?|улица|проспект|пр-?кт|пр\.|наб\.?|набережн\w*|площад\w*|сквер|парк|дк|дом культуры|центр|театр|музей|библиотек\w*|галере\w*|сцена|зал|клуб|дворец)\b|"
+    r"\b(?:вход|свободн\w*|бесплатн\w*|0\+|6\+|12\+|16\+|18\+)\b"
+    r")",
+    re.I | re.U,
+)
+
+
+def _extract_vk_parse_poster_logistics_block(text: str, limit: int) -> str:
+    """Return compact poster OCR logistics lines for long VK posts.
+
+    Long source captions can already fill the LLM context, but the poster may be
+    the only place with start time or venue.  Keep only lines that look like
+    source-grounded logistics evidence; semantic event decisions stay with the
+    downstream LLM parser.
+    """
+
+    block = _normalize_prompt_ocr_block(text)
+    if not block:
+        return ""
+    selected: list[str] = []
+    for line in block.splitlines():
+        norm = unicodedata.normalize("NFKC", line).casefold().replace("ё", "е")
+        if _VK_PARSE_POSTER_LOGISTICS_RE.search(norm):
+            selected.append(line)
+    if not selected:
+        return ""
+    compact = "\n".join(selected).strip()
+    return _truncate_prompt_block(compact, limit).strip()
+
+
 _LLM_FIELD_PLACEHOLDER_LITERALS: dict[str, frozenset[str]] = {
     "location_name": frozenset({"location_name", "venue", "place", "место", "площадка"}),
     "location_address": frozenset({"location_address", "address", "адрес"}),
@@ -179,17 +215,36 @@ def _budget_vk_parse_poster_texts(post_text: str, poster_texts: Sequence[str]) -
 
     main_text_len = len((post_text or "").strip())
     skip_main_text_chars = max(0, _read_int_env("VK_PARSE_POSTER_TEXT_SKIP_MAIN_TEXT_CHARS", 1600))
+    max_blocks = max(1, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCKS", 3))
+    max_block_chars = max(80, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS", 500))
+    max_total_chars = max(max_block_chars, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_TOTAL_CHARS", 1200))
     if skip_main_text_chars and main_text_len >= skip_main_text_chars:
+        selected: list[str] = []
+        remaining = max_total_chars
+        for block in cleaned:
+            if len(selected) >= max_blocks or remaining <= 0:
+                break
+            limit = min(max_block_chars, remaining)
+            trimmed = _extract_vk_parse_poster_logistics_block(block, limit)
+            if not trimmed:
+                continue
+            selected.append(trimmed)
+            remaining -= len(trimmed)
+        if selected:
+            logger.info(
+                "vk.parse budget: poster OCR logistics kept for long post text_len=%s posters=%s blocks=%s chars=%s",
+                main_text_len,
+                len(cleaned),
+                len(selected),
+                sum(len(block) for block in selected),
+            )
+            return selected
         logger.info(
-            "vk.parse budget: skip poster OCR for long post text_len=%s posters=%s",
+            "vk.parse budget: skip poster OCR for long post text_len=%s posters=%s logistics_blocks=0",
             main_text_len,
             len(cleaned),
         )
         return []
-
-    max_blocks = max(1, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCKS", 3))
-    max_block_chars = max(80, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS", 500))
-    max_total_chars = max(max_block_chars, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_TOTAL_CHARS", 1200))
 
     selected: list[str] = []
     remaining = max_total_chars

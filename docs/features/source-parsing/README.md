@@ -27,6 +27,7 @@
 - Downstream Smart Update дублирует это как safety-net (`skipped_giveaway`), чтобы prize-only promo пост не проходил даже при неудачном upstream parse.
 - Для image-heavy intro posts (`листайте афиши`, `смотрите карточки`, weekly schedule wrapper без конкретных событий в тексте) parse prompt теперь явно разрешает вернуть `[]` как штатный результат, а не пытаться “додумать” события из обёртки.
 - Gemma parse path теперь жёстче требует чистый JSON (`[]` или объект с `events`) и, если Gemma после repair всё равно отдаёт битый JSON, переключается на fallback `4o` вместо немедленного падения.
+- VK poster OCR остаётся source evidence даже при длинных caption'ах: если полный OCR не помещается в token budget, parse boundary обязан сохранить компактные logistics lines (дата/время/город/площадка/адрес/вход) вместо полного drop. Это предотвращает потерю времени/места, когда caption содержит длинный новостной текст, а точные `HH:MM` или venue находятся только на афише.
 - Для VK multi-poster / schedule posts intake дополнительно схлопывает exact duplicate child drafts внутри одного parsed batch только при совпадении `date + explicit time + venue + normalized title`; это узкий safety-net против двойного извлечения одной и той же карточки из карусели/афиш.
 - Для слабых VK/TG кандидатов-рубрик (`Дайджест`, `Афиша`, `куда сходить`,
   `посмотри/приходи` вместо площадки) Smart Update теперь делает отдельную
@@ -38,6 +39,11 @@
   разъехавшимся extracted venue, Smart Update расширяет shortlist перед
   матчингом, чтобы LLM увидела существующую карточку и решила merge/create.
   Это recall-only guardrail: он не схлопывает такие события без LLM.
+- Reference normalization должна быть fail-closed для generic municipal venues:
+  `Городской парк`, `зал`, `центр`, `культура/искусство` и похожие broad tokens
+  не являются достаточным fuzzy evidence для привязки к известной площадке в
+  другом городе. Curated aliases/exact name/address evidence всё ещё могут
+  canonicalize venue, но одиночный generic token не должен менять city/venue.
 
 ### Каноничность сайта (/parse) при конфликтах
 

@@ -1,0 +1,43 @@
+{
+  "incident_id": "INC-2026-07-02-kldevents-1778",
+  "reported_public_tg_url": "https://t.me/kldevents/1778",
+  "source_url": "https://vk.com/wall-169817694_32270",
+  "source_vk_group_id": 169817694,
+  "source_vk_post_id": 32270,
+  "prod_vk_inbox_id": 9581,
+  "affected_event_ids": [
+    6608,
+    6609
+  ],
+  "source_text_excerpt": "Когда: 5 и 19 июля. Где: Пионерский, городской парк. Вход: свободный. Возраст: 0+.",
+  "poster_ocr_text": "УЛИЧНЫЕ МЕЛОДИИ\nг. ПИОНЕРСКИЙ\nГОРОДСКОЙ ПАРК\n05'ИЮЛЯ / 19'ИЮЛЯ\n14:00\nВХОД СВОБОДНЫЙ",
+  "actual_bad_prod_fields": {
+    "location_name": "Зеленоградский городской центр культуры и искусства",
+    "location_address": "Курортный проспект 11",
+    "city": "Зеленоградск",
+    "time": "",
+    "date_is_inferred": true,
+    "date_provenance": "ungrounded"
+  },
+  "expected_events": [
+    {
+      "date": "2026-07-05",
+      "time": "14:00",
+      "location_name": "Городской парк",
+      "location_address": null,
+      "city": "Пионерский"
+    },
+    {
+      "date": "2026-07-19",
+      "time": "14:00",
+      "location_name": "Городской парк",
+      "location_address": null,
+      "city": "Пионерский"
+    }
+  ],
+  "regression_contract": [
+    "VK parse must preserve compact poster OCR logistics lines for long source captions when OCR contains date/time/location evidence.",
+    "location_reference.normalise_event_location_from_reference and Smart Update canonicalization must not fuzzy-bind generic 'Городской парк, Пионерский' to a known venue in another city.",
+    "Explicit curated aliases such as 'Янтарь-холл' must still canonicalize to their known venue."
+  ]
+}

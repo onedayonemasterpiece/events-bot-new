@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- **Incident / kldevents/1778 VK OCR location-time regression (INC-2026-07-02)**:
+  VK parsing now keeps compact poster OCR logistics under long-caption token
+  budgets, and Smart Update location reference matching no longer fuzzy-binds
+  generic `Городской парк, Пионерский` to the Зеленоградск culture center.
 - Smart Update now has explicit date provenance helpers and a conservative date-update policy, plus poster merge dedup by poster hash, Supabase path, phash, and exact URL fallback to avoid duplicate stored posters.
 - Added an exporter-side static-site public projection gate so preview/control
   event ids cannot publish non-canonical, merged, review/quarantine/rejected,

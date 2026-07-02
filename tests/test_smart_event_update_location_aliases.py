@@ -102,6 +102,37 @@ def test_generic_vorota_is_not_forced_into_zakheim_bucket() -> None:
     assert su._normalize_location("Ворота") == "ворота"
 
 
+def test_generic_city_park_not_fuzzy_bound_via_location_reference() -> None:
+    """Regression for INC-2026-07-02 / INC-2026-06-26.
+
+    Smart Update uses location_reference.py directly.  A generic municipal park
+    in Pionersky must remain source-grounded and must not bind to the known
+    Зеленоградск culture-center venue through the shared token ``городской``.
+    """
+
+    payload = {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+    assert match_known_venue("Городской парк", city="Пионерский") is None
+    assert (
+        su._canonicalize_location_fields(
+            location_name="Городской парк",
+            location_address=None,
+            city="Пионерский",
+            source_url="https://vk.com/wall-169817694_32270",
+        )
+        == ("Городской парк", None, "Пионерский")
+    )
+
+
 def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     camember = match_known_venue('сырный магазин "Камамбер"', city="Зеленоградск")
     assert camember is not None
