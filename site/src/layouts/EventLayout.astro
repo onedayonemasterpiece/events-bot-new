@@ -338,13 +338,20 @@ const FOOTER_SOCIAL_LINKS = [
       .authorized-search__results { margin-top: 1rem; display: grid; gap: 1rem; }
       .authorized-search__skeletons { margin-top: 1rem; display: grid; gap: 0.85rem; }
       .authorized-search__skeletons[hidden] { display: none; }
-      .authorized-search__skeleton-card { min-height: 320px; border-radius: 24px; border: 1px solid rgba(121,48,20,0.11); background: linear-gradient(110deg, rgba(255,253,248,0.82) 8%, rgba(255,244,230,0.92) 18%, rgba(255,253,248,0.82) 33%); background-size: 200% 100%; animation: search-skeleton-shimmer 1.35s ease-in-out infinite; box-shadow: 0 16px 30px rgba(72,45,25,0.08); }
+      .authorized-search__skeleton-card { min-height: 320px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.12); background: linear-gradient(110deg, #17191c 8%, #30343a 18%, #17191c 33%); background-size: 200% 100%; animation: search-skeleton-shimmer 1.35s ease-in-out infinite; box-shadow: 0 18px 36px rgba(10,12,16,0.28), inset 0 1px 0 rgba(255,255,255,0.08); }
       @keyframes search-skeleton-shimmer { to { background-position-x: -200%; } }
       .authorized-search__feedback { margin-top: 1rem; padding: 0.85rem; border-radius: 20px; border: 1px solid rgba(121,48,20,0.13); background: #fff7ea; display: grid; gap: 0.55rem; }
       .authorized-search__feedback-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-      .authorized-search__feedback button { min-height: 42px; border-radius: 999px; border: 1px solid rgba(121,48,20,0.16); background: #fffdf8; color: var(--primary-strong); padding: 0.45rem 0.75rem; font: inherit; font-weight: 880; cursor: pointer; }
+      .authorized-search__feedback button { min-height: 42px; border-radius: 999px; border: 1px solid rgba(121,48,20,0.16); background: #fffdf8; color: var(--primary-strong); padding: 0.45rem 0.75rem; font: inherit; font-weight: 880; cursor: pointer; transition: transform 150ms ease, background 150ms ease, border-color 150ms ease; }
+      .authorized-search__feedback button.is-selected,
+      .authorized-search__feedback button:disabled { background: #2b2f35; border-color: rgba(43,47,53,0.4); color: #fffaf1; cursor: default; }
+      .authorized-search__feedback-state { margin: 0; color: #5c5048; font-size: 0.92rem; }
+      .authorized-search__feedback.is-saving { border-color: rgba(43,47,53,0.22); background: #fff3dc; }
+      .authorized-search__feedback.is-saved { border-color: rgba(15,118,110,0.22); background: #eefaf4; }
+      .authorized-search__feedback.is-local { border-color: rgba(121,48,20,0.22); background: #fff6e5; }
       .authorized-search__fallback-title { margin: 1.1rem 0 0.2rem; color: var(--primary-strong); }
-      .authorized-search__more { margin-top: 0.85rem; }
+      .authorized-search__more { margin-top: 0.85rem; transition: opacity 160ms ease, transform 160ms ease; }
+      .authorized-search__more.is-loading { opacity: 0.82; cursor: progress; transform: translateY(1px); }
       .eyebrow { color: var(--primary-strong); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.5rem; }
       h1, h2, h3 { line-height: 1.08; letter-spacing: -0.035em; margin: 0; }
       h1 { font-size: clamp(1.8rem, 6vw, 3.7rem); max-width: 16ch; overflow-wrap: anywhere; }

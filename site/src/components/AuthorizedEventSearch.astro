@@ -87,6 +87,7 @@ const HeadingTag = headingLevel;
     const results = root.querySelector('[data-search-results]');
     const skeletons = root.querySelector('[data-search-skeletons]');
     const more = root.querySelector('[data-search-more]');
+    const moreDefaultLabel = more?.textContent || 'Показать ещё';
     let supabase = null;
     let currentQuery = '';
     let offset = 0;
@@ -349,15 +350,24 @@ const HeadingTag = headingLevel;
       root.classList.toggle('is-search-skeleton-loading', isLoading);
     }
 
-    function setSearchLoading(isLoading) {
+    function setSearchLoading(isLoading, options = {}) {
+      const { showSkeleton = true } = options;
       loading = isLoading;
-      setSkeletonLoading(isLoading);
+      setSkeletonLoading(Boolean(isLoading && showSkeleton));
       if (submit) {
         submit.disabled = isLoading;
         submit.classList.toggle('is-loading', isLoading);
         submit.setAttribute('aria-busy', isLoading ? 'true' : 'false');
       }
       if (input) input.readOnly = isLoading;
+    }
+
+    function setMoreLoading(isLoading) {
+      if (!more) return;
+      more.disabled = isLoading;
+      more.classList.toggle('is-loading', isLoading);
+      more.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+      more.textContent = isLoading ? 'Загружаю ещё…' : moreDefaultLabel;
     }
 
     function withTimeout(promise, ms, message) {
@@ -422,18 +432,22 @@ const HeadingTag = headingLevel;
       }
     }
 
-    async function sendSearchFeedback(query, verdict) {
-      const eventIds = lastResultEventIds.slice(0, 40);
-      enqueueLocalFeedback(query, verdict, eventIds);
+    async function sendSearchFeedback(query, verdict, options = {}) {
+      const eventIds = Array.isArray(options.eventIds) ? options.eventIds : lastResultEventIds.slice(0, 40);
+      if (options.enqueue !== false) enqueueLocalFeedback(query, verdict, eventIds);
       if (!supabase) return { ok: false, localOnly: true };
       try {
-        const { error } = await supabase.rpc('record_event_search_feedback_v1', {
-          p_query: query,
-          p_verdict: verdict,
-          p_result_event_ids: eventIds,
-          p_result_count: eventIds.length,
-          p_metadata: { surface: 'authorized_event_search', client_ts: new Date().toISOString() },
-        });
+        const { error } = await withTimeout(
+          supabase.rpc('record_event_search_feedback_v1', {
+            p_query: query,
+            p_verdict: verdict,
+            p_result_event_ids: eventIds,
+            p_result_count: eventIds.length,
+            p_metadata: { surface: 'authorized_event_search', client_ts: new Date().toISOString() },
+          }),
+          5000,
+          'feedback_timeout',
+        );
         if (error) return { ok: false, error };
         return { ok: true };
       } catch (error) {
@@ -448,14 +462,26 @@ const HeadingTag = headingLevel;
       wrap.className = 'authorized-search__feedback';
       wrap.innerHTML = `<strong>Похоже на то, что вы искали?</strong><div class="authorized-search__feedback-actions"><button type="button" data-search-feedback="matched">Совпало с ожиданиями</button><button type="button" data-search-feedback="missed">Не совпало</button></div><p class="muted-note">Хорошие запросы попадут в очередь поисковых тегов: после LLM-унификации для них будет создана статическая страница.</p>`;
       wrap.querySelectorAll('[data-search-feedback]').forEach((button) => {
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', () => {
+          if (wrap.dataset.feedbackState === 'saving' || wrap.dataset.feedbackState === 'saved') return;
           const verdict = button.dataset.searchFeedback || 'missed';
+          const verdictLabel = verdict === 'matched' ? 'результат совпал' : 'не совпало';
+          const eventIds = lastResultEventIds.slice(0, 40);
+          enqueueLocalFeedback(query, verdict, eventIds);
           wrap.classList.add('is-saving');
+          wrap.dataset.feedbackState = 'saving';
           wrap.querySelectorAll('button').forEach((item) => { item.disabled = true; });
-          const saved = await sendSearchFeedback(query, verdict);
-          wrap.innerHTML = saved.ok
-            ? '<strong>Спасибо. Запрос сохранён для анализа поисковых тегов.</strong><p class="muted-note">Если похожих оценок станет достаточно, появится общая статическая страница и тег поиска.</p>'
-            : '<strong>Спасибо. Запрос сохранён в браузере.</strong><p class="muted-note">Не удалось отправить на сервер сейчас; локальная очередь не блокирует поиск.</p>';
+          button.classList.add('is-selected');
+          wrap.innerHTML = `<strong>Выбрано: ${escapeHtml(verdictLabel)}.</strong><p class="authorized-search__feedback-state">Сохраняю на сервере… Если связь подвиснет, выбор уже записан в браузере и будет виден здесь.</p>`;
+          window.setTimeout(async () => {
+            const saved = await sendSearchFeedback(query, verdict, { eventIds, enqueue: false });
+            wrap.classList.remove('is-saving');
+            wrap.classList.add(saved.ok ? 'is-saved' : 'is-local');
+            wrap.dataset.feedbackState = saved.ok ? 'saved' : 'local';
+            wrap.innerHTML = saved.ok
+              ? '<strong>Готово: оценка сохранена.</strong><p class="muted-note">Спасибо. Это поможет собрать хорошие поисковые теги и улучшить выдачу.</p>'
+              : '<strong>Выбор сохранён в браузере.</strong><p class="muted-note">Сервер не подтвердил запись достаточно быстро; локальная очередь не блокирует поиск, а оценку можно догрузить позже.</p>';
+          }, 0);
         });
       });
       const cards = results.querySelectorAll('[data-event-card]');
@@ -614,15 +640,16 @@ const HeadingTag = headingLevel;
       }
       const query = validation.query;
       if (input) input.value = query;
-      setSearchLoading(true);
-      setSearchProgress(1, 'Запускаю поиск…');
+      setSearchLoading(true, { showSkeleton: !append });
+      if (append) setMoreLoading(true);
+      setSearchProgress(1, append ? 'Загружаю следующую пачку…' : 'Запускаю поиск…');
       const progressTimers = [
         window.setTimeout(() => { if (loading) setSearchProgress(28, 'Понимаю смысл запроса'); }, 500),
         window.setTimeout(() => { if (loading) setSearchProgress(55, 'Ищу события'); }, 1200),
         window.setTimeout(() => { if (loading) setSearchProgress(74, 'Проверяю, что подходит лучше'); }, 1800),
         window.setTimeout(() => { if (loading) setSearchProgress(92, 'Собираю карточки'); }, 3200),
       ];
-      if (more) more.hidden = true;
+      if (more && !append) more.hidden = true;
       try {
         if (!append || query !== currentQuery) {
           currentQuery = query;
@@ -700,6 +727,7 @@ const HeadingTag = headingLevel;
       } finally {
         for (const timer of progressTimers) window.clearTimeout(timer);
         setSkeletonLoading(false);
+        setMoreLoading(false);
         setSearchLoading(false);
         window.setTimeout(() => {
           if (!loading) resetSearchProgress();
