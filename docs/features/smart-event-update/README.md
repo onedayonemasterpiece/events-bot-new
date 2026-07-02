@@ -496,3 +496,19 @@ LLM остаётся владельцем смысловых решений, н�
 Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
 
 Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.
+
+### Static-site public projection gate
+
+The production preview/static-site exporter has an independent public projection
+gate before `preview-events.json` is written.  It is not a substitute for the
+LLM-owned Smart Update create/merge decisions; it is a final fail-closed public
+boundary.  The gate is applied to both the normal SQL slice and explicit
+`--include-ids` / control ids.
+
+Rows are suppressed when they are not canonical identities
+(`identity_status != canonical`), have `merged_into_event_id`, carry
+review/quarantine/rejected lifecycle or moderation statuses, have invalid ISO
+`date`/`end_date`, or expose narrow prompt/code/prose leakage patterns in
+`title`, `location_name`, `location_address`, or `city`.  Missing new columns on
+old SQLite snapshots are treated as absent schema, so old DB rows still export
+if their required public fields are valid.
