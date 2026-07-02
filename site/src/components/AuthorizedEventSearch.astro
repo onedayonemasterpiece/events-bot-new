@@ -97,7 +97,7 @@ const HeadingTag = headingLevel;
     let lastResultEventIds = [];
     let authCallbackHadError = false;
     let progressValue = 0;
-    const searchTimeoutMs = 60000;
+    const searchTimeoutMs = 6500;
     const authSessionTimeoutMs = 8000;
     const authCallbackTimeoutMs = 20000;
     const maxQueryLength = 180;
@@ -593,12 +593,20 @@ const HeadingTag = headingLevel;
 
       setResultContext(data);
       if (isVector) {
+        const verifierPending = data?.llm_verifier?.status === 'pending';
         if (items.length > 0 && results.children.length === 0) appendSectionHeading('Нашёл по смыслу');
         insertCardHtml(items, pageOffset, 'vector', pageOffset);
-        if (items.length > 0) appendPhaseNote('Это быстрые результаты векторного поиска. ИИ ещё проверяет точность и может переставить или убрать часть карточек.', pageOffset);
+        if (items.length > 0) appendPhaseNote(
+          verifierPending
+            ? 'Это быстрые результаты векторного поиска. ИИ ещё проверяет точность и может переставить или убрать часть карточек.'
+            : 'Это быстрые результаты векторного поиска.',
+          pageOffset,
+        );
         results.hidden = !results.children.length;
         if (results.children.length) setSkeletonLoading(false);
-        setStatus(items.length > 0 ? 'Нашёл варианты по смыслу. ИИ проверяет точность…' : 'Векторный поиск пока не нашёл карточки. Проверяю дальше…');
+        setStatus(items.length > 0
+          ? (verifierPending ? 'Нашёл варианты по смыслу. ИИ проверяет точность…' : 'Нашёл варианты по смыслу.')
+          : 'Векторный поиск пока не нашёл карточки. Проверяю дальше…');
         return { itemCount: items.length, fallbackCount: 0 };
       }
 
@@ -746,7 +754,7 @@ const HeadingTag = headingLevel;
         const pageOffset = offset;
         const { data, error } = await withTimeout(
           invokeEventSearch(
-            { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true },
+            { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
             session,
             {
               onVectorResult: (vectorData) => {

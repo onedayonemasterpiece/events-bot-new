@@ -223,14 +223,16 @@ The Edge Function runs an LLM verifier after pgvector retrieval when the user ha
 - primary online verifier is fast Gemini Lite (`EVENT_SEARCH_LLM_LITE_MODEL=gemini-3.1-flash-lite`), because it can classify the compact candidate batch in about a second and has enough effective quota after KEY5 rotation;
 - overflow verifier is Gemma 4 26B (`EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL=gemma-4-26b-a4b-it`), used only if all configured Lite key lanes fail with quota/capacity/retryable provider errors or Lite returns an unusable classification;
 - legacy `EVENT_SEARCH_LLM_MODEL` is no longer used as the primary model in the Lite-first strategy; if present, it is treated only as an overflow fallback source after the explicit `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_*` envs;
-- `EVENT_SEARCH_VERIFICATION_WINDOW=10` by default for the fast online batch after the 2026-07-02 latency probe; the browser requests `limit=8, candidate_window=10` for the first page so Gemini Lite receives about 6–8k prompt chars instead of the previous ~14k/20-candidate prompt;
+- `EVENT_SEARCH_VERIFICATION_WINDOW=10` remains the backend default, but the public static `/poisk/` page now requests the SLA path with `limit=4, candidate_window=4, use_llm_verifier=false`; optional online Gemini verification is no longer on the critical user-facing path because the 2026-07-02 probes showed provider stalls even on 2-candidate prompts;
 - model policy is `lite_first_gemma_overflow`: try Gemini Lite first across all configured Google key lanes, then Gemma 4 26B overflow.
 
 Operational knobs: `EVENT_SEARCH_LLM_LITE_MODEL(S)`, `EVENT_SEARCH_LLM_LITE_ATTEMPTS`, `EVENT_SEARCH_LLM_LITE_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LITE_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL(S)`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_TIMEOUT_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_ENABLED`.
-Prompt/latency knobs: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `768`),
+Prompt/latency knobs for the optional verifier: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `384`),
 `EVENT_SEARCH_LLM_THINKING_LEVEL` (default `MINIMAL`),
-`EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `320`) and
-`EVENT_SEARCH_LLM_MAX_CANDIDATES` (upper safety cap, default `20`; the online first-page batch is normally smaller through `candidate_window=10`).
+`EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `180`),
+`EVENT_SEARCH_LLM_LITE_CANDIDATE_COUNTS` (default `2`, adaptive shrink profile),
+`EVENT_SEARCH_LLM_FALLBACK_CANDIDATE_COUNTS` (default `2`) and
+`EVENT_SEARCH_LLM_MAX_CANDIDATES` (upper safety cap, default `20`).
 
 High-match contract:
 
@@ -238,32 +240,23 @@ High-match contract:
 2. The LLM receives candidate IDs + compact facts from `search_digest`; it returns exactly three buckets: `exact_event_ids`, `possible_event_ids`, `rejected_event_ids` plus `query_interpretation`.
 3. Only `exact_event_ids` are rendered under **«Результаты поиска»** (`items`).
 4. Weak/uncertain matches are rendered only under **«Возможно, вам будет интересно»** (`fallback_items`).
-5. If the LLM times out, provider returns non-2xx, facts are insufficient, quota is not reserved, the LLM rubber-stamps too many candidates as exact, or the verifier is disabled, the Edge Function fails closed: `items=[]`, candidates become possible/fallback only. Raw pgvector candidates must not be shown as exact search results in the public high-match mode.
-6. The first online page is deliberately small (`candidate_window=10`, `limit=8`) and `has_more` is exposed while pgvector still has later windows. “Показать ещё” requests the next vector offset and verifies that smaller batch instead of sending one heavy 20–40 candidate prompt.
+5. If the optional LLM verifier is requested and succeeds, only `exact_event_ids` are rendered under **«Результаты поиска»** and weak matches stay in fallback. If the verifier is not requested on the SLA path, the Edge Function returns the bounded pgvector window as `items` so the terminal response remains fast and does not wait on provider timeouts.
+6. The public first page is deliberately small (`candidate_window=4`, `limit=4`) and `has_more` is exposed while pgvector still has later windows. “Показать ещё” requests the next vector offset instead of sending one heavy 20–40 candidate prompt.
 
-P1 progressive UX target:
+P1 progressive UX target (future optional verifier path):
 
-- first response should return the high-confidence Gemini-Lite-verified window as soon
-  as the first verifier pass completes;
-- while the user starts reading/scrolling, the backend may continue verifying
-  the next candidate window(s) and append accepted cards below the current list;
-- unverified vector candidates can be shown only under a separate provisional
-  discovery heading, never as exact **«Результаты поиска»**;
-- when later verifier passes finish, the UI may remove/reclassify lower
-  unverified/provisional cards below the user’s current viewport, but must not
-  suddenly move or remove the card the user is currently interacting with;
-- this requires a server-side `search_session_id`/cursor and a cached verified
-  result set, so repeated “Показать ещё” calls reuse one classification job
-  instead of creating inconsistent independent LLM pages.
+- the public SLA path returns the bounded pgvector window as the terminal result and does not wait for online LLM providers;
+- an optional verifier path may still return a high-confidence Gemini-Lite-verified window when explicitly requested outside the public 3.5s SLA;
+- while the user starts reading/scrolling, a future backend job may verify the next candidate window(s) and append accepted cards below the current list;
+- if unverified vector candidates and verified candidates are mixed in one UI, the provisional state must be explicit and must not suddenly move or remove the card the user is currently interacting with;
+- this future verifier path requires a server-side `search_session_id`/cursor and a cached verified result set, so repeated “Показать ещё” calls reuse one classification job instead of creating inconsistent independent LLM pages.
 
 The verifier uses Gemini structured output (`responseMimeType: application/json` + `responseJsonSchema`) and still post-validates IDs against the retrieved candidate map. Broad queries can legitimately return many exact matches, so the previous default “over-approval” demotion is disabled by default; if a future incident proves rubber-stamping, it can be enabled explicitly with `EVENT_SEARCH_LLM_OVER_APPROVAL_DEMOTE_ENABLED=1` and a high `EVENT_SEARCH_LLM_OVER_APPROVAL_RATIO`.
 Every provider try is recorded in `llm_verifier.attempts[]` and search metadata
 with `{model, role: primary|fallback, attempt, status, elapsed_ms}`. The response
 also exposes `llm_verifier.model`, `llm_verifier.policy` and
 `llm_verifier.gemma_overflow_allowed` so product/debug review can see whether
-Gemma overflow was available after the Lite-first attempt. If all attempts fail, the high-match
-contract still fails closed: exact `items=[]`, possible candidates remain under
-the separate fallback/discovery heading.
+Gemma overflow was available after the Lite-first attempt. If all attempts fail on the optional verifier path, the response falls back to bounded pgvector candidates rather than blocking the public SLA path.
 For Lite/Gemma latency analysis, each attempt also records
 `timeout_ms`, `prompt_chars`, `prompt_fact_chars` and
 `compact_candidate_count`. A direct SQL probe can summarize the history:
@@ -291,7 +284,7 @@ order by created_at desc;
 - `Концерт классической музыки`: exact `5201 Концерт «Фестиваль Pianissimo: Константин Емельянов»`, 3 possible, LLM stage ≈1.0s.
 - `Чтобы было интересно детям`: exact `4512 С чего начинается Родина`, 3 possible, urban-planning events no longer appear as exact results.
 - `джаз на выходных`: 0 exact, 4 possible; with the current limited corpus this is preferable to showing non-jazz music as exact.
-- NDJSON/progress path emits backend stages: `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `finalize`, `result`.
+- NDJSON/progress path emits backend stages: `auth`, `validate`, `quota`, `embedding`, `vector_search`, optional `llm_verify`, `finalize`, `result`.
 - Historical 2026-06-29/2026-07-01 audit rows prove why the KEY5 branch switches
   the runtime order: the deployed Gemma-first cascade often spends `3.3–4.9s` on
   Gemma, and one late path spent about `25.6s` before Lite returned `ok` in
@@ -316,9 +309,9 @@ The facets are not used to store raw query text. They are passed to `search_even
 
 ### 2026-07-02 live batch-size probe
 
-Incident `INC-2026-07-02-static-search-92-percent-no-cards` showed that the previous 20-candidate online verifier window could leave the browser at the synthetic `92%` progress state while Lite lanes timed out. A live Edge Function experiment over `На природу с детьми`, `искусство у моря` and `в пятницу бесплатно` compared `candidate_window` values 8/10/12/16/20. The best first-page trade-off was `limit=8, candidate_window=10`: average browser round trip about `2.5s`, no Lite timeouts in the probe, roughly `7.4k` prompt chars and enough current-batch cards for a mobile first screen. `candidate_window=20` averaged about `9.8s` and produced repeated 3.5s Lite timeouts plus Gemma overflow for `искусство у моря` in the probe.
+Incident `INC-2026-07-02-static-search-92-percent-no-cards` showed that the previous 20-candidate online verifier window could leave the browser at the synthetic `92%` progress state while Lite lanes timed out. A live Edge Function experiment first compared `candidate_window` values 8/10/12/16/20 and then smaller `limit=6/window=6` and `limit=4/window=4` batches. The important finding was that prompt size was only part of the problem: on 2026-07-02 Gemini Lite still timed out at 3.5s on a compact 2-candidate prompt of about `1.6k` chars for `искусство у моря`, `в пятницу бесплатно` and `спектакль о любви`, and Gemma overflow could add 9s waits. Therefore the public static search SLA cannot depend on an online LLM verifier.
 
-The frontend uses NDJSON streaming for authorized search again. The Edge Function emits a `vector_results` progress event immediately after the pgvector RPC; the browser renders those real vector cards at once with a visible “ИИ проверяет точность” note, then replaces that preview with the final LLM-checked result when the terminal `result` event arrives. If the LLM verifier times out after vector cards were shown, the UI keeps the vector cards instead of ending as an empty 92% wait. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback is optimistic: the click immediately records a local queue item and shows a visible “saving” state; the Supabase RPC then confirms it as saved or leaves a clear local-only state if the server is slow.
+The frontend uses NDJSON streaming and requests the SLA vector path: `limit=4`, `candidate_window=4`, `use_llm_verifier=false`. The Edge Function still emits `vector_results` immediately after the pgvector RPC and then a terminal `result` event without digest/LLM stages. A six-query live probe through the normal quota RPC (`На природу с детьми`, `искусство у моря`, `в пятницу бесплатно`, `спектакль о любви`, `джаз на выходных`, `детям бесплатно`) returned all terminal results under 3.5s: max `1.793s`, average `0.983s`, p90 `1.028s`, timeouts `0`. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback is optimistic: the click immediately records a local queue item and shows a visible “saving” state; the Supabase RPC then confirms it as saved or leaves a clear local-only state if the server is slow.
 
 ## Quotas and privacy
 
