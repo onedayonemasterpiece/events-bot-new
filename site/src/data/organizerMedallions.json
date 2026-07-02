@@ -256,7 +256,7 @@
         512
       ],
       "ariaLabel": "Организатор или партнёр: Российское общество «Знание»",
-      "renderNote": "Медальон обновлён под текущую палитру официального сайта «Знание»: полный круг залит brand primary #0501D0, внутренний знак «З» оставлен белым, увеличен и намеренно обрезается нижним краем круга. Для событий фестиваля «80 историй о главном» медальон показывается по curated festival policy, даже если source text не повторяет организатора.",
+      "renderNote": "Медальон обновлён под текущую палитру официального сайта «Знание»: полный круг залит brand primary #0501D0, внутренний знак «З» оставлен белым, увеличен, оптически выровнен через root-clipped SVG group и намеренно обрезается нижним краем круга. Для событий фестиваля «80 историй о главном» медальон показывается по curated festival policy, даже если source text не повторяет организатора.",
       "avatarUrl": "/assets/organizers/znanie-russia.svg",
       "fallbackPngUrl": "/assets/organizers/znanie-russia.png",
       "sourcePath": "site/src/assets/organizers/source/znanie.logo-znanie-festival.svg",
@@ -286,7 +286,7 @@
         512
       ],
       "ariaLabel": "Фестиваль: 80 историй о главном",
-      "renderNote": "Медальон использует официальный hero lockup фестиваля «80 историй о главном» из kgd80 shared assets, вписанный в светлый круг с оранжевым ring; lockup увеличен через tighter viewBox и оставляет безопасные отступы от кольца. Для event.festival=«80 историй о главном» показывается вместе с медальоном Российского общества «Знание».",
+      "renderNote": "Медальон использует официальный hero lockup фестиваля «80 историй о главном» из kgd80 shared assets, вписанный в светлый круг с оранжевым ring; lockup увеличен через tighter viewBox, оптически опущен на несколько пикселей и оставляет безопасные отступы от кольца. Для event.festival=«80 историй о главном» показывается вместе с медальоном Российского общества «Знание».",
       "avatarUrl": "/assets/organizers/kgd80.svg",
       "fallbackPngUrl": "/assets/organizers/kgd80.png",
       "sourcePath": "site/src/assets/organizers/source/kgd80.logo-80-istorii-hero.svg",
