@@ -196,7 +196,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `SMART_UPDATE_IDENTITY_GATE` – Smart Update create-path identity gate mode (`off`, `shadow`, `enforce`).
 - `SMART_UPDATE_IDENTITY_VECTOR_RECALL` / `SMART_UPDATE_IDENTITY_VECTOR_TOP_K` / `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY` / `SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS` – vector-candidate recall knobs for the identity gate.
 - `SMART_UPDATE_IDENTITY_EMBEDDING_MODEL` / `SMART_UPDATE_IDENTITY_EMBEDDING_DIM` / `SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV` – embedding generation config for vector recall; default key env is `GOOGLE_API_KEY4`.
-- `PERSONALIZATION_SUPABASE_URL` / `PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY` – Supabase service-role access for the vector RPC used by the identity gate.
+- `PERSONALIZATION_SUPABASE_URL` / `PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY` – preferred Supabase access for the vector RPC used by the identity gate; if unset, the runtime falls back to existing `SUPABASE_URL` plus `SUPABASE_SERVICE_KEY`/`SUPABASE_KEY`.
 - `ENABLE_EXHIBITION_DUPLICATE_AUDIT` – enable scheduled read-only `/vystavki/` duplicate audit after identity-gate enforce.
 - `EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL` / `EXHIBITION_DUPLICATE_AUDIT_TZ` – audit schedule time in local time zone (default `07:45 Europe/Kaliningrad`).
 - `EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS` – acceptance/reporting window for the Prometheus/ops metrics (default `14`); with `event.added_at` available, the `*_since_total` metrics include duplicate pairs where either row was added inside the window.

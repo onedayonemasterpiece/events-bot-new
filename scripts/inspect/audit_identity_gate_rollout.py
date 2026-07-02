@@ -46,6 +46,8 @@ def identity_gate_env_readiness() -> dict[str, Any]:
     service_role_present = bool(
         (os.getenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY") or "").strip()
         or (os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY") or "").strip()
+        or (os.getenv("SUPABASE_SERVICE_KEY") or "").strip()
+        or (os.getenv("SUPABASE_KEY") or "").strip()
     )
     since_days_raw = (os.getenv("EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS") or "14").strip()
     try:
@@ -55,7 +57,10 @@ def identity_gate_env_readiness() -> dict[str, Any]:
     readiness = {
         "smart_update_identity_gate_enforce": (os.getenv("SMART_UPDATE_IDENTITY_GATE") or "").strip().lower() == "enforce",
         "smart_update_identity_vector_recall_enabled": _env_enabled(os.getenv("SMART_UPDATE_IDENTITY_VECTOR_RECALL"), default=True),
-        "personalization_supabase_url_present": bool((os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip()),
+        "personalization_supabase_url_present": bool(
+            (os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip()
+            or (os.getenv("SUPABASE_URL") or "").strip()
+        ),
         "personalization_supabase_service_role_present": service_role_present,
         "smart_update_identity_google_key_env": google_key_env,
         "smart_update_identity_google_key_present": bool((os.getenv(google_key_env) or "").strip()),

@@ -58,6 +58,7 @@
 - Added a read-only `/vystavki/` acceptance monitor (`scripts/inspect/audit_public_exhibition_duplicates.py`) that emits JSON/Prometheus metrics and fails on high-confidence public exhibition duplicates for the 14-day enforce window.
 - Added the optional scheduled exhibition duplicate acceptance audit (`ENABLE_EXHIBITION_DUPLICATE_AUDIT=1`) that reuses the read-only monitor, writes `ops_run(kind='exhibition_duplicate_audit')`, alerts admins on high-confidence pairs, and raises a scheduler job error after recording a failed run.
 - Added a read-only Smart Update identity-gate rollout audit (`scripts/inspect/audit_identity_gate_rollout.py`) and embedded its decision/veto/fail-safe/vector-error counters plus secret-safe env-readiness booleans into the scheduled exhibition duplicate audit; low-risk vector recall failures are now persisted as `suppressed_vector_error` instead of existing only in runtime logs, and identity-gate exception handling records a single fail-safe decision row.
+- Enabled the Smart Update identity gate and scheduled exhibition audit in Fly config, and allowed vector recall to reuse existing `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`/`SUPABASE_KEY` when dedicated personalization Supabase env vars are not set.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

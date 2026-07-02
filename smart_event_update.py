@@ -8273,19 +8273,25 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
             recall_identity_candidates_across_doc_kinds,
         )
 
-        supabase_url = (os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip()
+        supabase_url = (
+            os.getenv("PERSONALIZATION_SUPABASE_URL")
+            or os.getenv("SUPABASE_URL")
+            or ""
+        ).strip()
         supabase_key = (
             os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY")
             or os.getenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
             or ""
         ).strip()
         google_key = (os.getenv(SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV) or "").strip()
         if not supabase_url or not supabase_key or not google_key:
             missing = []
             if not supabase_url:
-                missing.append("PERSONALIZATION_SUPABASE_URL")
+                missing.append("PERSONALIZATION_SUPABASE_URL_or_SUPABASE_URL")
             if not supabase_key:
-                missing.append("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+                missing.append("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY_or_SUPABASE_SERVICE_KEY_or_SUPABASE_KEY")
             if not google_key:
                 missing.append(SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV)
             return IdentityVectorEvidence(

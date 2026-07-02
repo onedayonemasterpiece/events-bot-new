@@ -162,3 +162,25 @@ def test_rollout_audit_reports_env_readiness_without_secret_values(tmp_path, mon
     assert "secret-service-role" not in json.dumps(payload)
     assert "secret-google" not in json.dumps(payload)
     assert 'events_identity_gate_env_ready{check="ready"} 1' in rendered
+
+
+def test_rollout_env_readiness_accepts_existing_supabase_env_fallback(tmp_path, monkeypatch):
+    db_path = tmp_path / "events.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    conn.commit()
+    conn.close()
+    monkeypatch.delenv("PERSONALIZATION_SUPABASE_URL", raising=False)
+    monkeypatch.delenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "secret-existing")
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_GATE", "enforce")
+    monkeypatch.setenv("GOOGLE_API_KEY4", "secret-google")
+    monkeypatch.setenv("ENABLE_EXHIBITION_DUPLICATE_AUDIT", "1")
+
+    payload = build_rollout_payload(db_path, current=date(2026, 7, 2), since_days=14)
+
+    assert payload["env_readiness"]["personalization_supabase_url_present"] is True
+    assert payload["env_readiness"]["personalization_supabase_service_role_present"] is True
+    assert payload["env_readiness"]["ready"] is True
+    assert "secret-existing" not in json.dumps(payload)
