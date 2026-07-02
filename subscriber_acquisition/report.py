@@ -29,11 +29,21 @@ def _a(url: str | None, label: str) -> str:
 def render_report_html(run: AcqDiscoveryRun, surfaces: list[AcqSurface], opportunities: list[AcqOpportunity], *, feedback_summary: dict[str, Any] | None = None) -> str:
     lines: list[str] = []
     stats = run.stats_json or {}
+    tg_scan = stats.get("tg_scan") if isinstance(stats.get("tg_scan"), dict) else {}
+    vk_scan = stats.get("vk_scan") if isinstance(stats.get("vk_scan"), dict) else {}
+    replyable_types = {"group", "chat", "megagroup", "linked_discussion", "community"}
+    replyable_surfaces = [s for s in surfaces if str(s.surface_type or "").lower() in replyable_types and not str(s.status or "").startswith("rejected")]
+    no_comment_channels = [s for s in surfaces if str(s.status or "").lower() == "rejected_no_comments"]
+    resolved_channels = [s for s in surfaces if str(s.status or "").lower() == "resolved_has_linked_discussion"]
     lines.append("<h3>Сводка</h3>")
     lines.append("<ul>")
     lines.append(f"<li>run id: {run.id}</li>")
     lines.append(f"<li>status: {html.escape(run.status)}</li>")
     lines.append(f"<li>surfaces scanned: {stats.get('surfaces', len(surfaces))}</li>")
+    lines.append(f"<li>replyable surfaces in this import: {len(replyable_surfaces)}</li>")
+    lines.append(f"<li>TG channels resolved with linked discussion: {tg_scan.get('channels_with_linked_discussion', len(resolved_channels))}</li>")
+    lines.append(f"<li>TG channels rejected without comments: {tg_scan.get('channels_rejected_no_comments', len(no_comment_channels))}</li>")
+    lines.append(f"<li>VK posts/comments seen: posts={vk_scan.get('wall_posts_seen', 0)}, comments={vk_scan.get('comments_seen', 0)}, board_comments={vk_scan.get('board_comments_seen', 0)}</li>")
     lines.append(f"<li>opportunities found: {stats.get('opportunities', len(opportunities))}</li>")
     lines.append(f"<li>review cards posted: {stats.get('review_cards_posted', 0)}</li>")
     lines.append("</ul>")
@@ -51,7 +61,19 @@ def render_report_html(run: AcqDiscoveryRun, surfaces: list[AcqSurface], opportu
         lines.append(f"Почему: {html.escape(_safe_snippet(opp.context_text_snippet))}")
         lines.append("</p>")
 
-    lines.append("<h3>Поверхности</h3>")
+    lines.append("<h3>Replyable поверхности / карта групп</h3>")
+    if not replyable_surfaces:
+        lines.append("<p>Подтверждённых чатов/linked discussion/VK discussion surfaces в этом импорте нет.</p>")
+    for s in replyable_surfaces[:80]:
+        lines.append(f"<p>{_a(s.url, s.title or s.handle or s.url)} · {html.escape(s.platform)}/{html.escape(s.surface_type)} · {html.escape(s.status)}</p>")
+
+    lines.append("<h3>Каналы без места для ответа</h3>")
+    if not no_comment_channels:
+        lines.append("<p>Новых отклонений channel-without-comments нет.</p>")
+    for s in no_comment_channels[:50]:
+        lines.append(f"<p>{_a(s.url, s.title or s.handle or s.url)} · {html.escape(s.status)}</p>")
+
+    lines.append("<h3>Все поверхности</h3>")
     for s in surfaces[:80]:
         lines.append(f"<p>{_a(s.url, s.title or s.handle or s.url)} · {html.escape(s.platform)}/{html.escape(s.surface_type)} · {html.escape(s.status)}</p>")
 

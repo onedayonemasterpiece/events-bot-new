@@ -209,6 +209,18 @@ VK_SCAN_STATS: dict[str, int] = {
     "comment_prefilter_candidates": 0,
     "rate_limit_backoffs": 0,
 }
+TG_SCAN_STATS: dict[str, int] = {
+    "surfaces_attempted": 0,
+    "channel_resolve_attempts": 0,
+    "channels_with_linked_discussion": 0,
+    "channels_rejected_no_comments": 0,
+    "groups_or_chats_scanned": 0,
+    "linked_discussions_scanned": 0,
+    "channel_posts_seen_for_links": 0,
+    "replyable_messages_seen": 0,
+    "replyable_surfaces_scanned": 0,
+    "frontier_links_queued": 0,
+}
 
 LLM_GATE_SCHEMA = {
     "type": "object",
@@ -756,7 +768,52 @@ def _classify_acq_intent(text: str) -> dict[str, Any] | None:
 
 
 def _is_surface_scan_candidate(surface: dict[str, Any]) -> bool:
-    return not str(surface.get("status") or "").startswith("rejected")
+    status = str(surface.get("status") or "").strip().lower()
+    return not status.startswith("rejected") and status not in {"resolved_has_linked_discussion"}
+
+
+def _is_tg_replyable_surface_type(surface_type: str | None) -> bool:
+    return str(surface_type or "").strip().lower() in {"group", "chat", "megagroup", "linked_discussion"}
+
+
+def _mark_tg_channel_resolved_with_linked_discussion(
+    channel_surface: dict[str, Any],
+    *,
+    linked_surface: dict[str, Any],
+) -> dict[str, Any]:
+    updated = dict(channel_surface)
+    updated["status"] = "resolved_has_linked_discussion"
+    updated["topic_cluster"] = "telegram_channel_with_comments"
+    updated["reach"] = {
+        **(updated.get("reach") or {}),
+        "basis": "telegram_channel_resolved",
+        "linked_discussion_external_id": linked_surface.get("external_id"),
+        "linked_discussion_url": linked_surface.get("url"),
+    }
+    updated["risk"] = {
+        **(updated.get("risk") or {}),
+        "spam_risk": "low",
+        "safety_risk": "low",
+        "reason": "Channel is metadata only; replies must happen in linked discussion.",
+        "reply_policy": "use_linked_discussion",
+        "linked_discussion_external_id": linked_surface.get("external_id"),
+        "linked_discussion_url": linked_surface.get("url"),
+    }
+    return updated
+
+
+def _mark_tg_channel_rejected_no_comments(surface: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(surface)
+    updated["status"] = "rejected_no_comments"
+    updated["topic_cluster"] = "telegram_channel_without_comments"
+    updated["risk"] = {
+        "spam_risk": "high",
+        "safety_risk": "low",
+        "level": "rejected",
+        "reason": "Telegram channel has no accessible linked discussion/comments; reply acquisition requires comments/chat",
+        "reply_policy": "no_reply_surface",
+    }
+    return updated
 
 
 def _vk_surface_from_handle(handle: str) -> dict[str, Any] | None:
@@ -1405,13 +1462,14 @@ def _seed_surface(url: str, *, platform: str = "tg") -> dict[str, Any]:
     external_id = f"{platform}:{handle}" if handle else url
     surface_type = "community" if platform == "vk" else "unknown_public"
     source = "telega_in" if platform == "tg" and handle.lower() in _TELEGA_IN_TG_HANDLES else "seed"
+    status = "needs_comment_resolve" if platform == "tg" else "candidate"
     return {
         "platform": platform,
         "surface_type": surface_type,
         "url": url,
         "handle": handle or None,
         "external_id": external_id,
-        "status": "candidate",
+        "status": status,
         "source": source,
         "topic_hint": "Telega.in Kaliningrad regional catalog seed" if source == "telega_in" else "Kaliningrad public/community seed",
         "reach": {"confidence": "low", "basis": "seed_only"},
@@ -1475,9 +1533,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         return [], [], diagnostics
 
     max_surfaces = _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1)
+    max_channel_resolves = _int_env("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", max(30, max_surfaces * 3), min_value=1)
     max_frontier = _int_env("ACQ_MAX_TG_FRONTIER_PER_RUN", max(20, max_surfaces * 4), min_value=max_surfaces)
     max_messages = _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 25, min_value=1)
     max_threads = _int_env("ACQ_MAX_THREADS_PER_SURFACE", 5, min_value=1)
+    max_channel_link_posts = _int_env("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", 5, min_value=0)
     max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 30, min_value=1)
     search_queries = [str(q).strip() for q in list(_json_env("ACQ_TG_SEARCH_QUERIES_JSON", DEFAULT_TG_SEARCH_QUERIES) or []) if str(q).strip()]
     search_limit = _int_env("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", 0, min_value=0)
@@ -1492,10 +1552,12 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         _enqueue_tg_url(queue, queued, str(raw), limit=max_frontier)
     discovered_queued = 0
     processed = 0
+    replyable_processed = 0
+    channel_resolves = 0
     deadline = _deadline_after_seconds()
 
     async with TelegramClient(StringSession(session_string), int(api_id), api_hash, flood_sleep_threshold=60, **device_config) as client:
-        while queue and processed < max_surfaces:
+        while queue and (replyable_processed < max_surfaces or channel_resolves < max_channel_resolves):
             if _deadline_reached(deadline):
                 diagnostics.append("telegram scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                 break
@@ -1506,10 +1568,12 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 continue
             processed += 1
             progress = {
-                "progress_percent": min(90, 20 + int(processed / max(1, max_surfaces) * 60)),
-                "progress_label": f"telegram {processed}/{max_surfaces} · frontier +{discovered_queued}",
-                "surfaces_done": processed - 1,
+                "progress_percent": min(90, 20 + int(min(replyable_processed, max_surfaces) / max(1, max_surfaces) * 50)),
+                "progress_label": f"telegram replyable {replyable_processed}/{max_surfaces} · channel resolve {channel_resolves}/{max_channel_resolves} · frontier +{discovered_queued}",
+                "surfaces_done": replyable_processed,
                 "surfaces_total": max_surfaces,
+                "tg_channel_resolves_done": channel_resolves,
+                "tg_channel_resolves_total": max_channel_resolves,
                 "tg_frontier_queued": discovered_queued,
                 "opportunities_found": len(opportunities),
                 "llm_calls": int(LLM_GATE_STATS.get("calls", 0)),
@@ -1522,12 +1586,13 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             except Exception as exc:
                 diagnostics.append(f"{handle}: get_entity failed: {exc}")
                 continue
+            TG_SCAN_STATS["surfaces_attempted"] += 1
             surface_type = "channel" if bool(getattr(entity, "broadcast", False)) else "group" if bool(getattr(entity, "megagroup", False)) else "chat"
             surface = _seed_surface(f"https://t.me/{handle}", platform="tg")
             surface.update({
                 "surface_type": surface_type,
                 "title": getattr(entity, "title", None),
-                "status": "candidate",
+                "status": "needs_comment_resolve" if surface_type == "channel" else "candidate",
                 "reach": {"members": getattr(entity, "participants_count", None), "confidence": "low", "basis": "telegram_entity"},
                 "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only public scan"},
             })
@@ -1538,8 +1603,14 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 continue
             surfaces[surface["external_id"]] = surface
 
-            scan_entities: list[tuple[Any, dict[str, Any], str | None]] = [(entity, surface, None)]
+            scan_entities: list[tuple[Any, dict[str, Any], str | None]] = []
+            channel_link_scan_entities: list[tuple[Any, dict[str, Any], str | None]] = []
             if surface_type == "channel":
+                if channel_resolves >= max_channel_resolves:
+                    diagnostics.append(f"{handle}: channel commentability resolve queued for future run; resolve budget exhausted")
+                    continue
+                channel_resolves += 1
+                TG_SCAN_STATS["channel_resolve_attempts"] += 1
                 linked_comment_scan_added = False
                 try:
                     full = await client(GetFullChannelRequest(entity))
@@ -1552,6 +1623,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         linked_surface.update({
                             "surface_type": "linked_discussion",
                             "title": getattr(linked, "title", None),
+                            "status": "candidate",
                             "source": "linked_discussion",
                             "topic_hint": f"linked discussion for {handle}",
                             "reach": {"members": getattr(linked, "participants_count", None), "confidence": "low", "basis": "telegram_linked_discussion"},
@@ -1562,24 +1634,28 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             surfaces[linked_surface["external_id"]] = linked_surface
                             diagnostics.append(f"{linked_handle}: rejected out-of-region linked discussion")
                         else:
+                            surface = _mark_tg_channel_resolved_with_linked_discussion(surface, linked_surface=linked_surface)
+                            surfaces[surface["external_id"]] = surface
                             surfaces[linked_surface["external_id"]] = linked_surface
-                            scan_entities.append((linked, linked_surface, "linked_discussion"))
+                            if replyable_processed < max_surfaces:
+                                scan_entities.append((linked, linked_surface, "linked_discussion"))
+                            else:
+                                diagnostics.append(f"{linked_handle}: linked discussion queued for future scan; replyable budget exhausted")
+                            if max_channel_link_posts > 0:
+                                channel_link_scan_entities.append((entity, surface, "channel_link_discovery"))
                             linked_comment_scan_added = True
+                            TG_SCAN_STATS["channels_with_linked_discussion"] += 1
                 except Exception as exc:
                     diagnostics.append(f"{handle}: linked discussion lookup failed: {exc}")
                 if not linked_comment_scan_added:
-                    surface = dict(surface)
-                    surface["status"] = "rejected_no_comments"
-                    surface["topic_cluster"] = "telegram_channel_without_comments"
-                    surface["risk"] = {
-                        "spam_risk": "high",
-                        "safety_risk": "low",
-                        "level": "rejected",
-                        "reason": "Telegram channel has no accessible linked discussion/comments; reply acquisition requires comments/chat",
-                    }
+                    surface = _mark_tg_channel_rejected_no_comments(surface)
                     surfaces[surface["external_id"]] = surface
-                    scan_entities = []
+                    TG_SCAN_STATS["channels_rejected_no_comments"] += 1
                     diagnostics.append(f"{handle}: rejected channel without accessible comments")
+            elif replyable_processed < max_surfaces:
+                scan_entities.append((entity, surface, None))
+            else:
+                diagnostics.append(f"{handle}: queued for future scan; replyable budget exhausted")
 
             async def process_tg_message(message: Any, scan_surface: dict[str, Any], relation: str | None, *, retrieval: str, search_query: str | None = None) -> bool:
                 nonlocal discovered_queued
@@ -1595,6 +1671,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                         and _enqueue_tg_url(queue, queued, str(discovered.get("url") or ""), limit=max_frontier)
                     ):
                         discovered_queued += 1
+                        TG_SCAN_STATS["frontier_links_queued"] += 1
                 if not is_comment_opportunity_message(
                     message,
                     surface_type=str(scan_surface.get("surface_type") or ""),
@@ -1625,14 +1702,27 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     return True
                 return False
 
-            for scan_entity, scan_surface, relation in scan_entities:
+            for scan_entity, scan_surface, relation in [*channel_link_scan_entities, *scan_entities]:
+                relation_is_channel_link_discovery = relation == "channel_link_discovery"
+                if not relation_is_channel_link_discovery and _is_tg_replyable_surface_type(str(scan_surface.get("surface_type") or "")):
+                    replyable_processed += 1
+                    TG_SCAN_STATS["replyable_surfaces_scanned"] += 1
+                    if relation == "linked_discussion":
+                        TG_SCAN_STATS["linked_discussions_scanned"] += 1
+                    else:
+                        TG_SCAN_STATS["groups_or_chats_scanned"] += 1
                 seen = 0
                 try:
-                    async for message in client.iter_messages(scan_entity, limit=max_messages):
+                    limit = max_channel_link_posts if relation_is_channel_link_discovery else max_messages
+                    async for message in client.iter_messages(scan_entity, limit=limit):
                         if _deadline_reached(deadline):
                             diagnostics.append("telegram message scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                             break
                         seen += 1
+                        if relation_is_channel_link_discovery:
+                            TG_SCAN_STATS["channel_posts_seen_for_links"] += 1
+                        else:
+                            TG_SCAN_STATS["replyable_messages_seen"] += 1
                         await process_tg_message(message, scan_surface, relation, retrieval="latest")
                         if len(opportunities) >= max_opportunities:
                             break
@@ -1645,7 +1735,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 if relation == "linked_discussion" and seen >= max_threads:
                     diagnostics.append(f"{handle}: linked discussion scan capped at {max_threads} threads")
                 if search_limit > 0 and search_queries and len(opportunities) < max_opportunities:
-                    if str(scan_surface.get("surface_type") or "").casefold() != "channel":
+                    if not relation_is_channel_link_discovery and str(scan_surface.get("surface_type") or "").casefold() != "channel":
                         for query in search_queries:
                             if _deadline_reached(deadline):
                                 diagnostics.append("telegram search scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
@@ -1671,7 +1761,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             if len(opportunities) >= max_opportunities:
                 diagnostics.append(f"telegram opportunity scan capped at {max_opportunities} candidates")
                 break
-    diagnostics.append(f"telegram frontier walk processed {processed} surfaces; queued {discovered_queued} newly discovered tg links")
+    diagnostics.append(
+        "telegram resolver-first walk processed "
+        f"{processed} handles; resolved {channel_resolves} channels; "
+        f"scanned {replyable_processed} replyable surfaces; queued {discovered_queued} newly discovered tg links"
+    )
     return list(surfaces.values()), opportunities, diagnostics
 
 
@@ -1727,6 +1821,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "llm_gate_model": _acq_llm_model(),
             "llm_gate": dict(LLM_GATE_STATS),
             "llm_gate_limits": _llm_limit_snapshot(),
+            "tg_scan": dict(TG_SCAN_STATS),
             "vk_scan": dict(VK_SCAN_STATS),
             "external_sends": 0,
             "comments_posted": 0,

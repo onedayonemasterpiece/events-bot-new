@@ -32,6 +32,16 @@ contract:
   `rejected_no_comments` after scan, because reply acquisition requires a
   confirmed comment/chat surface; channels with comments are scanned through the
   linked discussion, while groups/chats are scanned directly;
+- Telegram scanning is resolver-first: channel/frontier links are not treated as
+  useful monitoring surfaces until commentability is resolved. Channel rows
+  start as `needs_comment_resolve`; each Kaggle run uses a separate
+  `ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN` budget to check `linked_chat_id`.
+  Channels with linked discussions become `resolved_has_linked_discussion` and
+  store the linked chat URL/external id for XLSX/report navigation; channels
+  without linked comments become `rejected_no_comments`. Candidate/review
+  opportunities and frontier-summary cards are restricted to replyable
+  surfaces: groups, chats, linked discussions, VK community comments and VK
+  discussion-board topics.
 - live Telegram runs use the standard `remote_telegram_session` registry guard
   plus an acquisition-specific local marker/cooldown and direct kernel-ref check
   before reusing S22, so a just-deleted/timeout Kaggle kernel cannot immediately

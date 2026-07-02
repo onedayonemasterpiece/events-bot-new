@@ -49,9 +49,35 @@ def _surface_was_scanned(item: dict[str, Any]) -> bool:
     next Kaggle run will keep starting from the same head of the seed list instead
     of walking the unscanned frontier.
     """
+    status = str((item or {}).get("status") or "").strip().lower()
+    if status == "needs_comment_resolve":
+        return False
     reach = item.get("reach") if isinstance(item, dict) else None
     basis = str((reach or {}).get("basis") or "").strip().lower()
     return bool(basis and basis != "seed_only")
+
+
+def _should_apply_runtime_status(existing: AcqSurface, incoming_status: str, *, scanned_this_run: bool) -> bool:
+    """Apply crawler status without overwriting human moderation decisions.
+
+    Runtime statuses describe crawler facts (channel has/has not comments,
+    resolved linked discussion, out-of-region, bot/service, etc.). Human
+    `approved`/`rejected` decisions remain stronger than a generic incoming
+    `candidate`, but factual reject/resolve statuses must update old candidate
+    rows so the next Kaggle run walks the frontier instead of rechecking the
+    same channels.
+    """
+    status = str(incoming_status or "").strip().lower()
+    current = str(existing.status or "").strip().lower()
+    if not status:
+        return False
+    if status.startswith("rejected"):
+        return True
+    if status in {"resolved_has_linked_discussion", "needs_comment_resolve"}:
+        return current not in {"approved", "rejected", "paused"}
+    if status == "candidate":
+        return scanned_this_run and current not in {"approved", "rejected", "paused"}
+    return scanned_this_run and current not in {"approved", "rejected", "paused"}
 
 
 @dataclass
@@ -128,7 +154,7 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 await session.flush()
             else:
                 surface = existing
-                if incoming_status.startswith("rejected"):
+                if _should_apply_runtime_status(surface, incoming_status, scanned_this_run=scanned_this_run):
                     surface.status = incoming_status
                 surface.title = item.get("title") or surface.title
                 surface.url = str(item.get("url") or surface.url or "")
@@ -221,7 +247,14 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
             ydb_export = None
         run.status = "done"
         run.finished_at = datetime.now(timezone.utc)
-        run.stats_json = {"surfaces": len(surfaces), "opportunities": len(opportunities), "skipped_duplicate_contexts": skipped, "ydb_export": ydb_export}
+        payload_stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
+        run.stats_json = {
+            **payload_stats,
+            "surfaces": len(surfaces),
+            "opportunities": len(opportunities),
+            "skipped_duplicate_contexts": skipped,
+            "ydb_export": ydb_export,
+        }
         session.add(run)
         await session.commit()
         await session.refresh(run)

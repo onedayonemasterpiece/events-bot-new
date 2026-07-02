@@ -46,7 +46,7 @@ async def run_acq_discovery_shadow(db, bot: Any | None = None, *, payload: dict[
     telegraph_url = None
     review_cards_posted = 0
     frontier_surfaces_shown = 0
-    if result.opportunities:
+    if result.opportunities or result.surfaces:
         try:
             telegraph_url = await publish_telegraph_report(result.run, result.surfaces, result.opportunities)
         except Exception:
@@ -132,13 +132,31 @@ def _surface_scan_state(surface: AcqSurface, *, now: datetime | None = None) -> 
 
 def _surface_reply_policy(surface: AcqSurface) -> str:
     status = str(surface.status or "candidate").strip().lower()
+    surface_type = str(surface.surface_type or "").strip().lower()
     if status == "approved":
         return "confirmed_can_reply_after_human_review"
-    if status == "rejected":
+    if status in {"rejected", "rejected_no_comments", "rejected_out_of_region", "rejected_bot_or_service", "rejected_non_community"}:
         return "rejected_do_not_reply"
     if status == "paused":
         return "paused_recheck_later"
+    if status == "resolved_has_linked_discussion":
+        return "channel_metadata_only_use_linked_discussion"
+    if status == "needs_comment_resolve" or surface_type in {"channel", "unknown_public"}:
+        return "needs_commentability_resolve"
+    if surface_type in {"group", "chat", "megagroup", "linked_discussion", "community"}:
+        return "replyable_pending_analysis"
     return "pending_discovery_analysis"
+
+
+def _surface_linked_discussion(surface: AcqSurface) -> tuple[str, str]:
+    for data in [surface.risk_json or {}, surface.reach_json or {}]:
+        if not isinstance(data, dict):
+            continue
+        external_id = str(data.get("linked_discussion_external_id") or "").strip()
+        url = str(data.get("linked_discussion_url") or "").strip()
+        if external_id or url:
+            return external_id, url
+    return "", ""
 
 
 def _dt_text(value: Any) -> str:
@@ -174,7 +192,8 @@ async def export_surface_map_xlsx(db) -> Path:
     ws.title = "groups"
     headers = [
         "id", "platform", "type", "title", "url", "handle", "status",
-        "scan_state", "reply_policy", "source", "topic_hint", "reach", "risk",
+        "scan_state", "reply_policy", "linked_discussion_external_id", "linked_discussion_url",
+        "source", "topic_hint", "reach", "risk",
         "last_scan_at", "next_scan_after", "opportunities_total", "opportunities_by_status",
         "review_note", "created_at", "updated_at",
     ]
@@ -186,6 +205,7 @@ async def export_surface_map_xlsx(db) -> Path:
     for surface in surfaces:
         counts = opp_counts.get(int(surface.id or 0), {})
         total = sum(counts.values())
+        linked_external_id, linked_url = _surface_linked_discussion(surface)
         row = [
             surface.id,
             surface.platform,
@@ -196,6 +216,8 @@ async def export_surface_map_xlsx(db) -> Path:
             surface.status,
             _surface_scan_state(surface),
             _surface_reply_policy(surface),
+            linked_external_id,
+            linked_url,
             surface.source,
             surface.topic_hint,
             json.dumps(surface.reach_json or {}, ensure_ascii=False),
@@ -213,10 +235,14 @@ async def export_surface_map_xlsx(db) -> Path:
         if surface.url:
             url_cell.hyperlink = surface.url
             url_cell.style = "Hyperlink"
+        linked_url_cell = ws.cell(row=ws.max_row, column=11)
+        if linked_url:
+            linked_url_cell.hyperlink = linked_url
+            linked_url_cell.style = "Hyperlink"
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
-    widths = {1: 8, 2: 12, 3: 20, 4: 38, 5: 44, 7: 14, 8: 24, 9: 34, 10: 18, 11: 38, 16: 18, 17: 24}
+    widths = {1: 8, 2: 12, 3: 20, 4: 38, 5: 44, 7: 22, 8: 24, 9: 42, 10: 28, 11: 44, 12: 18, 13: 38, 18: 18, 19: 24}
     for idx in range(1, len(headers) + 1):
         ws.column_dimensions[get_column_letter(idx)].width = widths.get(idx, 18)
 

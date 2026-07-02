@@ -11,6 +11,12 @@
 
 ### Changed
 
+- Subscriber Acquisition Telegram discovery is now resolver-first: channel rows
+  are queued as `needs_comment_resolve`, live Kaggle runs get a separate channel
+  linked-discussion budget, channels without comments become
+  `rejected_no_comments`, channels with linked chats store clickable linked
+  discussion metadata, and frontier summaries/review opportunities only surface
+  replyable chats/linked discussions/VK communities instead of raw channels.
 - Subscriber Acquisition Discovery now has an optional Yandex Managed Service
   for YDB serverless stats sink for run/surface/opportunity state, plus
   Telega.in Kaliningrad regional Telegram seeds for broader frontier discovery.

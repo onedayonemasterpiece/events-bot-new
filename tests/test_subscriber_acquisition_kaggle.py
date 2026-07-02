@@ -74,6 +74,25 @@ def test_rejected_no_comments_surface_is_not_scan_candidate():
     assert runtime._is_surface_scan_candidate(surface) is False
 
 
+def test_telegram_channel_resolution_status_helpers():
+    runtime = load_runtime()
+    channel = runtime._seed_surface("https://t.me/some_channel", platform="tg")
+    linked = runtime._seed_surface("https://t.me/some_channel_chat", platform="tg")
+    linked.update({"surface_type": "linked_discussion", "status": "candidate"})
+
+    assert channel["status"] == "needs_comment_resolve"
+
+    resolved = runtime._mark_tg_channel_resolved_with_linked_discussion(channel, linked_surface=linked)
+    assert resolved["status"] == "resolved_has_linked_discussion"
+    assert resolved["risk"]["reply_policy"] == "use_linked_discussion"
+    assert resolved["risk"]["linked_discussion_url"] == "https://t.me/some_channel_chat"
+    assert runtime._is_surface_scan_candidate(resolved) is False
+
+    rejected = runtime._mark_tg_channel_rejected_no_comments(channel)
+    assert rejected["status"] == "rejected_no_comments"
+    assert rejected["risk"]["reply_policy"] == "no_reply_surface"
+
+
 
 
 def test_trip_recommendation_requirement_is_acquisition_topic():
@@ -262,11 +281,12 @@ def test_shadow_payload_keeps_vk_seed_candidate_without_allowlist(monkeypatch):
     monkeypatch.delenv("ACQ_VK_ALLOWLIST_JSON", raising=False)
     payload = runtime.build_shadow_payload()
     by_external = {s["external_id"]: s for s in payload["surfaces"]}
-    assert by_external["tg:a_public"]["status"] == "candidate"
+    assert by_external["tg:a_public"]["status"] == "needs_comment_resolve"
     assert by_external["vk:test_public"]["status"] == "candidate"
     assert payload["stats"]["external_sends"] == 0
     assert payload["stats"]["comments_posted"] == 0
     assert payload["stats"]["stickers_sent"] == 0
+    assert "tg_scan" in payload["stats"]
 
 
 def test_shadow_payload_preserves_scanned_vk_surface_metadata(monkeypatch):
@@ -454,6 +474,7 @@ def test_telega_in_kaliningrad_seeds_are_tagged():
     assert "https://t.me/anons39" in runtime.DEFAULT_TG_SEEDS
     surface = runtime._seed_surface("https://t.me/anons39", platform="tg")
     assert surface["source"] == "telega_in"
+    assert surface["status"] == "needs_comment_resolve"
     assert "Telega.in" in surface["topic_hint"]
 
 
@@ -620,6 +641,19 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert "ACQ_MAX_VK_SURFACES_PER_RUN" in env
     assert "ACQ_MAX_VK_POSTS_PER_SURFACE" in env
     assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
+
+
+def test_runtime_env_passes_tg_channel_resolve_budget():
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=10), {"surfaces": [
+        {"platform": "tg", "url": "https://t.me/channel", "external_id": "tg:channel", "status": "needs_comment_resolve"},
+    ]})
+
+    assert env["ACQ_TG_SEEDS_JSON"] == '["https://t.me/channel"]'
+    assert "ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN" in env
+    assert "ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS" in env
 
 
 def test_smartik_vk_seeds_are_configured():

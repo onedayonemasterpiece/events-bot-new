@@ -63,11 +63,19 @@ and directly checks the acquisition Kaggle kernel ref before a new live TG run.
 This supplements `kaggle_registry` and prevents immediate reuse of the same
 Telethon auth key while a previous Kaggle kernel is still stopping or not yet
 reflected in the registry.
-Telegram broadcast channels are kept in the discovery map only after their
-commentability is checked: if a channel has no accessible linked discussion /
-comments, the scanner marks it `rejected_no_comments` and does not keep scanning
-it for reply opportunities. Review opportunities are built only from confirmed
-chat/comment surfaces.
+Telegram discovery is resolver-first, not channel-count-first. Runtime seed rows
+for Telegram channels start as `needs_comment_resolve`; each live Kaggle run has
+a separate cheap channel-resolution budget
+(`ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN`) that calls `GetFullChannelRequest` before
+spending LLM budget. If a channel has no accessible linked discussion/comments,
+the scanner marks it `rejected_no_comments`. If it has a linked discussion, the
+channel becomes `resolved_has_linked_discussion` with `linked_discussion_url` /
+`linked_discussion_external_id` in the map, and only the linked discussion
+surface is queued/scanned for reply opportunities. Review opportunities and
+frontier summaries are built only from confirmed replyable surfaces:
+Telegram groups/chats/linked discussions and VK communities/discussion threads.
+Channel posts may be sampled only for new-link discovery, never as reply
+candidates.
 VK discovery is also comment-first: the runtime reads only public wall/comment
 methods, requests `filter=all` wall posts, skips posts with zero comments, reads
 comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`

@@ -127,9 +127,21 @@ async def publish_review_cards(db, bot: Any, opportunities: list[AcqOpportunity]
 
 
 def _frontier_surfaces(surfaces: list[AcqSurface]) -> list[AcqSurface]:
+    replyable_tg_types = {"group", "chat", "megagroup", "linked_discussion"}
+    replyable_vk_types = {"community"}
     return [
         surface for surface in surfaces
-        if str(surface.source or "").strip().lower() in {"discovered", "linked_discussion"}
+        if (
+            (
+                str(surface.platform or "").strip().lower() == "tg"
+                and str(surface.surface_type or "").strip().lower() in replyable_tg_types
+            )
+            or (
+                str(surface.platform or "").strip().lower() == "vk"
+                and str(surface.surface_type or "").strip().lower() in replyable_vk_types
+            )
+        )
+        and str(surface.source or "").strip().lower() in {"discovered", "linked_discussion", "vk_source", "smartik_kaliningrad_catalog", "vk_social_search"}
         and str(surface.status or "").strip().lower() == "candidate"
     ]
 
@@ -137,9 +149,9 @@ def _frontier_surfaces(surfaces: list[AcqSurface]) -> list[AcqSurface]:
 def format_frontier_summary(surfaces: list[AcqSurface], *, limit: int = 12) -> str:
     frontier = _frontier_surfaces(surfaces)
     lines = [
-        "🧭 <b>Discovery: новые ссылки поставлены в очередь</b>",
-        "Согласование не требуется — следующие запуски будут сами анализировать эти чаты/паблики. Ручная калибровка нужна только для reply-кандидатов.",
-        f"Найдено новых surfaces: <b>{len(frontier)}</b>",
+        "🧭 <b>Discovery: новые replyable-поверхности поставлены в очередь</b>",
+        "Согласование не требуется — следующие запуски будут сами анализировать только чаты/linked discussions/VK discussions, где в принципе можно ответить. Каналы без комментариев отклоняются отдельно.",
+        f"Найдено новых replyable surfaces: <b>{len(frontier)}</b>",
     ]
     for surface in frontier[:max(1, limit)]:
         label = surface.title or surface.handle or surface.external_id or surface.url

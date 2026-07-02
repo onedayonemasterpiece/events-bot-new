@@ -120,6 +120,66 @@ async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sam
 
 
 @pytest.mark.asyncio
+async def test_import_updates_channel_to_resolved_linked_discussion_status(db, sample_payload):
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/source_channel",
+            handle="source_channel",
+            external_id="tg:source_channel",
+            status="candidate",
+            source="discovered",
+        ))
+        await session.commit()
+
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "channel",
+            "url": "https://t.me/source_channel",
+            "handle": "source_channel",
+            "external_id": "tg:source_channel",
+            "status": "resolved_has_linked_discussion",
+            "source": "discovered",
+            "reach": {
+                "basis": "telegram_channel_resolved",
+                "linked_discussion_external_id": "tg:source_chat",
+                "linked_discussion_url": "https://t.me/source_chat",
+            },
+            "risk": {
+                "reply_policy": "use_linked_discussion",
+                "linked_discussion_external_id": "tg:source_chat",
+                "linked_discussion_url": "https://t.me/source_chat",
+            },
+        },
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/source_chat",
+            "handle": "source_chat",
+            "external_id": "tg:source_chat",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "reach": {"basis": "telegram_linked_discussion"},
+            "risk": {},
+        },
+    ]
+    payload["opportunities"] = []
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        channel = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:source_channel"))).scalar_one()
+        linked = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:source_chat"))).scalar_one()
+
+    assert channel.status == "resolved_has_linked_discussion"
+    assert channel.risk_json["linked_discussion_url"] == "https://t.me/source_chat"
+    assert linked.surface_type == "linked_discussion"
+    assert linked.status == "candidate"
+
+
+@pytest.mark.asyncio
 async def test_import_rejects_telegram_bot_surfaces(db, sample_payload):
     payload = json.loads(json.dumps(sample_payload))
     payload["surfaces"][0]["external_id"] = "tg:RK39_bot"
@@ -284,11 +344,22 @@ async def test_frontier_summary_publishes_new_surfaces_without_approval_buttons(
             status="candidate",
             source="seed",
         )
+        unresolved_channel = AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/unresolved",
+            external_id="tg:unresolved",
+            title="Unresolved channel",
+            status="needs_comment_resolve",
+            source="discovered",
+        )
         session.add(new_surface)
         session.add(old_seed)
+        session.add(unresolved_channel)
         await session.commit()
         await session.refresh(new_surface)
         await session.refresh(old_seed)
+        await session.refresh(unresolved_channel)
 
     bot = FakeBot()
     shown = await publish_frontier_summary(db, bot, [old_seed, new_surface], config=AcqConfig(review_chat_id=777))
@@ -296,6 +367,8 @@ async def test_frontier_summary_publishes_new_surfaces_without_approval_buttons(
     assert shown == 1
     assert len(bot.calls) == 1
     assert "New linked chat" in bot.calls[0][1]
+    assert "Unresolved channel" not in bot.calls[0][1]
+    assert "replyable" in bot.calls[0][1]
     assert "Согласование не требуется" in bot.calls[0][1]
     assert bot.calls[0][2].get("reply_markup") is None
     async with db.get_session() as session:
@@ -411,11 +484,53 @@ async def test_surface_map_xlsx_has_clickable_group_links(db):
     headers = [cell.value for cell in ws[1]]
     assert "reply_policy" in headers
     assert "scan_state" in headers
+    assert "linked_discussion_url" in headers
     rows = list(ws.iter_rows(min_row=2, values_only=False))
     row = next(row for row in rows if row[4].value == "https://t.me/map_test")
     assert row[4].hyperlink.target == "https://t.me/map_test"
     assert row[8].value == "confirmed_can_reply_after_human_review"
     assert "summary" in wb.sheetnames
+
+
+@pytest.mark.asyncio
+async def test_surface_map_xlsx_links_channel_to_linked_discussion(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "channel",
+            "url": "https://t.me/source_channel",
+            "handle": "source_channel",
+            "external_id": "tg:source_channel",
+            "status": "resolved_has_linked_discussion",
+            "source": "discovered",
+            "reach": {
+                "basis": "telegram_channel_resolved",
+                "linked_discussion_external_id": "tg:source_chat",
+                "linked_discussion_url": "https://t.me/source_chat",
+            },
+            "risk": {
+                "reply_policy": "use_linked_discussion",
+                "linked_discussion_external_id": "tg:source_chat",
+                "linked_discussion_url": "https://t.me/source_chat",
+            },
+        }
+    ]
+    payload["opportunities"] = []
+    await import_discovery_result(db, payload)
+
+    path = await export_surface_map_xlsx(db)
+    from openpyxl import load_workbook
+    wb = load_workbook(path)
+    ws = wb["groups"]
+    headers = [cell.value for cell in ws[1]]
+    linked_idx = headers.index("linked_discussion_url")
+    policy_idx = headers.index("reply_policy")
+    row = next(ws.iter_rows(min_row=2, values_only=False))
+
+    assert row[policy_idx].value == "channel_metadata_only_use_linked_discussion"
+    assert row[linked_idx].value == "https://t.me/source_chat"
+    assert row[linked_idx].hyperlink.target == "https://t.me/source_chat"
 
 
 @pytest.mark.asyncio
@@ -426,6 +541,7 @@ async def test_runtime_seed_payload_includes_telega_in_kaliningrad_seeds(db):
 
     by_external = {item["external_id"]: item for item in payload["surfaces"]}
     assert by_external["tg:anons39"]["source"] == "telega_in"
+    assert by_external["tg:anons39"]["status"] == "needs_comment_resolve"
     assert "telega.in/channels/anons39" in by_external["tg:anons39"]["topic_hint"]
 
 

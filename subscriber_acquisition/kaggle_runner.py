@@ -202,7 +202,7 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
         platform = str(item.get("platform") or "").strip().lower()
         status = str(item.get("status") or "").strip().lower()
         source = str(item.get("source") or "").strip().lower()
-        if status not in {"seed", "candidate", "approved"} and source not in {"seed", "vk_source"}:
+        if status not in {"seed", "candidate", "approved", "needs_comment_resolve"} and source not in {"seed", "vk_source"}:
             continue
         if platform == "tg" and is_tg_bot_or_service_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
             continue
@@ -232,24 +232,29 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     seen: set[tuple[str, str]] = set()
     async with db.get_session() as session:
         rows = (await session.execute(
-            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved"])).limit(250)
+            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved", "needs_comment_resolve"])).limit(250)
         )).scalars().all()
 
         def _surface_priority(row: AcqSurface) -> tuple[int, int, int, float, int]:
             source = str(row.source or "").strip().lower()
             status = str(row.status or "").strip().lower()
+            surface_type = str(row.surface_type or "").strip().lower()
             vk_handle = vk_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold() if str(row.platform or "").lower() == "vk" else ""
             is_smartik = vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE
             is_social_search = vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE
             is_curated_social = is_smartik or is_social_search
             is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
+            is_replyable_tg = str(row.platform or "").lower() == "tg" and surface_type in {"group", "chat", "megagroup", "linked_discussion"}
+            needs_tg_comment_resolve = str(row.platform or "").lower() == "tg" and (
+                status == "needs_comment_resolve" or surface_type in {"channel", "unknown_public"}
+            )
             reach = row.reach_json if isinstance(row.reach_json, dict) else {}
             basis = str((reach or {}).get("basis") or "").strip().lower()
             is_seed_only = basis in {"", "seed_only", "vk_source_seed", "telega_in_seed", "smartik_catalog_seed"}
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
-            source_rank = 0 if is_curated_social else (1 if is_new_frontier else 2)
+            source_rank = 0 if is_replyable_tg else (1 if needs_tg_comment_resolve else (2 if is_curated_social else (3 if is_new_frontier else 4)))
             return (
                 source_rank,
                 0 if is_seed_only else 1,
@@ -311,7 +316,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "title": title,
                 "handle": handle,
                 "external_id": external_id,
-                "status": "candidate",
+                "status": "needs_comment_resolve",
                 "source": "telega_in",
                 "topic_hint": f"Telega.in Kaliningrad regional catalog seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "telega_in_seed"},
@@ -424,6 +429,8 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_LLM_CALLS_PER_RUN": os.getenv("ACQ_MAX_LLM_CALLS_PER_RUN", "80"),
         "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "1200"),
         "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
+        "ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN": os.getenv("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", ""),
+        "ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS": os.getenv("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", "5"),
         "ACQ_TG_SEARCH_QUERIES_JSON": os.getenv("ACQ_TG_SEARCH_QUERIES_JSON", ""),
         "ACQ_TG_SEARCH_MESSAGES_PER_QUERY": os.getenv("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", "0"),
         "ACQ_MAX_VK_SURFACES_PER_RUN": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", ""),
