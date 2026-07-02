@@ -473,6 +473,22 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         env["ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON"] = _json_env_value(sorted(set(terminal_tg_handles))[:5000])
     if tg_seeds:
         env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
+        tg_seed_meta = []
+        for item in seed_payload.get("surfaces") or []:
+            if not isinstance(item, dict) or str(item.get("platform") or "").strip().lower() != "tg":
+                continue
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            tg_seed_meta.append({
+                "url": url,
+                "handle": item.get("handle"),
+                "external_id": item.get("external_id"),
+                "surface_type": item.get("surface_type"),
+                "source": item.get("source"),
+            })
+        if tg_seed_meta:
+            env["ACQ_TG_SEED_SURFACES_JSON"] = _json_env_value(tg_seed_meta[:1000])
     if vk_seeds:
         env["ACQ_VK_SEEDS_JSON"] = _json_env_value(vk_seeds)
         # Product request: start VK discovery from all existing monitored VK groups.

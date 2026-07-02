@@ -1274,6 +1274,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     seen_contexts = _seen_context_urls()
     known_terminal_tg = _known_terminal_tg_handles()
     known_terminal_tg_skipped: set[str] = set()
+    tg_seed_meta = _tg_seed_metadata()
     opportunity_keys: set[str] = set()
     deadline = _deadline_after_seconds()
     for raw_url in seed_urls[:max_surfaces]:
@@ -1519,6 +1520,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         from telethon import TelegramClient
         from telethon.sessions import StringSession
         from telethon.tl.functions.channels import GetFullChannelRequest
+        from telethon.tl.types import PeerChannel
     except Exception as exc:
         diagnostics.append(f"telethon unavailable: {exc}")
         return [], [], diagnostics
@@ -1584,12 +1586,18 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             _status_event("alive", phase="telegram_scan", status="running", progress=progress)
             await _human_pause_async(multiplier=0.8 if processed > 1 else 0.2)
             try:
-                entity = await client.get_entity(int(handle) if str(handle).isdigit() else handle)
+                entity_ref = PeerChannel(int(handle)) if str(handle).isdigit() else handle
+                entity = await client.get_entity(entity_ref)
             except Exception as exc:
                 diagnostics.append(f"{handle}: get_entity failed: {exc}")
                 continue
             TG_SCAN_STATS["surfaces_attempted"] += 1
+            seed_meta = _metadata_for_tg_seed(raw_url, handle, tg_seed_meta)
+            seed_surface_type = str(seed_meta.get("surface_type") or "").strip().lower()
+            seed_source = str(seed_meta.get("source") or "").strip()
             surface_type = "channel" if bool(getattr(entity, "broadcast", False)) else "group" if bool(getattr(entity, "megagroup", False)) else "chat"
+            if seed_surface_type == "linked_discussion":
+                surface_type = "linked_discussion"
             surface = _seed_surface(f"https://t.me/{handle}", platform="tg")
             surface.update({
                 "surface_type": surface_type,
@@ -1598,6 +1606,12 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 "reach": {"members": getattr(entity, "participants_count", None), "confidence": "low", "basis": "telegram_entity"},
                 "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only public scan"},
             })
+            if seed_source:
+                surface["source"] = seed_source
+            if seed_meta.get("external_id"):
+                surface["external_id"] = str(seed_meta.get("external_id"))
+            if seed_meta.get("url"):
+                surface["url"] = str(seed_meta.get("url"))
             if _is_out_of_region_surface(surface):
                 surface = _mark_out_of_region_surface(surface, reason="resolved Telegram title/handle is outside Kaliningrad Oblast")
                 surfaces[surface["external_id"]] = surface
@@ -1655,7 +1669,8 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     TG_SCAN_STATS["channels_rejected_no_comments"] += 1
                     diagnostics.append(f"{handle}: rejected channel without accessible comments")
             elif replyable_processed < max_surfaces:
-                scan_entities.append((entity, surface, None))
+                relation_hint = "linked_discussion" if surface_type == "linked_discussion" else None
+                scan_entities.append((entity, surface, relation_hint))
             else:
                 diagnostics.append(f"{handle}: queued for future scan; replyable budget exhausted")
 
@@ -1786,6 +1801,28 @@ def _seen_context_urls() -> set[str]:
 def _known_terminal_tg_handles() -> set[str]:
     raw = _json_env("ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON", [])
     return {str(x).strip().strip("/").casefold() for x in list(raw or []) if str(x).strip()}
+
+
+def _tg_seed_metadata() -> dict[str, dict[str, Any]]:
+    raw = _json_env("ACQ_TG_SEED_SURFACES_JSON", [])
+    out: dict[str, dict[str, Any]] = {}
+    for item in list(raw or []):
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        handle = str(item.get("handle") or _handle_from_url(url)).strip().strip("/")
+        external_id = str(item.get("external_id") or "").strip()
+        for key in {handle.casefold(), url.rstrip("/").casefold(), external_id.casefold()}:
+            if key:
+                out[key] = item
+    return out
+
+
+def _metadata_for_tg_seed(raw_url: str, handle: str, metadata: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    for key in [str(handle or "").casefold(), str(raw_url or "").rstrip("/").casefold(), f"tg:{handle}".casefold() if handle else ""]:
+        if key and key in metadata:
+            return metadata[key]
+    return {}
 
 
 def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None, scanned_opportunities: list[dict[str, Any]] | None = None, diagnostics: list[str] | None = None) -> dict[str, Any]:

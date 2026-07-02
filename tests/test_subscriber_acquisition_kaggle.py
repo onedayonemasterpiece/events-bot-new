@@ -654,6 +654,7 @@ def test_runtime_env_passes_tg_channel_resolve_budget():
     assert env["ACQ_TG_SEEDS_JSON"] == '["https://t.me/channel"]'
     assert "ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN" in env
     assert "ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS" in env
+    assert "ACQ_TG_SEED_SURFACES_JSON" in env
 
 
 def test_smartik_vk_seeds_are_configured():
@@ -739,6 +740,20 @@ def test_known_terminal_tg_handles_env_parser(monkeypatch):
     monkeypatch.setenv("ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON", '["Anons39", "kpkld"]')
 
     assert runtime._known_terminal_tg_handles() == {"anons39", "kpkld"}
+
+
+def test_tg_seed_metadata_env_parser(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv(
+        "ACQ_TG_SEED_SURFACES_JSON",
+        '[{"url":"https://t.me/c/1481648829","handle":"1481648829","external_id":"tg:1481648829","surface_type":"linked_discussion","source":"linked_discussion"}]',
+    )
+
+    meta = runtime._tg_seed_metadata()
+
+    assert meta["1481648829"]["surface_type"] == "linked_discussion"
+    assert meta["https://t.me/c/1481648829"]["source"] == "linked_discussion"
+    assert runtime._metadata_for_tg_seed("https://t.me/c/1481648829", "1481648829", meta)["external_id"] == "tg:1481648829"
 
 
 def test_kaggle_dataset_slug_stays_within_current_api_limit():
