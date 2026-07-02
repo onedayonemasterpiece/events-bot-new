@@ -223,14 +223,14 @@ The Edge Function runs an LLM verifier after pgvector retrieval when the user ha
 - primary online verifier is fast Gemini Lite (`EVENT_SEARCH_LLM_LITE_MODEL=gemini-3.1-flash-lite`), because it can classify the compact candidate batch in about a second and has enough effective quota after KEY5 rotation;
 - overflow verifier is Gemma 4 26B (`EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL=gemma-4-26b-a4b-it`), used only if all configured Lite key lanes fail with quota/capacity/retryable provider errors or Lite returns an unusable classification;
 - legacy `EVENT_SEARCH_LLM_MODEL` is no longer used as the primary model in the Lite-first strategy; if present, it is treated only as an overflow fallback source after the explicit `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_*` envs;
-- `EVENT_SEARCH_VERIFICATION_WINDOW=20` and `EVENT_SEARCH_LLM_MAX_CANDIDATES=20` by default for the fast online batch. The UI still returns up to `12` cards, but the verifier can judge a wider recall window in one model call;
+- `EVENT_SEARCH_VERIFICATION_WINDOW=10` by default for the fast online batch after the 2026-07-02 latency probe; the browser requests `limit=8, candidate_window=10` for the first page so Gemini Lite receives about 6–8k prompt chars instead of the previous ~14k/20-candidate prompt;
 - model policy is `lite_first_gemma_overflow`: try Gemini Lite first across all configured Google key lanes, then Gemma 4 26B overflow.
 
 Operational knobs: `EVENT_SEARCH_LLM_LITE_MODEL(S)`, `EVENT_SEARCH_LLM_LITE_ATTEMPTS`, `EVENT_SEARCH_LLM_LITE_TIMEOUT_MS`, `EVENT_SEARCH_LLM_LITE_RETRY_BACKOFF_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_MODEL(S)`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_TIMEOUT_MS`, `EVENT_SEARCH_LLM_GEMMA_OVERFLOW_ENABLED`.
 Prompt/latency knobs: `EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS` (default `768`),
 `EVENT_SEARCH_LLM_THINKING_LEVEL` (default `MINIMAL`),
 `EVENT_SEARCH_LLM_FACT_MAX_CHARS` (default `320`) and
-`EVENT_SEARCH_LLM_MAX_CANDIDATES` (default `20`).
+`EVENT_SEARCH_LLM_MAX_CANDIDATES` (upper safety cap, default `20`; the online first-page batch is normally smaller through `candidate_window=10`).
 
 High-match contract:
 
@@ -239,7 +239,7 @@ High-match contract:
 3. Only `exact_event_ids` are rendered under **«Результаты поиска»** (`items`).
 4. Weak/uncertain matches are rendered only under **«Возможно, вам будет интересно»** (`fallback_items`).
 5. If the LLM times out, provider returns non-2xx, facts are insufficient, quota is not reserved, the LLM rubber-stamps too many candidates as exact, or the verifier is disabled, the Edge Function fails closed: `items=[]`, candidates become possible/fallback only. Raw pgvector candidates must not be shown as exact search results in the public high-match mode.
-6. `has_more=false` in this MVP high-match mode because repeated per-page LLM calls produced inconsistent page boundaries. The next production step is a cached/cursor verified window so “Показать ещё” paginates within one LLM-classified set instead of re-verifying each page.
+6. The first online page is deliberately small (`candidate_window=10`, `limit=8`) and `has_more` is exposed while pgvector still has later windows. “Показать ещё” requests the next vector offset and verifies that smaller batch instead of sending one heavy 20–40 candidate prompt.
 
 P1 progressive UX target:
 
@@ -312,6 +312,13 @@ The event documents embed weekday/time/admission fields in the deterministic sea
 - admission: `free`, `registration_required`, `paid`.
 
 The facets are not used to store raw query text. They are passed to `search_events_by_embedding_v1` and written only as compact metadata in Edge logs / audit rows. The RPC first asks pgvector for the nearest semantic candidates and only then applies a bounded boost (`weekday` > `admission` > `time_of_day`); therefore a facet cannot create events outside the trusted `card_snapshot` catalogue and cannot replace semantic retrieval with broad deterministic filtering.
+
+
+### 2026-07-02 live batch-size probe
+
+Incident `INC-2026-07-02-static-search-92-percent-no-cards` showed that the previous 20-candidate online verifier window could leave the browser at the synthetic `92%` progress state while Lite lanes timed out. A live Edge Function experiment over `На природу с детьми`, `искусство у моря` and `в пятницу бесплатно` compared `candidate_window` values 8/10/12/16/20. The best first-page trade-off was `limit=8, candidate_window=10`: average browser round trip about `2.5s`, no Lite timeouts in the probe, roughly `7.4k` prompt chars and enough current-batch cards for a mobile first screen. `candidate_window=20` averaged about `9.8s` and produced repeated 3.5s Lite timeouts plus Gemma overflow for `искусство у моря` in the probe.
+
+The frontend now renders three card-shaped shimmer placeholders while a search is running. This is a perceived-latency guard only; true vector-first progressive rendering remains a follow-up because the current reliable mobile path requests a single JSON response rather than the previously unreliable NDJSON stream.
 
 ## Quotas and privacy
 

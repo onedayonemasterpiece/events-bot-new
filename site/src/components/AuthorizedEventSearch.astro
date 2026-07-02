@@ -53,6 +53,11 @@ const HeadingTag = headingLevel;
     </button>
   </form>
   <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
+  <div class="authorized-search__skeletons" data-search-skeletons hidden aria-hidden="true">
+    <div class="authorized-search__skeleton-card"></div>
+    <div class="authorized-search__skeleton-card"></div>
+    <div class="authorized-search__skeleton-card"></div>
+  </div>
   <div class="authorized-search__results" data-search-results hidden></div>
   <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
 </section>
@@ -80,6 +85,7 @@ const HeadingTag = headingLevel;
     const avatarInitial = root.querySelector('[data-search-avatar-initial]');
     const avatarIcon = root.querySelector('[data-search-avatar-icon]');
     const results = root.querySelector('[data-search-results]');
+    const skeletons = root.querySelector('[data-search-skeletons]');
     const more = root.querySelector('[data-search-more]');
     let supabase = null;
     let currentQuery = '';
@@ -338,8 +344,14 @@ const HeadingTag = headingLevel;
       if (submitLabel) submitLabel.textContent = 'Искать';
     }
 
+    function setSkeletonLoading(isLoading) {
+      if (skeletons) skeletons.hidden = !isLoading;
+      root.classList.toggle('is-search-skeleton-loading', isLoading);
+    }
+
     function setSearchLoading(isLoading) {
       loading = isLoading;
+      setSkeletonLoading(isLoading);
       if (submit) {
         submit.disabled = isLoading;
         submit.classList.toggle('is-loading', isLoading);
@@ -498,6 +510,7 @@ const HeadingTag = headingLevel;
 
     function clearResults() {
       if (results) { results.innerHTML = ''; results.hidden = true; setResultContext({}); }
+      setSkeletonLoading(false);
       if (more) more.hidden = true;
       offset = 0;
       fallbackStarted = false;
@@ -626,7 +639,7 @@ const HeadingTag = headingLevel;
           invokeEventSearch(
             // JSON response path stays reliable; LLM verifier is bounded on the Edge side
             // and falls back to vector order on timeout/provider failure.
-            { query, limit: 12, offset, include_fallback: true, use_llm_verifier: true },
+            { query, limit: 8, offset, candidate_window: 10, include_fallback: true, use_llm_verifier: true },
             session,
           ),
           searchTimeoutMs,
@@ -660,7 +673,7 @@ const HeadingTag = headingLevel;
             appendSectionHeading('Возможно, вам будет интересно');
             fallbackStarted = true;
           }
-          if (!data?.has_more && fallbackItems.length) {
+          if (fallbackItems.length) {
             if (!fallbackStarted) {
               appendSectionHeading('Возможно, вам будет интересно');
               fallbackStarted = true;
@@ -678,6 +691,7 @@ const HeadingTag = headingLevel;
         if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
         else await refreshQuota();
         if (items.length === 0 && fallbackItems.length === 0) setStatus('Ничего не нашлось. Попробуйте описать запрос иначе.');
+        if (results && results.children.length) setSkeletonLoading(false);
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
         const message = String(error?.message || error);
@@ -685,6 +699,7 @@ const HeadingTag = headingLevel;
         else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
       } finally {
         for (const timer of progressTimers) window.clearTimeout(timer);
+        setSkeletonLoading(false);
         setSearchLoading(false);
         window.setTimeout(() => {
           if (!loading) resetSearchProgress();

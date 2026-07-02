@@ -1244,7 +1244,7 @@ async function runEventSearch(
   const offset = clampInt(body.offset, 0, 0, 500);
   const verificationWindow = clampInt(
     body.candidate_window,
-    envInt("EVENT_SEARCH_VERIFICATION_WINDOW", 20, 12, 60),
+    envInt("EVENT_SEARCH_VERIFICATION_WINDOW", 10, 8, 60),
     limit,
     60,
   );
@@ -1334,7 +1334,7 @@ async function runEventSearch(
       {
         p_query_embedding: embedding,
         p_match_count: verificationWindow,
-        p_offset_count: 0,
+        p_offset_count: offset,
         p_date_from: new Date().toISOString().slice(0, 10),
         p_date_to: null,
         p_city_filter: null,
@@ -1355,6 +1355,7 @@ async function runEventSearch(
     let items = (Array.isArray(rows) ? rows : []).map(normalizeCandidate);
     const retrievedCount = items.length;
     const nextOffset = offset + retrievedCount;
+    const hasMore = retrievedCount >= verificationWindow && nextOffset < 60;
 
     let llmResult: LlmVerifyResult = {
       exact: [],
@@ -1511,7 +1512,7 @@ async function runEventSearch(
         quota: quotaState,
         items,
         fallback_items: fallbackItems,
-        has_more: false,
+        has_more: hasMore,
         next_offset: nextOffset,
         retrieved_count: retrievedCount,
         verification_window: verificationWindow,

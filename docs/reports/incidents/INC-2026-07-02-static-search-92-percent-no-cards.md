@@ -89,26 +89,29 @@ Open. Current evidence supports multiple contributing roots:
 
 ## Immediate Mitigation
 
-None deployed yet. Investigation confirms backend success for reported queries on the fresh preview and identifies the missing production entrypoint plus missing frontend skeleton wiring.
+Partial mitigation deployed to the working preview path and Supabase Edge Function on 2026-07-02: smaller first-page verifier batches, offset-based pagination and visible shimmer card placeholders. The root `/poisk/` promotion gap remains open.
 
 ## Corrective Actions
 
-Pending.
+- Reduced the online verifier first page to `limit=8` / `candidate_window=10` based on a live batch-size probe.
+- Changed the Edge Function default verification window fallback from 20 to 10 and made pgvector search honor `offset` for subsequent batches.
+- Exposed `has_more` while later vector windows remain available.
+- Wired the existing shimmer-card CSS into actual search skeleton DOM/JS so users see card-shaped loading placeholders.
 
 ## Follow-up Actions
 
-- [ ] Implement card-shaped shimmer/halo placeholder in `AuthorizedEventSearch.astro` and verify it appears during slow search.
-- [ ] Split response path into vector-first render plus LLM refinement, or add a hard fast fallback that returns vector/possible cards before LLM lane timeout blocks the UI.
+- [x] Implement card-shaped shimmer/halo placeholder in `AuthorizedEventSearch.astro` and verify it appears during slow search.
+- [ ] Split response path into true vector-first render plus LLM refinement, or add a hard fast fallback that returns vector/possible cards before LLM lane timeout blocks the UI.
 - [ ] Add client-side telemetry for search submit/response/render/error/stuck states without storing raw query text.
 - [ ] Promote or repoint production `/poisk/` and root CTA to the current build.
 - [ ] Tune LLM verifier candidate window/timeouts/cache so first visible result target is consistently sub-2s when vector candidates exist.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: pending commit; Edge Function `event-search` deployed to personalization Supabase project `epyznmylqmchteykjsqj` from the same local diff.
+- deploy path: static preview `https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/` (`npm --prefix site run build:preview`, `check:preview`, `deploy:preview` passed; public preview verification ok).
+- regression checks: live batch-size probe artifact `artifacts/codex/prod-smart-search-20260702/window-tuning-live.json`; post-deploy mobile Playwright artifact `artifacts/codex/prod-smart-search-20260702/post-deploy-batch-smoke.json`.
+- post-deploy verification: query `искусство у моря` on public preview returned first page in `2572ms` backend total with `limit=8`, `candidate_window=10`, `retrieved_count=10`, `has_more=true`; skeleton became visible at `96ms` and hid after result cards rendered. “Показать ещё” sent `offset=10` and appended cards.
 
 ## Prevention
 
