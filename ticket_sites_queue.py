@@ -427,7 +427,7 @@ async def _smart_update_from_theatre_event(
         db,
         candidate,
         check_source_url=False,
-        schedule_kwargs={"skip_vk_sync": True},
+        schedule_kwargs={"skip_vk_sync": False},
     )
     return str(result.status or ""), int(result.event_id) if result.event_id else None
 
@@ -546,7 +546,7 @@ async def process_ticket_sites_queue(
                 try:
                     from source_parsing.pyramida import parse_pyramida_output, run_pyramida_kaggle_kernel
 
-                    status, file_paths, _dur = await run_pyramida_kaggle_kernel(urls)
+                    status, file_paths, _dur = await run_pyramida_kaggle_kernel(urls, db=db)
                     if status != "complete" or not file_paths:
                         raise RuntimeError(f"pyramida kernel failed status={status}")
                     events = parse_pyramida_output(file_paths)
@@ -608,7 +608,7 @@ async def process_ticket_sites_queue(
                 try:
                     from source_parsing.dom_iskusstv import parse_dom_iskusstv_output, run_dom_iskusstv_kaggle_kernel
 
-                    status, file_paths, _dur = await run_dom_iskusstv_kaggle_kernel(urls)
+                    status, file_paths, _dur = await run_dom_iskusstv_kaggle_kernel(urls, db=db)
                     if status != "complete" or not file_paths:
                         raise RuntimeError(f"dom_iskusstv kernel failed status={status}")
                     events = parse_dom_iskusstv_output(file_paths)
@@ -672,7 +672,7 @@ async def process_ticket_sites_queue(
 
                     from source_parsing.qtickets import parse_qtickets_output, run_qtickets_kaggle_kernel
 
-                    status, file_paths, _dur = await run_qtickets_kaggle_kernel()
+                    status, file_paths, _dur = await run_qtickets_kaggle_kernel(db=db)
                     if status != "complete" or not file_paths:
                         raise RuntimeError(f"qtickets kernel failed status={status}")
                     json_files = [f for f in file_paths if Path(f).suffix.lower() == ".json"]

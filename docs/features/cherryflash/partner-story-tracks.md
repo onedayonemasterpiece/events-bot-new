@@ -115,6 +115,13 @@ fail-closed.
 Other partner tracks resolve promo only for their exact partner `profile_key`
 unless they get their own documented exception.
 
+Partner story fanout is best-effort per configured target. A Telegram Business
+or Telethon authorization failure may fail that Telegram-family target, but it
+must not abort unrelated VK wall/story targets in the same CherryFlash render
+when VK credentials are present. If the run reaches Kaggle handoff and then
+ends as terminal `FAILED`, the same-day watchdog still treats it as retryable;
+handoff alone is not delivery evidence for a partner track.
+
 For `partner_region_east_001`, a missing Telegram Business target is treated as
 a same-day defer signal after the scheduled attempt plus one watchdog retry.
 When the cached Business connection still cannot be resolved on the retry, the
@@ -267,7 +274,7 @@ Selection policy:
 - profile key: `popular_review_konb`;
 - track id: `partner_konb_library_001`;
 - default publish mode (post-round-3, 2026-05-17): **`prod`**. Test mode is still available via setting `partner_track_konb_publish_mode=test`, which publishes a normal Telegram channel post to `https://t.me/keniggpt` (not a channel story);
-- production story fanout (post-round-3): **two independent best-effort targets** — Telegram channel story `https://t.me/kaliningradlibrary` and VK community story `https://vk.com/konb39`. **Neither is `required`** — success in one does not gate the other, and failure of one does not fail the overall publish. Each target is attempted on its own (`blocking=False`, `required=False`). Production evidence from `INC-2026-05-18` confirms the VK story path can publish while Telegram channel stories for `@kaliningradlibrary` fail with `BOOSTS_REQUIRED`; Telegram story delivery therefore requires the channel boost prerequisite (or a future supported business/story target) and remains best-effort until that prerequisite is resolved;
+- production story fanout (post-round-4, 2026-05-30): **three independent best-effort targets** — Telegram channel story `https://t.me/kaliningradlibrary`, VK community story `https://vk.com/konb39`, and a VK community **wall post** into the same `https://vk.com/konb39` (transport `vk_wall`). **None is `required`** — success in one does not gate the others, and failure of one does not fail the overall publish. Each target is attempted on its own (`blocking=False`, `required=False`). Round-4 operator request: «Видеоанонс КОНБ нужно в Вк помимо публикации в историю опубликовать ещё и в виде поста в вк-сообщество научной библиотеки». The `vk_wall` post reuses the shipped `vk_wall` transport (`_publish_vk_wall_video`: `video.save` → `wall.post`); its caption auto-fills via `build_vk_video_announce_caption` (cities/dates) because no explicit caption is set on the target. `_dedupe_targets` keys `vk_story:konb39` and `vk_wall:konb39` distinctly, so the two VK surfaces never collapse. Production evidence from `INC-2026-05-18` confirms the VK story path can publish while Telegram channel stories for `@kaliningradlibrary` fail with `BOOSTS_REQUIRED`; Telegram story delivery therefore requires the channel boost prerequisite (or a future supported business/story target) and remains best-effort until that prerequisite is resolved;
 - daily schedule (post-round-3): **`12:37 Europe/Kaliningrad`**, exactly 7 min after the eco/nature partner slot at 12:30, per operator brief. The partner-track render guard is scoped by `profile_key`, so a slow `popular_review_eco` render must not block the KОНБ slot or watchdog retries. The watchdog still retries later the same day until the shared 22:00 deadline if the KОНБ slot itself misses handoff;
 - КОНБ test/prod modes must not inherit global `video_announce_story_business_targets`; the only targets are the explicit КОНБ test/prod targets above.
 

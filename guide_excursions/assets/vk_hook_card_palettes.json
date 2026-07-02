@@ -1,0 +1,875 @@
+{
+  "version": "1.0.0",
+  "created_for": "VK digest hook cards, 1080x1080",
+  "contrast_policy": {
+    "primary_text_min_ratio": 7.0,
+    "basis": "WCAG contrast ratio formula; all background/text pairs in this file are >= 7:1",
+    "recommended_usage": "Use background + text for all meaningful text. Use accent only for shapes or badges with accent_text."
+  },
+  "layout_defaults": {
+    "canvas": {
+      "width": 1080,
+      "height": 1080
+    },
+    "safe_zone": {
+      "x": 150,
+      "y": 160,
+      "width": 780,
+      "height": 760
+    },
+    "main_text": {
+      "min_px": 64,
+      "preferred_px": [
+        76,
+        104
+      ],
+      "max_lines": 5
+    },
+    "subline": {
+      "min_px": 36,
+      "preferred_px": [
+        42,
+        56
+      ],
+      "max_lines": 2
+    }
+  },
+  "palettes": [
+    {
+      "id": "deep_wine_ivory",
+      "name_ru": "Глубокое вино / слоновая кость",
+      "family": "dark_editorial",
+      "background": "#4A0F1E",
+      "text": "#FFF4DF",
+      "accent": "#FFB000",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.97,
+        "accent_on_background": 8.32,
+        "accent_text_on_accent": 11.46,
+        "text_on_accent": 1.68
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "история, старый город, вечерние события",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "prussian_cream",
+      "name_ru": "Прусский синий / тёплый крем",
+      "family": "dark_editorial",
+      "background": "#102A43",
+      "text": "#FFF3D6",
+      "accent": "#F26B38",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.28,
+        "accent_on_background": 4.84,
+        "accent_text_on_accent": 6.94,
+        "text_on_accent": 2.75
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "архитектура, немецкое наследие, музейность",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "baltic_navy_sand",
+      "name_ru": "Балтийский navy / песочный",
+      "family": "dark_editorial",
+      "background": "#071B33",
+      "text": "#F5E6C8",
+      "accent": "#3DD6D0",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 14.04,
+        "accent_on_background": 9.66,
+        "accent_text_on_accent": 11.73,
+        "text_on_accent": 1.45
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "морские, портовые, городские маршруты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "pine_black_mint",
+      "name_ru": "Хвойный чёрный / ледяная мята",
+      "family": "dark_editorial",
+      "background": "#063B35",
+      "text": "#E9FFF7",
+      "accent": "#FF6B6B",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 11.94,
+        "accent_on_background": 4.49,
+        "accent_text_on_accent": 7.57,
+        "text_on_accent": 2.66
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "парки, природные маршруты, спокойная культура",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "charcoal_apricot",
+      "name_ru": "Графит / абрикос",
+      "family": "dark_editorial",
+      "background": "#171717",
+      "text": "#FFD9A8",
+      "accent": "#73E2A7",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.44,
+        "accent_on_background": 11.24,
+        "accent_text_on_accent": 13.17,
+        "text_on_accent": 1.2
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "афиши без фото, универсальные дайджесты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "aubergine_lemon",
+      "name_ru": "Баклажан / лимонный крем",
+      "family": "dark_editorial",
+      "background": "#2A1238",
+      "text": "#FFF8B5",
+      "accent": "#FF5DA2",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 15.58,
+        "accent_on_background": 5.91,
+        "accent_text_on_accent": 7.34,
+        "text_on_accent": 2.64
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "театр, музыка, необычные прогулки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "espresso_cyan",
+      "name_ru": "Эспрессо / светлый циан",
+      "family": "dark_editorial",
+      "background": "#24140E",
+      "text": "#DDF9FF",
+      "accent": "#F2B84B",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 16.14,
+        "accent_on_background": 9.93,
+        "accent_text_on_accent": 11.73,
+        "text_on_accent": 1.63
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "камерные события, локальные истории",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "oxide_cloud",
+      "name_ru": "Оксидная красная / облачный",
+      "family": "dark_editorial",
+      "background": "#5A1D12",
+      "text": "#FFF8F0",
+      "accent": "#67E8F9",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 12.31,
+        "accent_on_background": 8.95,
+        "accent_text_on_accent": 14.49,
+        "text_on_accent": 1.38
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "кирпичная архитектура, форты, индустриальные сюжеты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "midnight_gold",
+      "name_ru": "Полночный фиолетовый / мягкое золото",
+      "family": "dark_editorial",
+      "background": "#171333",
+      "text": "#FFE7A3",
+      "accent": "#A7F3D0",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 14.62,
+        "accent_on_background": 13.91,
+        "accent_text_on_accent": 16.37,
+        "text_on_accent": 1.05
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "концерты, вечерние экскурсии, премиальная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "ink_rose",
+      "name_ru": "Чернильный / пыльная роза",
+      "family": "dark_editorial",
+      "background": "#101828",
+      "text": "#FADADD",
+      "accent": "#9BF6FF",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.64,
+        "accent_on_background": 14.38,
+        "accent_text_on_accent": 17.02,
+        "text_on_accent": 1.05
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "городские тайны, романтичные маршруты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "black_lime",
+      "name_ru": "Мягкий чёрный / лайм",
+      "family": "bold_modern",
+      "background": "#111318",
+      "text": "#D8FF4F",
+      "accent": "#FF6A3D",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 16.22,
+        "accent_on_background": 6.53,
+        "accent_text_on_accent": 7.38,
+        "text_on_accent": 2.48
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "дерзкие короткие крючки, молодежная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "ultramarine_butter",
+      "name_ru": "Ультрамарин / сливочный",
+      "family": "bold_modern",
+      "background": "#1620D8",
+      "text": "#FFF1B8",
+      "accent": "#FF5C8A",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 8.3,
+        "accent_on_background": 3.2,
+        "accent_text_on_accent": 7.15,
+        "text_on_accent": 2.59
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "самые яркие карточки в сетке",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "oat_black_burgundy",
+      "name_ru": "Овсяный / почти чёрный",
+      "family": "light_editorial",
+      "background": "#E8D8B8",
+      "text": "#111111",
+      "accent": "#8F1633",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 13.44,
+        "accent_on_background": 6.41,
+        "accent_text_on_accent": 9.01,
+        "text_on_accent": 2.1
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "мягкая культурная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "porcelain_navy",
+      "name_ru": "Фарфор / navy",
+      "family": "light_editorial",
+      "background": "#F7F2EA",
+      "text": "#0A2342",
+      "accent": "#C44536",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 14.15,
+        "accent_on_background": 4.43,
+        "accent_text_on_accent": 4.94,
+        "text_on_accent": 3.19
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "музейность, спокойные подборки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "pale_mint_ink",
+      "name_ru": "Бледная мята / чернила",
+      "family": "light_editorial",
+      "background": "#DDF5E7",
+      "text": "#10201B",
+      "accent": "#B00020",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 14.7,
+        "accent_on_background": 6.38,
+        "accent_text_on_accent": 7.33,
+        "text_on_accent": 2.3
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "парки, семейные события",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "rosewood_cream_inverse",
+      "name_ru": "Розовое дерево / кремовый свет",
+      "family": "light_editorial",
+      "background": "#F4D6D3",
+      "text": "#2D0F12",
+      "accent": "#006D77",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 12.96,
+        "accent_on_background": 4.46,
+        "accent_text_on_accent": 6.08,
+        "text_on_accent": 2.91
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "романтические и архитектурные прогулки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "mist_blue_ink",
+      "name_ru": "Туманный голубой / чернильный",
+      "family": "light_editorial",
+      "background": "#DCEBFF",
+      "text": "#0B1F3A",
+      "accent": "#A53F2B",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 13.66,
+        "accent_on_background": 5.19,
+        "accent_text_on_accent": 6.28,
+        "text_on_accent": 2.63
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "город, вода, утренние маршруты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "warm_paper_brown",
+      "name_ru": "Тёплая бумага / тёмный коричневый",
+      "family": "light_editorial",
+      "background": "#F3E4C8",
+      "text": "#21140D",
+      "accent": "#B3401A",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 14.3,
+        "accent_on_background": 4.57,
+        "accent_text_on_accent": 5.73,
+        "text_on_accent": 3.13
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "исторические справки, литературная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "powder_yellow_ink",
+      "name_ru": "Пудрово-жёлтый / графит",
+      "family": "light_editorial",
+      "background": "#F8E7A2",
+      "text": "#151515",
+      "accent": "#005F73",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 14.73,
+        "accent_on_background": 5.87,
+        "accent_text_on_accent": 7.28,
+        "text_on_accent": 2.51
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "дружелюбные дайджесты, семейные экскурсии",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "clay_white_ink",
+      "name_ru": "Глина светлая / тёмный баклажан",
+      "family": "light_editorial",
+      "background": "#EBC8B2",
+      "text": "#241021",
+      "accent": "#1F7A8C",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 11.47,
+        "accent_on_background": 3.18,
+        "accent_text_on_accent": 4.98,
+        "text_on_accent": 3.6
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "ремесло, история быта, гастро/город",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "lavender_ink",
+      "name_ru": "Лаванда / тёмные чернила",
+      "family": "light_editorial",
+      "background": "#E6D9FF",
+      "text": "#17102B",
+      "accent": "#C2410C",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 13.74,
+        "accent_on_background": 3.88,
+        "accent_text_on_accent": 5.18,
+        "text_on_accent": 3.54
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "театр, музыка, культурные маршруты",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "sage_mahogany",
+      "name_ru": "Шалфей / махагон",
+      "family": "light_editorial",
+      "background": "#DCE5C2",
+      "text": "#27110E",
+      "accent": "#6D28D9",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 13.67,
+        "accent_on_background": 5.42,
+        "accent_text_on_accent": 7.1,
+        "text_on_accent": 2.52
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "спокойные локальные истории",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "electric_blue_white",
+      "name_ru": "Электрик / белый",
+      "family": "vivid_poster",
+      "background": "#0034C5",
+      "text": "#FFFFFF",
+      "accent": "#FFD400",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 9.14,
+        "accent_on_background": 6.39,
+        "accent_text_on_accent": 14.67,
+        "text_on_accent": 1.43
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "максимально заметные карточки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "magenta_ivory",
+      "name_ru": "Маджента / айвори",
+      "family": "vivid_poster",
+      "background": "#93004B",
+      "text": "#FFF4E6",
+      "accent": "#00F5D4",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 8.25,
+        "accent_on_background": 6.41,
+        "accent_text_on_accent": 15.01,
+        "text_on_accent": 1.29
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "фестивальный, яркий крючок",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "green_black_cream",
+      "name_ru": "Кислотный зелёный / чёрный",
+      "family": "vivid_poster",
+      "background": "#B6FF00",
+      "text": "#0A0A0A",
+      "accent": "#6A00FF",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 16.3,
+        "accent_on_background": 5.66,
+        "accent_text_on_accent": 6.87,
+        "text_on_accent": 2.88
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "молодёжные, смелые карточки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "orange_ink",
+      "name_ru": "Горячий оранжевый / тёмные чернила",
+      "family": "vivid_poster",
+      "background": "#FF7A00",
+      "text": "#121212",
+      "accent": "#0038FF",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 7.17,
+        "accent_on_background": 2.67,
+        "accent_text_on_accent": 6.98,
+        "text_on_accent": 2.68
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "анонсы, срочные подборки, внимание",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "cyan_ink",
+      "name_ru": "Циан / почти чёрный",
+      "family": "vivid_poster",
+      "background": "#00D5FF",
+      "text": "#071014",
+      "accent": "#B00020",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 10.94,
+        "accent_on_background": 4.17,
+        "accent_text_on_accent": 7.33,
+        "text_on_accent": 2.62
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "современные маршруты, урбанистика",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "acid_pink_black",
+      "name_ru": "Кислотно-розовый / чёрный",
+      "family": "vivid_poster",
+      "background": "#FF4FD8",
+      "text": "#000000",
+      "accent": "#D8FF4F",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 7.36,
+        "accent_on_background": 2.49,
+        "accent_text_on_accent": 18.34,
+        "text_on_accent": 18.34
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "самые дерзкие карточки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "yellow_violet",
+      "name_ru": "Жёлтый / фиолетовый",
+      "family": "vivid_poster",
+      "background": "#F9E547",
+      "text": "#241033",
+      "accent": "#D00000",
+      "accent_text": "#FFFFFF",
+      "contrast": {
+        "text_on_background": 13.64,
+        "accent_on_background": 4.43,
+        "accent_text_on_accent": 5.7,
+        "text_on_accent": 3.08
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "контрастные вопросы, “в сетке увидят точно”",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "coral_navy",
+      "name_ru": "Коралл / navy",
+      "family": "vivid_poster",
+      "background": "#FF8A7A",
+      "text": "#091E42",
+      "accent": "#FFF1B8",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 7.19,
+        "accent_on_background": 2.02,
+        "accent_text_on_accent": 18.53,
+        "text_on_accent": 14.52
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "тёплая, но заметная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "museum_green_ivory",
+      "name_ru": "Музейный зелёный / айвори",
+      "family": "premium_culture",
+      "background": "#173F35",
+      "text": "#FFF6E6",
+      "accent": "#D6A84F",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 10.88,
+        "accent_on_background": 5.32,
+        "accent_text_on_accent": 9.57,
+        "text_on_accent": 2.04
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "музеи, история, интеллигентная подача",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "royal_plum_gold",
+      "name_ru": "Королевская слива / золото",
+      "family": "premium_culture",
+      "background": "#2D1436",
+      "text": "#FCE6A8",
+      "accent": "#E04E39",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.46,
+        "accent_on_background": 4.2,
+        "accent_text_on_accent": 5.32,
+        "text_on_accent": 3.2
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "концерт, театр, премиум-события",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "deep_brown_parchment",
+      "name_ru": "Тёмная кожа / пергамент",
+      "family": "premium_culture",
+      "background": "#2A1710",
+      "text": "#F3D9A4",
+      "accent": "#4CC9F0",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 12.43,
+        "accent_on_background": 8.89,
+        "accent_text_on_accent": 10.92,
+        "text_on_accent": 1.4
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "история, архивность, старые фото",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "blue_black_pearl",
+      "name_ru": "Сине-чёрный / жемчуг",
+      "family": "premium_culture",
+      "background": "#0E1726",
+      "text": "#F4EDE4",
+      "accent": "#C084FC",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 15.46,
+        "accent_on_background": 6.8,
+        "accent_text_on_accent": 7.95,
+        "text_on_accent": 2.28
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "вечерние, интеллектуальные экскурсии",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "olive_black_ivory",
+      "name_ru": "Оливковый чёрный / айвори",
+      "family": "premium_culture",
+      "background": "#1F2A16",
+      "text": "#FFF9EA",
+      "accent": "#E76F51",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 14.27,
+        "accent_on_background": 4.85,
+        "accent_text_on_accent": 6.79,
+        "text_on_accent": 2.94
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "культурные прогулки, тихие места",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "maroon_blush",
+      "name_ru": "Марун / румяный",
+      "family": "premium_culture",
+      "background": "#3B0D11",
+      "text": "#FFE4E1",
+      "accent": "#B5E48C",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 13.93,
+        "accent_on_background": 11.54,
+        "accent_text_on_accent": 14.44,
+        "text_on_accent": 1.21
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "романтика, старые улицы, особняки",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "petrol_champagne",
+      "name_ru": "Петроль / шампань",
+      "family": "premium_culture",
+      "background": "#003C43",
+      "text": "#F6E7C1",
+      "accent": "#FFB4A2",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 9.91,
+        "accent_on_background": 7.12,
+        "accent_text_on_accent": 12.3,
+        "text_on_accent": 1.39
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "Балтика, вода, вечерний город",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    },
+    {
+      "id": "slate_warm_white",
+      "name_ru": "Сланец / тёплый белый",
+      "family": "premium_culture",
+      "background": "#263238",
+      "text": "#FFF8E7",
+      "accent": "#F4A261",
+      "accent_text": "#000000",
+      "contrast": {
+        "text_on_background": 12.43,
+        "accent_on_background": 6.38,
+        "accent_text_on_accent": 10.19,
+        "text_on_accent": 1.95
+      },
+      "safe": {
+        "large_text": true,
+        "normal_text_AA": true,
+        "small_text_AAA": true
+      },
+      "usage": "универсальный строгий шаблон",
+      "notes": "Использовать background + text для основного крючка; accent — для декоративных пятен, линий или badge с accent_text."
+    }
+  ]
+}

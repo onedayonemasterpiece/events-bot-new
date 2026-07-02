@@ -18,9 +18,377 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
+  - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
+  - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.
+- `INC-2026-06-30-prose-location-non-event-daily-duplicate.md`
+  - Scope: Telegram import/Smart Update short prose-location leaks (`В программе — ...`, `И не забывайте`), campaign/discount non-event routing, and Telegram daily scheduler restart idempotency.
+  - Must not regress: short source-grounded non-location fragments must not survive as `location_name`; campaign/discount/action posts must route to LLM eventness review before create; scheduled daily announcements must have durable per-channel/day claims so releases/restarts cannot duplicate an already-sent daily slot.
+- `INC-2026-06-30-generic-title-dropped-own-name.md`
+  - Scope: Smart Update create-title recovery for category-only titles where the source/OCR contains a distinctive own name, plus public Telegram/VK/Telegraph repair for event `6508`.
+  - Must not regress: generic titles like `Городской фестиваль` must route to LLM recovery when source headline/OCR carries a grounded own name such as `ВЕЛОДЕНЬ`; the guard must not deterministically rewrite titles and must not force recovery when no own-name evidence exists or when the current title is already distinctive.
+- `INC-2026-06-29-qtickets-structured-facts-lost.md`
+  - Scope: Qtickets/ticket-site parser structured fact handoff, `TheatreEvent` source text preservation, poster OCR priority, and public Telegram/VK/Telegraph fanout for parser-backed events.
+  - Must not regress: ticket-page JSON-LD title, venue, address, date/end-date, price and URL must remain visible to the LLM/Smart Update boundary; poster OCR remains secondary and must not replace canonical page titles such as `FLAVA INTENSIVE (VALERA & LERA VOYNITS)` with fragments like `VALERA`.
+- `INC-2026-06-29-konb-room-venue-drift.md`
+  - Scope: VK auto-import/Smart Update source-grounded location handling for KОНБ (`konb39`/`wall-30777579_*`) room/floor labels and public `@kldevents`/`klgdevents`/Telegraph event surfaces.
+  - Must not regress: `читальный зал`, `2 этаж`, or `4 этаж лекционный зал` from KОНБ at `Мира 9` must publish as `Научная библиотека, Мира 9, Калининград` while remaining only hall/room detail; the same generic room without KОНБ source grounding and `Дом китобоя, Мира 9` must not be auto-rewritten.
+- `INC-2026-06-29-kldevents-solenaya-railway-gates.md`
+  - Scope: Smart Update location canonicalization for gate-family aliases, `Солёная ворона` / `Железнодорожная 1` Зеленоградск events, and public Telegram/VK/Telegraph event surfaces.
+  - Must not regress: `Железнодорожная 1, Зеленоградск` must remain `Театральная гостиная Солёная ворона`, not `Железнодорожные ворота`; Railway Gates canonicalization still requires explicit `ворота` or the real Kaliningrad gate address/landmarks.
+- `INC-2026-06-29-tg-promo-compensation-repeat.md`
+  - Scope: broad Telegram `tg_repost` popular amplification diversity and incident compensation posts in `@kldevents`.
+  - Must not regress: `@kenigevents` popular reposts must not repeat the same normalized title inside 7 days while another forwardable candidate exists; compensation Telegram event posts must preserve direct registration/ticket links, respect media-group no-button limits, and explicitly run/verify the premium emoji editor after the standard event publisher path.
+- `INC-2026-06-29-80-stories-telegram-promo-gap.md`
+  - Scope: built-in `80 историй о главном` promo campaign Telegram companion activities, `tg_event_publish` self-forward/new-post behavior for `@kldevents`, `tg_repost` amplification to `@kenigevents`, and drift between VK 80 Stories refreshes and Telegram campaign coverage.
+  - Must not regress: the built-in 80 Stories campaign must seed and repair code-owned `tg_event_publish`/`tg_repost` activities; `@kldevents` gets two daily self-forward-or-new-post slots aligned with VK visibility, and production-only manual activity rows must not be the only source of truth.
+- `INC-2026-06-29-tg-event-publish-fresh-import-starvation.md`
+  - Scope: `joboutbox` due ordering and `tg_event_publish` spacing/catch-up for Smart Update imports into `@kldevents`.
+  - Must not regress: fresh Smart Update event announcements must not be starved behind old `tg_event_publish` catch-up/backlog rows either at initial `next_run_at` scheduling or at due-job execution; Telegram spacing may still enforce one post per interval, but newly imported events with completed dependencies need a freshness lane and public VK/TG divergence must be visible in evidence.
+- `INC-2026-06-29-tg-premium-rock-emoji-wrong-id.md`
+  - Scope: Telegram premium emoji editor for rock-concert title/category icons in `@kldevents` and daily announcements, especially the `lovekenigofficial` `🤘` document id.
+  - Must not regress: rock `🤘` must use document id `5404517529362128309` (rock/guitarist symbol), not neighboring id `5393556708398225048`; existing wrong custom entities for visible `🤘` must be corrected in-place.
+- `INC-2026-06-29-tg-premium-tretyakov-composite-pair.md`
+  - Scope: Telegram premium emoji editor for daily Tretyakov venue markers in `@kenigevents`, especially the `lovekenigofficial` `🖼🖼` document-id pair.
+  - Must not regress: Tretyakov `🖼🖼` must use the two-part composite ids `5188445640325099838,5188470637034758005`, not the small standalone thumbnail id `5188683852096234620` and not duplicated thumbnails; marker scope remains venue-only, not title/description-inferred.
+- `INC-2026-06-29-tg-premium-ticket-calendar-icon.md`
+  - Scope: Telegram premium emoji editor for `@kldevents` event posts, especially date rows, ticket/registration rows, and ruble/money price formatting.
+  - Must not regress: generator fallback must keep date/calendar and ticket semantics distinct (`📅` date, `🎫` tickets/registration); the premium editor may convert only date/calendar `📅` to custom `🎟`; paid ticket rows must become `🎫 Билеты 💰 <number>` (or the existing ticket label/link plus `💰 <number>`) and must not keep textual `руб.`.
+- `INC-2026-06-28-crumple-video-publish-only-storm.md`
+  - Scope: CrumpleVideo/CherryFlash source-session resume recovery, Kaggle status ledger liveness, and publish-only compensation ledgers.
+  - Must not regress: `videoannounce:<id>:publish-only:*` ledger rows must never resurrect the source render poller or repeat test/public Telegram mp4 delivery; terminal/published video sessions must not resume from fresh ledgers, while genuinely false-failed source sessions with fresh source heartbeats remain recoverable.
+- `INC-2026-06-28-opening-exhibition-range-duplicate.md`
+  - Scope: Telegram Monitoring / Smart Update exhibition-opening semantics, inferred exhibition `end_date`, temporal location fragments, and duplicate active exhibition inventory.
+  - Must not regress: opening-only exhibition titles without an explicit source run window must remain atomic and must not receive `date + 1 month`; a real exhibition range must be represented by the exhibition title itself or source-grounded `end_date`; active inventory must not retain duplicate opening/exhibition rows for the same real `Обход 2.0`-style event.
+- `INC-2026-06-28-vk-stale-event-publication.md`
+  - Scope: managed `klgdevents` VK/TG fanout freshness, inferred end-date handling, and VK postponed slot reservation for one-day timed events.
+  - Must not regress: inferred `end_date` must not let an already-started timed event publish; a VK postponed reservation at or after the event start must be refused; stale live/postponed managed VK posts for past timed events must be deleted or blocked before publication.
+- `INC-2026-06-28-google-ai-gemma4-rpm-overrun.md`
+  - Scope: Google AI LLM gateway reserve behavior, no-Supabase/local limiter fallback, and CherryFlash/video partner-filter Gemma 4 client wiring.
+  - Must not regress: server-side Google AI consumers must use Supabase-backed `GoogleAIClient` with a specific consumer name; any no-Supabase fallback must fail fast through the process-local limiter instead of making unlimited direct provider calls; Gemma 4 per-key bursts must not exceed the provider `15 RPM` limit.
+- `INC-2026-06-27-telegraph-footer-backfill-content-loss.md`
+  - Scope: Telegraph event-page bulk maintenance/backfills, python-telegraph `get_page(..., return_html=True)` response handling, and social footer rollout.
+  - Must not regress: existing Telegraph page body must never be treated as empty because HTML is in `content` instead of `content_html`; bulk footer/nav/image fixes require a canary plus public content-preservation smoke before editing all active/future pages.
 - `INC-2026-05-30-active-duplicate-events-recall-gate.md`
-  - Scope: `smart_event_update.py` create path — shortlist construction (`location`/`time` pre-filters), `_pre_create_duplicate_probe`, `_llm_match_or_create_bundle`, and the `(source_type, source_url)` idempotency guard.
-  - Must not regress: a genuine duplicate whose raw `location_name` is an alias/box-office/ticket-vendor variant of the same canonical venue, or whose time differs only as doors-vs-start/matinee skew, must stay in the dedup recall (shortlist) so the matcher/probe can compare it; two-ticket-vendor same-slot siblings must merge; genuinely-distinct same-venue same-day events (matinee + evening, two different shows) must NOT be collapsed.
+  - Scope: Smart Update duplicate recall when exact location/time gates miss same real events; widened candidate recall, LLM dedup adjudication, and safety rails for multi-session/source-time conflicts.
+  - Must not regress: after ordinary match/create, rescue, and pre-create probes fail, a same-date/date-adjacent plausible duplicate must still be visible to an LLM adjudicator; high-confidence same-event decisions may merge only when date/venue/time/source-session safety checks do not conflict; explicit same-source multi-session schedules must remain separate.
+- `INC-2026-06-27-valeria-duplicate-publication.md`
+  - Scope: Smart Update LLM-first duplicate matching, title-only deterministic vetoes, and managed TG/VK fanout for same real event rows.
+  - Must not regress: a high-confidence LLM match with same date/venue and no explicit time conflict must not be overruled solely by `unrelated_titles`; `Валерия` and `Концерт Валерии` must merge as one event instead of producing duplicate public posts.
+- `INC-2026-06-27-vk-prune-starvation.md`
+  - Scope: managed `klgdevents` past-event cleanup, `vk_post_prune` capped batches, and VK recommendation hygiene.
+  - Must not regress: old missing/repost-protected managed VK URLs must not starve fresh past live posts behind `VK_POST_PRUNE_LIMIT`; recent past posts without reposts/comments must be prioritized and removed from the feed.
+- `INC-2026-06-26-vk-channel-draft-telegraph-cta.md`
+  - Scope: VK Channel manual-copy draft CTA selection for registration-required promo events, especially `80 историй о главном`. Must not regress: Telegraph details pages must not be used as the one CTA when the event/campaign requires registration; missing direct registration/ticket links must fail/skip instead of producing a misleading draft; source-text registration URLs may be used as direct CTAs.
+- `INC-2026-06-26-crumple-missing-video-output.md`
+  - Scope: CrumpleVideo Kaggle notebook asset discovery, intro font loading, per-session dataset assets, final mp4 production, and fail-fast status behavior for scheduled `/v tomorrow` runs.
+  - Must not regress: required intro fonts must be available either from the static Kaggle assets dataset or the session dataset; the notebook must search concrete `/kaggle/input/*` mounts rather than a single hardcoded path; if `crumple_video_final.mp4` is not produced, the notebook must fail hard instead of reporting `render_done/report_written` as a successful run.
+- `INC-2026-06-26-vk-location-reference-fuzzy-park.md`
+  - Scope: VK auto-import/reference location normalization and public `klgdevents`/`@kldevents` event posts where a generic municipal venue such as `Городской парк` is fuzzy-bound to an unrelated known venue in another city. Must not regress: single generic tokens (`городской`, `парк`, `центр`, `культура`, `искусство`) must not be enough to canonicalize an unknown venue; source/poster-grounded `Пионерский, городской парк` must remain Pionersky unless an explicit curated alias/address supports another venue.
+- `INC-2026-06-26-tg-story-message-forward.md`
+  - Scope: CherryFlash/CrumpleVideo Telegram story-to-channel feed fanout, `telegram_story_message` transport, `popular_review` target generation, CrumpleVideo `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, and Kaggle story helper/notebook sync.
+  - Must not regress: production channel-feed video posts must be produced from the previous successful Telegram story via `InputMediaStory`/`messages.SendMediaRequest`, not by raw `send_file()` MP4 upload; `telegram_chat` remains allowed only for intentional raw test-post targets.
+- `INC-2026-06-25-afishaengagement-no-active-activity.md`
+  - Scope: Afisha Engagement public all-events fallback for `klgdevents`, production promo campaign/activity date config, runtime `afishaengagement.decision` smoke, and manual catch-up edits of VK postponed posts.
+  - Must not regress: ordinary `klgdevents` VK publication preflight must have an active public Afisha Engagement fallback when rollout is intended; repeated `no_active_activity` decisions while VK posts continue are a regression; manual catch-up must verify whether VK reassigned a postponed post id and reconcile DB URLs.
+- `INC-2026-06-25-outbox-unknown-jobtask-publication-outage.md`
+  - Scope: shared `JobOutbox` queue, `JobTask` enum materialization, outbox worker health, stale/TTL catch-up, ICS Supabase Storage upload, ticket-site/qTickets fanout, and Telegram/VK/Telegraph publication fanout.
+  - Must not regress: legacy or unknown raw `joboutbox.task` strings must not crash due/running ORM selection; one invalid page/navigation row must not block unrelated `tg_event_publish`/`vk_sync`; active current/future event-pipeline pending jobs must catch up after worker outages instead of expiring solely because the worker was blocked; health/release smoke must include runtime-log evidence for worker-loop failures, `/healthz` `job_outbox_worker_loop` status, direct Storage upload path evidence for ICS, qTickets public-fanout coverage, and public Telegram/VK resume evidence.
+- `INC-2026-06-25-vk-channel-wrong-surface.md`
+  - Scope: Promo `vk_channel_publish`, VK community Channel transport, public promo exposure statuses, and any fallback that uses `messages.send`/Messenger for a community Channel request.
+  - Must not regress: `vk_channel_publish` must create no public exposure while VK community Channel posting lacks a verified non-Messenger API; `messages.send` peer ids and `vk.com/im?...` URLs may be used only for explicit operator manual-copy drafts (`VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`) and must never be counted as VK community Channel delivery.
+- `INC-2026-06-24-vk-past-actuals.md`
+  - Scope: Promo VK publication/repost/story/carousel event eligibility, Afisha Engagement debug-shadow scheduling/cleanup, managed `klgdevents` VK/TG fanout gating, and VK postponed queue audits.
+  - Must not regress: a managed VK/Promo/Afisha Engagement post must not publish at or after the event start for one-day timed events; date-only debug-shadow copies must publish before the event day; same-day timed events whose start has passed must be excluded from promo candidate selection and `schedule_event_update_tasks` must not enqueue new `vk_sync`/`tg_event_publish` for them.
+- `INC-2026-06-24-future-event-date-default-venue-regressions.md`
+  - Scope: Telegram Monitoring Gemma extraction/import date semantics, event-local offsite venue grounding versus source defaults, Smart Update writer grounding, duplicate recall after venue drift, and public `@kldevents` future inventory.
+  - Must not regress: Russian compact dates (`10.05`, `30.05`) are `DD.MM`, month-word/hashtag dates (`26 июля`, `#13_июня`, `#21_июня`) remain authoritative, gate/floor/address/price/coordinate numbers never become event dates/times, retrospective reports without a future invite return `[]`, explicit offsite venue/address lines beat `source.default_location` even when extractor initially omits venue, thin/free source posts must not gain unsupported buy-ticket/theatre boilerplate, same date/title/venue source-time conflicts must match for LLM merge instead of becoming duplicate active rows, explicit same-source multi-session schedules must remain separate occurrences, and Telegraph/public text must not leak LLM editor meta such as “Вот обновленный текст”. Closure requires replaying the exact source URLs through Telegram Monitoring server import + Smart Update and verifying repaired public Telegram/Telegraph surfaces.
+- `INC-2026-06-22-poll-repost-orphan-open-poll.md`
+  - Scope: Poll to Repost production DB-write idempotency after Telegram `send_poll`, resolver popularity relaxation, Telethon/Fly/DB evidence for orphan public polls, and scheduler failure recovery.
+  - Must not regress: a transient SQLite writer lock after a public poll is sent must not leave the poll without a durable `poll_repost_run` row; resolver must not drop a valid winning option solely because sparse popularity coverage filtered its candidates after a relaxed creation.
+- `INC-2026-06-20-tg-speaker-roster-dropped.md`
+  - Scope: Telegram/Smart Update lecture and public-talk imports with named speaker rosters, split-create logistics cleanup, and public Telegraph/VK/TG descriptions.
+  - Must not regress: source-grounded named speaker rosters must not be collapsed into generic categories; logistics-tainted split-writer drafts should be LLM-cleaned before falling back to a generic description.
+- `INC-2026-06-20-tg-forward-service-chat-leak.md`
+  - Scope: forwarded/reposted Telegram message routing, TG monitoring on-demand channel/group signals, and manual add-event service replies.
+  - Must not regress: forwarded-post manual add-event flow must run only in private bot chats; group/channel reposts must not receive `Festival added` / `Event added` / publication progress service messages.
+- `INC-2026-06-20-tg-on-demand-scheduler-run-id.md`
+  - Scope: TG monitoring on demand APScheduler entrypoint, `_job_wrapper` run_id injection, and post-deploy runtime log smoke.
+  - Must not regress: scheduler jobs registered through `_job_wrapper` must accept the injected `run_id`; `tg_monitoring_on_demand` ticks must not fail with unexpected keyword argument errors.
+- `INC-2026-06-18-vk-title-shortlink-public-regression.md`
+  - Scope: VK auto-import title guard, poster OCR title handoff, Smart Update generic-title recovery, and source shortlink normalization for public Telegram/VK/Telegraph event posts.
+  - Must not regress: deterministic VK intake must not synthesize `<event_type> — <venue>` placeholders such as `Концерт — Бар Советов`; VK intake must not run deterministic word-level title-grounding/suspicious-title checks at all; if title quality needs review, it must route through Smart Update/LLM. Poster OCR is evidence for Smart Update/review, while the LLM title remains LLM-owned unless Smart Update changes it. External source shortlinks such as `clck.ru` must be resolved before public registration links are rendered.
+- `INC-2026-06-18-tg-location-prose-still-extracted.md`
+  - Scope: Telegram Monitoring LLM-first venue extraction, server import location recovery, exact address/studio handling, source-default venue ownership, Telegraph source-media rehydration, and public `@kldevents` repairs.
+  - Must not regress: regex/OCR helpers must not override an LLM/default known venue with prose; source-owned venues such as `sobor39`/`kldzoo` must keep their canonical defaults unless LLM-reviewed offsite evidence exists; explicit `address, studio` evidence must not be rebound to unrelated known venues like ИЦАЭ; multi-event source URLs must not rehydrate unrelated posters into another event.
+- `INC-2026-06-16-cherryflash-duplicate-after-bot-send-failure.md`
+  - Scope: CherryFlash/CrumpleVideo/Koenigsberg scheduled Kaggle video runs,
+    server-side output download, bot test/notify delivery, Kaggle status ledger,
+    and catch-up/watchdog slot eligibility.
+  - Must not regress: after render output, terminal Kaggle evidence, or a public
+    side effect exists, a full replacement Kaggle run is forbidden unless an
+    operator explicitly overrides it; post-download bot-send failures and
+    deterministic fanout blockers such as `BOOSTS_REQUIRED` must use a
+    post-render terminal status and retry only narrow operations that can add
+    value.
+- `INC-2026-06-16-tg-event-publish-timeout-duplicate.md`
+  - Scope: Telegram event publishing idempotency around Bot API write timeouts, `tg_event_publish` retry policy, and Telethon-first inspection of operator-provided Telegram links.
+  - Must not regress: a Bot API timeout during new `sendMessage`/`sendPhoto`/`sendMediaGroup` for `@kldevents` must be treated as an uncertain write and must not auto-retry into a duplicate public post; `t.me` incident links must be read through Telethon first.
+- `INC-2026-06-16-tg-location-pianissimo-program-fragment.md`
+  - Scope: Telegram Monitoring / Smart Update venue extraction for official source posts where a short, source-grounded program/repertoire line is copied into `location_name`, plus public `@kldevents` event-publish repair for `event.id=6060`.
+  - Must not regress: repertoire/program items such as `🎵 С. В. Рахманинов – Музыкальные моменты` and catalogue numbers such as `соч. 16` must trigger LLM venue review and must not survive as public venue/address fields; official Tretyakovka source context/default must recover `Филиал Третьяковской галереи, Парадная наб. 3, Калининград` when the post only says `в атриуме музея`.
+- `INC-2026-06-16-tg-phone-links.md`
+  - Scope: Telegram event publishing phone-only registration/ticket contacts and phone numbers in event body/captions.
+  - Must not regress: `event.ticket_link=tel:+...` must become an explicit clickable Telegram `phone_number` entity with a compact Telegram-visible phone payload; body phone numbers must be linkified outside existing anchors; Kaliningrad `4012` landlines must keep natural display formatting outside the final Telegram entity payload.
+- `INC-2026-06-16-vk-quality-duplicates-non-events.md`
+  - Scope: VK/TG Smart Update eventness for weak digest/rubric candidates, citywide/festival duplicate recall, managed `klgdevents` VK post idempotency, and near-duplicate poster media dedupe.
+  - Must not regress: rubric stubs such as `Дайджест - посмотри, приходи` must go through LLM-first eventness review and fail closed when not a concrete attendable event; same title/date/time citywide events with drifted venue text must be visible to LLM matching rather than creating duplicate active rows; existing managed/postponed VK posts must be reused instead of republished; visually near-duplicate posters must collapse before public VK publication.
+- `INC-2026-06-15-konb-room-location-and-future-audit.md`
+  - Scope: VK auto-import/Smart Update venue extraction for stable source-location sources, KОНБ `konb39`/`kaliningradlibrary` defaults, and future-event duplicate/generic-title audit.
+  - Must not regress: room/floor labels such as `лекционный зал`, `аудитория`, or `4 этаж` must not become public venues when source context identifies a real building; KОНБ VK imports must carry `Научная библиотека, Мира 9, Калининград`; future active listings must not keep generic duplicate rows such as duplicate `Музыкальный фестиваль` donor/map notices or duplicate 80th-region concert rows.
+- `INC-2026-06-15-poll-repost-missing-slots.md`
+  - Scope: `poll_to_forward.py`, production/debug poll creation, popularity underfill, topic-planner fallback, question guardrails, and Fly scheduler evidence.
+  - Must not regress: a sufficient raw event inventory must not disappear solely because sparse popularity coverage underfills; after an LLM planner attempt, usable inventory must fall back to bounded multi-candidate topics; full LLM unavailability must still skip rather than publish a fully deterministic poll; debug must remain a reliable visible smoke surface.
+- `INC-2026-06-15-tg-promo-media-drop-and-bullet-copy.md`
+  - Scope: explicit Telegram promo activity posts
+    (`promo_activity.surface='tg_event_publish'`) with event media and long full
+    promo bodies.
+  - Must not regress: media-backed promo activity posts must not become
+    text-only solely because the full body exceeds Telegram's caption limit;
+    the publisher should send the image/album with a concise caption and avoid
+    dumping long Smart Update bullet lists as the primary caption.
+
+- `INC-2026-06-15-cherryflash-caption-metadata.md`
+  - Scope: CherryFlash `popular_review` public Telegram/VK story-video captions
+    generated from `videoannounce_session.selection_params`.
+  - Must not regress: scheduled CherryFlash public posts must include the
+    release/session number and target date title
+    `Видеоанонс #<session_id> · <D month>`; Telegram `telegram_chat` targets
+    get this exact caption and VK wall captions keep it as the title before
+    the hashtag/date block.
+- `INC-2026-06-15-tg-promo-markdown-leak.md`
+  - Scope: explicit Telegram promo activity posts
+    (`promo_activity.surface='tg_event_publish'`), full event body formatting
+    in `main_part2.py`, and public `@kldevents` promo outputs.
+  - Must not regress: Markdown-style section headings and bullets from
+    `event.description` must not leak as literal `###`, `**`, or `*` markers in
+    public Telegram promo posts; headings should be formatted with Telegram HTML
+    and bullets normalized before escaping.
+- `INC-2026-06-14-crumple-vk-transport-drift.md`
+  - Scope: CrumpleVideo scheduled `/v tomorrow` VK wall fanout, Kaggle
+    notebook embedded story helper, story-enabled session dataset helper
+    bundling, and `vk:kenigeventsofficial:wall`.
+  - Must not regress: CrumpleVideo VK community targets must be handled through
+    the same explicit VK transports as CherryFlash (`vk_wall`/`vk_wall_story`)
+    and must never fall through to Telethon username resolution; the notebook
+    must prefer bundled `kaggle_common/story_publish.py` and keep embedded
+    fallback in sync.
+- `INC-2026-06-14-vk-publication-cta-plain-duplicate.md`
+  - Scope: promo `vk_publication` and Afisha Engagement public CTA one-write
+    boundary for `klgdevents` VK wall posts.
+  - Must not regress: promo VK publication must choose one production variant
+    before writing to VK. If public Afisha Engagement CTA preflight succeeds,
+    it is the scheduled wall post and the plain `post_to_vk` call is skipped;
+    if the plain fallback posts, later Afisha Engagement checks must be
+    `shadow_only=True` so public CTA activities cannot create a second wall
+    post for the same publication pass.
+- `INC-2026-06-14-morning-import-quality-and-outbox-stale.md`
+  - Scope: Telegram Monitoring location/city handoff, Smart Update unsupported-location guard, event `JobOutbox` stale handling, managed VK/TG fanout reconciliation, and Afisha Engagement CTA/plain public rollout evidence.
+  - Must not regress: temporal/date words such as `Завтра`, `Сегодня`, or `14 июня` must not persist as `location_name`; inflected settlement city strings such as `посёлке Железнодорожный` must route to LLM venue-review rather than regex replacement; event-pipeline `running` jobs must retry with bounded backoff after stale runtime expiry instead of becoming 10-year dependency blockers; CTA/plain VK publication remains a single production-path decision.
+- `INC-2026-06-14-afishaengagement-shadow-fallback-regression`
+  - Scope: Afisha Engagement public CTA/plain selection at the VK publication
+    boundary, legacy debug-shadow activity enablement, and VK postponed cleanup.
+  - Must not regress: normal Smart Update VK sync must choose exactly one
+    production variant per publication pass. If public CTA preflight wins, it
+    creates the CTA post; if it misses or fails, the path creates only the plain
+    post/update and must not schedule a marked debug-shadow copy as a side
+    effect. Broad debug-shadow activities must stay disabled unless an explicit
+    manual debug batch is being run.
+- `INC-2026-06-14-festival-recap-logistics-false-events.md`
+  - Scope: Telegram Monitoring / Smart Update non-event guards for festival recaps, attendee logistics notices, and managed VK/TG event fanout.
+  - Must not regress: a post-event recap that only says the next festival dates while location/place/address is still unknown must not create an event with a fabricated venue; an operational notice for existing guests about entry/navigation/parking/queue/cloakroom must not become a new event; real future festival announcements with grounded location and invitation/ticket signals must stay importable.
+- `INC-2026-06-13-tg-calendar-private-link.md`
+  - Scope: Telegram event calendar CTA selection, source-post keyboard
+    calendar links, and service/internal Telegram calendar asset links.
+  - Must not regress: public `@kldevents` calendar buttons must not point to
+    private `https://t.me/c/...` asset-channel links when a public `.ics` URL
+    exists; public `https://t.me/<username>/<id>` calendar-post links may remain
+    preferred.
+- `INC-2026-06-13-kaggle-duplicate-videoannounce.md`
+  - Scope: CherryFlash/CrumpleVideo/Koenigsberg story-video Kaggle handoff,
+    live Kaggle status callbacks, heartbeat, final report handling, and shared
+    Telegram session resource leases.
+  - Must not regress: scheduled retries must have live evidence showing whether
+    a previous Kaggle run is alive, rendering, publishing, failed, or writing
+    reports before a replacement run is treated as necessary; the status
+    framework must not silently suppress or deduplicate public publication
+    attempts.
+- `INC-2026-06-13-poll-repost-wrong-date-and-copy.md`
+  - Scope: Poll to Repost candidate eligibility, LLM reply composer guardrails,
+    and `@kldevents` Telegram event infoblock date-range rendering.
+  - Must not regress: a recommendation for a target date must not forward an
+    older start-date `@kldevents` post for a long-running event unless that
+    post visibly carries the active range; LLM replies must not invent
+    open-air/street format facts or use `на этом:` placeholder phrasing; Telegram
+    event posts with `end_date > date` must render a visible date range in the
+    infoblock and calendar button.
+- `INC-2026-06-13-vk-auto-import-day-month-regex-nameerror.md`
+  - Scope: VK auto-import draft extraction and `vk_intake` date-anchor guards.
+  - Must not regress: `_source_text_has_absolute_date_anchor` must support both
+    numeric `DD.MM` and text `DD month` anchors without runtime NameError;
+    failed `vk_inbox` rows from a technical draft exception must be catchable by
+    a post-deploy rerun.
+- `INC-2026-06-13-vk-postponed-event-slot-late-anchor.md`
+  - Scope: VK postponed slot reservation for managed event posts, especially
+    `/vk_auto_import` event fanout through shared `post_to_vk`.
+  - Must not regress: late promo/postponed anchors must not force fresh event
+    posts to the tail of the day when morning slots are free; reservation must
+    inspect active postponed timestamps and choose the first free slot at the
+    configured cadence.
+- `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog.md`
+  - Scope: Telegram Monitoring scheduled Kaggle handoff, critical scheduler
+    watchdog registration, `ops_run` delivery evidence, `/healthz` scheduler
+    health, and VK auto-import critical-slot recovery.
+  - Must not regress: deploy/restart during the 23:40 Telegram Monitoring slot
+    must not lose the day; `critical_scheduler_watchdog` must be registered and
+    health-visible whenever `tg_monitoring`, guide full monitoring, or
+    `vk_auto_import` is enabled; watchdog catch-up must inspect the last local
+    scheduled slot even after local midnight, and per-slot VK auto-import
+    recovery must not be masked by an earlier same-day success; Telegram
+    Monitoring catch-up must defer while a `tg_monitoring` Kaggle recovery
+    registry entry exists, instead of pushing a second kernel with
+    `TELEGRAM_AUTH_BUNDLE_S22`.
+- `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop.md`
+  - Scope: Kenigsberg `/kenigsberg` Kaggle story media profile, startup
+    catch-up retry behavior, and Telegram/VK fanout terminal status handling.
+  - Must not regress: Kenigsberg production story publish must use the
+    story-safe H.264/`avc1` helper path instead of bypassing it with the
+    CherryFlash native HEVC profile; startup catch-up must stop after repeated
+    same-day failed scheduled/story sessions instead of relaunching after every
+    deploy restart; closure requires terminal Telegram publish evidence or an
+    explicit operator blocker before another compensation run.
+- `INC-2026-06-12-kenigsberg-story-session-duplication.md`
+  - Scope: Kenigsberg `/kenigsberg` Kaggle story publishing, shared remote
+    Telegram session guard, Telegram/Guide monitoring Kaggle auth bundles, and
+    `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV`.
+  - Must not regress: two Kaggle jobs must never use the same Telethon auth
+    bundle concurrently; active unknown-scope registry entries stay
+    conservative and block; new remote Telegram jobs must write
+    `remote_telegram_auth_scope`; story publishing should use a separate
+    `TELEGRAM_AUTH_BUNDLE_STORY` when parallelism with S22 monitoring is
+    required.
+- `INC-2026-06-12-afishaengagement-public-canary-no-show.md`
+  - Scope: Afisha Engagement public/shadow candidate resolution, VK group alias
+    matching, and production public canary rates for `80 историй о главном`.
+  - Must not regress: `target_group="klgdevents"` must match numeric
+    `VK_EVENTS_GROUP_ID=231920894`; the 80-stories public activity at
+    its configured public rate must be evaluated before the all-events 0.1
+    fallback. The old shadow fallback requirement was superseded by
+    `INC-2026-06-14-afishaengagement-shadow-fallback-regression`.
+- `INC-2026-06-12-vk-partial-media-family-cta.md`
+  - Scope: managed VK event media upload/parity and Afisha Engagement CTA
+    selection for family fairs/markets.
+  - Must not regress: new managed `klgdevents` event posts must fail closed on
+    partial media upload instead of creating a public/postponed post with only
+    part of `event.photo_urls`; transient VK `upload.php` failures must be
+    retried with fresh upload-server URLs; family fairs/markets with explicit
+    child/family audience signals must use `family` CTA copy rather than
+    generic market repost wording.
+- `INC-2026-06-12-raffle-source-publication-false-skip.md`
+  - Scope: VK auto-import / Smart Update fanout from `schedule_event_update_tasks` into managed VK `vk_sync` and Telegram `tg_event_publish`, especially source posts that contain raffle/giveaway fragments alongside a real event.
+  - Must not regress: a valid event whose raw source mentions a ticket raffle/giveaway must still enqueue and publish managed VK + Telegram event posts when Smart Update has produced substantial cleaned non-giveaway event copy; prize-only giveaway sources without cleaned event copy may still be skipped when a non-giveaway alternative exists.
+- `INC-2026-06-12-future-event-quality-llm-first-repair.md`
+  - Scope: Telegram Monitoring / VK auto-import / Smart Update future-event quality, including malformed dates, source-non-grounded venue fragments, false `Калининград Сити Джаз Клуб` defaults, `DD.MM` date markers leaking as times, and duplicate public cards across Telegraph/Telegram/VK.
+  - Must not regress: active future rows must keep ISO dates only; source prose/default venue conflicts must route through LLM-first venue review instead of becoming public `location_name`; same real event clusters such as Westside `Род мужской`/`Солнцестояние`, Kantata/Agropark/Pianissimo duplicates must collapse while distinct same-time productions remain separate; confirmed bad public rows/pages/posts must be repaired or explicitly blocked by platform editing limits.
+- `INC-2026-06-12-tg-event-utility-hook-quality.md`
+  - Scope: Telegram event publishing intro generation for `@kldevents`,
+    especially utility/service posts whose source text is practical but stored
+    description/search digest may be hallucinated or entertainment-framed.
+  - Must not regress: `tg_event_publish` must not force every intro to be a
+    hook question; utility/service events such as tire collection/recycling
+    should use source-grounded useful copy and must prefer source text over a
+    conflicting entertainment-style description. The same conflicting
+    description must not feed Telegram type hashtags. Closure requires repair
+    evidence for `@kldevents/354` or an explicit external blocker.
+- `INC-2026-06-11-tg-monitoring-recovery-after-deploy-cancel.md`
+  - Scope: Telegram Monitoring scheduled Kaggle runs, `/data/kaggle_jobs.json`
+    recovery registry, `kaggle_recovery`, `ops_run` terminal evidence, and Fly
+    deploy/restart timing during active scheduled imports.
+  - Must not regress: a local deploy cancellation of `tg_monitoring` must not be
+    treated as lost output while the original Kaggle kernel is still alive; do
+    not start a replacement monitoring run before checking registry/Kaggle
+    status and recovery import evidence; closure requires terminal
+    `recovery_import` metrics or explicit registry/log evidence explaining why
+    recovery cannot proceed.
+- `INC-2026-06-10-event-outbox-fanout-deadlock.md`
+  - Scope: Smart Update event fanout through `JobOutbox`, `vk_sync`, `tg_event_publish`, `ics_publish`, and `tg_ics_post`.
+  - Must not regress: independent event pipeline jobs must not block each other via a broad same-event prior-job rule; `vk_sync` must not wait behind calendar jobs unless explicitly configured; dependent jobs must not expire while their dependency is actively retrying with bounded backoff; ordinary VK auto-import should restore the expected Telegraph + VK + Telegram rhythm.
+- `INC-2026-06-09-social-video-tg-publishing.md`
+  - Scope: CherryFlash/CrumpleVideo story and VK/TG fanout ownership, `guaranteed_any_position` video promo placement, and `@kldevents` Telegram event publish slot spacing.
+  - Must not regress: CherryFlash must not include the CrumpleVideo `vk:kenigeventsofficial:wall` / `crumple_official` target; CrumpleVideo must publish its official VK wall video through the shared production story target list; CherryFlash must post the rendered video into `@kenigevents` channel body after story upload; `guaranteed_any_position` promo must be mixed into stable lower positions instead of always appended; `tg_event_publish` must choose the nearest free daytime slot and must not leave a day-gap solely because late pending backlog exists.
+- `INC-2026-06-08-tg-ics-bad-time-retry-storm.md`
+  - Scope: calendar/ICS publication jobs (`ics_publish`, `tg_ics_post`), `schedule_event_update_tasks`, and Telegram event publish dependencies that include calendar posts.
+  - Must not regress: events whose `date` or `time` cannot be parsed into a concrete calendar start must not enqueue `ics_publish`/`tg_ics_post` and `tg_event_publish` must not depend on `tg_ics_post`; already queued invalid-schedule calendar jobs must finish with `skipped_invalid_schedule` instead of raising `ValueError: bad time`/`bad date` into an infinite retry storm.
+- `INC-2026-06-08-festival-vk-aggregate-regression.md`
+  - Scope: `/start` -> `Добавить событие`, Telegram Monitoring single-source containment for `@kraftmarket39`, Festival Queue/Universal Festival Parser, and `sync_festival_vk_post` VK aggregate publishing.
+  - Must not regress: urgent `@kraftmarket39` monitoring must run through the same Smart Update import path with a one-source Kaggle config; festival VK aggregate posts must stay disabled unless `ENABLE_FESTIVAL_VK_POSTS=1`; ordinary event-level VK/TG fanout remains separate and must not publish whole-festival aggregates to obsolete communities.
+- `INC-2026-06-07-tg-event-publishing-media-calendar-dedup.md`
+  - Scope: Telegram event publishing after Smart Update, `tg_event_publish`/`tg_ics_post` dependency order, calendar button target, Telegraph details link, Smart Update persisted poster dedup, and `vk_sync` managed-post idempotency.
+  - Must not regress: a one-image event must publish as a single captioned media post with a publicly usable calendar button, preferring a public `event.ics_post_url` but falling back to `event.ics_url` when `ics_post_url` is a private `t.me/c` asset link; multi-image posts must carry caption on media, not a separate text post unless explicitly redesigned; captions must include `Подробнее` when Telegraph exists and must not invent placeholder price/free information; managed-storage and raw-CDN copies of the same poster must collapse to one `event.photo_urls` entry and one persisted `EventPoster` after missing `phash` backfill; Smart Update acceptance requires both a real `@kldevents` post and a real `klgdevents` wall item (`wall.getById` non-empty), not merely a stale DB URL.
+- `INC-2026-06-07-guide-remote-session-stale-busy.md`
+  - Scope: shared remote Telegram session guard, stale Kaggle registry entries, guide scheduled full monitoring, and `GetKernelSessionStatus` transient failures.
+  - Must not regress: fresh `UNKNOWN`/status-lookup-failure Kaggle runs must still block a second `TELEGRAM_AUTH_BUNDLE_S22` session, but stale registry entries older than `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` with only transient status lookup failures (`HTTP 5xx`, network, SSL, timeout) must not indefinitely suppress the daily guide full slot; closure requires same-day guide full catch-up/import/digest evidence.
+- `INC-2026-06-07-future-event-quality-recurrence.md`
+  - Scope: Telegram Monitoring candidate title fallback, poster OCR date/time expansion, Smart Update future public event quality, managed Telegraph pages, and `klgdevents` VK event posts.
+  - Must not regress: short valid titles such as `Идиот`, `Гараж`, and `№ 13` must not be overwritten by umbrella/service lines like `завтра в театре` or `в продаже репертуар`; dotted follow-up dates such as `9.08` must not become public times like `09:08`; `time_is_default` may remain a weak internal anchor but must not render as confirmed time in VK source headers; data repair must delete bad public posts/pages/events and return Telegram/VK sources to scan state before closure.
+- `INC-2026-06-06-guide-monitoring-missed-vk-festival-hashtag.md`
+  - Scope: guide excursions scheduled `light/full` jobs, guide scheduled digest/VK fanout, runtime scheduler health, and VK event festival hashtags.
+  - Must not regress: a public event linked to canonical festival `Кантата` must publish/search as `#Кантата` even if `event.festival` carries an inflected label such as `Кантаты`; `/healthz` must expose `guide_excursions_light` and `guide_excursions_full`; a missed critical guide `full` daily slot must be caught up by the live watchdog and closure requires same-day catch-up/digest evidence.
+- `INC-2026-06-06-vk-past-klgdevents-posts.md`
+  - Scope: VK outbound event publishing to `klgdevents`, `schedule_event_update_tasks` enqueue behavior for `JobTask.vk_sync`, and `job_sync_vk_source_post` before `wall.post`.
+  - Must not regress: fully past events (`end_date` or, when empty, `date` strictly before today's local date) must not enqueue or execute a new managed `klgdevents` `vk_sync`; current/future events and ongoing long events (`end_date >= today`) must remain publish-eligible; already-managed `klgdevents` URLs must still suppress duplicate sync.
+- `INC-2026-06-05-vk-story-forward-wall-first.md`
+  - Scope: CherryFlash/Kaggle VK story fanout (`vk_wall`, `vk_wall_story`, legacy `vk_story`), `popular_review` target order for `kenigeventsofficial`/`klgdevents`, КОНБ `konb39` VK targets, and promo VK story image generation.
+  - Must not regress: video announcements for these VK communities must publish a wall clip first, then upload the mp4 as a VK video story with `link_url` pointing at that wall post; promo poster stories must use the source image/poster without VK `link_url`, so VK does not render a white wall-post card; `80 историй о главном` daily VK story surfaces must remain caption-free.
+- `INC-2026-06-04-80-stories-promo-vk-scheduler-gap.md`
+  - Scope: Promo VK scheduler for the built-in `80 историй о главном` campaign,
+    `vk_publication` cadence, `vk_repost`, new `vk_story` activity delivery,
+    `/promo` reporting, VK wall/story actor selection, and same-day
+    compensation discipline.
+  - Must not regress: the built-in campaign must idempotently seed two daily
+    `klgdevents` event posts, one daily repost into `kenigeventsofficial`, and
+    two daily story cards into each target community from recent public festival
+    event posts; story upload is complete only after `stories.save`; closure
+    requires production evidence for tomorrow's expected VK posts/reposts/stories
+    plus explicit same-day compensation evidence.
+- `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`
+  - Scope: Telegram Monitoring media/poster intake, `event.photo_urls`/`eventposter`, `sync_vk_source_post`, Smart Update parser defender, digest/multi-event prompt rules, and video announce poster eligibility.
+  - Must not regress: Telegram-origin events may exist in DB without media, but a new managed `klgdevents` VK post must not be created with `attachments=0`; missing media must fail closed as `vk_sync_missing_media_for_telegram_event`. Prose fragments such as `мы его очень ждали` must never survive as `location_name`; without a real venue/address/meeting point the candidate must fail closed instead of creating a public event row.
+- `INC-2026-06-04-tg-monitoring-vk-fanout-llm-quota-storm.md`
+  - Scope: Telegram Monitoring import boundary, Smart Update fallback policy, Google AI key reserve/overflow metadata,
+    `JobOutbox(vk_sync)`, VK fanout, CherryFlash S22 session usage, and promo/video/repost downstream surfaces.
+  - Must not regress: a successful Telegram import or `/tg` replay must leave active future non-silent Telegram-origin
+    events with pending/running/done `vk_sync` evidence or a managed VK URL; Google reserve overflow keys must be present
+    both as runtime secrets and in `google_ai_api_keys`; RPD/RPM failures in mass Gemma tasks must not cause unbounded
+    4o fallback spend.
+- `INC-2026-06-04-kraftmarket271-tg-monitoring-tpm-import-cancel.md`
+  - Scope: Telegram Monitoring producer extraction/OCR/rate-limit retry for `@kraftmarket39`, Google AI key registry and reserve fallback for `GOOGLE_API_KEY3`, server-side Telegram result import/recovery cancellation handling, scanned-message diagnostics, and `80 историй о главном` promo-campaign intake.
+  - Must not regress: a clear event-like festival promo post such as `@kraftmarket39/271` (`Калининград корабельный`, 2026-07-08, registration URL on `kgd80.ru`) must not be silently recorded as `events=[]` because of TPM; rate-limit/provider failures must be distinguishable from legitimate zero-event output; cancelled import/recovery must resume or rerun until the source tail is imported or has durable diagnostics; closure requires production DB evidence that `kraftmarket39` cursor/source rows are caught up through message `271`.
+- `INC-2026-06-02-vk-captcha-text-only-posts.md`
+  - Scope: VK event media upload (`upload_vk_photo`, `upload_vk_photo_bytes`), `sync_vk_source_post`, `post_to_vk`, user-token captcha handling, and `vk_sync` job pause behavior.
+  - Must not regress: if VK returns captcha (`code=14`) while uploading photos for an event post, `vk_sync` must pause/fail closed before `wall.post`; it must never create a `klgdevents` event post with `attachments=0` solely because the user-token photo upload path is blocked by captcha.
+- `INC-2026-05-29-genai-response-repr-leak.md`
+  - Scope: `google_ai/client.py` response→text extraction and empty-response guard; Smart Update description generation and grounded title recovery, `_sanitize_description_output`, `sanitize_for_vk`, VK source-post publish boundary; poster dedup (`media_dedup`, `_apply_posters`).
+  - Must not regress: a stringified provider SDK response (`GenerateContentResponse` repr) must never be returned as model output or published to any surface — empty/thought-only responses must raise `empty_response` and fall back; visually near-duplicate posters (Hamming-close `phash`) must collapse to one image before publishing; a generic `<event_type> — <venue>` placeholder title must be replaced by a grounded title recovered from the source when one is available.
+- `INC-2026-05-29-guide-vk-digest-missing-media.md`
+  - Scope: Guide excursions VK digest fanout to `vk.com/uhtykaliningrad`, materialized guide media assets, shared VK photo upload, postponed wall id resolution, and one-post VK digest rendering.
+  - Must not regress: a guide VK digest issue with media items must upload those assets to VK and publish/edit one wall post with both text and `photo...` attachments; first line must carry count + exact dates/range; postponed `wall.post` URLs must store the real wall item id, not only VK's `postponed_id`; media upload failure must fail closed instead of producing a text-only post.
+- `INC-2026-05-27-dachniki-prose-venue-duplicates.md`
+  - Scope: Telegram/VK/parser event location extraction, Smart Update shortlist filtering and duplicate matching, future active event Telegraph pages.
+  - Must not regress: a prose fragment in `location_name` must not be trusted as a venue anchor; if source text/title/date/time prove identity with an existing event, merge without changing the public venue, otherwise fail closed instead of creating a public prose-venue card.
+- `INC-2026-05-27-zhivoy-sunduk-writer-identity.md`
+  - Scope: Telegram Monitor title extraction, poster OCR title priority, Smart Update rich-facts/create-bundle/split-writer prompts, public Telegraph descriptions.
+  - Must not regress: caption/source attendee-facing names such as `Живой сундук` beat poster slogans like `Читайте бумажные книги!`; organizer/community/inspiration identity facts must stay source-grounded (`ОКЦ на Горького 116`, `Плоский мир Терри Пратчетта`) and must not be replaced by thematic guesses.
 - `INC-2026-05-19-vk-posts-personal-author.md`
   - Scope: shared VK `post_to_vk` wall publishing for `kenigeventsofficial` daily posts and `klgdevents` event posts, especially group-token actor calls.
   - Must not regress: every new community wall post created through `post_to_vk` must send `owner_id=-<group_id>`, `from_group=1`, and `signed=0`, so VK records `from_id=-<group_id>` and normal wall/community forwarding stays available.

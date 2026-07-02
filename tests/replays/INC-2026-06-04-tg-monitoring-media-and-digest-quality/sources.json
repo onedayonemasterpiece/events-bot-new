@@ -1,0 +1,51 @@
+{
+  "incident_id": "INC-2026-06-04-tg-monitoring-media-and-digest-quality",
+  "reported_at": "2026-06-04",
+  "production_symptoms": [
+    {
+      "source_url": "https://t.me/k_mira101/424",
+      "event_ids": [5640, 5641, 5642],
+      "created_at_utc": "2026-06-04T08:32:39Z..2026-06-04T08:33:05Z",
+      "vk_posts": [
+        "https://vk.com/wall-231920894_1985",
+        "https://vk.com/wall-231920894_1984",
+        "https://vk.com/wall-231920894_1983"
+      ],
+      "bad_fact": "Telegram-origin events were published to managed klgdevents VK posts with attachments=0.",
+      "minimal_source_truth": {
+        "source_text": "Дамы и господа, друзья\nА у нас весь июнь гастроли!\nВсего 3 концерта в июне и их нельзя пропустить\n\nЗнаменита органистка\n6 июня (суббота) 18:00 Лауреат межреспубликанского конкурса им. Чюрлениса Евгения Лисицина (орган, Москва, Рига) с программой \"Времена года\": А. Вивальди, И. С. Бах, М. П. Мусорский и др.\n\nЕще один известный органист и гитарист\n13 июня (суббота) 19:00 Федор Строганов (орган, Москва); Аркадий Резник (гитара, Москва). В программе А. Вивальди, И. С. Бах, Л. Боккерини, Х. Родриго, М. де Фалья, А. К. Жобим и др.\n\nУникальный ансамбль играющий на странных инструментах\n19 июня (пятница) 19:00 Ансамбль музыки ренессанс \"Pfeyffer\".",
+        "media": [],
+        "expected_behavior": "DB rows may exist, but vk_sync must fail closed until at least one renderable attachment is available."
+      }
+    },
+    {
+      "source_url": "https://t.me/molod_kld/3709",
+      "event_id": 5569,
+      "vk_post": "https://vk.com/wall-231920894_2000",
+      "bad_fact": "A one-line Telegram post was materialized as an event; reaction prose became location_name.",
+      "minimal_source_truth": {
+        "source_text": "🏠 Дайджест, мы его очень ждали",
+        "poster_ocr_text": "1-7 июня",
+        "poster_ocr_title": "Дайджест мероприятий",
+        "candidate": {
+          "title": "Дайджест",
+          "date": "2026-06-07",
+          "time": "",
+          "location_name": "мы его очень ждали",
+          "city": "Калининград"
+        },
+        "expected_behavior": "The reaction phrase must be dropped as prose, not treated as a venue; with no real venue/address/meeting point the candidate must fail closed."
+      }
+    }
+  ],
+  "negative_controls": [
+    {
+      "title": "Дайджест событий в музее",
+      "date": "2026-05-01",
+      "time": "14:00",
+      "location_name": "Кинозал",
+      "source_text": "Дайджест событий в музее: 1 мая в 14:00 - мастер-класс в Кинозале.",
+      "expected_behavior": "A digest post can still yield a real event when a concrete time and venue/room are present."
+    }
+  ]
+}

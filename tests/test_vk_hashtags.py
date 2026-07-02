@@ -1,7 +1,10 @@
 from datetime import date
+from types import SimpleNamespace
 
 from vk_hashtags import (
     build_vk_announce_hashtags,
+    build_vk_crumple_official_caption,
+    build_vk_event_hashtags,
     build_vk_video_announce_caption,
     normalize_vk_hashtag,
     vk_date_hashtags,
@@ -23,12 +26,37 @@ def test_build_vk_announce_hashtags_adds_base_city_and_dates():
         "#анонс",
         "#анонс39",
         "#кудапойтиКалининград",
-        "#афишаКалининград",
+        "#афишакалининград",
         "#Калининград",
         "#Светлогорск",
         "#17мая",
         "#17_мая",
     ]
+
+
+def test_build_vk_event_hashtags_adds_festival_name_without_spaces():
+    event = SimpleNamespace(
+        city="Калининград",
+        date="2026-06-06",
+        festival="80 историй о главном",
+    )
+
+    tags = build_vk_event_hashtags(event)
+
+    assert tags[-1] == "#80историйоглавном"
+
+
+def test_build_vk_event_hashtags_prefers_canonical_festival_name():
+    event = SimpleNamespace(
+        city="Калининград",
+        date="2026-06-06",
+        festival="Кантаты",
+    )
+
+    tags = build_vk_event_hashtags(event, festival_name="Кантата")
+
+    assert "#Кантата" in tags
+    assert "#Кантаты" not in tags
 
 
 def test_normalize_vk_hashtag_compacts_city_names():
@@ -46,3 +74,27 @@ def test_build_vk_video_announce_caption():
     assert "#Калининград" in caption
     assert "#24мая" in caption
     assert "#24_мая" in caption
+
+
+def test_build_vk_crumple_official_caption_uses_tomorrow_copy_and_requested_date_order():
+    caption = build_vk_crumple_official_caption(
+        cities=["Калининград", "Светлогорск"],
+        dates=["2026-06-09"],
+        tomorrow=date(2026, 6, 9),
+    )
+
+    assert caption == (
+        "События на завтра #Калининград #Светлогорск #9_июня #9июня"
+    )
+
+
+def test_build_vk_crumple_official_caption_uses_generated_period_when_not_tomorrow():
+    caption = build_vk_crumple_official_caption(
+        cities=["Калининград"],
+        dates=["2026-06-10", "2026-06-12"],
+        tomorrow=date(2026, 6, 9),
+    )
+
+    assert caption == (
+        "События на 10-12 июня #Калининград #10_июня #10июня #12_июня #12июня"
+    )

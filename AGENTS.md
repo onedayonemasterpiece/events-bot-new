@@ -8,6 +8,10 @@
 2. Для “быстрого роутинга” используй `docs/routes.yml` (машиночитаемая карта).
 3. Для задач по E2E всегда сверяйся с `docs/operations/e2e-scenarios.md` и поддерживай этот индекс актуальным при изменении сценариев.
 4. Для задач по инцидентам или при упоминании `INC-*` сразу открывай `docs/operations/incident-management.md` и `docs/reports/incidents/README.md`.
+5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
+6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
+7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
+8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
 
 ## Incident Mode (critical)
 
@@ -33,6 +37,9 @@
   - обязательны `TELEGRAM_BOT_TOKEN` и (`TELEGRAM_API_ID`/`TELEGRAM_API_HASH` **или** `TG_API_ID`/`TG_API_HASH`) и одна из: `TELEGRAM_AUTH_BUNDLE_E2E` или `TELEGRAM_SESSION`.
   - `behave`/`pytest` E2E подхватывают `.env` автоматически (best-effort) и **не** перетирают уже заданные переменные окружения.
   - если запускаешь бота руками из терминала, `.env` не подгружается автоматически: используй `set -a; source .env; set +a` перед `python main.py`.
+- Production Telegram UI E2E запускается только в `@events_love39_bot`; локальный `.env` используется только для human Telethon session/API id/hash. Не определяй production bot через локальный `TELEGRAM_BOT_TOKEN`, потому что он может указывать на тестовый `@eventsbotTestBot`.
+- Перед production admin UI E2E сверяй Telethon `get_me()` с production DB `/data/db.sqlite`, таблица `user`, `is_superadmin=1`; если grant отсутствует, запроси явное разрешение перед изменением prod DB.
+- Если production bot молчит на команду, сразу смотри `/data/runtime_logs/events-bot.log` и rotated logs по времени/user_id/update id/команде; webhook `200` без ответа часто означает штатный access-check return, а не сетевую поломку.
 
 ## Session Boundaries (critical)
 
@@ -41,6 +48,7 @@
 - `TELEGRAM_AUTH_BUNDLE_E2E` (or `TELEGRAM_SESSION`) is reserved for **local live E2E / Telethon human client** runs.
 - Never switch Kaggle guide monitoring from `TELEGRAM_AUTH_BUNDLE_S22` to `TELEGRAM_AUTH_BUNDLE_E2E` on your own, even as a temporary workaround.
 - Never run the same auth bundle concurrently in multiple places when one of them is Kaggle/remote, because Telegram can invalidate the auth key with `AuthKeyDuplicatedError`.
+- For `guide_monitoring`, an existing `kaggle_registry` entry with Kaggle status `UNKNOWN` or Kaggle API status errors (especially `GetKernelSessionStatus` HTTP 5xx) must be treated as an active remote Telethon session. Do not remove that registry entry and do not start a new guide Kaggle run until there is terminal Kaggle evidence, fresh output has been imported, or the user explicitly confirms the old auth bundle/session can be abandoned after replacement.
 - If the intended bundle is broken or missing, stop and report it clearly instead of borrowing another bundle.
 
 ## Правила раскладки
@@ -52,6 +60,7 @@
 - **LLM/промпты** → `docs/llm/`.
 - **Справочники** (локации/праздники/шаблоны) → `docs/reference/`.
 - **Бэклог/задачи** (ещё не реализовано) → `docs/backlog/`.
+- **Техдолг фестивального мониторинга** → `docs/backlog/features/festival-monitoring-debt/README.md`.
 - **Отчёты/планы/ретроспективы** → `docs/reports/`.
 - **Тулзы/шпаргалки** → `docs/tools/`.
 
@@ -66,6 +75,8 @@
 Если задача касается качества/смысла данных событий (например `title`, `description`, `search_digest`, `is_free`, `ticket_status`, work-hours/non-event классификация, venue/title semantics, duplicate/match решения), приоритет у обработки **через LLM** (промпты в `docs/llm/`, provider prompts вроде `kaggle/TelegramMonitor/telegram_monitor.py`, и LLM‑пасс в Smart Update).
 
 Детерминированные функции допустимы как поддержка (санитайзеры, нормализация, извлечение дат/времени, узкие consistency/safety guardrail‑проверки), но они **не должны менять смысл** текста или подменять LLM‑решение широкими regex/keyword правилами.
+
+В incident workflow это обязательный gate: перед prevention/fix нужно явно отделить семантическую проблему события/текста от механической проблемы транспорта/очереди/API. Семантические инциденты чинятся LLM-first; deterministic code допустим только как fail-closed/grounding/routing guard с negative controls.
 
 Каноническая политика: `docs/llm/request-guide.md` (секция про LLM‑first).
 
@@ -108,6 +119,12 @@
 ## Git / Push Policy
 
 - Канонический workflow для branch/worktree и безопасной изоляции параллельной разработки: `docs/operations/repository-workflow.md`.
+- По умолчанию новая плановая работа идёт в отдельном worktree на
+  `feature/<topic>` от свежего `origin/main`; короткие неаварийные багфиксы
+  допустимы в `fix/<topic>`.
+- `hotfix/<topic>` используй только для активного production incident /
+  emergency-fix. Если после mitigation задача стала плановой настройкой,
+  продолжай её в новой `feature/<topic>` ветке, а не в старой hotfix-ветке.
 - Держи облачный репозиторий разумно актуальным в ходе обычной работы, а не только в конце длинной серии правок.
 - После durable-изменений по текущей задаче stage/commit/push их в `origin`, если нет явного запрета пользователя и если задача не находится в промежуточной несогласованной стадии.
 - Перед любым push и deploy обязательно смотри `git status` и stage файлы явно.
@@ -126,6 +143,12 @@
 - Для prod-bound задач агент обязан сам привести deploy/tooling в рабочее состояние:
   - сначала проверить стандартные локальные пути и user-level install locations для нужных CLI (`flyctl`, `gh`, и т.п.), а не только текущий `PATH`;
   - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` в текущем процессе;
+  - для Fly auth сначала подгрузить общий devserver token, если он есть: `set -a; . /home/dev/.config/fly/release.env; set +a`; файл должен быть `0600`, значение токена не печатать;
+  - для Fly auth нельзя останавливаться на `flyctl auth whoami` / `no access token available`: обязательно проверить `~/.fly/config.yml` на `access_token` и попробовать process-local `FLY_ACCESS_TOKEN=<redacted>` или `FLY_API_TOKEN=<redacted>`; токен не печатать, в отчёте писать только факт наличия/отсутствия и результат `whoami`;
+  - отсутствие именно `FLY_API_TOKEN` в `.env` не означает отсутствие release auth, если есть user-level Fly config;
+  - если `/home/dev/.config/fly/release.env` отсутствует, а `~/.fly/config.yml` внезапно не содержит `access_token`, проверить, не был ли файл перезаписан WireGuard-only состоянием: `stat ~/.fly/config.yml`, `~/.fly/agent-logs/`, `~/.fly/logs/`; затем искать сохранённый токен в Codex/Claude session history без вывода секрета (`~/.codex/sessions/`, `~/.codex/logs_2.sqlite*`, `~/.claude/projects/-home-dev-projects-events-bot-new/`, `~/.claude/file-history/`) и проверять кандидатов только через process-local `FLY_ACCESS_TOKEN`/`FLY_API_TOKEN` + `flyctl auth whoami`;
+  - перед процедурными вопросами пользователю по Fly auth агент обязан исчерпать user-level config/env/session-history recovery; для этого репозитория уже известен прецедент: 2026-06-06 утренний deploy читал Fly token из local config/session path, а позже `~/.fly/config.yml` был перезаписан без usable auth;
+  - если после проверки user-level config/env Fly auth действительно отсутствует, следующий bootstrap — интерактивный `flyctl auth login`; не переключайся на GitHub Actions и не называй production fix доставленным до успешного manual `flyctl deploy`;
   - если CLI действительно отсутствует, агент должен установить его или предложить минимальный reproducible bootstrap, а не объявлять отсутствие инструмента достаточным оправданием остановки;
   - фразы вида "локально нет `flyctl`" не считаются допустимым closure/release explanation, если агент ещё не попытался self-bootstrap tooling.
 - Перед deploy обязательно:
@@ -133,7 +156,7 @@
   - проверить branch, чистоту worktree и связь с `origin/main`
   - сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
   - проверить, нет ли `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
-- GitHub Actions deploy допустим только если workflow явно checkout-ит и проверяет `main`.
+- Production deploy выполняется только вручную через `flyctl deploy` из clean worktree; GitHub Actions deploy для этого репозитория не используется и не является допустимым release path.
 - Ручной `flyctl deploy` допустим только из clean worktree; если deploy emergency и идёт не из `main`, branch должен быть запушен, SHA зафиксирован, а тот же fix обязан вернуться в `main` в рамках того же инцидента.
 - Для daily/scheduled prod-задач (`cron`, ежедневные публикации, daily import/rebuild jobs) deploy не считается closure сам по себе: если из-за бага сегодняшний слот уже был пропущен или завершился аварийно, после доставки фикса нужно выполнить compensating rerun/catch-up и проверить, что текущий день больше не потерян.
 

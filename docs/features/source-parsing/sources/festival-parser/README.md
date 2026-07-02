@@ -134,7 +134,29 @@ Gemma 3-27B limits:
 - 15K TPM (tokens per minute)
 - 14.4K RPD (requests per day)
 
-Token bucket algorithm in `rate_limit.py` handles this automatically.
+Token bucket algorithm in `rate_limit.py` handles the minute buckets, and now
+fails fast instead of sleeping forever when the estimated request is larger than
+the effective TPM budget or the effective daily request budget is exhausted.
+Server-side festival queue runs are also capped by `FESTIVAL_QUEUE_MAX_ITEMS_PER_RUN`
+(default `10`, hard-clamped to `1..50`) so an old pending backlog cannot be
+processed all at once.
+
+Operational guardrails for URL-based Kaggle parsing:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `FESTIVAL_PARSER_TIMEOUT_MINUTES` | `30` | Whole Kaggle run wait budget (`5..60`) |
+| `FESTIVAL_PARSER_TIMEOUT_MS` | `30000` | Playwright render timeout (`5000..120000`) |
+| `FESTIVAL_PARSER_MAX_LLM_CALLS` | `2` | Reason pass plus optional validation pass (`0..2`) |
+| `FESTIVAL_PARSER_MAX_ESTIMATED_TOKENS_PER_CALL` | `8000` | Per-call estimated prompt budget, below the effective TPM bucket |
+| `FESTIVAL_PARSER_NO_LLM` | `0` | Render/distill only, skip LLM and write metrics/rate usage |
+| `FESTIVAL_PARSER_DRY_RUN` | `0` | Same safety stop before LLM for parser smoke checks |
+| `FESTIVAL_PARSER_LLM_MODEL` | `gemma-3-27b` | Explicit model override for the legacy parser |
+
+For the VK dynamic-cover MVP (`80 историй о главном` + `Кантата`), prefer the
+existing lightweight festival-queue path and deterministic enrichment first.
+Do not run the Universal Festival Parser over the full accumulated queue as a
+shortcut.
 
 ## Security: API Key Management
 
@@ -199,4 +221,12 @@ KAGGLE_GEMMA_KEY_DATASET=username/gemma-key
 
 # Supabase storage bucket
 SUPABASE_PARSER_BUCKET=festival-parsing
+
+# Queue/parser safety
+FESTIVAL_QUEUE_MAX_ITEMS_PER_RUN=10
+FESTIVAL_PARSER_TIMEOUT_MINUTES=30
+FESTIVAL_PARSER_MAX_LLM_CALLS=2
+FESTIVAL_PARSER_MAX_ESTIMATED_TOKENS_PER_CALL=8000
+FESTIVAL_PARSER_NO_LLM=0
+FESTIVAL_PARSER_DRY_RUN=0
 ```

@@ -206,3 +206,4 @@ Smart Update сообщает оператору:
 - Плановый запуск очереди описан в `docs/operations/cron.md`.
 - Для аварийного fallback обложки индекса можно задать `FESTIVALS_INDEX_FALLBACK_COVER_URL` (должен быть preview‑friendly URL).
 - Исторический fallback вида `https://telegra.ph/file/...` считается устаревшим (upload endpoint deprecated) и не используется как preview‑friendly цель.
+- Агрегированные VK-посты о фестивалях временно выключены по умолчанию: `sync_festival_vk_post` возвращает skip, пока явно не выставлен `ENABLE_FESTIVAL_VK_POSTS=1`. Это не отключает обычные VK/TG посты отдельных событий через Smart Update. Возврат VK festival aggregate publishing требует закрыть техдолг `docs/backlog/features/festival-monitoring-debt/README.md` и пройти отдельный E2E/acceptance gate.

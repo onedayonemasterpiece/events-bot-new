@@ -191,6 +191,16 @@ async def handle_channel_post(message: types.Message):
     if not db or not bot:
         logger.warning("channel_nav: db or bot not initialized")
         return
+
+    # TG monitoring on demand uses Bot API channel_post updates only as a
+    # durable signal; actual extraction/import remains in the existing
+    # source-specific Telegram Monitoring pipeline.
+    try:
+        from source_parsing.telegram.on_demand import enqueue_on_demand_channel_post
+
+        await enqueue_on_demand_channel_post(db, message)
+    except Exception:
+        logger.exception("channel_nav: tg monitoring on-demand enqueue failed")
     
     # 1. Filter: Check if bot is admin (implicit if we can edit, but good to check context?)
     # Actually, we just try to edit.

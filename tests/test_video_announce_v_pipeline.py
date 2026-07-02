@@ -28,6 +28,7 @@ from video_announce.custom_types import RankedEvent
 from video_announce.handlers import handle_video_callback
 from video_announce.popular_review import PopularReviewPick, PopularReviewSelection
 import video_announce.scenario as scenario_module
+import video_announce.poller as poller_module
 from video_announce.scenario import TOMORROW_TEST_MIN_POSTERS, VideoAnnounceScenario
 
 
@@ -142,8 +143,16 @@ async def test_run_tomorrow_pipeline_creates_session_and_starts(monkeypatch, tmp
 
     started: dict[str, int] = {}
 
-    async def _fake_start_render(self, session_id: int, message=None, *, limit_scenes=None) -> str:  # noqa: ANN001,ARG002
+    async def _fake_start_render(  # noqa: ANN001,ARG002
+        self,
+        session_id: int,
+        message=None,
+        *,
+        limit_scenes=None,
+        background: bool = True,
+    ) -> str:
         started["session_id"] = session_id
+        started["background"] = background
         return "Рендеринг запущен"
 
     monkeypatch.setattr(VideoAnnounceScenario, "start_render", _fake_start_render)
@@ -232,6 +241,55 @@ async def test_run_tomorrow_pipeline_test_mode_limits_scenes(monkeypatch, tmp_pa
     await scenario.run_tomorrow_pipeline(test_mode=True)
 
     assert started["limit_scenes"] == TOMORROW_TEST_MIN_POSTERS
+
+
+@pytest.mark.asyncio
+async def test_run_tomorrow_pipeline_lane_busy_does_not_create_selected_session(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS", "LANE1,LANE2")
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="popular_review_eco",
+                selection_params={"_video_lane_auth_env": "LANE1"},
+                kaggle_kernel_ref="zigomaro/cherryflash",
+            )
+        )
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="popular_review_konb",
+                selection_params={"_video_lane_auth_env": "LANE2"},
+                kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+            )
+        )
+        await session.commit()
+
+    async def _start_render_must_not_run(*_args, **_kwargs) -> str:
+        raise AssertionError("lane-busy preflight must stop before SELECTED/start_render")
+
+    monkeypatch.setattr(VideoAnnounceScenario, "start_render", _start_render_must_not_run)
+
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db, bot, chat_id=123, user_id=1)
+    result = await scenario.run_tomorrow_pipeline(wait_for_handoff=True)
+
+    assert result is None
+    assert scenario.last_tomorrow_skip_reason == "video_lanes_busy"
+    assert any("video-lanes заняты" in text for _, text, _ in bot.messages)
+
+    async with db.get_session() as session:
+        res = await session.execute(select(VideoAnnounceSession))
+        sessions = list(res.scalars().all())
+    assert len(sessions) == 2
+    assert all(sess.status == VideoAnnounceSessionStatus.RENDERING for sess in sessions)
 
 
 @pytest.mark.asyncio
@@ -517,7 +575,7 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
         assert session_obj.id == session_id
         return "zigomaro/cherryflash-session-161", ["zigomaro/story-cipher"]
 
-    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref):  # noqa: ANN001
+    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref, **kwargs):  # noqa: ANN001,ARG001
         assert kernel_ref == "local:CherryFlash"
         assert dataset_sources == [
             "zigomaro/cherryflash-session-161",
@@ -861,7 +919,7 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
             "targets": [{"peer": "@keniggpt", "label": "@keniggpt", "delay_seconds": 0}],
         }
 
-    def _fake_write_story_secret_files(path):  # noqa: ANN001
+    def _fake_write_story_secret_files(path, **kwargs):  # noqa: ANN001, ARG001
         cipher_path = Path(path) / "story_publish.enc"
         key_path = Path(path) / "story_publish.key"
         cipher_path.write_bytes(b"cipher")
@@ -949,10 +1007,6 @@ async def test_create_cherryflash_dataset_fails_when_story_requested_but_config_
         "video_announce.scenario.build_story_publish_config",
         AsyncMock(return_value=None),
     )
-    monkeypatch.setattr(
-        "video_announce.scenario.ensure_story_secret_datasets",
-        AsyncMock(return_value=[]),
-    )
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
 
     class _DummyClient:
@@ -988,6 +1042,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
     tmp_path,
 ):
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -1040,6 +1095,395 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
             {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_create_crumple_dataset_bundles_current_story_helper_when_story_enabled(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    snapshot_dir = tmp_path / "snapshot"
+    calls: list[tuple[str, Path]] = []
+
+    async def _fake_selected_event_dates(session_id):  # noqa: ARG001
+        return ["2026-06-15"]
+
+    async def _fake_selected_event_cities(session_id):  # noqa: ARG001
+        return ["Калининград"]
+
+    async def _fake_build_story_publish_config(*args, **kwargs):  # noqa: ANN002,ANN003
+        return {
+            "version": 1,
+            "mode": "video",
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "mode": "upload",
+                    "required": True,
+                }
+            ],
+        }
+
+    class _DummyClient:
+        def create_dataset(self, path):  # noqa: ANN001
+            calls.append(("create_dataset", Path(path)))
+            shutil.copytree(path, snapshot_dir, dirs_exist_ok=True)
+
+        def delete_dataset(self, *args, **kwargs):  # noqa: ANN002,ANN003
+            raise AssertionError("delete_dataset should not be called")
+
+    monkeypatch.setattr(scenario, "_selected_event_dates", _fake_selected_event_dates)
+    monkeypatch.setattr(scenario, "_selected_event_cities", _fake_selected_event_cities)
+    monkeypatch.setattr(scenario, "_copy_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "video_announce.scenario.build_story_publish_config",
+        _fake_build_story_publish_config,
+    )
+    def _fake_write_story_secret_files(path, **kwargs):  # noqa: ANN001, ARG001
+        cipher_path = Path(path) / "story_publish.enc"
+        key_path = Path(path) / "story_publish.key"
+        cipher_path.write_bytes(b"cipher")
+        key_path.write_bytes(b"key")
+        return cipher_path, key_path
+
+    monkeypatch.setattr(
+        "video_announce.scenario.write_story_secret_files",
+        _fake_write_story_secret_files,
+    )
+
+    session_obj = SimpleNamespace(
+        id=676,
+        kaggle_kernel_ref="zigomaro/crumple-video",
+        selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        main_chat_id=-100123,
+    )
+
+    dataset_id, story_sources = await scenario._create_dataset(
+        session_obj,
+        json.dumps({"scenes": []}, ensure_ascii=False),
+        [],
+        client=_DummyClient(),
+    )
+
+    assert dataset_id == "zigomaro/video-afisha-session-676"
+    assert story_sources == []
+    assert len(calls) == 1
+    assert calls[0][0] == "create_dataset"
+    bundled_helper = snapshot_dir / "kaggle_common" / "story_publish.py"
+    assert bundled_helper.exists()
+    assert bundled_helper.read_text(encoding="utf-8") == (
+        Path("kaggle/CrumpleVideo/story_publish.py").read_text(encoding="utf-8")
+    )
+    assert (snapshot_dir / "story_publish.json").exists()
+    assert (snapshot_dir / "story_publish.enc").exists()
+    assert (snapshot_dir / "story_publish.key").exists()
+
+
+@pytest.mark.asyncio
+async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_target(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
+        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+
+    async with db.get_session() as session:
+        busy = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            selection_params={
+                "story_publish_enabled": True,
+                "_video_lane_auth_env": "TELEGRAM_AUTH_BUNDLE_STORY",
+            },
+            kaggle_kernel_ref="zigomaro/cherryflash",
+        )
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add_all([busy, fresh])
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert error is None
+    assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
+    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
+    assert kernel_ref == "zigomaro/cherryflash-video1"
+
+
+@pytest.mark.asyncio
+async def test_video_lane_assignment_skips_active_resource_lease(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
+        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            )
+            VALUES (?, 'videoannounce:703', 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY",
+                (now - timedelta(minutes=5)).isoformat(),
+                (now + timedelta(hours=1)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    async with db.get_session() as session:
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert error is None
+    assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
+    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
+    assert kernel_ref == "zigomaro/cherryflash-video1"
+
+
+@pytest.mark.asyncio
+async def test_video_lane_assignment_fails_when_all_resource_leases_busy(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        for env_name in ["TELEGRAM_AUTH_BUNDLE_STORY", "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"]:
+            await conn.execute(
+                """
+                INSERT INTO kaggle_resource_lease(
+                    resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+                )
+                VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+                """,
+                (
+                    f"telegram_session:env:{env_name}",
+                    f"videoannounce:{env_name}",
+                    (now - timedelta(minutes=5)).isoformat(),
+                    (now + timedelta(hours=1)).isoformat(),
+                    now.isoformat(),
+                ),
+            )
+        await conn.commit()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    async with db.get_session() as session:
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert params == {"story_publish_enabled": True}
+    assert kernel_ref == "local:CherryFlash"
+    assert error and "video-lanes заняты" in error
+
+
+@pytest.mark.asyncio
+async def test_fresh_kaggle_ledger_heartbeat_prevents_fixed_timeout_failure(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, progress_json,
+                token_hash, last_heartbeat_at, created_at, updated_at
+            )
+            VALUES (?, ?, 'cherryflash', 'CherryFlash', 'alive', 'render', ?, 'token-hash', ?, ?, ?)
+            """,
+            (
+                "videoannounce:701",
+                701,
+                json.dumps({"progress_label": "рендер 80%"}, ensure_ascii=False),
+                (now - timedelta(minutes=5)).isoformat(),
+                (now - timedelta(hours=4)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    heartbeat = await poller_module._fresh_kaggle_ledger_heartbeat(
+        db,
+        "videoannounce:701",
+        now=now,
+        grace_minutes=20,
+    )
+
+    assert heartbeat is not None
+    assert heartbeat["phase"] == "render"
+    assert heartbeat["progress"]["progress_label"] == "рендер 80%"
+
+
+@pytest.mark.asyncio
+async def test_create_story_publish_only_dataset_filters_failed_vk_target(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    video_path = tmp_path / "crumple_video_final.mp4"
+    video_path.write_bytes(b"video")
+    snapshot_dir = tmp_path / "publish_only_snapshot"
+
+    async def _fake_build_story_publish_config(*args, **kwargs):  # noqa: ANN002,ANN003
+        return {
+            "version": 1,
+            "mode": "video",
+            "targets": [
+                {
+                    "peer": "me",
+                    "label": "me",
+                    "mode": "upload",
+                },
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "delay_seconds": 300,
+                    "mode": "upload",
+                    "caption": "События на завтра",
+                },
+                {
+                    "peer": "@kenigevents",
+                    "label": "@kenigevents",
+                    "mode": "repost_previous",
+                    "required": True,
+                },
+            ],
+        }
+
+    class _DummyClient:
+        def create_dataset(self, path):  # noqa: ANN001
+            shutil.copytree(path, snapshot_dir, dirs_exist_ok=True)
+
+    monkeypatch.setattr(
+        poller_module,
+        "build_story_publish_config",
+        _fake_build_story_publish_config,
+    )
+    monkeypatch.setattr(
+        poller_module,
+        "create_kaggle_run_config",
+        AsyncMock(return_value=None),
+    )
+
+    dataset_id, story_sources = await poller_module._create_story_publish_only_dataset(
+        db,
+        _DummyClient(),
+        SimpleNamespace(
+            id=676,
+            main_chat_id=None,
+            selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        ),
+        video_path=video_path,
+        story_report={
+            "targets": [
+                {
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "ok": False,
+                    "error": 'ValueError: No user has "kenigeventsofficial" as username',
+                }
+            ]
+        },
+    )
+
+    assert dataset_id.startswith("zigomaro/crumple-story-publish-session-676-")
+    assert story_sources == []
+    assert (snapshot_dir / "crumple_video_final.mp4").read_bytes() == b"video"
+    assert (snapshot_dir / "story_publish.enc").exists()
+    assert (snapshot_dir / "story_publish.key").exists()
+    assert (snapshot_dir / "kaggle_common" / "story_publish.py").exists()
+    story_config = json.loads((snapshot_dir / "story_publish.json").read_text(encoding="utf-8"))
+    assert story_config["publish_only_recovery"] is True
+    assert story_config["targets"] == [
+        {
+            "peer": "kenigeventsofficial",
+            "label": "vk:kenigeventsofficial:wall",
+            "transport": "vk_wall",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "caption": "События на завтра",
+            "required": True,
+            "blocking": False,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -1352,3 +1796,45 @@ async def test_show_kernel_selection_blocks_when_ready_items_exceed_limit(tmp_pa
         "Выбрано 13 событий, а текущий рендер поддерживает максимум 12. "
         "Снимите лишние в SELECTED перед запуском."
     )
+
+
+def test_story_publish_only_lock_prevents_concurrent_session(monkeypatch, tmp_path):
+    monkeypatch.setattr(poller_module, "STORY_PUBLISH_ONLY_LOCK_DIR", tmp_path)
+
+    first = poller_module._acquire_story_publish_only_lock(676)
+    assert first is not None
+    try:
+        assert poller_module._acquire_story_publish_only_lock(676) is None
+    finally:
+        poller_module._release_story_publish_only_lock(first)
+
+    second = poller_module._acquire_story_publish_only_lock(676)
+    assert second is not None
+    poller_module._release_story_publish_only_lock(second)
+
+
+@pytest.mark.asyncio
+async def test_story_publish_only_recovery_skips_already_published_session(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(
+            VideoAnnounceSession(
+                id=676,
+                status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            )
+        )
+        session.add(
+            VideoAnnounceSession(
+                id=677,
+                status=VideoAnnounceSessionStatus.FAILED,
+            )
+        )
+        await session.commit()
+
+    assert await poller_module._load_session_if_publish_only_allowed(db, 676) is None
+
+    recoverable = await poller_module._load_session_if_publish_only_allowed(db, 677)
+    assert recoverable is not None
+    assert recoverable.id == 677

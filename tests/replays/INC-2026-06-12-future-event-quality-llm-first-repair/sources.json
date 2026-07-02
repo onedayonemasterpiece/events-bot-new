@@ -1,0 +1,155 @@
+{
+  "incident_id": "INC-2026-06-12-future-event-quality-llm-first-repair",
+  "reported_at": "2026-06-12",
+  "production_symptoms": [
+    {
+      "event_ids": [5868, 5933, 5936],
+      "title": "Род мужской",
+      "date": "2026-06-12",
+      "time": "20:30",
+      "bad_location": "Пространство Тёрка",
+      "expected_location": "ОКЦ на Горького",
+      "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691",
+      "note": "Same real Westside Movieclub screening leaked as duplicate public cards; repost default location conflicted with event-local source venue."
+    },
+    {
+      "event_ids": [5869, 5934],
+      "title": "Солнцестояние",
+      "date": "2026-06-13",
+      "time": "20:00",
+      "bad_location": "Пространство Тёрка",
+      "expected_location": "Сигнал",
+      "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691",
+      "note": "Same source schedule, event-local venue is Signal, not the repost channel default."
+    },
+    {
+      "event_ids": [3999, 5367],
+      "bad_location": "Калининград Сити Джаз Клуб",
+      "expected_location": null,
+      "note": "City Jazz was applied from source/default without source-grounded venue evidence."
+    },
+    {
+      "event_ids": [5285, 5890],
+      "bad_times": ["12:06", "13:06"],
+      "note": "LLM date markers DD.MM leaked into HH:MM time fields even though source contained separate real times."
+    }
+  ],
+  "replay_cases": [
+    {
+      "name": "telegram_default_location_loses_to_event_local_venue",
+      "source_type": "telegram",
+      "source_username": "terkatalk",
+      "source_message_id": 4990,
+      "source_default_location": "Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград",
+      "message_text": "12.06/13.06 | Women Power в киноклубе westside movieclub\n12 июня в 20:30 — «Род мужской» (2026)\n📍Новый ОКЦ, ул. Горького, 116\n13 июня в 20:00 — «Солнцестояние» (2017)\n📍Сигнал, Леонова 22",
+      "llm_event": {
+        "title": "Род мужской",
+        "date": "2026-06-12",
+        "time": "20:30",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград",
+        "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691/"
+      },
+      "expected_candidate": {
+        "location_name": "ОКЦ на Горького",
+        "location_address": "Горького 116",
+        "city": "Калининград"
+      }
+    },
+    {
+      "name": "telegram_rejects_unsupported_city_jazz_default",
+      "source_type": "telegram",
+      "source_username": "terkatalk",
+      "source_message_id": 4735,
+      "source_default_location": "Калининград Сити Джаз Клуб, Мира 33-35, Калининград",
+      "message_text": "Женская арт-терапевтическая группа.\nСтарт: 23 апреля.\nМесто: очно в Калининграде (уютный кабинет в центре города).\nВопросы, запись @lena_zaka",
+      "llm_event": {
+        "title": "Женская арт-терапевтическая группа",
+        "date": "2026-04-23",
+        "time": "",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград"
+      },
+      "expected_candidate": {
+        "location_name": null,
+        "location_address": null,
+        "city": "Калининград"
+      }
+    },
+    {
+      "name": "telegram_keeps_source_grounded_city_jazz_default",
+      "source_type": "telegram",
+      "source_username": "qtickets",
+      "source_message_id": 240069,
+      "source_default_location": "Калининград Сити Джаз Клуб, Мира 33-35, Калининград",
+      "message_text": "Мария Макарова акустика. 7 августа 20:00. пр-т Мира, 33 Калининград.",
+      "llm_event": {
+        "title": "Мария Макарова акустика",
+        "date": "2026-08-07",
+        "time": "20:00",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград"
+      },
+      "expected_candidate": {
+        "location_name": "Калининград Сити Джаз Клуб",
+        "location_address": "Мира 33-35",
+        "city": "Калининград"
+      }
+    },
+    {
+      "name": "vk_drops_ddmm_time_marker_when_source_has_other_times",
+      "source_type": "vk",
+      "message_text": "12.06 — «Род мужской» в 20:30\n13.06 — «Солнцестояние» в 20:00",
+      "llm_event": {
+        "title": "Род мужской",
+        "date": "2026-06-12",
+        "time": "12:06",
+        "location_name": "ОКЦ на Горького",
+        "location_address": "Горького 116",
+        "city": "Калининград"
+      },
+      "expected_candidate": {
+        "time": null,
+        "time_is_default": false
+      }
+    },
+    {
+      "name": "smart_update_recalls_same_ticket_despite_wrong_default_location",
+      "existing_event": {
+        "title": "Род мужской",
+        "date": "2026-06-12",
+        "time": "20:30",
+        "location_name": "ОКЦ на Горького",
+        "location_address": "Горького 116",
+        "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691"
+      },
+      "candidate": {
+        "source_type": "telegram",
+        "source_url": "https://t.me/terkatalk/4990",
+        "title": "Род мужской» (2026)",
+        "date": "2026-06-12",
+        "time": "20:30",
+        "location_name": "Пространство Тёрка",
+        "location_address": "Пл. Победы 4 (1 под. 2 этаж)",
+        "city": "Калининград",
+        "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691/"
+      },
+      "expected_replay_result": "merged_into_existing_event_without_changing_public_location"
+    }
+  ],
+  "negative_controls": [
+    {
+      "name": "city_jazz_valid_when_source_grounds_address",
+      "production_event_id": 5873,
+      "location_name": "Калининград Сити Джаз Клуб",
+      "source_evidence": "пр-т Мира, 33"
+    },
+    {
+      "name": "dramteatr_same_time_productions_remain_distinct",
+      "event_id_pairs": [[4819, 5039], [4820, 5041], [4821, 5042], [4824, 5127], [4825, 5128]]
+    }
+  ]
+}

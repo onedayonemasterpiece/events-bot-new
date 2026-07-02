@@ -128,6 +128,47 @@ def test_g4_split_create_disables_4o_fallback_for_experimental_stages(monkeypatc
     assert su._smart_update_4o_fallback_enabled("create_bundle") is True
 
 
+def test_smart_update_4o_fallback_env_can_disable_all_stages(monkeypatch):
+    monkeypatch.setenv("SMART_UPDATE_4O_FALLBACK", "0")
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", False)
+
+    assert su._smart_update_4o_fallback_enabled("create_bundle") is False
+
+
+def test_smart_update_4o_fallback_budget_limits_mass_fallback(monkeypatch):
+    monkeypatch.setenv("SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR", "2")
+    su._SMART_UPDATE_4O_FALLBACK_BUDGET["window_start"] = 0.0
+    su._SMART_UPDATE_4O_FALLBACK_BUDGET["count"] = 0
+
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is True
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is True
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is False
+
+
+def test_smart_update_gemma_client_uses_mass_task_retry_cap(monkeypatch):
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            self.max_retries = 3
+
+    fake_google_ai = types.ModuleType("google_ai")
+    fake_google_ai.GoogleAIClient = FakeGoogleAIClient
+    fake_google_ai.SecretsProvider = lambda: object()
+    fake_main = types.ModuleType("main")
+    fake_main.get_supabase_client = lambda: None
+    fake_main.notify_llm_incident = None
+    monkeypatch.setitem(sys.modules, "google_ai", fake_google_ai)
+    monkeypatch.setitem(sys.modules, "main", fake_main)
+    monkeypatch.setenv("SMART_UPDATE_GOOGLE_AI_MAX_RETRIES", "1")
+
+    su._get_gemma_client.cache_clear()
+    try:
+        client = su._get_gemma_client()
+    finally:
+        su._get_gemma_client.cache_clear()
+
+    assert client.max_retries == 1
+
+
 @pytest.mark.asyncio
 async def test_ask_gemma_json_uses_native_schema_when_enabled(monkeypatch):
     client = _FakeGemmaClient(['{"facts":["Факт"]}'])
@@ -298,6 +339,184 @@ async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_tit
     assert "О спикере" in prompt
     assert "профессиональная позиция спикера" in prompt
     assert "одном именованном факте" in prompt.casefold() or "одном именованном" in prompt
+    assert "ОТДЕЛЬНЫЙ именованный факт для КАЖДОГО блока" in prompt
+    assert "не сокращай состав до категорий" in prompt
+    assert "named roster" in prompt
+    assert "Главный архитектор Калининграда" in prompt
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_writer_repairs_logistics_instead_of_dropping_speaker_roster(
+    monkeypatch,
+):
+    """Regression for INC-2026-06-20-tg-speaker-roster-dropped.
+
+    Event 6244 had a rich speaker roster in the source, but the split writer's
+    first draft was rejected for logistics and the create path fell back to a
+    generic one-sentence description. The writer should ask the LLM to remove
+    logistics and keep the speaker roster before giving up.
+    """
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"description":"23 июня в 18:30 на Клинической 21 пройдёт паблик-ток.\\n\\n'
+                '### Спикеры\\n'
+                '- Артур Сарниц, архитектор.\\n'
+                '- Андрей Анисимов, главный архитектор Калининграда.",'
+                '"warnings":[]}'
+            ),
+            (
+                '{"short_description":"Паблик-ток о городской среде с архитекторами и краеведами.",'
+                '"search_digest":"Паблик-ток о городской среде с Артуром Сарницем и Андреем Анисимовым.",'
+                '"warnings":[]}'
+            ),
+        ]
+    )
+    text_calls: list[dict] = []
+
+    async def fake_ask_gemma_text(prompt, **kwargs):
+        text_calls.append({"prompt": prompt, **kwargs})
+        return (
+            "Паблик-ток о качестве городской среды и будущем районов Калининграда.\n\n"
+            "### Спикеры\n"
+            "- Артур Сарниц, архитектор\n"
+            "- Андрей Анисимов, главный архитектор Калининграда"
+        )
+
+    original_logistics_reject = su._description_needs_g4_split_create_logistics_reject
+
+    def fake_logistics_reject(text, *, candidate):
+        if "Клинической 21" in (text or ""):
+            return True
+        return original_logistics_reject(text, candidate=candidate)
+
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "_ask_gemma_text", fake_ask_gemma_text)
+    monkeypatch.setattr(
+        su,
+        "_description_needs_g4_split_create_logistics_reject",
+        fake_logistics_reject,
+    )
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kenigevents/4104",
+        source_text="АРТУР САРНИЦ\nАрхитектор\n\nАНДРЕЙ АНИСИМОВ\nГлавный архитектор Калининграда",
+        title="Лекция «Калининград: город-сад или микрорайон для жизни у моря!»",
+        date="2026-06-23",
+        time="18:30",
+        location_name="Историко-художественный музей",
+        location_address="Клиническая 21",
+        city="Калининград",
+        event_type="лекция",
+    )
+
+    result = await su._llm_g4_split_create_writer(
+        candidate=candidate,
+        title=candidate.title,
+        event_type=candidate.event_type,
+        facts_text_clean=[
+            "Формат: паблик-ток с участием экспертов",
+            "Спикер: Артур Сарниц, архитектор",
+            "Спикер: Андрей Анисимов, главный архитектор Калининграда",
+        ],
+    )
+
+    assert result is not None
+    assert "Артур Сарниц" in result["description"]
+    assert "Андрей Анисимов" in result["description"]
+    assert "18:30" not in result["description"]
+    assert "Клинической 21" not in result["description"]
+    assert text_calls and text_calls[0]["label"] == "split_description_writer_remove_logistics"
+    writer_prompt = client.calls[0]["prompt"]
+    assert "named roster" in writer_prompt
+    assert "не сворачивай имена в категории" in writer_prompt
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_prompt_preserves_organizer_and_inspiration_identity(
+    monkeypatch,
+):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Своп-мероприятие с книжным обменом."],'
+                '"program_or_examples":[],'
+                '"context_methodology_facts":["Событие вдохновлено Плоским миром Терри Пратчетта."],'
+                '"people_org_facts":["Организатор — сообщество вокруг ОКЦ на Горького 116."],'
+                '"logistics_facts":[],'
+                '"uncertain_or_drop":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/example/2705",
+        source_text=(
+            "Живой сундук\n"
+            "Своп-мероприятие от ОКЦ на Горького 116.\n"
+            "Событие организовано сообществом вокруг ОКЦ на Горького 116 "
+            "и вдохновлено Плоским миром Терри Пратчетта."
+        ),
+        title="Живой сундук",
+        date="2026-06-06",
+        time="12:00",
+        location_name="ОКЦ на Горького",
+        location_address="Горького 116",
+        city="Калининград",
+        event_type="ярмарка",
+    )
+
+    await su._llm_extract_candidate_facts(candidate)
+    prompt = client.calls[0]["prompt"]
+
+    assert "identity facts" in prompt
+    assert "Плоский мир Терри Пратчетта" in prompt
+    assert "организовано" in prompt
+    assert "вдохновлено" in prompt
+    assert "не заменяй" in prompt.casefold()
+
+
+@pytest.mark.asyncio
+async def test_infoblock_logistics_cleanup_prompt_keeps_identity_location_clauses(monkeypatch):
+    prompts: list[str] = []
+
+    async def fake_ask_gemma_text(prompt, **_kwargs):
+        prompts.append(prompt)
+        return "Событие «Живой сундук» организовано сообществом вокруг ОКЦ на Горького 116."
+
+    monkeypatch.setattr(su, "_ask_gemma_text", fake_ask_gemma_text)
+    candidate = su.EventCandidate(
+        source_type="telegraph_render",
+        source_url="https://t.me/okcng/376",
+        source_text="Живой сундук. Своп-мероприятие от ОКЦ на Горького 116.",
+        title="Живой сундук",
+        date="2026-06-06",
+        time="12:00-18:00",
+        location_name="ОКЦ на Горького",
+        location_address="Горького 116",
+        city="Калининград",
+        event_type="своп",
+    )
+
+    await su._llm_remove_infoblock_logistics(
+        description=(
+            "Событие «Живой сундук» организовано сообществом вокруг ОКЦ на Горького 116, "
+            "вдохновлённым Плоским миром Терри Пратчетта."
+        ),
+        candidate=candidate,
+        label="test",
+    )
+
+    prompt = prompts[0]
+    assert "identity-факты" in prompt
+    assert "организовано" in prompt
+    assert "вокруг" in prompt
+    assert "вдохновлено" in prompt
+    assert "это не логистический повтор" in prompt
 
 
 @pytest.mark.asyncio

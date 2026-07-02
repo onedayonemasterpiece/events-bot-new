@@ -87,6 +87,43 @@ async def test_publish_ics_both_channels_success(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_tg_ics_post_stores_public_channel_url_when_asset_has_username(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = DummyBot("123:abc")
+    async with db.get_session() as session:
+        session.add(
+            Channel(
+                channel_id=-1002807919036,
+                title="Calendar",
+                username="kenigeventscalendar",
+                is_admin=True,
+                is_asset=True,
+            )
+        )
+        session.add(
+            Event(
+                id=1,
+                title="Concert",
+                description="desc",
+                source_text="s",
+                date="2025-07-18",
+                time="19:00",
+                location_name="Hall",
+                city="Town",
+            )
+        )
+        await session.commit()
+    monkeypatch.setattr(main, "update_source_post_keyboard", lambda *a, **k: None)
+
+    await main.tg_ics_post(1, db, bot)
+
+    async with db.get_session() as session:
+        ev = await session.get(Event, 1)
+        assert ev.ics_post_url == "https://t.me/kenigeventscalendar/1"
+
+
+@pytest.mark.asyncio
 async def test_ics_skips_when_no_change(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -281,6 +318,48 @@ async def test_telegram_error_does_not_block_supabase(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ics_jobs_skip_invalid_schedule_without_retry(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = DummyBot("123:abc")
+    async with db.get_session() as session:
+        session.add(Channel(channel_id=-100, title="Asset", is_admin=True, is_asset=True))
+        session.add(
+            Event(
+                id=1,
+                title="A",
+                description="d",
+                source_text="s",
+                date="2025-07-18",
+                time="по расписанию",
+                location_name="Hall",
+                city="Town",
+            )
+        )
+        await session.commit()
+
+    fake = FakeClient()
+    monkeypatch.setattr(main, "get_supabase_client", lambda: fake)
+
+    pr = Progress()
+    assert await main.ics_publish(1, db, bot, pr) is False
+    assert not fake.uploaded
+    assert len(pr.marks) == 1
+    assert pr.marks[0][0] == "ics_supabase"
+    assert pr.marks[0][1] == "skipped_invalid_schedule"
+    assert "bad time" in pr.marks[0][2]
+    assert "по расписанию" in pr.marks[0][2]
+
+    pr2 = Progress()
+    assert await main.tg_ics_post(1, db, bot, pr2) is False
+    assert not bot.docs
+    assert len(pr2.marks) == 1
+    assert pr2.marks[0][0] == "ics_telegram"
+    assert pr2.marks[0][1] == "skipped_invalid_schedule"
+    assert "bad time" in pr2.marks[0][2]
+
+
+@pytest.mark.asyncio
 async def test_ics_coalesced_jobs_and_semaphore(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -327,3 +406,37 @@ async def test_ics_coalesced_jobs_and_semaphore(tmp_path, monkeypatch):
     )
     assert order[0][0] == 1 and order[1][0] == 2
     assert order[1][1] >= order[0][1]
+
+
+@pytest.mark.asyncio
+async def test_ics_upload_uses_direct_storage_endpoint_when_supabase_env_configured(monkeypatch):
+    calls = []
+
+    class Resp:
+        status_code = 201
+        text = '{"ok":true}'
+
+    def fake_post(url, *, headers, data, timeout):
+        calls.append((url, headers, data, timeout))
+        return Resp()
+
+    monkeypatch.setattr(main, "SUPABASE_URL", "https://example.supabase.co/rest/v1")
+    monkeypatch.setattr(main, "SUPABASE_KEY", "service-key")
+    monkeypatch.setattr(main, "SUPABASE_BUCKET", "events-ics")
+    monkeypatch.setattr(main, "_normalized_supabase_url_source", None)
+    monkeypatch.setattr(main, "_normalized_supabase_url", None)
+
+    import requests
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    url = await main._upload_ics_to_supabase_storage("event-1-2026-06-25.ics", b"BEGIN:VCALENDAR")
+
+    assert url == "https://example.supabase.co/storage/v1/object/public/events-ics/event-1-2026-06-25.ics"
+    assert calls
+    upload_url, headers, body, timeout = calls[0]
+    assert upload_url == "https://example.supabase.co/storage/v1/object/events-ics/event-1-2026-06-25.ics"
+    assert headers["x-upsert"] == "true"
+    assert headers["Content-Type"] == main.ICS_CONTENT_TYPE
+    assert body == b"BEGIN:VCALENDAR"
+    assert timeout == 45

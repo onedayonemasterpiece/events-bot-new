@@ -9,6 +9,14 @@ from smart_event_update import SmartUpdateResult
 from source_parsing.telegram import handlers as tg_handlers
 
 
+@pytest.fixture(autouse=True)
+def _disable_public_tg_fallback(monkeypatch):
+    async def fake_fetch_posters(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(tg_handlers, "_fallback_fetch_posters_from_public_tg_page", fake_fetch_posters)
+
+
 def _results_path(tmp_path: Path) -> Path:
     payload = {
         "schema_version": 2,
@@ -29,14 +37,14 @@ def _results_path(tmp_path: Path) -> Path:
                 "source_link": "https://t.me/kraftmarket39/193",
                 "text": (
                     "Продолжается регистрация на лекцию\n\n"
-                    "15 мая 16:00\n"
+                    "15 июля 16:00\n"
                     "Лекторий ОКЕАНиЯ\n"
                     "Музей Мирового океана, наб. Петра Великого 1, #Калининград"
                 ),
                 "events": [
                     {
                         "title": "О чём мечтали в советском Калининграде, куда стремились и куда попали",
-                        "date": "2026-05-15",
+                        "date": "2026-07-15",
                         "time": "16:00",
                         "location_name": "Лекторий ОКЕАНиЯ, Музей Мирового океана",
                         "location_address": "наб. Петра Великого 1",
@@ -52,8 +60,114 @@ def _results_path(tmp_path: Path) -> Path:
     return path
 
 
+def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
+    payload = {
+        "schema_version": 2,
+        "run_id": "INC-2026-06-13-kraftmarket-promo-zero-events-replay",
+        "generated_at": "2026-06-13T07:00:00+00:00",
+        "stats": {
+            "sources_total": 1,
+            "messages_scanned": 2,
+            "messages_with_events": 2,
+            "events_extracted": 2,
+        },
+        "messages": [
+            {
+                "source_username": "kraftmarket39",
+                "source_title": "Полюбить 39 | Маркет",
+                "message_id": 285,
+                "message_date": "2026-06-12T10:58:15+00:00",
+                "source_link": "https://t.me/kraftmarket39/285",
+                "text": (
+                    "Друзья, вы этого просили, мы это сделали!\n\n"
+                    "Лекции Дмитрия Манкевича о становлении здравоохранения в первые годы "
+                    "становления области перенесена в Историко-художественный музей на ту же дату "
+                    "и то же время.\n\n"
+                    "19 июня 18:30\n"
+                    "Историко-художественный музей, Клиническая 21, #Калининград\n"
+                    "Лекция проходит в рамках фестиваля «80 историй о главном».\n"
+                    "ПЕРЕНОС, билеты действительны\n"
+                    "бесплатно, по регистрации"
+                ),
+                "links": [
+                    {
+                        "url": "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+                        "text": "бесплатно, по регистрации",
+                        "source": "entity",
+                    }
+                ],
+                "events": [
+                    {
+                        "title": "Калининградское здравоохранение в период становления области",
+                        "date": "2026-06-19",
+                        "time": "18:30",
+                        "location_name": "Историко-художественный музей",
+                        "location_address": "Клиническая 21",
+                        "city": "Калининград",
+                        "ticket_link": "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+                        "event_type": "лекция",
+                        "is_free": True,
+                        "festival": "80 историй о главном",
+                    }
+                ],
+            },
+            {
+                "source_username": "kraftmarket39",
+                "source_title": "Полюбить 39 | Маркет",
+                "message_id": 287,
+                "message_date": "2026-06-12T16:14:11+00:00",
+                "source_link": "https://t.me/kraftmarket39/287",
+                "text": (
+                    "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
+                    "стать великим композитором.\n\n"
+                    "Событие проходит в рамках образовательной программы фестиваля Кантата.\n\n"
+                    "15 июня 12:45\n"
+                    "Филиал Третьяковской галереи, Парадная наб. 3, #Калининград\n"
+                    "Бесплатно, по регистрации"
+                ),
+                "links": [
+                    {
+                        "url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+                        "text": "«Бородин. Гениальный дилетант»",
+                        "source": "entity",
+                    }
+                ],
+                "events": [
+                    {
+                        "title": "Бородин. Гениальный дилетант",
+                        "date": "2026-06-15",
+                        "time": "12:45",
+                        "location_name": "Филиал Третьяковской галереи",
+                        "location_address": "Парадная наб. 3",
+                        "city": "Калининград",
+                        "ticket_link": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+                        "event_type": "лекция",
+                        "is_free": True,
+                        "festival": "Кантата",
+                    }
+                ],
+            },
+        ],
+    }
+    path = tmp_path / "kraftmarket_incident_telegram_results.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
 async def _seed_source(db: Database) -> int:
     async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT id FROM telegram_source WHERE username=? ORDER BY id LIMIT 1",
+            ("kraftmarket39",),
+        )
+        row = await cur.fetchone()
+        if row:
+            await conn.execute(
+                "UPDATE telegram_source SET title=?, enabled=1 WHERE id=?",
+                ("Полюбить 39 | Маркет", int(row[0])),
+            )
+            await conn.commit()
+            return int(row[0])
         cur = await conn.execute(
             """
             INSERT INTO telegram_source(username, title, enabled)
@@ -105,6 +219,169 @@ async def test_reprocesses_legacy_skipped_scan_without_reason(tmp_path, monkeypa
         )
         row = await cur.fetchone()
     assert row == ("done", 1, 1, None)
+
+
+@pytest.mark.asyncio
+async def test_reprocesses_kraftmarket_producer_zero_events_after_fixed_producer_payload(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_id = await _seed_source(db)
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO telegram_scanned_message(
+                source_id, message_id, status, events_extracted, events_imported, error
+            )
+            VALUES(?, ?, 'skipped', 0, 0, 'producer_zero_events:clear_event_signals')
+            """,
+            [(source_id, 285), (source_id, 287)],
+        )
+        await conn.commit()
+
+    calls = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(candidate)
+        return SmartUpdateResult(status="created", event_id=9000 + len(calls))
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_kraftmarket_incident_results_path(tmp_path), db)
+
+    assert report.events_created == 2
+    assert [c.source_url for c in calls] == [
+        "https://t.me/kraftmarket39/285",
+        "https://t.me/kraftmarket39/287",
+    ]
+    assert calls[0].title == "Калининградское здравоохранение в период становления области"
+    assert calls[0].date == "2026-06-19"
+    assert calls[0].time == "18:30"
+    assert calls[0].festival == "80 историй о главном"
+    assert calls[1].title == "Бородин. Гениальный дилетант"
+    assert calls[1].date == "2026-06-15"
+    assert calls[1].time == "12:45"
+    assert calls[1].festival == "Кантата"
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT message_id, status, events_extracted, events_imported, error
+            FROM telegram_scanned_message
+            WHERE source_id=? AND message_id IN (285, 287)
+            ORDER BY message_id
+            """,
+            (source_id,),
+        )
+        rows = await cur.fetchall()
+    assert rows == [(285, "done", 1, 1, None), (287, "done", 1, 1, None)]
+
+
+@pytest.mark.asyncio
+async def test_primary_telegram_import_does_not_suppress_vk_sync(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+
+    calls = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(kwargs)
+        return SmartUpdateResult(status="created", event_id=5656)
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_created == 1
+    assert len(calls) == 1
+    assert "schedule_kwargs" not in calls[0]
+
+
+@pytest.mark.asyncio
+async def test_primary_telegram_import_rearms_tasks_for_nochange_event(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+
+    scheduled = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        scheduled.append(event_id)
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+    assert scheduled == [5656]
+
+
+@pytest.mark.asyncio
+async def test_primary_telegram_import_does_not_run_global_vk_reconcile_by_default(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+    monkeypatch.delenv("TG_MONITORING_GLOBAL_VK_RECONCILE", raising=False)
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        return None
+
+    async def fail_global_reconcile(db_arg):
+        raise AssertionError("global VK reconcile must be opt-in")
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+    monkeypatch.setattr(tg_handlers, "_reconcile_primary_import_vk_sync_jobs", fail_global_reconcile)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+
+
+@pytest.mark.asyncio
+async def test_forced_existing_single_source_still_runs_smart_update_and_rearms_tasks(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_id = await _seed_source(db)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT OR IGNORE INTO telegram_source_force_message(source_id, message_id) VALUES(?, 193)",
+            (source_id,),
+        )
+        await conn.commit()
+
+    scheduled = []
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        scheduled.append(event_id)
+
+    calls = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(candidate)
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+    assert len(calls) == 1
+    assert calls[0].source_url == "https://t.me/kraftmarket39/193"
+    assert scheduled == [5656]
 
 
 @pytest.mark.asyncio

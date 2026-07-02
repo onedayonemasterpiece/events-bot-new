@@ -15,6 +15,10 @@
 - `docs/features/linked-events/README.md` — связанные события (серии “то же событие в другие даты” + UI «Другие даты»)
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
+- `docs/features/vk-location-marker/README.md` — безопасная VK location marker-метка для событийных wall-постов
+- `docs/features/vk-dynamic-cover/README.md` — динамическая обложка VK-сообщества: генерация wide/mobile assets и `/cover`
+- `docs/features/tg-publishing/README.md` — исходящие Telegram-публикации отдельных событий после Smart Update
+- `docs/features/tg-premium-emojis-update/README.md` — Telethon-редактор premium/custom emoji для ежедневных Telegram-анонсов
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
 - `docs/features/festivals/README.md` — фестивали: серии/выпуски, очередь и связь с событиями
 - `docs/features/post-metrics/README.md` — статистика постов и популярность (TG/VK): медианы, уровни ⭐/👍, основа для ранжирования
@@ -26,6 +30,12 @@
 - `docs/features/preview-3d/README.md` — генерация 3D-превью (`/3di`) через Kaggle/Blender с выгрузкой в Supabase Storage
 - `docs/features/guide-excursions-monitoring/README.md` — мониторинг экскурсионных анонсов гидов, отдельный digest track и публикация в тестовый канал
 - `docs/features/telegram-business-stories/README.md` — Telegram Business webhook contract, encrypted connection cache и публикация сторис через Bot API
+- `docs/features/tg-monitoring-on-demand/README.md` — fast-path запуск Telegram Monitoring по новым постам в allowlisted Telegram-каналах
+- `docs/features/kaggle-status-framework/README.md` — единый callback/heartbeat/status framework для Kaggle runtime/notebooks без скрытой дедупликации публикаций
+
+## Черновики требований
+
+- `docs/features/subscriber-acquisition/requirements.md` — требования к social acquisition workflow для роста подписчиков через Telegram/VK-рекомендации.
 
 ## Research / rollout
 

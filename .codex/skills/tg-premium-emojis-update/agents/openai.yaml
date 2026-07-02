@@ -1,0 +1,4 @@
+interface:
+  display_name: "TG Premium Emojis"
+  short_description: "Edit Telegram posts with premium emoji labels"
+  default_prompt: "Use $tg-premium-emojis-update to capture a premium emoji sample and apply it to Telegram daily announcements."

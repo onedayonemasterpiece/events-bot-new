@@ -34,7 +34,11 @@ async def test_scheduled_guide_digest_notifies_operator_when_no_new_items(monkey
         assert kwargs["trigger"] == "scheduled"
         assert kwargs["mode"] == "full"
         assert kwargs["chat_id"] == 4242
-        return SimpleNamespace(errors=[])
+        return SimpleNamespace(
+            errors=[],
+            recovery_kernel_ref="zigomaro/guide-excursions-monitor",
+            import_completed=True,
+        )
 
     async def fake_publish_guide_digest(_db, _bot, **kwargs):
         assert kwargs["family"] == "new_occurrences"
@@ -60,11 +64,22 @@ async def test_scheduled_guide_digest_notifies_operator_when_no_new_items(monkey
 
     import guide_excursions.service as guide_service
 
+    cleared: list[str] = []
+
+    async def fake_clear_guide_monitor_recovery_job(kernel_ref):
+        cleared.append(kernel_ref)
+
     monkeypatch.setattr(guide_service, "run_guide_monitor", fake_run_guide_monitor)
     monkeypatch.setattr(guide_service, "publish_guide_digest", fake_publish_guide_digest)
+    monkeypatch.setattr(
+        guide_service,
+        "clear_guide_monitor_recovery_job",
+        fake_clear_guide_monitor_recovery_job,
+    )
 
     await scheduling._run_scheduled_guide_excursions(object(), bot, mode="full")
 
+    assert cleared == ["zigomaro/guide-excursions-monitor"]
     assert bot.sent_messages == [
         (
             4242,
@@ -87,6 +102,8 @@ async def test_scheduled_guide_digest_publishes_after_nonfatal_partial_warning(m
             errors=[],
             warnings=["kaggle result marked as partial; llm_deferred=1; llm_error=0"],
             ops_run_id=765,
+            recovery_kernel_ref="zigomaro/guide-excursions-monitor",
+            import_completed=True,
         )
 
     published: list[dict[str, object]] = []
@@ -114,11 +131,22 @@ async def test_scheduled_guide_digest_publishes_after_nonfatal_partial_warning(m
 
     import guide_excursions.service as guide_service
 
+    cleared: list[str] = []
+
+    async def fake_clear_guide_monitor_recovery_job(kernel_ref):
+        cleared.append(kernel_ref)
+
     monkeypatch.setattr(guide_service, "run_guide_monitor", fake_run_guide_monitor)
     monkeypatch.setattr(guide_service, "publish_guide_digest", fake_publish_guide_digest)
+    monkeypatch.setattr(
+        guide_service,
+        "clear_guide_monitor_recovery_job",
+        fake_clear_guide_monitor_recovery_job,
+    )
 
     await scheduling._run_scheduled_guide_excursions(object(), bot, mode="full")
 
+    assert cleared == ["zigomaro/guide-excursions-monitor"]
     assert published == [{"family": "new_occurrences", "chat_id": 4242}]
     assert bot.sent_messages == [
         (

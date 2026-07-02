@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from kaggle_status import format_kaggle_status_label
 from ops_run import finish_ops_run, start_ops_run
 from source_parsing.kaggle_runner import run_kaggle_kernel
 from source_parsing.parser import (
@@ -459,6 +460,10 @@ def _build_parser_source_text(
     if date_text:
         lines.append(f"Дата: {date_text}")
 
+    end_date_text = str(theatre_event.end_date or "").strip()
+    if end_date_text and end_date_text != date_text:
+        lines.append(f"Дата окончания: {end_date_text}")
+
     time_text = str(theatre_event.parsed_time or "").strip()
     if time_text and time_text != "00:00":
         lines.append(f"Время: {time_text}")
@@ -466,6 +471,10 @@ def _build_parser_source_text(
     venue_text = str(location_name or theatre_event.location or "").strip()
     if venue_text:
         lines.append(f"Площадка: {venue_text}")
+
+    address_text = str(theatre_event.location_address or "").strip()
+    if address_text:
+        lines.append(f"Адрес: {address_text}")
 
     age_text = str(theatre_event.age_restriction or "").strip()
     if age_text:
@@ -489,6 +498,22 @@ def _build_parser_source_text(
     body = str(full_description or "").strip()
     if body:
         lines.extend(["", "Описание:", body])
+
+    if str(theatre_event.source_type or "").strip().lower() == "qtickets":
+        lines.extend(
+            [
+                "",
+                "Контракт источника:",
+                (
+                    "Это структурированная билетная страница Qtickets: "
+                    "название, площадка, адрес и даты выше являются "
+                    "каноническими полями страницы. OCR афиши используй "
+                    "только как дополнительный источник фактов; не заменяй "
+                    "название страницы отдельными словами с афиши, если "
+                    "каноническое название уже указано."
+                ),
+            ]
+        )
 
     return "\n".join(lines)
 
@@ -911,7 +936,7 @@ async def schedule_existing_event_update(db: Database, event_id: int) -> None:
         db,
         event,
         drain_nav=False,
-        skip_vk_sync=True,
+        skip_vk_sync=False,
     )
 
 
@@ -1108,14 +1133,14 @@ async def add_new_event_via_queue(
             candidate = EventCandidate(
                 source_type=f"parser:{theatre_event.source_type}",
                 source_url=source_url,
-                source_text=full_description or draft.source_text or draft.title,
+                source_text=source_text or draft.source_text or final_description or draft.title,
                 title=draft.title,
                 date=draft.date or datetime.now(timezone.utc).date().isoformat(),
                 time=draft.time or "00:00",
-                end_date=draft.end_date or None,
+                end_date=draft.end_date or theatre_event.end_date or None,
                 festival=(draft.festival or None),
                 location_name=draft.venue or "",
-                location_address=draft.location_address or None,
+                location_address=draft.location_address or theatre_event.location_address or None,
                 city=draft.city or None,
                 # Site/parser sources are canonical: in conflicts they should override
                 # lower-trust sources like Telegram.
@@ -1171,7 +1196,7 @@ async def add_new_event_via_queue(
                     db,
                     saved,
                     drain_nav=False,
-                    skip_vk_sync=True,
+                    skip_vk_sync=False,
                 )
             
             logger.info(
@@ -1241,16 +1266,7 @@ def escape_md(text: str) -> str:
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = status.get("failureMessage") or status.get("failure_message")
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _format_kaggle_phase(phase: str) -> str:
@@ -1416,11 +1432,32 @@ async def format_parsing_report(
             return f"  ICS: [ics]({value})"
         return "  ICS: ⏳" if has_time else "  ICS: —"
 
-    def _vk_post_line_md(url: str | None) -> str | None:
-        value = (url or "").strip()
-        if not value:
+    event_posts_by_eid = getattr(ctx, "event_posts_by_event_id", None) or {}
+
+    def _posts_line_md(eid: int) -> str | None:
+        row = event_posts_by_eid.get(int(eid))
+        if not row:
             return None
-        return f"  VK: [пост]({value})"
+        parts: list[str] = []
+        vk_url = (getattr(row, "vk_post_url", None) or "").strip()
+        if vk_url:
+            vk_part = f"VK [пост]({vk_url})"
+        else:
+            vk_part = "VK ⏳"
+        coauthor = (getattr(row, "vk_coauthor_screen_name", None) or "").strip()
+        coauthor_url = (getattr(row, "vk_coauthor_url", None) or "").strip()
+        if coauthor:
+            label = f"@{escape_md(coauthor)}"
+            if coauthor_url:
+                label = f"[@{escape_md(coauthor)}]({coauthor_url})"
+            vk_part += f" · соавторство: {label} предложено"
+        parts.append(vk_part)
+        tg_url = (getattr(row, "tg_post_url", None) or "").strip()
+        if tg_url:
+            parts.append(f"TG [пост]({tg_url})")
+        else:
+            parts.append("TG ⏳")
+        return "  Посты: " + " · ".join(parts)
 
     def _sources_lines_md(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
@@ -1537,9 +1574,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
-                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
-                if vk_line:
-                    lines.append(vk_line)
+                posts_line = _posts_line_md(eid_i) if eid_i else None
+                if posts_line:
+                    lines.append(posts_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(added_items) > 12:
@@ -1576,9 +1613,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
-                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
-                if vk_line:
-                    lines.append(vk_line)
+                posts_line = _posts_line_md(eid_i) if eid_i else None
+                if posts_line:
+                    lines.append(posts_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(updated_items) > 12:
@@ -1983,12 +2020,12 @@ async def run_source_parsing(
         tasks: dict[str, asyncio.Task] = {}
         if need_theatres:
             tasks["theatres"] = asyncio.create_task(
-                run_kaggle_kernel(status_callback=_update_kaggle_status)
+                run_kaggle_kernel(status_callback=_update_kaggle_status, db=db)
             )
         if need_phil:
-            tasks["philharmonia"] = asyncio.create_task(run_philharmonia_kaggle_kernel())
+            tasks["philharmonia"] = asyncio.create_task(run_philharmonia_kaggle_kernel(db=db))
         if need_qtickets:
-            tasks["qtickets"] = asyncio.create_task(run_qtickets_kaggle_kernel())
+            tasks["qtickets"] = asyncio.create_task(run_qtickets_kaggle_kernel(db=db))
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         by_name = dict(zip(tasks.keys(), results))
@@ -2646,11 +2683,13 @@ async def run_diagnostic_parse(
         from source_parsing.philharmonia import run_philharmonia_kaggle_kernel
         status, output_files, duration = await run_philharmonia_kaggle_kernel(
             status_callback=_update_kaggle_status,
+            db=db,
         )
     else:
         status, output_files, duration = await run_kaggle_kernel(
             status_callback=_update_kaggle_status,
-            run_config={"target_source": source}
+            run_config={"target_source": source},
+            db=db,
         )
     
     if status != "complete":

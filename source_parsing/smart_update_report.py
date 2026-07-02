@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
@@ -9,7 +10,8 @@ from urllib.parse import urlparse
 from sqlalchemy import func, select
 
 from db import Database
-from models import EventMediaAsset, EventSource, FestivalQueueItem, TicketSiteQueueItem
+from models import Event, EventMediaAsset, EventSource, FestivalQueueItem, TicketSiteQueueItem
+from vk_coauthors import select_vk_coauthor_candidate
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +32,21 @@ class FestivalQueueRow:
 
 
 @dataclass(frozen=True, slots=True)
+class EventPostRow:
+    vk_post_url: str | None
+    tg_post_url: str | None
+    vk_coauthor_screen_name: str | None
+    vk_coauthor_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SmartUpdateReportContext:
     tz: timezone
     sources_by_event_id: dict[int, list[tuple[datetime | None, str]]]
     video_count_by_event_id: dict[int, int]
     ticket_queue_by_event_id: dict[int, list[TicketQueueRow]]
     festival_queue_by_source_url: dict[str, FestivalQueueRow]
+    event_posts_by_event_id: dict[int, EventPostRow]
 
 
 _SCHEME_RE = re.compile(r"^https?://", re.I)
@@ -105,6 +116,7 @@ async def build_smart_update_report_context(
     video_count_by_event_id: dict[int, int] = {}
     ticket_queue_by_event_id: dict[int, list[TicketQueueRow]] = {}
     festival_queue_by_source_url: dict[str, FestivalQueueRow] = {}
+    event_posts_by_event_id: dict[int, EventPostRow] = {}
 
     if not eids and not urls:
         return SmartUpdateReportContext(
@@ -113,10 +125,16 @@ async def build_smart_update_report_context(
             video_count_by_event_id=video_count_by_event_id,
             ticket_queue_by_event_id=ticket_queue_by_event_id,
             festival_queue_by_source_url=festival_queue_by_source_url,
+            event_posts_by_event_id=event_posts_by_event_id,
         )
 
     async with db.get_session() as session:
         if eids:
+            event_rows = (
+                await session.execute(select(Event).where(Event.id.in_(eids)))
+            ).scalars().all()
+            events_by_id = {int(event.id): event for event in event_rows if event.id}
+
             src_rows = (
                 await session.execute(
                     select(EventSource.event_id, EventSource.imported_at, EventSource.source_url)
@@ -133,6 +151,22 @@ async def build_smart_update_report_context(
                 if not su:
                     continue
                 sources_by_event_id.setdefault(eid, []).append((imported_at, su))
+
+            for eid, event in events_by_id.items():
+                source_urls_for_event = [url for _dt, url in sources_by_event_id.get(eid, [])]
+                coauthor = select_vk_coauthor_candidate(
+                    event,
+                    source_urls=source_urls_for_event,
+                )
+                vk_url = str(getattr(event, "source_vk_post_url", "") or "").strip() or None
+                if not _is_managed_vk_post_url(vk_url):
+                    vk_url = None
+                event_posts_by_event_id[eid] = EventPostRow(
+                    vk_post_url=vk_url,
+                    tg_post_url=str(getattr(event, "tg_event_post_url", "") or "").strip() or None,
+                    vk_coauthor_screen_name=coauthor.screen_name if coauthor else None,
+                    vk_coauthor_url=coauthor.url if coauthor else None,
+                )
 
             v_rows = (
                 await session.execute(
@@ -214,6 +248,7 @@ async def build_smart_update_report_context(
         video_count_by_event_id=video_count_by_event_id,
         ticket_queue_by_event_id=ticket_queue_by_event_id,
         festival_queue_by_source_url=festival_queue_by_source_url,
+        event_posts_by_event_id=event_posts_by_event_id,
     )
 
 
@@ -227,3 +262,23 @@ def host_from_url(url: str | None) -> str:
     except Exception:
         return ""
 
+
+def _is_managed_vk_post_url(url: str | None) -> bool:
+    raw = str(url or "").strip()
+    if not raw:
+        return False
+    match = re.search(r"wall(-?\d+)_(\d+)", raw)
+    if not match:
+        return False
+    target = (
+        os.getenv("VK_EVENTS_GROUP_ID")
+        or os.getenv("VK_AFISHA_GROUP_ID")
+        or "231920894"
+    )
+    target = str(target or "").strip().lstrip("-")
+    if not target:
+        return False
+    try:
+        return str(abs(int(match.group(1)))) == target
+    except (TypeError, ValueError):
+        return False

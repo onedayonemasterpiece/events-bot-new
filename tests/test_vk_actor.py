@@ -1,7 +1,7 @@
 import logging
 import pytest
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import main
 
@@ -237,6 +237,44 @@ def test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval(monkeypatc
     )
 
 
+def test_vk_postponed_next_slot_uses_first_morning_gap_before_promo_anchors(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    monkeypatch.setattr(main, "VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS", 18 * 3600)
+    tz = ZoneInfo("Europe/Kaliningrad")
+
+    now = datetime(2026, 6, 13, 2, 9, tzinfo=tz)
+    promo_anchors = [
+        int(datetime(2026, 6, 13, 10, 40, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 15, 20, tzinfo=tz).timestamp()),
+    ]
+
+    assert main._vk_postponed_next_slot(
+        now,
+        postponed_timestamps=promo_anchors,
+    ) == datetime(2026, 6, 13, 6, 0, tzinfo=tz)
+
+
+def test_vk_postponed_next_slot_steps_through_occupied_morning_slots(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    tz = ZoneInfo("Europe/Kaliningrad")
+
+    now = datetime(2026, 6, 13, 2, 9, tzinfo=tz)
+    morning_anchors = [
+        int(datetime(2026, 6, 13, 6, 0, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 6, 10, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 15, 20, tzinfo=tz).timestamp()),
+    ]
+
+    assert main._vk_postponed_next_slot(
+        now,
+        postponed_timestamps=morning_anchors,
+    ) == datetime(2026, 6, 13, 6, 20, tzinfo=tz)
+
+
 @pytest.mark.asyncio
 async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
@@ -253,6 +291,7 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     tz = ZoneInfo("Europe/Kaliningrad")
     expected = int(datetime(2026, 5, 19, 10, 40, tzinfo=tz).timestamp())
     captured_wall_post = {}
+    calls = []
 
     async def fake_reserve(owner_id, actors, db, bot, *, now=None):
         assert owner_id == -2
@@ -268,23 +307,30 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
         token_kind="group",
         skip_captcha=False,
     ):
-        assert method == "wall.post"
-        captured_wall_post.update(
-            {
-                "params": params,
-                "token": token,
-                "token_kind": token_kind,
-                "skip_captcha": skip_captcha,
-            }
-        )
-        return {"response": {"post_id": 124}}
+        calls.append(method)
+        if method == "wall.post":
+            captured_wall_post.update(
+                {
+                    "params": params,
+                    "token": token,
+                    "token_kind": token_kind,
+                    "skip_captcha": skip_captcha,
+                }
+            )
+            return {"response": {"post_id": 124}}
+        if method == "wall.get":
+            assert params["owner_id"] == "-2"
+            assert params["filter"] == "all"
+            return {"response": {"items": [{"id": 125, "postponed_id": 124, "date": expected}]}}
+        raise AssertionError(method)
 
     monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
 
     url = await main.post_to_vk("2", "hello")
 
-    assert url == "https://vk.com/wall-2_124"
+    assert url == "https://vk.com/wall-2_125"
+    assert calls == ["wall.post", "wall.get"]
     assert captured_wall_post["token"] == "ga"
     assert captured_wall_post["token_kind"] == "group"
     assert captured_wall_post["skip_captcha"] is True
@@ -295,11 +341,60 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_post_to_vk_retries_postponed_id_resolution_with_user_actor(monkeypatch):
+    monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "ga")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", True)
+    expected = int(datetime(2026, 5, 19, 10, 40, tzinfo=ZoneInfo("Europe/Kaliningrad")).timestamp())
+    wall_get_calls = 0
+    sleep_calls = []
+
+    async def fake_reserve(owner_id, actors, db, bot, *, now=None):
+        return expected
+
+    async def fake_sleep(delay):
+        sleep_calls.append(delay)
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        nonlocal wall_get_calls
+        if method == "wall.post":
+            return {"response": {"post_id": 124}}
+        if method == "wall.get":
+            wall_get_calls += 1
+            assert token == "u"
+            assert token_kind == "user"
+            if wall_get_calls == 1:
+                return {"response": {"items": []}}
+            return {"response": {"items": [{"id": 125, "postponed_id": 124, "date": expected}]}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk("2", "hello")
+
+    assert url == "https://vk.com/wall-2_125"
+    assert wall_get_calls == 2
+    assert sleep_calls == [0.8]
+
+
+@pytest.mark.asyncio
 async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
     monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
     tz = ZoneInfo("Europe/Kaliningrad")
-    postponed_ts = int(datetime(2026, 5, 20, 10, 30, tzinfo=tz).timestamp())
+    postponed_ts = int((datetime.now(tz) + timedelta(minutes=30)).timestamp())
     calls = []
 
     async def fake_vk_api(

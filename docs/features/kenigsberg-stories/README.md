@@ -372,7 +372,7 @@ Current implementation state:
 
 Manual `/kenigsberg` came first during MVP testing.
 
-Scheduled production is enabled after the 2026-05-13 approval. The daily slot is `19:30 Europe/Kaliningrad` (`17:30 UTC`): the job is `kenigsberg_story_daily`, publishes a production story to `@mostvkenig`, and is intentionally not behind `KENIGSBERG_STORIES_*_ENABLED` feature flags. Startup catch-up runs the same production launch if the app restarts after today's slot and no scheduled production Kenigsberg handoff exists for the local day. The slot was moved from `20:10` to `19:30` on 2026-05-14 to clear a daily double-peak with `guide_excursions_full` (`20:10 local`) and to give the partner-track east slot (`18:30 local`) a clean 60-minute runway before render.
+Scheduled production is enabled after the 2026-05-13 approval. As of 2026-06-12 the slot is temporarily weekly: Friday `19:30 Europe/Kaliningrad` (`17:30 UTC`). The historical job id remains `kenigsberg_story_daily`, publishes a production story to `@mostvkenig`, and is intentionally not behind `KENIGSBERG_STORIES_*_ENABLED` feature flags. Startup catch-up runs the same production launch only on the weekly slot day if the app restarts after that slot and no scheduled production Kenigsberg handoff exists for the local day. The slot was moved from `20:10` to `19:30` on 2026-05-14 to clear a daily double-peak with `guide_excursions_full` (`20:10 local`) and to give the partner-track east slot (`18:30 local`) a clean 60-minute runway before render.
 
 The time slot should avoid other heavy operations:
 
@@ -398,6 +398,7 @@ Production:
   - `kaggle/CrumpleVideo/story_publish.py` is bundled as `kaggle_common/story_publish.py`;
   - `story_publish.json`, `story_publish.enc`, and `story_publish.key` are written into the same `kenigsberg-session-*` dataset;
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
+- Kenigsberg production keeps `story_upload_profile=telegram_story_native_hevc_720p_v1`, matching the compact HEVC path used by earlier successful scheduled thought-mode stories. Incident `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop` tracks the first failed long poetry production run and the temporary cadence reduction to weekly while the poetry media edge case is reviewed.
 - the required production story target is `@mostvkenig` with `fallback_peer=me`: the shared Kaggle story helper first attempts to publish the story as the channel `@mostvkenig` (so reposts show the channel as the author) and, if that attempt raises (e.g. Telegram returns `BOOSTS_REQUIRED` because channel-native story rights are not yet available), the helper transparently retries the same upload against `peer=me`. Either outcome counts as a successful blocking/required publish, and the resulting story id is what downstream `repost_previous` targets forward from;
 - after the primary story is live, the Kaggle helper reposts it to `@loving_guide39` and `@jane_tour39` as best-effort `repost_previous` targets with `600` second spacing (matching the CherryFlash fanout cadence); failures there do not block render/publish;
 - the same generated story is also published as a VK community story to `vk.com/mostvkenig` (`transport=vk_story`, `peer=mostvkenig`) `120` seconds after the primary Telegram publish. The VK target is intentionally `blocking=false, required=false`: failure (missing VK admin rights, VK rejecting the upload, etc.) is logged in `story_publish_report.json` but must not gate or fail the Telegram publish. The VK story uses the same encrypted runtime bundle as CherryFlash KONB (`VK_ACCESS_TOKEN5`, no new env), reusing the upload path validated by `kaggle/CrumpleVideo/story_publish.py` (`stories.getVideoUploadServer` → upload → `stories.save`).
@@ -421,6 +422,17 @@ Important boundary:
 
 - Business Stories use Bot API `postStory` and encrypted `business_connection_id`.
 - Do not repurpose `TELEGRAM_AUTH_BUNDLE_E2E` or `TELEGRAM_AUTH_BUNDLE_S22` for Business story publishing.
+- Telethon-based Kaggle story publishing must use a role-scoped auth source.
+  `TELEGRAM_AUTH_BUNDLE_S22` is reserved for remote monitoring
+  (`tg_monitoring` / `guide_monitoring`). For `/kenigsberg` and other story
+  publish jobs that need to run while monitoring is alive, set
+  `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY` and provide
+  a separate `TELEGRAM_AUTH_BUNDLE_STORY` session. The remote Telegram session
+  guard serializes jobs with the same auth source and permits parallel jobs only
+  when their `remote_telegram_auth_scope` values differ.
+- Startup catch-up is capped after repeated same-day failed scheduled/story
+  sessions so deploy restarts do not keep launching expensive Kaggle renders
+  after terminal publish failures.
 
 ## Open questions
 

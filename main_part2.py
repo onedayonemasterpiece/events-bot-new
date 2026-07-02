@@ -3,19 +3,28 @@ import os
 import html
 import re
 import asyncio
+import json
 import time as _time
+import httpx
+from html.parser import HTMLParser
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
+from urllib.parse import quote, urlsplit, urlunsplit
 from aiogram import Bot, types
+from aiogram.exceptions import TelegramBadRequest
 
 from aiohttp import web
 from telegraph import Telegraph
 from markup import (
     md_to_html,
+    simple_md_to_html,
     telegraph_br,
     linkify_for_telegraph,
+    linkify_phones_for_telegram_html,
+    _PHONE_RE,
     format_tel_link_for_display,
+    tel_href_for_phone_value,
 )
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
@@ -26,7 +35,12 @@ from sqlalchemy import select, update, delete, text, func, or_, and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 from scheduling import MONTHS_GEN
 from event_utils import format_event_md, is_recent
-from festival_queue import festival_queue_info_text, process_festival_queue
+from festival_queue import festival_queue_effective_limit, festival_queue_info_text, process_festival_queue
+from vk_location_marker import (
+    location_marker_param_keys,
+    resolve_vk_location_marker_for_event,
+    sanitize_location_marker_payload,
+)
 
 if "LOCAL_TZ" not in globals():
     LOCAL_TZ = timezone.utc
@@ -2509,6 +2523,15 @@ async def build_festival_vk_message(db: Database, fest: Festival) -> str:
     return "\n".join(lines)
 
 
+def festival_vk_posts_enabled() -> bool:
+    return (os.getenv("ENABLE_FESTIVAL_VK_POSTS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 async def sync_festival_vk_post(
     db: Database,
     name: str,
@@ -2518,6 +2541,18 @@ async def sync_festival_vk_post(
     nav_lines: list[str] | None = None,
     strict: bool = False,
 ) -> bool | None:
+    if not festival_vk_posts_enabled():
+        logging.info(
+            "festival VK posts disabled; skipping sync for %s",
+            name,
+            extra={
+                "action": "skipped_disabled",
+                "target": "vk",
+                "fest": name,
+                "nav_only": nav_only,
+            },
+        )
+        return False
     group_id = await get_vk_group_id(db)
     if not group_id:
         return
@@ -2601,14 +2636,7 @@ async def sync_festival_vk_post(
                 response = await vk_api(
                     "wall.getById", posts=f"{owner_id}_{post_id}"
                 )
-                if isinstance(response, dict):
-                    items = response.get("response") or (
-                        response["response"] if "response" in response else response
-                    )
-                else:
-                    items = response or []
-                if not isinstance(items, list):
-                    items = [items] if items else []
+                items = _vk_wall_get_by_id_items(response)
                 text = items[0].get("text", "") if items else ""
             except Exception as e:
                 logging.error(
@@ -2818,13 +2846,343 @@ def split_vk_daily_text_atomic(text: str, limit: int | None = None) -> list[str]
     return parts
 
 
+def _format_daily_recommend_today_line(event: Event) -> str:
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = html.escape(f"{emoji_part}{title_text}".strip())
+    link_href = str(getattr(event, "telegraph_url", "") or "").strip()
+    if not link_href and getattr(event, "telegraph_path", None):
+        link_href = f"https://telegra.ph/{str(event.telegraph_path).lstrip('/')}"
+    if link_href:
+        title = f'<a href="{html.escape(link_href)}">{title}</a>'
+    details: list[str] = []
+    if getattr(event, "time", None):
+        details.append(str(event.time).strip())
+    if getattr(event, "location_name", None):
+        details.append(str(event.location_name).strip())
+    suffix = f" — {html.escape(', '.join(part for part in details if part))}" if details else ""
+    return f"• {title}{suffix}"
+
+
+
+DAILY_AUDIENCE_HEART_EMOJI_ID = "5339188899241570417"
+DAILY_AUDIENCE_REPOST_EMOJI_ID = "5336998942661975661"
+DAILY_AUDIENCE_MIN_SCORE = 20
+DAILY_AUDIENCE_RELAXED_MIN_SCORE = 8
+DAILY_AUDIENCE_REPOST_WEIGHT = 5
+DAILY_AUDIENCE_MIN_SHARE = 0.15
+DAILY_AUDIENCE_MAX_SHARE = 0.20
+DAILY_AUDIENCE_INDENT = " " * 24
+
+
+def _daily_audience_env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
+
+
+def _daily_audience_env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
+
+
+def _daily_audience_share_count(total: int, share: float) -> int:
+    total = int(total or 0)
+    share = float(share or 0.0)
+    if total <= 0 or share <= 0:
+        return 0
+    return max(1, int(total * share + 0.999999))
+
+
+@dataclass(slots=True)
+class DailyAudienceMetric:
+    event_id: int
+    views: int = 0
+    likes: int = 0
+    comments: int = 0
+    reposts: int = 0
+    sources: int = 0
+
+    @property
+    def score(self) -> int:
+        return int(self.likes or 0) + DAILY_AUDIENCE_REPOST_WEIGHT * int(self.reposts or 0)
+
+
+def _daily_metric_value(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int) and value >= 0:
+        return int(value)
+    return 0
+
+
+def _parse_tg_post_ref(url: str | None) -> tuple[str, int] | None:
+    text_value = (url or "").strip()
+    if not text_value:
+        return None
+    m = re.search(r"(?:https?://)?t\.me/([^/?#\s]+)/([0-9]+)", text_value, flags=re.I)
+    if not m:
+        return None
+    username = m.group(1).strip().lstrip("@").lower()
+    if not username or username == "c":
+        return None
+    return username, int(m.group(2))
+
+
+def _parse_vk_wall_ref(url: str | None) -> tuple[int, int] | None:
+    text_value = (url or "").strip()
+    if not text_value:
+        return None
+    m = re.search(r"wall(-?\d+)_(\d+)", text_value, flags=re.I)
+    if not m:
+        return None
+    owner_id = int(m.group(1))
+    post_id = int(m.group(2))
+    group_id = abs(owner_id)
+    return group_id, post_id
+
+
+def _format_daily_audience_line(metric: DailyAudienceMetric) -> str | None:
+    likes = int(metric.likes or 0)
+    reposts = int(metric.reposts or 0)
+    if likes <= 0 and reposts <= 0:
+        return None
+    heart = f'<tg-emoji emoji-id="{DAILY_AUDIENCE_HEART_EMOJI_ID}">❤️</tg-emoji>'
+    repost = f'<tg-emoji emoji-id="{DAILY_AUDIENCE_REPOST_EMOJI_ID}">🔂</tg-emoji>'
+    return f"{DAILY_AUDIENCE_INDENT}{heart} {likes}  {repost} {reposts}"
+
+
+def _select_daily_audience_labels(
+    events: Sequence[Event],
+    metrics: Mapping[int, DailyAudienceMetric],
+) -> dict[int, DailyAudienceMetric]:
+    total = int(len(events or ()))
+    max_share = max(
+        0.0,
+        min(
+            1.0,
+            _daily_audience_env_float("DAILY_AUDIENCE_MAX_SHARE", DAILY_AUDIENCE_MAX_SHARE),
+        ),
+    )
+    min_share = max(
+        0.0,
+        min(
+            max_share,
+            _daily_audience_env_float("DAILY_AUDIENCE_MIN_SHARE", DAILY_AUDIENCE_MIN_SHARE),
+        ),
+    )
+    cap = _daily_audience_share_count(total, max_share)
+    if cap <= 0:
+        return {}
+    target = _daily_audience_share_count(total, min_share)
+    target = min(cap, target)
+    base_score = max(
+        0,
+        _daily_audience_env_int("DAILY_AUDIENCE_MIN_SCORE", DAILY_AUDIENCE_MIN_SCORE),
+    )
+    relaxed_score = max(
+        0,
+        min(
+            base_score,
+            _daily_audience_env_int(
+                "DAILY_AUDIENCE_RELAXED_MIN_SCORE",
+                DAILY_AUDIENCE_RELAXED_MIN_SCORE,
+            ),
+        ),
+    )
+    comparable: list[DailyAudienceMetric] = []
+    for event in events:
+        if event.id is None:
+            continue
+        metric = metrics.get(int(event.id))
+        if not metric:
+            continue
+        if metric.likes <= 0 and metric.reposts <= 0:
+            continue
+        comparable.append(metric)
+    comparable.sort(
+        key=lambda m: (
+            int(m.score),
+            int(m.reposts or 0),
+            int(m.likes or 0),
+            int(m.comments or 0),
+            int(m.views or 0),
+        ),
+        reverse=True,
+    )
+    strict = [metric for metric in comparable if int(metric.score) >= base_score]
+    if len(strict) >= target:
+        selected = strict[:cap]
+    else:
+        # Daily-specific adaptive relaxation: if the visible `❤️/🔂` labels are
+        # below the target share, lower only this daily score threshold down to a
+        # conservative floor and take just enough next-best rows to reach target.
+        relaxed = [metric for metric in comparable if int(metric.score) >= relaxed_score]
+        selected = relaxed[: max(len(strict), target)]
+    return {m.event_id: m for m in selected[:cap]}
+
+
+async def _load_daily_audience_metrics(
+    db: Database,
+    events: Sequence[Event],
+    *,
+    now_ts: int,
+) -> dict[int, DailyAudienceMetric]:
+    """Sum latest available TG/VK source-post metrics per event.
+
+    This deliberately aggregates all distinct source posts attached to the event
+    instead of taking a single VK/best-source row, because daily labels should
+    reflect total available audience signal across Telegram and VK.
+    """
+    event_ids = [int(e.id) for e in events if e.id is not None]
+    if not event_ids:
+        return {}
+
+    event_by_id = {int(e.id): e for e in events if e.id is not None}
+    tg_refs: dict[int, set[tuple[int, int]]] = {eid: set() for eid in event_ids}
+    vk_refs: dict[int, set[tuple[int, int]]] = {eid: set() for eid in event_ids}
+
+    import aiosqlite
+
+    async with aiosqlite.connect(db.path) as conn:
+        source_rows: list[tuple[Any, ...]] = []
+        placeholders = ",".join("?" for _ in event_ids)
+        try:
+            cur = await conn.execute(
+                f"""
+                SELECT event_id, source_type, source_url, source_chat_username, source_chat_id, source_message_id
+                FROM event_source
+                WHERE event_id IN ({placeholders})
+                """,
+                tuple(event_ids),
+            )
+            source_rows = await cur.fetchall()
+        except Exception:
+            source_rows = []
+
+        tg_by_username: dict[str, int] = {}
+        try:
+            cur = await conn.execute("SELECT id, username FROM telegram_source")
+            rows = await cur.fetchall()
+            for sid, username in rows:
+                source_id = int(sid)
+                username_norm = str(username or "").strip().lstrip("@").lower()
+                if username_norm:
+                    tg_by_username[username_norm] = source_id
+        except Exception:
+            pass
+
+        def _add_tg(eid: int, *, username: Any = None, chat_id: Any = None, message_id: Any = None, url: Any = None) -> None:
+            mid = int(message_id) if isinstance(message_id, int) else None
+            parsed = _parse_tg_post_ref(str(url)) if url else None
+            if parsed:
+                username = parsed[0]
+                mid = parsed[1]
+            if mid is None:
+                return
+            source_id = None
+            username_norm = str(username or "").strip().lstrip("@").lower()
+            if username_norm:
+                source_id = tg_by_username.get(username_norm)
+            if source_id is not None:
+                tg_refs.setdefault(eid, set()).add((int(source_id), int(mid)))
+
+        def _add_vk(eid: int, url: Any) -> None:
+            parsed = _parse_vk_wall_ref(str(url)) if url else None
+            if parsed:
+                vk_refs.setdefault(eid, set()).add(parsed)
+
+        for event in event_by_id.values():
+            eid = int(event.id)
+            _add_tg(
+                eid,
+                chat_id=getattr(event, "source_chat_id", None),
+                message_id=getattr(event, "source_message_id", None),
+                url=getattr(event, "source_post_url", None),
+            )
+            _add_vk(eid, getattr(event, "source_post_url", None))
+            _add_vk(eid, getattr(event, "source_vk_post_url", None))
+
+        for row in source_rows:
+            eid = int(row[0])
+            source_type = str(row[1] or "").strip().lower()
+            source_url = row[2]
+            source_chat_username = row[3]
+            source_chat_id = row[4]
+            source_message_id = row[5]
+            if source_type == "telegram" or _parse_tg_post_ref(str(source_url or "")):
+                _add_tg(
+                    eid,
+                    username=source_chat_username,
+                    chat_id=source_chat_id,
+                    message_id=source_message_id,
+                    url=source_url,
+                )
+            if source_type == "vk" or _parse_vk_wall_ref(str(source_url or "")):
+                _add_vk(eid, source_url)
+
+        out: dict[int, DailyAudienceMetric] = {eid: DailyAudienceMetric(event_id=eid) for eid in event_ids}
+        for eid, refs in tg_refs.items():
+            for source_id, message_id in sorted(refs):
+                cur = await conn.execute(
+                    """
+                    SELECT views, likes, comments
+                    FROM telegram_post_metric
+                    WHERE source_id = ? AND message_id = ? AND collected_ts <= ?
+                    ORDER BY collected_ts DESC, age_day DESC
+                    LIMIT 1
+                    """,
+                    (int(source_id), int(message_id), int(now_ts)),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    continue
+                metric = out.setdefault(eid, DailyAudienceMetric(event_id=eid))
+                metric.views += _daily_metric_value(row[0])
+                metric.likes += _daily_metric_value(row[1])
+                metric.comments += _daily_metric_value(row[2])
+                metric.sources += 1
+
+        for eid, refs in vk_refs.items():
+            for group_id, post_id in sorted(refs):
+                cur = await conn.execute(
+                    """
+                    SELECT views, likes, comments, reposts
+                    FROM vk_post_metric
+                    WHERE group_id = ? AND post_id = ? AND collected_ts <= ?
+                    ORDER BY collected_ts DESC, age_day DESC
+                    LIMIT 1
+                    """,
+                    (int(group_id), int(post_id), int(now_ts)),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    continue
+                metric = out.setdefault(eid, DailyAudienceMetric(event_id=eid))
+                metric.views += _daily_metric_value(row[0])
+                metric.likes += _daily_metric_value(row[1])
+                metric.comments += _daily_metric_value(row[2])
+                metric.reposts += _daily_metric_value(row[3])
+                metric.sources += 1
+
+    return {eid: metric for eid, metric in out.items() if metric.sources > 0}
+
+
 async def build_daily_posts(
     db: Database,
     tz: timezone,
     now: datetime | None = None,
 ) -> list[tuple[str, types.InlineKeyboardMarkup | None]]:
     from models import Event, WeekendPage, MonthPage, Festival
-    from promo import resolve_surface_promo_event_ids
+    from promo import resolve_daily_promo_recommendations, resolve_surface_promo_event_ids
 
     def _is_sold_out_status(value: str | None) -> bool:
         text = (value or "").strip().casefold()
@@ -2840,6 +3198,10 @@ async def build_daily_posts(
     promo_highlight_ids = await resolve_surface_promo_event_ids(
         db,
         surface="daily_highlight",
+        now_utc=now.astimezone(timezone.utc),
+    )
+    daily_recommendations = await resolve_daily_promo_recommendations(
+        db,
         now_utc=now.astimezone(timezone.utc),
     )
     yesterday_utc = recent_cutoff(tz, now)
@@ -3000,6 +3362,18 @@ async def build_daily_posts(
             elif m == next_month(cur_month):
                 next_count += 1
 
+    daily_audience_labels: dict[int, DailyAudienceMetric] = {}
+    try:
+        now_ts = int(now.astimezone(timezone.utc).timestamp())
+        daily_audience_metrics = await _load_daily_audience_metrics(
+            db,
+            events_new,
+            now_ts=now_ts,
+        )
+        daily_audience_labels = _select_daily_audience_labels(events_new, daily_audience_metrics)
+    except Exception:
+        logging.warning("daily audience metrics load failed", exc_info=True)
+
     processed_short_ids: set[int] = set()
     for candidate in (*events_today, *events_new):
         if (
@@ -3041,6 +3415,11 @@ async def build_daily_posts(
                 partner_creator_ids=partner_creator_ids,
             )
         )
+    if daily_recommendations:
+        lines1.append("")
+        lines1.append("<b><i>ИТОГО РЕКОМЕНДУЕМ ПОСЕТИТЬ СЕГОДНЯ</i></b>")
+        for item in daily_recommendations:
+            lines1.append(_format_daily_recommend_today_line(item.event))
     lines1.append("")
     lines1.append(
         f"#Афиша_Калининград #Калининград #концерт #{tag} #{today.day}_{MONTHS[today.month - 1]}"
@@ -3065,6 +3444,11 @@ async def build_daily_posts(
                         partner_creator_ids=partner_creator_ids,
                     )
                 )
+                metric = daily_audience_labels.get(int(e.id)) if e.id is not None else None
+                metric_line = _format_daily_audience_line(metric) if metric else None
+                if metric_line:
+                    lines2.append(metric_line)
+                    lines2.append("")
         lines2.append("")
         lines2.append("ℹ️ Нажмите на название мероприятия, чтобы открыть подробности")
     else:
@@ -3085,6 +3469,11 @@ async def build_daily_posts(
                     partner_creator_ids=partner_creator_ids,
                 )
             )
+            metric = daily_audience_labels.get(int(e.id)) if e.id is not None else None
+            metric_line = _format_daily_audience_line(metric) if metric else None
+            if metric_line:
+                lines2.append(metric_line)
+                lines2.append("")
     if recent_festival_entries:
         lines2.append("")
         lines2.append("ФЕСТИВАЛИ")
@@ -3286,9 +3675,16 @@ try:
     VK_POSTPONED_START_HOUR = int(os.getenv("VK_POSTPONED_START_HOUR", "6"))
 except ValueError:
     VK_POSTPONED_START_HOUR = 6
+try:
+    VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS = int(
+        os.getenv("VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS", str(18 * 3600))
+    )
+except ValueError:
+    VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS = 18 * 3600
 
 _vk_postponed_schedule_lock = asyncio.Lock()
 _vk_postponed_reserved_until_by_owner: dict[int, int] = {}
+_vk_postponed_reserved_until_by_source: dict[tuple[int, str], int] = {}
 
 
 def _vk_postponed_zone() -> timezone:
@@ -3313,21 +3709,84 @@ def _vk_postponed_day_start(value: datetime) -> datetime:
     return value.replace(hour=start_hour, minute=0, second=0, microsecond=0)
 
 
+def _vk_postponed_normalize_slot(value: datetime) -> datetime:
+    value = _round_up_to_next_minute(value)
+    if value.hour < min(23, max(0, VK_POSTPONED_START_HOUR)):
+        value = _vk_postponed_day_start(value)
+    return value
+
+
 def _vk_postponed_next_slot(
     now: datetime,
-    latest_postponed_ts: int | None,
+    latest_postponed_ts: int | None = None,
+    *,
+    postponed_timestamps: list[int] | None = None,
+    source_timestamps: list[int] | None = None,
+    source_interval_seconds: int | None = None,
 ) -> datetime:
     tz = _vk_postponed_zone()
     now_local = now.astimezone(tz)
     interval = max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)
-    candidate = now_local + timedelta(seconds=interval)
-    if latest_postponed_ts:
-        latest_dt = datetime.fromtimestamp(latest_postponed_ts, tz)
-        candidate = max(candidate, latest_dt + timedelta(seconds=interval))
-    candidate = _round_up_to_next_minute(candidate)
-    if candidate.hour < min(23, max(0, VK_POSTPONED_START_HOUR)):
-        candidate = _vk_postponed_day_start(candidate)
-    return candidate
+    source_interval = (
+        max(interval, int(source_interval_seconds or 0))
+        if source_interval_seconds
+        else 0
+    )
+    if postponed_timestamps is None:
+        candidate = now_local + timedelta(seconds=interval)
+        if latest_postponed_ts:
+            latest_dt = datetime.fromtimestamp(latest_postponed_ts, tz)
+            candidate = max(candidate, latest_dt + timedelta(seconds=interval))
+        return _vk_postponed_normalize_slot(candidate)
+
+    candidate = _vk_postponed_normalize_slot(now_local + timedelta(seconds=interval))
+    anchors = sorted(
+        datetime.fromtimestamp(ts, tz)
+        for ts in postponed_timestamps
+        if isinstance(ts, int)
+    )
+    source_anchors = sorted(
+        datetime.fromtimestamp(ts, tz)
+        for ts in (source_timestamps or [])
+        if isinstance(ts, int)
+    )
+    max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
+    source_horizon = _same_source_event_publish_spacing_horizon() if source_anchors else timedelta(0)
+    search_horizon = max(
+        timedelta(seconds=max(max_anchor_ahead, 24 * 3600)),
+        source_horizon,
+    )
+    search_until = now_local + search_horizon
+    min_step = min(interval, source_interval) if source_interval else interval
+    max_iterations = max(1, int(search_horizon.total_seconds() // min_step) + 48)
+    for _ in range(max_iterations):
+        candidate = _vk_postponed_normalize_slot(candidate)
+        next_candidate: datetime | None = None
+        for anchor in anchors:
+            if abs(anchor - candidate) < timedelta(seconds=interval):
+                proposed = anchor + timedelta(seconds=interval)
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        if source_interval:
+            source_delta = timedelta(seconds=source_interval)
+            for anchor in source_anchors:
+                if abs(anchor - candidate) < source_delta:
+                    proposed = anchor + source_delta
+                    if next_candidate is None or proposed > next_candidate:
+                        next_candidate = proposed
+        if next_candidate is None:
+            return candidate
+        candidate = next_candidate
+        if candidate > search_until:
+            break
+    fallback_candidates: list[datetime] = []
+    if anchors:
+        fallback_candidates.append(max(anchors) + timedelta(seconds=interval))
+    if source_anchors and source_interval:
+        fallback_candidates.append(max(source_anchors) + timedelta(seconds=source_interval))
+    if fallback_candidates:
+        candidate = max([candidate, *fallback_candidates])
+    return _vk_postponed_normalize_slot(candidate)
 
 
 def _vk_postponed_items(response: dict) -> list[dict]:
@@ -3341,18 +3800,51 @@ def _vk_postponed_items(response: dict) -> list[dict]:
     return [item for item in items if isinstance(item, dict)]
 
 
-async def _fetch_vk_latest_postponed_ts(
+def _is_afishaengagement_debug_post(item: dict) -> bool:
+    text = str(item.get("text") or "")
+    return "[AFISHAENGAGEMENT DEBUG COPY" in text or "#afishaengagement" in text
+
+
+async def _fetch_vk_postponed_anchor_timestamps(
     owner_id: int,
     actors: list[VkActor],
     db: Database | None,
     bot: Bot | None,
-) -> int | None:
+) -> list[int]:
+    items = await _fetch_vk_postponed_items_for_owner(owner_id, actors, db, bot)
+    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+    dates: list[int] = []
+    max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
+    max_anchor_ts = now_ts + max_anchor_ahead if max_anchor_ahead else None
+    for item in items:
+        if _is_afishaengagement_debug_post(item):
+            continue
+        value = item.get("date") or item.get("publish_date")
+        if isinstance(value, int) and value > now_ts:
+            if max_anchor_ts is not None and value > max_anchor_ts:
+                logging.warning(
+                    "vk.postponed ignoring far-future anchor owner_id=%s post_id=%s date=%s max_ahead_sec=%s",
+                    owner_id,
+                    item.get("id") or item.get("postponed_id"),
+                    value,
+                    max_anchor_ahead,
+                )
+                continue
+            dates.append(value)
+    return sorted(dates)
+
+
+async def _fetch_vk_postponed_items_for_owner(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+) -> list[dict]:
     params = {
         "owner_id": str(owner_id),
         "filter": "postponed",
         "count": 100,
     }
-    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
     lookup_actors = [actor for actor in actors if actor.kind == "user"] + [
         actor for actor in actors if actor.kind != "user"
     ]
@@ -3377,13 +3869,116 @@ async def _fetch_vk_latest_postponed_ts(
                 exc.message,
             )
             continue
-        dates: list[int] = []
-        for item in _vk_postponed_items(response):
-            value = item.get("date") or item.get("publish_date")
-            if isinstance(value, int) and value > now_ts:
-                dates.append(value)
-        return max(dates) if dates else None
-    return None
+        return _vk_postponed_items(response)
+    return []
+
+
+async def _fetch_same_source_vk_publish_timestamps(
+    *,
+    db: Database | None,
+    owner_id: int,
+    actors: list[VkActor],
+    bot: Bot | None,
+    source_url: str | None,
+    exclude_event_id: int | None = None,
+) -> list[int]:
+    if not db or not source_url:
+        return []
+    try:
+        source_event_ids = await _same_publish_source_event_ids(
+            db,
+            source_url,
+            exclude_event_id=exclude_event_id,
+        )
+    except Exception:
+        logging.warning(
+            "vk.postponed same-source lookup failed source_url=%s",
+            source_url,
+            exc_info=True,
+        )
+        return []
+    if not source_event_ids:
+        return []
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event.id, Event.source_vk_post_url)
+                .where(Event.id.in_(source_event_ids))
+                .where(Event.source_vk_post_url.is_not(None))
+                .where(Event.source_vk_post_url != "")
+            )
+        ).all()
+    target_posts: dict[int, int] = {}
+    for event_id, post_url in rows:
+        ids = _vk_owner_and_post_id(str(post_url or ""))
+        if not ids:
+            continue
+        try:
+            post_owner_id = int(ids[0])
+            post_id = int(ids[1])
+        except (TypeError, ValueError):
+            continue
+        if post_owner_id != owner_id:
+            continue
+        target_posts[post_id] = int(event_id)
+    if not target_posts:
+        return []
+
+    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+    source_horizon = _same_source_event_publish_spacing_horizon()
+    max_source_ts = now_ts + int(source_horizon.total_seconds())
+    timestamps: list[int] = []
+
+    try:
+        postponed_items = await _fetch_vk_postponed_items_for_owner(owner_id, actors, db, bot)
+    except Exception:
+        postponed_items = []
+    matched_postponed_ids: set[int] = set()
+    for item in postponed_items:
+        try:
+            item_id = int(item.get("id") or 0)
+            postponed_id = int(item.get("postponed_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        matched_id = item_id if item_id in target_posts else postponed_id
+        if matched_id not in target_posts:
+            continue
+        value = item.get("date") or item.get("publish_date")
+        if isinstance(value, int) and value > now_ts and value <= max_source_ts:
+            timestamps.append(value)
+            matched_postponed_ids.add(matched_id)
+
+    missing_ids = [post_id for post_id in target_posts if post_id not in matched_postponed_ids]
+    if missing_ids:
+        posts = ",".join(f"{owner_id}_{post_id}" for post_id in missing_ids[:100])
+        try:
+            response = await vk_api("wall.getById", posts=posts)
+            for item in _vk_wall_get_by_id_items(response):
+                try:
+                    item_id = int(item.get("id") or 0)
+                    value = int(item.get("date") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if item_id in target_posts and value > 0 and value <= max_source_ts:
+                    timestamps.append(value)
+        except Exception:
+            logging.info(
+                "vk.postponed same-source wall.getById probe failed owner_id=%s source_url=%s",
+                owner_id,
+                source_url,
+                exc_info=True,
+            )
+    return sorted(set(timestamps))
+
+
+async def _fetch_vk_latest_postponed_ts(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    dates = await _fetch_vk_postponed_anchor_timestamps(owner_id, actors, db, bot)
+    return max(dates) if dates else None
 
 
 async def _reserve_vk_postponed_publish_date(
@@ -3393,6 +3988,8 @@ async def _reserve_vk_postponed_publish_date(
     bot: Bot | None,
     *,
     now: datetime | None = None,
+    source_url: str | None = None,
+    event_id: int | None = None,
 ) -> int | None:
     if not VK_POSTPONED_ENABLED:
         return None
@@ -3400,21 +3997,186 @@ async def _reserve_vk_postponed_publish_date(
         tz = _vk_postponed_zone()
         now_local = (now or datetime.now(tz)).astimezone(tz)
         now_ts = int(now_local.timestamp())
-        latest_ts = await _fetch_vk_latest_postponed_ts(owner_id, actors, db, bot)
+        postponed_timestamps = await _fetch_vk_postponed_anchor_timestamps(
+            owner_id, actors, db, bot
+        )
         reserved_ts = _vk_postponed_reserved_until_by_owner.get(owner_id)
         if reserved_ts and reserved_ts > now_ts:
-            latest_ts = max(latest_ts or 0, reserved_ts)
-        publish_dt = _vk_postponed_next_slot(now_local, latest_ts)
+            postponed_timestamps.append(reserved_ts)
+        source_timestamps: list[int] = []
+        source_interval = _same_source_event_publish_interval()
+        source_key = _normalize_publish_source_url(source_url)
+        if source_key and source_interval > timedelta(seconds=max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)):
+            source_timestamps = await _fetch_same_source_vk_publish_timestamps(
+                db=db,
+                owner_id=owner_id,
+                actors=actors,
+                bot=bot,
+                source_url=source_url,
+                exclude_event_id=event_id,
+            )
+            reserved_source_ts = _vk_postponed_reserved_until_by_source.get((owner_id, source_key))
+            if reserved_source_ts and reserved_source_ts > now_ts:
+                source_timestamps.append(reserved_source_ts)
+        publish_dt = _vk_postponed_next_slot(
+            now_local,
+            postponed_timestamps=postponed_timestamps,
+            source_timestamps=source_timestamps,
+            source_interval_seconds=int(source_interval.total_seconds()) if source_timestamps else None,
+        )
         publish_ts = int(publish_dt.timestamp())
         _vk_postponed_reserved_until_by_owner[owner_id] = publish_ts
+        if source_key:
+            _vk_postponed_reserved_until_by_source[(owner_id, source_key)] = publish_ts
         logging.info(
-            "vk.postponed reserved owner_id=%s publish_date=%s local=%s latest=%s",
+            "vk.postponed reserved owner_id=%s publish_date=%s local=%s anchors=%s source_anchors=%s source_url=%s",
             owner_id,
             publish_ts,
             publish_dt.isoformat(),
-            latest_ts,
+            len(postponed_timestamps),
+            len(source_timestamps),
+            source_url,
         )
         return publish_ts
+
+
+async def _resolve_vk_postponed_wall_id(
+    *,
+    owner_id: int,
+    post_id: int,
+    actor: VkActor,
+    token: str | None,
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    try:
+        response = await _vk_api(
+            "wall.get",
+            {"owner_id": str(owner_id), "filter": "all", "count": 100},
+            db,
+            bot,
+            token=token,
+            token_kind=actor.kind,
+            skip_captcha=(actor.kind == "group"),
+        )
+    except Exception as exc:
+        logging.warning(
+            "post_to_vk resolve postponed id failed owner_id=%s post_id=%s actor=%s error=%s",
+            owner_id,
+            post_id,
+            actor.label,
+            exc,
+        )
+        return None
+    for item in _vk_postponed_items(response):
+        try:
+            item_id = int(item.get("id") or 0)
+            postponed_id = int(item.get("postponed_id") or 0)
+        except Exception:
+            continue
+        if item_id > 0 and (postponed_id == int(post_id) or item_id == int(post_id)):
+            return item_id
+    return None
+
+
+def _vk_wall_get_actors(owner_id: int) -> list[VkActor]:
+    actors = choose_vk_actor(owner_id, "wall.get")
+    user_actors = [actor for actor in actors if actor.kind == "user"]
+    if user_actors:
+        return user_actors
+    return actors
+
+
+async def _resolve_vk_postponed_wall_id_any_actor(
+    *,
+    owner_id: int,
+    post_id: int,
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    actors = _vk_wall_get_actors(owner_id)
+    for attempt in range(3):
+        for actor in actors:
+            token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+            resolved_id = await _resolve_vk_postponed_wall_id(
+                owner_id=owner_id,
+                post_id=post_id,
+                actor=actor,
+                token=token,
+                db=db,
+                bot=bot,
+            )
+            if resolved_id:
+                return resolved_id
+        if attempt < 2:
+            await asyncio.sleep(0.8 * (attempt + 1))
+    return None
+
+
+async def _resolve_existing_vk_post_url(
+    post_url: str,
+    *,
+    target_group_id: str,
+    db: Database | None,
+    bot: Bot | None,
+) -> str:
+    ids = _vk_owner_and_post_id(post_url)
+    if not ids:
+        return post_url
+    owner_id, post_id = ids
+    missing_confirmed = False
+    try:
+        response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
+        items = _vk_wall_get_by_id_items(response)
+        if items:
+            return post_url
+        missing_confirmed = True
+    except Exception:
+        logging.debug("resolve existing VK post getById failed: %s", post_url, exc_info=True)
+
+    try:
+        owner_id_num = int(owner_id)
+        post_id_num = int(post_id)
+    except (TypeError, ValueError):
+        return post_url
+
+    resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+        owner_id=owner_id_num,
+        post_id=post_id_num,
+        db=db,
+        bot=bot,
+    )
+    if resolved_id:
+        if resolved_id != post_id_num:
+            resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
+            logging.info(
+                "sync_vk_source_post resolved stale postponed id %s -> %s",
+                post_url,
+                resolved,
+            )
+            return resolved
+        logging.info("sync_vk_source_post existing postponed VK post found: %s", post_url)
+        return post_url
+    if missing_confirmed:
+        logging.info("sync_vk_source_post existing VK post is missing: %s", post_url)
+        return ""
+    return post_url
+
+
+def _vk_wall_get_by_id_items(response: object) -> list[dict]:
+    if isinstance(response, dict):
+        payload = response.get("response", response)
+        if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            items = payload.get("items") or []
+        else:
+            items = payload
+    else:
+        items = response or []
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    if isinstance(items, dict) and ("id" in items or "text" in items or "attachments" in items):
+        return [items]
+    return []
 
 
 async def post_to_vk(
@@ -3423,14 +4185,23 @@ async def post_to_vk(
     db: Database | None = None,
     bot: Bot | None = None,
     attachments: list[str] | None = None,
+    carousel: bool = False,
+    vk_coauthor_url: str | None = None,
+    vk_coauthor_screen_name: str | None = None,
+    publish_date: int | None = None,
+    source_publish_url: str | None = None,
+    source_event_id: int | None = None,
+    location_marker: Mapping[str, Any] | None = None,
+    latest_publish_ts: int | None = None,
 ) -> str | None:
     if not group_id:
         return None
     logging.info(
-        "post_to_vk start: group=%s len=%d attachments=%d",
+        "post_to_vk start: group=%s len=%d attachments=%d carousel=%s",
         group_id,
         len(message),
         len(attachments or []),
+        carousel,
     )
     owner_id = -int(group_id.lstrip("-"))
     params_base = {
@@ -3439,16 +4210,85 @@ async def post_to_vk(
         "from_group": 1,
         "signed": 0,
     }
+    location_params = sanitize_location_marker_payload(location_marker)
+    if location_params:
+        params_base.update(location_params)
+    coauthor_url = str(vk_coauthor_url or "").strip()
+    coauthor_screen = str(vk_coauthor_screen_name or "").strip().lstrip("@")
+    if coauthor_url:
+        params_base["copyright"] = coauthor_url
+    if coauthor_screen:
+        try:
+            resolved = await _vk_api(
+                "groups.getById",
+                {"group_id": coauthor_screen},
+                db,
+                bot,
+            )
+            response = resolved.get("response") if isinstance(resolved, dict) else resolved
+            group_info = None
+            if isinstance(response, list) and response:
+                group_info = response[0]
+            elif isinstance(response, dict) and response.get("groups"):
+                group_info = response["groups"][0]
+            coauthor_id = int((group_info or {}).get("id") or 0)
+            if coauthor_id > 0:
+                # VK currently accepts these fields but does not document them
+                # consistently. Keep both variants behind a fallback below.
+                params_base["coauthors"] = f"-{coauthor_id}"
+                params_base["coauthor_ids"] = f"-{coauthor_id}"
+        except Exception:
+            logging.info(
+                "post_to_vk coauthor resolve failed screen=%s",
+                coauthor_screen,
+                exc_info=True,
+            )
     if attachments:
         params_base["attachments"] = ",".join(attachments)
-        if len(attachments) > 1:
+        if len(attachments) > 1 and not carousel:
             # Multi-photo posts default to carousel in modern VK clients;
-            # publish as a grid so all images are visible at once.
+            # publish as a grid so all images are visible at once. When
+            # ``carousel`` is set we intentionally leave the default carousel
+            # rendering (swipeable) instead of forcing a grid.
             params_base["primary_attachments_mode"] = "grid"
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
-    publish_date = await _reserve_vk_postponed_publish_date(owner_id, actors, db, bot)
+    if location_params:
+        # Production verification showed VK accepts lat/long with group tokens
+        # but silently publishes community posts without a visible geo marker.
+        # Prefer the user actor for marker-bearing community posts; keep the
+        # normal actor fallback order if user publishing fails.
+        actors = sorted(actors, key=lambda actor: 0 if actor.kind == "user" else 1)
+    if publish_date is None:
+        publish_date = await _reserve_vk_postponed_publish_date(
+            owner_id,
+            actors,
+            db,
+            bot,
+            source_url=source_publish_url,
+            event_id=source_event_id,
+        )
+    if latest_publish_ts is not None:
+        now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+        if publish_date and publish_date >= int(latest_publish_ts):
+            logging.info(
+                "post_to_vk skip stale scheduled publication owner_id=%s event_id=%s publish_date=%s latest_publish_ts=%s",
+                owner_id,
+                source_event_id,
+                publish_date,
+                latest_publish_ts,
+            )
+            return None
+        if not publish_date and now_ts >= int(latest_publish_ts):
+            logging.info(
+                "post_to_vk skip stale immediate publication owner_id=%s event_id=%s now_ts=%s latest_publish_ts=%s",
+                owner_id,
+                source_event_id,
+                now_ts,
+                latest_publish_ts,
+            )
+            return None
     if publish_date:
         params_base["publish_date"] = publish_date
     for idx, actor in enumerate(actors, start=1):
@@ -3464,24 +4304,66 @@ async def post_to_vk(
         try:
             if DEBUG:
                 mem_info("VK post before")
-            data = await _vk_api(
-                "wall.post",
-                params,
-                db,
-                bot,
-                token=token,
-                token_kind=actor.kind,
-                skip_captcha=(actor.kind == "group"),
-            )
+            while True:
+                try:
+                    data = await _vk_api(
+                        "wall.post",
+                        params,
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    break
+                except VKAPIError as exc:
+                    if exc.code == 100 and any(k in params for k in location_marker_param_keys()):
+                        logging.warning(
+                            "post_to_vk location marker params rejected; retrying without marker msg=%s",
+                            exc.message,
+                        )
+                        params = {
+                            k: v
+                            for k, v in params.items()
+                            if k not in location_marker_param_keys()
+                        }
+                        continue
+                    if (
+                        exc.code == 100
+                        and any(k in params for k in ("copyright", "coauthors", "coauthor_ids"))
+                    ):
+                        logging.warning(
+                            "post_to_vk coauthor params rejected; retrying without coauthor screen=%s msg=%s",
+                            coauthor_screen,
+                            exc.message,
+                        )
+                        params = {
+                            k: v
+                            for k, v in params.items()
+                            if k not in {"copyright", "coauthors", "coauthor_ids"}
+                        }
+                        continue
+                    raise
             if DEBUG:
                 mem_info("VK post after")
             post_id = data.get("response", {}).get("post_id")
             if post_id:
-                url = f"https://vk.com/wall-{group_id.lstrip('-')}_{post_id}"
+                actual_post_id = int(post_id)
+                if publish_date:
+                    resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+                        owner_id=owner_id,
+                        post_id=actual_post_id,
+                        db=db,
+                        bot=bot,
+                    )
+                    if resolved_id:
+                        actual_post_id = resolved_id
+                url = f"https://vk.com/wall-{group_id.lstrip('-')}_{actual_post_id}"
                 logging.info(
-                    "post_to_vk ok group=%s post_id=%s len=%d attachments=%d",
+                    "post_to_vk ok group=%s post_id=%s actual_post_id=%s len=%d attachments=%d",
                     group_id,
                     post_id,
+                    actual_post_id,
                     len(message),
                     len(attachments or []),
                 )
@@ -3576,6 +4458,1832 @@ def _vk_owner_and_post_id(url: str) -> tuple[str, str] | None:
     return m.group(1), m.group(2)
 
 
+def _tg_channel_message_link(target_chat: str, message_id: int) -> str:
+    chat = str(target_chat or "").strip()
+    if chat.startswith("@"):
+        return f"https://t.me/{chat.lstrip('@')}/{message_id}"
+    if re.fullmatch(r"[A-Za-z0-9_]{5,}", chat):
+        return f"https://t.me/{chat}/{message_id}"
+    if chat.startswith("-100"):
+        return f"https://t.me/c/{chat[4:]}/{message_id}"
+    return f"tg:{chat}/{message_id}"
+
+
+def _tg_promo_event_keyboard(event: Event) -> types.InlineKeyboardMarkup | None:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    details_url = getattr(event, "telegraph_url", None) or (
+        f"https://telegra.ph/{str(event.telegraph_path).lstrip('/')}"
+        if getattr(event, "telegraph_path", None)
+        else None
+    )
+    if details_url:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="✨ Подробнее",
+                    url=str(details_url),
+                )
+            ]
+        )
+    return types.InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
+
+
+def _tg_promo_text_source(event: Event) -> str:
+    return (
+        str(getattr(event, "description", None) or "").strip()
+        or str(getattr(event, "source_text", None) or "").strip()
+        or str(getattr(event, "search_digest", None) or "").strip()
+    )
+
+
+def _tg_promo_strip_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text or "")
+
+
+def _tg_promo_clean_inline_markdown(text: str) -> str:
+    value = html.unescape(_tg_promo_strip_tags(str(text or "")))
+    value = re.sub(r"\[([^\]|]+)\|([^\]]+)\]", r"\2", value)
+    value = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", value)
+    value = value.replace("`", "")
+    value = re.sub(r"(?<!\w)(?:\*\*|__)(.+?)(?:\*\*|__)(?!\w)", r"\1", value)
+    value = re.sub(r"(?<!\w)(?:\*|_)([^*_]+?)(?:\*|_)(?!\w)", r"\1", value)
+    return " ".join(value.split())
+
+
+def _tg_promo_body_to_html(text: str) -> str:
+    raw = html.unescape(_tg_promo_strip_tags(str(text or "")))
+    raw = re.sub(r"```.*?```", "", raw, flags=re.S)
+    out: list[str] = []
+    blank = False
+    for raw_line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = raw_line.strip()
+        if not line:
+            if out and not blank:
+                out.append("")
+                blank = True
+            continue
+        if re.fullmatch(r"[-*_]{3,}", line):
+            continue
+        blank = False
+        heading = re.match(r"^#{1,6}\s+(.+)$", line)
+        if heading:
+            cleaned = _tg_promo_clean_inline_markdown(heading.group(1))
+            if cleaned:
+                out.append(f"<b>{html.escape(cleaned)}</b>")
+            continue
+        bold_line = re.fullmatch(r"(?:\*\*|__)(.+?)(?:\*\*|__)", line)
+        if bold_line:
+            cleaned = _tg_promo_clean_inline_markdown(bold_line.group(1))
+            if cleaned:
+                out.append(f"<b>{html.escape(cleaned)}</b>")
+            continue
+        bullet = re.match(r"^(?:[-*•▪▫–—]|\d+[.)])\s+(.+)$", line)
+        if bullet:
+            cleaned = _tg_promo_clean_inline_markdown(bullet.group(1))
+            if cleaned:
+                out.append(f"• {html.escape(cleaned)}")
+            continue
+        cleaned = _tg_promo_clean_inline_markdown(line)
+        if cleaned:
+            out.append(html.escape(cleaned))
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
+def _tg_promo_plain_location(event: Event) -> str:
+    return _compose_event_location(
+        getattr(event, "location_name", None),
+        getattr(event, "location_address", None),
+        getattr(event, "city", None),
+        city_hashtag=False,
+    )
+
+
+def _tg_promo_message_sections(event: Event) -> tuple[list[str], list[str], str | None]:
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = f"{emoji_part}{title_text}".strip()
+    date_part = str(event.date or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else date_part
+    time_part = str(getattr(event, "time", "") or "").strip()
+    when = f"{day} {time_part}".strip()
+
+    header = [f"<b>{html.escape(title)}</b>", "", f"📅 {html.escape(when)}"]
+    loc = _tg_promo_plain_location(event)
+    if loc:
+        header.append(f"📍 {html.escape(loc)}")
+    if getattr(event, "pushkin_card", False):
+        header.append(html.escape("✅ Пушкинская карта"))
+    ticket_line = _tg_event_ticket_line(event)
+    if ticket_line:
+        header.append(ticket_line)
+
+    body = _tg_promo_body_to_html(_tg_promo_text_source(event)).strip()
+    body_lines = body.splitlines() if body else []
+    hashtag_line = _tg_event_hashtag_line(event)
+    return header, body_lines, html.escape(hashtag_line) if hashtag_line else None
+
+
+def build_tg_promo_event_publication_message(event: Event) -> str:
+    lines, body_lines, hashtag_line = _tg_promo_message_sections(event)
+    if body_lines:
+        lines.extend(["", "\n".join(body_lines)])
+    if hashtag_line:
+        lines.extend(["", hashtag_line])
+    return "\n".join(lines).strip()
+
+
+def _tg_promo_caption_body_lines(body_lines: list[str]) -> list[str]:
+    """Pick prose-like body lines for a media caption.
+
+    Full promo bodies can exceed Telegram's 1024-character caption limit. When
+    media exists, the photo is the public surface; avoid falling back to a
+    text-only post and keep the caption concise instead of dumping long
+    Smart-Update bullet lists.
+    """
+
+    selected: list[str] = []
+    for line in body_lines:
+        stripped = line.strip()
+        if not stripped:
+            if selected and selected[-1] != "":
+                selected.append("")
+            continue
+        if stripped.startswith("• "):
+            continue
+        if stripped.startswith("<b>") and stripped.endswith("</b>"):
+            continue
+        selected.append(stripped)
+        if len(" ".join(selected)) >= 420:
+            break
+    while selected and selected[-1] == "":
+        selected.pop()
+    return selected
+
+
+def build_tg_promo_event_publication_media_caption(
+    event: Event,
+    *,
+    limit: int = 1024,
+) -> str:
+    full = build_tg_promo_event_publication_message(event)
+    if len(full) <= limit:
+        return full
+
+    header, body_lines, hashtag_line = _tg_promo_message_sections(event)
+    lines = list(header)
+    caption_body = _tg_promo_caption_body_lines(body_lines)
+    if caption_body:
+        lines.extend(["", "\n".join(caption_body)])
+    if getattr(event, "telegraph_url", None) or getattr(event, "telegraph_path", None):
+        lines.extend(["", html.escape("Полный текст — по кнопке «Подробнее».")])
+
+    def joined(candidate: list[str]) -> str:
+        return "\n".join(candidate).strip()
+
+    with_hashtags = [*lines, "", hashtag_line] if hashtag_line else lines
+    if len(joined(with_hashtags)) <= limit:
+        return joined(with_hashtags)
+
+    if len(joined(lines)) <= limit:
+        return joined(lines)
+
+    # Last-resort deterministic trim that only cuts escaped prose, not HTML tags.
+    compact = list(header)
+    remaining = limit - len(joined(compact)) - len("\n\n…")
+    if remaining > 80 and caption_body:
+        plain = html.unescape(re.sub(r"<[^>]+>", "", " ".join(caption_body)))
+        compact.extend(["", html.escape(plain[:remaining].rsplit(" ", 1)[0].rstrip()) + "…"])
+    return joined(compact)[:limit].rstrip()
+
+
+async def publish_tg_promo_event_publication(
+    event: Event,
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    target_chat: str,
+) -> str | None:
+    target_chat = str(target_chat or "").strip()
+    if not target_chat or not bot:
+        return None
+    message = build_tg_promo_event_publication_message(event)
+    if len(message) > 4096:
+        message = message[:4050].rstrip() + "\n\n..."
+    markup = _tg_promo_event_keyboard(event)
+    message_text, message_entities = telegram_event_html_to_text_entities(message)
+
+    photo_urls = [str(url).strip() for url in (getattr(event, "photo_urls", None) or []) if str(url).strip()]
+    sent_message_ids: list[int] = []
+    async with TG_SEND_SEMAPHORE:
+        if photo_urls:
+            caption = build_tg_promo_event_publication_media_caption(event)
+            caption_text, caption_entities = telegram_event_html_to_text_entities(caption)
+            if len(photo_urls) == 1:
+                sent = await bot.send_photo(
+                    target_chat,
+                    photo_urls[0],
+                    caption=caption_text,
+                    caption_entities=caption_entities,
+                    reply_markup=markup,
+                )
+                sent_message_ids.append(int(sent.message_id))
+            else:
+                media = [
+                    types.InputMediaPhoto(
+                        media=url,
+                        caption=caption_text if idx == 0 else None,
+                        caption_entities=caption_entities if idx == 0 else None,
+                    )
+                    for idx, url in enumerate(photo_urls[:TG_EVENT_ALBUM_SIZE])
+                ]
+                group = await bot.send_media_group(target_chat, media)
+                sent = group[0]
+                sent_message_ids.extend(int(item.message_id) for item in group)
+                if markup:
+                    await bot.edit_message_reply_markup(
+                        chat_id=target_chat,
+                        message_id=sent.message_id,
+                        reply_markup=markup,
+                    )
+        else:
+            sent = await bot.send_message(
+                target_chat,
+                message_text,
+                entities=message_entities,
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+            sent_message_ids.append(int(sent.message_id))
+    if sent_message_ids:
+        _schedule_tg_premium_emoji_editor(
+            [(target_chat, message_id) for message_id in sent_message_ids],
+            context="tg_promo_event_publish",
+        )
+    return _tg_channel_message_link(target_chat, int(sent.message_id))
+
+
+class VkChannelManualDraftMissingRegistrationLink(RuntimeError):
+    """A manual VK Channel draft needs a direct registration/ticket CTA."""
+
+
+def _single_event_link(
+    event: Event,
+    *,
+    allow_details_fallback: bool = True,
+) -> str:
+    """Pick exactly one public URL for compact channel-style event promos."""
+
+    for attr in ("ticket_link", "ticket_url", "registration_link", "registration_url"):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+    direct_text_link = _registration_or_ticket_link_from_event_text(event)
+    if direct_text_link:
+        return direct_text_link
+    if not allow_details_fallback:
+        return ""
+    for attr in ("telegraph_url", "source_post_url", "source_url", "source_vk_post_url", "ics_url"):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+    return ""
+
+
+def _registration_or_ticket_link_from_event_text(event: Event) -> str:
+    url_pattern = re.compile(r"https?://[^\s<>()\"']+", re.IGNORECASE)
+    text_fields: list[str] = []
+    for attr in ("source_text", "description", "search_digest", "short_description"):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value:
+            text_fields.append(value)
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str) and raw_source_texts.strip():
+        try:
+            parsed = json.loads(raw_source_texts)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            text_fields.extend(str(item or "") for item in parsed)
+    elif isinstance(raw_source_texts, (list, tuple)):
+        text_fields.extend(str(item or "") for item in raw_source_texts)
+
+    prioritized: list[str] = []
+    fallback: list[str] = []
+    for text in text_fields:
+        lower = text.lower()
+        for match in url_pattern.finditer(text):
+            url = match.group(0).rstrip(".,;:!?)]}")
+            start, end = match.span()
+            context = lower[max(0, start - 80) : min(len(lower), end + 80)]
+            if any(word in context for word in ("регистра", "билет", "ticket", "register")):
+                prioritized.append(url)
+            else:
+                fallback.append(url)
+    return (prioritized or fallback or [""])[0]
+
+
+def _vk_channel_manual_draft_requires_direct_cta(event: Event) -> bool:
+    festival = str(getattr(event, "festival", "") or "").strip().lower()
+    if "80 истор" in festival and "главн" in festival:
+        return True
+    haystack_parts = [
+        str(getattr(event, attr, "") or "")
+        for attr in ("source_text", "description", "search_digest", "short_description")
+    ]
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str):
+        haystack_parts.append(raw_source_texts)
+    elif isinstance(raw_source_texts, (list, tuple)):
+        haystack_parts.extend(str(item or "") for item in raw_source_texts)
+    haystack = "\n".join(haystack_parts).lower()
+    return any(word in haystack for word in ("регистра", "билет", "ticket", "register"))
+
+
+def _strip_urls_for_channel_text(value: str) -> str:
+    text = re.sub(r"https?://\S+", "", str(value or ""))
+    return " ".join(text.split())
+
+
+def build_vk_channel_promo_event_publication_message(event: Event) -> str:
+    """Compact VK community Channel promo text: short copy + one link.
+
+    The layout mirrors a Telegram channel event card, but removes the footer
+    link block and hashtags: title, info block, short description, one CTA URL.
+    """
+
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = f"{emoji_part}{title_text}".strip()
+    date_part = str(event.date or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else date_part
+    time_part = str(getattr(event, "time", "") or "").strip()
+    when = f"{day} {time_part}".strip()
+
+    lines = [title]
+    if when:
+        lines.append(f"📅 {when}")
+    loc = _tg_promo_plain_location(event)
+    if loc:
+        lines.append(f"📍 {loc}")
+
+    body_source = (
+        str(getattr(event, "short_description", None) or "").strip()
+        or str(getattr(event, "search_digest", None) or "").strip()
+        or str(getattr(event, "description", None) or "").strip()
+        or str(getattr(event, "source_text", None) or "").strip()
+    )
+    body = _strip_urls_for_channel_text(_strip_tags(body_source))
+    if body:
+        if len(body) > 220:
+            body = body[:217].rstrip() + "…"
+        lines.extend(["", body])
+
+    requires_direct_cta = _vk_channel_manual_draft_requires_direct_cta(event)
+    link = _single_event_link(event, allow_details_fallback=not requires_direct_cta)
+    if requires_direct_cta and not link:
+        raise VkChannelManualDraftMissingRegistrationLink(
+            "vk_channel_manual_draft_missing_registration_link"
+        )
+    if link:
+        lines.extend(["", link])
+    return "\n".join(lines).strip()
+
+
+def _vk_message_target_link(peer_id: int, message_id: int | None = None) -> str:
+    suffix = f"&msgid={int(message_id)}" if message_id else ""
+    return f"https://vk.com/im?sel={int(peer_id)}{suffix}"
+
+
+def _vk_channel_manual_draft_photo_urls(event: Event, *, limit: int = 3) -> list[str]:
+    """Return candidate poster URLs for a VK channel manual-copy draft.
+
+    The draft is a Messenger staging message for an operator to copy into a VK
+    community Channel.  Keep the staging payload close to the final post by
+    attaching the event poster when the canonical event row has media.
+    """
+
+    raw = getattr(event, "photo_urls", None) or []
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = []
+        raw = parsed if isinstance(parsed, (list, tuple)) else []
+    urls: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        url = str(item or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+        if len(urls) >= limit:
+            break
+    return urls
+
+
+async def _upload_vk_message_photo(
+    *,
+    peer_id: int,
+    photo_url: str,
+    db: Database | None,
+    bot: Bot | None,
+    token: str | None,
+    token_kind: str,
+) -> str | None:
+    """Upload one photo for VK ``messages.send`` and return an attachment id."""
+
+    if not photo_url:
+        return None
+    import mimetypes
+    import requests
+
+    server = await _vk_api(
+        "photos.getMessagesUploadServer",
+        {"peer_id": int(peer_id)},
+        db,
+        bot,
+        token=token,
+        token_kind=token_kind,
+        skip_captcha=(token_kind == "group"),
+    )
+    upload_url = (server.get("response") or {}).get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        upload_url = server.get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        raise RuntimeError("photos.getMessagesUploadServer returned no upload_url")
+
+    download = await asyncio.to_thread(requests.get, photo_url, timeout=120)
+    if download.status_code >= 400:
+        raise RuntimeError(f"VK channel photo download failed status={download.status_code}")
+    filename = os.path.basename(photo_url.split("?", 1)[0]) or "promo.jpg"
+    upload_response = await asyncio.to_thread(
+        requests.post,
+        str(upload_url),
+        files={
+            "photo": (
+                filename,
+                download.content,
+                mimetypes.guess_type(filename)[0] or "image/jpeg",
+            )
+        },
+        timeout=300,
+    )
+    upload_payload = upload_response.json()
+    if upload_response.status_code >= 400 or "error" in upload_payload:
+        raise RuntimeError(f"VK channel photo upload failed: {upload_payload}")
+    saved = await _vk_api(
+        "photos.saveMessagesPhoto",
+        {
+            "photo": upload_payload.get("photo"),
+            "server": upload_payload.get("server"),
+            "hash": upload_payload.get("hash"),
+        },
+        db,
+        bot,
+        token=token,
+        token_kind=token_kind,
+        skip_captcha=(token_kind == "group"),
+    )
+    payload = saved.get("response") if isinstance(saved, dict) and "response" in saved else saved
+    item = payload[0] if isinstance(payload, list) and payload else {}
+    owner_id = item.get("owner_id")
+    photo_id = item.get("id")
+    if owner_id is None or photo_id is None:
+        return None
+    access_key = str(item.get("access_key") or "").strip()
+    return f"photo{owner_id}_{photo_id}" + (f"_{access_key}" if access_key else "")
+
+
+async def publish_vk_channel_promo_event_publication(
+    event: Event,
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    target_group_id: int,
+    peer_ids: Sequence[int],
+    channel_ref: str | None = None,
+) -> str | None:
+    """Send a manual-copy draft to VK Messenger/Favorites.
+
+    This is intentionally not treated as VK community Channel publication:
+    ``messages.send`` writes to VK Messenger, where the operator can copy the
+    prepared post and publish it through the community UI's "Пост в канал".
+    """
+
+    normalized_peer_ids: list[int] = []
+    for peer_id in peer_ids:
+        try:
+            parsed_peer_id = int(peer_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_peer_id:
+            normalized_peer_ids.append(parsed_peer_id)
+    if not normalized_peer_ids:
+        raise RuntimeError("VK channel manual draft peer_id is not configured")
+    if not VK_USER_TOKEN:
+        raise RuntimeError("VK_USER_TOKEN missing for VK channel manual draft")
+
+    peer_id = normalized_peer_ids[0]
+    message = build_vk_channel_promo_event_publication_message(event)
+    if len(message) > 9000:
+        message = message[:8950].rstrip() + "\n\n..."
+    attachments: list[str] = []
+    photo_urls = _vk_channel_manual_draft_photo_urls(event)
+    upload_errors: list[str] = []
+    for photo_url in photo_urls:
+        try:
+            attachment = await _upload_vk_message_photo(
+                peer_id=peer_id,
+                photo_url=photo_url,
+                db=db,
+                bot=bot,
+                token=VK_USER_TOKEN,
+                token_kind="user",
+            )
+        except Exception as exc:
+            upload_errors.append(f"{type(exc).__name__}: {exc}")
+            logging.warning(
+                "vk_channel.manual_draft photo upload failed event_id=%s url=%s err=%s",
+                getattr(event, "id", None),
+                photo_url[:180],
+                exc,
+            )
+            continue
+        if attachment:
+            attachments.append(attachment)
+            break
+    if photo_urls and not attachments:
+        raise RuntimeError(
+            "VK channel manual draft poster upload failed"
+            + (f": {'; '.join(upload_errors[:2])}" if upload_errors else "")
+        )
+    send_params = {
+        "peer_id": peer_id,
+        "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
+        "message": message,
+        "dont_parse_links": 0,
+    }
+    if attachments:
+        send_params["attachment"] = ",".join(attachments)
+    data = await _vk_api(
+        "messages.send",
+        send_params,
+        db,
+        bot,
+        token=VK_USER_TOKEN,
+        token_kind="user",
+        skip_captcha=False,
+    )
+    payload = data.get("response") if isinstance(data, dict) and "response" in data else data
+    if isinstance(payload, int):
+        return _vk_message_target_link(peer_id, payload)
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        return _vk_message_target_link(int(payload[0].get("peer_id") or peer_id), payload[0].get("message_id"))
+    return _vk_message_target_link(peer_id)
+
+
+TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
+TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
+TG_EVENT_VK_URL = "https://vk.ru/im/channels/-239844596"
+TG_EVENT_MAX_URL = "https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA"
+TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
+TG_EVENT_ALBUM_SIZE = 10
+TG_EVENT_MAX_MEDIA = 9
+TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
+TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
+TG_EVENT_INTRO_MAX_CHARS = 330
+TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
+_TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
+    r"^\s*(?:хотите|готовы|что\s+здесь\s+стоит\s+увидеть)\b",
+    re.IGNORECASE,
+)
+
+
+class TelegramEventPublishUncertainSendError(RuntimeError):
+    """Telegram may have accepted a channel message, but the Bot API reply was lost."""
+
+
+def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    name = exc.__class__.__name__.lower()
+    return (
+        "telegramnetworkerror" in name
+        or "request timeout error" in text
+        or "request timeout" in text
+        or "timed out" in text
+    )
+
+
+async def _await_tg_event_send_result(awaitable: Any) -> Any:
+    try:
+        return await awaitable
+    except Exception as exc:
+        if _is_telegram_event_uncertain_send_error(exc):
+            raise TelegramEventPublishUncertainSendError(
+                "Telegram event send result is uncertain after Bot API timeout; "
+                "automatic retry is suppressed to avoid duplicate @kldevents posts. "
+                "Inspect the target Telegram channel and reconcile/delete manually before retry."
+            ) from exc
+        raise
+
+
+def _tg_event_publish_enabled() -> bool:
+    raw = os.getenv("ENABLE_TG_EVENT_PUBLISHING", "1")
+    return str(raw or "").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _tg_event_channel_target() -> int | str | None:
+    raw = (
+        os.getenv("TG_EVENT_CHANNEL")
+        or os.getenv("TG_EVENT_CHANNEL_ID")
+        or TG_EVENT_CHANNEL_DEFAULT
+    )
+    value = str(raw or "").strip()
+    if not value or value.lower() in {"0", "off", "none", "disabled"}:
+        return None
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value if value.startswith("@") else f"@{value}"
+
+
+def _tg_html_visible_len(html_text: str) -> int:
+    text = re.sub(
+        r"<a\s+[^>]*>(.*?)</a>",
+        r"\1",
+        html_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n+", "\n", text)
+    return len(text.strip())
+
+
+def _telegram_event_body_html(text: str | None) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    html_text = simple_md_to_html(raw)
+    try:
+        html_text = sanitize_telegram_html(html_text)
+    except Exception:
+        pass
+    html_text = linkify_phones_for_telegram_html(html_text)
+    html_text = re.sub(
+        r"<h[1-6][^>]*>(.*?)</h[1-6]>",
+        lambda m: "\n<b>" + m.group(1).strip() + "</b>\n",
+        html_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html_text = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</p\s*>", "\n\n", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<p[^>]*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<li[^>]*>", "\n• ", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</li\s*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</?(?:ul|ol)[^>]*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<blockquote[^>]*>", "<blockquote>", html_text, flags=re.IGNORECASE)
+
+    allowed = {
+        "a",
+        "b",
+        "strong",
+        "i",
+        "em",
+        "u",
+        "s",
+        "strike",
+        "del",
+        "code",
+        "pre",
+        "blockquote",
+    }
+
+    def _keep_allowed_tag(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        name_match = re.match(r"</?\s*([a-z0-9-]+)", tag, flags=re.IGNORECASE)
+        if not name_match:
+            return ""
+        return tag if name_match.group(1).lower() in allowed else ""
+
+    html_text = re.sub(r"</?[^>]+>", _keep_allowed_tag, html_text)
+    html_text = re.sub(r"[ \t]+\n", "\n", html_text)
+    html_text = re.sub(r"\n{3,}", "\n\n", html_text)
+    return html_text.strip()
+
+
+def _tg_utf16_len(value: str) -> int:
+    return len(value.encode("utf-16-le")) // 2
+
+
+def _tg_entity_payload(entity_type: str) -> str:
+    return str(getattr(entity_type, "value", entity_type))
+
+
+class _TelegramHtmlEntityParser(HTMLParser):
+    """Convert our limited Telegram HTML into plain text + Bot API entities.
+
+    Bot API HTML parse mode currently ignores ``tel:`` anchors for message text
+    links, so phone contacts must be sent as explicit ``phone_number`` entities.
+    """
+
+    _TAG_TO_TYPE = {
+        "b": "bold",
+        "strong": "bold",
+        "i": "italic",
+        "em": "italic",
+        "u": "underline",
+        "ins": "underline",
+        "s": "strikethrough",
+        "strike": "strikethrough",
+        "del": "strikethrough",
+        "code": "code",
+        "pre": "pre",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.entities: list[types.MessageEntity] = []
+        self._stack: list[dict[str, object]] = []
+        self._text = ""
+
+    def _offset(self) -> int:
+        return _tg_utf16_len(self._text)
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        tag = tag.lower()
+        entity_type = self._TAG_TO_TYPE.get(tag)
+        payload: dict[str, object] = {"tag": tag, "start": self._offset()}
+        if tag == "a":
+            href = ""
+            for key, value in attrs:
+                if str(key).lower() == "href":
+                    href = str(value or "").strip()
+                    break
+            if href.lower().startswith("tel:"):
+                payload.update({"type": "phone_number", "url": None})
+                self._stack.append(payload)
+            elif href:
+                payload.update({"type": "text_link", "url": href})
+                self._stack.append(payload)
+            return
+        if entity_type:
+            payload.update({"type": entity_type, "url": None})
+            self._stack.append(payload)
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        tag = tag.lower()
+        for idx in range(len(self._stack) - 1, -1, -1):
+            item = self._stack[idx]
+            if item.get("tag") != tag:
+                continue
+            self._stack.pop(idx)
+            entity_type = str(item.get("type") or "")
+            start = int(item.get("start") or 0)
+            length = self._offset() - start
+            if entity_type and length > 0:
+                kwargs = {"type": entity_type, "offset": start, "length": length}
+                if entity_type == "text_link" and item.get("url"):
+                    kwargs["url"] = str(item["url"])
+                self.entities.append(types.MessageEntity(**kwargs))
+            return
+
+    def handle_data(self, data: str) -> None:  # type: ignore[override]
+        if not data:
+            return
+        if self._stack and str(self._stack[-1].get("type") or "") == "phone_number":
+            href = tel_href_for_phone_value(data)
+            if href:
+                # Telegram accepts ``phone_number`` entities only for a compact
+                # phone-looking visible payload; pretty landline grouping with
+                # parentheses is silently dropped by Bot API.
+                data = "+" + re.sub(r"\D", "", href)
+        self.parts.append(data)
+        self._text += data
+
+
+def _entity_utf16_span(entity: types.MessageEntity) -> tuple[int, int]:
+    start = int(getattr(entity, "offset", 0) or 0)
+    end = start + int(getattr(entity, "length", 0) or 0)
+    return start, end
+
+
+def _tg_entities_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
+    return a_start < b_end and b_start < a_end
+
+
+def _tg_add_auto_entities(text: str, entities: list[types.MessageEntity]) -> None:
+    protected = [
+        _entity_utf16_span(ent)
+        for ent in entities
+        if _tg_entity_payload(getattr(ent, "type", "")) in {"text_link", "phone_number"}
+    ]
+
+    def can_add(start: int, end: int) -> bool:
+        return not any(_tg_entities_overlap(start, end, p_start, p_end) for p_start, p_end in protected)
+
+    for match in _PHONE_RE.finditer(text):
+        original = match.group(1) or match.group(0)
+        href = tel_href_for_phone_value(original)
+        if not href:
+            continue
+        start = _tg_utf16_len(text[: match.start(1)])
+        end = start + _tg_utf16_len(original)
+        if can_add(start, end):
+            entities.append(types.MessageEntity(type="phone_number", offset=start, length=end - start))
+            protected.append((start, end))
+
+    for match in re.finditer(r"(?<![\w/])#[\wА-Яа-яЁё_]+", text, flags=re.UNICODE):
+        start = _tg_utf16_len(text[: match.start()])
+        end = start + _tg_utf16_len(match.group(0))
+        if can_add(start, end):
+            entities.append(types.MessageEntity(type="hashtag", offset=start, length=end - start))
+
+
+def telegram_event_html_to_text_entities(html_text: str) -> tuple[str, list[types.MessageEntity]]:
+    parser = _TelegramHtmlEntityParser()
+    parser.feed(html_text or "")
+    parser.close()
+    text = "".join(parser.parts)
+    entities = list(parser.entities)
+    _tg_add_auto_entities(text, entities)
+    entities.sort(
+        key=lambda ent: (
+            int(getattr(ent, "offset", 0) or 0),
+            -int(getattr(ent, "length", 0) or 0),
+        )
+    )
+    return text, entities
+
+
+def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
+    from vk_hashtags import (
+        city_afisha_hashtag,
+        dedupe_vk_hashtags,
+        event_type_hashtags,
+        format_vk_hashtag_line,
+        normalize_vk_festival_hashtag,
+        vk_date_hashtags,
+    )
+
+    tags: list[str | None] = []
+    tags.extend(vk_date_hashtags(getattr(event, "date", None)))
+    city = getattr(event, "city", None)
+    if city:
+        tags.append(city_afisha_hashtag(city))
+    tags.extend(
+        event_type_hashtags(
+            getattr(event, "title", None),
+            None
+            if _tg_event_description_conflicts_with_utility_source(
+                getattr(event, "description", None),
+                getattr(event, "source_text", None),
+            )
+            else getattr(event, "description", None),
+            getattr(event, "source_text", None),
+        )
+    )
+    festival_tag = normalize_vk_festival_hashtag(
+        getattr(festival, "name", None) if festival else getattr(event, "festival", None)
+    )
+    if getattr(event, "is_free", False):
+        tags.append("#бесплатно")
+    if festival_tag:
+        tags.append(festival_tag)
+    return format_vk_hashtag_line(_tg_event_filter_hashtags(dedupe_vk_hashtags(tags)))
+
+
+TG_EVENT_HASHTAG_MAX_TAG_CHARS = 28
+TG_EVENT_HASHTAG_MAX_TAGS = 8
+TG_EVENT_HASHTAG_MAX_LINE_CHARS = 140
+
+
+def _tg_event_filter_hashtags(tags: list[str]) -> list[str]:
+    """Keep Telegram event hashtags useful for search, not as long title slugs."""
+
+    kept: list[str] = []
+    line_len = 0
+    for tag in tags:
+        clean = str(tag or "").strip()
+        if not clean.startswith("#"):
+            continue
+        body = clean[1:]
+        if not body:
+            continue
+        # Telegram footer hashtags are navigation/search aids. Long concatenated
+        # title/festival slugs like ``#ПоодёжкевстречаютНародныйкостюм...`` are
+        # visually heavy and poor search affordances, so keep only compact tags.
+        if len(body) > TG_EVENT_HASHTAG_MAX_TAG_CHARS:
+            continue
+        projected = line_len + (1 if kept else 0) + len(clean)
+        if projected > TG_EVENT_HASHTAG_MAX_LINE_CHARS:
+            break
+        kept.append(clean)
+        line_len = projected
+        if len(kept) >= TG_EVENT_HASHTAG_MAX_TAGS:
+            break
+    return kept
+
+
+def _tg_event_city_hashtag(city: str | None) -> str | None:
+    from vk_hashtags import normalize_vk_hashtag
+
+    return normalize_vk_hashtag(city)
+
+
+def _format_tg_event_price_with_money(event: Event) -> str:
+    if event.ticket_price_min is not None and event.ticket_price_max is not None:
+        if event.ticket_price_min != event.ticket_price_max:
+            return f"от 💰 {event.ticket_price_min} до 💰 {event.ticket_price_max}"
+        return f"💰 {event.ticket_price_min}"
+    if event.ticket_price_min is not None:
+        return f"💰 {event.ticket_price_min}"
+    if event.ticket_price_max is not None:
+        return f"💰 {event.ticket_price_max}"
+    return ""
+
+
+def _tg_event_ticket_line(event: Event) -> str:
+    ticket_link = (getattr(event, "ticket_link", None) or "").strip()
+    # Telegram posts must use the original event/registration link. vk.cc links are
+    # generated for VK analytics only and must not leak into Telegram publishing.
+    ticket_link_display = ticket_link
+    ticket_is_http = ticket_link_display.startswith(("http://", "https://"))
+    phone_href = ""
+    if ticket_link_display and not ticket_is_http:
+        phone_display = format_tel_link_for_display(ticket_link_display)
+        phone_href = tel_href_for_phone_value(ticket_link_display) if phone_display else ""
+        ticket_link_display = phone_display or ticket_link_display
+    ticket_label = "Билеты"
+    if getattr(event, "ticket_status", None) == "sold_out":
+        return "❌ Билеты все проданы"
+    if event.is_free:
+        if ticket_link_display and ticket_is_http:
+            return (
+                f'🟡 Бесплатно, <a href="{html.escape(ticket_link_display, quote=True)}">'
+                "по регистрации</a>"
+            )
+        if ticket_link_display:
+            if phone_href:
+                return (
+                    "🟡 Бесплатно, запись: "
+                    f'<a href="{html.escape(phone_href, quote=True)}">{html.escape(ticket_link_display)}</a>'
+                )
+            return f"🟡 Бесплатно, запись: {html.escape(ticket_link_display)}"
+        return "🟡 Бесплатно"
+    price = _format_tg_event_price_with_money(event)
+    if ticket_link_display and ticket_is_http:
+        if not price:
+            ticket_label = "по регистрации"
+        return (
+            f'🎫 <a href="{html.escape(ticket_link_display, quote=True)}">'
+            f"{html.escape(ticket_label)}</a>"
+            + (f" {html.escape(price)}" if price else "")
+        )
+    if ticket_link_display:
+        label = "по регистрации" if not price else f"Билеты {price}"
+        if phone_href:
+            return (
+                f"🎫 {html.escape(label)}: "
+                f'<a href="{html.escape(phone_href, quote=True)}">{html.escape(ticket_link_display)}</a>'
+            )
+        return f"🎫 {html.escape(label)}: {html.escape(ticket_link_display)}"
+    if price:
+        return f"🎫 Билеты {html.escape(price)}"
+    return ""
+
+
+def _tg_event_details_url(event: Event) -> str | None:
+    raw = (getattr(event, "telegraph_url", None) or "").strip()
+    if raw:
+        return normalize_telegraph_url(raw) or raw
+    path = (getattr(event, "telegraph_path", None) or "").strip()
+    if path:
+        return normalize_telegraph_url(f"https://telegra.ph/{path.lstrip('/')}")
+    return None
+
+
+def _tg_event_social_links_html() -> str:
+    return (
+        f'<a href="{html.escape(TG_EVENT_MAX_URL, quote=True)}">Max</a>'
+        " · "
+        f'<a href="{html.escape(TG_EVENT_VK_URL, quote=True)}">Вконтакте</a>'
+    )
+
+
+def _tg_event_calendar_post_url(event: Event) -> str | None:
+    return _tg_event_public_calendar_url(event)
+
+
+def _telegram_url_is_private_internal_link(url: str | None) -> bool:
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = urlsplit(raw)
+    except Exception:
+        return False
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").lstrip("/")
+    return host in {"t.me", "telegram.me"} and path.startswith("c/")
+
+
+def _tg_event_public_calendar_url(event: Event) -> str | None:
+    post_url = (getattr(event, "ics_post_url", None) or "").strip()
+    if post_url.startswith(("http://", "https://")) and not _telegram_url_is_private_internal_link(
+        post_url
+    ):
+        return post_url
+    file_url = (getattr(event, "ics_url", None) or "").strip()
+    if file_url.startswith(("http://", "https://")):
+        return file_url
+    return None
+
+
+def _tg_event_source_is_utility_service(text: str | None) -> bool:
+    lower = str(text or "").casefold()
+    if not lower:
+        return False
+    service_markers = (
+        "прием шин",
+        "приём шин",
+        "отработанных шин",
+        "переработ",
+        "перерабат",
+        "утилизац",
+        "сдать шин",
+        "пункт приема",
+        "пункт приёма",
+        "временной точки приема",
+        "временной точки приёма",
+    )
+    return any(marker in lower for marker in service_markers)
+
+
+def _tg_event_description_conflicts_with_utility_source(
+    description: str | None,
+    source_text: str | None,
+) -> bool:
+    if not _tg_event_source_is_utility_service(source_text):
+        return False
+    lower = str(description or "").casefold()
+    if not lower:
+        return False
+    entertainment_markers = (
+        "музыкальные номера",
+        "театральные постановки",
+        "выступления",
+        "зрителей",
+        "входной билет",
+        "билет",
+        "вечер будет наполнен",
+        "насладиться разнообразной программой",
+    )
+    return any(marker in lower for marker in entertainment_markers)
+
+
+def select_tg_event_text_for_publish(event: Event, *, promo_highlight: bool = False) -> str:
+    description = (getattr(event, "description", None) or "").strip()
+    source_text = (getattr(event, "source_text", None) or "").strip()
+    if description and looks_like_genai_response_dump(description):
+        logging.warning(
+            "tg_event: description for event %s looks like a genai SDK dump; using source_text",
+            getattr(event, "id", None),
+        )
+        description = ""
+    if description and _tg_event_description_conflicts_with_utility_source(description, source_text):
+        logging.warning(
+            "tg_event: description for event %s conflicts with utility/service source; using source_text",
+            getattr(event, "id", None),
+        )
+        description = ""
+    if promo_highlight:
+        parts: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for label, raw in (
+            ("Описание", description),
+            ("Коротко", getattr(event, "short_description", None)),
+            ("Суть", getattr(event, "search_digest", None)),
+            ("Исходный текст", source_text),
+        ):
+            value = re.sub(r"\s+", " ", str(raw or "")).strip()
+            if not value:
+                continue
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            parts.append((label, value))
+        if parts:
+            return "\n\n".join(f"{label}: {value}" for label, value in parts)
+    return description or source_text
+
+
+async def resolve_tg_event_promo_highlight(event: Event, db: Database | None) -> bool:
+    event_id = getattr(event, "id", None)
+    if not db or event_id is None:
+        return False
+    try:
+        from promo import resolve_campaign_promo_event_ids
+
+        promo_ids = await resolve_campaign_promo_event_ids(db)
+    except Exception:
+        logging.warning(
+            "tg_event: promo resolver failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
+    return int(event_id) in promo_ids
+
+
+async def resolve_tg_event_button_highlight(event: Event, db: Database | None) -> bool:
+    event_id = getattr(event, "id", None)
+    if not db or event_id is None:
+        return False
+    try:
+        from promo import resolve_tg_button_highlight_event_ids
+
+        highlight_ids = await resolve_tg_button_highlight_event_ids(db)
+    except Exception:
+        logging.warning(
+            "tg_event: button-highlight resolver failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
+    return int(event_id) in highlight_ids
+
+
+_ROCK_CONCERT_EVENT_RE = re.compile(
+    r"(?:\brock\b|(?<![а-яё])рок(?![а-яё])|метал(?:л)?|\bmetal\b|панк|\bpunk\b|хардкор|\bhardcore\b|крематор)",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_tg_rock_concert_event(event: Event) -> bool:
+    haystack = "\n".join(
+        str(value or "")
+        for value in (
+            getattr(event, "title", None),
+            getattr(event, "emoji", None),
+            getattr(event, "description", None),
+            getattr(event, "short_description", None),
+            getattr(event, "search_digest", None),
+            getattr(event, "source_text", None),
+        )
+    ).casefold()
+    return bool(_ROCK_CONCERT_EVENT_RE.search(haystack))
+
+
+def build_tg_event_announcement(
+    event: Event,
+    text: str,
+    festival: Festival | None = None,
+    *,
+    include_calendar_link: bool = False,
+    promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
+) -> str:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    if _is_tg_rock_concert_event(event):
+        emoji_part = "🤘 "
+    lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
+
+    if festival:
+        fest_link = festival.telegraph_url or festival.vk_url or festival.vk_post_url
+        fest_name = html.escape(festival.name)
+        if fest_link:
+            lines.append(f'<a href="{html.escape(fest_link, quote=True)}">✨ {fest_name}</a>')
+        else:
+            lines.append(f"✨ {fest_name}")
+
+    day = _tg_event_date_label(event)
+    time_part = str(event.time or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    lines.append(html.escape(f"📅 {day}{(' ' + time_part) if time_part else ''}"))
+
+    loc_parts: list[str] = []
+    loc = (event.location_name or "").strip()
+    if loc:
+        loc_parts.append(loc)
+    addr = event.location_address
+    if addr and event.city:
+        addr = strip_city_from_address(addr, event.city)
+    if addr:
+        loc_parts.append(addr)
+    if event.city:
+        loc_parts.append(_tg_event_city_hashtag(event.city) or event.city)
+    if loc_parts:
+        lines.append("📍 " + html.escape(", ".join(loc_parts)))
+
+    if event.pushkin_card:
+        lines.append("✅ Пушкинская карта")
+
+    ticket_line = _tg_event_ticket_line(event)
+    if ticket_line:
+        lines.append(ticket_line)
+
+    body = _telegram_event_body_html(text)
+    if body:
+        lines.extend(["", body])
+
+    hashtag_line = _tg_event_hashtag_line(event, festival)
+    if hashtag_line:
+        lines.extend(["", html.escape(hashtag_line)])
+
+    lines.append(
+        ""
+    )
+    footer_links: list[str] = []
+    details_url = _tg_event_details_url(event)
+    if details_url and not details_button_highlight:
+        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">🔎 Подробнее</a>')
+    elif details_url and include_calendar_link:
+        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">✨ Подробнее</a>')
+    calendar_url = _tg_event_calendar_post_url(event)
+    if include_calendar_link and calendar_url and not footer_links:
+        footer_links.append(
+            f'<a href="{html.escape(calendar_url, quote=True)}">📅 Добавить в календарь</a>'
+        )
+    social_links_allowed = not details_button_highlight
+    social_links = _tg_event_social_links_html() if social_links_allowed else ""
+    if footer_links:
+        footer_line = " · ".join(footer_links)
+        if social_links and details_url and not details_button_highlight:
+            footer_line += " " * 12 + social_links
+        elif social_links:
+            footer_line += " · " + social_links
+        lines.append(footer_line)
+    elif social_links:
+        lines.append(social_links)
+    return "\n".join(lines).strip()
+
+
+def _tg_event_date_label(event: Event) -> str:
+    date_part = str(getattr(event, "date", "") or "").split("..", 1)[0]
+    start = parse_iso_date(date_part)
+    raw_end = str(getattr(event, "end_date", "") or "").strip()
+    end = parse_iso_date(raw_end) if raw_end else None
+    if start and end and end > start:
+        start_text = format_day_pretty(start)
+        end_text = format_day_pretty(end)
+        if start.month == end.month:
+            start_text = str(start.day)
+        return f"{start_text}–{end_text}"
+    if start:
+        return format_day_pretty(start)
+    return str(getattr(event, "date", "") or "")
+
+
+def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
+    if _tg_event_source_is_utility_service(text):
+        return (
+            "Можно сдать до 4 чистых шин на переработку: их отправят на предприятие "
+            "и сделают из сырья новые полезные материалы."
+        )
+    for raw in (
+        getattr(event, "short_description", None),
+        getattr(event, "search_digest", None),
+        text,
+        getattr(event, "description", None),
+        getattr(event, "title", None),
+    ):
+        value = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if value:
+            sentence = re.split(r"(?<=[.!?])\s+", value, maxsplit=1)[0].strip()
+            sentence = re.sub(r",?\s*подробнее\s*\([^)]+\)\s*$", "", sentence, flags=re.I).strip()
+            if not sentence:
+                continue
+            if _TG_EVENT_REPETITIVE_OPENING_RE.match(sentence):
+                continue
+            base = sentence.rstrip(".!?").strip()
+            if sentence.endswith("?"):
+                return sentence
+            if len(base) > 1:
+                return f"{base}."
+            return base
+    return ""
+
+
+async def build_tg_event_hook_text(
+    event: Event,
+    text: str,
+    *,
+    promo_highlight: bool = False,
+) -> str:
+    source = (text or "").strip()
+    if not source:
+        return _fallback_tg_event_hook_text(event, text)
+    max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
+    promo_instruction = ""
+    if promo_highlight:
+        promo_instruction = (
+            "Это промо-событие: дай более богатое, но всё ещё компактное описание. "
+            "Выбери 2-3 самые сильные конкретные причины пойти, назови отличительную деталь "
+            "программы/участников/формата, избегай общей рекламной воды.\n"
+        )
+    prompt = (
+        "Сделай короткий Telegram-анонс события на русском языке.\n"
+        f"Формат: 1-3 предложения, до {max_chars} символов.\n"
+        f"{promo_instruction}"
+        "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
+        "или friendly-вступление вроде «Друзья, ...». Вопрос не обязателен, если событие "
+        "утилитарное, сервисное или важнее объяснить практическую пользу.\n"
+        "Не используй однотипные обращения в начале: «Хотите...», «Готовы...», "
+        "«Что здесь стоит увидеть?». Если вопрос уместен, он должен быть конкретным "
+        "к этому событию, а не шаблонным.\n"
+        "Не повторяй дату, время, место, цену и билетную ссылку: они будут в инфоблоке отдельно.\n"
+        "Не добавляй хештеги, эмодзи, ссылки, призыв купить билеты или служебные фразы.\n"
+        "Для пунктов приёма, сбора, переработки, волонтёрских и городских полезных акций "
+        "пиши в формате «какую пользу это даёт / что можно сделать / какие ограничения важны», "
+        "а не как про концерт, фестиваль или развлекательную программу.\n"
+        "Собственные имена и названия копируй буквально из названия или текста события; "
+        "если не уверен в форме слова, лучше опусти имя, чем меняй написание.\n"
+        "Не выдумывай факты; используй только текст ниже.\n\n"
+        f"Название: {getattr(event, 'title', '')}\n"
+        f"Текст события:\n{source[:5000]}"
+    )
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+
+        client = GoogleAIClient(
+            supabase_client=get_supabase_client(),
+            secrets_provider=SecretsProvider(),
+            consumer="tg_event_publish",
+            incident_notifier=notify_llm_incident,
+        )
+        raw, _usage = await client.generate_content_async(
+            model=TG_EVENT_REWRITE_MODEL,
+            prompt=prompt,
+            generation_config={"temperature": 0.4},
+            max_output_tokens=260 if promo_highlight else 180,
+        )
+    except Exception:
+        logging.warning(
+            "tg_event: hook rewrite failed event_id=%s",
+            getattr(event, "id", None),
+            exc_info=True,
+        )
+        return _fallback_tg_event_hook_text(event, text)
+    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
+    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
+    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
+    if not cleaned:
+        return _fallback_tg_event_hook_text(event, text)
+    if _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
+        return _fallback_tg_event_hook_text(event, text)
+    if _tg_event_source_is_utility_service(text) and any(
+        marker in cleaned.casefold()
+        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
+    ):
+        return _fallback_tg_event_hook_text(event, text)
+    if len(cleaned) > max_chars + 30:
+        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
+    return cleaned
+
+
+def _truncate_tg_plain_body(text: str, max_chars: int) -> str:
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    plain = html.unescape(plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    if max_chars <= 0:
+        return ""
+    if len(plain) <= max_chars:
+        return plain
+    cut = plain[: max(1, max_chars - 1)].rstrip()
+    last_space = cut.rfind(" ")
+    if last_space >= max_chars // 2:
+        cut = cut[:last_space].rstrip()
+    return (cut + "…").strip()
+
+
+async def build_tg_event_announcement_for_publish(
+    event: Event,
+    text: str,
+    festival: Festival | None = None,
+    *,
+    force_caption_limit: bool = False,
+    include_calendar_link: bool = False,
+    promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
+) -> tuple[str, bool]:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
+    hook_text = await build_tg_event_hook_text(
+        event,
+        text,
+        promo_highlight=promo_highlight,
+    )
+    message_html = build_tg_event_announcement(
+        event,
+        hook_text,
+        festival=festival,
+        include_calendar_link=include_calendar_link,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
+        return message_html, hook_text != text
+
+    # Safety-net: keep the deterministic shell intact
+    # and trim only the narrative body until the whole announcement fits.
+    base_without_body = build_tg_event_announcement(
+        event,
+        "",
+        festival=festival,
+        include_calendar_link=include_calendar_link,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
+    for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
+        trimmed = _truncate_tg_plain_body(hook_text, min(max(0, room), max(0, body_limit)))
+        candidate = build_tg_event_announcement(
+            event,
+            trimmed,
+            festival=festival,
+            include_calendar_link=include_calendar_link,
+            promo_highlight=promo_highlight,
+            details_button_highlight=details_button_highlight,
+        )
+        if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
+            return candidate, True
+    return base_without_body, True
+
+
+def _tg_event_publish_media_urls(event: Event) -> list[str]:
+    return _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])[:TG_EVENT_MAX_MEDIA]
+
+
+def build_tg_event_source_hash(
+    event: Event,
+    text: str,
+    *,
+    promo_highlight: bool = False,
+    details_button_highlight: bool = False,
+) -> str:
+    media_signature = "\n".join(_tg_event_publish_media_urls(event))
+    return content_hash(
+        "\n".join(
+            [
+                TG_EVENT_REWRITE_PROMPT_VERSION,
+                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_button_social_v6",
+                f"promo_highlight={bool(promo_highlight)}",
+                f"details_button_highlight={bool(details_button_highlight)}",
+                str(getattr(event, "title", "") or ""),
+                str(getattr(event, "date", "") or ""),
+                str(getattr(event, "time", "") or ""),
+                str(getattr(event, "location_name", "") or ""),
+                str(getattr(event, "location_address", "") or ""),
+                str(getattr(event, "city", "") or ""),
+                str(getattr(event, "festival", "") or ""),
+                str(getattr(event, "pushkin_card", "") or ""),
+                str(getattr(event, "is_free", "") or ""),
+                str(getattr(event, "ticket_status", "") or ""),
+                str(getattr(event, "ticket_link", "") or ""),
+                str(getattr(event, "ticket_price_min", "") or ""),
+                str(getattr(event, "ticket_price_max", "") or ""),
+                str(getattr(event, "ics_url", "") or ""),
+                str(getattr(event, "ics_post_url", "") or ""),
+                str(getattr(event, "telegraph_url", "") or ""),
+                str(getattr(event, "telegraph_path", "") or ""),
+                media_signature,
+                text or "",
+            ]
+        )
+    )
+
+
+def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> list[list[str]]:
+    clean = [str(u or "").strip() for u in urls if str(u or "").strip()]
+    return [clean[i : i + size] for i in range(0, len(clean), size)]
+
+
+def _tg_media_dhash_from_url(url: str) -> str | None:
+    match = re.search(r"/p/dh16/[0-9a-f]{2}/([0-9a-f]{64})\.webp(?:[?#].*)?$", url, re.I)
+    return match.group(1).lower() if match else None
+
+
+def _tg_media_dhash_distance(left: str, right: str) -> int | None:
+    try:
+        return (int(left, 16) ^ int(right, 16)).bit_count()
+    except Exception:
+        return None
+
+
+def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
+    clean: list[str] = []
+    seen: set[str] = set()
+    seen_dhashes: list[str] = []
+    for raw in urls or []:
+        url = str(raw or "").strip()
+        if not url or url in seen:
+            continue
+        dhash = _tg_media_dhash_from_url(url)
+        if dhash:
+            duplicate = False
+            for seen_dhash in seen_dhashes:
+                distance = _tg_media_dhash_distance(dhash, seen_dhash)
+                if (
+                    distance is not None
+                    and distance <= TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE
+                ):
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            seen_dhashes.append(dhash)
+        seen.add(url)
+        clean.append(url)
+    return clean
+
+
+async def _dedupe_event_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
+    """Drop visually duplicate event photos across managed mirrors and source URLs."""
+    return await _dedupe_vk_photo_urls_for_publish(photo_urls)
+
+
+def _tg_event_calendar_button_text(event: Event) -> str:
+    day = _tg_event_date_label(event)
+    time_part = str(getattr(event, "time", "") or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    prefix = " ".join(part for part in [day, time_part] if part).strip()
+    if prefix:
+        return f"📅 {prefix} · Добавить в календарь"
+    return "📅 Добавить в календарь"
+
+
+def build_tg_event_reply_markup(
+    event: Event,
+    *,
+    promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
+) -> types.InlineKeyboardMarkup | None:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
+    rows: list[list[types.InlineKeyboardButton]] = []
+    details_url = _tg_event_details_url(event)
+    if details_button_highlight and details_url:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="✨ Подробнее",
+                    url=details_url,
+                )
+            ]
+        )
+    calendar_url = _tg_event_calendar_post_url(event)
+    if calendar_url:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=_tg_event_calendar_button_text(event),
+                    url=calendar_url,
+                )
+            ]
+        )
+    if not rows:
+        return None
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def materialize_tg_event_media_for_upload(url: str, index: int) -> types.BufferedInputFile:
+    """Load a Smart Update materialized media URL for Telegram Bot API upload."""
+
+    clean_url = str(url or "").strip()
+    if not clean_url:
+        raise RuntimeError("empty tg event media url")
+    suffix = ".jpg"
+    path = urlsplit(clean_url).path.lower()
+    if path.endswith(".png"):
+        suffix = ".png"
+    elif path.endswith(".webp"):
+        suffix = ".webp"
+    elif path.endswith(".jpeg"):
+        suffix = ".jpeg"
+    timeout = httpx.Timeout(HTTP_TIMEOUT)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        resp = await client.get(clean_url)
+        resp.raise_for_status()
+        data = resp.content
+    if not data:
+        raise RuntimeError(f"empty tg event media download: {clean_url}")
+    return types.BufferedInputFile(data, filename=f"event-media-{index}{suffix}")
+
+
+async def publish_tg_event_announcement(
+    event: Event,
+    text: str,
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
+) -> tuple[str | None, int | None, str | None, str | None]:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
+    if not bot or not _tg_event_publish_enabled():
+        return None, None, None, None
+    target = _tg_event_channel_target()
+    if target is None:
+        return None, None, None, None
+
+    festival = await _resolve_event_festival(db, event)
+    source_hash = build_tg_event_source_hash(
+        event,
+        text,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    photo_urls = (
+        await _dedupe_event_photo_urls_for_publish(
+            _tg_event_publish_media_urls(event)
+        )
+    )[:TG_EVENT_MAX_MEDIA]
+    chunks = _chunked_tg_media(photo_urls)
+    if len(photo_urls) == 1:
+        desired_mode = "photo_caption"
+    elif len(photo_urls) > 1:
+        desired_mode = "album_caption"
+    else:
+        desired_mode = "text"
+    existing_id = getattr(event, "tg_event_post_id", None)
+    existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
+    if (
+        (getattr(event, "tg_event_source_hash", None) or "") == source_hash
+        and (getattr(event, "tg_event_post_url", None) or "").strip()
+        and (not photo_urls or existing_mode == desired_mode)
+    ):
+        return (
+            event.tg_event_post_url,
+            event.tg_event_post_id,
+            event.tg_event_post_mode,
+            source_hash,
+        )
+    message_html, _rewritten = await build_tg_event_announcement_for_publish(
+        event,
+        text,
+        festival=festival,
+        force_caption_limit=bool(chunks),
+        include_calendar_link=desired_mode == "album_caption",
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    reply_markup = build_tg_event_reply_markup(
+        event,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    message_text, message_entities = telegram_event_html_to_text_entities(message_html)
+
+    if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
+        try:
+            if existing_mode in {"album_caption", "photo_caption"} and desired_mode == existing_mode:
+                await bot.edit_message_caption(
+                    chat_id=target,
+                    message_id=existing_id,
+                    caption=message_text,
+                    caption_entities=message_entities,
+                    reply_markup=reply_markup if existing_mode == "photo_caption" else None,
+                )
+            elif existing_mode == "text" and desired_mode == "text":
+                await bot.edit_message_text(
+                    chat_id=target,
+                    message_id=existing_id,
+                    text=message_text,
+                    entities=message_entities,
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup,
+                )
+            else:
+                raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
+            _schedule_tg_premium_emoji_editor(
+                [(target, int(existing_id))],
+                context="tg_event_publish_edit",
+            )
+            return (
+                (getattr(event, "tg_event_post_url", None) or "").strip() or None,
+                int(existing_id),
+                existing_mode,
+                source_hash,
+            )
+        except Exception as exc:
+            logging.warning(
+                "publish_tg_event_announcement edit failed event_id=%s mode=%s err=%s",
+                getattr(event, "id", None),
+                existing_mode,
+                exc,
+            )
+
+    sent_url: str | None = None
+    sent_id: int | None = None
+    sent_mode = desired_mode
+
+    async def uploaded_media_group() -> list[types.InputMediaPhoto]:
+        uploaded = []
+        for idx, url in enumerate(photo_urls):
+            media_file = await materialize_tg_event_media_for_upload(url, idx)
+            if idx == 0:
+                uploaded.append(
+                    types.InputMediaPhoto(
+                        media=media_file,
+                        caption=message_text,
+                        caption_entities=message_entities,
+                    )
+                )
+            else:
+                uploaded.append(types.InputMediaPhoto(media=media_file))
+        return uploaded
+
+    try:
+        if desired_mode == "photo_caption":
+            upload = await materialize_tg_event_media_for_upload(photo_urls[0], 0)
+            msg = await _await_tg_event_send_result(
+                bot.send_photo(
+                    chat_id=target,
+                    photo=upload,
+                    caption=message_text,
+                    caption_entities=message_entities,
+                    reply_markup=reply_markup,
+                )
+            )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
+        elif desired_mode == "album_caption":
+            media_items = await uploaded_media_group()
+            for start in range(0, len(media_items), TG_EVENT_ALBUM_SIZE):
+                chunk = media_items[start : start + TG_EVENT_ALBUM_SIZE]
+                msgs = await _await_tg_event_send_result(
+                    bot.send_media_group(chat_id=target, media=chunk)
+                )
+                if sent_id is None and msgs:
+                    sent_id = msgs[0].message_id
+                    sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
+        else:
+            msg = await _await_tg_event_send_result(
+                bot.send_message(
+                    target,
+                    message_text,
+                    entities=message_entities,
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup,
+                )
+            )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
+    except Exception:
+        logging.exception(
+            "publish_tg_event_announcement failed event_id=%s desired_mode=%s media=%d",
+            getattr(event, "id", None),
+            desired_mode,
+            len(photo_urls),
+        )
+        raise
+
+    if (
+        existing_id
+        and int(existing_id) != int(sent_id or 0)
+        and existing_mode in {"text", "photo_caption", "album_caption"}
+    ):
+        try:
+            await bot.delete_message(chat_id=target, message_id=int(existing_id))
+        except Exception:
+            logging.warning(
+                "publish_tg_event_announcement old message delete failed event_id=%s old_id=%s old_mode=%s new_mode=%s",
+                getattr(event, "id", None),
+                existing_id,
+                existing_mode,
+                sent_mode,
+                exc_info=True,
+            )
+
+    if sent_id is not None:
+        _schedule_tg_premium_emoji_editor(
+            [(target, int(sent_id))],
+            context="tg_event_publish_send",
+        )
+
+    logging.info(
+        "publish_tg_event_announcement done event_id=%s url=%s media=%d mode=%s",
+        getattr(event, "id", None),
+        sent_url,
+        len(photo_urls),
+        sent_mode,
+    )
+    return sent_url, sent_id, sent_mode, source_hash
 
 
 def build_vk_source_header(event: Event, festival: Festival | None = None) -> list[str]:
@@ -3600,7 +6308,10 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     else:
         logging.error("Invalid event date: %s", event.date)
         day = event.date
-    lines.append(f"\U0001f4c5 {day} {event.time}")
+    time_part = str(event.time or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    lines.append(f"\U0001f4c5 {day}{(' ' + time_part) if time_part else ''}")
 
     loc = event.location_name
     addr = event.location_address
@@ -3660,10 +6371,64 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     return lines
 
 
-def _vk_event_hashtag_line(event: Event) -> str:
+def _festival_lookup_variants(value: str | None) -> set[str]:
+    try:
+        base = normalize_alias(value)
+    except Exception:
+        base = re.sub(r"[^\w]+", "", str(value or "").casefold(), flags=re.UNICODE)
+    if not base:
+        return set()
+    variants = {base}
+    if base.endswith("а") and len(base) > 1:
+        variants.add(base[:-1] + "ы")
+        variants.add(base[:-1] + "и")
+    if base.endswith("я") and len(base) > 1:
+        variants.add(base[:-1] + "и")
+    if base.endswith("ь") and len(base) > 1:
+        variants.add(base[:-1] + "я")
+    return variants
+
+
+async def _resolve_event_festival(db: Database | None, event: Event) -> Festival | None:
+    raw_name = (getattr(event, "festival", None) or "").strip()
+    if not raw_name or db is None:
+        return None
+    async with db.get_session() as session:
+        res = await session.execute(select(Festival).where(Festival.name == raw_name))
+        exact = res.scalars().first()
+        if exact:
+            return exact
+        res_all = await session.execute(select(Festival))
+        festivals = list(res_all.scalars().all())
+    try:
+        event_key = normalize_alias(raw_name)
+    except Exception:
+        event_key = re.sub(r"[^\w]+", "", raw_name.casefold(), flags=re.UNICODE)
+    if not event_key:
+        return None
+    for fest in festivals:
+        candidates = [fest.name, fest.full_name, *list(fest.aliases or [])]
+        for candidate in candidates:
+            if event_key in _festival_lookup_variants(candidate):
+                return fest
+    return None
+
+
+def _vk_event_hashtag_line(
+    event: Event,
+    festival: Festival | None = None,
+    *,
+    text: str | None = None,
+) -> str:
     from vk_hashtags import build_vk_event_hashtags, format_vk_hashtag_line
 
-    return format_vk_hashtag_line(build_vk_event_hashtags(event))
+    return format_vk_hashtag_line(
+        build_vk_event_hashtags(
+            event,
+            festival_name=getattr(festival, "name", None) if festival else None,
+            text=text,
+        )
+    )
 
 
 def _strip_vk_source_tail_lines(lines: list[str]) -> list[str]:
@@ -3698,13 +6463,165 @@ def build_vk_source_message(
     lines.append(VK_BLANK_LINE)
     if calendar_url:
         lines.append(f"Добавить в календарь {calendar_url}")
-    hashtag_line = _vk_event_hashtag_line(event)
+    hashtag_line = _vk_event_hashtag_line(event, festival, text=text)
     if hashtag_line:
         if calendar_url:
             lines.append(VK_BLANK_LINE)
         lines.append(hashtag_line)
     lines.append(VK_SOURCE_FOOTER)
     return "\n".join(lines)
+
+
+def _vk_photo_near_dup_hamming_threshold() -> int:
+    raw = (
+        os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
+        or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
+        or "32"
+    )
+    try:
+        return max(0, int(str(raw).strip()))
+    except (TypeError, ValueError):
+        return 32
+
+
+def _quote_photo_url_for_request(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe="/%:@"),
+                quote(parts.query, safe="=&?/:+,%"),
+                parts.fragment,
+            )
+        )
+    except Exception:
+        return url
+
+
+def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
+    match = re.search(
+        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
+        str(url or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).lower() if match else None
+
+
+async def _compute_vk_photo_url_dhash(url: str | None) -> str | None:
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    parsed = _extract_dhash_from_managed_photo_url(raw)
+    if parsed:
+        return parsed
+    try:
+        from media_dedup import compute_dhash_hex
+    except Exception:
+        return None
+    try:
+        session = get_http_session()
+        request_url = _quote_photo_url_for_request(raw)
+        async with span("http"):
+            async with HTTP_SEMAPHORE:
+                async with session.get(request_url) as resp:
+                    resp.raise_for_status()
+                    if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
+                        return None
+                    buf = bytearray()
+                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                        buf.extend(chunk)
+                        if len(buf) > MAX_DOWNLOAD_SIZE:
+                            return None
+        return await asyncio.to_thread(compute_dhash_hex, bytes(buf))
+    except Exception as exc:
+        logging.info("vk.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
+        return None
+
+
+async def _dedupe_vk_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
+    """Drop visually duplicate image URLs before uploading a VK media group."""
+    urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
+    if len(urls) < 2:
+        return urls
+    threshold = _vk_photo_near_dup_hamming_threshold()
+    if threshold <= 0:
+        out: list[str] = []
+        seen: set[str] = set()
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                out.append(url)
+        return out
+
+    try:
+        from media_dedup import hamming_distance_hex
+    except Exception:
+        hamming_distance_hex = None
+
+    kept: list[str] = []
+    kept_hashes: list[str | None] = []
+    seen_urls: set[str] = set()
+    for url in urls:
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        phash = await _compute_vk_photo_url_dhash(url)
+        duplicate = False
+        if phash and hamming_distance_hex is not None:
+            for existing in kept_hashes:
+                if existing and hamming_distance_hex(phash, existing) <= threshold:
+                    logging.info(
+                        "vk.photo_dedup dropped near-duplicate hamming<=%d url=%s",
+                        threshold,
+                        url[:160],
+                    )
+                    duplicate = True
+                    break
+        if duplicate:
+            continue
+        kept.append(url)
+        kept_hashes.append(phash)
+    return kept
+
+
+def _vk_require_media_for_telegram_source_posts() -> bool:
+    raw = os.getenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", "1")
+    return str(raw or "").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _url_looks_like_telegram_source(url: str | None) -> bool:
+    value = str(url or "").strip().lower()
+    return value.startswith("https://t.me/") or value.startswith("http://t.me/")
+
+
+async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:
+    if _url_looks_like_telegram_source(getattr(event, "source_post_url", None)):
+        return True
+    event_id = getattr(event, "id", None)
+    if not db or not event_id:
+        return False
+    try:
+        async with db.get_session() as session:
+            exists = (
+                await session.execute(
+                    select(EventSource.id)
+                    .where(
+                        EventSource.event_id == int(event_id),
+                        EventSource.source_type.in_(("telegram", "tg")),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        return exists is not None
+    except Exception:
+        logging.warning(
+            "sync_vk_source_post: failed to inspect event telegram origin event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
 
 
 async def sync_vk_source_post(
@@ -3722,13 +6639,12 @@ async def sync_vk_source_post(
     if not target_group_id:
         return None
     logging.info("sync_vk_source_post start for event %s", event.id)
-    festival = None
-    if event.festival and db:
-        async with db.get_session() as session:
-            res = await session.execute(
-                select(Festival).where(Festival.name == event.festival)
-            )
-            festival = res.scalars().first()
+    festival = await _resolve_event_festival(db, event)
+    publish_source_url = await _event_primary_publish_source_url(db, event)
+    location_marker_decision = await resolve_vk_location_marker_for_event(event, db)
+    location_marker = (
+        location_marker_decision.payload if location_marker_decision.applied else None
+    )
 
     existing_vk_post_url = (event.source_vk_post_url or "").strip()
     if existing_vk_post_url:
@@ -3736,9 +6652,60 @@ async def sync_vk_source_post(
         target_id = str(target_group_id).lstrip("-")
         if not ids or str(abs(int(ids[0]))) != target_id:
             existing_vk_post_url = ""
+        else:
+            resolved_vk_post_url = await _resolve_existing_vk_post_url(
+                existing_vk_post_url,
+                target_group_id=str(target_group_id),
+                db=db,
+                bot=bot,
+            )
+            if resolved_vk_post_url != existing_vk_post_url:
+                existing_vk_post_url = resolved_vk_post_url
+                event.source_vk_post_url = resolved_vk_post_url
+
+    async def _apply_afishaengagement_variant(
+        *,
+        prepared_message: str,
+        prepared_photo_urls: list[str],
+        phase: str,
+        existing_url: str | None = None,
+        public_only: bool = False,
+        shadow_only: bool = False,
+    ) -> str | None:
+        try:
+            from afishaengagement import maybe_publish_shadow_debug_copy
+
+            return await maybe_publish_shadow_debug_copy(
+                event=event,
+                db=db,
+                bot=bot,
+                target_group_id=str(target_group_id),
+                message=prepared_message,
+                photo_urls=prepared_photo_urls,
+                post_to_vk_fn=post_to_vk,
+                upload_vk_photo_fn=upload_vk_photo,
+                upload_images_fn=upload_images,
+                vk_api_fn=_vk_api,
+                upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
+                edit_vk_post_fn=edit_vk_post,
+                existing_vk_post_url=existing_url,
+                public_only=public_only,
+                shadow_only=shadow_only,
+                source_publish_url=publish_source_url,
+                source_event_id=int(event.id) if event.id is not None else None,
+                location_marker=location_marker,
+            )
+        except Exception:
+            logging.exception(
+                "sync_vk_source_post: afishaengagement %s failed event_id=%s",
+                phase,
+                event.id,
+            )
+            return None
 
     attachments: list[str] | None = None
     photo_urls_source: list[str] = list(event.photo_urls or [])
+    photo_urls_for_publish: list[str] = []
     if VK_PHOTOS_ENABLED and not photo_urls_source:
         # Fallback: when the event has no cached photo_urls but a Telegraph
         # source page exists, use the images from that page so the VK post
@@ -3758,13 +6725,7 @@ async def sync_vk_source_post(
                             "wall.getById",
                             posts=f"{ids_check[0]}_{ids_check[1]}",
                         )
-                        items_check = (
-                            response_check.get("response")
-                            if isinstance(response_check, dict)
-                            else response_check
-                        ) or []
-                        if not isinstance(items_check, list):
-                            items_check = [items_check] if items_check else []
+                        items_check = _vk_wall_get_by_id_items(response_check)
                         if items_check:
                             existing_has_photos = any(
                                 (att or {}).get("type") == "photo"
@@ -3797,10 +6758,15 @@ async def sync_vk_source_post(
                         event.id,
                         len(telegraph_images),
                     )
+    photo_upload_expected = False
+    photo_upload_skipped_missing_user_token = False
     if VK_PHOTOS_ENABLED and photo_urls_source:
         ids: list[str] = []
-        photo_urls = photo_urls_source[:VK_MAX_ATTACHMENTS]
-        for url in photo_urls:
+        photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
+            :VK_MAX_ATTACHMENTS
+        ]
+        photo_upload_expected = bool(photo_urls_for_publish)
+        for url in photo_urls_for_publish:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:
                 ids.append(photo_id)
@@ -3809,17 +6775,29 @@ async def sync_vk_source_post(
                     "VK photo upload skipped: user token required",
                     extra={"eid": event.id},
                 )
+                photo_upload_skipped_missing_user_token = True
                 break
         if ids:
-            if existing_vk_post_url and len(ids) < len(photo_urls):
+            if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
                 logging.warning(
                     "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
                     event.id,
                     len(ids),
-                    len(photo_urls),
+                    len(photo_urls_for_publish),
                 )
+            elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
+                logging.error(
+                    "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",
+                    event.id,
+                    getattr(event, "source_post_url", None),
+                    len(ids),
+                    len(photo_urls_for_publish),
+                )
+                raise RuntimeError("vk_sync_partial_media_upload")
             else:
                 attachments = ids
+    elif photo_urls_source:
+        photo_urls_for_publish = photo_urls_source[:VK_MAX_ATTACHMENTS]
 
     calendar_line_value: str | None = None
     previous_ics_url = event.ics_url
@@ -3852,14 +6830,7 @@ async def sync_vk_source_post(
                 response = await vk_api(
                     "wall.getById", posts=f"{ids[0]}_{ids[1]}"
                 )
-                if isinstance(response, dict):
-                    items = response.get("response") or (
-                        response["response"] if "response" in response else response
-                    )
-                else:
-                    items = response or []
-                if not isinstance(items, list):
-                    items = [items] if items else []
+                items = _vk_wall_get_by_id_items(response)
                 if items:
                     existing = items[0].get("text", "")
         except Exception as e:
@@ -3905,7 +6876,7 @@ async def sync_vk_source_post(
                 new_lines.append(CONTENT_SEPARATOR)
         if calendar_line_value:
             new_lines.append(f"Добавить в календарь {calendar_line_value}")
-        hashtag_line = _vk_event_hashtag_line(event)
+        hashtag_line = _vk_event_hashtag_line(event, festival, text=text_clean)
         if hashtag_line:
             if calendar_line_value:
                 new_lines.append(VK_BLANK_LINE)
@@ -3918,6 +6889,7 @@ async def sync_vk_source_post(
             db,
             bot,
             attachments,
+            location_marker=location_marker,
         )
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
@@ -3928,13 +6900,51 @@ async def sync_vk_source_post(
         message = build_vk_source_message(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
-        url = await post_to_vk(
-            target_group_id,
-            message,
-            db,
-            bot,
-            attachments,
+        if (
+            not attachments
+            and (
+                (
+                    _vk_require_media_for_telegram_source_posts()
+                    and await _event_has_telegram_origin(event, db)
+                )
+                or (photo_upload_expected and not photo_upload_skipped_missing_user_token)
+            )
+        ):
+            logging.error(
+                "sync_vk_source_post blocked text-only source post event_id=%s source_url=%s photo_upload_expected=%s",
+                event.id,
+                getattr(event, "source_post_url", None),
+                photo_upload_expected,
+            )
+            raise RuntimeError("vk_sync_missing_media_for_telegram_event")
+        coauthor = None
+        try:
+            from vk_coauthors import select_vk_coauthor_candidate
+
+            coauthor = select_vk_coauthor_candidate(event)
+        except Exception:
+            coauthor = None
+        url = None
+        url = await _apply_afishaengagement_variant(
+            prepared_message=message,
+            prepared_photo_urls=photo_urls_for_publish,
+            phase="public_create_preflight",
+            public_only=True,
         )
+        if not url:
+            url = await post_to_vk(
+                target_group_id,
+                message,
+                db,
+                bot,
+                attachments,
+                vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
+                vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
+                source_publish_url=publish_source_url,
+                source_event_id=int(event.id) if event.id is not None else None,
+                location_marker=location_marker,
+                latest_publish_ts=_event_publication_start_deadline_ts(event),
+            )
         if url:
             logging.info("sync_vk_source_post created %s", url)
     return url
@@ -3946,6 +6956,8 @@ async def edit_vk_post(
     db: Database | None = None,
     bot: Bot | None = None,
     attachments: list[str] | None = None,
+    carousel: bool = False,
+    location_marker: Mapping[str, Any] | None = None,
 ) -> bool:
     """Edit an existing VK post.
 
@@ -3964,6 +6976,9 @@ async def edit_vk_post(
         "message": message,
         "from_group": 1,
     }
+    location_params = sanitize_location_marker_payload(location_marker)
+    if location_params:
+        params.update(location_params)
     owner_id_num: int | None = None
     try:
         owner_id_num = int(owner_id)
@@ -4024,14 +7039,7 @@ async def edit_vk_post(
             )
         else:
             response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
-        if isinstance(response, dict):
-            items = response.get("response") or (
-                response["response"] if "response" in response else response
-            )
-        else:
-            items = response or []
-        if not isinstance(items, list):
-            items = [items] if items else []
+        items = _vk_wall_get_by_id_items(response)
         if items:
             post = items[0]
             post_text = post.get("text") or ""
@@ -4080,16 +7088,16 @@ async def edit_vk_post(
             except Exception:  # pragma: no cover - best effort
                 logging.exception("edit_vk_post notify_superadmin failed")
         return False
-    if post_text == message and current == old_attachments:
+    if post_text == message and current == old_attachments and not location_params:
         logging.info("edit_vk_post: no changes for %s", post_url)
         return False
     if attachments is not None:
         params["attachments"] = ",".join(current) if current else ""
     elif current:
         params["attachments"] = ",".join(current)
-    if len(current) > 1:
-        # Mirror post_to_vk: keep multi-photo posts as a grid (default
-        # rendering is carousel in current VK clients).
+    if len(current) > 1 and not carousel:
+        # Mirror post_to_vk: keep multi-photo posts as a grid unless the caller
+        # intentionally edits a swipeable carousel.
         params["primary_attachments_mode"] = "grid"
     if not edit_token:
         raise VKAPIError(None, "VK_USER_TOKEN missing", method="wall.edit")
@@ -4170,7 +7178,25 @@ async def send_daily_announcement_vk(
             await _post_section(section2, "added")
 
 
-async def _daily_try_claim(channel_id: int, day_key: str) -> bool:
+async def _ensure_daily_announcement_guard_table(db: Database) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_announcement_guard (
+                channel_id INTEGER NOT NULL,
+                day_key TEXT NOT NULL,
+                status TEXT NOT NULL,
+                claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP,
+                sent_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (channel_id, day_key)
+            )
+            """
+        )
+        await conn.commit()
+
+
+async def _daily_try_claim(db: Database, channel_id: int, day_key: str) -> bool:
     async with _daily_state_lock:
         stale = {item for item in _daily_sent_cache if item[1] != day_key}
         if stale:
@@ -4179,11 +7205,43 @@ async def _daily_try_claim(channel_id: int, day_key: str) -> bool:
             return False
         if (channel_id, day_key) in _daily_sent_cache:
             return False
+        await _ensure_daily_announcement_guard_table(db)
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT status, sent_count
+                FROM daily_announcement_guard
+                WHERE channel_id=? AND day_key=?
+                """,
+                (channel_id, day_key),
+            )
+            row = await cur.fetchone()
+            if row is not None:
+                status = str(row[0] or "").lower()
+                sent_count = int(row[1] or 0)
+                if status in {"running", "sent"} or sent_count > 0:
+                    if status == "sent" or sent_count > 0:
+                        _daily_sent_cache.add((channel_id, day_key))
+                    return False
+                # A zero-send failed scheduled run is left as a fail-closed
+                # blocker for the day. This avoids restart-induced duplicates;
+                # operators can still use manual /daily test sends with
+                # record=False for catch-up.
+                return False
+            await conn.execute(
+                """
+                INSERT INTO daily_announcement_guard(channel_id, day_key, status)
+                VALUES (?, ?, 'running')
+                """,
+                (channel_id, day_key),
+            )
+            await conn.commit()
         _daily_inflight_channels.add(channel_id)
         return True
 
 
 async def _daily_release_claim(
+    db: Database,
     channel_id: int,
     day_key: str,
     *,
@@ -4191,6 +7249,28 @@ async def _daily_release_claim(
 ) -> None:
     async with _daily_state_lock:
         _daily_inflight_channels.discard(channel_id)
+        await _ensure_daily_announcement_guard_table(db)
+        status = "sent" if sent_count > 0 else "failed"
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT INTO daily_announcement_guard(
+                    channel_id, day_key, status, finished_at, sent_count
+                )
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+                ON CONFLICT(channel_id, day_key) DO UPDATE SET
+                    status=excluded.status,
+                    finished_at=excluded.finished_at,
+                    sent_count=excluded.sent_count
+                """,
+                (channel_id, day_key, status, sent_count),
+            )
+            if sent_count > 0:
+                await conn.execute(
+                    "UPDATE channel SET last_daily=? WHERE channel_id=?",
+                    (day_key, channel_id),
+                )
+            await conn.commit()
         if sent_count > 0:
             _daily_sent_cache.add((channel_id, day_key))
 
@@ -4219,12 +7299,13 @@ async def send_daily_announcement(
         return 0
     # 2) Отправляем с «узким» шлюзом TG, чтобы не блокировать систему целиком
     sent = 0
+    sent_message_ids: list[int] = []
     pending_error: Exception | None = None
     for text, markup in posts:
         try:
             async with TG_SEND_SEMAPHORE:
                 async with span("tg-send"):
-                    await bot.send_message(
+                    sent_message = await bot.send_message(
                         channel_id,
                         text,
                         reply_markup=markup,
@@ -4232,6 +7313,8 @@ async def send_daily_announcement(
                         disable_web_page_preview=True,
                     )
             sent += 1
+            if getattr(sent_message, "message_id", None) is not None:
+                sent_message_ids.append(int(sent_message.message_id))
         except Exception as e:
             # In local/dev/E2E the bot often doesn't have access to prod channels
             # from the DB snapshot. Treat these as "skip" to avoid retries/flood.
@@ -4244,6 +7327,22 @@ async def send_daily_announcement(
                 continue
             pending_error = e
             break
+    if record and sent > 0:
+        try:
+            from promo import record_daily_promo_recommendation_exposures
+
+            record_now = now or datetime.now(tz)
+            await record_daily_promo_recommendation_exposures(
+                db,
+                now_utc=record_now.astimezone(timezone.utc),
+            )
+        except Exception:
+            logging.warning("daily promo recommendation exposure record failed", exc_info=True)
+    if record and sent_message_ids:
+        _schedule_tg_premium_emoji_editor(
+            [(channel_id, message_id) for message_id in sent_message_ids],
+            context="daily_announcement",
+        )
     # 3) Отмечаем только если что-то реально ушло
     if record and now is None and sent > 0:
         try:
@@ -4258,6 +7357,57 @@ async def send_daily_announcement(
     if pending_error and raise_on_error:
         raise pending_error
     return sent
+
+
+
+def _schedule_tg_premium_emoji_editor(
+    targets: Sequence[tuple[str | int, int]],
+    *,
+    context: str,
+) -> None:
+    if not targets:
+        return
+    try:
+        from tg_premium_emojis import (
+            edit_messages_with_env,
+            premium_emoji_editor_delay_seconds,
+            premium_emoji_editor_enabled,
+        )
+
+        if not premium_emoji_editor_enabled():
+            return
+        delay_seconds = premium_emoji_editor_delay_seconds()
+
+        async def _run_premium_emoji_editor() -> None:
+            try:
+                results = await edit_messages_with_env(
+                    targets,
+                    delay_seconds=delay_seconds,
+                )
+                logging.info(
+                    "tg_premium_emoji.edit_done context=%s results=%s",
+                    context,
+                    [
+                        {
+                            "chat": item.chat,
+                            "message_id": item.message_id,
+                            "edited": item.edited,
+                            "replacements": item.replacements,
+                            "error": item.error,
+                        }
+                        for item in results
+                    ],
+                )
+            except Exception:
+                logging.exception(
+                    "tg_premium_emoji.edit_failed context=%s targets=%s",
+                    context,
+                    targets,
+                )
+
+        asyncio.create_task(_run_premium_emoji_editor())
+    except Exception:
+        logging.warning("premium emoji editor scheduling failed context=%s", context, exc_info=True)
 
 
 async def _run_daily_scheduler_send(
@@ -4279,7 +7429,7 @@ async def _run_daily_scheduler_send(
     except Exception:
         logging.exception("daily_scheduler: channel %s failed", channel_id)
     finally:
-        await _daily_release_claim(channel_id, day_key, sent_count=sent)
+        await _daily_release_claim(db, channel_id, day_key, sent_count=sent)
 
 
 async def daily_scheduler(db: Database, bot: Bot):
@@ -4317,7 +7467,7 @@ async def daily_scheduler(db: Database, bot: Bot):
             if due:
                 try:
                     channel_id = int(r["channel_id"])
-                    claimed = await _daily_try_claim(channel_id, day_key)
+                    claimed = await _daily_try_claim(db, channel_id, day_key)
                     if not claimed:
                         logging.info(
                             "daily_scheduler: channel=%s skipped (already inflight/sent)",
@@ -4674,6 +7824,334 @@ async def cleanup_scheduler(
         except Exception as e:
             logging.error("Cleanup failed: %s", e)
             break
+
+
+async def prune_past_event_vk_posts(
+    db: Database,
+    bot: Bot | None = None,
+    *,
+    now: datetime | None = None,
+    dry_run: bool | None = None,
+    limit: int | None = None,
+) -> dict[str, int]:
+    """Delete managed ``klgdevents`` VK event posts whose event is already in the
+    past, so the community feed stops surfacing stale events and VK no longer
+    recommends them.
+
+    Safety contract (see ``docs/features/vk-publishing/autodeletevkposts.md``):
+
+    - **Only our community.** A post is deleted only when its stored
+      ``source_vk_post_url`` resolves to ``owner_id == -VK_EVENTS_GROUP_ID``.
+      VK-imported events keep ``source_vk_post_url`` pointing at the external
+      source wall, so they are filtered out and never touched.
+    - **Only past or explicitly non-active events.** Mirrors
+      :func:`cleanup_old_events` past-event logic with a *today* cutoff:
+      ``end_date`` strictly before today (``LOCAL_TZ``), or, when ``end_date``
+      is null, ``date`` strictly before today. Future events are kept unless
+      Smart Update/incident repair has already moved them out of
+      ``lifecycle_status='active'``.
+    - **Only DB-tracked event posts.** We act on events still present in the DB
+      (kept until 7 days after they end by :func:`cleanup_old_events`). Daily
+      announcements, polls and promo reposts are not stored in
+      ``Event.source_vk_post_url`` and therefore are never matched/deleted.
+    - **No reposts, comments, or story shares.** VK's wall API folds story
+      shares into the ``reposts`` object and exposes no separate story counter,
+      so ``reposts.count == 0`` is the combined "no reposts and no story" guard.
+      ``comments.count == 0`` is required too. If either count is
+      missing/unknown the post is kept.
+    - **Pinned posts are kept.**
+    - On a successful real delete the stored ``source_vk_post_url`` (and a
+      matching ``vk_repost_url``) is cleared. This lets a large backlog drain:
+      otherwise deleted-but-still-referenced events keep occupying the first
+      ``limit`` candidate slots (their rows linger until the 7-day
+      :func:`cleanup_old_events`) and the job never reaches the rest. A *failed*
+      delete keeps the URL so it is retried; a *missing* post (already gone) is
+      left for the 7-day row cleanup. ``dry_run`` never clears anything.
+    """
+    stats: dict[str, int] = {
+        "candidates": 0,
+        "deleted": 0,
+        "kept_reposts": 0,
+        "kept_comments": 0,
+        "kept_pinned": 0,
+        "missing": 0,
+        "errors": 0,
+        "dry_run": 0,
+    }
+
+    group_raw = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").strip()
+    if not group_raw:
+        logging.info("vk_post_prune: no VK_EVENTS_GROUP_ID configured, skip")
+        return stats
+    try:
+        group_id = abs(int(str(group_raw).lstrip("-")))
+    except (TypeError, ValueError):
+        logging.warning("vk_post_prune: invalid group id %r", group_raw)
+        return stats
+    target_owner_id = -group_id
+
+    if dry_run is None:
+        dry_run = (os.getenv("VK_POST_PRUNE_DRY_RUN") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+    if limit is None:
+        try:
+            limit = int(os.getenv("VK_POST_PRUNE_LIMIT", "300"))
+        except ValueError:
+            limit = 300
+    stats["dry_run"] = 1 if dry_run else 0
+
+    today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
+
+    # 1. Collect past/non-active events that still carry a managed klgdevents post URL.
+    # Prioritize the freshest ended events.  Historical rows can include many
+    # already-missing or repost-protected VK URLs; if those occupy the capped
+    # batch forever, newly-past posts remain live and VK may recommend them.
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event.id, Event.source_vk_post_url)
+                .where(
+                    Event.source_vk_post_url.is_not(None),
+                    or_(
+                        and_(
+                            Event.end_date.is_not(None), Event.end_date < today_str
+                        ),
+                        and_(Event.end_date.is_(None), Event.date < today_str),
+                        Event.lifecycle_status != "active",
+                    ),
+                )
+                .order_by(Event.date.desc(), Event.id.desc())
+            )
+        ).all()
+
+    candidates: list[tuple[int, str, int]] = []  # (event_id, post_url, post_id)
+    for event_id, url in rows:
+        url = (url or "").strip()
+        if not url:
+            continue
+        ids = _vk_owner_and_post_id(url)
+        if not ids:
+            continue
+        try:
+            owner = int(ids[0])
+            pid = int(ids[1])
+        except (TypeError, ValueError):
+            continue
+        # External source walls (VK-imported events) have a different owner_id
+        # and must never be deleted.
+        if owner != target_owner_id:
+            continue
+        candidates.append((int(event_id), url, pid))
+
+    stats["candidates"] = len(candidates)
+    if not candidates:
+        return stats
+    if limit and limit > 0:
+        candidates = candidates[:limit]
+
+    # 2. Read reposts/pinned state in batches via wall.getById (up to 100 ids).
+    post_state: dict[int, dict] = {}
+    BATCH = 100
+    for i in range(0, len(candidates), BATCH):
+        chunk = candidates[i : i + BATCH]
+        posts_param = ",".join(
+            f"{target_owner_id}_{pid}" for _eid, _url, pid in chunk
+        )
+        try:
+            resp = await vk_api("wall.getById", posts=posts_param)
+        except VKAPIError as e:
+            stats["errors"] += 1
+            if e.code == 14:
+                logging.warning("vk_post_prune: captcha required, aborting run")
+                return stats
+            logging.warning("vk_post_prune: wall.getById failed: %s", e)
+            continue
+        except Exception as e:
+            stats["errors"] += 1
+            logging.warning("vk_post_prune: wall.getById failed: %s", e)
+            continue
+        if isinstance(resp, dict):
+            items = resp.get("items") or []
+        elif isinstance(resp, list):
+            items = resp
+        else:
+            items = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            it_id = it.get("id")
+            if it_id is not None:
+                post_state[int(it_id)] = it
+        missing_pids = {
+            pid
+            for _eid, _url, pid in chunk
+            if pid not in post_state
+        }
+        if missing_pids:
+            # A postponed post can receive a new wall id when it becomes public,
+            # while VK still exposes the original id as ``postponed_id``. If an
+            # event was cancelled after scheduling, deleting only the original
+            # id is not enough once VK has promoted it to a live wall post.
+            try:
+                recent_resp = await vk_api(
+                    "wall.get",
+                    owner_id=target_owner_id,
+                    count=100,
+                )
+            except Exception:
+                logging.info(
+                    "vk_post_prune: wall.get postponed_id probe failed owner_id=%s",
+                    target_owner_id,
+                    exc_info=True,
+                )
+                recent_resp = None
+            if isinstance(recent_resp, dict):
+                recent_items = recent_resp.get("items") or []
+            elif isinstance(recent_resp, list):
+                recent_items = recent_resp[1:] if recent_resp and isinstance(recent_resp[0], int) else recent_resp
+            else:
+                recent_items = []
+            for it in recent_items:
+                if not isinstance(it, dict):
+                    continue
+                try:
+                    postponed_id = int(it.get("postponed_id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if postponed_id in missing_pids:
+                    post_state[postponed_id] = it
+
+    # 3. Decide + delete.
+    cleared: list[tuple[int, str]] = []  # (event_id, deleted_url) to unlink
+
+    async def _flush_cleared() -> None:
+        if not cleared:
+            return
+        ids = [eid for eid, _ in cleared]
+        try:
+            async with db.get_session() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(Event)
+                        .where(Event.id.in_(ids))
+                        .values(source_vk_post_url=None)
+                    )
+                    for eid, deleted_url in cleared:
+                        await session.execute(
+                            update(Event)
+                            .where(
+                                Event.id == eid,
+                                Event.vk_repost_url == deleted_url,
+                            )
+                            .values(vk_repost_url=None)
+                        )
+        except Exception:
+            logging.warning(
+                "vk_post_prune: failed to clear %d urls after delete",
+                len(cleared),
+                exc_info=True,
+            )
+
+    for event_id, url, pid in candidates:
+        item = post_state.get(pid)
+        if item is None:
+            # Already deleted/unavailable: nothing to do (left for the 7-day
+            # event-row cleanup). A transient lookup miss simply retries later.
+            stats["missing"] += 1
+            continue
+        if item.get("is_pinned"):
+            stats["kept_pinned"] += 1
+            continue
+        reposts = item.get("reposts") or {}
+        repost_count = reposts.get("count")
+        if not isinstance(repost_count, int) or repost_count > 0:
+            stats["kept_reposts"] += 1
+            continue
+        comments = item.get("comments") or {}
+        comment_count = comments.get("count")
+        if not isinstance(comment_count, int) or comment_count > 0:
+            stats["kept_comments"] += 1
+            continue
+        if dry_run:
+            stats["deleted"] += 1
+            logging.info(
+                "vk_post_prune dry_run would delete %s event_id=%s", url, event_id
+            )
+            continue
+        try:
+            delete_pid = int(item.get("id") or pid)
+            await _vk_api(
+                "wall.delete",
+                {"owner_id": target_owner_id, "post_id": delete_pid},
+                db,
+                bot,
+            )
+        except VKAPIError as e:
+            stats["errors"] += 1
+            if e.code == 14:
+                logging.warning("vk_post_prune: captcha required, aborting run")
+                await _flush_cleared()
+                return stats
+            logging.warning("vk_post_prune: delete failed %s: %s", url, e)
+            continue
+        except Exception as e:
+            stats["errors"] += 1
+            logging.warning("vk_post_prune: delete failed %s: %s", url, e)
+            continue
+        stats["deleted"] += 1
+        cleared.append((event_id, url))
+        logging.info("vk_post_prune deleted %s event_id=%s", url, event_id)
+
+    await _flush_cleared()
+    return stats
+
+
+async def vk_post_prune_scheduler(
+    db: Database, bot: Bot, run_id: str | None = None
+) -> None:
+    """Scheduled twice-daily pruning of past-event klgdevents VK posts."""
+    try:
+        start = _time.perf_counter()
+        stats = await prune_past_event_vk_posts(db, bot)
+        took_ms = (_time.perf_counter() - start) * 1000
+        is_dry = bool(stats.get("dry_run"))
+        logging.info(
+            "vk_post_prune_ok run_id=%s dry_run=%s candidates=%s deleted=%s "
+            "kept_reposts=%s kept_comments=%s kept_pinned=%s missing=%s "
+            "errors=%s took_ms=%.0f",
+            run_id,
+            int(is_dry),
+            stats["candidates"],
+            stats["deleted"],
+            stats["kept_reposts"],
+            stats["kept_comments"],
+            stats["kept_pinned"],
+            stats["missing"],
+            stats["errors"],
+            took_ms,
+        )
+        if stats["deleted"] or stats["errors"]:
+            prefix = "VK prune (dry-run)" if is_dry else "VK prune"
+            verb = "would delete" if is_dry else "deleted"
+            try:
+                await notify_superadmin(
+                    db,
+                    bot,
+                    f"{prefix}: {verb}={stats['deleted']} of {stats['candidates']} "
+                    f"candidates, kept_reposts={stats['kept_reposts']} "
+                    f"kept_comments={stats['kept_comments']} "
+                    f"pinned={stats['kept_pinned']} missing={stats['missing']} "
+                    f"errors={stats['errors']}",
+                )
+            except Exception as e:
+                logging.warning("vk_post_prune notify failed: %s", e)
+    except Exception as e:
+        logging.error("vk_post_prune failed run_id=%s: %s", run_id, e)
+
 
 async def rebuild_pages(
     db: Database,
@@ -5071,6 +8549,9 @@ async def _video_tomorrow_watchdog_loop(db: Database, bot: Bot) -> None:
     while True:
         try:
             await scheduler_video_tomorrow_watchdog_tick(db, bot)
+            critical_tick = globals().get("scheduler_critical_watchdog_tick")
+            if callable(critical_tick):
+                await critical_tick(db, bot)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -5140,6 +8621,17 @@ async def _runtime_health_report(
         tasks[name] = status
         if status != "ok" and (ready or startup_grace_exceeded):
             issues.append(f"{name}:{status}")
+    if "job_outbox_worker" in app:
+        worker_loop_status = "unknown"
+        status_fn = globals().get("job_outbox_worker_recent_error_status")
+        if callable(status_fn):
+            try:
+                worker_loop_status = str(status_fn())
+            except Exception as exc:
+                worker_loop_status = f"status_failed:{type(exc).__name__}"
+        tasks["job_outbox_worker_loop"] = worker_loop_status
+        if worker_loop_status != "ok" and (ready or startup_grace_exceeded):
+            issues.append(f"job_outbox_worker_loop:{worker_loop_status}")
 
     add_event_worker_status = _runtime_task_status(app.get("add_event_worker"))
     if add_event_worker_status != "missing":
@@ -5170,11 +8662,21 @@ async def _runtime_health_report(
     video_tomorrow_status = (
         str(scheduler_health.get("video_tomorrow") or "").strip() or "unknown"
     )
+    guide_light_status = (
+        str(scheduler_health.get("guide_excursions_light") or "").strip() or "unknown"
+    )
+    guide_full_status = (
+        str(scheduler_health.get("guide_excursions_full") or "").strip() or "unknown"
+    )
     if ready:
         if scheduler_status != "ok":
             issues.append(f"apscheduler:{scheduler_status}")
         if video_tomorrow_status not in {"ok", "disabled"}:
             issues.append(f"video_tomorrow_job:{video_tomorrow_status}")
+        if guide_light_status not in {"ok", "disabled"}:
+            issues.append(f"guide_excursions_light_job:{guide_light_status}")
+        if guide_full_status not in {"ok", "disabled"}:
+            issues.append(f"guide_excursions_full_job:{guide_full_status}")
 
     payload = {
         "ok": not issues,
@@ -10901,7 +14403,7 @@ async def handle_vk_crawl_now(message: types.Message, db: Database, bot: Bot) ->
 async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> None:
     async with db.get_session() as session:
         user = await session.get(User, message.from_user.id)
-    if not user:
+    if not has_admin_access(user):
         await bot.send_message(message.chat.id, "Not authorized")
         return
     await vk_review.release_stale_locks(db)
@@ -10919,16 +14421,34 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
         f"imported: {counts.get('imported', 0)}",
         f"rejected: {counts.get('rejected', 0)}",
     ]
-    schedule_raw = os.getenv(
+    crawl_schedule_raw = os.getenv(
         "VK_CRAWL_TIMES_LOCAL", "05:15,09:15,13:15,17:15,21:15,22:45"
     )
-    schedule_times = [part.strip() for part in schedule_raw.split(",") if part.strip()]
-    schedule_line = ", ".join(schedule_times)
-    schedule_tz = os.getenv("VK_CRAWL_TZ")
-    if schedule_tz:
-        schedule_line = f"{schedule_line} ({schedule_tz})"
-    if schedule_line:
-        lines.insert(0, f"Обновление базы: {schedule_line}")
+    crawl_schedule_times = [
+        part.strip() for part in crawl_schedule_raw.split(",") if part.strip()
+    ]
+    crawl_schedule_line = ", ".join(crawl_schedule_times)
+    crawl_schedule_tz = os.getenv("VK_CRAWL_TZ")
+    if crawl_schedule_tz:
+        crawl_schedule_line = f"{crawl_schedule_line} ({crawl_schedule_tz})"
+    if crawl_schedule_line:
+        lines.insert(0, f"Обновление базы VK: {crawl_schedule_line}")
+
+    auto_schedule_raw = os.getenv(
+        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,15:30,18:30"
+    )
+    auto_schedule_times = [
+        part.strip() for part in auto_schedule_raw.split(",") if part.strip()
+    ]
+    auto_schedule_line = ", ".join(auto_schedule_times)
+    auto_schedule_tz = os.getenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    if auto_schedule_tz:
+        auto_schedule_line = f"{auto_schedule_line} ({auto_schedule_tz})"
+    if auto_schedule_line:
+        lines.insert(
+            1 if crawl_schedule_line else 0,
+            f"Авторазбор очереди: {auto_schedule_line}",
+        )
     markup = types.ReplyKeyboardMarkup(
         keyboard=[[types.KeyboardButton(text=VK_BTN_CHECK_EVENTS)]],
         resize_keyboard=True,
@@ -10943,7 +14463,7 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
 
     async with db.get_session() as session:
         user = await session.get(User, message.from_user.id)
-    if not user:
+    if not has_admin_access(user):
         await bot.send_message(message.chat.id, "Not authorized")
         return
 
@@ -11181,7 +14701,13 @@ async def handle_fest_queue(message: types.Message, db: Database, bot: Bot) -> N
     if source_kind:
         start_lines.append(f"Фильтр источника: {source_kind}")
     if limit is not None and int(limit) > 0:
-        start_lines.append(f"Лимит: {int(limit)}")
+        effective_limit = festival_queue_effective_limit(limit)
+        if effective_limit < int(limit):
+            start_lines.append(f"Лимит: {effective_limit} (запрошено {int(limit)}, сработал safety cap)")
+        else:
+            start_lines.append(f"Лимит: {int(limit)}")
+    else:
+        start_lines.append(f"Лимит запуска: {festival_queue_effective_limit(None)} (safety cap)")
     if source_kind in {None, "tg"}:
         start_lines.append("Telegram источники обрабатываются через Kaggle")
     await bot.send_message(
@@ -15792,7 +19318,7 @@ async def get_source_page_text(path: str) -> str:
     html_content = page.get("content") or page.get("content_html") or ""
     html_content = apply_ics_link(html_content, None)
     html_content = apply_month_nav(html_content, None)
-    html_content = html_content.replace(FOOTER_LINK_HTML, "")
+    html_content = strip_footer_link(html_content)
     html_content = html_content.replace(f"<p>{CONTENT_SEPARATOR}</p>", f"\n{CONTENT_SEPARATOR}\n")
     html_content = html_content.replace("<br/>", "\n").replace("<br>", "\n")
     html_content = re.sub(r"</p>\s*<p>", "\n", html_content)
@@ -16898,7 +20424,7 @@ async def build_source_page_content(
     if event_footer_html and page_mode != "history":
         html_content = html_content.rstrip() + BODY_SPACER_HTML + event_footer_html
     if page_mode == "history":
-        html_content = html_content.replace(FOOTER_LINK_HTML, "").rstrip()
+        html_content = strip_footer_link(html_content)
         html_content = re.sub(
             r'(?:<p>(?:&nbsp;|&#8203;)</p>)?<p><a href="https://t\.me/kgdstories">[^<]+</a></p>',
             "",
@@ -17132,6 +20658,8 @@ def create_app() -> web.Application:
     dp.include_router(kenigsberg_stories_router)
     from handlers.telegraph_cache_cmd import telegraph_cache_router
     dp.include_router(telegraph_cache_router)
+    from handlers.vk_cover_cmd import vk_cover_router
+    dp.include_router(vk_cover_router)
     dp.include_router(tg_monitor_router)
     import video_announce.handlers as video_handlers
     import preview_3d.handlers as preview_3d_handlers
@@ -18103,10 +21631,11 @@ def create_app() -> web.Application:
         festival_edit_wrapper, lambda m: m.from_user.id in festival_edit_sessions
 
     )
+    from source_parsing.telegram.on_demand import is_private_forward_message
+
     dp.message.register(
         forward_wrapper,
-        lambda m: bool(m.forward_date)
-        or "forward_origin" in getattr(m, "model_extra", {}),
+        is_private_forward_message,
     )
     dp.my_chat_member.register(partial(handle_my_chat_member, db=db))
     dp.business_connection.register(
@@ -18135,6 +21664,9 @@ def create_app() -> web.Application:
 
     app.router.add_get("/healthz", health_handler)
     app.router.add_get("/metrics", metrics_handler)
+    from kaggle_status import make_kaggle_run_event_handler
+
+    app.router.add_post("/internal/kaggle/run-event", make_kaggle_run_event_handler(db))
 
     async def on_startup(app: web.Application):
         await init_db_and_scheduler(app, db, bot, webhook)

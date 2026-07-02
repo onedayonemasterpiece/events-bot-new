@@ -35,6 +35,10 @@ class ParserConfig:
     # LLM settings
     llm_model: str = "gemma-3-27b"
     max_retries: int = 3
+    max_llm_calls: int = 2
+    max_estimated_tokens_per_call: int = 8000
+    dry_run: bool = False
+    no_llm: bool = False
     
     # Output paths
     output_dir: Path = Path("/kaggle/working")
@@ -44,6 +48,7 @@ class ParserConfig:
         """Create config from environment variables."""
         festival_url = os.getenv("FESTIVAL_URL", "")
         run_id = os.getenv("RUN_ID", "")
+        config_data: dict = {}
         
         if not festival_url:
             # Try to read from config file
@@ -65,15 +70,48 @@ class ParserConfig:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             url_hash = hashlib.sha256(festival_url.encode()).hexdigest()[:8]
             run_id = f"{timestamp}_{url_hash}"
+
+        def _value(name: str, default: object = None) -> object:
+            env_value = os.getenv(name)
+            if env_value is not None:
+                return env_value
+            snake = name.lower()
+            if snake in config_data:
+                return config_data.get(snake)
+            return default
+
+        def _bool(name: str, default: bool = False) -> bool:
+            raw = _value(name, default)
+            if isinstance(raw, bool):
+                return raw
+            return str(raw or "").strip().lower() in ("1", "true", "yes", "on")
+
+        def _int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+            raw = _value(name, default)
+            try:
+                value = int(raw)
+            except Exception:
+                value = default
+            return max(minimum, min(value, maximum))
         
         return cls(
             festival_url=festival_url,
             run_id=run_id,
-            parser_version=os.getenv("PARSER_VERSION", "1.0.0"),
-            debug=os.getenv("DEBUG", "").lower() in ("1", "true", "yes"),
-            headless=os.getenv("HEADLESS", "true").lower() != "false",
-            timeout_ms=int(os.getenv("TIMEOUT_MS", "30000")),
-            llm_model=os.getenv("LLM_MODEL", "gemma-3-27b"),
+            parser_version=str(_value("PARSER_VERSION", "1.0.0") or "1.0.0"),
+            debug=_bool("DEBUG", False),
+            headless=str(_value("HEADLESS", "true")).strip().lower() != "false",
+            timeout_ms=_int("TIMEOUT_MS", 30000, minimum=5000, maximum=120000),
+            llm_model=str(_value("LLM_MODEL", "gemma-3-27b") or "gemma-3-27b"),
+            max_retries=_int("MAX_RETRIES", 3, minimum=0, maximum=5),
+            max_llm_calls=_int("MAX_LLM_CALLS", 2, minimum=0, maximum=2),
+            max_estimated_tokens_per_call=_int(
+                "MAX_ESTIMATED_TOKENS_PER_CALL",
+                8000,
+                minimum=1000,
+                maximum=8250,
+            ),
+            dry_run=_bool("DRY_RUN", False),
+            no_llm=_bool("NO_LLM", False),
         )
     
     def get_output_path(self, filename: str) -> Path:

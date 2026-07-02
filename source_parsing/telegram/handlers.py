@@ -11,23 +11,33 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 from collections import defaultdict
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from db import Database
 from event_utils import strip_city_from_address
-from location_reference import find_known_venue_in_text, normalise_event_location_from_reference
+from location_reference import (
+    find_known_venue_in_text,
+    match_known_venue,
+    normalise_event_location_from_reference,
+)
+from markup import tel_href_for_phone_value
 from models import (
     Channel,
+    Event,
     EventMediaAsset,
     EventSource,
+    JobOutbox,
+    JobStatus,
+    JobTask,
     TelegramScannedMessage,
     TelegramSource,
     TelegramSourceForceMessage,
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
-from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
 from telegram_sources import normalize_tg_username
 from source_parsing.post_metrics import (
     PopularityBaseline,
@@ -577,14 +587,14 @@ def _coerce_url(value: str | None) -> str | None:
     return None
 
 
-def _extract_message_links(message: dict[str, Any]) -> list[str]:
-    """Extract best-effort http(s) links from the Kaggle payload.
+def _extract_message_link_items(message: dict[str, Any]) -> list[dict[str, str | None]]:
+    """Extract best-effort http(s) links with optional labels from the Kaggle payload.
 
     The payload may contain:
     - links: ["https://..."]
     - links: [{"url": "https://...", "text": "..."}]
     """
-    out: list[str] = []
+    out: list[dict[str, str | None]] = []
     seen: set[str] = set()
     payload = message.get("links")
     items: list[Any] = payload if isinstance(payload, list) else []
@@ -601,10 +611,14 @@ def _extract_message_links(message: dict[str, Any]) -> list[str]:
         return []
     for it in items:
         url = None
+        text = None
+        source = None
         if isinstance(it, str):
             url = it
         elif isinstance(it, dict):
             url = it.get("url") or it.get("link") or it.get("href")
+            text = str(it.get("text") or "").strip() or None
+            source = str(it.get("source") or "").strip() or None
         url = _coerce_url(str(url or "")) if url else None
         if not url:
             continue
@@ -612,27 +626,113 @@ def _extract_message_links(message: dict[str, Any]) -> list[str]:
         if key in seen:
             continue
         seen.add(key)
-        out.append(url)
+        out.append({"url": url, "text": text, "source": source})
     return out
 
 
-def _infer_ticket_link_from_message_links(message_links: list[str]) -> str | None:
+def _extract_message_links(message: dict[str, Any]) -> list[str]:
+    return [str(item["url"]) for item in _extract_message_link_items(message) if item.get("url")]
+
+
+def _link_is_ticketish(label: str | None, url: str | None) -> bool:
+    text = str(label or "").strip().casefold()
+    value = str(url or "").strip().casefold()
+    if any(
+        marker in text
+        for marker in (
+            "билет",
+            "регист",
+            "запис",
+            "купить",
+            "ticket",
+            "register",
+            "registration",
+        )
+    ):
+        return True
+    return any(
+        domain in value
+        for domain in (
+            "timepad.ru",
+            "kassir.ru",
+            "qtickets.ru",
+            "ticketland.ru",
+            "ticketscloud.com",
+            "intickets.ru",
+        )
+    )
+
+
+def _is_more_specific_same_host_url(current: str | None, candidate: str | None) -> bool:
+    cur = _coerce_url(current)
+    cand = _coerce_url(candidate)
+    if not cur or not cand or cur.rstrip("/") == cand.rstrip("/"):
+        return False
+    try:
+        cur_p = urlparse(cur)
+        cand_p = urlparse(cand)
+    except Exception:
+        return False
+    if cur_p.netloc.casefold() != cand_p.netloc.casefold():
+        return False
+    cur_specificity = len((cur_p.path or "").strip("/")) + len(cur_p.query or "")
+    cand_specificity = len((cand_p.path or "").strip("/")) + len(cand_p.query or "")
+    return cand_specificity > cur_specificity
+
+
+def _link_is_public_ticket_candidate(url: str | None) -> bool:
+    value = str(url or "").strip().casefold()
+    if not value:
+        return False
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return True
+    host = (parsed.netloc or "").casefold()
+    path = (parsed.path or "").casefold()
+    query = (parsed.query or "").casefold()
+    # Telegram/VK entity extractors expose hashtags as synthetic search URLs;
+    # those are navigation noise, not registration/ticket targets.
+    if host in {"vk.com", "www.vk.com", "m.vk.com"} and path.startswith("/search/statuses"):
+        if "q=%23" in query or "q=#" in query:
+            return False
+    return True
+
+
+def _infer_ticket_link_from_message_links(
+    message_links: list[Any], *, current: str | None = None
+) -> str | None:
     """Pick a likely ticket/registration link from message-level links (best-effort)."""
     if not message_links:
         return None
-    external = [u for u in message_links if "t.me/" not in u.lower()]
+    normalized: list[dict[str, str | None]] = []
+    for item in message_links:
+        if isinstance(item, dict):
+            url = _coerce_url(item.get("url") or item.get("link") or item.get("href"))
+            label = str(item.get("text") or "").strip() or None
+        else:
+            url = _coerce_url(str(item or ""))
+            label = None
+        if url and _link_is_public_ticket_candidate(url):
+            normalized.append({"url": url, "text": label})
+    external = [item for item in normalized if "t.me/" not in str(item.get("url") or "").lower()]
+    if current:
+        ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
+        if len(ticketish) == 1:
+            candidate = ticketish[0].get("url")
+            if _is_more_specific_same_host_url(current, candidate):
+                return candidate
+        return None
     if len(external) == 1:
-        return external[0]
+        return external[0].get("url")
+    ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
+    if len(ticketish) == 1:
+        return ticketish[0].get("url")
+    external_urls = [str(item.get("url") or "") for item in external if item.get("url")]
+    if len(external_urls) == 1:
+        return external_urls[0]
     # If there are multiple links, only pick when there is a single strong ticket-domain match.
-    ticket_domains = (
-        "timepad.ru",
-        "kassir.ru",
-        "qtickets.ru",
-        "ticketland.ru",
-        "ticketscloud.com",
-        "intickets.ru",
-    )
-    strong = [u for u in external if any(d in u.lower() for d in ticket_domains)]
+    strong = [u for u in external_urls if _link_is_ticketish(None, u)]
     if len(strong) == 1:
         return strong[0]
     return None
@@ -2064,6 +2164,34 @@ def _rollover_iso_date_to_anchor(value: Any, *, anchor: date) -> str | None:
     )
 
 
+def _poster_time_match_is_supported(tail: str, match: re.Match[str]) -> bool:
+    token = match.group(0)
+    if "." not in token:
+        return True
+    try:
+        minute = int(match.group(2))
+    except Exception:
+        minute = 0
+    if not (1 <= minute <= 12):
+        return True
+    before = tail[max(0, match.start() - 40) : match.start()]
+    after = tail[match.end() : match.end() + 24]
+    context = f"{before} {after}"
+    return bool(
+        re.search(
+            r"(?iu)\b(?:начало|старт|сеанс|сбор|в|к|час(?:ов|а)?|ч)\b",
+            context,
+        )
+    )
+
+
+def _first_supported_poster_time(tail: str, time_re: re.Pattern[str]) -> re.Match[str] | None:
+    for tm in time_re.finditer(tail):
+        if _poster_time_match_is_supported(tail, tm):
+            return tm
+    return None
+
+
 def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, str]]:
     """Extract (month, day, HH:MM) pairs from poster OCR text."""
     raw = str(text or "").replace("\xa0", " ").strip()
@@ -2090,7 +2218,7 @@ def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, st
         if not mm:
             continue
         tail = low[m.end() : m.end() + 160]
-        tm = time_re.search(tail)
+        tm = _first_supported_poster_time(tail, time_re)
         if not tm:
             continue
         token = f"{int(tm.group(1)):02d}:{tm.group(2)}"
@@ -2111,7 +2239,7 @@ def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, st
         if not (1 <= mm <= 12 and 1 <= dd <= 31):
             continue
         tail = low[m.end() : m.end() + 160]
-        tm = time_re.search(tail)
+        tm = _first_supported_poster_time(tail, time_re)
         if not tm:
             continue
         token = f"{int(tm.group(1)):02d}:{tm.group(2)}"
@@ -2378,29 +2506,44 @@ def _filter_schedule_source_text(text: str, *, event_date: str | None, event_tit
 _DATE_TITLE_PREFIX_RE = re.compile(r"^\s*\d{1,2}[./]\d{1,2}(?:[./](?:19|20)\d{2})?\s*(?:[|—–-]\s*)?", re.U)
 _BAD_TITLE_RE = re.compile(r"^\s*[\W_]*\(?\s*\d*\s*(?:мест[ао]?)?\s*\)?\s*[\W_]*$", re.I | re.U)
 _ADDRESS_HINT_RE = re.compile(
-    r"(?i)\b(ул\.|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
+    r"(?i)\b(ул\.?|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
 )
 _LOCATION_VENUE_CUE_RE = re.compile(
     r"(?iu)\b(?:театр\w*|музе[йяе]|галере[яи]|кино(?:театр|зал)|дк\b|дом\s+культур\w*|"
-    r"центр\s+культур\w*|бар\w*|клуб\w*|пространств\w*|зал|сцена|ворот[а-я]*)\b"
+    r"центр\s+культур\w*|бар\w*|клуб\w*|пространств\w*|зал|сцена|"
+    r"студи[яи]|ворот[а-я]*)\b"
 )
 _LOCATION_PROSE_VERB_RE = re.compile(
     r"(?iu)\b("
     r"анонсирован\w*|представ\w*|расскаж\w*|покаж\w*|приглаша\w*|"
     r"пройд[её]т|состоится|переносится|запланирован\w*|нужда[ею]тся|"
     r"выигра\w*|созда\w*|дарим|открыва\w*|пиш\w*|можно|будут|"
-    r"известн\w*|телерадиоведущ\w*|концертмейстер\w*"
+    r"жд\w*|известн\w*|телерадиоведущ\w*|концертмейстер\w*"
     r")\b"
 )
 _LOCATION_PROSE_START_RE = re.compile(
     r"(?iu)^\s*(?:которые|известн\w*|дарим|вместо|по\s+решению|это|аниме|мультфильм|"
-    r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не)\b"
+    r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не|"
+    r"в\s+программе|программа\s+[–—-]|вы\s+услышите|"
+    r"и\s+не\s+забывайте|не\s+забывайте|напоминаем)\b"
 )
 _LOCATION_LABEL_FRAGMENT_RE = re.compile(
     r"(?iu)^\s*(?:кинозал|мастерские|мастер[- ]?классы|расписание|программа|сцена|зал)\s*:?\s*$"
 )
 _LOCATION_SCHEDULE_FRAGMENT_RE = re.compile(
     r"(?iu)^\s*\d{1,2}[:.]\d{2}\s*[-–—]\s*\d{1,2}[:.]\d{2}\s*[-–—]\s+\S+"
+)
+_LOCATION_NON_VENUE_BULLET_RE = re.compile(
+    r"(?u)^\s*(?!📍)[^\w\s#@,.:;!?()«»\"'`-]{1,4}\s+\S+"
+)
+_LOCATION_TOPIC_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*(?:о|об|обо|про|по|для|к|ко|с|со)\s+\S+"
+)
+_LOCATION_PROGRAM_ITEM_RE = re.compile(
+    r"(?iu)^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+"
+)
+_LOCATION_CATALOGUE_ADDRESS_RE = re.compile(
+    r"(?iu)^\s*(?:соч\.?|op\.?|№)\s*[0-9IVXLCDMivxlcdmA-Za-zА-Яа-яЁё./ -]+\s*$"
 )
 _CITY_PREFIX_RE = re.compile(
     r"(?i)^\s*(?:г\.?|город|пос\.?|посёлок|поселок|пгт|село|деревня)\s+"
@@ -2513,14 +2656,25 @@ def _looks_like_bad_title(title: str | None) -> bool:
     raw = str(title or "").strip()
     if not raw:
         return True
-    if len(raw) < 6:
-        return True
+    if "№" in raw and re.search(r"\d", raw):
+        return False
     if _BAD_TITLE_RE.match(raw):
         return True
-    letters = sum(1 for ch in raw if ch.isalpha())
-    if letters < 3:
+    if not re.search(r"[0-9A-Za-zА-Яа-яЁё№]", raw):
         return True
     return False
+
+
+_MESSAGE_TITLE_INFERENCE_SKIP_RE = re.compile(
+    r"(?iu)\b("
+    r"(?:сегодня|завтра)\s+в\s+театр(?:е)?|"
+    r"репертуар|"
+    r"афиша|"
+    r"анонс|"
+    r"в\s+продаже|"
+    r"появил[ао]сь\s+в\s+продаже"
+    r")\b"
+)
 
 
 def _infer_title_from_message_text(text: str | None) -> str | None:
@@ -2533,14 +2687,15 @@ def _infer_title_from_message_text(text: str | None) -> str | None:
             continue
         if s.lower().startswith(("билеты", "вход", "стоимость")):
             continue
+        if _MESSAGE_TITLE_INFERENCE_SKIP_RE.search(s):
+            continue
         s = _DATE_TITLE_PREFIX_RE.sub("", s).strip()
         s = re.sub(r"^[^\wА-Яа-яЁё]+", "", s).strip()
         if not s:
             continue
-        if len(s) < 6:
+        if len(s) < 2:
             continue
-        letters = sum(1 for ch in s if ch.isalpha())
-        if letters < 3:
+        if _looks_like_bad_title(s):
             continue
         return s[:140].strip()
     return None
@@ -2559,6 +2714,86 @@ def _split_default_location_line(value: str | None) -> tuple[str | None, str | N
     return parts[0], ", ".join(parts[1:]).strip() or None, city
 
 
+def _default_location_requires_source_grounding(value: str | None) -> bool:
+    norm = _normalize_location_probe_text(value)
+    return "калининград" in norm and "сити" in norm and "джаз" in norm
+
+
+def _address_grounded_in_text(address: str | None, text: str | None) -> bool:
+    address_norm = _normalize_location_probe_text(address)
+    text_norm = _normalize_location_probe_text(text)
+    if not address_norm or not text_norm:
+        return False
+    if address_norm in text_norm:
+        return True
+    address_tokens = [tok for tok in address_norm.split() if len(tok) >= 4 and not tok.isdigit()]
+    address_nums = set(re.findall(r"\d{1,4}", address_norm))
+    text_nums = set(re.findall(r"\d{1,4}", text_norm))
+    if address_tokens and any(tok in text_norm for tok in address_tokens):
+        if not address_nums or (address_nums & text_nums):
+            return True
+    return False
+
+
+def _location_payload_grounded_in_text(
+    *,
+    location_name: str | None,
+    location_address: str | None,
+    text: str | None,
+) -> bool:
+    return (
+        _source_text_explicitly_mentions_location(
+            text,
+            location_name=location_name,
+            location_address=location_address,
+        )
+        or _location_is_grounded_in_text(location_name, text)
+        or _address_grounded_in_text(location_address, text)
+    )
+
+
+def _event_local_location_candidate_ok(location_name: str | None, location_address: str | None) -> bool:
+    raw = str(location_name or "").strip()
+    if not raw:
+        return False
+    if "@" in raw or re.search(r"(?i)\bt\.me/", raw):
+        return False
+    if (
+        _looks_like_location_prose_fragment(raw)
+        or _looks_like_location_program_fragment(raw, location_address)
+        or _looks_like_location_person_name_fragment(raw)
+    ):
+        return False
+    if str(location_address or "").strip():
+        return True
+    if _ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw):
+        return True
+    # A bare free-text fragment is not enough to override an LLM/default venue.
+    # Allow only curated known venues without address cues; otherwise fail closed
+    # and leave the semantic decision to the LLM/update pass.
+    return match_known_venue(raw) is not None
+
+
+def _location_override_candidate_ok(location_name: str | None, location_address: str | None) -> bool:
+    """Stricter guard for replacing an LLM/default venue with regex/OCR evidence."""
+    return _event_local_location_candidate_ok(location_name, location_address)
+
+
+_CITY_SALUTATION_LOCATION_RE = re.compile(
+    r"(?iu)^\s*"
+    r"(?:калининград|светлогорск|зеленоградск|советск|гусев|черняховск|балтийск|пионерский|янтарный)"
+    r"\s*,\s*"
+    r"(?:спасибо|благодарим|любим|до\s+встречи|мы\s+вернулись|это\s+было)"
+    r"\b"
+)
+
+_UNKNOWN_LOCATION_LINE_RE = re.compile(
+    r"(?iu)^\s*(?:локаци[яю]|место|адрес)\s*(?:[:\-–—]\s*)?"
+    r"(?:уточняется|сообщим|объявим|будет\s+позже|позже|tba|to\s+be\s+announced)"
+    r"[.!?\s]*$"
+)
+
+
 def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]:
     raw = str(text or "").strip()
     if not raw:
@@ -2573,6 +2808,7 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if not cleaned:
             continue
         cleaned = cleaned.lstrip("📍").strip()
+        cleaned = re.sub(r"(?iu)^\s*(?:место|адрес|локация)\s*[:：-]\s*", "", cleaned).strip()
         if not cleaned:
             continue
         low = cleaned.casefold()
@@ -2598,18 +2834,34 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if "," in cleaned:
             left, right = (part.strip() for part in cleaned.split(",", 1))
             if left and right:
+                if _CITY_SALUTATION_LOCATION_RE.search(cleaned):
+                    continue
+                inline_venue = re.search(
+                    r"(?iu)(?:^|\s)(?:в|на)\s+([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 &'’._-]{1,50})$",
+                    left,
+                )
+                if inline_venue and (
+                    _ADDRESS_HINT_RE.search(right) or re.search(r"\b\d{1,4}[A-Za-zА-Яа-яЁё]?\b", right)
+                ):
+                    venue = inline_venue.group(1).strip()
+                    if venue and not _looks_like_location_prose_fragment(venue):
+                        return venue, right
                 if re.search(r"\b\d{1,2}:\d{2}\b", cleaned) and re.search(
                     r"\b\d{1,2}\s+[А-Яа-яЁё]+\b",
                     left,
                 ):
                     continue
                 if _ADDRESS_HINT_RE.search(left) or re.search(r"\b\d{1,3}\b", left):
+                    right_before_time = re.split(r"\b\d{1,2}[:.]\d{2}\b", right, maxsplit=1)[0].strip(" ,;–—-")
+                    if right_before_time and _LOCATION_VENUE_CUE_RE.search(right_before_time):
+                        return _normalize_ocr_location_case(right_before_time), left
                     return cleaned, None
                 left_city = _infer_city_from_location_string(left)
                 if left_city and not _ADDRESS_HINT_RE.search(right) and not re.search(r"\b\d{1,3}\b", right):
                     normalized_right = _normalize_ocr_location_case(right)
-                    if normalized_right:
+                    if normalized_right and _event_local_location_candidate_ok(normalized_right, None):
                         return normalized_right, None
+                    continue
                 return left, right
         # No comma: treat the whole line as a venue/address blob.
         if len(cleaned) >= 3:
@@ -2631,17 +2883,74 @@ def _infer_location_from_poster_payloads(payload: list[dict[str, Any]] | None) -
     return None, None
 
 
+_LOCATION_TEMPORAL_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*(?:"
+    r"сегодня|завтра|послезавтра|вчера|"
+    r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\s*[,.:;!?]?\s*$"
+)
+
+
+def _strip_location_temporal_decoration(value: str) -> str:
+    """Remove leading emoji/bullets that LLMs often copy with date words.
+
+    Public incidents showed values such as ``🤗Завтра`` surviving the temporal
+    gate because the semantic token was decorated.  Keep this as a fail-closed
+    shape normalizer only; it does not infer or replace a venue.
+    """
+
+    compact = re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(r"^[^0-9A-Za-zА-Яа-яЁё]+", "", compact).strip()
+
+
+def _looks_like_location_temporal_fragment(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    probes = {raw, _strip_location_temporal_decoration(raw)}
+    return any(_LOCATION_TEMPORAL_FRAGMENT_RE.fullmatch(probe) for probe in probes if probe)
+
+
+def _looks_like_location_program_fragment(value: str | None, address: str | None = None) -> bool:
+    raw = str(value or "").strip()
+    addr = str(address or "").strip()
+    if not raw:
+        return False
+    has_venue_or_address_cue = bool(_ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw))
+    if _LOCATION_PROSE_START_RE.search(raw) and not has_venue_or_address_cue:
+        return True
+    if _LOCATION_PROGRAM_ITEM_RE.search(raw) and not has_venue_or_address_cue:
+        return True
+    if addr and _LOCATION_CATALOGUE_ADDRESS_RE.search(addr) and not (
+        has_venue_or_address_cue or _ADDRESS_HINT_RE.search(addr)
+    ):
+        return True
+    return False
+
+
 def _looks_like_location_prose_fragment(value: str | None) -> bool:
     raw = str(value or "").strip()
     if not raw:
         return False
+    if _looks_like_location_program_fragment(raw):
+        return True
     if "\n" in raw:
         return True
     compact = re.sub(r"\s+", " ", raw)
     words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+    if _looks_like_location_temporal_fragment(compact):
+        return True
     if _LOCATION_LABEL_FRAGMENT_RE.match(compact):
         return True
     if _LOCATION_SCHEDULE_FRAGMENT_RE.search(compact):
+        return True
+    has_venue_or_address_cue = bool(_ADDRESS_HINT_RE.search(compact) or _LOCATION_VENUE_CUE_RE.search(compact))
+    if not has_venue_or_address_cue and (
+        _LOCATION_NON_VENUE_BULLET_RE.search(compact)
+        or _LOCATION_TOPIC_FRAGMENT_RE.search(compact)
+        or (compact.count("(") > compact.count(")"))
+    ):
         return True
     if len(compact) > 90:
         return True
@@ -2669,7 +2978,7 @@ def _looks_like_location_person_name_fragment(value: str | None) -> bool:
         return False
     if _ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw):
         return False
-    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+    if re.search(r"\d|[,:;.!?/@#()]|[«»\"'`]", raw):
         return False
     words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
     if not (2 <= len(words) <= 4):
@@ -2682,7 +2991,12 @@ def _looks_like_location_person_name_fragment(value: str | None) -> bool:
 
 
 def _known_venue_payload_from_text(text: str | None, *, city: str | None = None) -> tuple[str | None, str | None, str | None]:
-    venue = find_known_venue_in_text(text, city=city)
+    probe = "\n".join(
+        line
+        for line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if not _UNKNOWN_LOCATION_LINE_RE.match(line.strip())
+    )
+    venue = find_known_venue_in_text(probe, city=city)
     if venue is None:
         return None, None, None
     return venue.name or None, venue.address or None, venue.city or None
@@ -2701,7 +3015,7 @@ _TICKET_CONTACT_LINE_RE = re.compile(
 _TG_HANDLE_IN_TEXT_RE = re.compile(r"(?i)@([a-z0-9_]{4,32})")
 _TG_LINK_IN_TEXT_RE = re.compile(r"(?i)(?:https?://)?t\.me/([a-z0-9_]{4,32})\b")
 _PHONE_IN_TEXT_RE = re.compile(
-    r"(?u)(?<!\d)(?:\+7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
+    r"(?u)(?<!\d)(?:\+\s*7|8)\s*\(?\d{3}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)"
 )
 _EMAIL_IN_TEXT_RE = re.compile(r"(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b")
 
@@ -2710,6 +3024,12 @@ def _extract_ticket_link_from_text(text: str | None) -> str | None:
     raw = str(text or "")
     if not raw.strip():
         return None
+    if _TICKET_CONTACT_LINE_RE.search(raw):
+        phone_match = _PHONE_IN_TEXT_RE.search(raw)
+        if phone_match:
+            phone_href = tel_href_for_phone_value(phone_match.group(0))
+            if phone_href:
+                return phone_href
     m = _BOOKING_HANDLE_RE.search(raw)
     if m:
         handle = (m.group(1) or "").strip().lstrip("@")
@@ -2765,6 +3085,34 @@ def _infer_ticket_link_from_group_post_author(
     ):
         return None
     return _build_tg_user_link(author.get("username"), author.get("user_id"))
+
+
+def _message_user_author_meta(message: dict[str, Any]) -> dict[str, Any] | None:
+    author = message.get("post_author")
+    if isinstance(author, dict) and author.get("is_user"):
+        return author
+    for key in ("sender", "sender_user", "from_user"):
+        candidate = message.get(key)
+        if isinstance(candidate, dict) and candidate.get("username"):
+            return {**candidate, "is_user": True}
+    return None
+
+
+def _chat_post_author_username(message: dict[str, Any]) -> str | None:
+    """Lowercased post-author username for group/supergroup messages.
+
+    Used by the author-in-chat promo trigger. Only chats (group/supergroup)
+    have per-message user authors; channels post as the channel itself, so we
+    return ``None`` for them. Requires a resolved ``is_user`` author username.
+    """
+    source_type = str(message.get("source_type") or "").strip().lower()
+    if source_type not in {"group", "supergroup"}:
+        return None
+    author = _message_user_author_meta(message)
+    if not author:
+        return None
+    username = str(author.get("username") or "").strip().lstrip("@").lower()
+    return username or None
 
 
 def _norm_match(s: str | None) -> str:
@@ -3386,6 +3734,7 @@ def _build_candidate(
     end_date = event_data.get("end_date")
     extracted_location = event_data.get("location_name")
     location_name = extracted_location or source.default_location
+    location_from_source_default = bool(source.default_location and not str(extracted_location or "").strip())
     location_address = event_data.get("location_address")
     extracted_location_address = location_address
     location_overridden_by_default = False
@@ -3431,6 +3780,19 @@ def _build_candidate(
     message_posters_payload = message.get("posters") or []
     assigned_posters_payload = event_data.get("posters") or []
     posters_payload = assigned_posters_payload or message_posters_payload or []
+    ocr_source_text_parts: list[str] = []
+    for key in ("ocr_text", "ocr_title"):
+        chunk = str(message.get(key) or "").strip()
+        if chunk:
+            ocr_source_text_parts.append(chunk)
+    for item in (posters_payload[:3] if isinstance(posters_payload, list) else []):
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if chunk and chunk not in ocr_source_text_parts:
+                ocr_source_text_parts.append(chunk)
+    ocr_source_text = "\n".join(ocr_source_text_parts).strip()
     event_source_text = event_data.get("source_text") or event_data.get("description") or ""
     event_source_text_raw = str(event_source_text or "")
     message_text = message.get("text") or ""
@@ -3448,6 +3810,8 @@ def _build_candidate(
         )
     ):
         event_source_text = message_text_s
+    elif not message_text_s and not event_source_text_s and ocr_source_text:
+        event_source_text = ocr_source_text
     else:
         event_source_text = event_source_text_s
     event_source_text = _filter_schedule_source_text(
@@ -3534,17 +3898,17 @@ def _build_candidate(
             )
             title = inferred_title
 
-    inferred_loc, inferred_addr = _infer_location_from_text(message_text_s or event_source_text)
+    inferred_loc, inferred_addr = _infer_location_from_text(event_source_text or message_text_s)
     poster_loc, poster_addr = _infer_location_from_poster_payloads(
         assigned_posters_payload or posters_payload or message_posters_payload
     )
     probe_for_known_location = "\n".join(
         str(part)
         for part in (
-            message_text_s,
             event_source_text,
             event_source_text_raw,
             raw_excerpt,
+            message_text_s,
         )
         if str(part or "").strip()
     )
@@ -3553,6 +3917,7 @@ def _build_candidate(
         city=str(extracted_city or "").strip() or None,
     )
     location_address_was_prose = False
+    location_had_temporal_fragment = False
     if location_address and _looks_like_location_prose_fragment(location_address):
         logger.warning(
             "telegram: dropped prose-like extracted location_address source=%s message_id=%s title=%r address=%r",
@@ -3564,8 +3929,22 @@ def _build_candidate(
         location_address = None
         extracted_location_address = None
         location_address_was_prose = True
+    if location_name and _looks_like_location_temporal_fragment(location_name):
+        logger.warning(
+            "telegram: dropped temporal extracted location source=%s message_id=%s title=%r location=%r",
+            username,
+            message_id,
+            title,
+            location_name,
+        )
+        location_name = None
+        location_address = None
+        extracted_location = None
+        extracted_location_address = None
+        location_had_temporal_fragment = True
     if location_name and (
         _looks_like_location_prose_fragment(location_name)
+        or _looks_like_location_program_fragment(location_name, location_address)
         or _looks_like_location_person_name_fragment(location_name)
     ):
         logger.warning(
@@ -3596,10 +3975,73 @@ def _build_candidate(
         ):
             extracted_location = None
 
-    if not location_name:
+    default_grounding_parts = [str(event_source_text or "").strip(), str(raw_excerpt or "").strip()]
+    if message_text_s and message_text_s not in default_grounding_parts:
+        default_grounding_parts.append(message_text_s)
+    for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if chunk:
+                default_grounding_parts.append(chunk)
+    default_grounding_text = "\n".join(part for part in default_grounding_parts if part).strip()
+    if location_from_source_default and source.default_location:
+        default_name, default_address, _default_city = _split_default_location_line(source.default_location)
+        default_requires_grounding = _default_location_requires_source_grounding(source.default_location)
+        default_is_grounded = _location_payload_grounded_in_text(
+            location_name=default_name,
+            location_address=default_address,
+            text=default_grounding_text,
+        )
+        alternate_loc = None
+        alternate_addr = None
+        for candidate_loc, candidate_addr in (
+            (inferred_loc, inferred_addr),
+            (poster_loc, poster_addr),
+            (known_loc, known_addr),
+        ):
+            if candidate_loc and not _location_matches(candidate_loc, default_name):
+                alternate_loc = candidate_loc
+                alternate_addr = candidate_addr
+                break
+        if default_requires_grounding and default_is_grounded:
+            alternate_loc = None
+            alternate_addr = None
+        if alternate_loc and _event_local_location_candidate_ok(alternate_loc, alternate_addr) and _location_payload_grounded_in_text(
+            location_name=alternate_loc,
+            location_address=alternate_addr,
+            text=default_grounding_text,
+        ):
+            logger.info(
+                "telegram: overriding source default with event-grounded venue source=%s message_id=%s title=%r default=%r venue=%r",
+                username,
+                message_id,
+                title,
+                default_name,
+                alternate_loc,
+            )
+            location_name = alternate_loc
+            location_address = alternate_addr
+            location_from_source_default = False
+            if known_city and not extracted_city:
+                extracted_city = known_city
+        elif default_requires_grounding and not default_is_grounded:
+            logger.warning(
+                "telegram: dropping ungrounded risky source default source=%s message_id=%s title=%r default=%r",
+                username,
+                message_id,
+                title,
+                source.default_location,
+            )
+            location_name = None
+            location_address = None
+            location_from_source_default = False
+
+    if not location_name and not location_had_temporal_fragment:
         fallback_loc = inferred_loc or poster_loc or known_loc
         fallback_addr = inferred_addr or poster_addr or known_addr
-        if fallback_loc:
+        if fallback_loc and _event_local_location_candidate_ok(fallback_loc, fallback_addr):
             location_name = fallback_loc
             if fallback_addr and not location_address:
                 location_address = fallback_addr
@@ -3651,6 +4093,7 @@ def _build_candidate(
             probe_text = "\n".join(part for part in probe_parts if part).strip()
             if (
                 grounded_loc
+                and _location_override_candidate_ok(grounded_loc, grounded_addr)
                 and not _location_matches(extracted_location, grounded_loc)
                 and _location_is_grounded_in_text(grounded_loc, probe_text)
                 and not _location_is_grounded_in_text(extracted_location, probe_text)
@@ -3693,6 +4136,7 @@ def _build_candidate(
         grounded_addr = inferred_addr or poster_addr
         if (
             grounded_loc
+            and _location_override_candidate_ok(grounded_loc, grounded_addr)
             and not _location_matches(extracted_location, grounded_loc)
             and _location_is_grounded_in_text(grounded_loc, probe_text)
             and not _location_is_grounded_in_text(extracted_location, probe_text)
@@ -3708,6 +4152,44 @@ def _build_candidate(
             location_name = grounded_loc
             if grounded_addr:
                 location_address = grounded_addr
+    elif source.default_location and location_name:
+        # LLM-first extraction may leave location_name empty, causing the import
+        # boundary to seed the source default. If the post itself has an
+        # explicit offsite address/venue line, fail toward that event-local
+        # evidence instead of silently publishing the source default.
+        probe_parts = [str(message_text_s or event_source_text or "").strip()]
+        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+            if not isinstance(item, dict):
+                continue
+            for key in ("ocr_text", "ocr_title"):
+                chunk = str(item.get(key) or "").strip()
+                if chunk:
+                    probe_parts.append(chunk)
+        probe_text = "\n".join(part for part in probe_parts if part).strip()
+        grounded_loc = inferred_loc or poster_loc
+        grounded_addr = inferred_addr or poster_addr
+        if (
+            grounded_loc
+            and _location_override_candidate_ok(grounded_loc, grounded_addr)
+            and not _location_matches(grounded_loc, source.default_location)
+            and _location_payload_grounded_in_text(
+                location_name=grounded_loc,
+                location_address=grounded_addr,
+                text=probe_text,
+            )
+            and not _location_is_grounded_in_text(str(location_name), probe_text)
+        ):
+            logger.warning(
+                "telegram: replaced source-default location with explicit event-local location source=%s message_id=%s title=%r default=%r grounded=%r",
+                username,
+                message_id,
+                title,
+                source.default_location,
+                grounded_loc,
+            )
+            location_name = grounded_loc
+            location_address = grounded_addr
+            location_overridden_by_default = True
 
     kept_explicit_location = bool(
         extracted_location
@@ -3742,15 +4224,38 @@ def _build_candidate(
     if location_address:
         location_address = strip_city_from_address(location_address, city)
 
+    pre_normalized_location_name = str(location_name).strip() if location_name else None
+    pre_normalized_location_address = str(location_address).strip() if location_address else None
+    pre_normalized_city = str(city).strip() if city else None
     location_payload = {
-        "location_name": str(location_name).strip() if location_name else None,
-        "location_address": str(location_address).strip() if location_address else None,
-        "city": str(city).strip() if city else None,
+        "location_name": pre_normalized_location_name,
+        "location_address": pre_normalized_location_address,
+        "city": pre_normalized_city,
     }
     matched_venue = normalise_event_location_from_reference(location_payload)
     normalized_location_name = (location_payload.get("location_name") or "").strip() or None
     normalized_location_address = (location_payload.get("location_address") or "").strip() or None
     normalized_city = (location_payload.get("city") or "").strip() or None
+    if (
+        matched_venue
+        and pre_normalized_location_name
+        and normalized_location_name
+        and not _location_matches(pre_normalized_location_name, normalized_location_name)
+        and default_grounding_text
+        and _location_is_grounded_in_text(pre_normalized_location_name, default_grounding_text)
+        and not _location_is_grounded_in_text(normalized_location_name, default_grounding_text)
+    ):
+        logger.warning(
+            "telegram: keeping event-grounded venue over ungrounded reference normalization source=%s message_id=%s before=%r after=%r",
+            username,
+            message_id,
+            pre_normalized_location_name,
+            normalized_location_name,
+        )
+        matched_venue = None
+        normalized_location_name = pre_normalized_location_name
+        normalized_location_address = pre_normalized_location_address
+        normalized_city = pre_normalized_city
     if matched_venue and (
         normalized_location_name != (str(location_name).strip() if location_name else None)
         or normalized_location_address != (str(location_address).strip() if location_address else None)
@@ -3782,6 +4287,7 @@ def _build_candidate(
     if matched_venue is None:
         if location_name and (
             _looks_like_location_prose_fragment(location_name)
+            or _looks_like_location_program_fragment(location_name, location_address)
             or _looks_like_location_person_name_fragment(location_name)
         ):
             logger.warning(
@@ -3796,6 +4302,19 @@ def _build_candidate(
         if location_address and _looks_like_location_prose_fragment(location_address):
             logger.warning(
                 "telegram: dropping prose location_address after recovery source=%s message_id=%s title=%r address=%r",
+                username,
+                message_id,
+                title,
+                location_address,
+            )
+            location_address = None
+        if (
+            not location_name
+            and location_address
+            and not (_ADDRESS_HINT_RE.search(location_address) or _LOCATION_VENUE_CUE_RE.search(location_address))
+        ):
+            logger.warning(
+                "telegram: dropping unpaired non-address location_address after recovery source=%s message_id=%s title=%r address=%r",
                 username,
                 message_id,
                 title,
@@ -3839,9 +4358,25 @@ def _build_candidate(
             location_name = None
             location_address = None
 
+    refined_ticket_link = _infer_ticket_link_from_message_links(
+        _extract_message_link_items(message),
+        current=ticket_link,
+    )
+    if refined_ticket_link and refined_ticket_link != ticket_link:
+        ticket_link = refined_ticket_link
+        logger.info(
+            "telegram: refined ticket link from message links source=%s message_id=%s title=%r ticket_link=%s",
+            username,
+            message_id,
+            title,
+            ticket_link,
+        )
+
     # Extract a booking contact from the message when ticket_link is missing.
     if not ticket_link:
-        inferred_from_links = _infer_ticket_link_from_message_links(_extract_message_links(message))
+        inferred_from_links = _infer_ticket_link_from_message_links(
+            _extract_message_link_items(message)
+        )
         if inferred_from_links:
             ticket_link = inferred_from_links
             logger.info(
@@ -3882,7 +4417,9 @@ def _build_candidate(
         inferred_author_link = _infer_ticket_link_from_group_post_author(
             message,
             text="\n".join(
-                part for part in (message_text_s, event_source_text) if str(part or "").strip()
+                part
+                for part in (message_text_s, event_source_text, ocr_source_text)
+                if str(part or "").strip()
             ),
         )
         if inferred_author_link:
@@ -4118,6 +4655,7 @@ def _build_candidate(
             else None,
             "tg_location_overridden_by_default": bool(location_overridden_by_default),
             "tg_location_kept_extracted": kept_explicit_location,
+            "tg_location_temporal_rejected": bool(location_had_temporal_fragment),
             "tg_city_overridden_by_default": bool(city_overridden_by_default),
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
             "tg_time_is_default": bool(time_is_default),
@@ -4154,6 +4692,7 @@ def _build_candidate(
         source_chat_username=username or None,
         source_chat_id=_to_int(message.get("source_chat_id")),
         source_message_id=message_id,
+        tg_source_author=_chat_post_author_username(message),
         trust_level=source.trust_level,
         metrics=metrics,
         links_payload=[message.get("links"), event_data.get("links")],
@@ -4298,6 +4837,98 @@ def _dedupe_message_events(
         )
 
     return [grouped[k] for k in order]
+
+
+async def _schedule_primary_import_event_tasks(db: Database, event_id: int) -> None:
+    """Ensure the primary Telegram import can repair missing publication jobs.
+
+    Smart Update schedules tasks on create/merge. A replay can legitimately
+    return ``skipped_nochange`` for an already-created event; in that case the
+    import boundary still has to restore the standard publication pipeline.
+    """
+
+    from main import schedule_event_update_tasks
+
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+    if event is not None:
+        await schedule_event_update_tasks(db, event)
+
+
+async def _reconcile_primary_import_vk_sync_jobs(db: Database) -> int:
+    """Repair missing VK fanout for active Telegram-origin events.
+
+    This is intentionally scoped to Telegram origins and current/future active
+    events. A successful `/tg` replay should restore the whole downstream
+    publication pipeline, including historical rows that were imported before a
+    scheduler bug was fixed.
+    """
+
+    from main import schedule_event_update_tasks
+
+    today = date.today().isoformat()
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event)
+                .outerjoin(
+                    JobOutbox,
+                    (JobOutbox.event_id == Event.id)
+                    & (JobOutbox.task == JobTask.vk_sync)
+                    & (JobOutbox.status.in_([JobStatus.pending, JobStatus.running])),
+                )
+                .where(Event.source_post_url.like("%t.me/%"))
+                .where(Event.date >= today)
+                .where(Event.lifecycle_status == "active")
+                .where(Event.silent.is_(False))
+                .where(JobOutbox.id.is_(None))
+                .order_by(Event.id.desc())
+                .limit(250)
+            )
+        ).scalars().all()
+    repaired = 0
+    for event in rows:
+        try:
+            result = await schedule_event_update_tasks(db, event)
+            if JobTask.vk_sync in result:
+                repaired += 1
+        except Exception:
+            logger.warning(
+                "tg_monitor: failed to reconcile vk_sync for event_id=%s",
+                getattr(event, "id", None),
+                exc_info=True,
+            )
+    if repaired:
+        logger.info("tg_monitor.reconciled_vk_sync_jobs count=%s", repaired)
+    return repaired
+
+
+def _global_vk_reconcile_enabled() -> bool:
+    return (os.getenv("TG_MONITORING_GLOBAL_VK_RECONCILE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+async def _single_event_id_for_source_url(db: Database, source_url: str | None) -> int | None:
+    source = _clean_url(source_url)
+    if not source:
+        return None
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(EventSource.event_id)
+                .where(EventSource.source_type == "telegram")
+                .where(EventSource.source_url == source)
+                .limit(2)
+            )
+        ).all()
+    ids = {int(row[0]) for row in rows if row and row[0]}
+    if len(ids) == 1:
+        return next(iter(ids))
+    return None
 
 
 async def process_telegram_results(
@@ -5043,6 +5674,7 @@ async def process_telegram_results(
             try:
                 views = metrics.get("views")
                 likes = metrics.get("likes")
+                comments = metrics.get("comments")
                 reactions = metrics.get("reactions")
                 await upsert_telegram_post_metric(
                     db,
@@ -5053,6 +5685,7 @@ async def process_telegram_results(
                     message_ts=message_ts,
                     views=int(views) if isinstance(views, int) else None,
                     likes=int(likes) if isinstance(likes, int) else None,
+                    comments=int(comments) if isinstance(comments, int) else None,
                     reactions=reactions if isinstance(reactions, dict) else None,
                     collected_ts=int(collected_ts),
                 )
@@ -5399,14 +6032,32 @@ async def process_telegram_results(
                         candidate.event_type,
                     )
                     continue
-                # Telegram monitoring should not enqueue VK publishing jobs: they are irrelevant
-                # for the monitoring workflow and slow down local/E2E environments.
-                result = await smart_event_update(
-                    db,
-                    candidate,
-                    check_source_url=False,
-                    schedule_kwargs={"skip_vk_sync": True},
-                )
+                # The primary Telegram import is a real event-ingest boundary:
+                # Smart Update must enqueue the standard publication jobs,
+                # including VK sync, so promo events can flow through VK and
+                # downstream promo surfaces. Auxiliary linked-source passes
+                # below still skip VK sync to avoid duplicate publication work.
+                result: SmartUpdateResult | None = None
+                nochange_tasks_rearmed = False
+                if result is None:
+                    result = await smart_event_update(
+                        db,
+                        candidate,
+                        check_source_url=False,
+                    )
+                if (
+                    result.status == "skipped_nochange"
+                    and getattr(result, "event_id", None)
+                    and not nochange_tasks_rearmed
+                ):
+                    try:
+                        await _schedule_primary_import_event_tasks(db, int(result.event_id))
+                    except Exception:
+                        logger.warning(
+                            "tg_monitor: failed to schedule nochange event tasks event_id=%s",
+                            result.event_id,
+                            exc_info=True,
+                        )
                 if (
                     is_single_event_post
                     and getattr(result, "event_id", None)
@@ -5778,5 +6429,11 @@ async def process_telegram_results(
                     poster_bridge.pop(username, None)
         except Exception:
             pass
+
+    if _global_vk_reconcile_enabled():
+        try:
+            await _reconcile_primary_import_vk_sync_jobs(db)
+        except Exception:
+            logger.warning("tg_monitor: failed to reconcile primary import vk_sync jobs", exc_info=True)
 
     return report

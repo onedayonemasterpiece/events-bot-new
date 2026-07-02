@@ -33,8 +33,9 @@
   - `GOOGLE_AI_FALLBACK_MODELS` должен включать `gemma-4-31b-it`, чтобы Lite outage прозрачно откатывался на Gemma 4 через канонический `GoogleAIClient` model chain;
 - для Telegram auth Kaggle guide path по умолчанию использует только `TELEGRAM_AUTH_BUNDLE_S22`; локальная `TELEGRAM_AUTH_BUNDLE_E2E` не считается допустимым автоматическим fallback и может быть использована только через явный аварийный override;
 - VK sources in the same Kaggle guide path use `GUIDE_MONITORING_VK_TOKEN`; server-side encrypted secrets populate it from `GUIDE_MONITORING_VK_TOKEN` or from the env named by `GUIDE_MONITORING_VK_TOKEN_ENV` (default `VK_ACCESS_TOKEN5`). This token is scoped to Kaggle guide monitoring and is not exposed in config datasets.
-- перед запуском guide Kaggle kernel сервер обязан проверить общий `kaggle_registry`: если другой remote Telegram job (`tg_monitoring`, `guide_monitoring`, `telegraph_cache_probe`) ещё жив или его Kaggle status не удалось надёжно прочитать, guide run должен завершиться `skipped` с явной диагностикой `remote_telegram_session_busy`, а не запускать вторую Telethon session;
-- guide digest publish-time fallback для media запрещён: bot-side `forward -> file_id`, Telethon download и public-web scraping не считаются каноническим путём; если materialized assets не доехали из Kaggle/import path, publish должен останавливаться явно, а не деградировать до text-only поста.
+- перед запуском guide Kaggle kernel сервер обязан проверить общий `kaggle_registry`: если другой remote Telegram job (`tg_monitoring`, `guide_monitoring`, `telegraph_cache_probe`, `kenigsberg_story`) с тем же `remote_telegram_auth_scope` ещё жив или его Kaggle status не удалось надёжно прочитать, guide run должен завершиться `skipped` с явной диагностикой `remote_telegram_session_busy`, а не запускать вторую Telethon session поверх той же auth key. Jobs с другим explicit scope (например story publishing на `TELEGRAM_AUTH_BUNDLE_STORY`) могут идти параллельно; unknown scope считается конфликтующим;
+- `UNKNOWN`/Kaggle status 5xx не должен превращаться в вечный lock: recovery обязан пробовать matching output (`guide_excursions_results.json` с тем же `run_id`); если output уже доступен, это terminal evidence, результат импортируется, а registry очищается без запуска новой Telethon/Kaggle session;
+- guide digest publish-time fallback для media запрещён: bot-side `forward -> file_id`, Telethon download и public-web scraping не считаются каноническим путём; если materialized assets не доехали из Kaggle/import path, publish должен останавливаться явно, а не деградировать до text-only поста. Для уже импортированных старых VK rows допустим только server-side recovery из `attachments[].photo`, и он обязан выполняться в общем `publish_guide_digest` до Telegram fanout, чтобы Telegram и VK публиковались из одного `guide_digest_issue.media_items_json`, а не расходились по media state.
 - server-side guide Gemma path (`enrich`, `dedup`, `digest_writer`) тоже обязан идти как fixed-key consumer: runtime резолвит `candidate_key_ids` из `google_ai_api_keys.env_var_name` и сначала пытается зарезервировать именно `GOOGLE_API_KEY2` / `GOOGLE_API_KEY_2`, а на `GOOGLE_API_KEY` откатывается только если для primary guide key metadata ещё не заведена в Supabase;
 - server-side dedup/editorial тоже сидят на Gemma-конфигах;
 - `4o` для guide pipeline не используется.
@@ -59,7 +60,7 @@
 
 - отдельный guide-track в основной SQLite;
 - seed-пак Telegram-источников из casebook;
-- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` как personal guide source for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate`, `vk.com/konb39`, `vk.com/ruin.keepers` и `vk.com/narodexcursovod` через тот же Kaggle guide-monitoring runtime;
+- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` и `@progulki_s_katey` как personal guide sources for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate`, `vk.com/konb39`, `vk.com/ruin.keepers` и `vk.com/narodexcursovod` через тот же Kaggle guide-monitoring runtime;
 - guide-specific Kaggle runtime: [kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py](/workspaces/events-bot-new/kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py);
 - secure Kaggle push/poll/download через тот же split-secrets pattern, что и в Telegram Monitoring;
 - guide Kaggle transport теперь повторяет продовый Telegram Monitoring pattern: kernel push содержит нужный `google_ai/` код сразу, а secrets по-прежнему идут только через два отдельных datasets (`cipher + key`), без третьего payload dataset;
@@ -136,7 +137,10 @@ Guide track должен быть проверяемым так же, как Sma
 
 - import-time guide Kaggle config должен быть blank-safe: пустые numeric env overrides (`GUIDE_MONITORING_*`) не должны валить импорт guide runtime, а обязаны откатываться к documented defaults с warning в логах;
 - Статус guide kernel опрашивается с интервалом `GUIDE_MONITORING_POLL_INTERVAL` до динамического лимита ожидания по числу источников.
-- Транзиентные ошибки Kaggle API на polling (`SSL`, сеть, timeout) не должны валить guide run сразу: бот продолжает опрос и показывает в status-update, что это временная ошибка сети.
+- Транзиентные ошибки Kaggle API на polling (`SSL`, сеть, timeout, HTTP 5xx от `GetKernelSessionStatus`) не должны валить guide run сразу: бот продолжает опрос и показывает в status-update, что это временная ошибка Kaggle API.
+- Shared remote Telegram session guard перед новым запуском остаётся fail-closed для fresh/unknown Kaggle status, но stale registry entries с транзиентной ошибкой status lookup перестают блокировать новый run после `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` (default `390`). Это не разрешает ручную очистку fresh `UNKNOWN`: до cutoff запись считается live-lock для `TELEGRAM_AUTH_BUNDLE_S22`; после cutoff guard логирует/помечает meta `stale_transient_status_lookup_failure` и пропускает запуск, чтобы старый `GetKernelSessionStatus` 5xx не ломал ежедневный full slot бесконечно.
+- Если `kaggle_registry` содержит `guide_monitoring` job, а статус Kaggle не удаётся надёжно прочитать (`UNKNOWN`, `GetKernelSessionStatus` HTTP 5xx, network/timeout), эта запись считается **активной remote Telethon session**, а не stale. Её нельзя удалять вручную и нельзя запускать новый guide Kaggle run с тем же `TELEGRAM_AUTH_BUNDLE_S22`, пока не появится terminal Kaggle evidence, fresh output с ожидаемым `run_id` не будет импортирован, либо пользователь явно подтвердит abandon старой сессии после замены auth bundle. Нарушение этого правила может запустить два Kaggle kernel параллельно и инвалидировать Telegram auth key (`AuthKeyDuplicatedError`).
+- Для VK guide sources нормальный Kaggle scan обязан разбирать `attachments[].photo`, выбирать лучший `sizes[].url`, скачивать фото в output bundle `guide_media/...` и отдавать их как `media_refs/media_assets`; иначе digest carousel потеряет исходную картинку и будет вынужден строить hook-only slide. Server-side `recover_missing_vk_media_assets_for_occurrences()` допустим только как repair-страховка для уже импортированных старых rows, где `media_refs_json/media_assets_json` пустые.
 - При скачивании output сервер дополнительно валидирует `run_id` внутри `guide_excursions_results.json`; stale output от предыдущей версии kernel не должен импортироваться как свежий scan.
 - Перед polling сервер теперь дополнительно проверяет shape канонического Kaggle kernel: `zigomaro/guide-excursions-monitor` обязан оставаться `kernel_type=notebook` с notebook `code_file`. Если remote kernel внезапно стал `script`, run должен падать сразу с явной инструкцией пересоздать канонический notebook, а не зависать на stale output.
 - Сам guide notebook runner теперь тоже fail-closed по auth boundary: если `TELEGRAM_AUTH_BUNDLE_S22` отсутствует, а в окружении есть только `TELEGRAM_AUTH_BUNDLE_E2E`, `_resolve_auth_bundle()` обязан упасть с явной ошибкой вместо тихого borrow чужой сессии; non-`S22` auth допустим только через явный low-level override `GUIDE_MONITORING_ALLOW_NON_S22_AUTH=1`.
@@ -158,6 +162,8 @@ Guide track должен быть проверяемым так же, как Sma
   - для scheduled `full` run с `ENABLE_GUIDE_DIGEST_SCHEDULED=1` recovery должен дотягивать не только import, но и тот же auto-publish `new_occurrences`, если процесс упал между этими фазами;
   - если kernel завершился `failed/error/cancelled`, запись удаляется из реестра и оператор получает уведомление.
 - Источником истины для recovery по-прежнему остаётся Kaggle output; локальный persisted bundle считается лишь durable-копией уже скачанного canonical output и нужен только для того, чтобы рестарт не обнулял фазу import/publish.
+- Critical scheduler watchdog не должен немедленно повторять один и тот же дневной `guide_excursions_full` после recent terminal `error`/`crashed` или `remote_telegram_session_busy`: persisted `ops_run` state ставит retry-hold на `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`), чтобы Fly restart/secret rotation не запускали параллельный Kaggle/Telethon прогон на той же S22-сессии. Это не отключает следующий штатный слот и не считается заменой ремонта первопричины.
+- Пока канонический guide kernel `zigomaro/guide-excursions-monitor` находится в `RUNNING`, запрещено делать manual/prod Telethon smoke на той же `TELEGRAM_AUTH_BUNDLE_S22`; сначала дождаться terminal status или recovery output.
 
 `/general_stats` для guide-track теперь должен показывать не только источники/прогоны, но и:
 
@@ -257,6 +263,7 @@ Target channels для manual/scheduled publish задаются через `GUI
 - placeholder-значения вроде `Не определено` в публичной карточке не показываются;
 - booking/contact normalization предпочитает один лучший contact endpoint: сначала явный booking факт, затем мобильный телефон, затем `@username`, затем сайт/форма; публичная строка не должна копировать raw-instruction prose вроде `по телефону с 08:30...`, а `tel:` контакт должен быть кликабельным;
 - media delivery публикует album только из materialized assets, которые приехали из Kaggle scan/import и сохранены в `guide_monitor_post.media_assets_json`;
+- если выбранный digest issue ещё не имеет usable materialized media для VK-source occurrence, `publish_guide_digest` сначала делает server-side VK media recovery и обновляет `guide_digest_issue.media_items_json`; только после этого разрешена отправка Telegram/VK. Recovery после Telegram-фазы считается regression, потому что приводит к text-only Telegram post и карточкам только в VK.
 - multi-target publish должен отправлять один и тот же digest payload в каждый configured target channel; issue-level storage при этом хранит legacy primary target в `target_chat` и per-target message maps в `published_targets_json`, чтобы можно было безопасно backfill-ить новый канал без text-only костылей;
 - backfill нового target channel должен копировать исторические media albums как album-group, а затем перевязывать caption первого media-сообщения на текстовые части уже в целевом канале, чтобы copied album ссылался на локальные digest posts, а не на исходный канал;
 - caption media album должен компактно показывать временной охват найденных экскурсий: одна дата (`12 апреля`), короткий список редких дат (`12, 14 и 16 апреля`) или диапазон (`11-15 апреля`), после чего той же строкой можно указывать `карточки 1-8`; если валидных дат нет, runtime откатывается к старому нейтральному `В альбоме карточки ...`;
@@ -271,7 +278,7 @@ Target channels для manual/scheduled publish задаются через `GUI
 
 Цель ближайшего запуска: публиковать тот же `new_occurrences` fact-pack в VK-паблик `https://vk.com/uhtykaliningrad` отдельным от Telegram surface. VK-пост должен быть одним wall-постом, без Telegram-style split на несколько частей, пока итоговый plain-text payload проходит лимит VK. Если однажды payload не помещается, runtime должен явно остановить публикацию и показать оператору причину, а не резать выпуск молча.
 
-Формат первой строки важен для ленты VK: она должна сразу сообщать количество и месяцы найденных новых выходов, например `Новые экскурсии: 7 выходов на май и июнь`. Месяцы считаются по `guide_occurrence.date` после финальной dedup/editorial фильтрации, то есть по тем карточкам, которые реально попали в VK-пост. Следующие строки могут давать короткий редакционный lead, но первая строка не должна начинаться с приветствия, hashtag'ов, служебной метки или длинной интро-фразы.
+Формат первой строки важен для ленты VK: она должна сразу сообщать количество и точные даты найденных новых выходов, например `Новые экскурсии: 3 выхода, 30 мая, 2 июня и 7 июня` или диапазон для длинного выпуска. Даты считаются по `guide_occurrence.date` после финальной dedup/editorial фильтрации, то есть по тем карточкам, которые реально попали в VK-пост. Следующие строки могут давать короткий редакционный lead, но первая строка не должна начинаться с приветствия, hashtag'ов, служебной метки или длинной интро-фразы.
 
 VK-render отличается от Telegram-render:
 
@@ -282,13 +289,14 @@ VK-render отличается от Telegram-render:
 - если экскурсия пришла с личной VK-стены, public attribution должен показывать VK user mention/link на автора (`https://vk.com/<screen_name>` или `[id...|Имя]`, если resolve доступен), а не только обезличенное `Источник: VK`;
 - если экскурсия пришла из VK-сообщества, attribution использует community label/source link, но не притворяется персональным гидом без occurrence-level evidence;
 - VK-пост должен идти через общий community wall publishing contract из [VK Publishing](../vk-publishing/README.md): `owner_id=-<group_id>`, `from_group=1`, `signed=0`, `publish_date` минимум через 10 минут.
+- VK-пост должен публиковаться с VK photo attachments: либо production carousel slides, сгенерированными из `guide_digest_issue` fact-pack, либо теми же materialized guide media assets из `guide_digest_issue.media_items_json`. Текст и картинки идут одним `wall.post`, без Telegram-style разделения на media album + отдельный текст. Если ни carousel, ни materialized assets не дали ни одного `photo...` attachment, VK fanout должен fail-closed вместо text-only поста.
 
 Минимальный rollout для `uhtykaliningrad`:
 
 1. Добавить env/настройку целевой группы для guide VK digest отдельно от `VK_EVENTS_GROUP_ID`, чтобы не смешивать `uhtykaliningrad` с `klgdevents`.
 2. Добавить VK-render поверх уже существующего `build_guide_digest_preview(..., family="new_occurrences")`, чтобы dedup, writer, repeat-policy и published marks не расходились между Telegram и VK.
 3. Сохранять VK publication evidence в `guide_digest_issue.published_targets_json` или совместимом per-target поле, чтобы повторный запуск видел, что выпуск уже ушёл в VK, и не дублировал тот же digest.
-4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`.
+4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk` с photo attachments из `media_items_json`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`, `attachments[].type=photo`.
 
 Runtime flags:
 
@@ -300,11 +308,115 @@ Runtime flags:
 Подводные камни, которые считаются blocking для запуска:
 
 - нельзя переиспользовать Telegram split text как есть: VK должен получить один связный plain-text пост с собственной первой строкой;
+- нельзя публиковать VK guide digest без VK photo attachments: если carousel не собрался и preview/materialization не дали usable assets, отсутствие uploaded `photo...` является blocking ошибкой;
 - нельзя отмечать occurrence опубликованным только из-за VK-failure/partial: published mark ставится только после успешного wall.post/postponed result;
 - shortener failure не блокирует digest, но должен быть видимым, потому что Telegram-ссылки в VK без сокращения часто выглядят длинно и плохо меряются;
 - personal VK source требует owner/user awareness. `vk.com/ivsguide`, `vk.ru/natakkaz` и будущие личные страницы нельзя обрабатывать как negative group wall id;
 - добавление `vk.com/ruin.keepers` и `vk.com/narodexcursovod` расширяет duplicate surface: Route Matchmaker должен сравнивать VK announcements с Telegram `ruin_keepers` и aggregator mirrors по same-date route/booking anchors, иначе один и тот же выход появится в VK digest второй карточкой;
 - если VK resolve screen_name/group id недоступен из-за token/permission/rate limit, запуск должен остановиться до production-поста и показать оператору, какой source/target не был resolved.
+
+### Отдельный визуальный VK-дайджест расписания
+
+Помимо текстового/афишного guide digest есть отдельный VK-first выпуск
+`visual_schedule`: одна вертикальная карточка 1080×1350 с расписанием до 5
+будущих экскурсий. Это не замена основного дайджеста, а отдельная публикация:
+зритель должен за несколько секунд понять `когда · куда/откуда · с кем · как`
+и перейти в текст поста только если маршрут ему интересен.
+
+Production contract:
+
+- источник данных — уже сохранённые `guide_occurrence` из мониторинга; рендер не
+  придумывает названия, время, места старта или транспорт, а берёт факты из
+  `canonical_title`, `date/time`, `guide_names/organizer_names`,
+  `meeting_point`, `route_summary`, `seats_text`, `fact_pack_json`;
+- один production-выпуск содержит максимум 5 экскурсий (`GUIDE_VISUAL_DIGEST_MAX_CARDS=1`);
+  production-пост теперь однокартиночный; ручной review может рендерить
+  несколько карточек для сравнения, но scheduled daily публикует только первую
+  карточку с максимум 5 строками;
+- окно отбора начинается с завтрашней даты в timezone мониторинга
+  (`GUIDE_EXCURSIONS_TZ`, по умолчанию `Europe/Kaliningrad`): сегодняшние
+  экскурсии в визуальный дайджест не попадают, потому что зрителю уже слишком
+  поздно принимать решение по daily-карточке;
+- idempotency отдельная от старого Telegram/VK digest: после успешного VK
+  `wall.post` occurrence получает `published_visual_digest_issue_id`, а
+  `guide_digest_issue.media_items_json.item_states` хранит снимок визуально
+  важных фактов. Повторное попадание разрешено только если occurrence ещё ни
+  разу не была в `visual_schedule` или если изменился viewer-facing факт:
+  дата/время/статус, название, место/маршрут/точка встречи, запись/цена,
+  `last_call` или реально заканчиваются места (`≤4` и стало меньше, чем в
+  сохранённом снимке). Одного `updated_at` без существенной разницы недостаточно;
+- карточка показывает номер выпуска в компактном number-only бейдже (без `№`),
+  с центрированным лейблом/цифрой и стабильными внутренними отступами; также
+  показывает крупный период, полный месяц (`июля`), день
+  недели/время (если времени нет — полный день недели), полное имя гида или
+  название организации, локацию/старт/маршрут, короткие впечатления, аватар/логотип
+  известного гида/организации, иконку формата и места только когда они есть;
+  для `@progulki_s_katey` публичное имя показывается как `Катя Костюгова`, а
+  аватар берётся из Telegram-канала (с подтверждением профиля
+  `@katerinakostiugova`);
+- бренд-локап `Ух ты, Калининград!` не перерисовывается Pillow-текстом: renderer
+  использует committed PNG `guide_excursions/assets/visual_digest_brand/uhty_kaliningrad_v18.png`,
+  полученный из принятого v18 SVG-прототипа, чтобы не менять наклон, толщину,
+  stroke/glow и пропорции букв между выпусками;
+- даже при ручной много-карточной review-карусели каждая карточка должна быть
+  самодостаточным мини-дайджестом: не показываем техническую пагинацию вида
+  `1–5 из 15`, не добавляем строку «остальные даты ниже», а заголовки строк
+  остаются главным визуальным якорем;
+- Telegram-публикация идёт в те же каналы, что обычный guide digest
+  (`GUIDE_VISUAL_DIGEST_TARGET_CHATS` или fallback `GUIDE_DIGEST_TARGET_CHATS`):
+  одна картинка + HTML-caption, где названия экскурсий являются ссылками
+  (`<a href="...">название</a>`), без отдельных URL рядом и без VK shortener;
+- VK-текст: первая строка `Дайджест экскурсий №…`, короткая вводная, затем строки
+  `название — ссылка`. VK-ссылки оформляются кликабельным названием (`[vk-url|title]`),
+  внешние URL сокращаются через `utils.getShortLink`, телефонные контакты не
+  сокращаются;
+- хештеги в Telegram/VK включают базовые `#экскурсии #Калининград
+  #УхтыКалининград` плюс упомянутые города/узнаваемые локации карточки
+  (`#Зеленоградск`, `#Балтийск`, `#КуршскаяКоса`, `#Амалиенау` и т.п.);
+- публикация идёт через `post_to_vk(..., carousel=True)`, чтобы VK оставил
+  листалку, а не принудительную медиагруппу/grid. Scheduled VK wall post
+  ставится в отложку на 10 минут (`GUIDE_VISUAL_DIGEST_VK_DELAY_SECONDS=600`);
+  после выхода из отложки due-job публикует VK Story примерно через 15 минут
+  (`GUIDE_VISUAL_DIGEST_VK_STORY_DELAY_SECONDS=900`) с той же карточкой,
+  помещённой на 1080×1920 без уменьшения текста, и ссылкой на wall post.
+
+Код: `guide_excursions/visual_digest.py`, ручной CLI
+`scripts/guide_visual_digest.py`, scheduler gate
+`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1`. На Fly отдельный slot:
+`GUIDE_VISUAL_DIGEST_TIME_LOCAL=10:30`, `GUIDE_VISUAL_DIGEST_TZ=Europe/Kaliningrad`,
+`GUIDE_VISUAL_DIGEST_MAX_CARDS=1`, VK target `uhtykaliningrad`, Telegram targets
+из `GUIDE_DIGEST_TARGET_CHATS`. Старый Telegram/VK guide digest остаётся
+отдельным и не отменяется. Визуальный QA перед первым тестом был проведён через
+`agy --model "Gemini 3.1 Pro (High)"`; Gemini verdict: `PASS` для contact sheet
+production renderer.
+
+### Hook-карточки (engagement cards)
+
+Поверх afisha-вложений VK-пост дополняется 1–3 «крючковыми» карточками (1080×1080), на которых крупно вынесена одна цепляющая маркетинговая фраза-вопрос — чтобы в сетке VK пост сразу зацеплял взгляд. Это редакторские текст-карточки в инстаграм-стиле, а не афиши.
+
+Контракт:
+
+- **Карточки дополняют, а не заменяют афиши.** Слотовая математика: `available_slots = max(0, 9 − число_afisha_attachments)`, целевое число карточек 1–3 (`HOOK_CARD_MAX_CARDS`), итог в сетке ≤ 9 изображений. Если афиш уже ≥ 9, карточки не добавляются. Афиши никогда не вытесняются карточками.
+- **Карточки идут ПЕРВЫМИ в сетке** (самое цепляющее впереди), афиши — следом: итоговый `attachments = карточки + афиши`.
+- **Best-effort и additive.** Любая ошибка генерации/рендера/загрузки карточек логируется и проглатывается — дайджест всё равно публикуется с афишами. Отдельного on/off флага нет: карточки — часть публикации дайджеста (меньше точек отказа).
+- **Хук — это ВОПРОС.** Всегда ровно один маркетинговый вопрос-крючок, заканчивающийся «?» (тот же принцип, что и первая фраза-крючок рерайта анонса, `ask_4o`/GPT-4o), а не утверждение/заголовок. Санитайзер отбрасывает любой крючок без «?» или с более чем одним «?». Существующий grounded `main_hook` из enrich используется только как фактура для grounding, его текст на карточку дословно не выносится.
+- **Отбор через LLM:** один GPT-4o вызов (`response_format=GuideHookCards`) по фактам экскурсий генерирует крючок для перспективных выходов и возвращает только самые сильные и **разнотипные** (разные темы/форматы) `cap` штук, отсортированные по `strength`. Не обязательно показывать крючок для каждой экскурсии.
+- **Подпись на карточке (footer) = дата + гид(ы)** (`«7 июня · Анна Иванова»`, `«7 июня · Кирилл и Марго»`, `«7 июня · 3 гида»`), детерминированно из occurrence (`date` + `guide_names`), максимально кратко; совместный выезд не должен схлопываться до первого гида. Если данных нет — footer опускается.
+- **Санитайзер карточки (fail-closed на карточку):** без эмодзи, без URL/usernames/телефонов/цен/дат/времени и призывов «записаться/купить билет»; 3–14 слов, ≤ 90 символов; сохраняется доминирующий термин (прогулка/экскурсия/джип-тур, см. Terminology Policy). Неестественные штампы вроде `за горизонтом` отбрасываются вместо публикации на картинке. Нарушившие крючки отбрасываются, карточка не строится.
+- **Цвет — один на публикацию, разный по дням.** Все карточки одного поста используют ОДНУ палитру (`select_post_palette(seed=issue_id)`); разные выпуски/дни ротируют палитру, поэтому один день выглядит цельно, а разные дни — по-разному. Палитры из валидированного набора `guide_excursions/assets/vk_hook_card_palettes.json` (контраст ≥ 7:1).
+- **Типографика:** текст центрируется в safe-zone `x 150–930 / y 160–920` с большими полями, чтобы VK-обрезка краёв сетки не задевала смысловой текст. **Единый кегль главного крючка на все карточки одной публикации** (наименьший подходящий из 56–104 px, считается по самому длинному хуку и применяется ко всем — чтобы соседние карточки не выглядели как разная жирность/ширина); подпись — фиксированные 46 px. Шрифт главного текста — `assets/fonts/Cygre-ExtraBold.ttf`, подпись — `Cygre-SemiBold.ttf` (кириллический гротеск).
+- Код: `guide_excursions/hook_cards.py` (LLM-пайплайн + отбор) и `guide_excursions/hook_card_render.py` (Pillow-рендер). Покрыто `tests/test_guide_hook_cards.py`.
+
+### Карусель (продакшн-формат)
+
+`publish_latest_guide_digest_to_vk` публикует VK-дайджест **каруселью** (листалкой) — вертикальные слайды 4:5, которые VK показывает целиком (без обрезки до квадрата). Тип каждого слайда выбирается **по картинке**:
+
+- медиа, которое уже является **афишей** (постер со своим текстом — определяется vision-классификатором GPT-4o «АФИША/ФОТО»), показывается целиком + номер `i/N` + бейдж «листай» (`render_afisha_slide`);
+- **фото без текста** получает маркетинговый вопрос-крючок в нижнем «ломаном» блоке + дата·гид + «листай» + номер (`render_carousel_slide`);
+- для самых сильных крючков событий **без пригодного фото** добавляется 1–2 текстовые карточки-крючки (`render_hook_only_slide`);
+- последний слайд — CTA со стрелкой вниз к тексту поста (`render_cta_slide`).
+
+Сборка — `guide_excursions/hook_carousel.py::build_carousel_slides` (одна палитра на публикацию, ротация по дню; фото-слайды по силе крючка; ≤9 слайдов + CTA). Slides готовятся один раз на digest issue и сохраняются в `GUIDE_MEDIA_STORE_ROOT/_digest_carousel/<issue_id>/slide_*.jpg`: Telegram и VK должны переиспользовать эти же файлы, а не генерировать два разных набора. Если в Telegram digest ровно один фото-кандидат, публикуется generated card (`slide_0.jpg`) вместо raw source photo; если фото несколько, Telegram остаётся на старой media-album схеме. VK-пост идёт через `post_to_vk(..., carousel=True)` (без `primary_attachments_mode=grid`, чтобы VK рендерил листалку); `repair_existing` edit тоже сохраняет carousel mode, чтобы отложенный пост можно было заменить без удаления и повторной публикации. Carousel build/upload выполняется **до** требования materialized afisha assets: если в выпуске нет пригодных исходных картинок, но есть строки дайджеста, runtime может опубликовать hook-only карточки + CTA как полноценные VK photo attachments. Если carousel slides построены, но VK upload вернул меньше двух `photo...` attachments, публикация должна fail-closed/retry и не имеет права откатываться на plain source-image/afisha-grid fallback; fallback допустим только когда carousel вообще не был построен.
 
 ## Terminology Policy
 
@@ -367,7 +479,9 @@ Guide digest не должен произвольно смешивать `про
 - если после scheduled `full` scan у `new_occurrences` нет candidates, scheduled publish должен завершаться bot-only служебным сообщением оператору (`новых экскурсионных находок нет`) без публикации пустого поста в каналы;
 - scheduled `full` slot считается critical daily slot: если первичный APScheduler fire пропущен или записался как `ops_run(... status='skipped', skip_reason='heavy_busy')`, startup catch-up и live watchdog обязаны догонять тот же scheduled `full` path в пределах lookback окна, а catch-up-dispatch ждёт освобождения heavy gate вместо тихого пропуска дня;
 - same-day `light` runs не считаются подтверждением доставки daily `full` slot: recovery должен искать materialized `guide_monitoring` именно с `details.mode='full'`, иначе вечерняя автопубликация может быть ложно признана “уже выполненной”.
-- если catch-up `full` run снова завершается `status='skipped'` только из-за занятого shared remote Telegram/Kaggle session (`remote_telegram_session_busy`), watchdog не должен считать такой dispatch завершением суточного слота: тот же scheduled `full` path обязан пробоваться снова на следующем watchdog tick, пока не materialize-ится не-skipped `full` run или не истечёт lookback окно.
+- same-day `recovery_import` со статусом `success`/`partial` и `details.mode='full'` считается подтверждением доставки daily `full` slot, если он импортирует уже завершённый scheduled Kaggle output; после такого импорта watchdog не должен запускать новый full scan.
+- если catch-up `full` run снова завершается `status='skipped'` только из-за занятого shared remote Telegram/Kaggle session (`remote_telegram_session_busy`), watchdog не должен считать такой dispatch завершением суточного слота, но и не должен стучаться каждую минуту: тот же scheduled `full` path откладывается до `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`) и пробуется снова только после cooldown, пока не materialize-ится не-skipped `full` run или не истечёт lookback окно.
+- `/healthz` обязан раскрывать статусы `guide_excursions_light` и `guide_excursions_full` вместе с generic scheduler status; green health without guide job visibility is insufficient evidence for this feature. Production closure after a missed daily guide slot requires deploy evidence plus same-day catch-up/digest evidence, not just a code fix.
 
 ## Основные entrypoints
 

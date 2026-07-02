@@ -8,14 +8,18 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from models import Channel, Setting
 from source_parsing.telegram.split_secrets import encrypt_secret
 from telegram_business import load_business_story_targets
-from vk_hashtags import build_vk_video_announce_caption
+from vk_hashtags import (
+    build_vk_crumple_official_caption,
+    build_vk_video_announce_caption,
+)
 from .kaggle_client import KaggleClient
 
 logger = logging.getLogger(__name__)
@@ -28,6 +32,7 @@ DEFAULT_CIPHER_DATASET_SLUG = "crumple-video-story-secrets-cipher"
 DEFAULT_KEY_DATASET_SLUG = "crumple-video-story-secrets-key"
 DEFAULT_SINGLE_DAY_STORY_PERIOD_SECONDS = 12 * 60 * 60
 DEFAULT_MULTI_DAY_STORY_PERIOD_SECONDS = 24 * 60 * 60
+LOCAL_STORY_TZ = ZoneInfo("Europe/Kaliningrad")
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +48,7 @@ class StoryTarget:
     user_hash: str = ""
     fallback_peer: str = ""
     caption: str = ""
+    caption_variant: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -65,6 +71,8 @@ class StoryTarget:
             payload["fallback_peer"] = self.fallback_peer
         if self.caption:
             payload["caption"] = self.caption
+        if self.caption_variant:
+            payload["caption_variant"] = self.caption_variant
         return payload
 
 
@@ -161,11 +169,21 @@ def _parse_auth_bundle(bundle_b64: str, *, env_key: str) -> dict[str, Any]:
     return payload
 
 
-def _story_session_payload() -> dict[str, Any]:
+def _story_session_payload(
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> dict[str, Any]:
     api_id = _require_env_any("TG_API_ID", "TELEGRAM_API_ID")
     api_hash = _require_env_any("TG_API_HASH", "TELEGRAM_API_HASH")
-    bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
-    session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    bundle_env_key = (
+        str(auth_bundle_env or "").strip()
+        or (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
+    )
+    session_env_key = (
+        str(session_env or "").strip()
+        or (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    )
 
     auth: dict[str, Any] = {
         "api_id": int(api_id),
@@ -219,8 +237,49 @@ def _story_session_payload() -> dict[str, Any]:
     )
 
 
-def build_story_secrets_payload() -> str:
-    payload = _story_session_payload()
+def _selection_auth_bundle_env(selection_params: dict[str, Any] | None) -> str:
+    params = selection_params if isinstance(selection_params, dict) else {}
+    return str(
+        params.get("_video_lane_auth_env")
+        or params.get("story_auth_bundle_env")
+        or ""
+    ).strip()
+
+
+def _selection_session_env(selection_params: dict[str, Any] | None) -> str:
+    params = selection_params if isinstance(selection_params, dict) else {}
+    return str(
+        params.get("_video_lane_session_env")
+        or params.get("story_session_env")
+        or ""
+    ).strip()
+
+
+def story_remote_auth_scope(selection_params: dict[str, Any] | None = None) -> str | None:
+    selection_bundle_env = _selection_auth_bundle_env(selection_params)
+    if selection_bundle_env:
+        return selection_bundle_env
+    selection_session = _selection_session_env(selection_params)
+    if selection_session:
+        return selection_session
+    bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
+    if bundle_env_key:
+        return bundle_env_key
+    session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    if session_env_key:
+        return session_env_key
+    return None
+
+
+def build_story_secrets_payload(
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> str:
+    payload = _story_session_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     vk_access_token = _get_env_value("VK_ACCESS_TOKEN5")
     if vk_access_token:
         payload["vk_access_token"] = vk_access_token
@@ -248,8 +307,16 @@ def build_story_secrets_payload() -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def write_story_secret_files(target_dir: Path) -> tuple[Path, Path]:
-    payload = build_story_secrets_payload()
+def write_story_secret_files(
+    target_dir: Path,
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> tuple[Path, Path]:
+    payload = build_story_secrets_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     encrypted, key = encrypt_secret(payload)
     if not encrypted or not key:
         raise RuntimeError("Failed to encrypt story secrets payload")
@@ -297,13 +364,13 @@ def _create_or_update_dataset(
             ),
             encoding="utf-8",
         )
+        exists = False
         try:
-            client.create_dataset(tmp_path)
+            client.dataset_status(dataset_slug)
+            exists = True
         except Exception:
-            logger.exception(
-                "video_announce.story dataset create failed, trying version update dataset=%s",
-                dataset_slug,
-            )
+            exists = False
+        if exists:
             client.create_dataset_version(
                 tmp_path,
                 version_notes="refresh story secrets",
@@ -311,11 +378,21 @@ def _create_or_update_dataset(
                 convert_to_csv=False,
                 dir_mode="zip",
             )
+        else:
+            client.create_dataset(tmp_path)
     return dataset_slug
 
 
-async def ensure_story_secret_datasets(client: KaggleClient) -> list[str]:
-    payload = build_story_secrets_payload()
+async def ensure_story_secret_datasets(
+    client: KaggleClient,
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> list[str]:
+    payload = build_story_secrets_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     encrypted, key = encrypt_secret(payload)
     if not encrypted or not key:
         raise RuntimeError("Failed to encrypt story secrets payload")
@@ -353,7 +430,7 @@ def _dedupe_targets(targets: list[StoryTarget]) -> list[StoryTarget]:
     for target in targets:
         if target.transport == "telegram_business":
             key = f"business:{target.business_connection_hash}"
-        elif target.transport in {"vk_story", "vk_wall", "telegram_chat"}:
+        elif target.transport in {"vk_story", "vk_wall", "vk_wall_story", "telegram_chat", "telegram_story_message"}:
             key = f"{target.transport}:{target.peer.casefold()}"
         else:
             key = f"telethon:{target.peer.casefold()}"
@@ -387,6 +464,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             mode = "upload"
             transport = "telethon"
             caption = ""
+            caption_variant = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"extra-{idx + 1}")
@@ -399,8 +477,9 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
-            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall"} else "telethon"
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "telegram_story_message", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
+            caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -434,6 +513,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 required=required,
                 transport=transport,
                 caption=caption,
+                caption_variant=caption_variant,
                 fallback_peer=fallback_peer,
             )
         )
@@ -468,6 +548,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             mode = "upload"
             transport = "telethon"
             caption = ""
+            caption_variant = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"override-{idx + 1}")
@@ -480,8 +561,9 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
-            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall"} else "telethon"
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "telegram_story_message", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
+            caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -515,6 +597,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 required=required,
                 transport=transport,
                 caption=caption,
+                caption_variant=caption_variant,
                 fallback_peer=fallback_peer,
             )
         )
@@ -655,7 +738,7 @@ def _story_should_be_pinned(
 
 def _story_upload_profile(selection_params: dict[str, Any]) -> str | None:
     raw = str(selection_params.get("story_upload_profile") or "").strip().lower()
-    if raw == "telegram_story_native_hevc_720p_v1":
+    if raw in {"telegram_story_native_hevc_720p_v1", "legacy_h264_transcode"}:
         return raw
     return None
 
@@ -699,13 +782,23 @@ async def build_story_publish_config(
     caption_text = str(caption).strip() if isinstance(caption, str) else ""
 
     target_payloads = [target.as_dict() for target in targets]
+    normalized_dates = _normalize_story_event_dates(selected_event_dates)
     vk_wall_caption = build_vk_video_announce_caption(
         cities=selected_event_cities or [],
-        dates=selected_event_dates or [],
+        dates=normalized_dates,
         title=caption_text or "Видеоанонс",
+    )
+    vk_crumple_official_caption = build_vk_crumple_official_caption(
+        cities=selected_event_cities or [],
+        dates=normalized_dates,
+        tomorrow=datetime.now(LOCAL_STORY_TZ).date() + timedelta(days=1),
     )
     for target_payload in target_payloads:
         if target_payload.get("transport") != "vk_wall":
+            continue
+        if str(target_payload.get("caption_variant") or "").strip() == "crumple_official":
+            target_payload["required"] = True
+            target_payload["caption"] = vk_crumple_official_caption
             continue
         current_caption = str(target_payload.get("caption") or "").strip()
         if not current_caption or current_caption == "Видеоанонс":
@@ -716,6 +809,7 @@ async def build_story_publish_config(
         "mode": mode,
         "smoke_only": smoke_only,
         "upload_profile": _story_upload_profile(selection_params),
+        "auth_source": story_remote_auth_scope(selection_params),
         "period_seconds": _story_period_seconds(selected_event_dates=selected_event_dates),
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,
@@ -729,7 +823,7 @@ async def build_story_publish_config(
         config["upload_profile"] or "-",
         config["period_seconds"],
         config["pinned"],
-        _normalize_story_event_dates(selected_event_dates),
+        normalized_dates,
         [target.peer for target in targets],
     )
     return config

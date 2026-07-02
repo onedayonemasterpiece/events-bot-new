@@ -43,6 +43,7 @@ selected_import_result: dict[int, str] = {}
 _monitor_lock = asyncio.Lock()
 
 SOURCES_PAGE_SIZE = max(3, min(int((os.getenv("TG_SOURCES_PAGE_SIZE") or "8") or 8), 15))
+KRAFTMARKET_SOURCE_USERNAME = "kraftmarket39"
 
 
 def _is_dev_mode_enabled() -> bool:
@@ -53,6 +54,12 @@ def get_tg_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🚀 Запустить мониторинг", callback_data="tg:run")],
+            [
+                InlineKeyboardButton(
+                    text="🎯 Только @kraftmarket39",
+                    callback_data=f"tg:run_source:{KRAFTMARKET_SOURCE_USERNAME}",
+                )
+            ],
             [InlineKeyboardButton(text="♻️ Импорт из JSON", callback_data="tg:rerun_import")],
             [InlineKeyboardButton(text="➕ Добавить источник", callback_data="tg:add")],
             [InlineKeyboardButton(text="🧩 Синхронизировать источники", callback_data="tg:seed")],
@@ -112,6 +119,21 @@ async def handle_tg_callback(callback: CallbackQuery):
                 callback.bot,
                 callback.message.chat.id,
                 operator_id=callback.from_user.id,
+            )
+        )
+    elif action == "run_source" and len(parts) >= 3:
+        source_username = normalize_source(parts[2])
+        if not source_username:
+            await callback.answer("Некорректный источник.", show_alert=True)
+            return
+        await callback.message.answer(f"🎯 Запускаю Telegram Monitor только для @{source_username}...")
+        await callback.answer()
+        asyncio.create_task(
+            run_monitor_task(
+                callback.bot,
+                callback.message.chat.id,
+                operator_id=callback.from_user.id,
+                source_usernames=[source_username],
             )
         )
     elif action == "rerun_import":
@@ -426,7 +448,13 @@ async def handle_source_input(message: types.Message):
         await message.answer(f"❌ Error: {e}")
         adding_source_sessions.pop(user_id, None)
 
-async def run_monitor_task(bot: Bot, chat_id: int, *, operator_id: int | None = None):
+async def run_monitor_task(
+    bot: Bot,
+    chat_id: int,
+    *,
+    operator_id: int | None = None,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
+):
     import main
     db = main.get_db()
     
@@ -450,6 +478,7 @@ async def run_monitor_task(bot: Bot, chat_id: int, *, operator_id: int | None = 
                     send_progress=True,
                     trigger="manual",
                     operator_id=operator_id,
+                    source_usernames=source_usernames,
                 )
     except Exception as e:
         logger.exception("Manual monitor run failed")

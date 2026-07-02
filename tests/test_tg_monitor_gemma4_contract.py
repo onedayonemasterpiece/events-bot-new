@@ -120,11 +120,16 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Prefer filling location_name and location_address" in source
     assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
+    assert 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра"' in source
     assert "never copy a descriptive sentence" in source
+    assert "discussion-topic line such as" in source
+    assert "Never split one prose/list sentence across location_name and location_address" in source
+    assert "For online-only livestreams, use an explicit platform/page as location_name" in source
     assert "each event must use venue/address/city facts" in source
     assert "the event-local venue wins" in source
     assert "canonical attendee-facing title rather than the in-character/plot phrase" in source
-    assert "speaker biography, schedule commentary, film metadata" in source
+    assert "speaker biography, schedule commentary" in source
+    assert "film metadata" in source
     assert 'hall/room label such as "Кинозал:" or "Атриум:"' in source
     assert "use the host venue as location_name" in source
     assert "leave location_name empty rather than filling it with prose" in source
@@ -141,6 +146,11 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Title must be the attendee-facing event name, not a poster service heading." in source
     assert 'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс"' in source
     assert 'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05".' in source
+    assert 'Russian numeric dates are always day.month: "10.05" means 10 May, not September 10' in source
+    assert '"#13_июня", and "#21_июня" are authoritative' in source
+    assert 'Never use nearby address/venue numbers, gates/floors ("гейт 2.6", "2 этаж")' in source
+    assert 'Retrospective wording like "17 июня ... прошла лекция"' in source
+    assert 'that event-local evidence also wins over the source default' in source
     assert "performance/show/concert/play/film screening with exact future date, start time" in source
     assert '"НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ"' in source
     assert "keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields" in source
@@ -148,10 +158,20 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert 'must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00"' in source
     assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
     assert 'Use source context only as weak hosting context' in source
+    assert 'transfer/reschedule ("перенос", "перенесена") of a future lecture/talk' in source
+    assert 'giveaway results, winners, repost mechanics, or congratulatory/promo framing' in source
+    assert 'For festival/promo campaign source posts such as @kraftmarket39' in source
+    assert 'promo/giveaway-result wrapper repeats a future event date/time' in source
+    assert "Festival/campaign anchor contract" in source
+    assert 'fill festival with the exact campaign-covering festival name: "Кантата" or "80 историй о главном"' in source
+    assert "this is required for downstream promo campaigns" in source
     assert "Institution work-hours notices are NOT events" in source
     assert "do NOT classify a post as a work-hours notice merely because it mentions a museum/library venue" in source
     assert 'a street/address such as "Музейная аллея"' in source
     assert "extract those events even when they happen at a museum or library" in source
+    assert "Do not use historical/background dates from exhibit text" in source
+    assert '"9 октября 1947 года..." inside an exhibition narrative is historical content' in source
+    assert "return [] unless it also gives an explicit future opening" in source
     assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
     assert "Missing price is unknown, not free." in source
     assert "Do not mark zoo/museum/theatre events free merely because" in source
@@ -179,6 +199,165 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "single-event rescue failed" in source
     assert "A curator/speaker/artist/person name" in source
     assert "_location_review_looks_like_person_name" in source
+    assert "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE" in source
+    assert "_strip_location_review_temporal_decoration" in source
+    assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
+    assert "city must be the place name itself, not an inflected phrase" in source
+    assert "_correct_single_event_from_source_datetime" in source
+    assert "poster_only_ocr = (not caption_content) and bool(ocr_only_content)" in source
+    assert "content = caption_content or ocr_only_content" in source
+    assert "OCR-only poster text:" in source
+    assert "do not return [] merely because caption text is empty" in source
+
+
+def test_tg_monitor_source_datetime_guard_corrects_single_event_drift() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("MONTHS_MAP = {")
+    end = source.index("\n\nasync def extract_events", start)
+    ns = {
+        "date": date,
+        "datetime": datetime,
+        "re": re,
+        "timedelta": timedelta,
+        "timezone": timezone,
+        "logger": type("_L", (), {"info": lambda *a, **k: None})(),
+    }
+    exec(source[start:end], ns)
+
+    correct = ns["_correct_single_event_from_source_datetime"]
+
+    assert correct(
+        [{"title": "Дегустация сыров и вин", "date": "2026-06-26", "time": "19:00"}],
+        message_text="Встречаемся 26 июля , в 19:00, в Виниссимо на пр. Мира, 23",
+        ocr_text=None,
+        message_date="2026-06-23T12:00:00+00:00",
+        source_username="terkatalk",
+    )[0]["date"] == "2026-07-26"
+
+    yoga = correct(
+        [{"title": "Международный день йоги", "date": "2026-07-02", "time": "10:00"}],
+        message_text="🗓 #21_июня с 10.00-13.00\n📍 Ростех арена, ул. Триумфальная аллея, гейт 2.6",
+        ocr_text=None,
+        message_date="2026-06-19T12:00:00+00:00",
+        source_username="kulturnaya_chaika",
+    )[0]
+    assert yoga["date"] == "2026-06-21"
+    assert yoga["time"] == "10:00-13:00"
+
+    past = correct(
+        [{"title": "Run sos run!", "date": "2026-09-10", "time": "14:00"}],
+        message_text="10.05 | Run sos run!\n14:00 разминка\n📍Плохой охотник",
+        ocr_text=None,
+        message_date="2026-05-10T09:00:00+00:00",
+        source_username="meowafisha",
+    )[0]
+    assert past["date"] == "2026-05-10"
+    assert "repertoire/program items, musical work titles" in source
+    assert "catalogue number such as \"соч. 16\"" in source
+    assert 'temporal/date fragments (including emoji-prefixed values like "🤗Завтра")' in source
+
+
+
+def test_tg_monitor_location_review_triggers_on_emoji_prefixed_temporal_location() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    events = [
+        {
+            "title": "Мультсреда в музее",
+            "date": "2026-06-17",
+            "time": "15:00-17:00",
+            "location_name": "🤗Завтра",
+            "location_address": "",
+        }
+    ]
+
+    assert needs_review(
+        events,
+        source_default_location="Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+        message_text="🤗Завтра, 17 июня, у нас Мультсреда в музее.",
+        source_context_line="Source default location: Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+    ) is True
+
+def test_tg_monitor_location_review_triggers_on_program_item_as_location() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("_LOCATION_REVIEW_TIME_RANGE_RE = re.compile")
+    end = source.index("\n\nasync def extract_events", start)
+    ns = {"re": re, "json": json}
+    exec(source[start:end], ns)
+
+    needs_review = ns["_needs_llm_location_review"]
+
+    source_text = (
+        "19 июня в 20:00 в атриуме музея прозвучит первый концерт нового сезона Pianissimo.\n"
+        "В программе вечера — шедевры фортепианной музыки:\n"
+        "🎵 С. В. Рахманинов – Музыкальные моменты, соч. 16"
+    )
+    events = [
+        {
+            "title": "Первый концерт нового сезона Pianissimo",
+            "date": "2026-06-19",
+            "time": "20:00",
+            "location_name": "🎵 С. В. Рахманинов – Музыкальные моменты",
+            "location_address": "соч. 16",
+            "city": "Калининград",
+        }
+    ]
+
+    assert needs_review(events, message_text=source_text) is True
+
+
+def test_tg_monitor_location_review_triggers_on_non_location_bullet_fragment() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Ревущий лев, поющий лось",
+                "date": "2026-06-18",
+                "time": "",
+                "end_date": "2026-06-28",
+                "location_name": "📩 Зоосад с первого года (напомним",
+                "city": "Калининград",
+            }
+        ],
+        source_default_location="Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+        message_text=(
+            "📩 Зоосад с первого года (напомним, Кёнигсбергский зоосад открылся "
+            "21 мая 1896 года) издавал открытки. Выставка работает до 28 июня."
+        ),
+        ocr_text="",
+        source_context_line="source_username=kaliningradartmuseum",
+    )
+
+
+def test_tg_monitor_location_review_triggers_on_topic_sentence_split_location() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Прямой эфир с министром по культуре и туризму Калининградской области Андреем Ермаком",
+                "date": "2026-06-19",
+                "time": "14:30",
+                "location_name": "о концертах",
+                "location_address": "организованных в честь 80-летия Калининградской области;",
+                "city": "Калининград",
+            }
+        ],
+        message_text=(
+            "Андрей Викторович расскажет:\n\n"
+            "- о концертах, организованных в честь 80-летия Калининградской области;\n"
+            "- об итогах фестиваля классической музыки «Кантата»."
+        ),
+        ocr_text=(
+            "Официальная страница правительства Калининградской области "
+            "Вконтакте и в Одноклассниках"
+        ),
+        source_context_line="source_username=minkultturism_39",
+    )
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:
@@ -305,6 +484,9 @@ def test_tg_monitor_extract_prompt_blocks_gemma4_known_leaks() -> None:
     assert 'Never emit English event_type tokens like "exhibition"' in source
     assert "Fundraising-only posts" in source
     assert "Pure retrospective reports of completed events" in source
+    assert 'only says "следующий фестиваль" with dates but "локация/место/адрес уточняется"' in source
+    assert "Operational updates for people already attending an event" in source
+    assert '"важная информация для гостей/зрителей", entry route, navigation, parking, queue, cloakroom' in source
 
 
 def test_tg_monitor_general_extract_failure_falls_through_to_rescue_prompts() -> None:
@@ -474,6 +656,92 @@ def _load_sanitizer_in_isolation():
     return namespace
 
 
+def _load_location_review_helpers_in_isolation():
+    import ast
+
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    wanted = {
+        "_LOCATION_REVIEW_TIME_RANGE_RE",
+        "_LOCATION_REVIEW_DATE_RE",
+        "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE",
+        "_strip_location_review_temporal_decoration",
+        "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE",
+        "_LOCATION_REVIEW_ADDRESS_HINT_RE",
+        "_LOCATION_REVIEW_VENUE_CUE_RE",
+        "_LOCATION_REVIEW_GENERIC_ROOM_RE",
+        "_LOCATION_REVIEW_NON_VENUE_BULLET_RE",
+        "_LOCATION_REVIEW_TOPIC_FRAGMENT_RE",
+        "_LOCATION_REVIEW_PROGRAM_ITEM_RE",
+        "_LOCATION_REVIEW_CATALOGUE_ADDRESS_RE",
+        "_location_review_looks_like_person_name",
+        "_location_review_norm",
+        "_location_review_value_grounded",
+        "_event_needs_location_grounding_review",
+        "_needs_llm_location_review",
+    }
+    extracted: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if targets & wanted:
+                extracted.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in wanted:
+            extracted.append(node)
+    namespace: dict = {"re": re}
+    exec(
+        compile(ast.Module(body=extracted, type_ignores=[]), filename="<location-review>", mode="exec"),
+        namespace,
+    )
+    if "_needs_llm_location_review" not in namespace:
+        pytest.fail("location-review helper _needs_llm_location_review missing from source")
+    return namespace
+
+
+def test_tg_monitor_location_review_triggers_on_temporal_location_name() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Экспериментальный пленэр",
+                "date": "2026-06-14",
+                "time": "12:00",
+                "location_name": "Завтра",
+                "location_address": "Каштановая аллея 1а",
+                "city": "Калининград",
+            }
+        ],
+        source_default_location="Барн, Каштановая аллея 1а, Калининград",
+        message_text="Завтра, 14 июня, в 12:00 в рамках ОП!ФЕСТА состоится экспериментальный пленэр.",
+        ocr_text="",
+        source_context_line="source_username=barn_kaliningrad",
+    )
+
+
+def test_tg_monitor_location_review_triggers_on_inflected_city_phrase() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Концерт VI Международного фестиваля классической музыки",
+                "date": "2026-06-14",
+                "time": "",
+                "location_name": "Кирха Гердауэн",
+                "location_address": "Первомайская 1",
+                "city": "посёлке Железнодорожный",
+            }
+        ],
+        source_default_location=None,
+        message_text="14 июня в кирхе Гердауэн в посёлке Железнодорожный пройдёт концерт.",
+        ocr_text="",
+        source_context_line="source_username=festdir",
+    )
+
+
 def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None:
     ns = _load_sanitizer_in_isolation()
     sanitize = ns["_sanitize_extracted_events"]
@@ -557,6 +825,116 @@ def test_tg_monitor_sanitizer_keeps_urls_when_stripping_comment_tails() -> None:
     assert clean_value("Название (// leaked reasoning)") == "Название"
     assert clean_value("Название # leaked reasoning") == "Название"
     assert clean_value("Название {// leaked reasoning") == "Название"
+
+
+def _load_tg_monitor_signal_helpers_in_isolation():
+    import ast
+
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    wanted = {
+        "_CLEAR_SINGLE_EVENT_INVITE_RE",
+        "_CLEAR_SINGLE_EVENT_DATE_RE",
+        "_CLEAR_SINGLE_EVENT_TIME_RE",
+        "_CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE",
+        "_looks_like_clear_single_event_invitation",
+        "_has_strong_event_invitation_signal",
+    }
+    extracted: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if targets & wanted:
+                extracted.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in wanted:
+            extracted.append(node)
+    namespace: dict = {"re": re}
+    exec(
+        compile(ast.Module(body=extracted, type_ignores=[]), filename="<tg-monitor-signals>", mode="exec"),
+        namespace,
+    )
+    if "_has_strong_event_invitation_signal" not in namespace:
+        pytest.fail("strong event signal helper missing from Telegram monitor source")
+    return namespace
+
+
+def test_tg_monitor_strong_event_signal_keeps_kraftmarket_promo_posts_in_llm_path() -> None:
+    ns = _load_tg_monitor_signal_helpers_in_isolation()
+    strong = ns["_has_strong_event_invitation_signal"]
+    clear = ns["_looks_like_clear_single_event_invitation"]
+
+    kraft_285 = (
+        "Друзья, вы этого просили, мы это сделали!\n\n"
+        "Лекции Дмитрия Манкевича о становлении здравоохранения в первые годы "
+        "становления области перенесена в Историко-художественный музей на ту же дату "
+        "и то же время.\n\n"
+        "О ЧЁМ БУДЕТ ЛЕКЦИЯ\n"
+        "Поговорим о здравоохранении в первые годы.\n\n"
+        "Лекция проходит в рамках фестиваля «80 историй о главном».\n\n"
+        "бесплатно, по регистрации\n\n"
+        "19 июня 18:30\n"
+        "Историко-художественный музей, Клиническая 21, #Калининград\n"
+        "ПЕРЕНОС, билеты действительны\n"
+        "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1"
+    )
+    kraft_287 = (
+        "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
+        "стать великим композитором.\n\n"
+        "В рамках образовательной программы фестиваля Кантата вы сможете послушать "
+        "лекцию о русском композиторе Александре Бородине.\n\n"
+        "15 июня 12:45\n"
+        "Филиал Третьяковской галереи, Парадная наб. 3, #Калининград\n\n"
+        "Бесплатно, по регистрации\n"
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00"
+    )
+    raffle_results_with_event = (
+        "Поздравляем победителей розыгрыша!\n\n"
+        "А тем, кому сегодня чуть-чуть не повезло, не грустите: ждём вас 13 июня "
+        "с 11:00 до 16:00 в деревне Холмогорье. Билеты стоят 800 рублей, впереди "
+        "конкурс костюмов и запуск воздушных змеев."
+    )
+
+    assert strong(kraft_285)
+    assert clear(kraft_285)
+    assert strong(kraft_287)
+    assert clear(kraft_287)
+
+
+def test_tg_monitor_clear_event_signal_accepts_poster_only_ocr() -> None:
+    ns = _load_tg_monitor_signal_helpers_in_isolation()
+    strong = ns["_has_strong_event_invitation_signal"]
+    clear = ns["_looks_like_clear_single_event_invitation"]
+
+    kraft_317_ocr = (
+        "МАСТЕР КЛАСС\n"
+        "ПО КАЛЛИГРАФИИ\n"
+        "проводит Ламейко Светлана\n"
+        "Дата: 1 июля\n"
+        "Время: 19:00\n"
+        "Место: музей «Восток на Западе», ул. Клиническая, 19А\n"
+        "Стоимость: 1000 рублей\n"
+        "Запись по телефону: +7 (931) 616 08 88"
+    )
+    schedule_noise = (
+        "АФИША\n"
+        "1 июля 19:00 лекция\n"
+        "2 июля 19:00 концерт\n"
+        "3 июля 19:00 встреча\n"
+        "4 июля 19:00 мастер-класс\n"
+        "5 июля 19:00 экскурсия\n"
+        "музей"
+    )
+    raffle_results_with_event = (
+        "Поздравляем победителей розыгрыша!\n\n"
+        "А тем, кому сегодня чуть-чуть не повезло, не грустите: ждём вас 13 июня "
+        "с 11:00 до 16:00 в деревне Холмогорье. Билеты стоят 800 рублей, впереди "
+        "конкурс костюмов и запуск воздушных змеев."
+    )
+
+    assert clear(kraft_317_ocr)
+    assert not clear(schedule_noise)
+    assert strong(raffle_results_with_event)
+    assert not strong("Поздравляем победителей конкурса! Итоги уже в комментариях.")
 
 
 def test_tg_monitor_sanitizer_strips_html_tags_and_own_title_meta_leaks() -> None:
@@ -658,6 +1036,17 @@ def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> 
     assert "tg_monitor.google_ai bootstrap" in source
 
 
+def test_tg_monitor_title_prompt_prefers_caption_event_name_over_poster_slogan() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    master_prompt = Path("docs/llm/prompts.md").read_text(encoding="utf-8")
+
+    for text in (source, master_prompt):
+        assert "Живой сундук" in text
+        assert "Читайте бумажные книги" in text
+        assert "poster" in text.casefold() or "poster_titles" in text
+        assert "slogan" in text.casefold() or "лозунг" in text.casefold()
+
+
 def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() -> None:
     source = Path("source_parsing/telegram/service.py").read_text(encoding="utf-8")
 
@@ -675,3 +1064,7 @@ def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() 
     assert "key.startswith(\"GOOGLE_API_LOCALNAME\")" in source
     assert "Do not ship unrelated GOOGLE_API_KEY* values" in source
     assert "\"TG_MONITORING_GOOGLE_KEY_ENV\": google_key_env" in source
+    assert "kaggle_status_client.py" in source
+    assert "await_dataset_ready" in source
+    assert "\"kaggle_run.json\"" in source
+    assert "\"kaggle_status_client.py\"" in source

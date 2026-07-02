@@ -63,6 +63,15 @@ def test_base_prompt_includes_known_holidays():
     )
 
 
+def test_base_prompt_rejects_historical_exhibition_dates():
+    main._read_base_prompt.cache_clear()
+    prompt = main._read_base_prompt()
+
+    assert "Do NOT use historical/background dates from a story" in prompt
+    assert "9 октября 1947 года" in prompt
+    assert "already opened" in prompt
+
+
 def test_event_parse_defender_flags_bare_type_dash_venue_title():
     """Defender must flag titles shaped exactly like the master-prompt-forbidden
     `<event_type> — <venue>` template (INC-2026-05-11-bar-bastion). It must NOT

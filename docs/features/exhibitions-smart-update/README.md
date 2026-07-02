@@ -19,6 +19,7 @@
 - Матчинг событий использует пересечение диапазонов дат:
   - существующее событие с `date=2026-01-15` и `end_date=2026-03-01` матчит кандидат с `date=2026-02-20`.
 - Если у выставки в источнике есть дата начала, но нет даты закрытия, Smart Update ставит `end_date` по умолчанию как `date + 1 календарный месяц`.
+- Исключение: если карточка озаглавлена как открытие выставки (`Открытие выставки...`) и источник не даёт явный период/дату закрытия, fallback-период не ставится — это атомарное событие открытия. Для диапазона карточка должна быть нормализована как сама выставка или иметь source-grounded `end_date`.
 - Это правило относится только к `выставка`. Для `ярмарка` fallback-период по умолчанию не ставится: ярмарка без явного сигнала о сроке окончания остаётся однодневной.
 - Такой `end_date` считается служебным fallback: он нужен для month/weekend-страниц и merge по периоду, но не должен показываться пользователю как подтверждённая дата закрытия.
 - Для длинных событий (`выставка`, `ярмарка`) продление `end_date` разрешено, если trust кандидата не ниже накопленного trust события.
@@ -57,3 +58,52 @@
   - `tests/e2e/features/smart_event_update.feature`
     - `Выставка не дублируется при новом источнике внутри периода`
     - `Выставка не принимает продление периода от источника с более низким trust`
+
+## Enforce acceptance monitor for `/vystavki/`
+
+After `SMART_UPDATE_IDENTITY_GATE=enforce`, the 14-day acceptance gate for the
+current exhibition-duplicate incident is the read-only SQLite monitor:
+
+```bash
+python3 scripts/inspect/audit_public_exhibition_duplicates.py \
+  --db /data/db.sqlite \
+  --current-date <YYYY-MM-DD> \
+  --since-days 14 \
+  --format both \
+  --fail-on-high-confidence
+```
+
+The monitor applies a schema-adaptive public gate (`identity_status=canonical`,
+`merged_into_event_id IS NULL`, active lifecycle, valid ISO dates), selects
+current/future exhibition-like rows, and reports high-confidence pairs where
+long-running exhibition ranges overlap and title/source/venue evidence indicates
+one public identity. `events_public_exhibition_duplicate_pairs_total` reports all
+currently visible high-confidence pairs; `*_since_total` is the rollout-window
+acceptance metric and, when `event.added_at` exists, includes pairs where either
+row was added inside the explicit `since_date`/`EXHIBITION_DUPLICATE_AUDIT_SINCE_DATE` rollout start, or `current_date - since_days` when no explicit start is set. If a legacy/test schema lacks
+`added_at`, the monitor fails closed and counts the pair in the window. Rollout
+closure requires:
+
+- `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"} 0`;
+- no critical false positives on recurring/multi-session controls;
+- any detected pair is treated as an incident/regression, not auto-merged by the
+  monitor.
+
+The same acceptance check can be scheduled after enforce:
+
+```env
+SMART_UPDATE_IDENTITY_GATE=enforce
+ENABLE_EXHIBITION_DUPLICATE_AUDIT=1
+EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL=07:45
+EXHIBITION_DUPLICATE_AUDIT_TZ=Europe/Kaliningrad
+EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS=14
+```
+
+Scheduled runs are read-only, write `ops_run(kind='exhibition_duplicate_audit')`,
+alert the superadmin/admin chat on high-confidence pairs, and by default raise a
+scheduler job error after recording `status='failed'`.
+ The scheduled audit also embeds Smart Update identity-gate rollout counters from
+`event_identity_decision_log` (decision/veto/fail-safe/vector-error counts) and
+secret-safe env-readiness booleans into `ops_run.metrics_json` and
+`details_json.identity_gate`, so the 14-day evidence can show both public
+duplicate absence and gate/vector health.

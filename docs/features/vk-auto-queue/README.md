@@ -14,11 +14,17 @@
 
 Gemma 4 migration note: VK auto-import draft extraction — это не бинарная предклассификация “есть событие / нет события”, а полноценное извлечение черновиков событий с датой, временем, площадкой, билетами и служебными полями перед Smart Update. Поэтому production default для этого scoped stage — `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=models/gemma-4-31b-it`; более маленькая `26b` допустима только как явный canary override. Smart Update routing и глобальный `/parse` этим переключателем не меняются.
 
+Draft date-anchor guards live inside `vk_intake.py`: numeric anchors like
+`15.06` and text anchors like `15 июня` must be detected before Smart Update
+post-processing, without importing or relying on Smart Update private regexes.
+
 После `INC-2026-05-02-pre-daily-event-quality` VK draft prompt явно требует event-local venue grounding: для репостов и постов с несколькими блоками площадка/адрес/город берутся из блока конкретного события, а дефолт источника используется только как fallback. Если пост явно говорит, что событие проходит в библиотеке/музее/баре/другой площадке, это важнее дефолтной площадки VK-группы. Literal placeholders (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) вычищаются как syntax-only guardrail и не должны доходить до Smart Update.
 
 После `INC-2026-05-05-kitoboya-garage-date` VK draft prompt также fail-closed для выставок/ярмарок без точной даты: teaser вроде `в мае откроем`, `готовим выставку`, `анонсируем дату позже` должен возвращать `[]`, а не материализоваться как первое число месяца. Смысловое решение остаётся LLM-first; детерминированный слой Smart Update только страхует unsupported teaser date как `skipped_non_event:unsupported_exhibition_teaser_date`.
 
 После `INC-2026-05-08-vk-quality-false-skips` VK draft prompt для ярмарок, арт-маркетов и праздничных программ явно предпочитает **один umbrella event**, если источник описывает одну программу в одном месте/день. Отдельные child events допустимы только когда у блока есть самостоятельный билет/регистрация, отдельная площадка или явный source anchor; иначе программа уходит в `description`/`search_digest`, а Smart Update получает один устойчивый кандидат.
+
+После `INC-2026-06-18-vk-title-shortlink-public-regression` deterministic title guard в `vk_intake` не имеет права заменять LLM-заголовок на шаблон `<event_type> — <venue>` (`Концерт — Бар Советов`). VK intake не должен делать deterministic title-grounding по словам вообще: не проверять LLM-title exact-token эвристиками, не объявлять его suspicious и не переписывать. Poster OCR heading может быть только evidence для Smart Update/review, а сам title остаётся LLM-owned и дальше проходит Smart Update LLM title-recovery/grounding. Ссылки регистрации из внешних shortener'ов вроде `clck.ru` раскрываются до конечного URL до сохранения `ticket_link`, чтобы публичный Telegram/VK/Telegraph не вёл пользователя через source shortlink.
 
 Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
 
@@ -83,6 +89,13 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 ```text
 /vk_auto_import --include-skipped
 ```
+
+Ручной `/vk_auto_import` по умолчанию не ждёт общий heavy-job gate
+(`VK_AUTO_IMPORT_HEAVY_MODE=off`), чтобы оператор мог разбирать VK очередь во
+время удалённого Telegram/Kaggle monitoring. Scheduled `vk_auto_import`
+сохраняет сериализацию через heavy gate (`wait`), если env явно не переопределён.
+Если для ручного прогона принудительно включён `VK_AUTO_IMPORT_HEAVY_MODE=wait`,
+бот должен сразу написать, какую тяжёлую операцию он ждёт.
 
 Остановить текущий прогон (остановка произойдёт после завершения текущего поста):
 
@@ -169,7 +182,7 @@ Scheduler job: `vk_auto_queue.vk_auto_import_scheduler` (`scheduling.py`).
 
 ENV:
 - `ENABLE_VK_AUTO_IMPORT=1` включает job.
-- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:30,18:30`) локальные времена запуска.
+- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:15,10:15,12:00,15:30,18:30`) локальные времена запуска.
 - `VK_AUTO_IMPORT_TZ` (по умолчанию `Europe/Kaliningrad`) таймзона расписания.
 - `VK_AUTO_IMPORT_LIMIT` (по умолчанию `15`) сколько постов обработать за один запуск.
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` (по умолчанию `models/gemma-4-31b-it`) scoped model override только для VK auto-import draft extraction. Он передаётся в `event_parse` через `vk_intake`, но не меняет Smart Update и не меняет глобальный `/parse`.
@@ -187,7 +200,7 @@ ENV:
 
 Рекомендация по эксплуатации: для live очереди безопаснее частые меньшие батчи, чем редкие большие. Такой режим лучше переживает `SCHED_HEAVY_GUARD_MODE=skip`, быстрее подбирает свежие посты после crawl и реже создаёт длинные окна, где один пропущенный запуск мгновенно превращается в суточный backlog.
 
-Подбор дефолтных окон делался с запасом относительно типовых соседних задач в `Europe/Kaliningrad`: утренний run не ставится вплотную к `daily` на `08:00`, поздний run не ставится рядом с вечерним `tg_monitoring`, а дневные окна держат отступ от `VK_CRAWL_TIMES_LOCAL` и midday jobs.
+Подбор дефолтных окон делался с запасом относительно типовых соседних задач в `Europe/Kaliningrad`: утренний run не ставится вплотную к `daily` на `08:00`, поздний run не ставится рядом с вечерним `tg_monitoring`, а дневные окна держат очередь более ровной. Слот `15:30` выбран как ближайшее безопасное окно после `15:15` `/3di`: он забирает свежие `pending` посты после дневного `13:15` VK crawl, но оставляет буфер до `16:30` festival queue.
 
 Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие дольше lock timeout, автоматически возвращаются в `pending` на следующем run/выборе очереди. Иначе такие строки не видны текущему auto-import flow, который использует `locked` как рабочий статус.
 
@@ -203,7 +216,7 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - Crawl admission is intentionally LLM-first for event-like edge cases: if a VK post has date-like text plus strong invite/registration/offline-place signals but deterministic `event_ts_hint` is missing or uncertain, crawl should fail open into `vk_inbox`/normal LLM import instead of terminally rejecting it as `past_event`. Deterministic normalization may preserve syntax (for example `16 мая 2026 г. в 16:00` must not be masked as phone-like noise), but semantic event acceptance stays in the LLM/Smart Update path.
 Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update. По умолчанию очередь идёт строго row-by-row без N+1 reserve; если `VK_AUTO_IMPORT_PREFETCH=1`, включается лёгкий prefetch следующего post, а полный (media/OCR/LLM) префетч по-прежнему включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
 
-Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build`, поэтому двойное ожидание убрано без потери качества/полноты отчёта.
+Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build` и `tg_event_publish`, поэтому двойное ожидание убрано без потери качества/полноты отчёта. ICS остаётся opt-in через `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS`.
 
 ### Recovery after restart/OOM
 
@@ -258,6 +271,7 @@ ENV:
 - Один VK пост может порождать несколько событий.
 - События в прошлом не должны создаваться.
 - Время начала берём из текста/афиши (OCR). Если время в посте не указано, можно подставить `vk_source.default_time` как **низкоприоритетный** fallback (помечается `event.time_is_default=1` и не является жёстким якорем: при появлении явного времени из других источников оно переопределяется).
+- `vk_source.location` / source-location hint — сильный, но не слепой prior для источников с постоянной площадкой. Если пост явно называет только помещение/этаж (`лекционный зал`, `аудитория`, `4 этаж`), LLM должен считать venue отсутствующим и восстанавливать здание/организацию из source context/OCR/hint; для `konb39` canonical default — `Научная библиотека, Мира 9, Калининград`.
 - Посты об **отмене/переносе** не создают новых событий: автоимпорт пытается найти соответствующее событие в базе и выставляет `event.lifecycle_status=cancelled|postponed` (событие становится неактивным и исчезает из дайджестов/анонсов/агрегированных страниц после ближайшего rebuild). Флаг `event.silent` остаётся для ручного скрытия оператором.
   - Детектор отмены/переноса должен быть **консервативным**: он не должен срабатывать на “литературные” обороты вроде «перенесут вас в мир…».
   - Посты о переносе только **времени начала** (`8 мая время начала ... перенесено на 19.30`, при этом событие остаётся открытым/регистрация продолжается) не идут в shortcut отмены: они проходят обычный LLM-first import + Smart Update. Cancellation matcher не имеет права деактивировать событие без date/title anchor.

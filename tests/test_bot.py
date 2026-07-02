@@ -10367,6 +10367,46 @@ async def test_festival_vk_message_period_location(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_festival_vk_sync_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("ENABLE_FESTIVAL_VK_POSTS", raising=False)
+
+    async def fail_get_vk_group_id(_db):
+        raise AssertionError("disabled festival VK sync must not read VK settings")
+
+    monkeypatch.setattr(main, "get_vk_group_id", fail_get_vk_group_id)
+
+    assert await main.sync_festival_vk_post(None, "Solo", bot=None) is False
+
+
+@pytest.mark.asyncio
+async def test_festival_pages_result_omits_disabled_vk_url(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("ENABLE_FESTIVAL_VK_POSTS", raising=False)
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        fest = main.Festival(
+            name="Solo",
+            vk_post_url="https://vk.com/wall-231828790_1018",
+        )
+        session.add(fest)
+        ev = main.Event(
+            title="Future",
+            description="d",
+            source_text="s",
+            date=FUTURE_DATE,
+            time="18:00",
+            location_name="Hall",
+            festival="Solo",
+        )
+        session.add(ev)
+        await session.commit()
+        eid = ev.id
+
+    assert await main._job_result_link(JobTask.festival_pages, eid, db) is None
+
+
+@pytest.mark.asyncio
 async def test_festival_page_no_events_shows_info(tmp_path: Path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -11292,3 +11332,18 @@ async def test_progress_includes_festival_tg(tmp_path: Path, monkeypatch):
     await main.publish_event_progress(ev, db, bot, chat_id=1)
     final_text = bot.text_edits[-1][2]
     assert "✅ Telegraph (фестиваль) — http://fest" in final_text
+
+
+@pytest.mark.asyncio
+async def test_daily_scheduler_claim_survives_runtime_reset(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        await main._daily_reset_runtime_state()
+        assert await main._daily_try_claim(db, 12345, "2026-06-30") is True
+        await main._daily_release_claim(db, 12345, "2026-06-30", sent_count=3)
+        await main._daily_reset_runtime_state()
+
+        assert await main._daily_try_claim(db, 12345, "2026-06-30") is False
+    finally:
+        await db.close()

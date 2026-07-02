@@ -39,6 +39,59 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+def _load_status_loader():
+    try:
+        from kaggle_status_client import load_status_client as loader
+        return loader
+    except Exception as exc:
+        print(f"[kaggle_status] import failed: {exc}", flush=True)
+    for root in [SCRIPT_DIR, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("events_bot_kaggle_status_client", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    print(f"[kaggle_status] loaded helper from {candidate}", flush=True)
+                    return module.load_status_client
+            except Exception as exc:
+                print(f"[kaggle_status] helper load failed from {candidate}: {exc}", flush=True)
+    return None
+
+
+load_status_client = _load_status_loader()
+
+STATUS_PROGRESS: dict[str, object] = {"phase": "bootstrap"}
+STATUS_CLIENT = load_status_client(log=lambda message: print(message, flush=True)) if load_status_client else None
+
+
+def _status_event(event: str, *, phase: str | None = None, status: str | None = None, progress: dict | None = None, message: str | None = None) -> None:
+    if STATUS_CLIENT is None:
+        return
+    try:
+        STATUS_CLIENT.event(
+            event,
+            phase=phase,
+            status=status,
+            progress=progress,
+            message=message,
+        )
+    except Exception:
+        print(f"[kaggle_status] failed to emit {event}", flush=True)
+
+
+def _status_progress() -> dict[str, object]:
+    return dict(STATUS_PROGRESS)
+
 
 def ensure_libs() -> None:
     modules = [
@@ -783,6 +836,100 @@ def _vk_post_text(post: dict[str, Any]) -> str:
     return html.unescape(text).strip()
 
 
+def _safe_media_fragment(value: Any) -> str:
+    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())
+    return text.strip("._") or "media"
+
+
+def _vk_best_photo_url(photo: dict[str, Any]) -> str | None:
+    sizes = photo.get("sizes") if isinstance(photo.get("sizes"), list) else []
+    best_url: str | None = None
+    best_score = -1
+    for size in sizes:
+        if not isinstance(size, dict):
+            continue
+        url = str(size.get("url") or "").strip()
+        if not url:
+            continue
+        try:
+            score = int(size.get("width") or 0) * int(size.get("height") or 0)
+        except Exception:
+            score = 0
+        if score > best_score:
+            best_score = score
+            best_url = url
+    return best_url
+
+
+def _vk_photo_media_refs(post: dict[str, Any]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
+    message_id = int(post.get("id") or 0)
+    for idx, att in enumerate(attachments[:GUIDE_MEDIA_OUTPUT_LIMIT_PER_POST]):
+        if not isinstance(att, dict) or att.get("type") != "photo":
+            continue
+        photo = att.get("photo") if isinstance(att.get("photo"), dict) else {}
+        url = _vk_best_photo_url(photo)
+        if not url:
+            continue
+        refs.append(
+            {
+                "message_id": message_id,
+                "kind": "photo",
+                "attachment_index": idx,
+                "owner_id": int(photo.get("owner_id") or 0) or None,
+                "id": int(photo.get("id") or 0) or None,
+                "url": url,
+            }
+        )
+    return refs
+
+
+def materialize_vk_post_media_assets(*, username: str, post: ScannedPost) -> list[dict[str, Any]]:
+    if not post.media_refs:
+        return []
+    MEDIA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out: list[dict[str, Any]] = []
+    max_bytes = GUIDE_MEDIA_OUTPUT_MAX_MB * 1024 * 1024
+    for idx, media_ref in enumerate(post.media_refs[:GUIDE_MEDIA_OUTPUT_LIMIT_PER_POST]):
+        if str(media_ref.get("kind") or "").strip().lower() != "photo":
+            continue
+        url = str(media_ref.get("url") or "").strip()
+        if not url:
+            continue
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "events-bot-guide-monitor/1.0"})
+            with urllib.request.urlopen(request, timeout=VK_TIMEOUT_SECONDS) as response:
+                payload = response.read(max_bytes + 1)
+        except Exception as exc:
+            print(
+                f"[guide:vk-media:error] source=vk:{username} message_id={post.message_id} error={type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            continue
+        if not payload or len(payload) > max_bytes:
+            continue
+        rel_path = (
+            f"guide_media/{_safe_media_fragment(username)}_"
+            f"{int(post.message_id)}_{int(media_ref.get('attachment_index') or idx)}_{idx}.jpg"
+        )
+        asset_path = WORK_DIR / rel_path
+        asset_path.parent.mkdir(parents=True, exist_ok=True)
+        asset_path.write_bytes(payload)
+        out.append(
+            {
+                "message_id": int(media_ref.get("message_id") or post.message_id),
+                "kind": "photo",
+                "attachment_index": int(media_ref.get("attachment_index") or idx),
+                "owner_id": media_ref.get("owner_id"),
+                "id": media_ref.get("id"),
+                "relative_path": rel_path,
+                "size_bytes": len(payload),
+            }
+        )
+    return out
+
+
 def _vk_post_to_scanned_post(
     post: dict[str, Any],
     *,
@@ -822,7 +969,7 @@ def _vk_post_to_scanned_post(
         forwards=reposts or None,
         reactions_total=sum(reactions_json.values()) or None,
         reactions_json=reactions_json or None,
-        media_refs=[],
+        media_refs=_vk_photo_media_refs(post),
         media_assets=[],
     )
 
@@ -2706,11 +2853,12 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
                 )
         flags = prefilter_flags(post, ocr_chunks=ocr_chunks)
         passes = prefilter_pass(post, source_kind, flags)
-        media_assets = (
-            await materialize_post_media_assets(client, username=username, post=post)
-            if passes and platform == "telegram" and client is not None
-            else []
-        )
+        if passes and platform == "telegram" and client is not None:
+            media_assets = await materialize_post_media_assets(client, username=username, post=post)
+        elif passes and platform == "vk":
+            media_assets = materialize_vk_post_media_assets(username=username, post=post)
+        else:
+            media_assets = []
         payload: dict[str, Any] = {
             "message_id": post.message_id,
             "grouped_id": post.grouped_id,
@@ -2826,6 +2974,26 @@ async def main() -> None:
     run_id = str(config.get("run_id") or f"guide_kaggle_{int(datetime.now(timezone.utc).timestamp())}")
     started_at = datetime.now(timezone.utc).isoformat()
     sources = [item for item in (config.get("sources") or []) if isinstance(item, dict)]
+    acquired_resources: list[str] = []
+    STATUS_PROGRESS.update(
+        {
+            "phase": "preflight",
+            "run_id": run_id,
+            "sources_total": len(sources),
+            "sources_done": 0,
+            "limit_per_source": int(config.get("limit_per_source") or 25),
+            "days_back": int(config.get("days_back") or 7),
+            "progress_percent": 5,
+            "progress_label": f"источники 0/{len(sources)}",
+        }
+    )
+    _status_event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=_status_progress)
+        for resource_key in STATUS_CLIENT.config.get("resource_leases") or []:
+            if not STATUS_CLIENT.acquire_resource(str(resource_key), ttl_seconds=3 * 60 * 60):
+                raise RuntimeError(f"Required Kaggle resource is busy: {resource_key}")
+            acquired_resources.append(str(resource_key))
     print(
         (
             f"Guide monitor run_id={run_id} mode={config.get('scan_mode') or 'full'} "
@@ -2845,9 +3013,23 @@ async def main() -> None:
     try:
         limit = int(config.get("limit_per_source") or 25)
         days_back = int(config.get("days_back") or 7)
-        for source in sources:
+        for idx, source in enumerate(sources, start=1):
             if not isinstance(source, dict):
                 continue
+            STATUS_PROGRESS.update(
+                {
+                    "phase": "scan",
+                    "source_index": idx,
+                    "sources_total": len(sources),
+                    "source": str(source.get("username") or source.get("source_url") or ""),
+                    "sources_done": len(sources_output),
+                    "progress_label": (
+                        f"источники {idx}/{len(sources)} · "
+                        f"{source.get('username') or source.get('source_url') or ''}"
+                    ),
+                }
+            )
+            _status_event("source_started", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
             try:
                 if client is not None and (collapse_ws(source.get("platform")).lower() or "telegram") == "telegram":
                     await ensure_client_connected(client)
@@ -2868,9 +3050,23 @@ async def main() -> None:
             if result.get("source_status") != "ok":
                 partial = True
             sources_output.append(result)
+            STATUS_PROGRESS.update(
+                {
+                    "sources_done": len(sources_output),
+                    "posts_scanned": sum(int(item.get("posts_scanned") or 0) for item in sources_output),
+                    "progress_label": (
+                        f"источники {len(sources_output)}/{len(sources)} · "
+                        f"посты {sum(int(item.get('posts_scanned') or 0) for item in sources_output)}"
+                    ),
+                }
+            )
+            _status_event("source_done", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
     finally:
         if client is not None:
             await client.disconnect()
+        for resource_key in acquired_resources:
+            if STATUS_CLIENT is not None:
+                STATUS_CLIENT.release_resource(resource_key)
     stats = _summarize_run_stats(sources_output)
     payload = {
         "schema_version": 1,
@@ -2883,6 +3079,29 @@ async def main() -> None:
         "sources": sources_output,
     }
     RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    STATUS_PROGRESS.update(
+        {
+            "phase": "report",
+            "sources_done": len(sources_output),
+            "posts_total": stats.get("posts_total", 0),
+            "occurrences_total": stats.get("occurrences_total", 0),
+            "partial": partial,
+            "output": str(RESULT_PATH),
+            "progress_percent": 100,
+            "progress_label": (
+                f"источники {len(sources_output)}/{len(sources)} · "
+                f"посты {stats.get('posts_total', 0)} · экскурсии {stats.get('occurrences_total', 0)}"
+            ),
+        }
+    )
+    _status_event(
+        "report_written",
+        phase="report",
+        status="done" if not partial else "partial",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.stop_alive()
     print(
         (
             f"Guide monitor completed partial={partial} "

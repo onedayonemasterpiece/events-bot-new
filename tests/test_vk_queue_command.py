@@ -31,7 +31,7 @@ async def test_handle_vk_queue_shows_counts_and_button(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.get_session() as session:
-        session.add(User(user_id=1))
+        session.add(User(user_id=1, is_superadmin=True))
         await session.commit()
     async with db.raw_conn() as conn:
         rows = [
@@ -64,8 +64,11 @@ async def test_handle_vk_queue_shows_counts_and_button(tmp_path):
     await main.handle_vk_queue(msg, db, bot)
     assert bot.messages, "no message sent"
     sent = bot.messages[0]
-    assert sent.text.splitlines()[0].startswith("Обновление базы: ")
+    lines = sent.text.splitlines()
+    assert lines[0].startswith("Обновление базы VK: ")
+    assert lines[1].startswith("Авторазбор очереди: ")
     assert "05:15, 09:15, 13:15, 17:15, 21:15, 22:45" in sent.text
+    assert "06:15, 10:15, 12:00, 15:30, 18:30" in sent.text
     assert "pending: 2" in sent.text
     assert "locked: 1" in sent.text
     assert sent.reply_markup.keyboard[0][0].text == main.VK_BTN_CHECK_EVENTS

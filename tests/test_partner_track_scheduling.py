@@ -14,7 +14,9 @@ if str(ROOT) not in sys.path:
 
 
 import scheduling
+import video_announce.scenario as scenario_module
 from db import Database
+from models import User
 
 
 class _FixedPartnerEcoMidday(datetime):
@@ -159,6 +161,46 @@ async def _insert_partner_failed_ops_run(
         )
         await conn.commit()
         return int(cur.lastrowid)
+
+
+@pytest.mark.asyncio
+async def test_scheduled_partner_track_lane_busy_is_explicit_skip(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        await session.commit()
+
+    class FakeScenario:
+        last_partner_track_skip_reason = "video_lanes_busy"
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def run_partner_track_pipeline(self, *_args, **_kwargs) -> None:
+            return None
+
+    monkeypatch.setattr(scenario_module, "VideoAnnounceScenario", FakeScenario)
+
+    await scheduling._run_scheduled_partner_track(
+        db,
+        bot=object(),
+        partner_track_id="partner_eco_nature_001",
+    )
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_partner_eco' ORDER BY id DESC LIMIT 1"
+        )
+        row = await cur.fetchone()
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "skipped"
+    assert details["partner_track_id"] == "partner_eco_nature_001"
+    assert details["skip_reason"] == "video_lanes_busy"
 
 
 @pytest.mark.asyncio

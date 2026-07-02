@@ -35,6 +35,18 @@ def _install_dummy_kaggle(monkeypatch):
     )
 
 
+def test_normalize_kernel_ref_strips_code_and_owner_leading_slash(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    assert module._normalize_kernel_ref("/code/zigomaro/cherryflash-video-lane-1") == (
+        "zigomaro/cherryflash-video-lane-1"
+    )
+    assert module._normalize_kernel_ref("/zigomaro/cherryflash-video-lane-1") == (
+        "zigomaro/cherryflash-video-lane-1"
+    )
+
+
 def test_kaggle_test_skips_max_size(monkeypatch):
     _install_dummy_kaggle(monkeypatch)
     KaggleClient = importlib.import_module("video_announce.kaggle_client").KaggleClient
@@ -283,6 +295,67 @@ def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatc
     assert push_gpu_flags == [True, False]
 
 
+def test_deploy_kernel_update_does_not_cpu_fallback_crumple_video(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CrumpleVideo"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/crumple-video",
+  "title": "Crumple Video",
+  "code_file": "crumple_video.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": []
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "crumple_video.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+
+    class Response:
+        ref = ""
+        versionNumber = 0
+        error = "Maximum weekly GPU quota of 30.00 hours reached."
+        invalidDatasetSources: list[str] = []
+
+    push_gpu_flags: list[bool] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            push_gpu_flags.append(bool(meta.get("enable_gpu")))
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "crumple-video", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    with pytest.raises(RuntimeError, match="Maximum weekly GPU quota"):
+        client.deploy_kernel_update(
+            "local:CrumpleVideo",
+            ["zigomaro/video-afisha-session-766"],
+        )
+
+    assert push_gpu_flags == [True]
+
+
 def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
@@ -416,6 +489,182 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     ]
 
 
+def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CherryFlash"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/cherryflash",
+  "title": "CherryFlash",
+  "code_file": "cherryflash.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/cherryflash-session-old"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "cherryflash.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_meta: dict = {}
+
+    class Response:
+        ref = "/code/zigomaro/cherryflash-video1"
+        versionNumber = 78
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            pushed_meta.update(
+                module.json.loads(
+                    (Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8")
+                )
+            )
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "cherryflash", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "local:CherryFlash",
+        ["zigomaro/cherryflash-session-220"],
+        target_kernel_ref="zigomaro/cherryflash-video1",
+    )
+
+    assert result == "zigomaro/cherryflash-video1"
+    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert pushed_meta["slug"] == "cherryflash-video1"
+    assert pushed_meta["title"] == "cherryflash-video1"
+    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-220"]
+
+
+def test_quota_remaining_seconds_from_raw_parses_kaggle_duration_strings(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    remaining = module._quota_remaining_seconds_from_raw(
+        {
+            "gpuQuota": {
+                "timeUsed": "108146.341s",
+                "timeReserved": "0s",
+                "totalTimeAllowed": "108000s",
+            }
+        }
+    )
+
+    assert remaining == pytest.approx(-146.341)
+
+
+def test_kaggle_kernel_exists_treats_wrong_slug_as_missing(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    class StubApi:
+        def kernels_status(self, ref):
+            raise RuntimeError(
+                f"Cannot access kernel '{ref}' (Permission 'kernels.get' was denied). "
+                "The most likely cause is a wrong kernel slug."
+            )
+
+    assert module._kaggle_kernel_exists(StubApi(), "zigomaro/missing-lane") is False
+
+
+def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quota_exhausted(
+    monkeypatch,
+    tmp_path,
+):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CherryFlash"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/cherryflash",
+  "title": "CherryFlash",
+  "code_file": "cherryflash.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [
+    "zigomaro/cherryflash-session-old"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "cherryflash.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_meta: dict = {}
+
+    class Response:
+        ref = "/code/zigomaro/cherryflash-video1"
+        versionNumber = 79
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            pushed_meta.update(
+                module.json.loads(
+                    (Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8")
+                )
+            )
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "cherryflash", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(module, "_kaggle_kernel_exists", lambda _api, _ref: False)
+    monkeypatch.setattr(module, "_read_gpu_quota_remaining_seconds", lambda _api: -1.0)
+
+    result = client.deploy_kernel_update(
+        "local:CherryFlash",
+        ["zigomaro/cherryflash-session-221"],
+        target_kernel_ref="zigomaro/cherryflash-video1",
+        machine_shape="NvidiaTeslaT4",
+    )
+
+    assert result == "zigomaro/cherryflash-video1"
+    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert pushed_meta["enable_gpu"] is False
+    assert "machine_shape" not in pushed_meta
+    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-221"]
+
+
 def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
@@ -487,4 +736,71 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
         "zigomaro/koenigsberg-winter",
         "zigomaro/koenigsberg-music",
         "zigomaro/kenigsberg-session-100-1777298000",
+    ]
+
+
+def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CrumpleStoryPublishOnly"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/crumple-story-publish-only",
+  "title": "Crumple Story Publish Only",
+  "code_file": "publish_only.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/crumple-story-publish-session-676-1777189467",
+    "zigomaro/crumple-video-story-secrets-cipher"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "publish_only.py").write_text("print('ok')\n", encoding="utf-8")
+    pushed_sources: list[str] = []
+
+    class Response:
+        ref = "/code/zigomaro/crumple-story-publish-only"
+        versionNumber = 8
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            pushed_sources.extend(meta["dataset_sources"])
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {
+            "path": str(kernel_dir),
+            "slug": "crumple-story-publish-only",
+            "id": kernel_ref,
+        },
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "zigomaro/crumple-story-publish-only",
+        ["zigomaro/crumple-story-publish-session-677-1777298000"],
+    )
+
+    assert result == "zigomaro/crumple-story-publish-only"
+    assert pushed_sources == [
+        "zigomaro/crumple-video-story-secrets-cipher",
+        "zigomaro/crumple-story-publish-session-677-1777298000",
     ]

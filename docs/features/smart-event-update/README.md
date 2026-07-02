@@ -12,7 +12,10 @@ Smart Update по умолчанию строит публичный текст 
 - `EVENT_PARSE_GEMMA_MODEL=gemma-4-31b-it` (default) — upstream VK/TG draft extraction uses Gemma 4 before Smart Update receives candidates. Legacy parser forcing remains explicit via `EVENT_PARSE_LLM=4o`; automatic parser fallback to 4o is disabled unless `EVENT_PARSE_ENABLE_4O_FALLBACK=1`.
 - `GEO_REGION_GEMMA_MODEL=gemma-4-31b-it` (default) — Smart Update's region-filter LLM fallback also stays on Gemma 4.
 - `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` — off-by-default production-candidate create path для Gemma 4 migration: тяжёлый `create_bundle` остаётся ответственным за извлечение фактов, а сопутствующая работа делится на лёгкие Gemma 4 native-schema стадии `lollipop.bucket_facts`, `lollipop.prioritize.weight`, `lollipop.prioritize.lead`, `lollipop.editorial.layout` и финальный writer (`smart_update.g4_lollipop_light.final_writer.v3`). Writer выводит `- item` bullets только когда соответствующая секция writer_pack содержит non-empty `literal_items`; для остальных секций требует непрерывной прозы и сливает несколько фактов, отличающихся только именем (композитор/исполнитель/произведение/роль), в одно компактное предложение, чтобы не получалась одно-словная россыпь bullets. Чтобы убрать ложно-положительный `infoblock.leak:LG03` (когда короткое имя площадки естественно встречается в narrative как «в «Сигнале»»), `_g4_lollipop_light_normalize_bucket_payload` помечает `location_name` без признаков адреса (без улицы/цифр/двух запятых) как `narrative_policy=suppress` для writer-pack infoblock-валидатора; при адресоподобном `location_name` (`ул.`, цифры, две запятые) leak-guard сохраняется. `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4|4o|adaptive` выбирает writer lane; в adaptive dense packs (`facts_text_clean` больше `SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD`, default `14`) идут в один явный final `4o` writer call, остальные остаются на Gemma 4. Production canary должен ставить `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4`, если `FOUR_O_TOKEN` намеренно не выдан, иначе writer попытается dispatch 4o call, который без авторизации сразу падает (token не тратится, но trace покажет `writer.final_4o failed` и работа уйдёт в legacy fact-first fallback вместо новой v3-prose-prompt дорожки). Лёгкие native stages ограничены `SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC` (default `70`) и имеют короткий retry на transient provider failures (`SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES`, default `2`).
-- `SMART_UPDATE_G4_SPLIT_CREATE=1` — экспериментальный вариант `g4-split-create-v2-rich-facts` для миграции на Gemma 4: create-path не вызывает тяжёлый `create_bundle`, а делает quality-critical `rich_facts_extract` с секциями фактов, ответственный `split_description_writer` для основного Telegraph/body текста и лёгкий `split_derived_fields` для `short_description` / `search_digest`. По умолчанию выключен; `rich_facts_extract` остаётся тяжёлым fact-ledger этапом и может откатиться с native schema на prompt-schema. Основной writer не запускает повторный prompt-schema вызов, пока явно не задан `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1`; лёгкий `split_derived_fields` может откатиться на prompt-schema. Split-create стадии отключают legacy 4o fallback, чтобы Gemma 4 benchmark оставался model-clean. Основной writer ограничен `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`), derived stage — `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`). Если description writer недоступен после успешного извлечения фактов, create использует bounded fact-ledger fallback вместо старого многошагового fact-first/rewrite/reflow каскада.
+- `SMART_UPDATE_G4_SPLIT_CREATE=1` — экспериментальный вариант `g4-split-create-v2-rich-facts` для миграции на Gemma 4: create-path не вызывает тяжёлый `create_bundle`, а делает quality-critical `rich_facts_extract` с секциями фактов, ответственный `split_description_writer` для основного Telegraph/body текста и лёгкий `split_derived_fields` для `short_description` / `search_digest`. По умолчанию выключен; `rich_facts_extract` остаётся тяжёлым fact-ledger этапом и может откатиться с native schema на prompt-schema. Основной writer не запускает повторный prompt-schema вызов, пока явно не задан `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1`; лёгкий `split_derived_fields` может откатиться на prompt-schema. Split-create стадии отключают legacy 4o fallback, чтобы Gemma 4 benchmark оставался model-clean. Основной writer ограничен `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`), derived stage — `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`). Если description writer недоступен после успешного извлечения фактов, create использует bounded fact-ledger fallback вместо старого многошагового fact-first/rewrite/reflow каскада. Для лекций/паблик-токов `rich_facts_extract` обязан сохранять каждый блок `ИМЯ` + роль как отдельный named-roster fact; `split_description_writer` обязан включать такие факты в narrative и не сворачивать участников в категории вроде «краеведы/учёные/эксперты». Если draft writer попал под logistics reject, Smart Update делает LLM-pass `split_description_writer_remove_logistics`, чтобы убрать повтор даты/адреса/билетов без потери фактов, и только потом переходит к fallback.
+- `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce` — create-path identity gate after the widened-recall `_llm_dedup_adjudicator` and before a new event row is created. `off` is the default and does nothing. `shadow` builds/logs a structured verdict but never changes behavior. `enforce` may veto create on narrow deterministic evidence (same source identity, same ticket+slot, same poster identity) or vector identity evidence from `related_v1`/`search_v3`; it never auto-merges. If the gate itself errors in `enforce`, Smart Update fails safe with `skipped_identity_gate` instead of creating or merging automatically. Vector recall is controlled by `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`, `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`, `SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS`, `SMART_UPDATE_IDENTITY_EMBEDDING_MODEL`, `SMART_UPDATE_IDENTITY_EMBEDDING_DIM`, and `SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV`.
+- After switching the identity gate to `enforce`, production should also enable the read-only `/vystavki/` acceptance audit with `ENABLE_EXHIBITION_DUPLICATE_AUDIT=1`; it records `ops_run(kind='exhibition_duplicate_audit')` and fails/alerts on high-confidence public exhibition duplicate pairs during the 14-day rollout window.
+  For read-only rollout evidence independent of the scheduler, run `python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`; it reports decision/veto/fail-safe/vector-error counts from `event_identity_decision_log` and env-readiness booleans without printing secrets. Low-risk vector recall failures that are allowed to continue are still persisted in `decision_payload.suppressed_vector_error` and counted as vector errors.
 
 Канонический контракт и детали реализации:
 
@@ -41,6 +44,7 @@ Smart Update по умолчанию строит публичный текст 
     - `doors_start_ticket_bridge`: merge для пар вроде `19:30 doors / 20:00 start`, когда в тексте/OCR явно присутствует оба времени и прочие якоря совпадают;
     - `copy_post_same_day_text`: merge для same-day repost/copy cases с почти идентичным `source_text` и тем же venue даже тогда, когда один источник несёт shortlink, а другой generic ticket URL/button-only CTA;
     - `doors_start_text_bridge`: отдельный bridge для copy-post family без ticket anchor, когда один источник ошибочно заякорился в `сбор гостей 19:00`, а другой в `начало 20:00`, но текст явно содержит оба времени и это всё ещё один и тот же слот;
+    - `prose_location_same_slot_text`: если extractor протащил в `location_name` очевидный prose-фрагмент, Smart Update не использует этот текст как venue anchor; он может смержить только при совпадении `date + explicit time + related title + near-identical source_text`, иначе кандидат fail-closed как `invalid:prose_location` и не создаёт публичную карточку с prose-venue;
     - `cross_source_exact_match`: exact-title cross-source merge при одинаковых `date + time + venue`; это осознанно узкий rescue, а не общая cluster heuristic;
     - `city_noise_exact_title_shortlist`: если из-за `event.city` shortlist потерял exact-title duplicate, Smart Update точечно добирает city-mismatch событие обратно только при совпадении `date + venue + exact title` и без time conflict;
     - `city_noise_copy_post_shortlist`: отдельный city-noise rescue для multi-event repost families; Smart Update может добрать событие из другого города обратно в shortlist только при совпадении `date + ticket_link` и почти идентичном `source_text`, чтобы не терять merge из-за шумного venue override;
@@ -51,9 +55,26 @@ Smart Update по умолчанию строит публичный текст 
   - LLM‑матчинг (JSON‑ответ с `match_event_id`, `confidence`).
     - в prompt LLM `time=00:00` и `time_is_default=true` трактуются как слабый/placeholder якорь времени;
     - LLM отдельно инструктируется склеивать события при совпадении дата+площадка+контекст (участники/афиша/OCR), даже если заголовки сформулированы по-разному (общее vs конкретное название постановки).
+    - если LLM с высокой уверенностью (`confidence >= 0.95`) нашёл совпадение и жёсткие якоря не конфликтуют (дата, площадка, явное время), deterministic title guard не имеет права отменять merge только по `unrelated_titles`; детерминированный слой остаётся safety rail для фактических конфликтов, но не semantic owner для harmless title drift / русских падежей (`Валерия` vs `Концерт Валерии`).
   - Telegram Monitoring помечает extracted time как `time_is_default=true`, если это время не поддержано текстом поста, linked source text или OCR. Такой кандидат может смержиться с уже существующей карточкой по дате/площадке/смыслу, не создавая дубль только из-за неподтверждённого времени.
   - rescue‑match на create‑пути: если LLM на шаге `match_or_create` выбрал `create`, но вернул осмысленный `bundle.title`, Smart Update делает дополнительную детерминированную попытку матчинга по shortlist через `bundle.title`, чтобы не создавать дубль при слабом/плохом `candidate.title`.
   - **LLM dedup adjudicator (widened recall, create-path only — INC‑2026‑05‑30 opt 1).** Самый последний рубеж: когда все детерминированные матчеры, `match_or_create` bundle, rescue‑match и `_pre_create_duplicate_probe` сказали «нет совпадения», настоящий дубль мог просто не попасть в anchor‑gated shortlist (дрейф строки площадки или времени doors/start). Поэтому Smart Update делает **отдельный широкий recall** (дата ±1 день + soft‑city, БЕЗ фильтра по точной площадке/времени), сужает его дешёвым blocking‑ключом (`_titles_look_related` OR совпадение площадки OR паритет `ticket_link` OR пересечение poster‑hash, топ‑8) и спрашивает LLM (`_llm_dedup_adjudicator`, decision‑only JSON: `action/match_event_id/confidence/reason_code/reason`) — это дубль или отдельное событие. Промпт явно: doors‑vs‑start и алиас/касса/билетный‑оператор площадки — НЕ признак различия; два разных вендора билетов на один слот — это всё ещё один ивент; но несколько сеансов из одного поста, утренник+вечер, разные шоу и `allow_parallel` площадки — РАЗНЫЕ события. Решение проходит детерминированный guard‑ladder `_dedup_adjudicator_accept_merge` (порог `confidence ≥ 0.80`, для `allow_parallel` `≥ 0.90`; veto по конфликту времени кроме `doors_start_skew ≤ 90 мин`; unrelated‑title overrule кроме `junk_location_same_venue`; `generic_ticket_false_friend`; и **жёсткий инвариант**: один и тот же `source_url` + конфликт времени ⇒ всегда create — это легитимный multi‑session split вроде `5426/5427` из `t.me/gusmuseum/4509`). Адъюдикатор работает ТОЛЬКО на create‑пути (никогда не переопределяет уже найденный match), не запускается для `parser:*` и под `anchor_forced`, и управляется флагом `SMART_UPDATE_DEDUP_ADJUDICATOR` (default ON). Он не противоречит детерминированным rescue‑веткам выше — запускается строго после них.
+  - **Vector identity gate evidence.**
+    `event_identity.py` defines the `identity_candidate_v1` compact candidate
+    document format for embedding recall: every emitted line is
+    provenance-labelled (`candidate.title`, `candidate.location_name`,
+    `candidate.source_text`, poster OCR/hash labels, etc.), large fields are
+    bounded/truncated, and the final document carries a stable SHA-256 hash. The
+    Smart Update create-path gate can generate an ephemeral Gemini embedding
+    (not stored), call the service-role-only Supabase RPC
+    `event_identity_candidates_by_embedding_v1` over existing `related_v1` and
+    `search_v3` vectors, hydrate the nearest SQLite event by id, and feed that
+    vector evidence into deterministic create-veto checks. The ephemeral
+    embedding provider call must go through `GoogleAIClient.embed_content_async()`
+    and `google_ai_reserve`/`google_ai_finalize`; direct `embedContent` calls are
+    disabled unless an explicit local/debug bypass is set. `search_v3` is broad
+    recall evidence only; high vector similarity alone is not enough to block
+    recurring/single-slot events with different explicit dates.
   - create-bundle title guard теперь жёстче:
     - prompt прямо запрещает редакционные/идеологические заголовки вместо фактического имени события;
     - если явного имени нет, LLM должен предпочесть нейтральный формат вроде `<event_type> в <venue>`, а не промо-слоган;
@@ -69,6 +90,7 @@ Smart Update по умолчанию строит публичный текст 
   - описание и необязательные поля обогащаются через LLM (Gemma): **журналистский рерайт, не дословно** (не только для Telegram — для всех внешних источников);
     - при create-bundle `short_description` теперь дополнительно ограничивается на factual framing: модель должна описывать, что происходит (формат/участники/жанр), а не добавлять символические/идеологические интерпретации;
     - create-bundle facts теперь могут возвращать до 24 атомарных фактов и явно приоритизируют организаторов/институции, цель события, методологию/background, точные числа/статистику, участников/ведущих/модераторов/гидов/исполнителей, программу/примеры и условия участия. Это LLM-first tightening для Gemma 4 migration: если источник плотный, модель должна сокращать декоративные оценки, а не терять организатора, цель, числа или функцию модератора/ведущего/гида.
+    - rich-facts/create-bundle prompts трактуют организатора, сообщество, площадку и источник вдохновения (`Плоский мир Терри Пратчетта` и т.п.) как identity facts: их нужно сохранять из явного source evidence, не заменяя тематическими догадками или названием другого сообщества.
   - для всех LLM-запросов Smart Update (rewrite/merge) действует орфографическое правило: при любой модификации текста нужно **сохранять/использовать букву `ё`** в словах, где она нормативна (не заменять её на `е`, если слово в источнике или по норме пишется через `ё`);
   - конфликты фиксируются в логах (`added_facts`, `skipped_conflicts`).
   - Telegraph страница события рендерится из `event.description` (смёрженного/отрерайченного текста), чтобы новые факты из дополнительных источников не терялись.
@@ -124,9 +146,15 @@ Smart Update по умолчанию строит публичный текст 
     - при этом запрещены Markdown-ссылки `[текст](url)` и таблицы.
   - заголовок события (`event.title`) при создании/мердже может быть улучшен LLM с учётом заголовка афиши (`poster_titles`/OCR),
     чтобы не терять ключевые смысловые маркеры (например «Масленица») и не превращать title в “кусок описания”.
-  - если входной `title` выглядит как generic-fallback вида `<event_type> — <площадка>` (например «Концерт — Янтарь холл»),
-    но в `source_text`/OCR есть явное собственное название/бренд события, Smart Update разрешает LLM заменить заголовок на это имя
-    (с детерминированной проверкой grounding по токенам источников).
+  - если входной `title` выглядит как generic-fallback вида `<event_type> — <площадка>` (например «Концерт — Янтарь холл»)
+    или как category-only заголовок без отличительного собственного имени при наличии такого имени в `source_text`/OCR
+    (например `Городской фестиваль` при source headline `Городской фестиваль «ВЕЛОДЕНЬ»`), Smart Update сначала просит LLM
+    найти формальное собственное название/бренд события в `source_text`/OCR/фактах; если такого имени нет, запускается второй
+    LLM-first recovery pass для короткого публичного заголовка из grounded темы, программы, участника/коллектива, фестиваля/проекта,
+    праздника или центрального произведения/объекта события. Это закрывает афишные источники без официального нейминга
+    (`Pianissimo: Илья Папоян`, `Розовый натюрморт`, `День защиты детей в Юности`) без детерминированного смыслового угадывания.
+    Детерминированный guard только маршрутизирует слабый заголовок к LLM и не выбирает replacement сам; результат принимается только
+    если он не является тем же `<тип> — <площадка>` шаблоном и все смысловые токены заголовка подтверждаются тем же source/OCR/fact corpus.
   - цитаты должны быть устойчивыми при мердже: если в предыдущей версии описания уже была релевантная цитата (blockquote),
     то при добавлении новых источников (например `/parse`) Smart Update старается **сохранить цитату** (и не заменить её
     целиком на “косвенную речь”).
@@ -155,8 +183,19 @@ Smart Update по умолчанию строит публичный текст 
     - fallback: поиск по `event_source.source_url`, если источник уже был сохранён у события.
     - форс‑матч применяется только когда он безопасен: если на один `source_url` приходится несколько событий (schedule‑посты), матч делается только при одинаковой “сигнатуре дубля” (дата + начало времени/пустое время + площадка + нормализованный `title`).
   - для Telegram `group/supergroup` постов, где автор публикации — пользователь Telegram, мониторинг может использовать автора как fallback‑контакт для `ticket_link`, если явная ссылка/handle на запись не найдена и в тексте нет phone/email контакта; приоритет: `https://t.me/<username>`, fallback — `tg://user?id=<id>`.
+- Identity/schema foundation:
+  - `event.identity_status` хранит статус идентичности карточки (`canonical` по умолчанию; будущий merge/gate сможет помечать merged/review states без смешивания с `lifecycle_status`);
+  - `event.merged_into_event_id` хранит каноническую карточку, если текущая строка позже будет сведена как дубль;
+  - `event.date_is_inferred`, `date_provenance`, `date_confidence`, `end_date_provenance`, `end_date_confidence` добавлены как first-class provenance/trust поля для будущих решений о датах; существующий `end_date_is_inferred` сохраняется и остаётся отдельным durable marker;
+  - `event_identity_decision_log` — append-only foundation для решений identity gate/adjudicator: участвующие event/source ids, решение, причина, confidence, actor и JSON payload;
+  - `event_identity_lock` — per-event lock для временной или ручной защиты identity от автоматического merge/update.
 - Trust‑логика:
   - хранится `event.ticket_trust_level` и применяется при обновлении ticket‑полей.
+  - для даты есть явная лестница provenance/trust: `missing` → `ungrounded` → `source_text` → `poster_ocr` → `canonical_source` → `operator`;
+    обычный merge не переписывает `event.date` только потому, что новый источник принёс другую дату. Разрешённые автоматические случаи остаются узкими:
+    canonical `parser:*`/site source может исправить якорь, а grounded дата из source text/OCR может исправить старый inferred range у long‑running события при совпадающей площадке.
+  - афиши при merge дедуплицируются не только по `poster_hash`, но и по `supabase_path`, точному `phash`, а затем по точному URL как weak fallback;
+    если новый storage URL относится к уже сохранённой афише, строка `eventposter` обновляется без добавления визуального дубля в `event.photo_urls`.
 
 ## Где используется
 
@@ -165,6 +204,10 @@ Smart Update по умолчанию строит публичный текст 
 - VK auto-import очереди (`vk_inbox`) (`vk_auto_queue.run_vk_auto_import`).
 - Ручной импорт (`add_events_from_text`, `/addevent_raw`).
 - `/parse` (site parsers): источник сайта добавляется/мерджится через Smart Update, когда у события ещё нет этого `parser:<site>` источника.
+- Outgoing post jobs: `schedule_event_update_tasks()` ставит Telegraph rebuild, VK event post и Telegram event post ([Telegram Event Publishing](../tg-publishing/README.md)) для активных будущих/текущих событий.
+  Для managed VK event posts `vk_sync` считается идемпотентным и по отложенным постам тоже: если `wall.getById`
+  не видит stored URL, но `wall.get` находит запись по тому же postponed/live id, Smart Update не создаёт второй
+  VK-пост для того же `event_id`.
 
 ## Фестивали и фестивальная очередь
 
@@ -208,7 +251,7 @@ Smart Update содержит детекцию фестивалей как ча�
 
 - `smart_event_update.py` — основная логика матчинга/мерджа.
 - `docs/reference/location-flags.md` — `allow_parallel_events`.
-- `models.py` / `db.py` — `event_source`, `eventposter.phash`, `telegram_*` таблицы.
+- `models.py` / `db.py` — `event_source`, `event_identity_*`, `eventposter.phash`, `telegram_*` таблицы.
 
 ## Примечания
 
@@ -238,6 +281,11 @@ Smart Update содержит детекцию фестивалей как ча�
 
 - В Smart Update есть канонизация части частых алиасов на входе кандидата:
   - `Научная библиотека` / `Калининградская областная научная библиотека` -> `Научная библиотека, Мира 9, Калининград` (без смешивания с БФУ).
+  - Для VK-источника КОНБ (`wall-30777579_*`/`konb39`) room/floor labels вроде
+    `читальный зал`, `2 этаж`, `4 этаж лекционный зал` не считаются публичной
+    площадкой: при source-grounding и адресе `Мира 9` они нормализуются в
+    `Научная библиотека, Мира 9, Калининград`, а room/hall остаётся только
+    вспомогательным hall_hint для дедупликации.
   - `Дом китобоя` + вариации адреса (`пр-т Мира 9` и т.п.) -> `Дом китобоя, Мира 9, Калининград`.
   - `Закхайм*` / `Ворота галерея` / `Арт-пространство Ворота` -> `Закхаймские ворота, Литовский Вал 61, Калининград`.
   - `Фридланд*` / `Дзержинского 30` -> `Фридландские ворота, Дзержинского 30, Калининград`.
@@ -250,6 +298,7 @@ Smart Update содержит детекцию фестивалей как ча�
   - `Bar Sovetov` / `Бар Советов` / `Баре Советов` -> `Бар Советов, Мира 118, Калининград`;
   - `Суспирия` / `Сусппирия` + `Коперника 21` -> `Бар Суспирия, Коперника 21, Калининград`.
   - `Третьяковская галерея` / `Третьяковская галерея, Калининград` -> `Филиал Третьяковской галереи, Парадная наб. 3, Калининград`.
+  - `Русский центр искусства` / `РЦИ` / `Русский центр искусства, Рыбная деревня` -> `Русский центр искусства, Октябрьская 10, Калининград`.
 - После этих узких алиасов Smart Update дополнительно сверяет `location_name/location_address` с `docs/reference/locations.md`.
   Если запись матчится на одну каноническую площадку, Smart Update подставляет reference `location_name`
   и использует город из справочника как авторитетный, даже когда extractor записал в `city` шумный токен вроде названия площадки.
@@ -263,7 +312,8 @@ Smart Update содержит детекцию фестивалей как ча�
   - `skipped_non_event:service_promo` (промо услуг/пакетных программ «организуем/бронирование открыто» без конкретной даты/времени)
   - `skipped_non_event:work_schedule` (только явные посты про режим/график/часы работы учреждений или закрытие/санитарный день; обычные лекции/шоу/фестивальные слоты в музеях/библиотеках или на адресах вроде `Музейная аллея` не режутся этим guard — их смысл должен решаться LLM/extractor path)
   - `skipped_non_event:venue_status_update` (статус‑обновления площадок: «отсрочка до …», новости о закрытии/выселении/аренде, петиции/сборы)
-  - `skipped_non_event:completed_event_report` (report/recap‑посты о уже прошедшем мероприятии: прошедшее время, «приняли участие/встреча прошла/выразили благодарность», без invite/registration/ticket сигналов; continuation-анонсы вроде `следующий показ будет ...`, `в следующий раз встречаемся ...`, `вас вновь ждёт ...` не режем этим guard и оставляем в event-пайплайне)
+  - `skipped_non_event:completed_event_report` (report/recap‑посты о уже прошедшем мероприятии: прошедшее время, «приняли участие/встреча прошла/выразили благодарность», без invite/registration/ticket сигналов; continuation-анонсы вроде `следующий показ будет ...`, `в следующий раз встречаемся ...`, `вас вновь ждёт ...` не режем этим guard и оставляем в event-пайплайне; отдельный узкий safety-net режет recap, где есть только `следующий фестиваль` + даты и `локация/место/адрес уточняется`, потому что это ещё не source-grounded future event)
+  - `skipped_non_event:event_logistics_notice` (операционные updates для уже пришедших/купивших гостей: «важная информация для гостей/зрителей», вход/проход/парковка/навигация/очереди/гардероб; полноценные новые invite‑посты с датой, названием, площадкой и ticket/registration сигналом не режутся)
   - `skipped_non_event:utility_outage` (коммунальные отключения: свет/вода/тепло/газ)
   - `skipped_non_event:road_closure` (перекрытия/ограничения движения/проезда)
   - `skipped_non_event:online_event` применяется только к онлайн-only форматам (вебинар/Zoom/стрим/трансляция); фраза «онлайн-регистрация» при офлайн-площадке, маршруте или месте старта не считается онлайн-only событием.
@@ -364,6 +414,13 @@ LLM остаётся владельцем смысловых решений, н�
 1. **Telegraph footer** (в конец страницы события):
    - строка `Источников: N` (без перечисления самих источников);
    - строка `Последнее обновление: YYYY-MM-DD HH:MM (TZ)` — время последнего Smart Update (локальный TZ, Калининград).
+   - после служебных строк выводится компактный редакционный подвал:
+     `Полюбить Калининград`, `Telegram: Анонсы · Афиша`,
+     `ВК: Анонсы · Афиша · канал Афиши`, `Max: Анонсы`. Ссылки ведут соответственно на
+     `https://t.me/kenigevents`, `https://t.me/kldevents`,
+     `https://vk.com/kenigeventsofficial`, `https://vk.com/klgdevents`,
+     VK-канал Афиши `https://vk.ru/im/channels/-239844596` и
+     Max `https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA`.
 2. **Лог фактов (added_facts) по источникам**:
    - доступен из `/events -> Edit` через отдельную кнопку, а также шорткатом командой `/log <event_id>`;
    - формат — журнал с датой/временем, источником и фактами, что именно было добавлено/смёрджено и что было проигнорировано.
@@ -393,7 +450,7 @@ LLM остаётся владельцем смысловых решений, н�
 - `Telegraph: ⏳ ...` / `Telegraph: ❌ ...` (только если ссылка ещё не готова или есть ошибка)
 - `Лог: /log <id>`
 - `ICS: ics` (короткая кликабельная ссылка, либо `—/⏳`)
-- `VK: пост` (кликабельная ссылка на управляемый klgdevents-пост, если `event.source_vk_post_url` указывает на опубликованный VK-анонс; строка отсутствует, если ссылки нет)
+- `Посты: VK пост/⏳ · TG пост/⏳` (кликабельные ссылки на управляемый `klgdevents` VK-анонс и Telegram event post, если они уже опубликованы; для VK рядом может быть пометка `соавторство: @... предложено`, когда publish-flow распознал известного источника-соавтора)
 - `Факты: ✅N ↩️M ⚠️K ℹ️L` (сколько фактов добавлено/проигнорировано/в конфликте/служебных заметок на текущей итерации)
 - `Иллюстрации:` и `Видео:` (где доступно: delta `+N` и `всего M`)
 
@@ -437,3 +494,41 @@ LLM остаётся владельцем смысловых решений, н�
 
 - `tests/e2e/features/smart_event_update.feature` (пограничные кейсы матчинга/мерджа).
 - `tests/e2e/features/telegram_monitoring.feature` (обогащение событий из Telegram Monitoring).
+
+### 2026-06-30 incident guard: campaign actions and short prose locations
+
+Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
+
+Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.
+
+### Static-site public projection gate
+
+The production preview/static-site exporter has an independent public projection
+gate before `preview-events.json` is written.  It is not a substitute for the
+LLM-owned Smart Update create/merge decisions; it is a final fail-closed public
+boundary.  The gate is applied to both the normal SQL slice and explicit
+`--include-ids` / control ids.
+
+Rows are suppressed when they are not canonical identities
+(`identity_status != canonical`), have `merged_into_event_id`, carry
+review/quarantine/rejected lifecycle or moderation statuses, have invalid ISO
+`date`/`end_date`, or expose narrow prompt/code/prose leakage patterns in
+`title`, `location_name`, `location_address`, or `city`.  Missing new columns on
+old SQLite snapshots are treated as absent schema, so old DB rows still export
+if their required public fields are valid.
+
+Identity gate observability is persisted in `event_identity_decision_log` for
+every enabled create-path gate invocation, including allow/veto/fail-safe
+results and compact vector evidence.  Newly created events also store
+`date_provenance`, `date_confidence`, `date_is_inferred`,
+`end_date_provenance`, and `end_date_confidence` derived from source/OCR
+grounding.  Immediately before inserting a new event row, Smart Update reruns a
+cheap duplicate probe inside the create transaction window; if it finds a fresh
+duplicate it records a decision-log row and returns `skipped_identity_gate`
+instead of creating another public row.
+
+The `/vystavki/` enforce rollout is monitored independently from page rendering
+with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the
+canonical SQLite event inventory read-only and emits JSON/Prometheus acceptance
+metrics, including
+`events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"}`.

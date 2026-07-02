@@ -339,6 +339,39 @@ def test_build_vk_source_header_uses_short_ticket_link():
     assert "https://vk.cc/short" not in registration_line
 
 
+def test_build_vk_source_header_hides_default_time():
+    event = main.Event(
+        title="Киносеанс немого кино",
+        description="desc",
+        source_text="src",
+        date="2026-06-28",
+        time="09:08",
+        time_is_default=True,
+        location_name="Грёза Хутор",
+    )
+
+    lines = main.build_vk_source_header(event)
+
+    assert "09:08" not in lines
+    assert any(line == "📅 28 июня" for line in lines)
+
+
+def test_build_vk_source_header_keeps_confirmed_time():
+    event = main.Event(
+        title="Концерт",
+        description="desc",
+        source_text="src",
+        date="2026-06-28",
+        time="19:00",
+        time_is_default=False,
+        location_name="Club",
+    )
+
+    lines = main.build_vk_source_header(event)
+
+    assert any(line == "📅 28 июня 19:00" for line in lines)
+
+
 @pytest.mark.asyncio
 async def test_sync_vk_source_post_updates_short_link(monkeypatch):
     event = main.Event(

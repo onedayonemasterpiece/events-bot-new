@@ -42,10 +42,29 @@ Documented exceptions (rare, guardrail-only):
 - Fail-closed contradiction guards: a zero/missing price never creates a free
   label; explicit giveaway/included-entry-ticket/positive-price evidence can only
   clear `is_free`, not invent paid/free meaning.
-- Exact identity plumbing: a specific ticket URL plus same date/place, or
-  near-identical source text plus same date/time/place, may converge candidates
-  before LLM to prevent duplicate public cards. Generic ticket landing pages and
-  ambiguous title/location-only matches remain LLM-owned.
+- Exact identity plumbing: a specific ticket URL plus same date/place, a specific
+  ticket URL plus same date/time with no explicit time conflict when venue is
+  already suspected to come from a wrong source default, or near-identical source
+  text plus same date/time/place, may keep candidates visible for LLM/dedupe or
+  converge them before create to prevent duplicate public cards. Generic ticket
+  landing pages and ambiguous title/location-only matches remain LLM-owned.
+- Event-quality safety rails from `INC-2026-06-07-future-event-quality-recurrence.md`:
+  deterministic code may preserve short LLM-produced titles that are already
+  contentful (`Идиот`, `Гараж`, `№ 13`) and may reject ambiguous dotted
+  OCR tokens such as `9.08` as times when there is no nearby time context. These
+  checks do not choose the event title or classify the post; they only stop a
+  fallback/parser ambiguity from overwriting LLM-owned meaning.
+- Weak rubric/digest routing from
+  `INC-2026-06-16-vk-quality-duplicates-non-events.md`: deterministic code may
+  detect high-risk shapes such as `Дайджест`, `Афиша`, or imperative junk in
+  `location_name` and send them to a small LLM eventness reviewer. The
+  reviewer owns the semantic `event/non_event` decision; for these already
+  suspicious candidates uncertainty fails closed instead of publishing a
+  guessed event.
+- Citywide/festival duplicate recall from the same incident: deterministic
+  code may keep same-title/date/time citywide candidates visible in the LLM
+  duplicate shortlist even when extracted venues differ. It is recall-only and
+  must not merge ambiguous citywide vs venue-specific events without LLM.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The
@@ -143,7 +162,16 @@ calculated from the events added to the festival.
 
 ## Logging
 
-OpenAI usage resets daily at 00:00 UTC. The `four_o.usage` log records each
+OpenAI usage resets daily at 00:00 UTC. The `four_o.usage` log records each
 request with its token count and the remaining budget as defined by
-`FOUR_O_DAILY_TOKEN_LIMIT` (1 000 000 tokens by default). Grafana dashboards can
+`FOUR_O_DAILY_TOKEN_LIMIT` (1,000,000 tokens by default). Grafana dashboards can
 filter by the `four_o.usage` key to visualise daily token spend.
+
+Direct `gpt-4o` calls also have a model-specific hard guard:
+`FOUR_O_GPT4O_DAILY_TOKEN_LIMIT` defaults to `950000`. Before sending a
+`gpt-4o` request, the bot reads today's persisted `token_usage` total for
+`gpt-4o`/`gpt-4o-2024-08-06` and adds a conservative estimate for the next
+request. If that would exceed the cap, the request is sent to
+`FOUR_O_GPT4O_FALLBACK_MODEL` (`gpt-4o-mini` by default) and logs
+`four_o.budget_fallback`. The fallback model is not counted against this
+model-specific `gpt-4o` cap.

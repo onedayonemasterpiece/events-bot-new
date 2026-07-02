@@ -16,6 +16,12 @@ from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
 from sqlalchemy import select
 
+from kaggle_registry import register_job
+from kaggle_status import (
+    KAGGLE_RUN_FILENAME,
+    create_kaggle_run_config,
+    write_kaggle_status_files,
+)
 from kenigsberg_stories.state import (
     KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
@@ -33,6 +39,11 @@ from kenigsberg_stories.state import (
     reset_bans,
 )
 from models import Channel, VideoAnnounceSession, VideoAnnounceSessionStatus
+from remote_telegram_session import (
+    RemoteTelegramSessionBusyError,
+    format_remote_telegram_session_busy_lines,
+    raise_if_remote_telegram_session_busy,
+)
 from runtime import require_main_attr
 from video_announce.kaggle_client import (
     KaggleClient,
@@ -51,6 +62,7 @@ from video_announce.story_publish import (
     STORY_PUBLISH_CONFIG_FILENAME,
     STORY_PUBLISH_KEY_FILENAME,
     build_story_publish_config,
+    story_remote_auth_scope,
     write_story_secret_files,
 )
 
@@ -67,6 +79,13 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
+
+
+def _telegram_session_resource_key(auth_scope: str | None) -> str:
+    raw = str(auth_scope or "unknown").strip().casefold() or "unknown"
+    safe = re.sub(r"[^a-z0-9_.:-]+", "-", raw).strip("-") or "unknown"
+    return f"telegram_session:{safe}"
+
 
 class StoryTextPreparationError(RuntimeError):
     pass
@@ -805,12 +824,13 @@ async def _create_kenigsberg_dataset(
     session_id: int,
     payload: dict,
     story_config: dict | None = None,
+    kaggle_run_config: dict | None = None,
+    dataset_id: str | None = None,
 ) -> str:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME not set")
-    run_suffix = f"{session_id}-{int(time.time())}"
-    dataset_id = f"{username}/kenigsberg-session-{run_suffix}"
+    dataset_id = dataset_id or f"{username}/kenigsberg-session-{session_id}-{int(time.time())}"
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         (tmp_path / "dataset-metadata.json").write_text(
@@ -830,6 +850,7 @@ async def _create_kenigsberg_dataset(
             encoding="utf-8",
         )
         _copy_required_assets(tmp_path)
+        write_kaggle_status_files(tmp_path, kaggle_run_config)
         if story_config is not None:
             (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
                 json.dumps(story_config, ensure_ascii=False, indent=2),
@@ -952,6 +973,24 @@ async def _launch_kaggle_generation(
             return None
 
     test_chat_id = None
+
+    story_auth_scope = story_remote_auth_scope()
+    try:
+        await raise_if_remote_telegram_session_busy(
+            current_job_type=KENIGSBERG_PROFILE_KEY,
+            current_auth_scope=story_auth_scope,
+        )
+    except RemoteTelegramSessionBusyError as exc:
+        logger.warning(
+            "kenigsberg.remote_telegram_session_busy conflicts=%s",
+            [conflict.kernel_ref for conflict in exc.conflicts],
+        )
+        for line in format_remote_telegram_session_busy_lines(
+            exc.conflicts,
+            actor_label="Kenigsberg Stories",
+        ):
+            await notify(line)
+        return None
 
     issue_number = await reserve_issue_number(db)
     seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
@@ -1112,13 +1151,31 @@ async def _launch_kaggle_generation(
     client = KaggleClient()
     try:
         obj = await _mark_session_rendering_with_retry(db, obj.id) or obj
+        kaggle_username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if not kaggle_username:
+            raise RuntimeError("KAGGLE_USERNAME not set")
+        run_dataset_ref = f"{kaggle_username}/kenigsberg-session-{obj.id}-{int(time.time())}"
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"kenigsberg:{obj.id}",
+            session_id=obj.id,
+            kind=KENIGSBERG_PROFILE_KEY,
+            notebook="KoenigsbergStories",
+            kernel_ref=obj.kaggle_kernel_ref,
+            dataset_ref=run_dataset_ref,
+            resource_leases=[_telegram_session_resource_key(story_auth_scope)],
+        )
         dataset_id = await _create_kenigsberg_dataset(
             db,
             session_id=obj.id,
             payload=payload,
             story_config=story_config,
+            kaggle_run_config=kaggle_run_config,
+            dataset_id=run_dataset_ref,
         )
         expected_files = ["payload.json", "scripts/render_kenigsberg_story.py"]
+        if kaggle_run_config:
+            expected_files.append(KAGGLE_RUN_FILENAME)
         if story_config is not None:
             expected_files.extend(
                 [
@@ -1140,6 +1197,28 @@ async def _launch_kaggle_generation(
             "local:KoenigsbergStories",
             [dataset_id],
         )
+        try:
+            await register_job(
+                KENIGSBERG_PROFILE_KEY,
+                kernel_ref,
+                meta={
+                    "session_id": obj.id,
+                    "issue_number": issue_number,
+                    "trigger": trigger,
+                    "chat_id": notify_chat_id,
+                    "operator_user_id": operator_user_id,
+                    "dataset_slug": dataset_id,
+                    "remote_telegram_auth_scope": story_auth_scope,
+                    "pid": os.getpid(),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "kenigsberg: failed to register remote telegram session job session=%s kernel=%s",
+                obj.id,
+                kernel_ref,
+                exc_info=True,
+            )
         await await_kernel_dataset_sources(
             client,
             kernel_ref,

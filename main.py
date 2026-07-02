@@ -126,7 +126,7 @@ from typing import (
     Mapping,
     cast,
 )
-from urllib.parse import urlparse, parse_qs, ParseResult
+from urllib.parse import urlparse, parse_qs, ParseResult, quote
 import uuid
 import textwrap
 # тяжёлый стек подтягиваем только если понадобится
@@ -245,6 +245,7 @@ from markup import (
     FEST_INDEX_INTRO_START,
     FEST_INDEX_INTRO_END,
     linkify_for_telegraph,
+    looks_like_genai_response_dump,
     sanitize_for_vk,
     format_tel_link_for_display,
 )
@@ -265,6 +266,7 @@ from shortlinks import (
 from scheduling import (
     startup as scheduler_startup,
     cleanup as scheduler_cleanup,
+    maybe_dispatch_critical_scheduler_watchdog as scheduler_critical_watchdog_tick,
     maybe_dispatch_video_tomorrow_watchdog as scheduler_video_tomorrow_watchdog_tick,
     runtime_health_status as scheduler_runtime_health_status,
     video_tomorrow_watchdog_enabled as scheduler_video_tomorrow_watchdog_enabled,
@@ -2195,14 +2197,10 @@ FOUR_O_RESPONSE_LIMIT = int(os.getenv("FOUR_O_RESPONSE_LIMIT", "1000"))
 FOUR_O_EDITOR_MAX_TOKENS = int(os.getenv("FOUR_O_EDITOR_MAX_TOKENS", "2000"))
 FOUR_O_PITCH_MAX_TOKENS = int(os.getenv("FOUR_O_PITCH_MAX_TOKENS", "200"))
 
-# Track OpenAI usage against a daily budget. OpenAI resets usage at midnight UTC.
+# Track OpenAI usage against a daily budget.  OpenAI resets usage at midnight UTC.
 FOUR_O_DAILY_TOKEN_LIMIT = int(os.getenv("FOUR_O_DAILY_TOKEN_LIMIT", "1000000"))
-FOUR_O_GPT4O_DAILY_TOKEN_LIMIT = int(
-    os.getenv("FOUR_O_GPT4O_DAILY_TOKEN_LIMIT", "950000")
-)
-FOUR_O_GPT4O_FALLBACK_MODEL = (
-    os.getenv("FOUR_O_GPT4O_FALLBACK_MODEL", "gpt-4o-mini") or ""
-).strip()
+FOUR_O_GPT4O_DAILY_TOKEN_LIMIT = int(os.getenv("FOUR_O_GPT4O_DAILY_TOKEN_LIMIT", "950000"))
+FOUR_O_GPT4O_FALLBACK_MODEL = os.getenv("FOUR_O_GPT4O_FALLBACK_MODEL", "gpt-4o-mini")
 FOUR_O_GPT4O_BUDGET_MODELS = frozenset({"gpt-4o", "gpt-4o-2024-08-06"})
 FOUR_O_GPT4O_USAGE_CACHE_SECONDS = float(
     os.getenv("FOUR_O_GPT4O_USAGE_CACHE_SECONDS", "10")
@@ -2233,8 +2231,8 @@ _four_o_usage_state = {
 }
 _gpt4o_daily_usage_cache: dict[str, Any] = {
     "date": None,
-    "used": None,
-    "checked_at": 0.0,
+    "used": 0,
+    "loaded_at": 0.0,
 }
 _last_ask_4o_request_id: str | None = None
 _token_usage_log_disabled = os.getenv("DISABLE_TOKEN_USAGE_LOG", "").strip().lower() in {
@@ -2271,23 +2269,24 @@ def _get_four_o_usage_snapshot() -> dict[str, Any]:
 
 
 def _is_budgeted_gpt4o_model(model: str | None) -> bool:
-    return (model or "").strip().lower() in FOUR_O_GPT4O_BUDGET_MODELS
+    return (model or "").strip() in FOUR_O_GPT4O_BUDGET_MODELS
 
 
 def _estimate_openai_chat_tokens(
     messages: Sequence[Mapping[str, Any]],
     *,
-    max_tokens: int,
+    max_tokens: int | None = None,
 ) -> int:
-    text_bytes = 0
+    content_bytes = 0
     for message in messages:
         content = message.get("content")
         if isinstance(content, str):
-            text_bytes += len(content.encode("utf-8"))
+            content_bytes += len(content.encode("utf-8"))
         elif content is not None:
-            text_bytes += len(str(content).encode("utf-8"))
-    prompt_estimate = math.ceil(text_bytes / 3) + (4 * len(messages)) + 16
-    return max(0, prompt_estimate) + max(0, int(max_tokens or 0))
+            content_bytes += len(str(content).encode("utf-8"))
+    prompt_estimate = max(1, math.ceil(content_bytes / 3))
+    completion_estimate = max(0, int(max_tokens or 0))
+    return prompt_estimate + completion_estimate
 
 
 async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
@@ -2295,7 +2294,11 @@ async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
     if client is None:
         return None
     start = datetime.combine(today, time.min, tzinfo=timezone.utc).isoformat()
-    end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=timezone.utc).isoformat()
+    end = datetime.combine(
+        today + timedelta(days=1),
+        time.min,
+        tzinfo=timezone.utc,
+    ).isoformat()
 
     def _fetch() -> int:
         total = 0
@@ -2304,7 +2307,7 @@ async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
         while True:
             response = (
                 client.table("token_usage")
-                .select("total_tokens,prompt_tokens,completion_tokens")
+                .select("model,total_tokens,prompt_tokens,completion_tokens")
                 .in_("model", list(FOUR_O_GPT4O_BUDGET_MODELS))
                 .gte("at", start)
                 .lt("at", end)
@@ -2313,14 +2316,16 @@ async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
             )
             rows = getattr(response, "data", None) or []
             for row in rows:
+                if not isinstance(row, Mapping):
+                    continue
                 try:
-                    row_total = row.get("total_tokens")
-                    if row_total is None:
-                        row_total = int(row.get("prompt_tokens") or 0) + int(
-                            row.get("completion_tokens") or 0
-                        )
-                    total += max(int(row_total or 0), 0)
-                except Exception:
+                    total_tokens = row.get("total_tokens")
+                    if total_tokens is not None:
+                        total += max(int(total_tokens), 0)
+                    else:
+                        total += max(int(row.get("prompt_tokens") or 0), 0)
+                        total += max(int(row.get("completion_tokens") or 0), 0)
+                except (TypeError, ValueError):
                     continue
             if len(rows) < page_size:
                 break
@@ -2330,69 +2335,67 @@ async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
     try:
         return await asyncio.to_thread(_fetch)
     except Exception as exc:
-        logging.warning("four_o.budget_supabase_usage_failed: %s", exc)
+        logging.warning("four_o.budget_usage_fetch_failed: %s", exc)
         return None
 
 
 async def _get_gpt4o_daily_usage_total(today: date | None = None) -> int:
     today = today or _current_utc_date()
-    _ensure_four_o_usage_state(today)
-    cache_date = _gpt4o_daily_usage_cache.get("date")
-    checked_at = float(_gpt4o_daily_usage_cache.get("checked_at") or 0.0)
-    cached_used = _gpt4o_daily_usage_cache.get("used")
     now = _time.monotonic()
     if (
-        cache_date == today
-        and cached_used is not None
-        and now - checked_at < max(0.0, FOUR_O_GPT4O_USAGE_CACHE_SECONDS)
+        _gpt4o_daily_usage_cache.get("date") == today
+        and now - float(_gpt4o_daily_usage_cache.get("loaded_at") or 0.0)
+        < FOUR_O_GPT4O_USAGE_CACHE_SECONDS
     ):
-        return max(int(cached_used or 0), 0)
+        return int(_gpt4o_daily_usage_cache.get("used") or 0)
 
-    used = await _fetch_gpt4o_daily_usage_from_supabase(today)
-    if used is None:
-        models = _four_o_usage_state.get("models") or {}
-        used = sum(
-            int(models.get(model_name, 0) or 0)
-            for model_name in FOUR_O_GPT4O_BUDGET_MODELS
+    fetched = await _fetch_gpt4o_daily_usage_from_supabase(today)
+    if fetched is None:
+        snapshot = _get_four_o_usage_snapshot()
+        models = snapshot.get("models") or {}
+        fetched = sum(
+            int(models.get(model) or 0)
+            for model in FOUR_O_GPT4O_BUDGET_MODELS
         )
     _gpt4o_daily_usage_cache.update(
-        {"date": today, "used": max(int(used or 0), 0), "checked_at": now}
+        {
+            "date": today,
+            "used": int(fetched),
+            "loaded_at": now,
+        }
     )
-    return max(int(used or 0), 0)
+    return int(fetched)
 
 
 async def _resolve_openai_model_for_budget(
     requested_model: str,
-    *,
-    operation: str,
     messages: Sequence[Mapping[str, Any]],
-    max_tokens: int,
+    *,
+    max_tokens: int | None,
+    operation: str,
     meta: Mapping[str, Any] | None = None,
 ) -> str:
-    model = (requested_model or "gpt-4o").strip() or "gpt-4o"
-    if not _is_budgeted_gpt4o_model(model):
-        return model
+    if not _is_budgeted_gpt4o_model(requested_model):
+        return requested_model
     limit = max(FOUR_O_GPT4O_DAILY_TOKEN_LIMIT, 0)
-    if limit <= 0:
-        return model
-    fallback_model = FOUR_O_GPT4O_FALLBACK_MODEL
-    if not fallback_model or _is_budgeted_gpt4o_model(fallback_model):
-        return model
+    fallback = (FOUR_O_GPT4O_FALLBACK_MODEL or "").strip()
+    if not limit or not fallback or fallback == requested_model:
+        return requested_model
+    estimated = _estimate_openai_chat_tokens(messages, max_tokens=max_tokens)
     used = await _get_gpt4o_daily_usage_total()
-    estimate = _estimate_openai_chat_tokens(messages, max_tokens=max_tokens)
-    if used + estimate <= limit:
-        return model
+    if used + estimated <= limit:
+        return requested_model
     logging.warning(
-        "four_o.budget_fallback op=%s requested_model=%s fallback_model=%s used=%d estimate=%d limit=%d meta=%s",
+        "four_o.budget_fallback op=%s requested=%s fallback=%s used=%d estimate=%d limit=%d meta=%s",
         operation,
-        model,
-        fallback_model,
+        requested_model,
+        fallback,
         used,
-        estimate,
+        estimated,
         limit,
         dict(meta or {}),
     )
-    return fallback_model
+    return fallback
 
 
 def get_last_ask_4o_request_id() -> str | None:
@@ -2452,11 +2455,13 @@ def _record_four_o_usage(
     models.setdefault(model, 0)
     models[model] += spent
     if _is_budgeted_gpt4o_model(model):
-        cache_date = _gpt4o_daily_usage_cache.get("date")
-        cached_used = _gpt4o_daily_usage_cache.get("used")
-        if cache_date == today and cached_used is not None:
-            _gpt4o_daily_usage_cache["used"] = max(int(cached_used or 0), 0) + spent
-            _gpt4o_daily_usage_cache["checked_at"] = _time.monotonic()
+        if _gpt4o_daily_usage_cache.get("date") != today:
+            _gpt4o_daily_usage_cache["used"] = 0
+        _gpt4o_daily_usage_cache["date"] = today
+        _gpt4o_daily_usage_cache["used"] = (
+            int(_gpt4o_daily_usage_cache.get("used") or 0) + spent
+        )
+        _gpt4o_daily_usage_cache["loaded_at"] = _time.monotonic()
     new_total = _four_o_usage_state.get("total", 0) + spent
     _four_o_usage_state["total"] = new_total
     previous_used = _four_o_usage_state.get("used", 0)
@@ -2626,6 +2631,30 @@ async def telegraph_call(func, /, *args, retries: int = 3, **kwargs):
     # If we exit the loop without returning or raising, raise the last exception
     if last_exc:
         raise TelegraphException("Telegraph request failed") from last_exc
+
+
+def telegraph_page_html(page: dict | None) -> str:
+    """Return Telegraph page body HTML from python-telegraph responses.
+
+    python-telegraph stores HTML in `content` when get_page(..., return_html=True)
+    is used. Older/local probes sometimes expected `content_html`; support both so
+    maintenance scripts and image/nav fixups never treat an existing page as empty.
+    """
+    if not isinstance(page, dict):
+        return ""
+    value = page.get("content")
+    if value is None:
+        value = page.get("content_html")
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    try:
+        from telegraph.utils import nodes_to_html
+
+        return nodes_to_html(value)
+    except Exception:
+        return str(value or "")
 
 
 async def telegraph_create_page(
@@ -2890,6 +2919,11 @@ HELP_COMMANDS = [
     {
         "usage": "/vkphotos",
         "desc": "Toggle VK photo posting",
+        "roles": {"superadmin"},
+    },
+    {
+        "usage": "/cover [status|preview|apply|save_default|restore|history|on|off]",
+        "desc": "Manage generated VK community cover, saved default cover, and temporary promo/festival rotation",
         "roles": {"superadmin"},
     },
     {
@@ -3446,7 +3480,7 @@ def redact_params(params: dict[str, Any]) -> dict[str, Any]:
 
 def _vk_user_token() -> str | None:
     """Return user token unless it was previously marked invalid."""
-    token = os.getenv("VK_USER_TOKEN")
+    token = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4")
     global _vk_user_token_bad
     if token and _vk_user_token_bad and token != _vk_user_token_bad:
         _vk_user_token_bad = None
@@ -3848,13 +3882,7 @@ async def _vk_api(
                     actor=kind,
                     token=redacted_token,
                 )
-            if code == 15 and (
-                "edit time expired" in msg_l
-                or "post or comment deleted" in msg_l
-                or "post not found" in msg_l
-                or "deleted" in msg_l
-                or "access denied" in msg_l
-            ):
+            if code == 15 and "edit time expired" in msg_l:
                 logging.info("vk no-retry error code=15: %s", msg)
                 break
             if kind == "user" and code in {5, 27}:
@@ -3984,16 +4012,6 @@ async def upload_vk_photo(
             try:
                 if DEBUG:
                     mem_info("VK upload before")
-                data = await _vk_api(
-                    "photos.getWallUploadServer",
-                    {"group_id": group_id.lstrip("-")},
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-                upload_url = data["response"]["upload_url"]
                 session = get_http_session()
 
                 async def _download():
@@ -4029,39 +4047,63 @@ async def upload_vk_photo(
                     return None
                 if detect_image_type(img_bytes) == "jpeg":
                     validate_jpeg_markers(img_bytes)
-                form = FormData()
-                form.add_field(
-                    "photo",
-                    img_bytes,
-                    filename="image.jpg",
-                    content_type="image/jpeg",
-                )
+                for upload_attempt in range(1, 4):
+                    data = await _vk_api(
+                        "photos.getWallUploadServer",
+                        {"group_id": group_id.lstrip("-")},
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    upload_url = data["response"]["upload_url"]
+                    form = FormData()
+                    form.add_field(
+                        "photo",
+                        img_bytes,
+                        filename="image.jpg",
+                        content_type="image/jpeg",
+                    )
 
-                async def _upload():
-                    async with span("http"):
-                        async with HTTP_SEMAPHORE:
-                            async with session.post(upload_url, data=form) as up:
-                                return await up.json()
+                    async def _upload():
+                        async with span("http"):
+                            async with HTTP_SEMAPHORE:
+                                async with session.post(upload_url, data=form) as up:
+                                    return await up.json()
 
-                upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
-                save = await _vk_api(
-                    "photos.saveWallPhoto",
-                    {
-                        "group_id": group_id.lstrip("-"),
-                        "photo": upload_result.get("photo"),
-                        "server": upload_result.get("server"),
-                        "hash": upload_result.get("hash"),
-                    },
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-                info = save["response"][0]
-                if DEBUG:
-                    mem_info("VK upload after")
-                return f"photo{info['owner_id']}_{info['id']}"
+                    try:
+                        upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                    except Exception as exc:
+                        logging.warning(
+                            "vk.upload upload_request_failed owner_id=%s actor=%s attempt=%s error=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            exc,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(min(2.0, 0.25 * upload_attempt))
+                            continue
+                        raise
+                    save = await _vk_api(
+                        "photos.saveWallPhoto",
+                        {
+                            "group_id": group_id.lstrip("-"),
+                            "photo": upload_result.get("photo"),
+                            "server": upload_result.get("server"),
+                            "hash": upload_result.get("hash"),
+                        },
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    info = save["response"][0]
+                    if DEBUG:
+                        mem_info("VK upload after")
+                    return f"photo{info['owner_id']}_{info['id']}"
             except VKAPIError as e:
                 logging.warning(
                     "vk.upload error actor=%s token=%s code=%s msg=%s",
@@ -4085,8 +4127,195 @@ async def upload_vk_photo(
                     continue
                 raise
         return None
+    except VKAPIError as e:
+        if e.code == 14:
+            logging.error("VK photo upload blocked by captcha: %s", e)
+            raise
+        logging.error("VK photo upload failed: %s", e)
+        return None
     except Exception as e:
         logging.error("VK photo upload failed: %s", e)
+        return None
+
+
+async def upload_vk_photo_bytes(
+    group_id: str,
+    image_bytes: bytes,
+    db: Database | None = None,
+    bot: Bot | None = None,
+    *,
+    filename: str = "image.jpg",
+    token: str | None = None,
+    token_kind: str = "group",
+) -> str | None:
+    """Upload in-memory image bytes to VK and return attachment id."""
+    if not group_id or not image_bytes:
+        return None
+    try:
+        owner_id = -int(group_id.lstrip("-"))
+        if len(image_bytes) > MAX_DOWNLOAD_SIZE:
+            raise ValueError("file too large")
+        if token:
+            actors = [VkActor(token_kind, token, f"{token_kind}:explicit")]
+        else:
+            actors = choose_vk_actor(owner_id, "photos.getWallUploadServer")
+            user_actors = [actor for actor in actors if actor.kind == "user"]
+            if user_actors:
+                actors = user_actors
+        if not actors:
+            raise VKAPIError(None, "VK token missing", method="photos.getWallUploadServer")
+        if all(actor.kind == "group" for actor in actors):
+            logging.info(
+                "vk.upload.bytes skipped owner_id=%s reason=user_token_required",
+                owner_id,
+            )
+            return None
+
+        try:
+            image_bytes, filename = ensure_jpeg(image_bytes, filename or "image.jpg")
+        except Exception as exc:
+            logging.warning("vk.upload.bytes convert_failed filename=%s error=%s", filename, exc)
+            return None
+        if detect_image_type(image_bytes) == "jpeg":
+            validate_jpeg_markers(image_bytes)
+
+        session = get_http_session()
+        for idx, actor in enumerate(actors, start=1):
+            logging.info(
+                "vk.call method=photos.getWallUploadServer owner_id=%s try=%d/%d actor=%s source=bytes",
+                owner_id,
+                idx,
+                len(actors),
+                actor.label,
+            )
+            actor_token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+            try:
+                for upload_attempt in range(1, 4):
+                    data = await _vk_api(
+                        "photos.getWallUploadServer",
+                        {"group_id": group_id.lstrip("-")},
+                        db,
+                        bot,
+                        token=actor_token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    upload_url = data["response"]["upload_url"]
+                    form = FormData()
+                    form.add_field(
+                        "photo",
+                        image_bytes,
+                        filename=filename or "image.jpg",
+                        content_type="image/jpeg",
+                    )
+
+                    async def _upload():
+                        async with span("http"):
+                            async with HTTP_SEMAPHORE:
+                                async with session.post(upload_url, data=form) as up:
+                                    return await up.json()
+
+                    try:
+                        upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                    except Exception as exc:
+                        logging.warning(
+                            "vk.upload.bytes upload_request_failed owner_id=%s actor=%s attempt=%s error=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            exc,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        return None
+                    if not isinstance(upload_result, dict):
+                        logging.warning(
+                            "vk.upload.bytes invalid_upload_response owner_id=%s actor=%s attempt=%s type=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            type(upload_result).__name__,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        return None
+                    upload_photo = upload_result.get("photo")
+                    upload_server = upload_result.get("server")
+                    upload_hash = upload_result.get("hash")
+                    if not upload_photo or not upload_server or not upload_hash:
+                        logging.warning(
+                            "vk.upload.bytes empty_upload_response owner_id=%s actor=%s attempt=%s result_keys=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            sorted(upload_result.keys()) if isinstance(upload_result, dict) else type(upload_result).__name__,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        return None
+                    try:
+                        save = await _vk_api(
+                            "photos.saveWallPhoto",
+                            {
+                                "group_id": group_id.lstrip("-"),
+                                "photo": upload_photo,
+                                "server": upload_server,
+                                "hash": upload_hash,
+                            },
+                            db,
+                            bot,
+                            token=actor_token,
+                            token_kind=actor.kind,
+                            skip_captcha=(actor.kind == "group"),
+                        )
+                    except VKAPIError as e:
+                        msg_l = (e.message or "").lower()
+                        if e.code == 100 and "photo is undefined" in msg_l and upload_attempt < 3:
+                            logging.warning(
+                                "vk.upload.bytes retrying_after_invalid_photo owner_id=%s actor=%s attempt=%s",
+                                owner_id,
+                                actor.label,
+                                upload_attempt,
+                            )
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        raise
+                    info = save["response"][0]
+                    return f"photo{info['owner_id']}_{info['id']}"
+            except VKAPIError as e:
+                logging.warning(
+                    "vk.upload.bytes error actor=%s token=%s code=%s msg=%s",
+                    e.actor,
+                    e.token,
+                    e.code,
+                    e.message,
+                )
+                msg_l = (e.message or "").lower()
+                perm = (
+                    e.code in VK_FALLBACK_CODES
+                    or "method is unavailable with group auth" in msg_l
+                    or "access denied" in msg_l
+                )
+                if idx < len(actors) and perm:
+                    logging.info(
+                        "vk.retry reason=%s actor_next=%s",
+                        e.code or e.message,
+                        actors[idx].label,
+                    )
+                    continue
+                raise
+        return None
+    except VKAPIError as e:
+        if e.code == 14:
+            logging.error("VK byte photo upload blocked by captcha: %s", e)
+            raise
+        logging.error("VK byte photo upload failed: %s", e)
+        return None
+    except Exception as e:
+        logging.error("VK byte photo upload failed: %s", e)
         return None
 
 
@@ -5798,8 +6027,6 @@ def strip_city_from_address(address: str | None, city: str | None) -> str | None
     addr = address.strip()
     if addr.lower().endswith(city_clean):
         addr = re.sub(r",?\s*#?%s$" % re.escape(city_clean), "", addr, flags=re.IGNORECASE)
-    if addr.lower().startswith(city_clean):
-        addr = re.sub(r"^#?%s\s*,?\s*" % re.escape(city_clean), "", addr, flags=re.IGNORECASE)
     # Compact common Russian address noise: "ул." prefix and comma separators.
     addr = addr.rstrip(", ")
     addr = re.sub(r"\s*,\s*", " ", addr)
@@ -6950,7 +7177,7 @@ async def sync_festivals_index_page(db: Database) -> None:
             url = normalize_telegraph_url(data.get("url"))
             path = data.get("path")
         page = await telegraph_call(tg.get_page, path, return_html=True)
-        page_html = page.get("content_html", "")
+        page_html = telegraph_page_html(page)
         page_html, img_ok, img_fix = _ensure_img_links(page_html, link_map)
         if img_fix:
             page_html = sanitize_telegraph_html(page_html)
@@ -7147,7 +7374,7 @@ async def rebuild_festivals_index_if_needed(
             status = "built"
 
         page = await telegraph_call(telegraph.get_page, path, return_html=True)
-        page_html = page.get("content_html", "")
+        page_html = telegraph_page_html(page)
         page_html, img_ok, img_fix = _ensure_img_links(page_html, link_map)
         if img_fix:
             page_html = sanitize_telegraph_html(page_html)
@@ -7756,11 +7983,17 @@ async def update_source_post_keyboard(event_id: int, db: Database, bot: Bot) -> 
                     await session.commit()
 
     rows: list[list[types.InlineKeyboardButton]] = []
-    if ev.ics_post_url:
+    calendar_url_func = globals().get("_tg_event_public_calendar_url")
+    calendar_url = (
+        calendar_url_func(ev)
+        if callable(calendar_url_func)
+        else ((ev.ics_url or "").strip() or (ev.ics_post_url or "").strip())
+    )
+    if calendar_url:
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text="Добавить в календарь", url=ev.ics_post_url
+                    text="Добавить в календарь", url=calendar_url
                 )
             ]
         )
@@ -8024,6 +8257,28 @@ async def build_ics_content(db: Database, event: Event) -> str:
     return "\r\n".join(folded) + "\r\n"
 
 
+def _ics_build_error_is_permanent(exc: Exception) -> bool:
+    return isinstance(exc, ValueError) and str(exc) in {"bad time", "bad date"}
+
+
+def _calendar_schedule_is_supported(ev: Event) -> bool:
+    return bool(parse_time_range(ev.time) and parse_iso_date(ev.date))
+
+
+def _mark_ics_skipped_invalid_schedule(progress, key: str, event: Event, exc: Exception) -> None:
+    detail = f"{str(exc) or exc.__class__.__name__}: date={event.date!r} time={event.time!r}"
+    if progress:
+        progress.mark(key, "skipped_invalid_schedule", detail)
+    logging.warning(
+        "%s skipped invalid schedule event_id=%s date=%r time=%r reason=%s",
+        key,
+        event.id,
+        event.date,
+        event.time,
+        str(exc) or exc.__class__.__name__,
+    )
+
+
 def _ics_filename(event: Event) -> str:
     d = parse_iso_date(event.date.split("..", 1)[0])
     if d:
@@ -8101,6 +8356,78 @@ def format_event_caption(ev: Event, *, style: str = "ics") -> tuple[str, str | N
     return "\n".join(lines), "HTML"
 
 
+async def _upload_ics_to_supabase_storage(filename: str, ics_bytes: bytes) -> str | None:
+    """Upload an ICS file to Supabase Storage and return its public URL.
+
+    Production uses the Storage HTTP endpoint directly. This keeps ICS upload
+    independent from the shared Supabase/PostgREST Python client state: the
+    2026-06-25 incident showed the SDK path could attempt `/rest/v1/object/...`
+    and surface a non-actionable `KeyError('message')`. Tests and local dev with
+    only a monkeypatched client still keep the old client fallback when no
+    Supabase base URL/key is configured.
+    """
+
+    if os.getenv("SUPABASE_DISABLED") == "1":
+        return None
+
+    object_path = str(filename or "").strip().lstrip("/")
+    if not object_path:
+        raise ValueError("empty ICS filename")
+
+    base_url = _get_normalized_supabase_url()
+    key = str(SUPABASE_KEY or "").strip()
+    bucket = (SUPABASE_BUCKET or "events-ics").strip() or "events-ics"
+    if base_url and key:
+        quoted_path = "/".join(quote(part, safe="") for part in object_path.split("/"))
+        upload_url = f"{base_url}/storage/v1/object/{bucket}/{quoted_path}"
+        headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": ICS_CONTENT_TYPE,
+            "Content-Disposition": ICS_CONTENT_DISP_TEMPLATE.format(name=object_path),
+            "x-upsert": "true",
+            "cache-control": "public, max-age=3600",
+        }
+
+        def _upload() -> tuple[int, str]:
+            import requests
+
+            resp = requests.post(upload_url, headers=headers, data=ics_bytes, timeout=45)
+            body = ""
+            try:
+                body = str(resp.text or "")[:500]
+            except Exception:
+                body = ""
+            return int(resp.status_code), body
+
+        async with span("http"):
+            async with HTTP_SEMAPHORE:
+                status_code, body = await asyncio.to_thread(_upload)
+        if status_code in {200, 201}:
+            return f"{base_url}/storage/v1/object/public/{bucket}/{quoted_path}"
+        raise RuntimeError(f"supabase storage upload failed status={status_code} body={body}")
+
+    # Local/test compatibility fallback. Production should not normally reach it
+    # because SUPABASE_URL and a service key are configured.
+    client = get_supabase_client()
+    if not client:
+        return None
+    storage = client.storage.from_(bucket)
+    async with span("http"):
+        await asyncio.to_thread(
+            storage.upload,
+            object_path,
+            ics_bytes,
+            {
+                "content-type": ICS_CONTENT_TYPE,
+                "content-disposition": ICS_CONTENT_DISP_TEMPLATE.format(name=object_path),
+                "upsert": "true",
+            },
+        )
+        supabase_url = await asyncio.to_thread(storage.get_public_url, object_path)
+    return str(supabase_url or "").strip() or None
+
+
 async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> bool:
     if (os.getenv("DISABLE_ICS_JOBS") or "").strip().lower() in ("1", "true", "yes", "on"):
         logging.info("ics_publish disabled via DISABLE_ICS_JOBS")
@@ -8120,6 +8447,9 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
                 l for l in content.split("\r\n") if not l.startswith(("UID:", "DTSTAMP:"))
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
+            if _ics_build_error_is_permanent(e):
+                _mark_ics_skipped_invalid_schedule(progress, "ics_supabase", ev, e)
+                return False
             if progress:
                 progress.mark("ics_supabase", "error", str(e))
             raise
@@ -8136,25 +8466,8 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
             supabase_disabled = os.getenv("SUPABASE_DISABLED") == "1"
             if not supabase_disabled:
                 try:
-                    client = get_supabase_client()
-                    if client:
-                        storage = client.storage.from_(SUPABASE_BUCKET)
-                        async with span("http"):
-                            await asyncio.to_thread(
-                                storage.upload,
-                                filename,
-                                ics_bytes,
-                                {
-                                    "content-type": ICS_CONTENT_TYPE,
-                                    "content-disposition": ICS_CONTENT_DISP_TEMPLATE.format(
-                                        name=filename
-                                    ),
-                                    "upsert": "true",
-                                },
-                            )
-                            supabase_url = await asyncio.to_thread(
-                                storage.get_public_url, filename
-                            )
+                    supabase_url = await _upload_ics_to_supabase_storage(filename, ics_bytes)
+                    if supabase_url:
                         if progress:
                             progress.mark("ics_supabase", "done", supabase_url)
                         logging.info("ics_publish supabase_url=%s", supabase_url)
@@ -8215,6 +8528,9 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
                 l for l in content.split("\r\n") if not l.startswith(("UID:", "DTSTAMP:"))
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
+            if _ics_build_error_is_permanent(e):
+                _mark_ics_skipped_invalid_schedule(progress, "ics_telegram", ev, e)
+                return False
             if progress:
                 progress.mark("ics_telegram", "error", str(e))
             raise
@@ -8270,7 +8586,11 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
 
         tg_file_id = msg.document.file_id
         tg_post_id = msg.message_id
-        tg_post_url = message_link(msg.chat.id, msg.message_id)
+        asset_username = (getattr(channel, "username", None) or "").strip().lstrip("@")
+        if asset_username:
+            tg_post_url = f"https://t.me/{asset_username}/{tg_post_id}"
+        else:
+            tg_post_url = message_link(msg.chat.id, msg.message_id)
 
         async with db.get_session() as session:
             obj = await session.get(Event, event_id)
@@ -8831,15 +9151,29 @@ def _match_known_venue(value: str | None, *, city: str | None = None) -> _KnownV
         "клуб",
         "центр",
         "пространство",
+        "парк",
         "школа",
         "библиотека",
         "галерея",
         "арена",
         "дворец",
+        "городской",
+        "городское",
         "музыкальная",
+        "музыкальный",
+        "музыкальное",
         "областная",
+        "областной",
+        "областное",
         "городская",
+        "городские",
         "детская",
+        "детский",
+        "детское",
+        "культура",
+        "культуры",
+        "искусство",
+        "искусства",
     }
 
     def _tokens(s: str) -> set[str]:
@@ -9422,12 +9756,17 @@ async def _parse_event_via_4o(
         {"role": "system", "content": prompt},
         {"role": "user", "content": user_msg},
     ]
+    meta_payload = {
+        key: extra[key]
+        for key in ("feature", "version")
+        if extra.get(key) is not None
+    }
     model_name = await _resolve_openai_model_for_budget(
         "gpt-4o",
-        operation="parse",
-        messages=messages,
+        messages,
         max_tokens=FOUR_O_RESPONSE_LIMIT,
-        meta={key: extra[key] for key in ("feature", "version") if extra.get(key) is not None},
+        operation="parse",
+        meta=meta_payload or None,
     )
     payload = {
         "model": model_name,
@@ -9436,7 +9775,7 @@ async def _parse_event_via_4o(
     }
     # ensure we start the network request with as little memory as possible
     gc.collect()
-    logging.info("Sending 4o parse request to %s model=%s", url, payload["model"])
+    logging.info("Sending 4o parse request to %s", url)
     session = get_http_session()
     call_started = _time.monotonic()
     semaphore_acquired = False
@@ -9477,11 +9816,6 @@ async def _parse_event_via_4o(
         usage,
     )
     request_id = data_raw.get("id")
-    meta_payload = {
-        key: extra[key]
-        for key in ("feature", "version")
-        if extra.get(key) is not None
-    }
     await log_token_usage(
         BOT_CODE,
         model_name,
@@ -9838,11 +10172,12 @@ async def ask_4o(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": text})
+    requested_model = model or "gpt-4o"
     selected_model = await _resolve_openai_model_for_budget(
-        model or "gpt-4o",
-        operation="ask",
-        messages=messages,
+        requested_model,
+        messages,
         max_tokens=max_tokens,
+        operation="ask",
         meta=meta,
     )
     payload: dict[str, Any] = {
@@ -13720,6 +14055,7 @@ async def enqueue_job(
     *,
     coalesce_key: str | None = None,
     depends_on: list[str] | None = None,
+    replace_depends_on: bool = False,
     next_run_at: datetime | None = None,
 ) -> str:
     async with db.get_session() as session:
@@ -13782,8 +14118,15 @@ async def enqueue_job(
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
             if job.status == JobStatus.done and task == JobTask.vk_sync:
-                logline("ENQ", event_id, "skipped", job_key=job_key)
-                return "skipped"
+                if ev is None or await _event_has_existing_managed_vk_post(ev):
+                    logline("ENQ", event_id, "skipped", job_key=job_key)
+                    return "skipped"
+                logging.warning(
+                    "ENQ vk_sync done_without_managed_vk_requeue event_id=%s job_id=%s source_vk_post_url=%s",
+                    event_id,
+                    job.id,
+                    getattr(ev, "source_vk_post_url", None) if ev is not None else None,
+                )
             if job.status == JobStatus.running:
                 age = (now - job.updated_at).total_seconds()
                 if age > 600:
@@ -13802,13 +14145,20 @@ async def enqueue_job(
                 if payload is not None:
                     job.payload = payload
                 if depends_on:
-                    cur = set(filter(None, (job.depends_on or "").split(",")))
-                    cur.update(depends_on)
-                    job.depends_on = ",".join(sorted(cur))
+                    if replace_depends_on:
+                        job.depends_on = ",".join(depends_on)
+                    else:
+                        cur = set(filter(None, (job.depends_on or "").split(",")))
+                        cur.update(depends_on)
+                        job.depends_on = ",".join(sorted(cur))
                 now = datetime.now(timezone.utc)
-                # Fix #1: Preserve deferred next_run_at if still in future
+                # Preserve deferred page rebuilds, but event announcements are
+                # re-armed from the current Smart Update cycle and must not keep
+                # stale tomorrow slots.
                 job_next_run = _ensure_utc(job.next_run_at)
-                if next_run_at and next_run_at > job_next_run:
+                if next_run_at and task == JobTask.tg_event_publish:
+                    job.next_run_at = next_run_at
+                elif next_run_at and next_run_at > job_next_run:
                     job.next_run_at = next_run_at
                 elif job_next_run < now:
                     # Only reset if already past due
@@ -13835,12 +14185,18 @@ async def enqueue_job(
                     job.payload = payload
                     updated = True
                 if depends_on:
-                    cur = set(filter(None, (job.depends_on or "").split(",")))
-                    before = cur.copy()
-                    cur.update(depends_on)
-                    if cur != before:
-                        job.depends_on = ",".join(sorted(cur))
-                        updated = True
+                    if replace_depends_on:
+                        new_depends_on = ",".join(depends_on)
+                        if (job.depends_on or "") != new_depends_on:
+                            job.depends_on = new_depends_on
+                            updated = True
+                    else:
+                        cur = set(filter(None, (job.depends_on or "").split(",")))
+                        before = cur.copy()
+                        cur.update(depends_on)
+                        if cur != before:
+                            job.depends_on = ",".join(sorted(cur))
+                            updated = True
                 if updated:
                     session.add(job)
                     await session.commit()
@@ -13929,9 +14285,12 @@ async def enqueue_job(
             else:
                 job.next_run_at = now
             if depends_on:
-                cur = set(filter(None, (job.depends_on or "").split(",")))
-                cur.update(depends_on)
-                job.depends_on = ",".join(sorted(cur))
+                if replace_depends_on:
+                    job.depends_on = ",".join(depends_on)
+                else:
+                    cur = set(filter(None, (job.depends_on or "").split(",")))
+                    cur.update(depends_on)
+                    job.depends_on = ",".join(sorted(cur))
             session.add(job)
             await session.commit()
             logline(
@@ -13961,6 +14320,734 @@ async def enqueue_job(
         return "new"
 
 
+def _event_has_managed_vk_post(ev: Event) -> bool:
+    existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
+    if not existing_vk_url:
+        return False
+    owner_ids = _vk_owner_and_post_id(existing_vk_url)
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not owner_ids or not target_group_id:
+        return False
+    return str(abs(int(owner_ids[0]))) == target_group_id
+
+
+async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
+    if not _event_has_managed_vk_post(ev):
+        return False
+    existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
+    ids = _vk_owner_and_post_id(existing_vk_url)
+    if not ids:
+        return False
+    try:
+        response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
+        if _vk_wall_get_by_id_items(response):
+            return True
+    except Exception:
+        logging.warning(
+            "managed VK post existence probe failed event_id=%s url=%s",
+            getattr(ev, "id", None),
+            existing_vk_url,
+            exc_info=True,
+        )
+        return True
+    try:
+        resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+            owner_id=int(ids[0]),
+            post_id=int(ids[1]),
+            db=None,
+            bot=None,
+        )
+        if resolved_id:
+            logging.info(
+                "managed VK post exists via postponed lookup event_id=%s url=%s resolved_id=%s",
+                getattr(ev, "id", None),
+                existing_vk_url,
+                resolved_id,
+            )
+            return True
+    except Exception:
+        logging.warning(
+            "managed VK postponed existence probe failed event_id=%s url=%s",
+            getattr(ev, "id", None),
+            existing_vk_url,
+            exc_info=True,
+        )
+        return True
+    return False
+
+
+def _event_vk_publish_end_date(ev: Event) -> date | None:
+    end_raw = (getattr(ev, "end_date", None) or "").strip()
+    if end_raw:
+        end = parse_iso_date(end_raw.split("..", 1)[-1].strip())
+        if end:
+            return end
+    date_raw = (getattr(ev, "date", None) or "").strip()
+    if ".." in date_raw:
+        end = parse_iso_date(date_raw.split("..", 1)[1].strip())
+        if end:
+            return end
+    if date_raw:
+        return parse_iso_date(date_raw.split("..", 1)[0].strip())
+    return None
+
+
+def _event_has_ended_before_today(ev: Event, *, now: datetime | None = None) -> bool:
+    end_date = _event_vk_publish_end_date(ev)
+    if not end_date:
+        return False
+    now_value = now or datetime.now(LOCAL_TZ)
+    today = (
+        now_value.date()
+        if now_value.tzinfo is None
+        else now_value.astimezone(LOCAL_TZ).date()
+    )
+    return end_date < today
+
+
+def _event_has_trusted_publish_span(ev: Event) -> bool:
+    """Return True only for source-grounded multi-day publication windows."""
+
+    date_raw = str(getattr(ev, "date", "") or "").strip()
+    if ".." in date_raw:
+        start = parse_iso_date(date_raw.split("..", 1)[0].strip())
+        end = parse_iso_date(date_raw.split("..", 1)[1].strip())
+        return bool(start and end and end > start)
+    end_raw = str(getattr(ev, "end_date", "") or "").strip()
+    if not end_raw:
+        return False
+    if bool(getattr(ev, "end_date_is_inferred", False)):
+        return False
+    start = parse_iso_date(date_raw.split("..", 1)[0].strip()) if date_raw else None
+    end = parse_iso_date(end_raw.split("..", 1)[-1].strip())
+    return bool(end and (start is None or end > start))
+
+
+
+def _event_publication_start_deadline_ts(ev: Event) -> int | None:
+    """Latest safe VK publish timestamp for timed one-day public fanout."""
+
+    if _event_has_trusted_publish_span(ev):
+        return None
+    date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
+    event_date = parse_iso_date(date_raw)
+    if event_date is None:
+        return None
+    time_raw = str(getattr(ev, "time", "") or "").strip()
+    match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", time_raw)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return int(
+        datetime.combine(event_date, time(hour, minute), tzinfo=LOCAL_TZ).timestamp()
+    )
+
+
+def _event_start_has_passed_for_publication(
+    ev: Event, *, now: datetime | None = None
+) -> bool:
+    """Return True when a timed event already started locally.
+
+    Date-only same-day events are not treated as started because there is no
+    reliable time anchor. Explicit multi-day/long-running events remain
+    publishable until their trusted end date. Inferred ``end_date`` values are
+    not trusted as a freshness exemption for public VK/Telegram fanout: a
+    one-day timed event with a guessed future end date must fail closed after
+    start.
+    """
+
+    if _event_has_trusted_publish_span(ev):
+        return False
+    date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
+    event_date = parse_iso_date(date_raw)
+    if event_date is None:
+        return False
+    time_raw = str(getattr(ev, "time", "") or "").strip()
+    match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", time_raw)
+    if not match:
+        return False
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return False
+    now_value = now or datetime.now(LOCAL_TZ)
+    local_now = now_value if now_value.tzinfo is None else now_value.astimezone(LOCAL_TZ)
+    start_dt = datetime.combine(event_date, time(hour, minute), tzinfo=LOCAL_TZ)
+    return start_dt <= local_now
+
+
+VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v2"
+
+
+def _tg_event_publish_window_hours() -> tuple[int, int]:
+    def _hour(name: str, default: int) -> int:
+        try:
+            return min(23, max(0, int(str(os.getenv(name, str(default))).strip())))
+        except (TypeError, ValueError):
+            return default
+
+    return (
+        _hour("TG_EVENT_PUBLISH_START_HOUR", 7),
+        _hour("TG_EVENT_PUBLISH_END_HOUR", 23),
+    )
+
+
+def _tg_event_publish_interval() -> timedelta:
+    try:
+        minutes = int(str(os.getenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")).strip())
+    except (TypeError, ValueError):
+        minutes = 10
+    return timedelta(minutes=max(1, minutes))
+
+
+def _tg_event_publish_spacing_horizon() -> timedelta:
+    try:
+        hours = int(str(os.getenv("TG_EVENT_PUBLISH_SPACING_HORIZON_HOURS", "24")).strip())
+    except (TypeError, ValueError):
+        hours = 24
+    return timedelta(hours=max(1, hours))
+
+
+def _tg_event_publish_fresh_queue_horizon() -> timedelta:
+    """How long new imports outrank old Telegram announcement catch-up rows."""
+
+    try:
+        hours = float(str(os.getenv("TG_EVENT_PUBLISH_FRESH_QUEUE_HOURS", "8")).strip())
+    except (TypeError, ValueError):
+        hours = 8.0
+    return timedelta(hours=max(1.0, hours))
+
+
+def _same_source_event_publish_interval() -> timedelta:
+    """Minimum gap between event posts created from the same source post."""
+
+    raw = (
+        os.getenv("SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS")
+        or os.getenv("AFISHA_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS")
+        or "12"
+    )
+    try:
+        hours = float(str(raw).strip())
+    except (TypeError, ValueError):
+        hours = 12.0
+    if hours <= 0:
+        return timedelta(0)
+    return timedelta(hours=hours)
+
+
+def _same_source_event_publish_spacing_horizon() -> timedelta:
+    raw = (
+        os.getenv("SAME_SOURCE_EVENT_PUBLISH_SPACING_HORIZON_HOURS")
+        or os.getenv("AFISHA_SOURCE_EVENT_PUBLISH_SPACING_HORIZON_HOURS")
+        or "168"
+    )
+    try:
+        hours = int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        hours = 168
+    return timedelta(hours=max(1, hours))
+
+
+def _normalize_publish_source_url(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        ids = _vk_owner_and_post_id(raw)  # type: ignore[name-defined]
+    except Exception:
+        ids = None
+    if ids:
+        return f"vk:{ids[0]}_{ids[1]}"
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        path = parsed.path.rstrip("/")
+        return parsed._replace(
+            scheme=parsed.scheme.lower(),
+            netloc=parsed.netloc.lower(),
+            path=path,
+            params="",
+            query="",
+            fragment="",
+        ).geturl()
+    return raw.casefold()
+
+
+def _event_source_url_is_managed_output(url: str | None) -> bool:
+    raw = str(url or "").strip()
+    if not raw:
+        return False
+    try:
+        ids = _vk_owner_and_post_id(raw)  # type: ignore[name-defined]
+    except Exception:
+        ids = None
+    if not ids:
+        return False
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not target_group_id:
+        return False
+    try:
+        return str(abs(int(ids[0]))) == target_group_id
+    except (TypeError, ValueError):
+        return False
+
+
+async def _event_primary_publish_source_url(db: Database | None, ev: Event | None) -> str:
+    """Return the external source-post URL used for same-afisha publish cadence."""
+
+    if not ev:
+        return ""
+    primary = str(getattr(ev, "source_post_url", None) or "").strip()
+    if primary and not _event_source_url_is_managed_output(primary):
+        return primary
+    event_id = getattr(ev, "id", None)
+    if not db or not event_id:
+        return ""
+    try:
+        from models import EventSource
+
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    select(EventSource.source_url)
+                    .where(EventSource.event_id == int(event_id))
+                    .order_by(EventSource.id)
+                    .limit(20)
+                )
+            ).scalars().all()
+        for source_url in rows:
+            source_url = str(source_url or "").strip()
+            if source_url and not _event_source_url_is_managed_output(source_url):
+                return source_url
+    except Exception:
+        logging.warning(
+            "same-source cadence: failed to inspect source URLs event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+    return ""
+
+
+async def _same_publish_source_event_ids(
+    db: Database,
+    source_url: str | None,
+    *,
+    exclude_event_id: int | None = None,
+) -> list[int]:
+    raw_source = str(source_url or "").strip()
+    normalized = _normalize_publish_source_url(raw_source)
+    if not raw_source or not normalized:
+        return []
+    from models import EventSource
+
+    event_ids: set[int] = set()
+    async with db.get_session() as session:
+        direct_rows = (
+            await session.execute(
+                select(Event.id, Event.source_post_url)
+                .where(Event.source_post_url.is_not(None))
+                .where(Event.source_post_url != "")
+                .order_by(Event.id.desc())
+                .limit(500)
+            )
+        ).all()
+        for event_id, candidate_url in direct_rows:
+            if _normalize_publish_source_url(candidate_url) == normalized:
+                event_ids.add(int(event_id))
+        source_rows = (
+            await session.execute(
+                select(EventSource.event_id, EventSource.source_url)
+                .where(EventSource.source_url.is_not(None))
+                .where(EventSource.source_url != "")
+                .order_by(EventSource.id.desc())
+                .limit(1000)
+            )
+        ).all()
+        for event_id, candidate_url in source_rows:
+            if (
+                _normalize_publish_source_url(candidate_url) == normalized
+                and not _event_source_url_is_managed_output(candidate_url)
+            ):
+                event_ids.add(int(event_id))
+    if exclude_event_id is not None:
+        event_ids.discard(int(exclude_event_id))
+    return sorted(event_ids)
+
+
+def _normalize_tg_event_publish_run_at(candidate: datetime) -> datetime:
+    start_hour, end_hour = _tg_event_publish_window_hours()
+    local = candidate.astimezone(LOCAL_TZ)
+    if local.hour < start_hour:
+        local = local.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    elif local.hour >= end_hour:
+        next_day = local.date() + timedelta(days=1)
+        local = datetime.combine(
+            next_day,
+            time(hour=start_hour),
+            tzinfo=LOCAL_TZ,
+        )
+    return local.astimezone(timezone.utc)
+
+
+def _tg_event_publish_backlog_gap_threshold(interval: timedelta) -> timedelta:
+    return max(interval * 6, timedelta(hours=1))
+
+
+async def _defer_tg_event_publish_if_spacing_blocked(
+    session,
+    job: JobOutbox,
+    *,
+    now: datetime | None = None,
+) -> datetime | None:
+    """Keep Telegram event posts spaced even when old jobs become due together."""
+
+    job_id = getattr(job, "id", None)
+    if not job_id:
+        return None
+    now_utc = _ensure_utc(now or datetime.now(timezone.utc))
+    interval = _tg_event_publish_interval()
+    candidate = _normalize_tg_event_publish_run_at(now_utc)
+    if candidate <= now_utc:
+        candidate = now_utc
+
+    rows = (
+        await session.execute(
+            select(JobOutbox.id, JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+            .where(
+                JobOutbox.task == JobTask.tg_event_publish,
+                JobOutbox.id != int(job_id),
+                JobOutbox.status.in_([JobStatus.done, JobStatus.running]),
+            )
+            .order_by(JobOutbox.updated_at.desc())
+            .limit(25)
+        )
+    ).all()
+    anchors: list[datetime] = []
+    for _id, status, next_run_at, updated_at in rows:
+        anchor = _ensure_utc(updated_at if status == JobStatus.done else (updated_at or next_run_at))
+        if anchor:
+            anchors.append(anchor)
+
+    if not anchors:
+        if candidate > now_utc:
+            job.next_run_at = candidate
+            job.updated_at = now_utc
+            session.add(job)
+            await session.commit()
+            return candidate
+        return None
+
+    latest_anchor = max(anchors)
+    next_allowed = _normalize_tg_event_publish_run_at(latest_anchor + interval)
+    deferred_until = max(candidate, next_allowed)
+    if deferred_until > now_utc:
+        job.next_run_at = deferred_until
+        job.updated_at = now_utc
+        session.add(job)
+        await session.commit()
+        logging.info(
+            "TG_EVENT spacing defer job_id=%s event_id=%s next_run_at=%s latest_anchor=%s",
+            job_id,
+            getattr(job, "event_id", None),
+            deferred_until.isoformat(),
+            latest_anchor.isoformat(),
+        )
+        return deferred_until
+    return None
+
+
+async def next_tg_event_publish_run_at(
+    db: Database,
+    *,
+    now: datetime | None = None,
+    source_url: str | None = None,
+    exclude_event_id: int | None = None,
+    prefer_fresh: bool = False,
+) -> datetime:
+    now_utc = _ensure_utc(now or datetime.now(timezone.utc))
+    candidate = _normalize_tg_event_publish_run_at(now_utc)
+    interval = _tg_event_publish_interval()
+    spacing_horizon = _tg_event_publish_spacing_horizon()
+    source_interval = _same_source_event_publish_interval()
+    source_spacing_horizon = _same_source_event_publish_spacing_horizon()
+    max_spacing_anchor = now_utc + spacing_horizon
+    max_source_anchor = now_utc + source_spacing_horizon
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(
+                    JobOutbox.event_id,
+                    JobOutbox.status,
+                    JobOutbox.next_run_at,
+                    JobOutbox.updated_at,
+                    Event.added_at,
+                )
+                .outerjoin(Event, Event.id == JobOutbox.event_id)
+                .where(JobOutbox.task == JobTask.tg_event_publish)
+                .order_by(JobOutbox.id.desc())
+                .limit(200)
+            )
+        ).all()
+    source_event_ids = (
+        set(await _same_publish_source_event_ids(db, source_url, exclude_event_id=exclude_event_id))
+        if source_url and source_interval > interval
+        else set()
+    )
+    anchors: list[datetime] = []
+    source_anchors: list[datetime] = []
+    now_local_date = now_utc.astimezone(LOCAL_TZ).date()
+    candidate_local = candidate.astimezone(LOCAL_TZ)
+    backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
+    fresh_cutoff = now_utc - _tg_event_publish_fresh_queue_horizon()
+    for _event_id, status, next_run_at, updated_at, event_added_at in rows:
+        anchor = None
+        if status in {JobStatus.pending, JobStatus.running}:
+            anchor = _ensure_utc(next_run_at)
+        elif status == JobStatus.done:
+            anchor = _ensure_utc(updated_at)
+        if not anchor:
+            continue
+        if (
+            prefer_fresh
+            and status == JobStatus.pending
+            and _event_id not in source_event_ids
+        ):
+            added_at = _ensure_utc(event_added_at)
+            if added_at and added_at < fresh_cutoff:
+                logging.info(
+                    "TG_EVENT spacing ignoring stale pending backlog anchor for fresh import event_id=%s anchor=%s added_at=%s cutoff=%s",
+                    _event_id,
+                    anchor.isoformat(),
+                    added_at.isoformat(),
+                    fresh_cutoff.isoformat(),
+                )
+                continue
+        # A stale next-day pending announcement should not push a fresh manual
+        # import/re-arm out of the current publish window. Same-day pending
+        # anchors still space posts normally.
+        if (
+            status in {JobStatus.pending, JobStatus.running}
+            and anchor.astimezone(LOCAL_TZ).date() > now_local_date
+            and candidate_local.date() == now_local_date
+        ):
+            logging.info(
+                "TG_EVENT spacing ignoring next-day pending anchor status=%s anchor=%s now=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                now_utc.isoformat(),
+            )
+            continue
+        # After the local publish window closes, the next candidate is tomorrow
+        # morning. Stale backlog rows from earlier incidents may sit on the same
+        # next day but many hours later; they must not make fresh imports skip
+        # the whole morning. Legitimate morning anchors still space normally.
+        if (
+            status in {JobStatus.pending, JobStatus.running}
+            and candidate_local.date() > now_local_date
+            and anchor.astimezone(LOCAL_TZ).date() == candidate_local.date()
+            and anchor - candidate > backlog_gap_threshold
+        ):
+            logging.info(
+                "TG_EVENT spacing ignoring next-day backlog anchor status=%s anchor=%s candidate=%s gap_threshold=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                candidate.isoformat(),
+                backlog_gap_threshold,
+            )
+            continue
+        if anchor > max_spacing_anchor:
+            logging.warning(
+                "TG_EVENT spacing ignoring far-future anchor status=%s anchor=%s now=%s horizon=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                now_utc.isoformat(),
+                spacing_horizon,
+            )
+            continue
+        anchors.append(anchor)
+        if _event_id in source_event_ids:
+            if anchor > max_source_anchor:
+                logging.warning(
+                    "TG_EVENT same-source spacing ignoring far-future anchor event_id=%s anchor=%s now=%s horizon=%s source_url=%s",
+                    _event_id,
+                    anchor.isoformat(),
+                    now_utc.isoformat(),
+                    source_spacing_horizon,
+                    source_url,
+                )
+                continue
+            source_anchors.append(anchor)
+    anchors.sort()
+    source_anchors.sort()
+    search_horizon = max(spacing_horizon, source_spacing_horizon if source_anchors else spacing_horizon)
+    min_step = min(interval, source_interval) if source_interval > timedelta(0) else interval
+    max_iterations = max(1, int(search_horizon / min_step) + 20)
+    for _ in range(max_iterations):
+        candidate = _normalize_tg_event_publish_run_at(candidate)
+        next_candidate: datetime | None = None
+        for anchor in anchors:
+            if abs(anchor - candidate) < interval:
+                proposed = anchor + interval
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        for anchor in source_anchors:
+            if abs(anchor - candidate) < source_interval:
+                proposed = anchor + source_interval
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        if next_candidate is None:
+            return candidate
+        candidate = next_candidate
+    logging.warning(
+        "TG_EVENT spacing fallback after exhausted search now=%s candidate=%s anchors=%s source_anchors=%s source_url=%s",
+        now_utc.isoformat(),
+        candidate.isoformat(),
+        len(anchors),
+        len(source_anchors),
+        source_url,
+    )
+    return _normalize_tg_event_publish_run_at(candidate)
+
+
+def _is_sqlite_locked_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "database is locked" in msg or "database table is locked" in msg
+
+
+_TICKET_GIVEAWAY_RE = re.compile(
+    r"\b(?:"
+    r"розыгрыш\w*|розыгрыва\w*|разыгрыва\w*|разыгра\w*|"
+    r"дарим|подарим|выигра\w*|победител\w*"
+    r")\b",
+    re.IGNORECASE,
+)
+_TICKET_WORD_RE = re.compile(
+    r"\b(?:билет\w*|пригласительн\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _event_ticket_giveaway_text(event: Event) -> str:
+    parts: list[str] = []
+    for raw in (
+        getattr(event, "title", None),
+        getattr(event, "description", None),
+        getattr(event, "short_description", None),
+        getattr(event, "search_digest", None),
+        getattr(event, "source_text", None),
+    ):
+        value = str(raw or "").strip()
+        if value:
+            parts.append(value)
+    raw_sources = getattr(event, "source_texts", None) or []
+    if isinstance(raw_sources, list):
+        for raw in raw_sources:
+            value = str(raw or "").strip()
+            if value:
+                parts.append(value)
+    return "\n".join(parts)
+
+
+def _event_looks_like_ticket_giveaway(event: Event) -> bool:
+    text = _event_ticket_giveaway_text(event)
+    if not text:
+        return False
+    return bool(_TICKET_GIVEAWAY_RE.search(text) and _TICKET_WORD_RE.search(text))
+
+
+def _strip_ticket_giveaway_fragments(text: str) -> str:
+    kept: list[str] = []
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _TICKET_GIVEAWAY_RE.search(line) or _TICKET_WORD_RE.search(line):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def _event_has_publishable_non_giveaway_editorial_body(event: Event) -> bool:
+    """Return True when Smart Update already produced event copy beyond raffle mechanics."""
+
+    for raw in (
+        getattr(event, "short_description", None),
+        getattr(event, "description", None),
+        getattr(event, "search_digest", None),
+    ):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        cleaned = _strip_ticket_giveaway_fragments(text)
+        if len(cleaned) >= 120:
+            return True
+        sentenceish = [part for part in re.split(r"[.!?…\n]+", cleaned) if len(part.strip()) >= 25]
+        if len(sentenceish) >= 2:
+            return True
+    return False
+
+
+async def _has_non_giveaway_tg_publication_alternative(
+    db: Database,
+    event: Event,
+) -> bool:
+    event_id = getattr(event, "id", None)
+    if event_id is None:
+        return False
+    today = datetime.now(LOCAL_TZ).date().isoformat()
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event, JobOutbox.status)
+                    .outerjoin(
+                        JobOutbox,
+                        and_(
+                            JobOutbox.event_id == Event.id,
+                            JobOutbox.task == JobTask.tg_event_publish,
+                            JobOutbox.status.in_(
+                                [JobStatus.pending, JobStatus.running, JobStatus.done]
+                            ),
+                        ),
+                    )
+                    .where(Event.id != int(event_id))
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                    .where(func.coalesce(Event.end_date, Event.date) >= today)
+                    .where(
+                        or_(
+                            Event.tg_event_post_url.is_not(None),
+                            JobOutbox.id.is_not(None),
+                        )
+                    )
+                    .order_by(Event.date, Event.time, Event.id)
+                    .limit(200)
+                )
+            ).all()
+        )
+    for candidate, status in rows:
+        if _event_has_ended_before_today(candidate):
+            continue
+        has_tg_post = bool(str(getattr(candidate, "tg_event_post_url", "") or "").strip())
+        has_tg_job = status in {JobStatus.pending, JobStatus.running, JobStatus.done}
+        if not has_tg_post and not has_tg_job:
+            continue
+        if _event_looks_like_ticket_giveaway(candidate):
+            continue
+        return True
+    return False
+
+
+async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -> bool:
+    if not _event_looks_like_ticket_giveaway(event):
+        return False
+    if _event_has_publishable_non_giveaway_editorial_body(event):
+        return False
+    return await _has_non_giveaway_tg_publication_alternative(db, event)
+
+
 async def schedule_event_update_tasks(
     db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
 ) -> dict[JobTask, str]:
@@ -13978,20 +15065,79 @@ async def schedule_event_update_tasks(
         # from aggregated pages and the operator can still inspect the record if needed).
         disable_ics_jobs = True
         skip_vk_sync = True
-    if (not disable_ics_jobs) and ev.time and "ics_publish" in JOB_HANDLERS:
-        ics_dep = await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
+    if _event_has_ended_before_today(ev):
+        # Fully past events may still need page rebuild cleanup, but they must not create
+        # a new managed klgdevents wall post.
+        skip_vk_sync = True
+    if _event_start_has_passed_for_publication(ev):
+        # A same-day event that has already started is no longer safe to announce
+        # on VK/Telegram; keep page rebuilds only.
+        skip_vk_sync = True
+    if (not skip_vk_sync) and await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "schedule_event_update_tasks: skip managed VK/TG publication for ticket giveaway event_id=%s; alternative exists",
+            eid,
+        )
+        skip_vk_sync = True
+    telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
+    tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
+    vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
+    has_calendar_schedule = _calendar_schedule_is_supported(ev)
+    if (not disable_ics_jobs) and has_calendar_schedule and "ics_publish" in JOB_HANDLERS:
+        ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
+        await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
     results[JobTask.telegraph_build] = await enqueue_job(
         db, eid, JobTask.telegraph_build, depends_on=None
     )
-    if (not disable_ics_jobs) and "tg_ics_post" in JOB_HANDLERS:
-        tg_ics_deps = [results[JobTask.telegraph_build]]
+    if (not disable_ics_jobs) and has_calendar_schedule and "tg_ics_post" in JOB_HANDLERS:
+        tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)
         results[JobTask.tg_ics_post] = await enqueue_job(
-            db, eid, JobTask.tg_ics_post, depends_on=tg_ics_deps
+            db,
+            eid,
+            JobTask.tg_ics_post,
+            depends_on=tg_ics_deps,
+            replace_depends_on=True,
         )
-    page_deps = [results[JobTask.telegraph_build]]
+    vk_dep: str | None = None
+    if not skip_vk_sync:
+        # Schedule vk_sync before Telegram event publishing so the two public
+        # surfaces keep the same Smart Update contract. Imported VK events keep
+        # `source_vk_post_url` pointing at the external source wall post; those
+        # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
+        if not await _event_has_existing_managed_vk_post(ev):
+            vk_dep = vk_dep_key
+            results[JobTask.vk_sync] = vk_dep
+            await enqueue_job(db, eid, JobTask.vk_sync)
+    if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
+        tg_event_deps = [telegraph_dep_key]
+        if JobTask.tg_ics_post in results:
+            tg_event_deps.append(tg_ics_dep_key)
+        if vk_dep:
+            tg_event_deps.append(vk_dep)
+        publish_source_url = await _event_primary_publish_source_url(db, ev)
+        ev_added_at = _ensure_utc(getattr(ev, "added_at", None))
+        prefer_fresh_tg_slot = bool(
+            ev_added_at
+            and ev_added_at >= datetime.now(timezone.utc) - _tg_event_publish_fresh_queue_horizon()
+        )
+        tg_event_next_run_at = await next_tg_event_publish_run_at(
+            db,
+            source_url=publish_source_url,
+            exclude_event_id=eid,
+            prefer_fresh=prefer_fresh_tg_slot,
+        )
+        results[JobTask.tg_event_publish] = await enqueue_job(
+            db,
+            eid,
+            JobTask.tg_event_publish,
+            depends_on=tg_event_deps,
+            replace_depends_on=True,
+            next_run_at=tg_event_next_run_at,
+        )
+    page_deps = [telegraph_dep_key]
     
     if not DISABLE_PAGE_JOBS:
         # Deferred page rebuilds: откладываем month_pages и weekend_pages на 15 минут
@@ -14086,32 +15232,8 @@ async def schedule_event_update_tasks(
             results[JobTask.festival_pages] = await enqueue_job(
                 db, eid, JobTask.festival_pages
             )
-        if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
-            results[JobTask.static_site_build] = await enqueue_job(
-                db,
-                eid,
-                JobTask.static_site_build,
-                payload={"reason": "smart_update", "event_id": eid},
-                coalesce_key="static_site_build:prod",
-                next_run_at=deferred_time,
-            )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
-    if not skip_vk_sync:
-        # Schedule vk_sync unless we already have a managed klgdevents post for this event.
-        # Imported VK events keep `source_vk_post_url` pointing at the external source wall
-        # post; those must still get a redactional post in `VK_EVENTS_GROUP_ID`.
-        existing_vk_url = (ev.source_vk_post_url or "").strip()
-        managed_klgdevents_post = False
-        if existing_vk_url:
-            owner_ids = _vk_owner_and_post_id(existing_vk_url)
-            target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
-            if owner_ids and target_group_id:
-                managed_klgdevents_post = (
-                    str(abs(int(owner_ids[0]))) == target_group_id
-                )
-        if not managed_klgdevents_post:
-            results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
@@ -15699,6 +16821,7 @@ BACKOFF_SCHEDULE = [30, 120, 600, 3600]
 TASK_LABELS = {
     "telegraph_build": "Telegraph (событие)",
     "vk_sync": "VK (событие)",
+    "tg_event_publish": "Telegram (событие)",
     "ics_publish": "Календарь (ICS)",
     "tg_ics_post": "ICS (Telegram)",
     "month_pages": "Страница месяца",
@@ -15719,31 +16842,82 @@ TASK_LABELS = {
 # (vk_auto_import / nightly_page_sync) cannot starve them.
 JOB_TTL: dict[JobTask, int] = {
     JobTask.telegraph_build: 3600,
+    JobTask.tg_event_publish: 3600,
     JobTask.ics_publish: 3600,
     JobTask.tg_ics_post: 3600,
     JobTask.month_pages: 3600,
     JobTask.week_pages: 3600,
     JobTask.weekend_pages: 3600,
-    JobTask.static_site_build: 7200,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
-    JobTask.telegraph_build: 180,
+    JobTask.telegraph_build: 900,
+    JobTask.tg_event_publish: 180,
     JobTask.ics_publish: 60,
     JobTask.tg_ics_post: 60,
     JobTask.month_pages: 180,
     JobTask.week_pages: 180,
     JobTask.weekend_pages: 180,
-    JobTask.static_site_build: 5400,
 }
 
 DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
+EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
+    JobTask.telegraph_build,
+    JobTask.vk_sync,
+    JobTask.tg_event_publish,
+    JobTask.ics_publish,
+    JobTask.tg_ics_post,
+}
+DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
 # runtime storage for progress callbacks keyed by event id
 _EVENT_PROGRESS: dict[int, SimpleNamespace] = {}
 # mapping from coalesce key to events waiting for progress updates
 _EVENT_PROGRESS_KEYS: dict[str, set[int]] = {}
+
+_JOB_OUTBOX_WORKER_HEALTH: dict[str, Any] = {
+    "last_ok_monotonic": None,
+    "last_error_monotonic": None,
+    "last_error": None,
+    "consecutive_errors": 0,
+}
+
+
+def _job_outbox_worker_error_window_sec() -> float:
+    raw = (os.getenv("JOB_OUTBOX_WORKER_HEALTH_ERROR_WINDOW_SEC") or "").strip()
+    try:
+        value = float(raw) if raw else 120.0
+    except ValueError:
+        value = 120.0
+    return max(5.0, value)
+
+
+def _mark_job_outbox_worker_cycle_ok() -> None:
+    _JOB_OUTBOX_WORKER_HEALTH["last_ok_monotonic"] = _time.monotonic()
+    _JOB_OUTBOX_WORKER_HEALTH["consecutive_errors"] = 0
+
+
+def _mark_job_outbox_worker_cycle_error(exc: BaseException) -> None:
+    _JOB_OUTBOX_WORKER_HEALTH["last_error_monotonic"] = _time.monotonic()
+    _JOB_OUTBOX_WORKER_HEALTH["last_error"] = type(exc).__name__
+    _JOB_OUTBOX_WORKER_HEALTH["consecutive_errors"] = int(
+        _JOB_OUTBOX_WORKER_HEALTH.get("consecutive_errors") or 0
+    ) + 1
+
+
+def job_outbox_worker_recent_error_status() -> str:
+    consecutive = int(_JOB_OUTBOX_WORKER_HEALTH.get("consecutive_errors") or 0)
+    if consecutive <= 0:
+        return "ok"
+    last_error_monotonic = _JOB_OUTBOX_WORKER_HEALTH.get("last_error_monotonic")
+    if last_error_monotonic is None:
+        return "ok"
+    age_sec = max(0.0, _time.monotonic() - float(last_error_monotonic))
+    if age_sec > _job_outbox_worker_error_window_sec():
+        return "ok"
+    err = str(_JOB_OUTBOX_WORKER_HEALTH.get("last_error") or "Exception")
+    return f"recent_error:{err}:consecutive={consecutive}:age={age_sec:.1f}s"
 
 
 async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | None:
@@ -15755,6 +16929,8 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
             return ev.telegraph_url
         if task == JobTask.vk_sync:
             return ev.source_vk_post_url
+        if task == JobTask.tg_event_publish:
+            return ev.tg_event_post_url
         if task == JobTask.ics_publish:
             return ev.ics_url
         if task == JobTask.tg_ics_post:
@@ -15781,6 +16957,8 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
                 return page.vk_post_url if page else None
             return None
         if task == JobTask.festival_pages:
+            if "festival_vk_posts_enabled" in globals() and not festival_vk_posts_enabled():
+                return None
             if ev.festival:
                 fest = (
                     await session.execute(
@@ -15790,6 +16968,74 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
                 return fest.vk_post_url if fest else None
             return None
     return None
+
+
+async def _dependency_blockers_for_job(
+    session: Any,
+    obj: JobOutbox,
+) -> list[tuple[str, JobStatus | str | None, datetime | None]]:
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]] = []
+    deps = [d for d in (obj.depends_on or "").split(",") if d]
+    if not deps:
+        return dep_blockers
+    task_values = {t.value for t in JobTask}
+    for dep in deps:
+        dep_job: JobOutbox | None = None
+        task_part, sep, event_part = dep.partition(":")
+        if sep and event_part.isdigit() and task_part in task_values:
+            dep_res = await session.execute(
+                select(JobOutbox)
+                .where(
+                    JobOutbox.event_id == int(event_part),
+                    JobOutbox.task == JobTask(task_part),
+                )
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+            dep_job = _normalize_job(dep_res.scalar_one_or_none())
+        else:
+            dep_res = await session.execute(
+                select(JobOutbox)
+                .where(JobOutbox.coalesce_key == dep)
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+            dep_job = _normalize_job(dep_res.scalar_one_or_none())
+        if dep_job and dep_job.status != JobStatus.done:
+            dep_blockers.append((dep, dep_job.status, dep_job.next_run_at))
+    return dep_blockers
+
+
+def _dependency_retry_at(
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]],
+    now: datetime,
+) -> datetime | None:
+    retry_times: list[datetime] = []
+    for _key, status, run_at in dep_blockers:
+        dep_run_at = _ensure_utc(run_at) if run_at else None
+        if dep_run_at and now < dep_run_at <= now + DEPENDENCY_RETRY_HORIZON:
+            retry_times.append(dep_run_at)
+        elif status in {JobStatus.pending, JobStatus.running}:
+            retry_times.append(now + timedelta(seconds=5))
+    if not retry_times:
+        return None
+    return min(retry_times)
+
+
+async def _defer_job_until_dependency_retry(
+    session: Any,
+    obj: JobOutbox,
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]],
+    now: datetime,
+) -> bool:
+    retry_at = _dependency_retry_at(dep_blockers, now)
+    if not retry_at:
+        return False
+    obj.next_run_at = max(retry_at + timedelta(seconds=1), now + timedelta(seconds=2))
+    obj.updated_at = now
+    session.add(obj)
+    await session.commit()
+    return True
 
 
 async def reconcile_job_outbox(db: Database) -> None:
@@ -15853,20 +17099,56 @@ async def _run_due_jobs_once_locked(
     force_notify: bool = False,
 ) -> int:
     now = datetime.now(timezone.utc)
+    # The database has accumulated a few legacy/experimental task strings.
+    # SQLAlchemy Enum conversion raises LookupError for an unknown value while
+    # materializing rows; a single bad row must not crash the whole outbox worker.
+    # Use enum members (SAEnum stores names in this schema) so filtering happens
+    # in SQL before ORM row conversion.
+    known_job_tasks = list(JobTask)
     async with db.get_session() as session:
         running_rows = await session.execute(
-            select(JobOutbox).where(JobOutbox.status == JobStatus.running)
+            select(JobOutbox).where(
+                JobOutbox.status == JobStatus.running,
+                JobOutbox.task.in_(known_job_tasks),
+            )
         )
         running_jobs = [_normalize_job(job) for job in running_rows.scalars().all()]
         stale: list[str] = []
         for rjob in running_jobs:
+            if rjob.task == JobTask.telegraph_build and rjob.event_id is not None:
+                ev = await session.get(Event, int(rjob.event_id))
+                link = (getattr(ev, "telegraph_url", None) or "").strip() if ev else ""
+                if link:
+                    rjob.status = JobStatus.done
+                    rjob.last_error = None
+                    rjob.last_result = link
+                    rjob.updated_at = now
+                    rjob.next_run_at = now
+                    session.add(rjob)
+                    logging.info(
+                        "OUTBOX_RUNNING_RESULT key=%s result=%s",
+                        rjob.coalesce_key or f"{rjob.task.value}:{rjob.event_id}",
+                        link,
+                    )
+                    continue
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
+                retry_event_pipeline = (
+                    rjob.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                    and rjob.event_id is not None
+                )
                 rjob.status = JobStatus.error
                 rjob.last_error = "stale"
                 rjob.updated_at = now
-                rjob.next_run_at = now + timedelta(days=3650)
+                if retry_event_pipeline:
+                    rjob.attempts += 1
+                    delay = BACKOFF_SCHEDULE[
+                        min(rjob.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
+                    ]
+                    rjob.next_run_at = now + timedelta(seconds=delay)
+                else:
+                    rjob.next_run_at = now + timedelta(days=3650)
                 session.add(rjob)
                 stale.append(
                     rjob.coalesce_key or f"{rjob.task.value}:{rjob.event_id}"
@@ -15880,6 +17162,7 @@ async def _run_due_jobs_once_locked(
             .where(
                 JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
                 JobOutbox.next_run_at <= now,
+                JobOutbox.task.in_(known_job_tasks),
             )
         )
         if only_event is not None:
@@ -15890,17 +17173,50 @@ async def _run_due_jobs_once_locked(
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
     priority = {
+        JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
+        JobTask.tg_event_publish: 0,
         JobTask.ics_publish: 0,
         JobTask.tg_ics_post: 0,
         JobTask.month_pages: 1,
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
-        JobTask.vk_sync: 2,
-        JobTask.static_site_build: 3,
     }
-    jobs.sort(key=lambda j: (priority.get(j.task, 99), j.id))
+    tg_event_added_at: dict[int, datetime | None] = {}
+    tg_event_ids = sorted(
+        {
+            int(j.event_id)
+            for j in jobs
+            if j.task == JobTask.tg_event_publish and j.event_id is not None
+        }
+    )
+    if tg_event_ids:
+        async with db.get_session() as session:
+            rows = await session.execute(
+                select(Event.id, Event.added_at).where(Event.id.in_(tg_event_ids))
+            )
+            tg_event_added_at = {
+                int(event_id): _ensure_utc(added_at) for event_id, added_at in rows.all()
+            }
+    fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
+
+    def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
+        task_priority = priority.get(j.task, 99)
+        if j.task == JobTask.tg_event_publish and j.event_id is not None:
+            added_at = tg_event_added_at.get(int(j.event_id))
+            # When an old catch-up/backfill backlog is being throttled one post at
+            # a time, fresh Smart Update imports must not be starved behind rows
+            # that can be safely announced later. Within the fresh lane, newest
+            # imports go first so a live Smart Update does not wait behind an
+            # hours-old mini-backlog. Spacing is still enforced by
+            # _defer_tg_event_publish_if_spacing_blocked before every send.
+            if added_at and added_at >= fresh_cutoff:
+                return (task_priority, 1, -int(added_at.timestamp()), j.id)
+            return (task_priority, 2, j.id, 0)
+        return (task_priority, 0, j.id, 0)
+
+    jobs.sort(key=_job_due_sort_key)
     processed = 0
     for job in jobs:
         async with db.get_session() as session:
@@ -15919,6 +17235,62 @@ async def _run_due_jobs_once_locked(
                 # Regular task: age from updated_at
                 age = (now - obj.updated_at).total_seconds()
             if age > ttl:
+                if (
+                    obj.status == JobStatus.pending
+                    and obj.event_id is not None
+                    and obj.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                ):
+                    ev = await session.get(Event, int(obj.event_id))
+                    ev_date = (getattr(ev, "date", None) or "").strip() if ev else ""
+                    ev_status = (getattr(ev, "lifecycle_status", None) or "active").strip()
+                    ev_silent = bool(getattr(ev, "silent", False)) if ev else True
+                    today = now.astimezone(LOCAL_TZ).date().isoformat()
+                    if ev and ev_status == "active" and not ev_silent and (not ev_date or ev_date >= today):
+                        # Catch-up after a worker outage/restart: a valid active
+                        # future event should still be publishable even when the
+                        # pending row waited longer than JOB_TTL because the
+                        # whole worker was blocked.
+                        obj.updated_at = now
+                        session.add(obj)
+                        await session.commit()
+                        logging.info(
+                            "OUTBOX_STALE_PENDING_CATCHUP key=%s age=%s",
+                            obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
+                            int(age),
+                        )
+                        age = 0
+            if age > ttl:
+                dep_blockers = await _dependency_blockers_for_job(session, obj)
+                if dep_blockers and await _defer_job_until_dependency_retry(
+                    session, obj, dep_blockers, now
+                ):
+                    logging.info(
+                        "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
+                        obj.event_id,
+                        obj.task.value,
+                        ",".join(
+                            f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                            for key, status, _ in dep_blockers
+                        ),
+                        obj.next_run_at.isoformat() if obj.next_run_at else None,
+                    )
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        waiting_for_deps=[
+                            {
+                                "key": key,
+                                "status": status.value if isinstance(status, JobStatus) else status,
+                                "next_run_at": run_at.isoformat() if run_at else None,
+                            }
+                            for key, status, run_at in dep_blockers
+                        ],
+                        deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
+                    )
+                    continue
                 obj.status = JobStatus.error
                 obj.last_error = "expired"
                 obj.updated_at = now
@@ -15967,41 +17339,67 @@ async def _run_due_jobs_once_locked(
                         reason="superseded",
                     )
                     continue
-            exists_stmt = (
-                select(
-                    JobOutbox.id,
-                    JobOutbox.task,
-                    JobOutbox.status,
-                    JobOutbox.next_run_at,
+            if obj.task not in EVENT_PIPELINE_INDEPENDENT_TASKS:
+                exists_stmt = (
+                    select(
+                        JobOutbox.id,
+                        JobOutbox.task,
+                        JobOutbox.status,
+                        JobOutbox.next_run_at,
+                    )
+                    .where(
+                        JobOutbox.event_id == obj.event_id,
+                        JobOutbox.id < obj.id,
+                        JobOutbox.task.in_(known_job_tasks),
+                        JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
+                        JobOutbox.next_run_at <= now,
+                    )
+                    .limit(1)
                 )
-                .where(
-                    JobOutbox.event_id == obj.event_id,
-                    JobOutbox.id < obj.id,
-                    JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
-                    JobOutbox.next_run_at <= now,
-                )
-                .limit(1)
-            )
-            if obj.task == JobTask.ics_publish:
-                exists_stmt = exists_stmt.where(JobOutbox.task == JobTask.ics_publish)
-            # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
-            # easily trigger "database is locked" on a SELECT that doesn't actually
-            # require flushing anything.
-            with session.no_autoflush:
-                early = (await session.execute(exists_stmt)).first()
-            if early:
-                ejob = early[0]
-                etask = early[1]
-                estat = early[2]
-                enext = early[3]
+                # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
+                # easily trigger "database is locked" on a SELECT that doesn't actually
+                # require flushing anything.
+                with session.no_autoflush:
+                    early = (await session.execute(exists_stmt)).first()
+                if early:
+                    ejob = early[0]
+                    etask = early[1]
+                    estat = early[2]
+                    enext = early[3]
+                    logging.info(
+                        "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                        obj.event_id,
+                        obj.task.value,
+                        ejob,
+                        etask.value if isinstance(etask, JobTask) else etask,
+                        estat.value if isinstance(estat, JobStatus) else estat,
+                        enext.isoformat() if enext else None,
+                    )
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        blocking_id=ejob,
+                        blocking_task=etask.value if isinstance(etask, JobTask) else etask,
+                        blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
+                        blocking_run_at=enext.isoformat() if enext else None,
+                    )
+                    continue
+            dep_blockers = await _dependency_blockers_for_job(session, obj)
+            if dep_blockers and await _defer_job_until_dependency_retry(
+                session, obj, dep_blockers, now
+            ):
                 logging.info(
-                    "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                    "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
                     obj.event_id,
                     obj.task.value,
-                    ejob,
-                    etask.value if isinstance(etask, JobTask) else etask,
-                    estat.value if isinstance(estat, JobStatus) else estat,
-                    enext.isoformat() if enext else None,
+                    ",".join(
+                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                        for key, status, _ in dep_blockers
+                    ),
+                    obj.next_run_at.isoformat() if obj.next_run_at else None,
                 )
                 logline(
                     "RUN",
@@ -16009,12 +17407,60 @@ async def _run_due_jobs_once_locked(
                     "skip",
                     job_id=obj.id,
                     task=obj.task.value,
-                    blocking_id=ejob,
-                    blocking_task=etask.value if isinstance(etask, JobTask) else etask,
-                    blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
-                    blocking_run_at=enext.isoformat() if enext else None,
+                    waiting_for_deps=[
+                        {
+                            "key": key,
+                            "status": status.value if isinstance(status, JobStatus) else status,
+                            "next_run_at": run_at.isoformat() if run_at else None,
+                        }
+                        for key, status, run_at in dep_blockers
+                    ],
+                    deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
                 )
                 continue
+            if dep_blockers:
+                logging.info(
+                    "RUN skip eid=%s task=%s blocked_by_deps=%s",
+                    obj.event_id,
+                    obj.task.value,
+                    ",".join(
+                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                        for key, status, _ in dep_blockers
+                    ),
+                )
+                logline(
+                    "RUN",
+                    obj.event_id,
+                    "skip",
+                    job_id=obj.id,
+                    task=obj.task.value,
+                    blocking_deps=[
+                        {
+                            "key": key,
+                            "status": status.value if isinstance(status, JobStatus) else status,
+                            "next_run_at": run_at.isoformat() if run_at else None,
+                        }
+                        for key, status, run_at in dep_blockers
+                    ],
+                )
+                continue
+            if obj.task == JobTask.tg_event_publish:
+                deferred_to = await _defer_tg_event_publish_if_spacing_blocked(
+                    session,
+                    obj,
+                    now=datetime.now(timezone.utc),
+                )
+                if deferred_to:
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="tg_spacing",
+                        next_run_at=deferred_to.isoformat(),
+                    )
+                    continue
             obj.status = JobStatus.running
             obj.updated_at = datetime.now(timezone.utc)
             session.add(obj)
@@ -16152,7 +17598,10 @@ async def _run_due_jobs_once_locked(
                 else:
                     err = str(exc) or repr(exc) or exc.__class__.__name__
                     status = JobStatus.error
-                    retry = True
+                    uncertain_cls = globals().get("TelegramEventPublishUncertainSendError")
+                    retry = not (
+                        uncertain_cls is not None and isinstance(exc, uncertain_cls)
+                    )
                 logline(
                     "RUN",
                     obj.event_id,
@@ -16333,10 +17782,15 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
                 fest_map if fest_map else None,
             )
             await _watch_nav_jobs(db, bot)
-        except Exception:  # pragma: no cover - log unexpected errors
+            _mark_job_outbox_worker_cycle_ok()
+        except Exception as exc:  # pragma: no cover - log unexpected errors
+            _mark_job_outbox_worker_cycle_error(exc)
             logging.exception("job_outbox_worker cycle failed")
         if _time.monotonic() - last_log >= 30.0:
-            await _log_job_outbox_stats(db)
+            try:
+                await _log_job_outbox_stats(db)
+            except Exception:
+                logging.exception("job_outbox_worker stats failed")
             last_log = _time.monotonic()
         await asyncio.sleep(interval)
 
@@ -16544,8 +17998,31 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
             .limit(max_sources)
         )
     ).all()
-    if len(source_rows) <= 1:
+    if not source_rows:
         return 0
+
+    source_urls = [
+        str(row[1] or "").strip()
+        for row in source_rows
+        if str(row[1] or "").strip()
+    ]
+    shared_source_urls: set[str] = set()
+    if source_urls:
+        source_counts = (
+            await session.execute(
+                select(
+                    EventSource.source_url,
+                    func.count(func.distinct(EventSource.event_id)),
+                )
+                .where(EventSource.source_url.in_(source_urls))
+                .group_by(EventSource.source_url)
+            )
+        ).all()
+        shared_source_urls = {
+            str(source_url or "").strip()
+            for source_url, event_count in source_counts
+            if str(source_url or "").strip() and int(event_count or 0) > 1
+        }
 
     poster_rows = (
         await session.execute(
@@ -16580,9 +18057,17 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
     photo_urls = list(getattr(ev, "photo_urls", None) or [])
     now = datetime.now(timezone.utc)
     for source_type, source_url in source_rows:
+        source_url_clean = str(source_url or "").strip()
+        if source_url_clean in shared_source_urls:
+            logging.info(
+                "telegraph.source_media: skip shared multi-event source rehydrate event_id=%s source=%s",
+                event_id,
+                source_url_clean,
+            )
+            continue
         candidates = await _fetch_event_source_poster_candidates(
             str(source_type or ""),
-            str(source_url or ""),
+            source_url_clean,
             limit=per_source_limit,
         )
         for poster in candidates:
@@ -16777,6 +18262,8 @@ async def update_telegraph_event_page(
                         try:
                             rid_int = int(rid)
                         except Exception:
+                            continue
+                        if str(rstatus or "").strip().casefold() != "active":
                             continue
                         items.append(
                             {
@@ -16984,6 +18471,21 @@ async def update_telegraph_event_page(
             if url and url not in photos:
                 photos.append(url)
                 merged_photo_urls = True
+        try:
+            dedupe_event_photos = globals().get("_dedupe_event_photo_urls_for_publish")
+            if callable(dedupe_event_photos):
+                photos_before_dedupe = list(photos or [])
+                posters_before_dedupe = list(poster_render_urls or [])
+                photos = await dedupe_event_photos(photos_before_dedupe)
+                poster_render_urls = await dedupe_event_photos(posters_before_dedupe)
+                if photos != photos_before_dedupe or poster_render_urls != posters_before_dedupe:
+                    merged_photo_urls = True
+        except Exception:
+            logging.warning(
+                "telegraph: failed to dedupe render photos for event %s",
+                event_id,
+                exc_info=True,
+            )
         if merged_photo_urls or exclude_urls:
             ev.photo_urls = list(photos)
             ev.photo_count = len(ev.photo_urls)
@@ -17286,7 +18788,11 @@ async def update_telegraph_event_page(
                     eid=ev.id,
                 )
             except Exception as edit_err:
-                # Fallback: if edit fails (e.g., PAGE_ACCESS_DENIED), create new page
+                # Fallback only for pages created under another Telegraph token.
+                # Transient errors/flood control must not create replacement pages and
+                # silently orphan already-published links.
+                if "PAGE_ACCESS_DENIED" not in str(edit_err):
+                    raise
                 logging.warning(
                     "Telegraph edit failed for event %d (path=%s): %s. Creating new page.",
                     ev.id,
@@ -17936,12 +19442,8 @@ async def patch_month_page_for_date(
             tg_call(telegraph.get_page, page.path, return_html=True),
             tg_call(telegraph.get_page, page.path2, return_html=True),
         )
-        html1 = unescape_html_comments(
-            data1.get("content") or data1.get("content_html") or ""
-        )
-        html2 = unescape_html_comments(
-            data2.get("content") or data2.get("content_html") or ""
-        )
+        html1 = unescape_html_comments(telegraph_page_html(data1))
+        html2 = unescape_html_comments(telegraph_page_html(data2))
 
         from telegraph.utils import html_to_nodes
 
@@ -18922,6 +20424,326 @@ async def publish_event_progress(
                     _EVENT_PROGRESS_KEYS.pop(key, None)
 
 
+def _event_single_day_iso(event: Event) -> str | None:
+    raw = str(getattr(event, "date", "") or "").strip()
+    if not raw or ".." in raw or str(getattr(event, "end_date", "") or "").strip():
+        return None
+    day = parse_iso_date(raw.split("..", 1)[0])
+    return day.isoformat() if day else None
+
+
+def _public_event_time(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == "00:00":
+        return ""
+    return raw
+
+
+def _event_time_sort_key(value: str | None) -> tuple[int, int, int, str]:
+    raw = _public_event_time(value)
+    m = re.match(r"^(\d{1,2}):(\d{2})$", raw)
+    if not m:
+        return (1, 0, 0, raw)
+    try:
+        hh = int(m.group(1))
+        mm = int(m.group(2))
+    except Exception:
+        return (1, 0, 0, raw)
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return (1, 0, 0, raw)
+    return (0, hh, mm, raw)
+
+
+def _format_same_day_times_for_publication(times: Sequence[str]) -> str:
+    clean: list[str] = []
+    seen: set[str] = set()
+    for raw in times:
+        value = _public_event_time(raw)
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        clean.append(value)
+    if len(clean) <= 1:
+        return clean[0] if clean else ""
+    if len(clean) == 2:
+        return f"{clean[0]} и {clean[1]}"
+    return f"{', '.join(clean[:-1])} и {clean[-1]}"
+
+
+async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Event]:
+    event_id = getattr(event, "id", None)
+    if event_id is None:
+        return [event]
+    day = _event_single_day_iso(event)
+    if not day:
+        return [event]
+
+    async def _auto_serial_group() -> list[Event]:
+        group = await _same_day_serial_schedule_publish_group(db, event, day)
+        return group if len(group) > 1 else [event]
+
+    raw_ids = getattr(event, "linked_event_ids", None) or []
+    linked_ids: list[int] = []
+    seen: set[int] = {int(event_id)}
+    if isinstance(raw_ids, list):
+        for raw in raw_ids:
+            try:
+                linked_id = int(raw)
+            except Exception:
+                continue
+            if linked_id <= 0 or linked_id in seen:
+                continue
+            linked_ids.append(linked_id)
+            seen.add(linked_id)
+    if not linked_ids:
+        return await _auto_serial_group()
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event).where(Event.id.in_([int(event_id), *linked_ids]))
+                )
+            ).scalars().all()
+        )
+    by_id = {
+        int(getattr(row, "id")): row
+        for row in rows
+        if getattr(row, "id", None) is not None
+    }
+    if int(event_id) not in by_id:
+        by_id[int(event_id)] = event
+    group: list[Event] = []
+    for candidate in by_id.values():
+        if _event_single_day_iso(candidate) != day:
+            continue
+        if getattr(candidate, "lifecycle_status", "active") != "active" or getattr(candidate, "silent", False):
+            continue
+        if _event_has_ended_before_today(candidate):
+            continue
+        group.append(candidate)
+    if len(group) <= 1:
+        return await _auto_serial_group()
+    group.sort(
+        key=lambda item: (
+            _event_time_sort_key(getattr(item, "time", None)),
+            int(getattr(item, "id", 0) or 0),
+        )
+    )
+    return group
+
+
+_SERIAL_FEEDING_TITLE_RE = re.compile(r"^\s*(?:[^\wа-яё]+)?кормлени[ея]\b", re.IGNORECASE)
+
+
+def _event_photo_signature_for_series(event: Event) -> tuple[str, ...]:
+    raw = getattr(event, "photo_urls", None) or []
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = []
+        raw = parsed if isinstance(parsed, list) else []
+    urls = [str(url or "").strip() for url in raw if str(url or "").strip()]
+    return tuple(sorted(dict.fromkeys(urls)))
+
+
+def _event_is_feeding_series_item(event: Event) -> bool:
+    return bool(_SERIAL_FEEDING_TITLE_RE.search(str(getattr(event, "title", "") or "")))
+
+
+def _series_location_key(event: Event) -> tuple[str, str, str]:
+    def norm(value: str | None) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip().casefold().replace("ё", "е"))
+
+    return (
+        norm(getattr(event, "location_name", None)),
+        norm(getattr(event, "location_address", None)),
+        norm(getattr(event, "city", None)),
+    )
+
+
+async def _same_day_serial_schedule_publish_group(db: Database, event: Event, day: str) -> list[Event]:
+    source_url = str(getattr(event, "source_post_url", "") or "").strip()
+    photo_signature = _event_photo_signature_for_series(event)
+    location_key = _series_location_key(event)
+    if not source_url or not photo_signature or not any(location_key) or not _event_is_feeding_series_item(event):
+        return []
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event)
+                    .where(Event.date == day)
+                    .where(Event.source_post_url == source_url)
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                    .order_by(Event.time, Event.id)
+                )
+            ).scalars().all()
+        )
+    group: list[Event] = []
+    for candidate in rows:
+        if _event_has_ended_before_today(candidate):
+            continue
+        if not _event_is_feeding_series_item(candidate):
+            continue
+        if _series_location_key(candidate) != location_key:
+            continue
+        if _event_photo_signature_for_series(candidate) != photo_signature:
+            continue
+        group.append(candidate)
+    if len(group) < 3:
+        return []
+    return group
+
+
+def _series_schedule_item_label(event: Event) -> str:
+    title = re.sub(
+        r"^\s*(?:[^\wа-яё]+)?кормлени[ея]\s*",
+        "",
+        str(getattr(event, "title", "") or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    title = re.sub(r"\s+", " ", title).strip(" .:-")
+    return title or str(getattr(event, "title", "") or "").strip()
+
+
+def _apply_serial_schedule_publish_view(anchor: Event, group: Sequence[Event]) -> Event:
+    if len(group) < 3 or not all(_event_is_feeding_series_item(item) for item in group):
+        return anchor
+    location = str(getattr(anchor, "location_name", "") or "").strip()
+    title = f"Кормления животных: {location}" if location else "Кормления животных"
+    lines = ["Расписание кормлений:"]
+    for item in group:
+        time_value = _public_event_time(getattr(item, "time", None))
+        label = _series_schedule_item_label(item)
+        if time_value:
+            lines.append(f"• {time_value} — {label}")
+        elif label:
+            lines.append(f"• {label}")
+    body = "\n".join(lines)
+    anchor.title = title
+    anchor.short_description = body
+    anchor.description = body
+    anchor.source_text = body
+    anchor.event_type = "кормление"
+    combined_time = _format_same_day_times_for_publication(
+        [str(getattr(item, "time", "") or "") for item in group]
+    )
+    if combined_time:
+        anchor.time = combined_time
+        anchor.time_is_default = False
+    logging.info(
+        "serial schedule publish group anchor=%s ids=%s title=%s",
+        getattr(anchor, "id", None),
+        ",".join(str(getattr(item, "id", "")) for item in group),
+        title,
+    )
+    return anchor
+
+
+async def _prepare_same_day_linked_publish_event(
+    db: Database,
+    event: Event,
+) -> tuple[Event, list[Event]]:
+    group = await _same_day_linked_publish_group(db, event)
+    if len(group) <= 1:
+        return event, [event]
+    anchor = group[0]
+    if len(group) >= 3 and all(_event_is_feeding_series_item(item) for item in group):
+        anchor = _apply_serial_schedule_publish_view(anchor, group)
+    else:
+        combined_time = _format_same_day_times_for_publication(
+            [str(getattr(item, "time", "") or "") for item in group]
+        )
+        if combined_time:
+            anchor.time = combined_time
+            anchor.time_is_default = False
+    return anchor, group
+
+
+def _same_day_publish_group_ids(group: Sequence[Event]) -> list[int]:
+    ids: list[int] = []
+    seen: set[int] = set()
+    for item in group:
+        event_id = getattr(item, "id", None)
+        if event_id is None:
+            continue
+        try:
+            clean_id = int(event_id)
+        except Exception:
+            continue
+        if clean_id <= 0 or clean_id in seen:
+            continue
+        seen.add(clean_id)
+        ids.append(clean_id)
+    return ids
+
+
+async def _copy_same_day_linked_vk_publication(
+    db: Database,
+    *,
+    source_event: Event,
+    covered_event_ids: Sequence[int],
+    vk_url: str | None = None,
+    vk_source_hash: str | None = None,
+) -> None:
+    clean_ids = sorted({int(eid) for eid in covered_event_ids if int(eid) > 0})
+    if not clean_ids:
+        return
+    url = (vk_url or getattr(source_event, "source_vk_post_url", None) or "").strip()
+    source_hash = (vk_source_hash or getattr(source_event, "vk_source_hash", None) or "").strip()
+    if not url and not source_hash:
+        return
+    async with db.get_session() as session:
+        rows = list(
+            (await session.execute(select(Event).where(Event.id.in_(clean_ids)))).scalars().all()
+        )
+        for row in rows:
+            if url:
+                row.source_vk_post_url = url
+            if source_hash:
+                row.vk_source_hash = source_hash
+            session.add(row)
+        await session.commit()
+
+
+async def _copy_same_day_linked_tg_publication(
+    db: Database,
+    *,
+    source_event: Event,
+    covered_event_ids: Sequence[int],
+    post_url: str | None = None,
+    post_id: int | None = None,
+    post_mode: str | None = None,
+    source_hash: str | None = None,
+) -> None:
+    clean_ids = sorted({int(eid) for eid in covered_event_ids if int(eid) > 0})
+    if not clean_ids:
+        return
+    url = (post_url or getattr(source_event, "tg_event_post_url", None) or "").strip()
+    mode = (post_mode or getattr(source_event, "tg_event_post_mode", None) or "").strip()
+    hash_value = (source_hash or getattr(source_event, "tg_event_source_hash", None) or "").strip()
+    source_post_id = post_id if post_id is not None else getattr(source_event, "tg_event_post_id", None)
+    if not url and not source_post_id and not mode and not hash_value:
+        return
+    async with db.get_session() as session:
+        rows = list(
+            (await session.execute(select(Event).where(Event.id.in_(clean_ids)))).scalars().all()
+        )
+        for row in rows:
+            if url:
+                row.tg_event_post_url = url
+            if source_post_id:
+                row.tg_event_post_id = int(source_post_id)
+            if mode:
+                row.tg_event_post_mode = mode
+            if hash_value:
+                row.tg_event_source_hash = hash_value
+            session.add(row)
+        await session.commit()
+
+
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
@@ -18934,10 +20756,60 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         is_vk_wall_url(ev.source_post_url) if ev else None,
     )
     if not ev:
-        return
+        return False
+    if _event_has_ended_before_today(ev):
+        logging.info(
+            "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "end_date", None),
+        )
+        return False
+    if _event_start_has_passed_for_publication(ev):
+        logging.info(
+            "job_sync_vk_source_post: skip already-started event_id=%s date=%s time=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "time", None),
+        )
+        return False
+    if await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "job_sync_vk_source_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
+            event_id,
+        )
+        return False
+    ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
-    text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
-    new_hash = content_hash(text_for_vk)
+    description_for_vk = (getattr(ev, "description", None) or "").strip()
+    # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
+    # must never be published. If the stored description looks like such a dump, fall
+    # back to the raw source text instead.
+    if description_for_vk and looks_like_genai_response_dump(description_for_vk):
+        logging.warning(
+            "job_sync_vk_source_post: description for event %s looks like a genai SDK dump; using source_text",
+            event_id,
+        )
+        description_for_vk = ""
+    text_for_vk = description_for_vk or (ev.source_text or "")
+    # VK wall text includes event metadata built from `ev` (title/date/place)
+    # plus the body text, so title-only repairs must not be invisible here.
+    new_hash = content_hash(
+        "\n".join(
+            [
+                VK_SOURCE_POST_FORMAT_VERSION,
+                str(getattr(ev, "title", "") or ""),
+                str(getattr(ev, "date", "") or ""),
+                str(getattr(ev, "time", "") or ""),
+                str(getattr(ev, "location_name", "") or ""),
+                str(getattr(ev, "location_address", "") or ""),
+                str(getattr(ev, "city", "") or ""),
+                str(getattr(ev, "ticket_link", "") or ""),
+                json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
+                text_for_vk,
+            ]
+        )
+    )
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False
     if existing_vk_post_url:
@@ -18945,27 +20817,197 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        return
-    vk_url = await sync_vk_source_post(ev, text_for_vk, db, bot, ics_url=ev.ics_url)
-    partner_user: User | None = None
-    event_for_notice: Event | None = None
-    async with db.get_session() as session:
-        obj = await session.get(Event, event_id)
-        if obj:
-            if vk_url:
-                obj.source_vk_post_url = vk_url
-            obj.vk_source_hash = new_hash
-            session.add(obj)
-            if bot and obj.creator_id:
-                partner_user = await session.get(User, obj.creator_id)
-            await session.commit()
-            event_for_notice = obj
+        post_exists = True
+        try:
+            ids = _vk_owner_and_post_id(existing_vk_post_url)
+            if ids:
+                response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
+                items = _vk_wall_get_by_id_items(response)
+                post_exists = bool(items)
+        except Exception:
+            logging.warning(
+                "job_sync_vk_source_post: managed VK post existence probe failed event_id=%s url=%s",
+                event_id,
+                existing_vk_post_url,
+                exc_info=True,
+            )
+        if post_exists:
+            await _copy_same_day_linked_vk_publication(
+                db,
+                source_event=ev,
+                covered_event_ids=_same_day_publish_group_ids(same_day_group),
+                vk_url=existing_vk_post_url,
+                vk_source_hash=new_hash,
+            )
+            return
+        logging.warning(
+            "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
+            event_id,
+            existing_vk_post_url,
+        )
+        ev.source_vk_post_url = None
+        ev.vk_source_hash = None
+    replace_existing_text = len(same_day_group) >= 3 and all(
+        _event_is_feeding_series_item(item) for item in same_day_group
+    )
+    vk_url = await sync_vk_source_post(
+        ev,
+        text_for_vk,
+        db,
+        bot,
+        ics_url=ev.ics_url,
+        append_text=not replace_existing_text,
+    )
+    event_for_notice, partner_user = await _persist_vk_source_post_result(
+        event_id,
+        db,
+        vk_url,
+        new_hash,
+        bot=bot,
+    )
     if vk_url:
+        await _copy_same_day_linked_vk_publication(
+            db,
+            source_event=event_for_notice or ev,
+            covered_event_ids=_same_day_publish_group_ids(same_day_group),
+            vk_url=vk_url,
+            vk_source_hash=new_hash,
+        )
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(
                 db, bot, event_for_notice, user=partner_user
             )
+
+
+async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None) -> bool:
+    if not bot:
+        return False
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+    if not ev:
+        return False
+    if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
+        logging.info("job_publish_tg_event_post: skip hidden event_id=%s", event_id)
+        return False
+    if _event_has_ended_before_today(ev):
+        logging.info(
+            "job_publish_tg_event_post: skip past event_id=%s date=%s end_date=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "end_date", None),
+        )
+        return False
+    if _event_start_has_passed_for_publication(ev):
+        logging.info(
+            "job_publish_tg_event_post: skip already-started event_id=%s date=%s time=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "time", None),
+        )
+        return False
+    if await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "job_publish_tg_event_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
+            event_id,
+        )
+        return False
+    ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+
+    promo_highlight = await resolve_tg_event_promo_highlight(ev, db)
+    details_button_highlight = await resolve_tg_event_button_highlight(ev, db)
+    text_for_tg = select_tg_event_text_for_publish(
+        ev,
+        promo_highlight=promo_highlight,
+    )
+    url, post_id, mode, source_hash = await publish_tg_event_announcement(
+        ev,
+        text_for_tg,
+        db,
+        bot,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
+    if not url and not source_hash:
+        return False
+    async with db.get_session() as session:
+        obj = await session.get(Event, event_id)
+        if not obj:
+            return False
+        if url:
+            obj.tg_event_post_url = url
+        if post_id:
+            obj.tg_event_post_id = int(post_id)
+        if mode:
+            obj.tg_event_post_mode = mode
+        if source_hash:
+            obj.tg_event_source_hash = source_hash
+        session.add(obj)
+        await session.commit()
+    if url:
+        await _copy_same_day_linked_tg_publication(
+            db,
+            source_event=ev,
+            covered_event_ids=_same_day_publish_group_ids(same_day_group),
+            post_url=url,
+            post_id=post_id,
+            post_mode=mode,
+            source_hash=source_hash,
+        )
+        logline("TG", event_id, "event done", url=url)
+    return True
+
+
+async def _persist_vk_source_post_result(
+    event_id: int,
+    db: Database,
+    vk_url: str | None,
+    new_hash: str,
+    *,
+    bot: Bot | None,
+    attempts: int = 5,
+) -> tuple[Event | None, User | None]:
+    """Persist an already-created/updated VK post without re-running wall.post on lock."""
+
+    last_locked: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            async with db.get_session() as session:
+                obj = await session.get(Event, event_id)
+                if not obj:
+                    return None, None
+                if vk_url:
+                    obj.source_vk_post_url = vk_url
+                obj.vk_source_hash = new_hash
+                session.add(obj)
+                partner_user: User | None = None
+                if bot and obj.creator_id:
+                    partner_user = await session.get(User, obj.creator_id)
+                await session.commit()
+                if attempt > 1:
+                    logging.info(
+                        "job_sync_vk_source_post: persisted after sqlite lock retry event_id=%s attempt=%s",
+                        event_id,
+                        attempt,
+                    )
+                return obj, partner_user
+        except Exception as exc:
+            if not _is_sqlite_locked_error(exc):
+                raise
+            last_locked = exc
+            if attempt >= attempts:
+                break
+            delay = min(3.0, 0.25 * attempt * attempt)
+            logging.warning(
+                "job_sync_vk_source_post: sqlite locked while persisting vk result event_id=%s attempt=%s/%s retry_in=%.2fs",
+                event_id,
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    assert last_locked is not None
+    raise last_locked
 
 
 @dataclass
@@ -18998,7 +21040,7 @@ async def update_festival_tg_nav(event_id: int, db: Database, bot: Bot | None) -
         path = fest.telegraph_path
         try:
             page = await telegraph_call(tg.get_page, path, return_html=True)
-            html_content = page.get("content") or page.get("content_html") or ""
+            html_content = telegraph_page_html(page)
             title = page.get("title") or fest.full_name or fest.name
             m = re.search(r"<!--NAV_HASH:([0-9a-f]+)-->", html_content)
             old_hash = m.group(1) if m else ""
@@ -19177,198 +21219,10 @@ festivals_nav_dedup = festivals_fix_nav
 rebuild_festival_pages_nav = festivals_fix_nav
 
 
-def _static_site_status_callback_url() -> str:
-    explicit = (
-        os.getenv("STATIC_SITE_STATUS_CALLBACK_URL")
-        or os.getenv("KAGGLE_STATUS_CALLBACK_URL")
-        or ""
-    ).strip()
-    if explicit:
-        return explicit
-    webhook = (os.getenv("WEBHOOK_URL") or "").strip()
-    if webhook:
-        return webhook.rstrip("/") + "/internal/kaggle/run-event"
-    fly_app = (os.getenv("FLY_APP_NAME") or "events-bot-new-wngqia").strip()
-    return f"https://{fly_app}.fly.dev/internal/kaggle/run-event"
-
-
-def _env_flag(name: str, default: bool = False) -> bool:
-    value = (os.getenv(name) or "").strip().lower()
-    if not value:
-        return default
-    return value in {"1", "true", "yes", "on"}
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
-    return int(raw)
-
-
-def _first_env(*names: str, default: str = "") -> str:
-    for name in names:
-        value = (os.getenv(name) or "").strip()
-        if value:
-            return value
-    return default
-
-
-def _static_site_build_kaggle_command(
-    *,
-    db_path: str,
-    build_id: str,
-    limit: int,
-    current_date: str,
-    script_path: str,
-    status_callback_url: str,
-) -> list[str]:
-    related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
-    if related_mode not in {"sparse", "pgvector"}:
-        raise ValueError(f"unsupported STATIC_SITE_RELATED_MODE={related_mode!r}")
-    cmd = [
-        sys.executable,
-        script_path,
-        "--db",
-        db_path,
-        "--status-db",
-        db_path,
-        "--status-callback-url",
-        status_callback_url,
-        "--limit",
-        str(limit),
-        "--current-date",
-        current_date,
-        "--build-id",
-        build_id,
-        "--public-site-origin",
-        _first_env("STATIC_SITE_PUBLIC_SITE_ORIGIN", "PUBLIC_SITE_ORIGIN", default="https://kenigevents.ru"),
-        "--asset-base-url",
-        _first_env("STATIC_SITE_ASSET_BASE_URL", "PUBLIC_ASSET_BASE_URL"),
-        "--astro-asset-base-url",
-        _first_env("STATIC_SITE_ASTRO_ASSET_BASE_URL", "PUBLIC_ASTRO_ASSET_BASE_URL"),
-        "--ics-base-url",
-        _first_env("STATIC_SITE_ICS_BASE_URL", "PUBLIC_ICS_BASE_URL"),
-        "--public-personalization-supabase-url",
-        _first_env(
-            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL",
-            "PUBLIC_PERSONALIZATION_SUPABASE_URL",
-            "PERSONALIZATION_SUPABASE_URL",
-        ),
-        "--public-personalization-supabase-publishable-key",
-        _first_env(
-            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
-            "PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
-            "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
-        ),
-        "--public-yandex-auth-provider",
-        _first_env("STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER", "PUBLIC_YANDEX_AUTH_PROVIDER", default="custom:yandex"),
-        "--export-in-kaggle",
-        "--related-cache",
-        (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
-        "--related-mode",
-        related_mode,
-        "--pgvector-embedding-model",
-        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip(),
-        "--pgvector-embedding-key-env",
-        (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
-        "--pgvector-max-provider-calls",
-        str(_env_int("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", 1000)),
-        "--gemma-related-model",
-        (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip(),
-        "--gemma-related-key-env",
-        (os.getenv("STATIC_SITE_GEMMA_RELATED_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
-        "--gemma-related-max-anchors",
-        str(_env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0)),
-        "--timeout-minutes",
-        str(_env_int("STATIC_SITE_KAGGLE_TIMEOUT_MINUTES", 60)),
-        "--poll-interval",
-        str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
-        "--download-output",
-    ]
-    if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
-        cmd.append("--sync-pgvector-vectors")
-    if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
-        cmd.append("--gemma-related-verify")
-    if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
-        cmd.append("--keep-secret-datasets")
-    return cmd
-
-
-async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool:
-    """Coalesced static-site build after Smart Update.
-
-    Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
-    kernel and receives a tar.gz artifact. The Kaggle status dataset/ledger is
-    intentionally the same contract CherryFlash uses, so operators see
-    heartbeat/progress from inside the kernel instead of opaque failed runs.
-    """
-
-    enabled = (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if not enabled:
-        logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
-        return False
-    limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "50").strip() or "50")
-    now_local = datetime.now(LOCAL_TZ)
-    current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
-    build_id = (
-        os.getenv("STATIC_SITE_BUILD_ID")
-        or f"preview-{now_local.strftime('%Y%m%d%H%M')}-event-pages-prod{limit}-kaggle"
-    ).strip()
-    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
-    cmd = _static_site_build_kaggle_command(
-        db_path=db.path,
-        build_id=build_id,
-        limit=limit,
-        current_date=current_date,
-        script_path=script_path,
-        status_callback_url=_static_site_status_callback_url(),
-    )
-    logging.info(
-        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
-        event_id,
-        build_id,
-        limit,
-        (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
-        _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
-        _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
-    )
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        cwd=os.path.dirname(__file__),
-        env=os.environ.copy(),
-    )
-    assert proc.stdout is not None
-    tail: list[str] = []
-    while True:
-        line = await proc.stdout.readline()
-        if not line:
-            break
-        text = line.decode("utf-8", errors="replace").rstrip()
-        if text:
-            logging.info("static_site_build: %s", text)
-            tail.append(text)
-            if len(tail) > 80:
-                tail.pop(0)
-    code = await proc.wait()
-    if code != 0:
-        raise RuntimeError(
-            f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
-        )
-    logging.info("static_site_build: done build_id=%s", build_id)
-    return True
-
-
 JOB_HANDLERS = {
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
+    "tg_event_publish": job_publish_tg_event_post,
     "ics_publish": ics_publish,
     "tg_ics_post": tg_ics_post,
     "month_pages": job_month_pages_debounced,
@@ -19376,7 +21230,6 @@ JOB_HANDLERS = {
     "weekend_pages": job_weekend_pages_debounced,
     "festival_pages": update_festival_pages_for_event,
     "fest_nav:update_all": update_all_festival_nav,
-    "static_site_build": job_static_site_build_kaggle,
 }
 
 
@@ -19609,7 +21462,7 @@ async def check_month_page_markers(tg, path: str) -> None:
     except Exception as e:
         logging.error("check_month_page_markers failed: %s", e)
         return
-    html = page.get("content") or page.get("content_html") or ""
+    html = telegraph_page_html(page)
     html = unescape_html_comments(html)
     if "<!--DAY" in html:
         logging.info("month_rebuild_markers_present")
@@ -20085,6 +21938,44 @@ def format_event_vk_daily_inline(
     return body
 
 
+def _is_tretyakov_daily_venue(e: Event) -> bool:
+    """Return whether the event's structured venue is Tretyakov Gallery.
+
+    The daily `🖼🖼` marker is a venue-recognition marker, not a title/topic
+    marker. Do not infer it from event names or descriptions such as
+    "Александр Дейнека".
+    """
+    haystack = "\n".join(
+        str(value or "")
+        for value in (
+            getattr(e, "location_name", None),
+            getattr(e, "location_address", None),
+        )
+    ).casefold()
+    return "третьяков" in haystack or "tretyakov" in haystack
+
+
+_ROCK_CONCERT_EVENT_RE = re.compile(
+    r"(?:\brock\b|(?<![а-яё])рок(?![а-яё])|метал(?:л)?|\bmetal\b|панк|\bpunk\b|хардкор|\bhardcore\b|крематор)",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_rock_concert_event(e: Event) -> bool:
+    haystack = "\n".join(
+        str(value or "")
+        for value in (
+            getattr(e, "title", None),
+            getattr(e, "emoji", None),
+            getattr(e, "description", None),
+            getattr(e, "short_description", None),
+            getattr(e, "search_digest", None),
+            getattr(e, "source_text", None),
+        )
+    ).casefold()
+    return bool(_ROCK_CONCERT_EVENT_RE.search(haystack))
+
+
 def format_event_daily(
     e: Event,
     highlight: bool = False,
@@ -20157,6 +22048,8 @@ def format_event_daily(
     if is_recent(e):
         prefix += "\U0001f6a9 "
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
+    if _is_rock_concert_event(e):
+        emoji_part = "🤘 "
 
     partner_creator_ids = partner_creator_ids or ()
     title = html.escape(title_text)
@@ -20235,6 +22128,8 @@ def format_event_daily(
         city_hashtag=True,
     )
     loc_html = html.escape(loc) if loc else ""
+    if loc_html and _is_tretyakov_daily_venue(e):
+        loc_html = f"🖼🖼 {loc_html}"
     date_part = e.date.split("..", 1)[0]
     d = parse_iso_date(date_part)
     if d:
@@ -20280,13 +22175,19 @@ def format_event_daily_inline(
     markers: list[str] = []
     if promo_highlight:
         markers.append("✨")
+    tretyakov_daily_event = _is_tretyakov_daily_venue(e)
+    rock_concert_event = _is_rock_concert_event(e)
     if is_recent(e):
-        markers.append("\U0001f6a9")
+        markers.append("🖼🖼" if tretyakov_daily_event else "\U0001f6a9")
     if e.is_free:
         markers.append("🟡")
     prefix = "".join(f"{m} " for m in markers)
 
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
+    if tretyakov_daily_event and emoji_part.strip() in {"🖼", "🖼️"}:
+        emoji_part = ""
+    elif rock_concert_event:
+        emoji_part = "🤘 "
 
     partner_creator_ids = partner_creator_ids or ()
     title = html.escape(title_text)

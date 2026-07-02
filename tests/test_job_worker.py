@@ -4,6 +4,37 @@ import pytest
 from aiohttp import web
 import main
 
+
+@pytest.mark.asyncio
+async def test_job_outbox_worker_survives_stats_failure(monkeypatch):
+    stats_failed = asyncio.Event()
+
+    async def fake_run_due_jobs_once(*args, **kwargs):
+        return 0
+
+    async def fake_watch_nav_jobs(*args, **kwargs):
+        return None
+
+    async def fake_log_stats(db):
+        if not stats_failed.is_set():
+            stats_failed.set()
+            raise LookupError("stats context missing")
+
+    monkeypatch.setattr(main, "_run_due_jobs_once", fake_run_due_jobs_once)
+    monkeypatch.setattr(main, "_watch_nav_jobs", fake_watch_nav_jobs)
+    monkeypatch.setattr(main, "_log_job_outbox_stats", fake_log_stats)
+
+    task = asyncio.create_task(main.job_outbox_worker(object(), object(), interval=0.01))
+    try:
+        await asyncio.wait_for(stats_failed.wait(), timeout=1)
+        await asyncio.sleep(0.03)
+        assert not task.done()
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
 @pytest.mark.asyncio
 async def test_init_starts_job_outbox_worker(tmp_path, monkeypatch):
     async def fake_get_tz_offset(db):

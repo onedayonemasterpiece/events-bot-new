@@ -33,6 +33,55 @@ CrumpleVideo/Blender. Этот документ собирает требова�
 - Этот флаг отключает только LLM-дозаполнение `about` на критическом пути `start_render()` и fail-open возвращает пустой результат вместо блокировки pre-Kaggle handoff.
 - Использовать только как временный аварийный рычаг для восстановления сегодняшнего слота; после успешного rerun флаг нужно снять.
 
+### Kaggle story helper contract
+
+- `CrumpleVideo` использует тот же Kaggle-side story helper contract, что и
+  CherryFlash: каждый VK target обязан иметь явный `transport="vk_wall"`,
+  `transport="vk_wall_story"` или legacy `transport="vk_story"`, иначе plain
+  screen name вроде `kenigeventsofficial` будет ошибочно обработан Telethon как
+  Telegram peer.
+- Dataset для scheduled `/v tomorrow` при включённом story publish должен
+  включать свежий `kaggle_common/story_publish.py`; notebook сначала копирует
+  этот helper из session dataset и только если его нет использует embedded
+  fallback. Это защищает CrumpleVideo от drift относительно CherryFlash при
+  изменениях VK fanout.
+- Release gate для изменений в `kaggle/CrumpleVideo/story_publish.py`:
+  `tests/test_crumple_build_notebook.py` должен подтверждать, что embedded
+  fallback синхронизирован с repo helper и содержит VK transport branch.
+- Если render уже завершился, но story/VK fanout упал на VK target, штатная
+  компенсация не должна запускать Blender заново. Poller или операторский
+  скрипт `scripts/run_crumple_story_publish_only_recovery.py <session_id>`
+  запускает publish-only recovery: скачивает уже готовый
+  `crumple_video_final.mp4` из output исходной Kaggle-сессии, собирает
+  отдельный private session-dataset с этим mp4, текущим `story_publish.json`,
+  per-run encrypted VK auth (`story_publish.enc`/`story_publish.key`) и
+  `kaggle_common/story_publish.py`, фильтрует targets до упавших VK transport
+  targets и запускает lightweight kernel `CrumpleStoryPublishOnly`. Перед
+  запуском берётся per-session file lock, чтобы watchdog и ручной скрипт не
+  перетёрли один и тот же Kaggle kernel разными dataset sources.
+- Publish-only recovery не использует Telethon, если в отфильтрованном
+  `story_publish.json` остались только VK/Telegram Business transports; VK wall
+  post должен идти через тот же helper (`video.save` + `wall.post`), что и
+  CherryFlash, без преобразования `kenigeventsofficial` в Telegram username.
+
+### Scheduled `/v tomorrow` handoff contract
+
+- Scheduled `/v tomorrow` creates a stable slot key
+  `crumple_video:<profile>:<target_date>:tomorrow` in
+  `videoannounce_session.selection_params` when a session is materialized.
+- If story-enabled video lanes are configured and all lane auth bundles are
+  already busy (`RENDERING` session or active `kaggle_resource_lease`), the
+  scheduler records `ops_run.status='skipped'` with
+  `skip_reason='video_lanes_busy'` and must not create another `SELECTED`
+  session or Kaggle dataset.
+- The current two-lane production CrumpleVideo kernel mapping is
+  `zigomaro/crumple-video,zigomaro/crumple-video-video1`; both targets must stay
+  accessible before production env keeps the two-lane mapping enabled.
+- A scheduled `video_tomorrow` ops run is successful only after confirmed Kaggle
+  handoff: the session has a session dataset and a non-local Kaggle kernel ref
+  (or terminal artifact/publication evidence). A local-only `SELECTED` row is
+  an attempted slot, not product delivery.
+
 ## Проблемы и наблюдения (последний тестовый прогон)
 
 - Рендер занял `7314.6s` (ускорение требуется только для тестового запуска).
@@ -84,6 +133,12 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   - сам текст остаётся статичным, а “живым” остаётся только очень тихий touch cue;
   - CTA композится под слоем бумаги, поэтому при unfold бумага естественно перекрывает подсказку и она не остаётся поверх сцены.
 
+### Telegram story-to-channel publication
+
+- For production `/v tomorrow` (`CrumpleVideo`), the Telegram channel feed post must be a forward/share of the already-published story, not a separate raw MP4 upload.
+- Ordered Telegram contract: upload the first story target (`me`), repost it to the required `@kenigevents` story target, then after a 10-minute delay (`delay_seconds=600`) send that same story into the `@kenigevents` channel body through `telegram_story_message` with an empty comment/message; downstream story fanout such as `@lovekenig` continues to use `repost_previous`.
+- The `telegram_story_message` target is required for final publish status, but it must not become the pre-render gate: render preflight remains tied to the story upload/repost capability checks.
+
 ### Состав и источник афиш
 
 - Тестовый запуск:
@@ -114,6 +169,13 @@ CrumpleVideo/Blender. Этот документ собирает требова�
 
 - Формат: `Видео-анонс #{номер} на завтра {дата или диапазон дат}`.
 - Дата берётся из выбранных событий: одна дата или диапазон.
+- Боевой `CrumpleVideo` дополнительно публикует wall-видео в
+  `https://vk.com/kenigeventsofficial`. Подпись этого target:
+  `События на завтра <хештеги городов> #<дата>_<месяц> #<дата><месяц>`,
+  если все выбранные события пришлись на завтра по `Europe/Kaliningrad`.
+  Если подбор расширил окно, первая строка становится
+  `События на <дата или диапазон>`, а date hashtags добавляются для дат
+  фактически выбранных афиш.
 
 ### Intro: актуальный макет
 
@@ -396,8 +458,24 @@ color: #100E0E;
 - После завершения рендера результат всегда отправляется в `test`-канал, а если для профиля настроен `main`-канал, бот сейчас автоматически дублирует ролик и туда.
 - Если `VIDEO_ANNOUNCE_STORY_ENABLED=1`, story publish выполняется внутри `Kaggle` notebook, а не после локального скачивания:
   - notebook читает `story_publish.json` из session-dataset;
-  - auth для Telethon передаётся в Kaggle через encrypted split-datasets (`story_publish.enc` + `story_publish.key`);
-  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
+  - auth для Telethon передаётся в Kaggle через per-run encrypted files in the
+    same session dataset (`story_publish.enc` + `story_publish.key`); при
+    включённом `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` конкретный auth bundle
+    выбирается как video lane и фиксируется в `selection_params._video_lane_auth_env`;
+  - для параллельных long CPU renders `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS`
+    должен задавать Kaggle kernel targets в том же порядке, что и
+    `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`; новый target slug может быть
+    автоматически создан первым `SaveKernel` push, но если недельная GPU quota
+    уже исчерпана, launcher должен создать target CPU-first. Иначе неудачная
+    GPU-попытка создания с последующим CPU retry может вернуться как
+    `Notebook not found`. Без lane-target refs два `/v` рендера с одним remote
+    kernel slug остаются сериализованными, чтобы не перетереть output/poller
+    state. Server-side selector обязан считать lane занятой не только по
+    `RENDERING` video session, но и по active/non-expired
+    `kaggle_resource_lease` для `telegram_session:env:<ENV>`, чтобы ручная
+    остановка Kaggle run не приводила к немедленному повторному handoff на ту же
+    Telegram-сессию;
+  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем non-blocking `vk:kenigeventsofficial:wall` with `caption_variant=crumple_official`, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - target objects may carry `required=true`: such targets do not block the expensive render preflight, but the final publish report becomes failed if they do not receive the story;
   - `main`-канал профиля + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` остаются только как legacy fallback, если explicit ordered list не задан;
@@ -416,8 +494,22 @@ color: #100E0E;
   - story lifetime зависит от охвата дат: `12h`, если выбранные события покрывают только одну дату (`завтра`), и `24h`, если ролик охватывает две и более дат;
   - для story-video действует отдельный guard `30 MB`: если финальный mp4 больше, notebook считает story publish failed и пишет это в report;
   - notebook пишет `story_publish_report.json` в output и считает run failed, если story publish был включён, но blocking target завершился ошибкой или required fanout target не получил story на publish phase.
+- Если publish phase завершился ошибкой только на VK transport target, poller
+  обязан сначала попробовать publish-only recovery через
+  `CrumpleStoryPublishOnly` и после успешной компенсации продолжить обычную
+  post-download доставку mp4/логов без повторного рендера.
+- Если Kaggle status API возвращает `UNKNOWN`/ошибки или сам kernel закончил
+  `error`/`failed`, poller перед `FAILED` обязан проверить downloadable output.
+  Для `error`/`failed` сначала проверяется свежий notebook heartbeat/status
+  ledger: если за последние 15 минут ноутбук прислал non-terminal `alive`, он
+  считается живым и poller продолжает ждать с отображением phase/progress.
+  Уже готовый mp4/report закрывает full-rerender path и классифицируется по
+  фактическому story/publish результату. Если report содержит pre-render story
+  blocker вроде `BOOSTS_REQUIRED` и mp4 поэтому отсутствует, это
+  `PUBLISH_BLOCKED`, а не renderer/output failure. Явная операторская отмена в
+  Kaggle не восстанавливается через output-probe.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
-- Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path.
+- Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path. Если timeout достигнут, но `kaggle_run_ledger` всё ещё получает свежий `alive`, poller продолжает ждать bounded increments вместо ложного `FAILED`; окончательный потолок задаёт `VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES`.
 - Live evidence on `2026-04-26` showed `@kenigevents` can still return `BOOSTS_REQUIRED`; production keeps the Premium self-account as the render blocking target, but treats channel fanout as required delivery so a missing channel story cannot finish green.
 
 ## Продовый rollout

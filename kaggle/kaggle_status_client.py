@@ -14,6 +14,28 @@ from typing import Any, Callable
 
 RUN_FILENAME = "kaggle_run.json"
 EVENTS_FILENAME = "kaggle_status_events.jsonl"
+TERMINAL_EVENTS = {"render_done", "report_written"}
+TERMINAL_STATUSES = {"complete", "done", "failed", "error", "cancelled", "canceled"}
+PHASE_PROGRESS_PERCENT = {
+    "bootstrap": 0,
+    "created": 0,
+    "prepare": 5,
+    "preflight": 5,
+    "pushed": 10,
+    "kernel_shape_wait": 15,
+    "poll": 20,
+    "run": 50,
+    "parse": 55,
+    "download": 45,
+    "distill": 65,
+    "reason": 80,
+    "render": 60,
+    "publish": 85,
+    "fresh_output_wait": 95,
+    "report": 95,
+    "write_report": 95,
+    "cleanup": 98,
+}
 
 
 def _now_iso() -> str:
@@ -34,6 +56,70 @@ def _find_file(filename: str, roots: list[Path] | None = None) -> Path | None:
             matches = []
         if matches:
             return matches[0]
+    return None
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return number
+
+
+def _bounded_percent(value: Any) -> int | None:
+    number = _as_float(value)
+    if number is None:
+        return None
+    return max(0, min(100, int(round(number))))
+
+
+def _progress_percent(progress: dict[str, Any], *, event: str, status: str, phase: str) -> int | None:
+    for key in ("progress_percent", "percent", "completion_percent", "pct"):
+        percent = _bounded_percent(progress.get(key))
+        if percent is not None:
+            return percent
+    status_l = str(status or "").casefold()
+    event_l = str(event or "").casefold()
+    phase_l = str(phase or progress.get("phase") or "").casefold()
+    if event_l in TERMINAL_EVENTS and status_l in TERMINAL_STATUSES:
+        return 100
+    if status_l in {"complete", "done"}:
+        return 100
+    for done_key, total_key in (
+        ("cell_index", "cell_total"),
+        ("url_index", "urls_total"),
+        ("source_index", "sources_total"),
+        ("sources_done", "sources_total"),
+        ("post_index", "posts_total"),
+        ("posts_done", "posts_total"),
+        ("event_index", "events_total"),
+        ("events_done", "events_total"),
+        ("scene_index", "scenes_total"),
+        ("scenes_done", "scenes_total"),
+        ("frame_index", "frames_total"),
+        ("frames_done", "frames_total"),
+        ("month_index", "months_total"),
+        ("item_index", "items_total"),
+        ("items_done", "items_total"),
+        ("processed", "total"),
+    ):
+        done = _as_float(progress.get(done_key))
+        total = _as_float(progress.get(total_key))
+        if done is None or total is None or total <= 0:
+            continue
+        percent = _bounded_percent((done / total) * 100.0)
+        if percent is None:
+            continue
+        if status_l in {"running", "alive", "queued"} and percent >= 100:
+            return 95
+        return percent
+    if phase_l in PHASE_PROGRESS_PERCENT:
+        return PHASE_PROGRESS_PERCENT[phase_l]
     return None
 
 
@@ -87,7 +173,10 @@ class KaggleStatusClient:
         return bool(self.config.get("callback_url") and self.config.get("run_id") and self.config.get("token"))
 
     def _append_local(self, payload: dict[str, Any], response: dict[str, Any] | None, error: str | None) -> None:
-        row = {"ts": _now_iso(), "payload": payload, "response": response, "error": error}
+        safe_payload = dict(payload)
+        if safe_payload.get("token"):
+            safe_payload["token"] = "<redacted>"
+        row = {"ts": _now_iso(), "payload": safe_payload, "response": response, "error": error}
         with self.events_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
@@ -106,6 +195,17 @@ class KaggleStatusClient:
         with self._lock:
             self._event_seq += 1
             seq = self._event_seq
+        progress_payload = dict(progress or {})
+        event_phase = phase or event
+        event_status = status or ("alive" if event == "alive" else "running")
+        percent = _progress_percent(
+            progress_payload,
+            event=event,
+            status=event_status,
+            phase=event_phase,
+        )
+        if percent is not None:
+            progress_payload["progress_percent"] = percent
         payload = {
             "run_id": self.config.get("run_id"),
             "session_id": self.config.get("session_id"),
@@ -114,9 +214,9 @@ class KaggleStatusClient:
             "token": self.config.get("token"),
             "event": event,
             "event_uid": event_uid or f"{event}:{seq}",
-            "phase": phase or event,
-            "status": status or ("alive" if event == "alive" else "running"),
-            "progress": progress or {},
+            "phase": event_phase,
+            "status": event_status,
+            "progress": progress_payload,
         }
         if message:
             payload["message"] = str(message)

@@ -20,6 +20,8 @@ from video_announce.kaggle_client import (
     LOCAL_KERNEL_PREFIX,
 )
 from kaggle_registry import register_job, remove_job
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
+from db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ async def run_kaggle_kernel(
     status_callback: Callable[[str, str, dict | None], Awaitable[None]] | None = None,
     run_config: dict[str, Any] | None = None,
     dataset_sources: list[str] | None = None,
+    db: Database | None = None,
 ) -> tuple[str, list[str], float]:
     """Run the Kaggle kernel and wait for completion.
     
@@ -58,12 +61,17 @@ async def run_kaggle_kernel(
     kernel_path = KERNELS_ROOT_PATH / kernel_folder
     kernel_ref = f"{LOCAL_KERNEL_PREFIX}{kernel_folder}"
     registered = False
+    ledger_run_id: str | None = None
+    dataset_sources_clean = [
+        str(item).strip() for item in (dataset_sources or []) if str(item).strip()
+    ]
 
     async def _notify(phase: str, status: dict | None = None) -> None:
         if not status_callback:
             return
         try:
-            await status_callback(phase, kernel_ref, status)
+            enriched = await enrich_kaggle_status_from_ledger(db, ledger_run_id, status)
+            await status_callback(phase, kernel_ref, enriched)
         except Exception:
             logger.exception("theatres_kaggle: status callback failed phase=%s", phase)
     
@@ -88,6 +96,31 @@ async def run_kaggle_kernel(
         logger.error("theatres_kaggle: failed to read metadata: %s", e)
         await _notify("metadata_error")
         return "error", [], time.time() - start_time
+
+    if db is not None:
+        run_token = str((run_config or {}).get("run_id") or f"{kernel_folder}-{int(start_time)}")
+        ledger_run_id = f"parser:{kernel_folder}:{run_token}"
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=ledger_run_id,
+            session_id=None,
+            kind="parser_kernel",
+            notebook=kernel_folder,
+            kernel_ref=kernel_ref,
+        )
+        username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if username and kaggle_run_config:
+            status_dataset = create_kaggle_status_dataset(
+                client,
+                username=username,
+                slug_prefix=f"status-{kernel_folder}",
+                run_id=run_token,
+                config=kaggle_run_config,
+            )
+            if status_dataset:
+                dataset_sources_clean.append(status_dataset)
+        elif kaggle_run_config:
+            logger.warning("theatres_kaggle: KAGGLE_USERNAME missing; status dataset skipped")
 
     await _notify("prepare")
     
@@ -143,9 +176,9 @@ async def run_kaggle_kernel(
                     except Exception as e:
                         logger.error("theatres_kaggle: failed to inject config: %s", e)
                 
-                client.push_kernel(kernel_path=tmp_path, dataset_sources=dataset_sources)
+                client.push_kernel(kernel_path=tmp_path, dataset_sources=dataset_sources_clean)
         else:
-            client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
+            client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources_clean)
     except Exception as e:
         logger.error("theatres_kaggle: push failed: %s", e)
         await _notify("push_failed")

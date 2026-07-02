@@ -434,18 +434,35 @@ async def test_db_init_repairs_known_vk_source_location_defaults(tmp_path):
             "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
             (149955604, "bar_bastion", "БАСТИОН. Калининград", "Калининград Сити Джаз Клуб"),
         )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (30777579, "konb39", "Калининградская областная научная библиотека", None),
+        )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (179910542, "amberarena39", "Дворец спорта «Янтарный»", None),
+        )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (39437155, "mbkaliningrad39", "Мой бизнес 39 | Калининград", "Калининград Сити Джаз Клуб"),
+        )
         await conn.commit()
 
     await db.init()
 
     async with db.raw_conn() as conn:
         rows = await conn.execute_fetchall(
-            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?) ORDER BY group_id",
-            (149955604, 214027639),
+            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?, ?, ?, ?) ORDER BY group_id",
+            (149955604, 179910542, 214027639, 30777579, 39437155),
         )
     locations = {int(row[0]): row[1] for row in rows}
     assert locations[149955604] == "Бар Бастион, Судостроительная 6/1, Калининград"
+    assert locations[179910542] == "Дворец спорта «Янтарный», Согласия 39, Калининград"
     assert locations[214027639] == "Стендап клуб Локация, Юбилейная 18, Калининград"
+    assert locations[30777579] == "Научная библиотека, Мира 9, Калининград"
+    assert locations[39437155] == "Центр «Мой бизнес», Уральская 18, Калининград"
+
+
 @pytest.mark.asyncio
 async def test_build_event_payload_includes_default_time(monkeypatch):
     captured = {}
@@ -465,6 +482,34 @@ async def test_build_event_payload_includes_default_time(monkeypatch):
     assert "Правила извлечения локации" in captured["text"]
     assert captured["festival_names"] is None
     assert draft.time == "19:00"
+    assert festival_payload is None
+
+
+@pytest.mark.asyncio
+async def test_build_event_payload_drops_ddmm_date_marker_time_even_with_other_times(monkeypatch):
+    """INC-2026-06-12: date markers like 12.06 must not survive as 12:06
+    when the same source contains real times elsewhere."""
+
+    async def fake_parse(text, **kwargs):
+        return [
+            {
+                "title": "Род мужской",
+                "date": "2026-06-12",
+                "time": "12:06",
+                "location_name": "ОКЦ на Горького",
+                "location_address": "Горького 116",
+                "city": "Калининград",
+            }
+        ]
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse)
+
+    draft, festival_payload = await vk_intake.build_event_payload_from_vk(
+        "12.06 — «Род мужской» в 20:30\n13.06 — «Солнцестояние» в 20:00"
+    )
+
+    assert draft.time is None
+    assert draft.time_is_default is False
     assert festival_payload is None
 
 

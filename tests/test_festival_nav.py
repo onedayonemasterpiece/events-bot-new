@@ -170,3 +170,15 @@ def test_apply_footer_link_replaces_telegraph_target_attrs_footer_without_max():
     assert updated.count(main.MAX_SOCIAL_URL) == 1
     assert 'target="_blank">канал Афиши</a></p><p>\u200b</p><p>&#8203;</p>' not in updated
     assert updated.endswith(FOOTER_LINK_HTML)
+
+def test_telegraph_page_html_uses_content_key_from_python_telegraph():
+    page = {
+        "content": '<p>body</p><p><b>Полюбить Калининград</b></p>',
+        "content_html": "",
+    }
+    assert main.telegraph_page_html(page).startswith("<p>body</p>")
+
+
+def test_telegraph_page_html_falls_back_to_content_html():
+    page = {"content_html": "<p>legacy body</p>"}
+    assert main.telegraph_page_html(page) == "<p>legacy body</p>"

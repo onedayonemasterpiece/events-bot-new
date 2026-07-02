@@ -1,11 +1,12 @@
 # Post Metrics & Popularity (TG/VK)
 
-Фича консолидирует сбор статистики постов (`views/likes`) и подсветку “популярности” единым алгоритмом **для Telegram Monitoring и VK Auto Queue**.
+Фича консолидирует сбор статистики постов (`views/likes`, а также доступные `comments/reposts`) и подсветку “популярности” единым алгоритмом **для Telegram Monitoring и VK Auto Queue**.
 
 Это **не про “посты” как сущность**, а про то, как статистика постов становится сигналом для:
 
 - маркировки событий в отчётах Smart Update (`⭐/👍` уровни);
-- будущих фич (см. ниже): автопубликации анонсов, приоритизации видеоанонсов и честных публичных счётчиков лайков на статических страницах.
+- подписи популярных событий в секции ежедневного анонса `ДОБАВИЛИ В АНОНС`;
+- будущих фич (см. ниже): автопубликации анонсов и приоритизации видеоанонсов.
 
 ## Канонический код (одна точка)
 
@@ -13,8 +14,7 @@
 
 - сохранение снапшотов: `upsert_telegram_post_metric`, `upsert_vk_post_metric`;
 - вычисление бейзлайна: `load_telegram_popularity_baseline`, `load_vk_popularity_baseline`;
-- вычисление маркеров: `popularity_marks`;
-- best-effort bridge в публичные агрегаты персонализации: после TG/VK metric upsert вызывается `reaction_counter_sync.py`, который пересчитывает raw source counters для затронутых событий и, если настроены `PERSONALIZATION_SUPABASE_URL` + `PERSONALIZATION_SUPABASE_SECRET_KEY`, upsert-ит их в отдельную Supabase/Postgres БД персонализации.
+- вычисление маркеров: `popularity_marks`.
 
 Обе пайплайны (TG/VK) используют **тот же код** и одинаковые ENV параметры.
 
@@ -22,8 +22,8 @@
 
 Снапшоты метрик хранятся отдельно для Telegram и VK:
 
-- `telegram_post_metric` (ключ `(source_id, message_id, age_day)`)
-- `vk_post_metric` (ключ `(group_id, post_id, age_day)`)
+- `telegram_post_metric` (ключ `(source_id, message_id, age_day)`): `views`, `likes`, `comments` (если у поста есть открытый discussion/replies count), `reactions_json`;
+- `vk_post_metric` (ключ `(group_id, post_id, age_day)`): `views`, `likes`, `comments`, `reposts`.
 
 `age_day` означает “сколько суток прошло с публикации”:
 
@@ -31,27 +31,9 @@
 - `1` — вторые 24 часа;
 - `2` — третьи 24 часа (по умолчанию).
 
-Метрики сохраняются только для `age_day <= POST_POPULARITY_MAX_AGE_DAY`, чтобы рост БД был ограничен. Для публичного счётчика события повторные age buckets не суммируются: берётся `MAX(likes)`/`MAX(views)` по исходному посту, затем raw значения суммируются по разным source posts без повышающих коэффициентов.
+Метрики сохраняются только для `age_day <= POST_POPULARITY_MAX_AGE_DAY`, чтобы рост БД был ограничен.
 
 Снапшоты очищаются job’ом `post_metrics_cleanup` (retention по умолчанию = `POST_POPULARITY_HORIZON_DAYS`).
-
-## Public source-like counters for static pages
-
-`reaction_counter_sync.py` is the compact bridge from production post metrics to the personalization Supabase table `personalization_event_reaction_counter`:
-
-- source of truth: Fly SQLite `telegram_post_metric`, `vk_post_metric`, `event_source`, and VK `vk_inbox_import_event` when available;
-- aggregation: distinct source post per event, `MAX(raw likes/views)` across age buckets, then sum across source posts;
-- no coefficients, no popularity normalization, no “boosts”;
-- upsert fields: `source_likes_count`, `source_views_count`, `source_engagement_sources_count`, `source_refreshed_at`, `updated_at`;
-- service fields (`service_likes_count`, `not_interested_count`, `share_count`) are not touched by source sync.
-
-Bulk backfill/runbook:
-
-```bash
-scripts/sync_reaction_counters_to_supabase.py --sqlite-db /data/db.sqlite
-```
-
-Runtime writes require personalization Supabase backend credentials in the bot process. Without them the post metric upsert stays successful and the bridge is skipped.
 
 ## Бейзлайн (медианы)
 
@@ -98,7 +80,8 @@ ENV (общие для TG/VK):
 
 - Telegram Monitoring (`/tg`):
   - `🔥 Популярные посты` в конце импорта;
-  - маркеры добавляются в `Smart Update (детали событий)` перед названием события.
+  - маркеры добавляются в `Smart Update (детали событий)` перед названием события;
+  - если Telethon отдаёт `message.replies.replies`, счётчик комментариев сохраняется вместе с `views/likes`.
   - `/tg` → «📋 Список источников»: показывает per-channel медианы `views/likes` за окно `POST_POPULARITY_HORIZON_DAYS` и покрытие в сутках (`days/N`), чтобы оператор мог сравнить свежий пост с бейзлайном.
 - VK Auto Queue (`/vk_auto_import`):
   - маркеры добавляются перед названием события в унифицированном Smart Update отчёте.
@@ -110,6 +93,14 @@ ENV (общие для TG/VK):
   - Если нужен именно “полный” 7-дневный бакет, поднимите `POST_POPULARITY_MAX_AGE_DAY` хотя бы до `6`; для Telegram дополнительно нужен scan/rescan horizon не короче 7 суток (`TG_MONITORING_DAYS_BACK>=7`).
   - Диагностика в конце блока дополнительно показывает, сколько постов (после фильтров) оказалось выше медианы по `views/likes/оба` — это помогает понять случаи, когда “популярных по обоим” почти нет.
   - В диагностической строке блока без результатов используется HTML-безопасная запись `skip(&lt;=median)`, чтобы отчёт не падал в Telegram parse-mode.
+
+- Ежедневный анонс (`build_daily_posts`):
+  - в секции `ДОБАВИЛИ В АНОНС` популярные события получают дополнительную строку с кастомными emoji `❤️`/`🔂` из `@kenigevents adaptive pack` (`❤️=5339188899241570417`, `🔂=5336998942661975661`);
+  - расчёт идёт **по сумме всех доступных distinct source posts события**: Telegram + VK, а не по одному “лучшему” VK-посту;
+  - score: `likes_sum + 5 * reposts_sum`; базовый порог `DAILY_AUDIENCE_MIN_SCORE=20`;
+  - если событий с label меньше `DAILY_AUDIENCE_MIN_SHARE` (default `0.15`) от секции, daily снижает только свой порог до `DAILY_AUDIENCE_RELAXED_MIN_SCORE=8` и добирает следующие лучшие строки до target;
+  - верхняя граница — `DAILY_AUDIENCE_MAX_SHARE` (default `0.20`) от секции, чтобы daily не раздувался;
+  - ранжирование: `score`, затем `reposts`, `likes`, `comments`, `views`.
 
 ## Будущее (roadmap, кратко)
 

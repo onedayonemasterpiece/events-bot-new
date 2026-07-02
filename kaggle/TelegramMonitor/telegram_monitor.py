@@ -18,6 +18,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -27,6 +28,59 @@ logger = logging.getLogger('telegram_monitor')
 SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py')).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+
+def _load_status_loader():
+    try:
+        from kaggle_status_client import load_status_client as loader
+        return loader
+    except Exception as exc:
+        logger.warning("kaggle_status import failed: %s", exc)
+    for root in [SCRIPT_DIR, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("events_bot_kaggle_status_client", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    logger.info("[kaggle_status] loaded helper from %s", candidate)
+                    return module.load_status_client
+            except Exception as exc:
+                logger.warning("kaggle_status helper load failed from %s: %s", candidate, exc)
+    return None
+
+
+load_status_client = _load_status_loader()
+
+STATUS_PROGRESS: dict[str, object] = {"phase": "bootstrap"}
+STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
+
+
+def _status_event(event: str, *, phase: str | None = None, status: str | None = None, progress: dict | None = None, message: str | None = None) -> None:
+    if STATUS_CLIENT is None:
+        return
+    try:
+        STATUS_CLIENT.event(
+            event,
+            phase=phase,
+            status=status,
+            progress=progress,
+            message=message,
+        )
+    except Exception:
+        logger.warning("tg_monitor.status_event_failed event=%s", event, exc_info=True)
+
+
+def _status_progress() -> dict[str, object]:
+    return dict(STATUS_PROGRESS)
 
 
 def bootstrap_google_ai_bundle() -> None:
@@ -598,6 +652,25 @@ def is_promo_or_congrats(text: str | None, ocr_text: str | None = None) -> bool:
     if _CONGRATS_RE.search(combined) and (_CONGRATS_CONTEXT_RE.search(combined) or '|' in combined):
         return True
     return False
+
+def _has_strong_event_invitation_signal(text: str | None, ocr_text: str | None = None) -> bool:
+    """Route clear event-shaped promo/congrats posts to LLM extraction.
+
+    This is deliberately not an extractor. It only checks whether the post has
+    enough structural evidence to justify an LLM pass even when promo/congrats
+    wording is present.
+    """
+    combined = ((text or '') + '\n' + (ocr_text or '')).strip()
+    if not combined:
+        return False
+    if _looks_like_clear_single_event_invitation(combined):
+        return True
+    date_like = bool(_CLEAR_SINGLE_EVENT_DATE_RE.search(combined))
+    time_like = bool(_CLEAR_SINGLE_EVENT_TIME_RE.search(combined))
+    event_like = bool(_CLEAR_SINGLE_EVENT_INVITE_RE.search(combined))
+    venue_or_ticket = bool(_CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE.search(combined))
+    registration_link = bool(re.search(r'https?://\S+|регистрац\w*|бесплатно,\s*по\s+регистрац', combined, re.IGNORECASE | re.UNICODE))
+    return bool(date_like and time_like and event_like and (venue_or_ticket or registration_link))
 
 def strip_promo_lines(text: str | None) -> str:
     if not text:
@@ -1234,14 +1307,23 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'date': _string_schema(
                 'YYYY-MM-DD or empty string; never a placeholder literal. '
-                'Message date is context for resolving explicit relative anchors, not a default event date.'
+                'Message date is context for resolving explicit relative anchors, not a default event date. '
+                'Russian numeric dates are day.month: "10.05" means 10 May, not September 10; '
+                '"26 июля" and "#13_июня" are authoritative event dates and must not be remapped to the '
+                'current/message month. Nearby address/venue numbers, gates, floors, prices, coordinates, '
+                'or building numbers are not dates.'
             ),
             'time': _string_schema('HH:MM (24h) or empty string; never a date.'),
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
             'location_name': _string_schema(
                 'Venue name where the event takes place; empty string if unknown. '
                 'Must be a venue/place name, not a nearby content fragment. Never copy descriptive prose, '
-                'speaker biographies, schedule commentary, film metadata, ticket instructions, or narrative sentences. '
+                'speaker biographies, schedule commentary, film metadata, ticket instructions, repertoire/program items, '
+                'musical work titles, catalogue numbers such as "соч. 16", or narrative sentences. '
+                'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра". '
+                'If source context has a default venue but this message explicitly gives a different address/venue '
+                '(for example a line starting with "Место:" or "📍"), do not copy the source default; use only the '
+                'event-local venue/address evidence or leave the unresolved venue empty. '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
                 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
@@ -1255,6 +1337,8 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'city': _string_schema(
                 'City of the venue where attendees physically go; empty string if not grounded in the text/OCR. '
+                'Return the place name itself in nominative form; do not include prepositions or locality words like '
+                '"в посёлке", "посёлке", "городе", "селе", or "деревне". '
                 'Never copy a city that appears only as (a) a parenthetical origin/collection note, or '
                 '(b) a biographical/affiliation mention of a speaker/author/curator/institution '
                 '(e.g. "лектор — X, сотрудник Российской национальной библиотеки" does not put the event in '
@@ -1360,7 +1444,10 @@ LOCATION_REVIEW_SCHEMA = {
                 'Never descriptive prose, schedule commentary, a service heading, a ticket instruction, or film metadata.'
             ),
             'location_address': _string_schema('Corrected venue street address, or empty string if not grounded.'),
-            'city': _string_schema('Corrected venue city, or empty string if not grounded.'),
+            'city': _string_schema(
+                'Corrected venue city, or empty string if not grounded. Use the place name itself, '
+                'not an inflected phrase like "посёлке Железнодорожный".'
+            ),
         },
         'required': ['location_name', 'location_address', 'city'],
     },
@@ -1477,6 +1564,16 @@ def _message_likes(msg) -> int | None:
     if not reactions or not getattr(reactions, 'results', None):
         return None
     return sum(r.count for r in reactions.results if getattr(r, 'count', None))
+
+
+def _message_comments(msg) -> int | None:
+    replies = getattr(msg, 'replies', None)
+    if not replies:
+        return None
+    count = getattr(replies, 'replies', None)
+    if isinstance(count, int) and count >= 0:
+        return int(count)
+    return None
 
 
 def _source_type(entity) -> str:
@@ -1743,7 +1840,7 @@ MONTHS_MAP = {
     'декабря': 12,
 }
 DATE_TEXT_RE = re.compile(
-    r"\b(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
+    r"(?:\b|#)(\d{1,2})[\s_]+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
     re.IGNORECASE,
 )
 DATE_NUM_RE = re.compile(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b")
@@ -1906,6 +2003,159 @@ def _extract_ocr_datetime(ocr_text: str | None, message_date: str | None = None)
     counts = Counter(times)
     best = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
     return date_val, best
+
+
+def _time_from_text_slice(text: str | None) -> str | None:
+    """Return one explicit time/range from a narrow source slice, if unambiguous."""
+    if not text:
+        return None
+    _date_val, time_val = _extract_ocr_datetime(text, None)
+    return time_val
+
+
+def _extract_single_textual_datetime(
+    text: str | None,
+    message_date: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Extract one explicit source date/time candidate from message text.
+
+    This is a narrow fail-closed safety net for already-LLM-extracted single
+    events. It does not classify eventness and it intentionally returns
+    ``(None, None)`` when the source mentions multiple different dates.
+
+    Priority is given to Russian month-word dates (including hashtag forms like
+    ``#13_июня``). Numeric ``DD.MM`` dates are accepted only when they look like
+    an event date marker (start of line / before a title separator / hashtag),
+    which avoids treating address details such as ``гейт 2.6`` as dates.
+    """
+    raw = str(text or "").replace("\xa0", " ").strip()
+    if not raw:
+        return None, None
+    msg_date = _parse_message_date(message_date)
+
+    month_matches: list[tuple[date, int, int]] = []
+    for m in DATE_TEXT_RE.finditer(raw.lower().replace("ё", "е")):
+        month = MONTHS_MAP.get(m.group(2).lower())
+        if not month:
+            continue
+        candidate = _infer_ocr_date(int(m.group(1)), month, None, msg_date)
+        if candidate:
+            month_matches.append((candidate, m.start(), m.end()))
+
+    unique_month_dates = sorted({item[0] for item in month_matches})
+    matches: list[tuple[date, int, int]] = []
+    if len(unique_month_dates) == 1:
+        target = unique_month_dates[0]
+        matches = [item for item in month_matches if item[0] == target]
+    elif len(unique_month_dates) > 1:
+        return None, None
+    else:
+        numeric_matches: list[tuple[date, int, int]] = []
+        for m in DATE_NUM_RE.finditer(raw):
+            marker_end = min(len(raw), m.end() + 4)
+            line_start = raw.rfind("\n", 0, m.start()) + 1
+            prefix = raw[line_start:m.start()]
+            suffix = raw[m.end():marker_end]
+            looks_event_marker = (
+                not prefix.strip()
+                or "|" in suffix
+                or re.search(r"(?iu)#\s*$", prefix)
+                or re.search(r"(?iu)\b(?:дата|когда|старт|открытие)\s*:?\s*$", prefix)
+            )
+            if not looks_event_marker:
+                # ``10.05 |`` can be preceded by an emoji/bullet.
+                stripped_prefix = re.sub(r"^[^\wА-Яа-яЁё#]+", "", prefix.strip())
+                looks_event_marker = not stripped_prefix and "|" in suffix
+            if not looks_event_marker:
+                continue
+            try:
+                day = int(m.group(1))
+                month = int(m.group(2))
+            except Exception:
+                continue
+            if not (1 <= day <= 31 and 1 <= month <= 12):
+                continue
+            year = None
+            if m.group(3):
+                try:
+                    year = int(m.group(3))
+                    if year < 100:
+                        year += 2000
+                except Exception:
+                    year = None
+            candidate = _infer_ocr_date(day, month, year, msg_date)
+            if candidate:
+                numeric_matches.append((candidate, m.start(), m.end()))
+        unique_numeric_dates = sorted({item[0] for item in numeric_matches})
+        if len(unique_numeric_dates) != 1:
+            return None, None
+        target = unique_numeric_dates[0]
+        matches = [item for item in numeric_matches if item[0] == target]
+
+    if not matches:
+        return None, None
+    source_date = matches[0][0].isoformat()
+
+    # Prefer time near the explicit date marker, then fall back to one unique
+    # time in the whole post. This keeps unrelated programme times from
+    # overwriting the event start.
+    for _candidate, start, end in matches[:4]:
+        window = raw[max(0, start - 80):min(len(raw), end + 220)]
+        near_time = _time_from_text_slice(window)
+        if near_time:
+            return source_date, near_time
+    _date_val, source_time = _extract_ocr_datetime(raw, message_date)
+    return source_date, source_time
+
+
+def _correct_single_event_from_source_datetime(
+    events: list[dict],
+    *,
+    message_text: str | None,
+    ocr_text: str | None,
+    message_date: str | None,
+    source_username: str | None,
+) -> list[dict]:
+    """Correct one-row LLM date/time drift from one explicit source date.
+
+    LLM remains the eventness/field extractor. This guard only rejects the
+    familiar failure where the model emits an unsupported future date while the
+    same source text contains exactly one explicit, parseable event date.
+    """
+    if not events or len(events) != 1 or not isinstance(events[0], dict):
+        return events
+    source_date, source_time = _extract_single_textual_datetime(message_text, message_date)
+    if not source_date and ocr_text:
+        source_date, source_time = _extract_single_textual_datetime(ocr_text, message_date)
+    if not source_date:
+        return events
+    ev = dict(events[0])
+    current_date = str(ev.get("date") or "").strip()
+    current_time = str(ev.get("time") or "").strip()
+    changed = False
+    if current_date and current_date != source_date:
+        ev["date"] = source_date
+        changed = True
+    elif not current_date:
+        ev["date"] = source_date
+        changed = True
+    if source_time and (not current_time or current_time in {"00:00", "0:00"} or changed):
+        # Keep existing explicit time if the date was already correct; when the
+        # date was wrong, the associated time is also suspect (e.g. 12:55 from
+        # an unrelated token).
+        ev["time"] = source_time
+        changed = True
+    if not changed:
+        return events
+    logger.info(
+        "extract_events source_datetime_correct source=%s date=%s->%s time=%s->%s",
+        source_username,
+        current_date,
+        ev.get("date"),
+        current_time,
+        ev.get("time"),
+    )
+    return [ev]
 
 
 def _bridge_date_from_parts(day: int, month_name: str, msg_date) -> str | None:
@@ -2152,6 +2402,23 @@ _LOCATION_REVIEW_DATE_RE = re.compile(
     r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_TEMPORAL_LOCATION_RE = re.compile(
+    r"^\s*(?:"
+    r"сегодня|завтра|послезавтра|вчера|"
+    r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\s*[,.:;!?]?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _strip_location_review_temporal_decoration(value: str) -> str:
+    compact = re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(r"^[^0-9A-Za-zА-Яа-яЁё]+", "", compact).strip()
+_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE = re.compile(
+    r"^\s*(?:в\s+)?(?:городе|пос[её]лке|селе|деревне|пгт|микрорайоне|мкр\.?)\s+\S+",
+    re.IGNORECASE | re.UNICODE,
+)
 _LOCATION_REVIEW_ADDRESS_HINT_RE = re.compile(
     r"\b(?:ул\.?|улица|проспект|пр-т|пер\.?|переулок|площадь|пл\.?|наб\.?|набережная|"
     r"шоссе|бульвар|аллея|проезд|д\.|дом)\b",
@@ -2170,6 +2437,22 @@ _LOCATION_REVIEW_VENUE_CUE_RE = re.compile(
 )
 _LOCATION_REVIEW_GENERIC_ROOM_RE = re.compile(
     r"^\s*(?:кино(?:зал|театр)|зал|холл|аудитори[яи]|сцена|мастерск(?:ая|ие)|дворик|площадка)\s*:?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_NON_VENUE_BULLET_RE = re.compile(
+    r"^\s*(?!📍)[^\w\s#@,.:;!?()«»\"'`-]{1,4}\s+\S+",
+    re.UNICODE,
+)
+_LOCATION_REVIEW_TOPIC_FRAGMENT_RE = re.compile(
+    r"^\s*(?:о|об|обо|про|по|для|к|ко|с|со)\s+\S+",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_PROGRAM_ITEM_RE = re.compile(
+    r"^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_CATALOGUE_ADDRESS_RE = re.compile(
+    r"^\s*(?:соч\.?|op\.?|№)\s*[0-9IVXLCDMivxlcdmA-Za-zА-Яа-яЁё./ -]+\s*$",
     re.IGNORECASE | re.UNICODE,
 )
 _CLEAR_SINGLE_EVENT_INVITE_RE = re.compile(
@@ -2226,7 +2509,7 @@ def _location_review_looks_like_person_name(value: str | None) -> bool:
         return False
     if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw):
         return False
-    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+    if re.search(r"\d|[,:;.!?/@#()]|[«»\"'`]", raw):
         return False
     words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
     if not (2 <= len(words) <= 4):
@@ -2404,7 +2687,29 @@ def _location_review_value_grounded(value: str | None, evidence_text: str) -> bo
 def _event_needs_location_grounding_review(ev: dict, evidence_text: str) -> bool:
     raw = str(ev.get('location_name') or '').strip()
     addr = str(ev.get('location_address') or '').strip()
+    has_venue_or_address_cue = bool(
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw)
+        or _LOCATION_REVIEW_ADDRESS_HINT_RE.search(addr)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(addr)
+    )
     if raw and _LOCATION_REVIEW_GENERIC_ROOM_RE.search(raw):
+        return True
+    if raw and not has_venue_or_address_cue and (
+        _LOCATION_REVIEW_NON_VENUE_BULLET_RE.search(raw)
+        or _LOCATION_REVIEW_TOPIC_FRAGMENT_RE.search(raw)
+        or raw.count('(') > raw.count(')')
+    ):
+        return True
+    if raw and _LOCATION_REVIEW_PROGRAM_ITEM_RE.search(raw) and not (
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+    ):
+        return True
+    if raw and addr and _LOCATION_REVIEW_CATALOGUE_ADDRESS_RE.search(addr) and not (
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw)
+        or _LOCATION_REVIEW_ADDRESS_HINT_RE.search(addr)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+    ):
         return True
     if raw and not _location_review_value_grounded(raw, evidence_text):
         if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text) or _LOCATION_REVIEW_VENUE_CUE_RE.search(evidence_text):
@@ -2440,6 +2745,9 @@ def _needs_llm_location_review(
         if not isinstance(ev, dict):
             continue
         raw = str(ev.get('location_name') or '').strip()
+        city_raw = str(ev.get('city') or '').strip()
+        if city_raw and _LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE.search(city_raw):
+            return True
         if not raw:
             if evidence_text and _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text):
                 return True
@@ -2456,13 +2764,16 @@ def _needs_llm_location_review(
             return True
         if _LOCATION_REVIEW_TIME_RANGE_RE.search(compact):
             return True
+        temporal_probes = {compact, _strip_location_review_temporal_decoration(compact)}
+        if any(_LOCATION_REVIEW_TEMPORAL_LOCATION_RE.fullmatch(probe) for probe in temporal_probes if probe):
+            return True
         if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
             return True
         if _location_review_looks_like_person_name(compact):
             return True
-        if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
+        if _event_needs_location_grounding_review(ev, evidence_text):
             return True
-        if evidence_text and _event_needs_location_grounding_review(ev, evidence_text):
+        if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
             return True
     return False
 
@@ -2501,18 +2812,30 @@ async def _repair_suspicious_locations(
         'Use the original message text, OCR, source title, source username, and source default location as evidence. '
         'location_name must be a real venue/place name where attendees go. '
         'A curator/speaker/artist/person name such as "ТАТЬЯНА БОРИСОВА" is not a venue unless the source explicitly says the place is named that way. '
+        'A temporal/date fragment such as "Завтра", "Сегодня", "в пятницу", or "14 июня" is not a venue. '
+        'city must be the place name itself, not an inflected phrase: output "Железнодорожный", not "посёлке Железнодорожный". '
         'If current venue fields are not grounded in the source text/OCR/source context, replace them with the '
         'grounded venue from the source or return empty strings. Do not preserve a plausible but ungrounded venue. '
         'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '
         'vs "Дворец спорта Юность"), choose only the source-grounded venue. '
-        'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
-        'speaker bios, or an event description as location_name. '
+        'Never keep descriptive prose, schedule commentary, a service heading, non-location emoji/list bullets, '
+        'discussion-topic lines such as "о концертах" / "об итогах ...", film metadata, ticket instructions, '
+        'speaker bios, repertoire/program items, musical work titles, catalogue numbers such as "соч. 16", '
+        'temporal/date fragments (including emoji-prefixed values like "🤗Завтра"), '
+        'or an event description as location_name. Never split one prose/list sentence across location_name and '
+        'location_address. For online-only livestreams, use an explicit platform/page as location_name only when '
+        'the source/OCR states it; otherwise leave venue fields empty. '
         'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
         'by source context or message text, output the host venue as location_name and leave the hall label out. '
         'For schedule/program posts with many lines, use only the venue nearest the event line. If the event line has '
         'no venue and a later/nearby line names a different venue for another event, leave this event venue unresolved. '
         'If the source default location is provided, treat it as a strong prior for this source, but override it only '
         'when the message explicitly names a different venue/address. '
+        'When a repost/schedule line explicitly names an event-local venue, the event-local venue wins over source default. '
+        'Example: if source default is "Пространство Тёрка" but the event line says "Новый ОКЦ, Горького 116", output '
+        '"ОКЦ на Горького"; if the next event line says "Сигнал, Леонова 22", output "Сигнал". '
+        'Do not output "Калининград Сити Джаз Клуб" from source default unless the message/OCR/source context explicitly '
+        'mentions City Jazz or its address near Мира 33/33-35. '
         'If no venue is grounded, output empty strings for unresolved venue fields rather than prose or generic '
         'placeholders like "музей", "галерея", "пространство", or "площадка". '
         'For events whose current venue fields are already correct, repeat the same venue fields unchanged. '
@@ -2566,7 +2889,13 @@ async def extract_events(
     source_title: str | None = None,
     source_default_location: str | None = None,
 ):
-    content = (text or '').strip()
+    caption_content = (text or '').strip()
+    ocr_only_content = (ocr_text or '').strip()
+    poster_only_ocr = (not caption_content) and bool(ocr_only_content)
+    # Poster-only Telegram posts have an empty caption but may carry the whole
+    # event announcement in OCR. Keep extraction LLM-first: OCR text becomes the
+    # source text for the LLM instead of being ignored by the early caption guard.
+    content = caption_content or ocr_only_content
     if not content or len(content) < 10:
         return []
 
@@ -2733,9 +3062,11 @@ async def extract_events(
         return (ru_sched_events or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
     # LLM path
-    message_text_only = content
-    if ocr_text:
+    message_text_only = caption_content
+    if ocr_text and not poster_only_ocr:
         content = (content + '\n\nOCR:\n' + ocr_text).strip()
+    elif poster_only_ocr:
+        content = ('OCR-only poster text:\n' + ocr_only_content).strip()
     if not content or len(content) < 10:
         return []
     message_date_ymd = msg_date.isoformat() if msg_date else ''
@@ -2776,6 +3107,12 @@ async def extract_events(
         'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
         'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
+        'Festival/campaign anchor contract: when the source explicitly says the event is part of a named festival '
+        '(for example "фестиваль «Кантата»", "фестиваля Кантата", "80 историй о главном", or kgd80.ru), '
+        'fill festival with the exact campaign-covering festival name: "Кантата" or "80 историй о главном". '
+        'Do not drop festival merely because the post is a single lecture/talk rather than a whole-festival announcement. '
+        'The date field must always be an ISO calendar date (YYYY-MM-DD) or an empty string; never put titles, labels, '
+        'ticket text, descriptions, or long source fragments into date/end_date. '
         'Never return whitespace-only strings. '
         'Never output the literal string "unknown" (or "n/a", "none") in any text field; use empty string instead. '
         'Never output literal field-name placeholders like "location_address", "address", "location_name", '
@@ -2788,11 +3125,19 @@ async def extract_events(
         'Title must be the attendee-facing event name, not a poster service heading. '
         'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс" are not event titles when a nearby date line names the real event. '
         'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
+        'Russian numeric dates are always day.month: "10.05" means 10 May, not September 10; '
+        '"30.05 | Никита Крас" means 30 May. Month-word and hashtag dates such as "26 июля", '
+        '"#13_июня", and "#21_июня" are authoritative and must not be changed to the current/message month. '
+        'Never use nearby address/venue numbers, gates/floors ("гейт 2.6", "2 этаж"), prices, coordinates, '
+        'phone numbers, or building numbers as date/time anchors. '
+        'A date marker like "12.06" or "13.06" is not an event time unless the source also writes the same value as HH:MM. '
         'If a post is in-character promo copy but a ticket URL/page or clear program title gives the canonical event name, '
         'use the canonical attendee-facing title rather than the in-character/plot phrase. '
         'If message text/caption contains a named event and OCR contains only schedule/service headings '
         'like a date, weekday, time, "НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ", price, age limit, or venue label, '
         'keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields. '
+        'If the Telegram message has no caption and the poster OCR itself contains a full announcement, use that '
+        'OCR text as the primary source evidence; do not return [] merely because caption text is empty. '
         'Before returning, audit every title: if it is only a schedule/service heading and the caption has a named '
         'headline, replace the title with that named headline. Example: caption "Второй Большой киноквиз!" plus '
         'OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00". '
@@ -2803,11 +3148,17 @@ async def extract_events(
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
         'location_name must be a venue/place name, not arbitrary nearby text: never copy a descriptive sentence, '
-        'speaker biography, schedule commentary, film metadata, ticket instruction, or event description into location_name. '
+        'speaker biography, schedule commentary, non-location emoji/list bullet, discussion-topic line such as '
+        '"о концертах" / "об итогах ...", film metadata, ticket instruction, repertoire/program item, '
+        'musical work title, catalogue number such as "соч. 16", or event description into location_name. '
+        'Never split one prose/list sentence across location_name and location_address. For online-only livestreams, '
+        'use an explicit platform/page as location_name only when the source/OCR states it; otherwise leave venue fields empty. '
         'For multi-date, multi-event, timetable, digest, or repost posts, each event must use venue/address/city facts '
         'from the local block nearest that event date/title; do not reuse a source default or another block venue when '
         'the event-local block explicitly names a different venue. '
         'If a source/default location conflicts with an explicitly named event-local venue, the event-local venue wins. '
+        'If the message gives a different explicit address/venue line ("Место:", "📍", "ул.", "пр-т", etc.), '
+        'that event-local evidence also wins over the source default; do not silently keep the source default venue. '
         'If a schedule groups items under a hall/room label such as "Кинозал:" or "Атриум:" and source context names '
         'the museum/theatre/venue, use the host venue as location_name; do not return only the hall label as the venue. '
         'If the venue is not grounded, leave location_name empty rather than filling it with prose. '
@@ -2817,6 +3168,9 @@ async def extract_events(
         'do NOT return [] only because some venue, city, or ticket fields remain unresolved; return one best-effort event object and leave unresolved text fields empty. '
         'If one post clearly announces one attendee-facing performance/show/concert/play/film screening with exact future date, start time, and either venue/address or ticket/registration link, '
         'do NOT return [] solely because the wording is short, promotional, or partially in a poster/link; return one best-effort event object. '
+        'Posts that announce a transfer/reschedule ("перенос", "перенесена") of a future lecture/talk with the same date/time are still attendee-facing events; extract the future event and keep transfer details in raw_excerpt/search_digest. '
+        'Posts with giveaway results, winners, repost mechanics, or congratulatory/promo framing still contain an event when they also state a concrete future date/time and venue or registration/ticket URL; ignore the mechanics/winners and extract the underlying event. '
+        'For festival/promo campaign source posts such as @kraftmarket39, a line with exact date/time, event title, venue, and free/paid registration is a concrete event, not merely channel promotion. '
         'For such a clearly invited single lecture/talk, prefer filling date/time from text or OCR rather than leaving them empty. '
         'If only the title is reliable at extraction time, still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it. '
         'For a clearly invited single lecture/talk with one supported start datetime, return exactly one event row '
@@ -2831,6 +3185,9 @@ async def extract_events(
         'keep the cycle/series label in raw_excerpt/search_digest, not as a second event row. '
         'Do not create a second row that contains only venue/location fields for the same lecture. '
         'Title must be the event name (not just a date, weekday, or time). '
+        'If the caption/message names the attendee-facing event or project, and poster OCR contains a slogan, genre phrase, reading imperative, or CTA, '
+        'prefer the caption/message event name over the poster slogan. For example, do not rename an event to "Читайте бумажные книги!" '
+        'when the message identifies it as "Живой сундук". '
         'Prefer concise human event titles; for talks/lectures/meetups keep project or series context in raw_excerpt/search_digest, not inside an overlong title. '
         'If a post says "в разделе X на выставке Y", title should usually be the main exhibition Y, not the subsection X, '
         'unless X is explicitly announced as its own separate attendable event. '
@@ -2853,6 +3210,9 @@ async def extract_events(
         'a street/address such as "Музейная аллея", weekdays, dates, or times. '
         'If it announces attendee-facing lectures, shows, talks, workshops, excursions, or festival program slots '
         'with concrete dates/times, extract those events even when they happen at a museum or library. '
+        'Do not use historical/background dates from exhibit text, document quotes, story prose, or noisy OCR as event dates. '
+        'For example, "9 октября 1947 года..." inside an exhibition narrative is historical content, not an upcoming schedule anchor. '
+        'If the source only says an exhibition already opened and can be visited during institution work hours, return [] unless it also gives an explicit future opening, lecture, curator talk, excursion, or other attendee-facing slot. '
         'A named festival context does not make a concrete post a whole-festival non-event: if a post says an event is '
         '"in the framework of" a festival, or includes a festival hashtag, and also gives a specific title/date/time/venue '
         'or registration signal, return the concrete event with festival filled. '
@@ -2864,6 +3224,11 @@ async def extract_events(
         'use relative words such as "сегодня" only against the message date, and split multiple nights into multiple events. '
         'Pure retrospective reports of completed events ("прошло мероприятие", "ленту развернули", "приняли участие") '
         'are NOT new events to attend unless the same post also explicitly invites attendance at a future dated event. '
+        'Retrospective wording like "17 июня ... прошла лекция", "на встрече говорили", "состоялась встреча" '
+        'with no future invitation must return [] even if the text contains a venue and a past date. '
+        'A recap that only says "следующий фестиваль" with dates but "локация/место/адрес уточняется" is NOT a concrete future event; return []. '
+        'Operational updates for people already attending an event ("важная информация для гостей/зрителей", entry route, navigation, parking, queue, cloakroom) '
+        'are NOT standalone events; return [] unless the same post is also a full new invitation with a concrete future date, title, venue, and ticket/registration signal. '
         'Fundraising-only posts ("сбор средств", "помогите собрать"), standalone video/blog/content pieces without a real invite, '
         'and book reviews/sales are NOT events to attend. Return [] for such posts. '
         'Date is REQUIRED for dated events: never invent a date from the message date. '
@@ -3014,8 +3379,14 @@ async def extract_events(
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
             'Use empty string for unknown text fields. '
+            'If text or ticket URL names a festival campaign context such as "Кантата" or "80 историй о главном"/kgd80.ru, '
+            'set festival exactly to "Кантата" or "80 историй о главном" on the returned event. '
             'This rescue runs only after a structural detector found exact date, exact time, and ticket/venue evidence; '
             'prefer returning one best-effort event over [] when the source clearly invites attendance. '
+            'A transfer/reschedule post with "перенос/перенесена" plus a future date/time is still an event. '
+            'A giveaway-result or congratulatory/promo post with a concrete future event date/time plus venue or registration/ticket URL is still an event; ignore winner names, repost rules, and promo mechanics. '
+            'If the text contains a registration/ticket URL next to a titled lecture/talk, treat that as strong attendance evidence. '
+            'If the Telegram caption is empty but OCR-only poster text contains event title, date, time, venue, price, or phone registration, extract that one source-grounded event. '
             'Do not invent facts: leave unresolved venue/address/city/ticket fields empty. '
             'Infer missing year from the message date and choose the nearest upcoming date. '
             'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
@@ -3127,9 +3498,13 @@ async def extract_events(
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
             'Use empty string for unknown text fields. '
+            'If the lecture/talk belongs to a named festival campaign context such as "Кантата" or "80 историй о главном"/kgd80.ru, '
+            'set festival exactly to that festival name; this is required for downstream promo campaigns. '
             'If text says "Приглашаем на лекцию/встречу/экскурсию/показ" and OCR gives one explicit date/time, '
             'that is enough to keep one best-effort event row even if venue fields stay empty. '
             'Prefer one row over [] for such a clearly invited single event. '
+            'Also keep one row when the post is a transfer/reschedule notice for a future lecture/talk or when a promo/giveaway-result wrapper repeats a future event date/time with a registration/ticket URL. '
+            'Ignore giveaway winners, repost mechanics, and congratulatory framing; extract the underlying attendee-facing event. '
             'Merge OCR date/time into that row; infer the year from message date when needed. '
             'Do not use message_date itself as the event date unless the text/OCR contains an explicit relative date anchor '
             'such as "сегодня", "завтра", or "послезавтра". '
@@ -3324,6 +3699,13 @@ async def extract_events(
         source_context_line=source_context_line,
         events=out,
         source_default_location=source_default_location,
+    )
+    out = _correct_single_event_from_source_datetime(
+        out,
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        message_date=message_date,
+        source_username=source_username,
     )
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
@@ -3542,6 +3924,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
 
         views = getattr(msg, 'views', None)
         likes = _message_likes(msg)
+        comments = _message_comments(msg)
         if isinstance(views, int):
             views_vals.append(views)
         if isinstance(likes, int):
@@ -3553,8 +3936,10 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             logger.info('message.flag reason=ticket_giveaway username=%s message_id=%s', username, msg.id)
 
         skip_promo = is_promo_or_congrats(text)
-        if skip_promo:
+        if skip_promo and not _has_strong_event_invitation_signal(text):
             logger.info('message.skip reason=promo_or_congrats username=%s message_id=%s', username, msg.id)
+        elif skip_promo:
+            logger.info('message.flag reason=promo_or_congrats_strong_event_signal_pre_ocr username=%s message_id=%s', username, msg.id)
 
         posters = []
         videos = []
@@ -3719,12 +4104,18 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             except Exception as exc:
                 logger.warning('media process failed for %s/%s: %s', username, msg.id, exc)
 
-        if is_promo_or_congrats(text, ocr_text):
+        if is_promo_or_congrats(text, ocr_text) and not _has_strong_event_invitation_signal(text, ocr_text):
             logger.info('message.skip reason=promo_or_congrats_ocr username=%s message_id=%s', username, msg.id)
             skip_promo = True
             events = []
             ocr_date_hint, ocr_time_hint = None, None
         else:
+            if skip_promo:
+                logger.info(
+                    'message.flag reason=promo_or_congrats_strong_event_signal username=%s message_id=%s',
+                    username,
+                    msg.id,
+                )
             # If OCR reveals giveaway terms, keep text intact; LLM should ignore mechanics.
             if is_ticket_giveaway(text, ocr_text):
                 logger.info('message.flag reason=ticket_giveaway_ocr username=%s message_id=%s', username, msg.id)
@@ -3844,10 +4235,33 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 return cands[0].get('url')
             return None
 
+        def _more_specific_ticket_link(current: str | None, candidate: str | None) -> bool:
+            cur = (current or '').strip()
+            cand = (candidate or '').strip()
+            if not cur or not cand or cur.rstrip('/') == cand.rstrip('/'):
+                return False
+            if not cand.startswith(('http://', 'https://')):
+                return False
+            try:
+                cur_p = urlparse(cur)
+                cand_p = urlparse(cand)
+            except Exception:
+                return False
+            if cur_p.netloc.casefold() != cand_p.netloc.casefold():
+                return False
+            cur_specificity = len((cur_p.path or '').strip('/')) + len(cur_p.query or '')
+            cand_specificity = len((cand_p.path or '').strip('/')) + len(cand_p.query or '')
+            return cand_specificity > cur_specificity
+
         if cleaned_events and link_spans:
-            # Only set when ticket_link is missing (monitor extraction is authoritative).
             if len(cleaned_events) == 1:
                 ev = cleaned_events[0]
+                current_ticket = (ev.get('ticket_link') or '').strip()
+                ticketish = [c for c in link_spans if _ticketish(c.get('text'), c.get('url'))]
+                if current_ticket and ticketish:
+                    picked_specific = _pick_link(ticketish)
+                    if _more_specific_ticket_link(current_ticket, picked_specific):
+                        ev['ticket_link'] = picked_specific
                 if not (ev.get('ticket_link') or '').strip():
                     picked = _pick_link([c for c in link_spans if (c.get('url') or '').startswith(('http://', 'https://'))])
                     if picked:
@@ -3864,9 +4278,14 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 for j, (p, idx_ev) in enumerate(starts):
                     end = starts[j+1][0] if j+1 < len(starts) else len(text_for_links)
                     ev = cleaned_events[idx_ev]
-                    if (ev.get('ticket_link') or '').strip():
-                        continue
                     seg_links = [c for c in link_spans if isinstance(c.get('offset'), int) and p <= int(c['offset']) < end]
+                    current_ticket = (ev.get('ticket_link') or '').strip()
+                    if current_ticket:
+                        ticketish = [c for c in seg_links if _ticketish(c.get('text'), c.get('url'))]
+                        picked_specific = _pick_link(ticketish)
+                        if _more_specific_ticket_link(current_ticket, picked_specific):
+                            ev['ticket_link'] = picked_specific
+                        continue
                     picked = _pick_link(seg_links)
                     if picked:
                         ev['ticket_link'] = picked
@@ -3892,6 +4311,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'metrics': {
                 'views': views,
                 'likes': likes,
+                'comments': comments,
             },
             'links': links_meta,
             'posters': posters,
@@ -4190,27 +4610,71 @@ async def main():
     run_id = config.get('run_id') or f'kaggle_{uuid.uuid4().hex[:8]}'
     all_messages = []
     all_sources_meta = []
+    acquired_resources: list[str] = []
 
     logger.info('tg_monitor.run start run_id=%s sources=%d', run_id, len(sources))
+    STATUS_PROGRESS.update({
+        "phase": "preflight",
+        "run_id": run_id,
+        "sources_total": len(sources),
+        "sources_done": 0,
+        "progress_percent": 5,
+        "progress_label": f"источники 0/{len(sources)}",
+    })
+    _status_event(
+        "kernel_started",
+        phase="preflight",
+        status="running",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=_status_progress)
+        for resource_key in STATUS_CLIENT.config.get("resource_leases") or []:
+            if not STATUS_CLIENT.acquire_resource(str(resource_key), ttl_seconds=3 * 60 * 60):
+                raise RuntimeError(f"Required Kaggle resource is busy: {resource_key}")
+            acquired_resources.append(str(resource_key))
     if not sources:
         logger.warning('tg_monitor.run no sources configured')
 
     device_config = DEVICE_CONFIG
 
-    async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH, flood_sleep_threshold=TG_FLOOD_SLEEP_THRESHOLD, **device_config) as client:
-        for source in sources:
-            try:
+    try:
+        async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH, flood_sleep_threshold=TG_FLOOD_SLEEP_THRESHOLD, **device_config) as client:
+            for idx, source in enumerate(sources, start=1):
+                STATUS_PROGRESS.update(
+                    {
+                        "phase": "scan",
+                        "source_index": idx,
+                        "sources_total": len(sources),
+                        "source": source.get('username'),
+                        "sources_done": idx - 1,
+                        "messages_scanned": len(all_messages),
+                        "progress_label": f"источники {idx}/{len(sources)} · @{source.get('username')}",
+                    }
+                )
+                _status_event("source_started", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
+                try:
+                    await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
+                    scan_result = await scan_source(client, source)
+                    msgs = scan_result.get('messages') if isinstance(scan_result, dict) else []
+                    meta = scan_result.get('source_meta') if isinstance(scan_result, dict) else None
+                    if isinstance(meta, dict) and meta.get('username'):
+                        all_sources_meta.append(meta)
+                    all_messages.extend(msgs)
+                    logger.info('scanned %s messages for %s', len(msgs), source.get('username'))
+                except Exception as exc:
+                    logger.exception('scan failed for %s: %s', source.get('username'), exc)
+                STATUS_PROGRESS.update({
+                    "sources_done": idx,
+                    "messages_scanned": len(all_messages),
+                    "progress_label": f"источники {idx}/{len(sources)} · сообщений {len(all_messages)}",
+                })
+                _status_event("source_done", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
                 await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
-                scan_result = await scan_source(client, source)
-                msgs = scan_result.get('messages') if isinstance(scan_result, dict) else []
-                meta = scan_result.get('source_meta') if isinstance(scan_result, dict) else None
-                if isinstance(meta, dict) and meta.get('username'):
-                    all_sources_meta.append(meta)
-                all_messages.extend(msgs)
-                logger.info('scanned %s messages for %s', len(msgs), source.get('username'))
-            except Exception as exc:
-                logger.exception('scan failed for %s: %s', source.get('username'), exc)
-            await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
+    finally:
+        for resource_key in acquired_resources:
+            if STATUS_CLIENT is not None:
+                STATUS_CLIENT.release_resource(resource_key)
 
     # Keep one metadata object per source username.
     sources_meta_by_username = {}
@@ -4249,6 +4713,25 @@ async def main():
 
     out_path = Path('telegram_results.json')
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    STATUS_PROGRESS.update(
+        {
+            "phase": "report",
+            "messages_scanned": len(all_messages),
+            "messages_with_events": messages_with_events,
+            "events_extracted": events_extracted,
+            "output": str(out_path),
+            "progress_percent": 100,
+            "progress_label": f"источники {len(sources)}/{len(sources)} · события {events_extracted}",
+        }
+    )
+    _status_event(
+        "report_written",
+        phase="report",
+        status="done",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.stop_alive()
     logger.info('Saved telegram_results.json with %s messages and %s sources_meta', len(all_messages), len(sources_meta))
 
 try:

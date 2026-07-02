@@ -761,10 +761,28 @@ def main() -> None:
             source = source.replace(scene_collect_old, scene_collect_new, 1)
         elif scene_collect_new not in source:
             raise RuntimeError("Could not locate scene collect block in notebook")
-        if preflight_log_old in source:
-            source = source.replace(preflight_log_old, preflight_log_new, 1)
-        elif preflight_log_new not in source:
-            raise RuntimeError("Could not locate poster preflight log block in notebook")
+        if preflight_log_new not in source:
+            if preflight_log_old in source:
+                source = source.replace(preflight_log_old, preflight_log_new, 1)
+            else:
+                raise RuntimeError("Could not locate poster preflight log block in notebook")
+        # Older runs of this builder inserted preflight helpers repeatedly.
+        # Keep one `_poster_label`/`_telegram_cache_path`/`_log_poster_preflight`
+        # block before `main_pipeline` so the builder is idempotent.
+        poster_helper_marker = "def _poster_label("
+        main_pipeline_marker = "def main_pipeline():"
+        poster_helper_start = source.find(poster_helper_marker)
+        main_pipeline_start = source.find(main_pipeline_marker)
+        if poster_helper_start >= 0 and main_pipeline_start > poster_helper_start:
+            helper_region = source[poster_helper_start:main_pipeline_start]
+            helper_parts = helper_region.split("\n" + poster_helper_marker)
+            if len(helper_parts) > 1:
+                source = (
+                    source[:poster_helper_start]
+                    + helper_parts[0].rstrip()
+                    + "\n\n\n"
+                    + source[main_pipeline_start:]
+                )
         cell["source"] = source.splitlines(keepends=True) if source_was_list else source
         replaced = True
         break

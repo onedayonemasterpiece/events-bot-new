@@ -129,6 +129,197 @@ async def test_publish_guide_digest_uses_single_album_caption_when_text_fits(tmp
 
 
 @pytest.mark.asyncio
+async def test_publish_guide_digest_uses_generated_card_for_single_photo(tmp_path, monkeypatch):
+    media_path = tmp_path / "guide-photo.jpg"
+    media_path.write_bytes(b"raw-image")
+    slide_path = tmp_path / "slide_0.jpg"
+    slide_path.write_bytes(b"generated-card")
+
+    preview = {
+        "issue_id": 78,
+        "texts": ["Новые экскурсии гидов: 1 находка\n\n1. Карточка"],
+        "items": [{"id": 101, "date": "2026-04-19"}],
+        "media_items": [
+            {
+                "occurrence_id": 101,
+                "media_asset": {"path": str(media_path), "kind": "photo"},
+                "media_ref": {"kind": "photo"},
+            }
+        ],
+        "covered_occurrence_ids": [101],
+    }
+
+    async def fake_build_preview(db, *, family, limit=24, run_id=None):
+        del db, family, limit, run_id
+        return preview
+
+    async def fake_ensure_carousel(*, issue_id, rows, media_items):
+        assert issue_id == 78
+        assert rows == preview["items"]
+        assert media_items == preview["media_items"]
+        return [slide_path, tmp_path / "slide_1.jpg"]
+
+    monkeypatch.setattr(guide_service, "build_guide_digest_preview", fake_build_preview)
+    monkeypatch.setattr(guide_service, "_ensure_guide_digest_carousel_slide_paths", fake_ensure_carousel)
+
+    class _FakeConn:
+        def __init__(self) -> None:
+            self.row_factory = None
+
+        async def execute(self, sql, params=()):
+            del sql, params
+            return None
+
+        async def commit(self):
+            return None
+
+    class _FakeDB:
+        @asynccontextmanager
+        async def raw_conn(self):
+            yield _FakeConn()
+
+    class _Message:
+        def __init__(self, message_id: int) -> None:
+            self.message_id = message_id
+
+    class _DummyBot:
+        def __init__(self) -> None:
+            self.media_calls: list[tuple[str, list[object]]] = []
+
+        async def send_media_group(self, chat_id, media):
+            self.media_calls.append((chat_id, list(media)))
+            return [_Message(501)]
+
+        async def send_message(self, chat_id, text, **kwargs):
+            del chat_id, text, kwargs
+            raise AssertionError("single-card caption should fit into media post")
+
+        async def edit_message_caption(self, chat_id, message_id, caption, **kwargs):
+            del chat_id, message_id, caption, kwargs
+            raise AssertionError("no caption relink needed")
+
+    bot = _DummyBot()
+
+    await guide_service.publish_guide_digest(
+        _FakeDB(),
+        bot,
+        family="new_occurrences",
+        chat_id=None,
+        target_chat="@digest_target",
+    )
+
+    sent_media = bot.media_calls[0][1]
+    assert sent_media[0].media.filename == "slide_0.jpg"
+    assert sent_media[0].media.data == b"generated-card"
+
+
+@pytest.mark.asyncio
+async def test_publish_guide_digest_recovers_media_before_telegram_single_card(tmp_path, monkeypatch):
+    media_path = tmp_path / "guide-photo.jpg"
+    media_path.write_bytes(b"raw-image")
+    slide_path = tmp_path / "slide_0.jpg"
+    slide_path.write_bytes(b"generated-card")
+
+    recovered_media_items = [
+        {
+            "occurrence_id": 101,
+            "media_asset": {"path": str(media_path), "kind": "photo"},
+            "media_ref": {"kind": "photo"},
+        }
+    ]
+    preview = {
+        "issue_id": 79,
+        "texts": ["Новые экскурсии гидов: 1 находка\n\n1. Карточка"],
+        "items": [{"id": 101, "date": "2026-04-19"}],
+        "media_items": [],
+        "covered_occurrence_ids": [101],
+    }
+
+    async def fake_build_preview(db, *, family, limit=24, run_id=None):
+        del db, family, limit, run_id
+        return preview
+
+    async def fake_recover(db, occurrence_ids, *, vk_api_fn=None, bot=None):
+        del db, vk_api_fn
+        assert occurrence_ids == [101]
+        assert bot is not None
+        return 1
+
+    async def fake_media_items_for_occurrence_ids(db, occurrence_ids):
+        del db
+        assert occurrence_ids == [101]
+        return recovered_media_items
+
+    async def fake_ensure_carousel(*, issue_id, rows, media_items):
+        assert issue_id == 79
+        assert rows == preview["items"]
+        assert media_items == recovered_media_items
+        return [slide_path, tmp_path / "slide_1.jpg"]
+
+    monkeypatch.setattr(guide_service, "build_guide_digest_preview", fake_build_preview)
+    monkeypatch.setattr(guide_service, "recover_missing_vk_media_assets_for_occurrences", fake_recover)
+    monkeypatch.setattr(guide_service, "_media_items_for_occurrence_ids", fake_media_items_for_occurrence_ids)
+    monkeypatch.setattr(guide_service, "_ensure_guide_digest_carousel_slide_paths", fake_ensure_carousel)
+
+    class _FakeConn:
+        def __init__(self) -> None:
+            self.row_factory = None
+            self.executed: list[tuple[str, tuple[object, ...]]] = []
+
+        async def execute(self, sql, params=()):
+            self.executed.append((sql, tuple(params)))
+            return None
+
+        async def commit(self):
+            return None
+
+    class _FakeDB:
+        def __init__(self) -> None:
+            self.conn = _FakeConn()
+
+        @asynccontextmanager
+        async def raw_conn(self):
+            yield self.conn
+
+    class _Message:
+        def __init__(self, message_id: int) -> None:
+            self.message_id = message_id
+
+    class _DummyBot:
+        def __init__(self) -> None:
+            self.media_calls: list[tuple[str, list[object]]] = []
+
+        async def send_media_group(self, chat_id, media):
+            self.media_calls.append((chat_id, list(media)))
+            return [_Message(601)]
+
+        async def send_message(self, chat_id, text, **kwargs):
+            del chat_id, text, kwargs
+            raise AssertionError("recovered single-card media should carry the digest caption")
+
+        async def edit_message_caption(self, chat_id, message_id, caption, **kwargs):
+            del chat_id, message_id, caption, kwargs
+            raise AssertionError("no caption relink needed")
+
+    db = _FakeDB()
+    bot = _DummyBot()
+
+    result = await guide_service.publish_guide_digest(
+        db,
+        bot,
+        family="new_occurrences",
+        chat_id=None,
+        target_chat="@digest_target",
+    )
+
+    assert result["media_message_ids"] == [601]
+    sent_media = bot.media_calls[0][1]
+    assert sent_media[0].media.filename == "slide_0.jpg"
+    assert sent_media[0].media.data == b"generated-card"
+    assert any("UPDATE guide_digest_issue SET media_items_json" in sql for sql, _params in db.conn.executed)
+
+
+@pytest.mark.asyncio
 async def test_publish_guide_digest_keeps_empty_digest_bot_only(monkeypatch):
     preview = {
         "issue_id": 88,

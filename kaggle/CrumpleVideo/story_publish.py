@@ -286,6 +286,21 @@ def _story_upload_profile(config: dict[str, Any]) -> str:
     return STORY_UPLOAD_PROFILE_LEGACY_H264
 
 
+def _config_requires_telegram_client(config: dict[str, Any]) -> bool:
+    for target_cfg in config.get("targets") or []:
+        if not isinstance(target_cfg, dict):
+            continue
+        transport = str(target_cfg.get("transport") or "telethon").strip().lower()
+        if transport not in {
+            "vk_story",
+            "vk_wall",
+            "vk_wall_story",
+            "telegram_business",
+        }:
+            return True
+    return False
+
+
 def _validate_native_story_video(path: Path, *, log) -> Path:
     if not path.exists():
         raise RuntimeError("Story video publish requested but final video is missing")
@@ -477,6 +492,13 @@ async def _create_client(auth: dict[str, Any]) -> TelegramClient:
     return client
 
 
+async def _try_create_client(auth: dict[str, Any]) -> tuple[TelegramClient | None, str | None]:
+    try:
+        return await _create_client(auth), None
+    except Exception as exc:
+        return None, str(exc) or type(exc).__name__
+
+
 def _account_info(me: Any) -> dict[str, Any]:
     return {
         "id": getattr(me, "id", None),
@@ -571,13 +593,27 @@ def _extract_story_id(result: Any) -> int | None:
 
 def _extract_message_id(result: Any) -> int | None:
     if isinstance(result, (list, tuple)) and result:
-        return _extract_message_id(result[0])
+        for item in result:
+            message_id = _extract_message_id(item)
+            if message_id is not None:
+                return message_id
+        return None
     message_id = getattr(result, "id", None)
     if message_id is not None:
         try:
             return int(message_id)
         except Exception:
             return None
+    message = getattr(result, "message", None)
+    if message is not None:
+        message_id = _extract_message_id(message)
+        if message_id is not None:
+            return message_id
+    updates = getattr(result, "updates", None)
+    if updates:
+        message_id = _extract_message_id(updates)
+        if message_id is not None:
+            return message_id
     if isinstance(result, dict):
         for key in ("id", "message_id"):
             if key in result:
@@ -585,6 +621,11 @@ def _extract_message_id(result: Any) -> int | None:
                     return int(result[key])
                 except Exception:
                     return None
+        for key in ("message", "updates"):
+            if key in result:
+                message_id = _extract_message_id(result[key])
+                if message_id is not None:
+                    return message_id
     return None
 
 
@@ -894,15 +935,17 @@ def _publish_vk_story_video(
     config: dict[str, Any],
     target_cfg: dict[str, Any],
     media_path: Path,
+    source_url: str | None = None,
 ) -> dict[str, Any]:
     group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
-    server = _vk_api(
-        "stories.getVideoUploadServer",
-        auth=auth,
-        config=config,
-        group_id=str(group_id),
-        add_to_news="1",
-    )
+    params: dict[str, str] = {
+        "group_id": str(group_id),
+        "add_to_news": "1",
+    }
+    if source_url:
+        params["link_text"] = str(target_cfg.get("link_text") or "watch")
+        params["link_url"] = source_url
+    server = _vk_api("stories.getVideoUploadServer", auth=auth, config=config, **params)
     upload_url = server.get("upload_url") if isinstance(server, dict) else None
     if not upload_url:
         raise RuntimeError("VK stories.getVideoUploadServer returned no upload_url")
@@ -943,11 +986,49 @@ def _publish_vk_story_video(
         "story_id": item.get("id"),
         "owner_id": item.get("owner_id"),
         "expires_at": item.get("expires_at"),
+        "source_wall_post_url": source_url,
     }
 
 
+def _vk_wall_ids_from_url(url: str) -> tuple[int, int] | None:
+    import re
+
+    match = re.search(r"wall(-?\d+)_(\d+)", str(url or ""))
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _publish_vk_wall_story_forward(
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    target_cfg: dict[str, Any],
+    media_path: Path,
+    source_wall: dict[str, Any],
+) -> dict[str, Any]:
+    group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
+    source_url = str(source_wall.get("post_url") or "").strip()
+    if not source_url:
+        raise RuntimeError("VK wall-story target has no source wall post URL")
+    result = _publish_vk_story_video(
+        auth=auth,
+        config=config,
+        target_cfg=target_cfg,
+        media_path=media_path,
+        source_url=source_url,
+    )
+    result.update(
+        {
+            "source_wall_group_id": source_wall.get("group_id"),
+            "story_media_path": str(media_path),
+        }
+    )
+    return result
+
+
 async def _story_targets_report(
-    client: TelegramClient,
+    client: TelegramClient | None,
     *,
     auth: dict[str, Any],
     config: dict[str, Any],
@@ -955,12 +1036,17 @@ async def _story_targets_report(
     phase: str,
     media_path: Path | None = None,
     honor_delays: bool,
+    telegram_auth_error: str | None = None,
 ) -> dict[str, Any]:
-    me = await client.get_me()
-    account = _account_info(me)
-    log(
-        f"Story {phase} account: {_account_label(account)} premium={account.get('premium')}"
-    )
+    if client is not None:
+        me = await client.get_me()
+        account = _account_info(me)
+        log(
+            f"Story {phase} account: {_account_label(account)} premium={account.get('premium')}"
+        )
+    else:
+        account = {"telegram_auth_error": telegram_auth_error or "Telethon client unavailable"}
+        log(f"Story {phase} Telegram auth unavailable: {account['telegram_auth_error']}")
     report = _build_story_report(
         config,
         phase=phase,
@@ -968,6 +1054,7 @@ async def _story_targets_report(
         media_path=media_path,
     )
     previous_story: dict[str, Any] | None = None
+    previous_vk_wall: dict[str, Any] | None = None
     for idx, target_cfg in enumerate(config.get("targets") or []):
         peer_ref = str(target_cfg.get("peer") or "").strip()
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
@@ -996,7 +1083,7 @@ async def _story_targets_report(
             "ok": False,
         }
         try:
-            if transport in {"vk_story", "vk_wall"}:
+            if transport in {"vk_story", "vk_wall", "vk_wall_story"}:
                 group_id = _vk_group_id(peer_ref, auth=auth, config=config)
                 target_report["group_id"] = group_id
                 if media_path is not None:
@@ -1017,14 +1104,64 @@ async def _story_targets_report(
                             )
                         )
                     else:
-                        result = _publish_vk_wall_video(
-                            auth=auth,
-                            config=config,
-                            target_cfg=target_cfg,
-                            media_path=media_path,
-                        )
-                        target_report.update(result)
-                        log(f"✅ VK wall video published to {label}: {result['post_url']}")
+                        if transport == "vk_wall":
+                            result = _publish_vk_wall_video(
+                                auth=auth,
+                                config=config,
+                                target_cfg=target_cfg,
+                                media_path=media_path,
+                            )
+                            previous_vk_wall = result
+                            target_report.update(result)
+                            log(f"✅ VK wall video published to {label}: {result['post_url']}")
+                        else:
+                            source_wall = previous_vk_wall
+                            if source_wall is None:
+                                source_wall = _publish_vk_wall_video(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                )
+                                previous_vk_wall = source_wall
+                            try:
+                                result = _publish_vk_wall_story_forward(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                    source_wall=source_wall,
+                                )
+                            except Exception:
+                                source_ids = _vk_wall_ids_from_url(
+                                    str(source_wall.get("post_url") or "")
+                                )
+                                source_group_id = abs(source_ids[0]) if source_ids else None
+                                if source_group_id == group_id:
+                                    raise
+                                log(
+                                    f"⚠️ VK wall-story cross-community forward failed for {label}; "
+                                    "publishing local wall post and retrying"
+                                )
+                                source_wall = _publish_vk_wall_video(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                )
+                                previous_vk_wall = source_wall
+                                result = _publish_vk_wall_story_forward(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                    source_wall=source_wall,
+                                )
+                            target_report.update(result)
+                            log(
+                                f"✅ VK wall-story published to {label}: "
+                                f"{result['source_wall_post_url']}"
+                            )
                 else:
                     log(f"✅ VK {transport} preflight passed for {label} (club{group_id})")
                 target_report["ok"] = True
@@ -1063,7 +1200,56 @@ async def _story_targets_report(
                 target_report["ok"] = True
                 report["targets"].append(target_report)
                 continue
+            if transport == "telegram_story_message":
+                if client is None:
+                    raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
+                peer = await client.get_input_entity(peer_ref)
+                target_report["effective_peer"] = peer_ref
+                if media_path is not None:
+                    if not previous_story:
+                        raise RuntimeError(
+                            "telegram_story_message target requires a successful prior story target"
+                        )
+                    source_peer = previous_story["peer"]
+                    source_story_id = int(previous_story["story_id"])
+                    # Keep the feed post a clean story forward/share: adding a
+                    # message caption makes Telegram render an ordinary commented
+                    # story-message with a separate post view counter. The story
+                    # itself already carries its caption.
+                    media = types.InputMediaStory(peer=source_peer, id=source_story_id)
+                    target_report["source_story_id"] = source_story_id
+                    target_report["source_peer"] = previous_story.get("peer_ref")
+                    target_report["source_label"] = previous_story.get("label")
+                    result = await client(
+                        functions.messages.SendMediaRequest(
+                            peer=peer,
+                            media=media,
+                            message="",
+                        )
+                    )
+                    target_report["message_id"] = _extract_message_id(result)
+                    target_report["result"] = (
+                        result.to_dict() if hasattr(result, "to_dict") else str(result)
+                    )
+                    log(
+                        f"✅ Telegram story forwarded to chat {label}"
+                        + (
+                            f" (message_id={target_report['message_id']})"
+                            if target_report.get("message_id") is not None
+                            else ""
+                        )
+                    )
+                else:
+                    log(
+                        f"✅ Telegram story-message preflight passed for {label} "
+                        f"(peer={peer_ref})"
+                    )
+                target_report["ok"] = True
+                report["targets"].append(target_report)
+                continue
             if transport == "telegram_chat":
+                if client is None:
+                    raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
                 peer = await client.get_input_entity(peer_ref)
                 target_report["effective_peer"] = peer_ref
                 if media_path is not None:
@@ -1100,6 +1286,8 @@ async def _story_targets_report(
             else:
                 attempt_order = [peer_ref]
 
+            if client is None:
+                raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
             chosen: dict[str, Any] | None = None
             primary_error: Exception | None = None
             for attempt_idx, attempt_peer_ref in enumerate(attempt_order):
@@ -1271,7 +1459,11 @@ async def preflight_story_publish_from_kaggle(
 
     config = runtime["config"]
     auth = runtime["auth"]
-    client = await _create_client(auth)
+    if _config_requires_telegram_client(config):
+        client, telegram_auth_error = await _try_create_client(auth)
+    else:
+        client, telegram_auth_error = None, None
+        log("Story preflight has no Telethon targets; skipping Telegram client.")
     try:
         report = await _story_targets_report(
             client,
@@ -1281,15 +1473,17 @@ async def preflight_story_publish_from_kaggle(
             phase="preflight",
             media_path=None,
             honor_delays=False,
+            telegram_auth_error=telegram_auth_error,
         )
         if not report.get("fanout_ok", report.get("ok")):
             write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
-        try:
-            await client.disconnect()
-        except Exception:
-            logger.warning("story_publish: failed to disconnect client", exc_info=True)
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.warning("story_publish: failed to disconnect client", exc_info=True)
 
 
 async def publish_story_from_kaggle(
@@ -1323,7 +1517,11 @@ async def publish_story_from_kaggle(
                 output_dir=output_dir,
                 log=log,
             )
-    client = await _create_client(auth)
+    if _config_requires_telegram_client(config):
+        client, telegram_auth_error = await _try_create_client(auth)
+    else:
+        client, telegram_auth_error = None, None
+        log("Story publish has no Telethon targets; skipping Telegram client.")
     try:
         report = await _story_targets_report(
             client,
@@ -1333,11 +1531,13 @@ async def publish_story_from_kaggle(
             phase="publish",
             media_path=media_path,
             honor_delays=True,
+            telegram_auth_error=telegram_auth_error,
         )
         write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
-        try:
-            await client.disconnect()
-        except Exception:
-            logger.warning("story_publish: failed to disconnect client", exc_info=True)
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.warning("story_publish: failed to disconnect client", exc_info=True)

@@ -24,6 +24,7 @@ from video_announce.kaggle_client import (
     KERNELS_ROOT_PATH,
 )
 from kaggle_registry import register_job, remove_job
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
 from source_parsing.parser import TheatreEvent, parse_date_raw
 from source_parsing.handlers import (
     SourceParsingStats,
@@ -51,6 +52,7 @@ async def run_qtickets_kaggle_kernel(
     timeout_minutes: int = 20,
     poll_interval: int = 30,
     status_callback: Callable[[str, str, dict | None], Awaitable[None]] | None = None,
+    db: Database | None = None,
 ) -> tuple[str, list[str], float]:
     """Run Kaggle kernel for parsing Qtickets events.
     
@@ -70,12 +72,14 @@ async def run_qtickets_kaggle_kernel(
     kernel_path = KERNELS_ROOT_PATH / QTICKETS_KERNEL_FOLDER
     kernel_ref = "zigomaro/parse-qtickets"  # Default
     registered = False
+    ledger_run_id: str | None = None
 
     async def _notify(phase: str, status: dict | None = None) -> None:
         if not status_callback:
             return
         try:
-            await status_callback(phase, kernel_ref, status)
+            enriched = await enrich_kaggle_status_from_ledger(db, ledger_run_id, status)
+            await status_callback(phase, kernel_ref, enriched)
         except Exception:
             logger.warning("qtickets_kaggle: status callback failed phase=%s", phase)
     
@@ -111,15 +115,39 @@ async def run_qtickets_kaggle_kernel(
 
     # Create a unique temp directory for this run
     run_id = str(uuid.uuid4())[:8]
+    ledger_run_id = f"parser:{QTICKETS_KERNEL_FOLDER}:{run_id}"
     temp_kernel_dir = Path(tempfile.gettempdir()) / f"qtickets_kernel_{run_id}"
     
     # Copy kernel to temp directory
     shutil.copytree(kernel_path, temp_kernel_dir)
+    dataset_sources: list[str] = []
+    if db is not None:
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=ledger_run_id,
+            session_id=None,
+            kind="parser_kernel",
+            notebook=QTICKETS_KERNEL_FOLDER,
+            kernel_ref=kernel_ref,
+        )
+        username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if username and kaggle_run_config:
+            status_dataset = create_kaggle_status_dataset(
+                client,
+                username=username,
+                slug_prefix=f"status-{QTICKETS_KERNEL_FOLDER}",
+                run_id=run_id,
+                config=kaggle_run_config,
+            )
+            if status_dataset:
+                dataset_sources.append(status_dataset)
+        elif kaggle_run_config:
+            logger.warning("qtickets_kaggle: KAGGLE_USERNAME missing; status dataset skipped")
     
     try:
         # Push kernel to Kaggle
         try:
-            client.push_kernel(kernel_path=temp_kernel_dir)
+            client.push_kernel(kernel_path=temp_kernel_dir, dataset_sources=dataset_sources)
         except Exception as e:
             logger.error("qtickets_kaggle: push failed: %s", e)
             await _notify("push_failed")
@@ -295,6 +323,20 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     (item.get("parsed_time") or "").strip()
                     or (item.get("time") or "").strip()
                 )
+                end_date = (item.get("end_date") or "").strip() or None
+                if end_date:
+                    try:
+                        end_date = datetime.strptime(end_date, "%Y-%m-%d").date().isoformat()
+                    except ValueError:
+                        try:
+                            end_date = datetime.fromisoformat(end_date).date().isoformat()
+                        except ValueError:
+                            logger.warning(
+                                "qtickets_parse: invalid end_date=%r title=%s",
+                                end_date,
+                                title[:80],
+                            )
+                            end_date = None
 
                 if not parsed_date and date_raw:
                     try:
@@ -359,11 +401,13 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     description=(item.get("description") or "").strip(),
                     pushkin_card=False,
                     location=location,
+                    location_address=(item.get("location_address") or "").strip(),
                     age_restriction=age_restriction,
                     scene="",  # Qtickets events may not have scene info
                     source_type="qtickets",
                     parsed_date=parsed_date,
                     parsed_time=parsed_time,
+                    end_date=end_date,
                     ticket_price_min=price_min,
                     ticket_price_max=price_max,
                 )

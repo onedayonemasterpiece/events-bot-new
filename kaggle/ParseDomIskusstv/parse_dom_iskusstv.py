@@ -15,6 +15,49 @@ import re
 from datetime import date
 from typing import Optional
 
+def _load_status_loader():
+    try:
+        from kaggle_status_client import load_status_client as loader
+        return loader
+    except Exception as exc:
+        print(f"[kaggle_status] import failed: {exc}", flush=True)
+    import importlib.util
+    from pathlib import Path
+    for root in [Path(__file__).resolve().parent, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("events_bot_kaggle_status_client", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    print(f"[kaggle_status] loaded helper from {candidate}", flush=True)
+                    return module.load_status_client
+            except Exception as path_exc:
+                print(f"[kaggle_status] helper load failed from {candidate}: {path_exc}", flush=True)
+    return None
+
+
+load_status_client = _load_status_loader()
+
+STATUS_PROGRESS = {
+    "phase": "bootstrap",
+    "urls_total": 0,
+    "url_index": 0,
+    "events_parsed": 0,
+    "progress_percent": 0,
+    "progress_label": "подготовка",
+}
+STATUS_CLIENT = load_status_client(log=print) if load_status_client else None
+
 
 def install_libs():
     try:
@@ -234,54 +277,54 @@ def extract_prices_resilient(content: str, body_text: str) -> tuple[Optional[int
 
 async def parse_special_project_page(page, url: str) -> list[dict]:
     print(f"\n🏛 Загрузка: {url}")
-    
+
     try:
         await page.goto(url, timeout=60000, wait_until='networkidle')
         await page.wait_for_timeout(3000)
-        
+
         for _ in range(5):
             await page.mouse.wheel(0, 500)
             await page.wait_for_timeout(500)
         await page.evaluate("window.scrollTo(0, 0)")
         await page.wait_for_timeout(1000)
-        
+
         content = await page.content()
         soup = BeautifulSoup(content, 'html.parser')
-        
+
         title = await extract_title_resilient(page, soup)
         print(f"   📌 Название: {title}")
-        
+
         photos = await extract_images_resilient(page, content)
         print(f"   🖼 Фото: {len(photos)}")
-        
+
         description = await extract_description_resilient(page)
         print(f"   📝 Описание: {len(description)} символов")
-        
+
         age_restriction = ""
         age_match = re.search(r'(\d+)\s*\+', content)
         if age_match:
             age_restriction = f"{age_match.group(1)}+"
-        
+
         events: list[dict] = []
         date_pattern = re.compile(
             r'(\d{1,2})\s+(ЯНВАРЯ|ФЕВРАЛЯ|МАРТА|АПРЕЛЯ|МАЯ|ИЮНЯ|ИЮЛЯ|АВГУСТА|СЕНТЯБРЯ|ОКТЯБРЯ|НОЯБРЯ|ДЕКАБРЯ)\s+(\d{1,2}:\d{2})',
             re.IGNORECASE
         )
-        
+
         ticket_links = soup.find_all('a', href=re.compile(r'unifd-performance-id=\d+'))
         print(f"   🎫 Найдено ссылок на билеты: {len(ticket_links)}")
-        
+
         seen_dates = set()
-        
+
         for link in ticket_links:
             href = link.get('href', '')
             perf_match = re.search(r'unifd-performance-id=(\d+)', href)
             if not perf_match:
                 continue
-            
+
             perf_id = perf_match.group(1)
             ticket_url = f"{BASE_DOMAIN}/?unifd-performance-id={perf_id}"
-            
+
             date_raw = ""
             parent = link.parent
             for _ in range(7):
@@ -293,15 +336,15 @@ async def parse_special_project_page(page, url: str) -> list[dict]:
                     date_raw = f"{date_match.group(1)} {date_match.group(2)} {date_match.group(3)}"
                     break
                 parent = parent.parent
-            
+
             dedup_key = (date_raw, perf_id)
             if dedup_key in seen_dates:
                 continue
             seen_dates.add(dedup_key)
-            
+
             parsed_date, parsed_time = parse_date_time(date_raw)
             print(f"   📅 {date_raw} -> {parsed_date} {parsed_time} (ID: {perf_id})")
-            
+
             events.append({
                 "title": title,
                 "date_raw": date_raw,
@@ -317,10 +360,10 @@ async def parse_special_project_page(page, url: str) -> list[dict]:
                 "age_restriction": age_restriction,
                 "source_type": "dom_iskusstv"
             })
-        
+
         print(f"\n✅ Найдено событий: {len(events)}")
         return events
-        
+
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         import traceback
@@ -330,16 +373,16 @@ async def parse_special_project_page(page, url: str) -> list[dict]:
 
 async def check_ticket_availability(page, ticket_url: str) -> tuple[str, Optional[int], Optional[int]]:
     print(f"   🔍 Проверка: {ticket_url[:60]}...")
-    
+
     try:
         await page.goto(ticket_url, timeout=45000, wait_until='networkidle')
         await page.wait_for_timeout(5000)
-        
+
         try:
             await page.wait_for_selector('iframe, [class*="widget"], [class*="ticket"]', timeout=5000)
         except Exception:
             pass
-        
+
         frames = page.frames
         widget_content = ""
         for frame in frames:
@@ -348,38 +391,41 @@ async def check_ticket_availability(page, ticket_url: str) -> tuple[str, Optiona
                 widget_content += frame_content
             except Exception:
                 pass
-        
+
         content = await page.content()
         all_content = content + widget_content
         body_text = await page.inner_text("body")
         body_lower = body_text.lower()
-        
+
         status = "unknown"
         if any(sold in body_lower for sold in ["билетов нет", "sold out", "распродано"]):
             status = "sold_out"
         elif any(avail in body_lower for avail in ["купить", "в корзину", "выбрать"]):
             status = "available"
-        
+
         price_min, price_max = extract_prices_resilient(all_content, body_text)
-        
+
         if price_min and status == "unknown":
             status = "available"
-        
+
         print(f"      Status: {status}, Price: {price_min}-{price_max}")
         return status, price_min, price_max
-        
+
     except Exception as e:
         print(f"      ⚠️ Ошибка: {e}")
         return "unknown", None, None
 
 
 async def main():
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=lambda: dict(STATUS_PROGRESS))
     urls = []
     # Priority 1: urls.json (injected by bot)
     json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "urls.json")
     if os.path.exists("urls.json"):
         json_path = "urls.json"
-    
+
     if os.path.exists(json_path):
         try:
             with open(json_path, "r", encoding="utf-8") as f:
@@ -388,60 +434,95 @@ async def main():
         except Exception as e:
             print(f"⚠️ Ошибка чтения urls.json: {e}")
             urls = []
-            
+
     # Priority 2: ENV variable
     if not urls:
         urls_env = os.environ.get("DOM_ISKUSSTV_URLS", "")
         if urls_env:
             urls = [u.strip() for u in urls_env.split(",") if u.strip()]
-            
+
     # Fallback: Default test URL
     if not urls:
         urls = ["https://xn--b1admiilxbaki.xn--p1ai/skazka"]
-    
+
     print(f"📋 Парсинг {len(urls)} URL(s)...")
     print(f"🛡 Режим: с защитой от изменения селекторов")
+    STATUS_PROGRESS.update({
+        "phase": "parse",
+        "urls_total": len(urls),
+        "url_index": 0,
+        "progress_label": f"url 0/{len(urls)}",
+    })
     all_events = []
-    
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        )
-        page = await context.new_page()
-        ticket_page = await context.new_page()
-        
-        for url in urls:
-            events = await parse_special_project_page(page, url)
-            
-            for event in events:
-                if "unifd-performance-id" in event["url"]:
-                    status, price_min, price_max = await check_ticket_availability(ticket_page, event["url"])
-                    event["ticket_status"] = status
-                    event["ticket_price_min"] = price_min
-                    event["ticket_price_max"] = price_max
-            
-            all_events.extend(events)
-        
-        await browser.close()
-    
-    print("\n" + "=" * 60)
-    print(f"🎉 Результат: {len(all_events)} событий")
-    
-    for i, event in enumerate(all_events, 1):
-        print(f"\n{i}. {event['title']}")
-        print(f"   📅 {event['date_raw']} -> {event['parsed_date']} {event['parsed_time']}")
-        print(f"   🎫 {event['ticket_status']} | {event['ticket_price_min']}-{event['ticket_price_max']} ₽")
-    
-    if all_events:
-        df = pd.DataFrame(all_events)
-        df.to_json('dom_iskusstv_events.json', orient='records', force_ascii=False, indent=2)
-        print("\n💾 Сохранено в dom_iskusstv_events.json")
-    else:
-        with open('dom_iskusstv_events.json', 'w', encoding='utf-8') as f:
-            json.dump([], f)
-        print("⚠️ Создан пустой файл.")
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            )
+            page = await context.new_page()
+            ticket_page = await context.new_page()
+
+            for index, url in enumerate(urls, 1):
+                STATUS_PROGRESS.update({
+                    "url_index": index,
+                    "current_url": url,
+                    "progress_label": f"url {index}/{len(urls)} · события {len(all_events)}",
+                })
+                if STATUS_CLIENT and STATUS_CLIENT.enabled:
+                    STATUS_CLIENT.event("url_started", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
+                events = await parse_special_project_page(page, url)
+
+                for event in events:
+                    if "unifd-performance-id" in event["url"]:
+                        status, price_min, price_max = await check_ticket_availability(ticket_page, event["url"])
+                        event["ticket_status"] = status
+                        event["ticket_price_min"] = price_min
+                        event["ticket_price_max"] = price_max
+
+                all_events.extend(events)
+                STATUS_PROGRESS["events_parsed"] = len(all_events)
+                STATUS_PROGRESS["progress_label"] = f"url {index}/{len(urls)} · события {len(all_events)}"
+                if STATUS_CLIENT and STATUS_CLIENT.enabled:
+                    STATUS_CLIENT.event("url_done", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
+
+            await browser.close()
+
+        print("\n" + "=" * 60)
+        print(f"🎉 Результат: {len(all_events)} событий")
+
+        for i, event in enumerate(all_events, 1):
+            print(f"\n{i}. {event['title']}")
+            print(f"   📅 {event['date_raw']} -> {event['parsed_date']} {event['parsed_time']}")
+            print(f"   🎫 {event['ticket_status']} | {event['ticket_price_min']}-{event['ticket_price_max']} ₽")
+
+        STATUS_PROGRESS.update({
+            "phase": "write_report",
+            "events_parsed": len(all_events),
+            "progress_percent": 95,
+            "progress_label": f"запись отчёта · события {len(all_events)}",
+        })
+        if all_events:
+            df = pd.DataFrame(all_events)
+            df.to_json('dom_iskusstv_events.json', orient='records', force_ascii=False, indent=2)
+            print("\n💾 Сохранено в dom_iskusstv_events.json")
+        else:
+            with open('dom_iskusstv_events.json', 'w', encoding='utf-8') as f:
+                json.dump([], f)
+            print("⚠️ Создан пустой файл.")
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_PROGRESS.update({"progress_percent": 100, "progress_label": f"готово · события {len(all_events)}"})
+            STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
+    except Exception as exc:
+        STATUS_PROGRESS.update({"phase": "failed"})
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="failed", status="failed", progress=dict(STATUS_PROGRESS), message=str(exc))
+        raise
+    finally:
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.stop_alive()
 
 
 asyncio.get_event_loop().run_until_complete(main())

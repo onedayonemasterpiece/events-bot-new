@@ -1,0 +1,62 @@
+{
+  "incident_id": "INC-2026-06-13-kraftmarket-promo-zero-events",
+  "reported_at": "2026-06-13",
+  "production_symptoms": [
+    {
+      "source_url": "https://t.me/kraftmarket39/285",
+      "scanned_status": "skipped",
+      "scanned_error": "producer_zero_events:clear_event_signals",
+      "impact": "The promoted festival event for 80 историй о главном was absent from event_source/event rows and could not enter active promo campaigns."
+    },
+    {
+      "source_url": "https://t.me/kraftmarket39/287",
+      "scanned_status": "skipped",
+      "scanned_error": "producer_zero_events:clear_event_signals",
+      "impact": "The promoted educational event for Кантата was absent from event_source/event rows and could not enter active promo campaigns."
+    }
+  ],
+  "replay_cases": [
+    {
+      "name": "kraftmarket_285_transfer_notice_is_80_stories_event",
+      "source_type": "telegram",
+      "source_username": "kraftmarket39",
+      "source_message_id": 285,
+      "source_url": "https://t.me/kraftmarket39/285",
+      "message_date": "2026-06-12T10:58:15+00:00",
+      "message_text": "Друзья, вы этого просили, мы это сделали!\n\nЛекции Дмитрия Манкевича о становлении здравоохранения в первые годы становления области перенесена в Историко-художественный музей на ту же дату и то же время.\n\n19 июня 18:30\nИсторико-художественный музей, Клиническая 21, #Калининград\nЛекция проходит в рамках фестиваля «80 историй о главном».\nПЕРЕНОС, билеты действительны\nбесплатно, по регистрации\nhttps://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+      "expected_event": {
+        "title": "Калининградское здравоохранение в период становления области",
+        "date": "2026-06-19",
+        "time": "18:30",
+        "location_name": "Историко-художественный музей",
+        "location_address": "Клиническая 21",
+        "city": "Калининград",
+        "ticket_link": "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+        "event_type": "лекция",
+        "is_free": true,
+        "festival": "80 историй о главном"
+      }
+    },
+    {
+      "name": "kraftmarket_287_kantata_education_event",
+      "source_type": "telegram",
+      "source_username": "kraftmarket39",
+      "source_message_id": 287,
+      "source_url": "https://t.me/kraftmarket39/287",
+      "message_date": "2026-06-12T16:14:11+00:00",
+      "message_text": "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог стать великим композитором.\n\nСобытие проходит в рамках образовательной программы фестиваля Кантата.\n15 июня 12:45\nФилиал Третьяковской галереи, Парадная наб. 3, #Калининград\nБесплатно, по регистрации\nhttps://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+      "expected_event": {
+        "title": "Бородин. Гениальный дилетант",
+        "date": "2026-06-15",
+        "time": "12:45",
+        "location_name": "Филиал Третьяковской галереи",
+        "location_address": "Парадная наб. 3",
+        "city": "Калининград",
+        "ticket_link": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+        "event_type": "лекция",
+        "is_free": true,
+        "festival": "Кантата"
+      }
+    }
+  ]
+}

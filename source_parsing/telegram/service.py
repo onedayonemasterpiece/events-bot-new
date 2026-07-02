@@ -24,6 +24,12 @@ from sqlalchemy.exc import OperationalError
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from kaggle_registry import list_jobs, register_job, remove_job, update_job_meta
+from kaggle_status import (
+    create_kaggle_run_config,
+    enrich_kaggle_status_from_ledger,
+    format_kaggle_status_label,
+    write_kaggle_status_files,
+)
 from models import TelegramSource, TelegramSourceForceMessage
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
@@ -39,7 +45,7 @@ from source_parsing.telegram.handlers import (
     TelegramMonitorReport,
     process_telegram_results,
 )
-from video_announce.kaggle_client import KaggleClient
+from video_announce.kaggle_client import KaggleClient, await_dataset_ready
 
 from .split_secrets import encrypt_secret
 
@@ -422,11 +428,18 @@ async def _build_config_payload(
     db: Database,
     *,
     run_id: str | None = None,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
+    requested_usernames = [
+        username
+        for username in (normalize_tg_username(raw) for raw in (source_usernames or []))
+        if username
+    ]
     async with db.get_session() as session:
-        res = await session.execute(
-            select(TelegramSource).where(TelegramSource.enabled.is_(True))
-        )
+        stmt = select(TelegramSource).where(TelegramSource.enabled.is_(True))
+        if requested_usernames:
+            stmt = stmt.where(TelegramSource.username.in_(sorted(set(requested_usernames))))
+        res = await session.execute(stmt)
         sources = res.scalars().all()
         force_map: dict[int, list[int]] = {}
         source_ids = [src.id for src in sources if src.id is not None]
@@ -457,6 +470,8 @@ async def _build_config_payload(
     }
     if run_id:
         payload["run_id"] = run_id
+    if requested_usernames:
+        payload["requested_source_usernames"] = sorted(set(requested_usernames))
     return payload
 
 
@@ -613,6 +628,7 @@ def _create_dataset(
 
 async def _prepare_kaggle_datasets(
     *,
+    db: Database,
     client: KaggleClient,
     config_payload: dict[str, Any],
     secrets_payload: str,
@@ -621,6 +637,14 @@ async def _prepare_kaggle_datasets(
     encrypted, fernet_key = encrypt_secret(secrets_payload)
     username = _require_kaggle_username()
     slug_suffix = _slugify(run_id, max_len=16)
+    kaggle_run_config = await create_kaggle_run_config(
+        db,
+        run_id=f"tg_monitor:{run_id}",
+        session_id=None,
+        kind="telegram_monitor",
+        notebook="TelegramMonitor",
+        resource_leases=["telegram_session:s22"],
+    )
 
     def write_cipher(path: Path) -> None:
         (path / "config.json").write_text(
@@ -628,6 +652,7 @@ async def _prepare_kaggle_datasets(
             encoding="utf-8",
         )
         (path / "secrets.enc").write_bytes(encrypted)
+        write_kaggle_status_files(path, kaggle_run_config)
 
     def write_key(path: Path) -> None:
         (path / "fernet.key").write_bytes(fernet_key)
@@ -645,6 +670,21 @@ async def _prepare_kaggle_datasets(
         _build_dataset_slug(CONFIG_DATASET_KEY, run_id),
         f"Telegram Monitor Key {slug_suffix}",
         write_key,
+    )
+    await await_dataset_ready(
+        client,
+        slug_cipher,
+        expected_files=[
+            "config.json",
+            "secrets.enc",
+            "kaggle_run.json",
+            "kaggle_status_client.py",
+        ],
+    )
+    await await_dataset_ready(
+        client,
+        slug_key,
+        expected_files=["fernet.key"],
     )
     return slug_cipher, slug_key
 
@@ -839,7 +879,17 @@ def _prepared_kernel_path(kernel_path: Path) -> Path:
         prepared = tmp_path / kernel_path.name
         shutil.copytree(kernel_path, prepared)
         _stage_google_ai_bundle(prepared)
+        status_client_src = PROJECT_ROOT / "kaggle" / "kaggle_status_client.py"
+        if not status_client_src.exists():
+            raise FileNotFoundError(
+                f"Telegram Monitoring status helper missing: {status_client_src}"
+            )
+        shutil.copy2(status_client_src, prepared / "kaggle_status_client.py")
         _sync_notebook_entrypoint(prepared)
+        if not (prepared / "kaggle_status_client.py").exists():
+            raise RuntimeError(
+                f"Telegram Monitoring status helper was not staged: {prepared}"
+            )
         yield prepared
 
 
@@ -887,6 +937,30 @@ def _compute_kaggle_poll_timeout_minutes(*, sources_count: int) -> int:
     return min(max_minutes, max(1, timeout))
 
 
+def _is_transient_kaggle_status_error(exc: Exception) -> bool:
+    """Return True for status-poll errors where the Kaggle kernel may still run."""
+    if isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError"):
+        return True
+    if isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError"):
+        return True
+    if exc.__class__.__name__.endswith("Timeout"):
+        return True
+
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        status_code_int = int(status_code)
+    except Exception:
+        status_code_int = 0
+    if status_code_int in {429, 500, 502, 503, 504}:
+        return True
+
+    message = str(exc or "")
+    if "GetKernelSessionStatus" in message and re.search(r"\b(429|5\d\d)\b", message):
+        return True
+    return False
+
+
 async def _poll_kaggle_kernel(
     client: KaggleClient,
     kernel_ref: str,
@@ -910,6 +984,57 @@ async def _poll_kaggle_kernel(
         except Exception:
             logger.exception("tg_monitor: status callback failed phase=%s", phase)
 
+    async def _output_is_ready_after_status_error() -> dict | None:
+        if not run_id:
+            return None
+        output_dir = Path(tempfile.gettempdir()) / f"tg-monitor-poll-probe-{run_id}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            files = await asyncio.to_thread(
+                client.download_kernel_output,
+                kernel_ref,
+                path=str(output_dir),
+                force=True,
+            )
+        except Exception as exc:
+            logger.info(
+                "tg_monitor.kernel_poll_output_probe_failed run_id=%s kernel_ref=%s err=%s",
+                run_id,
+                kernel_ref,
+                str(exc)[:240],
+            )
+            return None
+        for name in files or []:
+            candidate = output_dir / name
+            if candidate.name != "telegram_results.json" or not candidate.exists():
+                continue
+            try:
+                payload = json.loads(candidate.read_text(encoding="utf-8"))
+            except Exception:
+                logger.info(
+                    "tg_monitor.kernel_poll_output_probe_bad_json run_id=%s kernel_ref=%s path=%s",
+                    run_id,
+                    kernel_ref,
+                    candidate,
+                    exc_info=True,
+                )
+                continue
+            output_run_id = str(payload.get("run_id") or "").strip()
+            if output_run_id != str(run_id):
+                logger.info(
+                    "tg_monitor.kernel_poll_output_probe_stale run_id=%s kernel_ref=%s output_run_id=%s",
+                    run_id,
+                    kernel_ref,
+                    output_run_id or "<empty>",
+                )
+                continue
+            return {
+                "status": "COMPLETE",
+                "_completion_source": "kaggle_output_after_status_error",
+                "_output_path": str(candidate),
+            }
+        return None
+
     await _notify("poll", {"_poll_timeout_minutes": timeout_minutes, "_elapsed_seconds": 0.0})
     while time.monotonic() < deadline:
         attempt += 1
@@ -919,11 +1044,7 @@ async def _poll_kaggle_kernel(
             consecutive_poll_errors = 0
         except Exception as exc:
             consecutive_poll_errors += 1
-            is_ssl = isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError")
-            is_conn = isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError")
-            is_timeout = exc.__class__.__name__.endswith("Timeout")
-            is_transient = is_ssl or is_conn or is_timeout
-            if not is_transient:
+            if not _is_transient_kaggle_status_error(exc):
                 raise
             msg = str(exc) or repr(exc)
             if len(msg) > 280:
@@ -948,6 +1069,20 @@ async def _poll_kaggle_kernel(
                     "_elapsed_seconds": time.monotonic() - started,
                 },
             )
+            ready_status = await _output_is_ready_after_status_error()
+            if ready_status:
+                ready_status["_poll_timeout_minutes"] = timeout_minutes
+                ready_status["_elapsed_seconds"] = time.monotonic() - started
+                last_status = dict(ready_status)
+                logger.info(
+                    "tg_monitor.kernel_poll_complete_from_output run_id=%s kernel_ref=%s attempt=%s elapsed=%.1fs",
+                    run_id,
+                    kernel_ref,
+                    attempt,
+                    time.monotonic() - started,
+                )
+                await _notify("complete", last_status)
+                return "complete", last_status, time.monotonic() - started
             await asyncio.sleep(min(60, 2 ** min(consecutive_poll_errors, 5)))
             continue
 
@@ -1458,16 +1593,7 @@ async def _import_results_with_retry(
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = _extract_kaggle_failure_message(status)
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _extract_kaggle_failure_message(status: dict | None) -> str:
@@ -1557,6 +1683,7 @@ def _format_event_block(
     video_counts = getattr(ctx, "video_count_by_event_id", None) or {}
     ticket_queue_by_eid = getattr(ctx, "ticket_queue_by_event_id", None) or {}
     fest_queue_by_src = getattr(ctx, "festival_queue_by_source_url", None) or {}
+    event_posts_by_eid = getattr(ctx, "event_posts_by_event_id", None) or {}
 
     def _ics_line(url: str | None, *, has_time: bool) -> str:
         value = (url or "").strip()
@@ -1565,12 +1692,24 @@ def _format_event_block(
             return f'ICS: <a href="{safe}">ics</a>'
         return "ICS: ⏳" if has_time else "ICS: —"
 
-    def _vk_post_line(url: str | None) -> str | None:
-        value = (url or "").strip()
-        if not value:
+    def _posts_line(eid: int, fallback_vk_url: str | None) -> str | None:
+        row = event_posts_by_eid.get(int(eid)) if eid else None
+        vk_url = (getattr(row, "vk_post_url", None) or "").strip() if row else ""
+        tg_url = (getattr(row, "tg_post_url", None) or "").strip() if row else ""
+        if not vk_url:
+            vk_url = (fallback_vk_url or "").strip()
+        if not (row or vk_url or tg_url):
             return None
-        safe = html.escape(value, quote=True)
-        return f'VK: <a href="{safe}">пост</a>'
+        parts: list[str] = []
+        if vk_url:
+            parts.append(f'VK <a href="{html.escape(vk_url, quote=True)}">пост</a>')
+        else:
+            parts.append("VK ⏳")
+        if tg_url:
+            parts.append(f'TG <a href="{html.escape(tg_url, quote=True)}">пост</a>')
+        else:
+            parts.append("TG ⏳")
+        return "Посты: " + " · ".join(parts)
 
     def _sources_lines(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
@@ -1669,9 +1808,9 @@ def _format_event_block(
             else:
                 lines.append(f"Лог: {html.escape(item.log_cmd)}")
         lines.append(_ics_line(item.ics_url, has_time=bool((item.time or "").strip())))
-        vk_line = _vk_post_line(getattr(item, "vk_post_url", None))
-        if vk_line:
-            lines.append(vk_line)
+        posts_line = _posts_line(eid_i, getattr(item, "vk_post_url", None))
+        if posts_line:
+            lines.append(posts_line)
         stats = item.fact_stats or {}
         try:
             photos = int(getattr(item, "photo_count", None) or 0)
@@ -1723,10 +1862,13 @@ def _format_event_block(
             parts: list[str] = []
             views = metrics.get("views")
             likes = metrics.get("likes")
+            comments = metrics.get("comments")
             if isinstance(views, int) and views >= 0:
                 parts.append(f"views={views}")
             if isinstance(likes, int) and likes >= 0:
                 parts.append(f"likes={likes}")
+            if isinstance(comments, int) and comments >= 0:
+                parts.append(f"comments={comments}")
             reactions = metrics.get("reactions")
             if isinstance(reactions, dict):
                 for k in ("👍", "❤", "❤️", "🔥"):
@@ -1865,11 +2007,14 @@ def _format_popular_posts_block(
         if isinstance(metrics, dict):
             v = metrics.get("views")
             l = metrics.get("likes")
+            c = metrics.get("comments")
             parts = []
             if isinstance(v, int) and v >= 0:
                 parts.append(f"views={v}")
             if isinstance(l, int) and l >= 0:
                 parts.append(f"likes={l}")
+            if isinstance(c, int) and c >= 0:
+                parts.append(f"comments={c}")
             if parts:
                 lines.append(f"  метрики: {html.escape(' '.join(parts))}")
         extracted = int(getattr(it, "events_extracted", 0) or 0)
@@ -1916,10 +2061,13 @@ def _format_metrics_line(metrics: dict[str, Any] | None) -> str | None:
     parts: list[str] = []
     views = metrics.get("views")
     likes = metrics.get("likes")
+    comments = metrics.get("comments")
     if isinstance(views, int) and views >= 0:
         parts.append(f"views={views}")
     if isinstance(likes, int) and likes >= 0:
         parts.append(f"likes={likes}")
+    if isinstance(comments, int) and comments >= 0:
+        parts.append(f"comments={comments}")
     return f"Метрики поста: {' '.join(parts)}" if parts else None
 
 
@@ -2912,6 +3060,7 @@ async def run_telegram_monitor(
     trigger: str = "manual",
     operator_id: int | None = None,
     ops_run_id: int | None = None,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> TelegramMonitorReport:
     started_ts = time.monotonic()
     run_id = run_id or uuid.uuid4().hex
@@ -2925,6 +3074,11 @@ async def run_telegram_monitor(
             operator_id=operator_id,
             details={"run_id": run_id},
         )
+    requested_usernames = [
+        username
+        for username in (normalize_tg_username(raw) for raw in (source_usernames or []))
+        if username
+    ]
     status = "error"
     report_loaded = False
     report = TelegramMonitorReport(run_id=run_id)
@@ -2959,6 +3113,7 @@ async def run_telegram_monitor(
                         chat_id=chat_id,
                         run_id=run_id,
                         send_progress=send_progress,
+                        source_usernames=requested_usernames or None,
                     )
                     report_loaded = True
                     status = _resolve_tg_monitor_ops_status(report, report_loaded=report_loaded)
@@ -3000,6 +3155,7 @@ async def run_telegram_monitor(
             },
             details={
                 "run_id": run_id,
+                "source_usernames": sorted(set(requested_usernames)),
                 "errors": list(report.errors or [])[:40],
             },
         )
@@ -3012,11 +3168,16 @@ async def _run_telegram_monitor_locked(
     chat_id: int | None = None,
     run_id: str,
     send_progress: bool = False,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> TelegramMonitorReport:
     logger.info("tg_monitor.lock_acquired run_id=%s", run_id)
     kaggle_status_message_id: int | None = None
     kaggle_kernel_ref = KERNEL_REF
-    config_payload = await _build_config_payload(db, run_id=run_id)
+    config_payload = await _build_config_payload(
+        db,
+        run_id=run_id,
+        source_usernames=source_usernames,
+    )
     sources = config_payload.get("sources") or []
     logger.info(
         "tg_monitor.config run_id=%s sources=%d telegraph_urls=%d",
@@ -3044,6 +3205,10 @@ async def _run_telegram_monitor_locked(
             "tg_monitor.sources sample=%s",
             [src.get("username") for src in sources[:5]],
         )
+    elif source_usernames:
+        requested = ", ".join(f"@{username}" for username in source_usernames)
+        raise RuntimeError(f"Telegram source scope has no enabled sources: {requested}")
+    auth_scope = _resolve_auth_bundle_env_key() or "TG_SESSION"
     secrets_payload = _build_secrets_payload()
     try:
         payload_keys = sorted((json.loads(secrets_payload) or {}).keys())
@@ -3075,6 +3240,11 @@ async def _run_telegram_monitor_locked(
             return
         if kernel_ref:
             kaggle_kernel_ref = kernel_ref
+        status = await enrich_kaggle_status_from_ledger(
+            db,
+            f"tg_monitor:{run_id}",
+            status,
+        )
         text = _format_kaggle_status_message(phase, kaggle_kernel_ref, status)
         try:
             if kaggle_status_message_id is None:
@@ -3093,6 +3263,7 @@ async def _run_telegram_monitor_locked(
     try:
         await raise_if_remote_telegram_session_busy(
             current_job_type="tg_monitoring",
+            current_auth_scope=auth_scope,
         )
     except RemoteTelegramSessionBusyError as exc:
         await _notify(
@@ -3111,6 +3282,7 @@ async def _run_telegram_monitor_locked(
     registered_recovery = False
     try:
         dataset_cipher, dataset_key = await _prepare_kaggle_datasets(
+            db=db,
             client=client,
             config_payload=config_payload,
             secrets_payload=secrets_payload,
@@ -3147,7 +3319,9 @@ async def _run_telegram_monitor_locked(
                     "run_id": run_id,
                     "chat_id": chat_id,
                     "pid": os.getpid(),
+                    "remote_telegram_auth_scope": auth_scope,
                     "dataset_slugs": [dataset_cipher, dataset_key],
+                    "source_usernames": sorted(set(source_usernames or [])),
                 },
             )
             registered_recovery = True
@@ -3285,14 +3459,47 @@ async def resume_telegram_monitor_jobs(
         try:
             meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
             owner_pid = meta.get("pid")
-            if owner_pid == os.getpid():
+            if owner_pid == os.getpid() and _RUN_LOCK.locked():
                 continue
 
             run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex
             try:
                 status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
-            except Exception:
+            except Exception as exc:
                 logger.exception("tg_monitor_recovery: status fetch failed kernel=%s", kernel_ref)
+                try:
+                    results_path = await _download_results(client, kernel_ref, run_id)
+                except Exception:
+                    logger.warning(
+                        "tg_monitor_recovery: output download after status failure failed kernel=%s run_id=%s",
+                        kernel_ref,
+                        run_id,
+                        exc_info=True,
+                    )
+                    continue
+                logger.info(
+                    "tg_monitor_recovery: status failed but output exists kernel=%s run_id=%s status_error=%s",
+                    kernel_ref,
+                    run_id,
+                    exc,
+                )
+                await run_telegram_import_from_results(
+                    db,
+                    results_path=results_path,
+                    bot=bot,
+                    chat_id=notify_chat_id,
+                    run_id=run_id,
+                    send_progress=bool(bot and notify_chat_id),
+                    trigger="recovery_import",
+                    operator_id=0,
+                )
+                await remove_job("tg_monitoring", kernel_ref)
+                recovered += 1
+                if bot and notify_chat_id:
+                    await bot.send_message(
+                        int(notify_chat_id),
+                        f"✅ tg_monitor recovery: kernel {kernel_ref} обработан по output после ошибки статуса",
+                    )
                 continue
 
             state = str(status.get("status") or "").lower()

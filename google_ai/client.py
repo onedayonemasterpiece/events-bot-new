@@ -19,6 +19,8 @@ import random
 import re
 import time
 import uuid
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Optional, TYPE_CHECKING
@@ -33,6 +35,10 @@ logger = logging.getLogger(__name__)
 IncidentNotifier = Callable[[str, dict[str, Any]], Any]
 
 _DEFAULT_ENV_CANDIDATE_CACHE: dict[tuple[str, tuple[str, ...]], tuple[str, ...] | None] = {}
+# Cache of active key ids for the emergency-overflow env names (keyed by the
+# normalized alias tuple). Separate from the scoped default-env cache so the
+# two lookups never clobber each other.
+_OVERFLOW_ENV_CANDIDATE_CACHE: dict[tuple[str, ...], tuple[str, ...] | None] = {}
 
 
 @dataclass
@@ -92,6 +98,7 @@ class GoogleAIClient:
     DEFAULT_MAX_OUTPUT_TOKENS = 8192
     DEFAULT_TPM_RESERVE_EXTRA = 1000
     DEFAULT_MULTIMODAL_IMAGE_TOKENS = 1600
+    DEFAULT_EMBEDDING_TPM_RESERVE_EXTRA = 64
     # Heuristic budget for prompt token estimation. We intentionally overestimate
     # to avoid passing Supabase reserve checks and then hitting provider 429
     # on input-token-per-minute quotas.
@@ -117,6 +124,13 @@ class GoogleAIClient:
     RESERVE_DIRECT_RETRY_ENV = "GOOGLE_AI_RESERVE_DIRECT_RETRY"
     RESERVE_DIRECT_SCHEMA_ENV = "GOOGLE_AI_RESERVE_DIRECT_SCHEMA"
     RESERVE_SCOPE_TO_DEFAULT_ENV_ENV = "GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV"
+    # Comma-separated env names whose keys may be borrowed as emergency overflow
+    # when the scoped lane is exhausted for the day. Empty = no overflow.
+    RESERVE_OVERFLOW_KEY_ENVS_ENV = "GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"
+    # A scoped reservation only spills into the overflow pool when it is blocked
+    # for a *day-level* reason (the lane is out of daily budget) — never for a
+    # per-minute spike (rpm/tpm), where waiting on the same key is correct.
+    _RESERVE_OVERFLOW_TRIGGER_REASONS = frozenset({"rpd", "no_keys"})
     PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
 
     # Process-local limiter (used when Supabase reserve RPC is missing/flaky).
@@ -195,6 +209,7 @@ class GoogleAIClient:
         default_env_var_name: Optional[str] = None,
         dry_run: bool = False,
         incident_notifier: Optional[IncidentNotifier] = None,
+        reserve_overflow_key_envs: Optional[Any] = None,
     ):
         """Initialize the client.
         
@@ -244,6 +259,14 @@ class GoogleAIClient:
         self.scope_reserve_to_default_env = (
             os.getenv(self.RESERVE_SCOPE_TO_DEFAULT_ENV_ENV, "1").strip().lower()
             in {"1", "true", "yes", "on"}
+        )
+        # Emergency overflow: when the scoped lane is out of daily budget, these
+        # extra env-named keys may be borrowed. Explicit constructor arg wins;
+        # otherwise fall back to the global env (unset = disabled).
+        self.reserve_overflow_key_envs = self._normalize_overflow_envs(
+            reserve_overflow_key_envs
+            if reserve_overflow_key_envs is not None
+            else os.getenv(self.RESERVE_OVERFLOW_KEY_ENVS_ENV, "")
         )
 
         # Cache missing Supabase RPCs to avoid noisy per-request fallbacks when
@@ -363,6 +386,131 @@ class GoogleAIClient:
             return []
         _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = ids
         return list(ids)
+
+    @staticmethod
+    def _normalize_overflow_envs(value: Any) -> list[str]:
+        """Parse the overflow-key-env configuration (CSV string or list)."""
+        if value is None:
+            return []
+        raw_items = value.split(",") if isinstance(value, str) else list(value)
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            name = str(item or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append(name)
+        return out
+
+    def _resolve_overflow_candidate_key_ids(
+        self,
+        *,
+        exclude: list[str] | None,
+    ) -> list[str] | None:
+        """Active key ids for the configured overflow env names, minus ``exclude``.
+
+        Returns the ids ordered by ``priority`` so the RPC borrows the
+        cheapest-priority spare key first. None when overflow is unconfigured,
+        unavailable, or fully covered by the scoped pool.
+        """
+        if self.supabase is None or not self.reserve_overflow_key_envs:
+            return None
+        env_names: list[str] = []
+        seen: set[str] = set()
+        for raw in self.reserve_overflow_key_envs:
+            for alias in self._default_env_aliases(raw):
+                if alias not in seen:
+                    seen.add(alias)
+                    env_names.append(alias)
+        env_tuple = tuple(env_names)
+        if not env_tuple:
+            return None
+        if env_tuple in _OVERFLOW_ENV_CANDIDATE_CACHE:
+            ids = _OVERFLOW_ENV_CANDIDATE_CACHE[env_tuple]
+        else:
+            try:
+                result = (
+                    self.supabase.table("google_ai_api_keys")
+                    .select("id, env_var_name, priority")
+                    .eq("is_active", True)
+                    .in_("env_var_name", list(env_tuple))
+                    .order("priority")
+                    .order("id")
+                    .execute()
+                )
+                rows = list(result.data or [])
+                ids = tuple(
+                    str(row.get("id"))
+                    for row in rows
+                    if row.get("id") and str(row.get("env_var_name") or "") in env_tuple
+                )
+            except Exception as exc:
+                logger.warning(
+                    "google_ai.overflow_candidates_failed envs=%s err=%s",
+                    ",".join(env_tuple),
+                    exc,
+                )
+                ids = None
+            _OVERFLOW_ENV_CANDIDATE_CACHE[env_tuple] = ids
+        if not ids:
+            return None
+        exclude_set = set(exclude or [])
+        out = [key_id for key_id in ids if key_id not in exclude_set]
+        return out or None
+
+    @staticmethod
+    def _reserve_result_from_data(data: dict[str, Any]) -> "ReserveResult":
+        return ReserveResult(
+            ok=data.get("ok", False),
+            api_key_id=data.get("api_key_id"),
+            env_var_name=data.get("env_var_name"),
+            key_alias=data.get("key_alias"),
+            minute_bucket=data.get("minute_bucket"),
+            day_bucket=data.get("day_bucket"),
+            limits=data.get("limits"),
+            used_after=data.get("used_after"),
+            blocked_reason=data.get("blocked_reason"),
+            retry_after_ms=data.get("retry_after_ms"),
+        )
+
+    async def _run_reserve_rpc(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call ``google_ai_reserve`` with short transient retries; return parsed row."""
+        retry_attempts = self._read_int_env(self.RESERVE_RPC_RETRY_ATTEMPTS_ENV, 2)
+        retry_attempts = max(1, min(retry_attempts, 6))
+        retry_base_delay_ms = self._read_int_env(self.RESERVE_RPC_RETRY_BASE_DELAY_MS_ENV, 350)
+        retry_base_delay_ms = max(50, min(retry_base_delay_ms, 5000))
+        rpc_error: Exception | None = None
+        result = None
+        for rpc_attempt in range(1, retry_attempts + 1):
+            try:
+                result = self.supabase.rpc("google_ai_reserve", payload).execute()
+                rpc_error = None
+                break
+            except Exception as exc:
+                rpc_error = exc
+                transient = self._is_transient_reserve_rpc_error(exc)
+                if not transient or rpc_attempt >= retry_attempts:
+                    raise
+                delay_ms = int(retry_base_delay_ms * (2 ** (rpc_attempt - 1)))
+                delay_ms += random.randint(0, max(30, retry_base_delay_ms // 2))
+                delay_ms = min(delay_ms, 7000)
+                logger.warning(
+                    "google_ai.reserve_rpc_transient_retry attempt=%s/%s delay_ms=%s err=%s",
+                    rpc_attempt,
+                    retry_attempts,
+                    delay_ms,
+                    str(exc)[:260],
+                )
+                await asyncio.sleep(delay_ms / 1000.0)
+        if result is None:
+            if rpc_error:
+                raise rpc_error
+            raise RuntimeError("google_ai_reserve returned no result")
+        data = result.data
+        if isinstance(data, list) and data:
+            data = data[0]
+        return data
 
     async def _call_supabase_rpc_with_retries(
         self,
@@ -679,6 +827,174 @@ class GoogleAIClient:
 
         raise last_error or ProviderError(error_type="unknown", error_message="Max retries exceeded")
     
+
+    async def embed_content_async(
+        self,
+        model: str,
+        text: str,
+        *,
+        output_dimensionality: int = 768,
+        task_type: Optional[str] = None,
+        title: Optional[str] = None,
+        candidate_key_ids: Optional[list[str]] = None,
+    ) -> tuple[tuple[float, ...], UsageInfo]:
+        """Generate a text embedding through the same reserve/finalize limiter.
+
+        Embedding provider calls must not bypass ``google_ai_reserve``.  The
+        Google embedding REST response does not currently expose token usage in
+        the shape we use here, so finalize records a conservative reserved-token
+        estimate as best-effort usage and does not reduce the reserved TPM.
+        """
+
+        request_uid = str(uuid.uuid4())
+        model_name = (model or "").strip()
+        limit_model = self._normalize_rate_limit_model(model_name)
+        provider_model, provider_model_name = self._resolve_provider_model(model_name or limit_model)
+        reserved_tpm = self._calculate_reserved_embedding_tpm(text)
+        ctx = RequestContext(
+            request_uid=request_uid,
+            consumer=self.consumer,
+            account_name=self.account_name,
+            model=limit_model,
+            requested_model=model_name or limit_model,
+            provider_model=provider_model,
+            provider_model_name=provider_model_name,
+            reserved_tpm=reserved_tpm,
+        )
+
+        last_error: Optional[Exception] = None
+        for attempt_no in range(1, self.max_retries + 1):
+            try:
+                return await self._attempt_embed(
+                    ctx=ctx,
+                    attempt_no=attempt_no,
+                    text=text,
+                    output_dimensionality=output_dimensionality,
+                    task_type=task_type,
+                    title=title,
+                    candidate_key_ids=candidate_key_ids,
+                )
+            except RateLimitError:
+                raise
+            except ReservationError:
+                raise
+            except ProviderError as exc:
+                last_error = exc
+                if int(getattr(exc, "status_code", 0) or 0) == 429:
+                    raise
+                can_retry = bool(exc.retryable) and attempt_no < self.max_retries
+                if can_retry:
+                    delay_ms = self.retry_delays_ms[min(attempt_no - 1, len(self.retry_delays_ms) - 1)]
+                    if exc.retry_after_ms:
+                        delay_ms = max(int(delay_ms), int(exc.retry_after_ms))
+                    await asyncio.sleep((delay_ms + random.randint(0, 100)) / 1000)
+                    self._log_event("google_ai.embedding_retry", ctx, attempt_no=attempt_no, error=str(exc))
+                    continue
+                raise
+        raise last_error or ProviderError(error_type="unknown", error_message="Max embedding retries exceeded")
+
+    async def _attempt_embed(
+        self,
+        *,
+        ctx: RequestContext,
+        attempt_no: int,
+        text: str,
+        output_dimensionality: int,
+        task_type: Optional[str],
+        title: Optional[str],
+        candidate_key_ids: Optional[list[str]],
+    ) -> tuple[tuple[float, ...], UsageInfo]:
+        reserve_result = await self._reserve(ctx, attempt_no, candidate_key_ids)
+        if not reserve_result.ok:
+            raise RateLimitError(
+                blocked_reason=reserve_result.blocked_reason or "unknown",
+                retry_after_ms=reserve_result.retry_after_ms,
+                model=ctx.model,
+                api_key_id=reserve_result.api_key_id,
+                minute_bucket=reserve_result.minute_bucket,
+                day_bucket=reserve_result.day_bucket,
+            )
+
+        ctx.api_key_id = reserve_result.api_key_id
+        self._log_event("google_ai.reserve_ok", ctx, attempt_no=attempt_no, reserve=reserve_result)
+
+        api_key = self._get_api_key(reserve_result.env_var_name)
+        if not api_key:
+            await self._notify_incident(
+                "missing_api_key",
+                ctx=ctx,
+                severity="critical",
+                message=f"API key not found: {reserve_result.env_var_name}",
+                details={"env_var_name": reserve_result.env_var_name},
+            )
+            raise ReservationError(f"API key not found: {reserve_result.env_var_name}")
+
+        await self._mark_sent(ctx, attempt_no)
+        start_time = _monotonic()
+        try:
+            if self.dry_run:
+                values = tuple(0.0 for _ in range(max(1, int(output_dimensionality))))
+            else:
+                values = await self._call_embedding_provider(
+                    api_key=api_key,
+                    model=ctx.requested_model or ctx.model,
+                    text=text,
+                    output_dimensionality=output_dimensionality,
+                    task_type=task_type,
+                    title=title,
+                )
+            duration_ms = int((_monotonic() - start_time) * 1000)
+        except Exception as exc:
+            duration_ms = int((_monotonic() - start_time) * 1000)
+            provider_error = self._classify_error(exc)
+            await self._finalize(ctx=ctx, attempt_no=attempt_no, usage=None, duration_ms=duration_ms, error=provider_error)
+            self._log_event("google_ai.embedding_call_error", ctx, attempt_no=attempt_no, duration_ms=duration_ms, error=provider_error)
+            raise provider_error
+
+        usage = UsageInfo(input_tokens=int(ctx.reserved_tpm or 0), output_tokens=0, total_tokens=int(ctx.reserved_tpm or 0))
+        await self._finalize(ctx=ctx, attempt_no=attempt_no, usage=usage, duration_ms=duration_ms)
+        self._log_event("google_ai.embedding_call_ok", ctx, attempt_no=attempt_no, duration_ms=duration_ms, usage=usage)
+        return values, usage
+
+    async def _call_embedding_provider(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        text: str,
+        output_dimensionality: int,
+        task_type: Optional[str],
+        title: Optional[str],
+    ) -> tuple[float, ...]:
+        def _sync_call() -> tuple[float, ...]:
+            provider_model, provider_model_name = self._resolve_provider_model(model)
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/{provider_model_name}:embedContent"
+            payload: dict[str, Any] = {
+                "model": provider_model_name,
+                "content": {"parts": [{"text": text}]},
+                "outputDimensionality": int(output_dimensionality),
+            }
+            if task_type:
+                payload["taskType"] = str(task_type)
+            if title:
+                payload["title"] = str(title)
+            request = urllib.request.Request(
+                endpoint,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                method="POST",
+                headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            )
+            timeout_sec = float(self.provider_timeout_seconds or 0.0) or None
+            with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+                response_payload = json.loads(response.read().decode("utf-8") or "{}")
+            values = response_payload.get("embedding", {}).get("values")
+            if not isinstance(values, list) or len(values) != int(output_dimensionality):
+                got = len(values) if isinstance(values, list) else "missing"
+                raise RuntimeError(f"Gemini embedding returned unexpected dimension: {got}")
+            return tuple(float(value) for value in values)
+
+        return await asyncio.to_thread(_sync_call)
+
     async def _attempt_generate(
         self,
         ctx: RequestContext,
@@ -793,11 +1109,22 @@ class GoogleAIClient:
     ) -> ReserveResult:
         """Reserve rate limit slot via Supabase RPC."""
         if not self.supabase:
-            # No Supabase = no rate limiting (for local dev)
-            logger.warning("No Supabase client, skipping rate limit reservation")
+            # No Supabase still must not become an unlimited production bypass:
+            # use the same process-local fail-fast limiter as the RPC-missing
+            # fallback unless a local caller explicitly disables it.
+            logger.warning("No Supabase client, using local rate limit reservation")
+            if self.allow_local_limiter_fallback:
+                return await self._local_reserve(
+                    ctx,
+                    attempt_no=attempt_no,
+                    key_alias="local-fallback-no-supabase",
+                    blocked_reason="supabase_unavailable",
+                )
             return ReserveResult(
                 ok=True,
                 env_var_name=self.default_env_var_name,
+                key_alias="reserve-fallback-no-supabase",
+                blocked_reason="supabase_unavailable",
             )
         was_cached_missing = self._reserve_rpc_missing
         if was_cached_missing:
@@ -882,66 +1209,69 @@ class GoogleAIClient:
         }
 
         try:
-            retry_attempts = self._read_int_env(self.RESERVE_RPC_RETRY_ATTEMPTS_ENV, 2)
-            retry_attempts = max(1, min(retry_attempts, 6))
-            retry_base_delay_ms = self._read_int_env(self.RESERVE_RPC_RETRY_BASE_DELAY_MS_ENV, 350)
-            retry_base_delay_ms = max(50, min(retry_base_delay_ms, 5000))
-            rpc_error: Exception | None = None
-            result = None
-            for rpc_attempt in range(1, retry_attempts + 1):
-                try:
-                    result = self.supabase.rpc("google_ai_reserve", payload).execute()
-                    rpc_error = None
-                    break
-                except Exception as exc:
-                    rpc_error = exc
-                    transient = self._is_transient_reserve_rpc_error(exc)
-                    if not transient or rpc_attempt >= retry_attempts:
-                        raise
-                    delay_ms = int(retry_base_delay_ms * (2 ** (rpc_attempt - 1)))
-                    delay_ms += random.randint(0, max(30, retry_base_delay_ms // 2))
-                    delay_ms = min(delay_ms, 7000)
-                    logger.warning(
-                        "google_ai.reserve_rpc_transient_retry consumer=%s model=%s attempt=%s/%s delay_ms=%s err=%s",
+            data = await self._run_reserve_rpc(payload)
+            result = self._reserve_result_from_data(data)
+
+            if result.ok:
+                if was_cached_missing:
+                    logger.info(
+                        "google_ai.reserve_rpc_recovered consumer=%s model=%s",
                         ctx.consumer,
                         ctx.model,
-                        rpc_attempt,
-                        retry_attempts,
-                        delay_ms,
-                        str(exc)[:260],
                     )
-                    await asyncio.sleep(delay_ms / 1000.0)
-            if result is None:
-                if rpc_error:
-                    raise rpc_error
-                raise RuntimeError("google_ai_reserve returned no result")
-            
-            data = result.data
-            if isinstance(data, list) and data:
-                data = data[0]
+                    self._reserve_rpc_missing_since = 0.0
+                    self._missing_rpc_logged.discard("google_ai_reserve")
+                return result
 
-            if was_cached_missing:
-                logger.info(
-                    "google_ai.reserve_rpc_recovered consumer=%s model=%s",
-                    ctx.consumer,
-                    ctx.model,
+            # Scoped lane refused. If it is out of *daily* budget (rpd/no_keys)
+            # and an emergency overflow pool is configured, retry the reservation
+            # once with the scoped + spare keys merged. The RPC orders by priority
+            # and skips the exhausted scoped key, so it borrows the cheapest spare
+            # key only when the lane is genuinely out of daily budget. The same
+            # request_uid/attempt_no is safe to reuse: a blocked reservation never
+            # writes a request_attempts row, so there is no idempotency conflict.
+            blocked = (result.blocked_reason or "").strip().lower()
+            if (
+                isinstance(scoped_candidate_key_ids, list)
+                and scoped_candidate_key_ids
+                and blocked in self._RESERVE_OVERFLOW_TRIGGER_REASONS
+            ):
+                overflow_ids = self._resolve_overflow_candidate_key_ids(
+                    exclude=scoped_candidate_key_ids
                 )
-                self._reserve_rpc_missing_since = 0.0
-                self._missing_rpc_logged.discard("google_ai_reserve")
-            
-            return ReserveResult(
-                ok=data.get("ok", False),
-                api_key_id=data.get("api_key_id"),
-                env_var_name=data.get("env_var_name"),
-                key_alias=data.get("key_alias"),
-                minute_bucket=data.get("minute_bucket"),
-                day_bucket=data.get("day_bucket"),
-                limits=data.get("limits"),
-                used_after=data.get("used_after"),
-                blocked_reason=data.get("blocked_reason"),
-                retry_after_ms=data.get("retry_after_ms"),
-            )
-            
+                if overflow_ids:
+                    payload["p_candidate_key_ids"] = list(scoped_candidate_key_ids) + overflow_ids
+                    overflow_data = await self._run_reserve_rpc(payload)
+                    overflow_result = self._reserve_result_from_data(overflow_data)
+                    if overflow_result.ok:
+                        if was_cached_missing:
+                            self._reserve_rpc_missing_since = 0.0
+                            self._missing_rpc_logged.discard("google_ai_reserve")
+                        self._log_event(
+                            "google_ai.reserve_overflow_used",
+                            ctx,
+                            attempt_no=attempt_no,
+                            reserve=overflow_result,
+                        )
+                        await self._notify_incident(
+                            "reserve_overflow_used",
+                            ctx=ctx,
+                            severity="warning",
+                            message=(
+                                f"Scoped lane out of daily budget ({blocked}); "
+                                f"borrowed spare key {overflow_result.env_var_name}"
+                            ),
+                            details={
+                                "blocked_reason": blocked,
+                                "overflow_env_var_name": overflow_result.env_var_name,
+                            },
+                        )
+                        return overflow_result
+                    # Overflow pool also exhausted: surface the overflow verdict.
+                    return overflow_result
+
+            return result
+
         except Exception as e:
             if (
                 self.allow_reserve_fallback
@@ -1135,7 +1465,7 @@ class GoogleAIClient:
         blocked_reason: str,
     ) -> ReserveResult:
         """Process-local limiter used when Supabase reserve RPC is missing/flaky."""
-        rpm_limit = self._read_local_limit(self.LOCAL_RPM_ENV, 20)
+        rpm_limit = self._read_local_limit(self.LOCAL_RPM_ENV, 15)
         tpm_limit = self._read_local_limit(self.LOCAL_TPM_ENV, 12000)
         rpd_limit = self._read_local_limit(self.LOCAL_RPD_ENV, 5000)
 
@@ -1522,20 +1852,72 @@ class GoogleAIClient:
             except Exception:
                 pass
 
-            # Last resort: stringify.
+            # No usable answer text. This happens when the model returns only
+            # thought-channel parts (e.g. Gemma 4 spent the whole output-token
+            # budget "thinking" and never emitted an answer part) or an otherwise
+            # empty candidate. NEVER stringify the raw SDK response here: str(resp)
+            # dumps the entire GenerateContentResponse repr (thought text, token
+            # counts, http headers) and callers treat that as model output, which
+            # is exactly how the SDK repr leaked into public posts. It also
+            # silently defeats the empty_response guard below. Return "" so the
+            # caller raises ProviderError and retries / falls back.
+            return ""
+
+        def _diagnose_empty(resp: Any) -> str:
+            """Best-effort, repr-safe summary of why extraction yielded no text.
+
+            Must not embed the raw response (that is the leak we are fixing): only
+            small scalar signals (finish reasons, whether any thought-only part was
+            present, token counts) so the failure is visible in logs/metrics.
+            """
+            finish_reasons: list[str] = []
+            had_thought_part = False
+            had_any_part = False
             try:
-                return str(resp).strip()
+                for cand in list(getattr(resp, "candidates", None) or []):
+                    fr = getattr(cand, "finish_reason", None)
+                    if fr is None and isinstance(cand, dict):
+                        fr = cand.get("finish_reason")
+                    if fr is not None:
+                        finish_reasons.append(getattr(fr, "name", None) or str(fr))
+                    content = getattr(cand, "content", None)
+                    if content is None and isinstance(cand, dict):
+                        content = cand.get("content")
+                    cand_parts = getattr(content, "parts", None)
+                    if cand_parts is None and isinstance(content, dict):
+                        cand_parts = content.get("parts")
+                    for part in list(cand_parts or []):
+                        had_any_part = True
+                        th = getattr(part, "thought", None)
+                        if th is None and isinstance(part, dict):
+                            th = part.get("thought")
+                        if th:
+                            had_thought_part = True
             except Exception:
-                return ""
+                pass
+            meta = getattr(resp, "usage_metadata", None)
+            thoughts_tokens = getattr(meta, "thoughts_token_count", None) if meta else None
+            return (
+                f"finish_reasons={finish_reasons or None} "
+                f"thought_only={had_thought_part and not response_text and had_any_part} "
+                f"thoughts_token_count={thoughts_tokens}"
+            )
 
         usage = _get_usage(response)
         response_text = _extract_text(response)
         if not response_text:
+            diag = _diagnose_empty(response)
+            logger.warning(
+                "google_ai.empty_response requested_model=%s provider_model_name=%s %s",
+                model,
+                model_name,
+                diag,
+            )
             raise ProviderError(
                 error_type="empty_response",
                 error_message=(
                     "Provider returned empty text "
-                    f"(requested_model={model}, provider_model_name={model_name})"
+                    f"(requested_model={model}, provider_model_name={model_name}; {diag})"
                 ),
                 retryable=True,
             )
@@ -1635,6 +2017,12 @@ class GoogleAIClient:
         if blob_count > 0:
             est += blob_count * int(self.DEFAULT_MULTIMODAL_IMAGE_TOKENS)
         return max(1, est)
+
+
+    def _calculate_reserved_embedding_tpm(self, text: Any) -> int:
+        input_est = self._estimate_prompt_tokens(text)
+        extra = self._read_int_env("GOOGLE_AI_EMBEDDING_TPM_RESERVE_EXTRA", self.DEFAULT_EMBEDDING_TPM_RESERVE_EXTRA)
+        return max(1, int(input_est) + int(extra))
 
     def _calculate_reserved_tpm(self, *, prompt: Any, max_output_tokens: int) -> int:
         """Calculate tokens to reserve for TPM check.

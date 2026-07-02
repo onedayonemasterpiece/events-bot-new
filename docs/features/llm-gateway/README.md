@@ -29,6 +29,11 @@
     * при transient сетевых сбоях (`SSL handshake timeout`, `server disconnected`, `EOF`) reserve RPC сначала делает короткие retry и только затем переключается в local fallback:
       - `GOOGLE_AI_RESERVE_RPC_RETRY_ATTEMPTS` (по умолчанию `2`);
       - `GOOGLE_AI_RESERVE_RPC_RETRY_BASE_DELAY_MS` (по умолчанию `350` мс, exponential backoff + jitter).
+    * если клиент создан без Supabase (`supabase_client=None`), это больше не
+      считается unlimited local-dev режимом: по умолчанию включается тот же
+      process-local fail-fast limiter. Его дефолтный RPM равен `15`, чтобы
+      случайный server-side fallback не пробивал Gemma 4 free-tier лимит; для
+      локальных probes можно явно переопределить `GOOGLE_AI_LOCAL_RPM`.
 *   **Совместимость с legacy Supabase-проектами (без миграций):**
     * если отсутствует `google_ai_finalize`, клиент автоматически переключается на `finalize_google_ai_usage`;
     * fallback на legacy finalize применяется не только для первого запроса, а для всех следующих в процессе;
@@ -137,12 +142,25 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     * Для provider-side `429` это тоже правило: ждать/деферить должен вызывающий workflow (`event_parse`, `vk_auto_queue`, Smart Update), а не сам `GoogleAIClient`.
 *   **Structured Logging**: Все вызовы логируются в формате JSON Lines для анализа.
 *   **Operational visibility**: bypass reserve логируется отдельным событием `google_ai.reserve_fallback_no_rpc` — это сигнал, что RPC-схему нужно починить.
+    * `google_ai.reserve_ok` в production не должен иметь `api_key_id=null` /
+      `used_after=null`, кроме явно локальных probes; это regression signal для
+      `INC-2026-06-28-google-ai-gemma4-rpm-overrun`.
 *   **Incident alerts**: критические сбои LLM отправляются в админ-чат как инцидент (`notify_llm_incident`).
     * ENV `GOOGLE_AI_INCIDENT_NOTIFICATIONS=0` — выключить инцидент-алерты.
     * ENV `GOOGLE_AI_INCIDENT_COOLDOWN_SECONDS` — антиспам/дедуп уведомлений (по умолчанию 900 сек).
 *   **Model fallback chain**: при финальном провале основной модели клиент переключается на запасные модели из `GOOGLE_AI_FALLBACK_MODELS` (через запятую) и логирует `google_ai.model_fallback`.
     * Gateway уважает `requested_model`: первой в цепочке всегда идёт запрошенная модель, а запасные модели остаются только fallback-хвостом.
     * Gemma-модели меньше `12b` (`1b/4b`) автоматически исключаются из цепочки и не используются для текста.
+*   **Emergency overflow keys**: `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS` может дать scoped consumer запасные ключи только при
+    daily-budget отказах (`rpd`/`no_keys`). Per-minute (`rpm`/`tpm`) не расширяется, чтобы параллельные задачи не пробивали
+    минутные лимиты. Каждый env в этом списке должен существовать и как runtime secret, и как активная строка
+    `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC.
+*   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
+    переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
+    incident kill-switch, не steady-state policy.
+*   **Smart Update provider retry cap**: `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES` отдельно ограничивает внутренние
+    `GoogleAIClient` retry для массового Smart Update (default `1`). Это не запрещает 4o fallback: оно предотвращает
+    умножение Gemma RPM/RPD на provider `500/504`, после чего маленький 4o budget остаётся последним аварийным хвостом.
 
 ### 3.1. Логирование конкретной модели (обязательно)
 В JSON-логах клиента теперь фиксируются **оба** имени модели:

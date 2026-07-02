@@ -76,8 +76,21 @@
 - scheduled CherryFlash launch contract:
   - manual/operator launch may still use a background render task so the Telegram UI stays responsive;
   - scheduled `popular_review` must wait through the pre-Kaggle phase until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug such as `zigomaro/cherryflash`;
-  - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`);
-  - same-day startup/watchdog catch-up must retry a missed CherryFlash slot when today's matching session failed before handoff, but must skip duplicate reruns when a remote dataset/kernel handoff already exists for today's slot, even if the local session status later became misleading.
+  - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`), and a successful `ops_run` handoff is not delivery evidence by itself;
+  - same-day startup/watchdog catch-up may retry a missed CherryFlash slot when today's matching session failed before render/output evidence; it must not launch a full replacement Kaggle run after `video_url`, terminal Kaggle ledger evidence (`done`/`partial` with `terminal_at`), `DONE`, `PUBLISH_BLOCKED`, `PUBLISHED_TEST`, or `PUBLISHED_MAIN`. Post-render bot/test delivery failures and deterministic fanout blockers such as `BOOSTS_REQUIRED` are narrow publish/reconcile problems, not rerender signals.
+  - poller-side terminal classification must prefer durable artifacts over
+    provider status alone: repeated Kaggle `UNKNOWN` status, status HTTP 5xx
+    collapsed into an empty status response, timeout, or Kaggle `error`/`failed`
+    are checked against the notebook heartbeat/status ledger first. A fresh
+    non-terminal heartbeat (default freshness window: 15 minutes) means the
+    notebook is still alive and the poller keeps waiting. Without fresh
+    heartbeat, the poller performs an output probe before marking `FAILED`.
+    If a video/report is downloadable, classify from the artifact/report; if a
+    story preflight/publish report names a deterministic target blocker such as
+    `BOOSTS_REQUIRED`, use `PUBLISH_BLOCKED`. Explicit operator cancellation
+    stays cancelled/failed and is not output-recovered.
+  - CherryFlash story fanout is target-independent: an unavailable or unauthorized Telethon session may fail Telegram story/channel targets, but it must not abort configured VK wall or VK story targets that can publish with VK credentials.
+  - public CherryFlash captions must carry the release/session number and the target date in `D month` form: `Видеоанонс #<session_id> · <D month>` (for example, `Видеоанонс #677 · 15 июня`). The `telegram_chat` post target receives this exact caption; the VK wall target may expand it with the normal VK hashtag/date block, but must keep the same numbered/date title.
   - if CherryFlash fails or leaves no local-day `ops_run` because SQLite reports `database or disk is full`, treat it as `INC-2026-05-05-cherryflash-disk-full`: collect Fly `/data` evidence, restore free space and SQLite write health first, verify `/healthz`, then perform the same-day compensating CherryFlash run and collect dataset/kernel/story evidence.
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;
@@ -667,14 +680,17 @@ This section captures the latest intro-direction request as an explicit delta to
 ### Publication target
 
 - Production publication is a mixed Telegram/VK fanout, not a single Telegram-only phase target.
-- The current ordered chain interleaves surfaces with 5-minute pauses so VK users do not wait for the whole Telegram fanout:
+- The current ordered chain interleaves Telegram and VK surfaces with short
+  per-target pauses so VK users do not wait for the whole Telegram fanout:
   - upload primary Telegram story to `@kenigevents`;
+  - forward that just-published story into the `@kenigevents` channel feed as a story-message post (not as a separate raw MP4 upload);
   - after `300` seconds publish the same video as a VK wall post in `https://vk.com/club231828790`;
   - after `300` seconds repost the Telegram story to `@lovekenig`;
   - after `300` seconds publish VK story in `https://vk.com/club231828790`;
   - after `300` seconds repost the Telegram story to `@loving_guide39`;
   - after `300` seconds publish VK story in `https://vk.com/klgdevents`;
-  - after `300` seconds repost the Telegram story to `@catwithbag`.
+  - after `300` seconds repost the Telegram story to `@catwithbag`;
+  - after `600` seconds repost the Telegram story to `@i_love_kaliningrad`.
 - The two VK story targets therefore stay `600` seconds apart even though the overall queue alternates Telegram and VK every `300` seconds.
 - Telegram channel-story failures such as `BOOSTS_REQUIRED` must not abort CherryFlash publication for the rest of the surfaces. Business partner stories and VK publications are independent best-effort fanout targets and should continue even if the main Telegram channel lacks story boosts.
 
@@ -702,15 +718,57 @@ This section captures the latest intro-direction request as an explicit delta to
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
   - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
-  - the shared helper supports `telethon`, `telegram_business`, `vk_wall`, and `vk_story` targets in one ordered queue;
-  - the mixed queue uses `300` second per-target delays and relies on target order to maintain the required `600` seconds between VK story publications;
-  - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall post; `vk_story` uploads via `stories.getVideoUploadServer` and finalizes with `stories.save`;
-  - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`;
+  - the shared helper supports `telethon`, `telegram_business`, `telegram_chat`,
+    `vk_wall`, legacy direct `vk_story`, and wall-linked `vk_wall_story` targets
+    in one ordered queue;
+  - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall
+    post; `vk_wall_story` then uploads the same mp4 as a VK video story with
+    `link_url` pointing at the previous wall post.
+    If VK rejects cross-community linking, the helper creates a wall post in
+    the target community and links that local post instead;
+  - for `popular_review`, Telegram fanout starts with a story upload to
+    `@kenigevents`, then almost immediately posts the same final mp4 to the
+    `@kenigevents` channel body through the shared `telegram_chat` target;
+  - for `popular_review`, VK fanout has exactly one wall post target:
+    `vk:club231828790:wall` with the generated `Видеоанонс` caption, then a
+    linked video story in the same community immediately, then after `600`
+    seconds the same linked video story into `vk.com/klgdevents` or a local
+    `klgdevents` wall-post fallback. The CrumpleVideo
+    `vk:kenigeventsofficial:wall` / `crumple_official` target must not be part
+    of the CherryFlash override;
+  - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишакалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
+  - `telegram_story_message` uses the previous successful Telegram story as `InputMediaStory` and sends that story into a channel/chat feed with an empty `message`/comment; it must not call the raw `send_file()`/MP4 upload path, and it must not add a separate caption that can make Telegram show a separate post-view counter instead of the story-first surface.
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
   - Business targets are optional fanout for CherryFlash: missing boosts, missing rights, or a missing Business connection must be visible in the per-target report but must not prevent Telegram channel targets, VK wall posts, or VK stories from proceeding.
   - Encrypted Bot API secrets must be co-located with the session `story_publish.json` inside the same `cherryflash-session-*` dataset so Kaggle cannot preflight against stale static story secrets.
+  - Parallel scheduled CherryFlash runs use the shared video-lane contract:
+    `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` is the ordered pool of Telegram auth
+    bundles, `selection_params._video_lane_auth_env` records the actual lane for
+    that session, and `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` maps the same
+    lane index to an isolated existing Kaggle kernel target. A lane target must
+    be precreated before it is put into the production env; relying on the first
+    normal `kernels_push` to create a slug can fail with `Notebook not found`
+    after the session dataset has already been created. Production now
+    preflights target availability before dataset creation and blocks the
+    session as `PUBLISH_BLOCKED` if the configured target is missing. Current
+    two-lane production mapping is `zigomaro/cherryflash` plus
+    `zigomaro/cherryflash-video-lane-1`. Without lane kernel refs, CherryFlash
+    runs that resolve to the same remote Kaggle slug remain serialized to avoid
+    overwritten outputs/polling. The server-side selector must treat both
+    `RENDERING` video sessions and active, non-expired `kaggle_resource_lease`
+    rows for `telegram_session:env:<ENV>` as busy lanes before pushing the next
+    notebook, so a manually cancelled Kaggle run cannot immediately recycle a
+    still-held Telegram auth session.
+  - Scheduled CherryFlash/partner attempts must not create another `SELECTED`
+    session when all configured lanes are busy. The scheduler records an
+    explicit `ops_run.status='skipped'` with `skip_reason='video_lanes_busy'`
+    and retries from the normal watchdog cadence instead of multiplying
+    session rows or Kaggle datasets. If a scheduled session is created, it
+    carries a stable `scheduled_slot_key` (`product:profile:target_date:slot`)
+    and the scheduler must not mark the corresponding `ops_run` successful
+    until the Kaggle dataset and non-local kernel handoff are confirmed.
   - Business story posts must pass Bot API `post_to_chat_page=true`; without it, Telegram can accept `postStory` and show an active story while not exposing it on the account page/profile story list in the expected way.
   - Kaggle story runtime startup must log enough non-secret matching evidence to diagnose publication fanout before render starts: config/cipher/key paths, target labels already present in `story_publish.json`, business target count, encrypted business secret count, and missing business connection hashes. Raw `business_connection_id`, Telegram user ids, bot tokens, and personal account handles must not be printed.
 - Sibling profile rule:
@@ -753,6 +811,18 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] One successful run publishes no more than `6` and no fewer than `2` events.
 - [ ] A run with only `0` or `1` eligible event does not publish a video.
 - [ ] Every selected event belongs to the same candidate universe that `/popular_posts` would surface at build time.
+- [ ] Active `video_general` promo campaigns may add renderable future events
+  outside the organic popularity/date window to the CherryFlash-family
+  selection, including `tg_chat_author` campaigns such as
+  `kraftmarket39:@LANGEANNA`.
+- [ ] The CherryFlash promo resolver distributes the two-item global promo
+  budget fairly across eligible campaigns/activities before giving any one
+  campaign a second item.
+- [ ] Partner CherryFlash tracks keep their topic/profile filters as hard gates:
+  promo candidates that do not match the partner filter are skipped rather than
+  admitted as off-filter exceptions.
+- [ ] CrumpleVideo remains period-bound for promo: author/festival promo must
+  not expand `/v tomorrow` beyond its normal selection window.
 - [ ] No event repeats inside one release.
 - [ ] No event repeats if its previous publication in this mode is less than `7` days old.
 - [ ] The same event can return after the cooldown expires.
@@ -770,7 +840,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
-- [ ] Story autopublish publishes the current mixed ordered fanout `@kenigevents -> VK wall club231828790 -> @lovekenig -> VK story club231828790 -> @loving_guide39 -> VK story klgdevents -> @catwithbag`, preserving `600` second spacing between the two VK story targets.
+- [ ] Story autopublish publishes the current mixed ordered fanout `@kenigevents -> VK wall club231828790 -> @lovekenig -> VK story club231828790 -> @loving_guide39 -> VK story klgdevents -> @catwithbag -> @i_love_kaliningrad`, preserving `600` second spacing between the two VK story targets and the final `@i_love_kaliningrad` repost.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
 - [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 

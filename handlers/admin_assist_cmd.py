@@ -424,6 +424,13 @@ def _allowed_actions() -> dict[str, dict[str, Any]]:
             "args_schema": {"args_text": {"type": "args_text", "required": True}},
             "examples": ["vklink 123 https://vk.com/wall-1_2", "привяжи vk ссылку к событию 123"],
         },
+        "cover": {
+            "command": "/cover",
+            "risk": "mutating",
+            "desc": "Управлять динамической обложкой VK: status/preview/apply/save_default/restore/history/on/off.",
+            "args_schema": {"args_text": {"type": "args_text", "required": False}},
+            "examples": ["покажи cover preview", "сохрани текущую cover как дефолт", "обнови обложку VK", "cover history"],
+        },
         "setchannel": {
             "command": "/setchannel",
             "risk": "mutating",

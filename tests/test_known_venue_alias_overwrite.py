@@ -65,6 +65,27 @@ def test_unknown_venue_left_alone() -> None:
     }
 
 
+def test_generic_city_park_not_fuzzy_bound_to_zelenogradsk_culture_center() -> None:
+    """Regression for INC-2026-06-26.
+
+    Source text can say only "Пионерский, городской парк".  A generic
+    municipal-park phrase must not be bound to the known Зеленоградск venue
+    merely because both strings contain the word "городской".
+    """
+
+    payload = {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+    main._normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+
+
 def test_known_venue_without_alias_still_normalises_when_address_empty() -> None:
     payload = {"location_name": "Янтарь холл", "location_address": None, "city": None}
     main._normalise_event_location_from_reference(payload)
@@ -85,3 +106,35 @@ def test_canonical_venue_with_correct_address_unchanged() -> None:
         "location_address": "Леонова 22",
         "city": "Калининград",
     }
+
+
+def test_inc_2026_06_15_location_audit_aliases() -> None:
+    cases = [
+        (
+            {"location_name": "Ростехarena", "location_address": None, "city": "Калининград"},
+            ("Ростех Арена", "Солнечный бульвар 25", "Калининград"),
+        ),
+        (
+            {"location_name": 'Клуб "СКЛАД" (Warehouse Club)', "location_address": None, "city": "Калининград"},
+            ("СКЛАD", "Ялтинская 20П", "Калининград"),
+        ),
+        (
+            {"location_name": "Дом с Горгульей", "location_address": None, "city": "Калининград"},
+            ("Дом Горгульи", "Комсомольская 24", "Калининград"),
+        ),
+        (
+            {"location_name": "Калининградский областной драматический театр", "location_address": "пр.Мира 4", "city": "Калининград"},
+            ("Драматический театр", "Мира 4", "Калининград"),
+        ),
+        (
+            {"location_name": "Лекторий центра Мой бизнес", "location_address": None, "city": "Калининград"},
+            ("Лекторий Центра «Мой бизнес»", "Уральская 18, 4 этаж", "Калининград"),
+        ),
+    ]
+    for payload, expected in cases:
+        main._normalise_event_location_from_reference(payload)
+        assert (
+            payload["location_name"],
+            payload["location_address"],
+            payload["city"],
+        ) == expected

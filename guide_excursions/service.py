@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from heavy_ops import heavy_operation
 from kaggle_registry import list_jobs, remove_job
+from kaggle_status import enrich_kaggle_status_from_ledger
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
     RemoteTelegramSessionBusyError,
@@ -48,6 +50,7 @@ from .kaggle_service import (
     download_guide_results,
     extract_guide_failure_message,
     format_kaggle_status_message,
+    remote_telegram_auth_scope,
     run_guide_monitor_kaggle,
 )
 from .parser import (
@@ -65,6 +68,14 @@ from .telethon_client import create_telethon_runtime_client
 logger = logging.getLogger(__name__)
 
 GUIDE_DIGEST_PART_DELIMITER = "\n\n---PART---\n\n"
+GUIDE_VK_MEDIA_RECOVERY_MAX_BYTES = max(
+    1_000_000,
+    min(
+        int((os.getenv("GUIDE_VK_MEDIA_RECOVERY_MAX_BYTES") or str(8 * 1024 * 1024)) or 0),
+        20 * 1024 * 1024,
+    ),
+)
+_VK_WALL_URL_RE = re.compile(r"vk\.(?:com|ru)/wall(?P<owner>-?\d+)_(?P<post>\d+)", re.I)
 
 
 def _parse_digest_target_chats(value: str | Sequence[str] | None) -> tuple[str, ...]:
@@ -362,16 +373,28 @@ def _ru_exit_word(count: int) -> str:
     return "выходов"
 
 
+def _guide_digest_vk_period_label(rows: Sequence[Mapping[str, Any]]) -> str | None:
+    parsed_dates = sorted(
+        {
+            parsed
+            for parsed in (_parse_iso_date(collapse_ws(_mapping_value(row, "date"))) for row in rows)
+            if parsed is not None
+        }
+    )
+    if not parsed_dates:
+        return None
+    if len(parsed_dates) <= 3:
+        labels = [
+            build_media_caption_period_label([item.isoformat()])
+            for item in parsed_dates
+        ]
+        return _join_ru_list([label for label in labels if label])
+    return build_media_caption_period_label([item.isoformat() for item in parsed_dates])
+
+
 def _guide_digest_vk_lead(rows: Sequence[Mapping[str, Any]], *, family: str) -> str:
-    months: list[str] = []
-    for row in rows:
-        parsed = _parse_iso_date(collapse_ws(_mapping_value(row, "date")))
-        if not parsed:
-            continue
-        month = VK_MONTH_NOM.get(parsed.month)
-        if month and month not in months:
-            months.append(month)
-    period = f" на {_join_ru_list(months)}" if months else ""
+    period_label = _guide_digest_vk_period_label(rows)
+    period = f", {period_label}" if period_label else ""
     count = len(rows)
     if family == "last_call":
         return f"Last call по экскурсиям: {count} сигналов{period}"
@@ -424,6 +447,164 @@ def _extract_wall_post_id(url: str | None) -> int | None:
         return int(match.group(1))
     except Exception:
         return None
+
+
+def _guide_vk_media_asset_paths(media_items: Sequence[Mapping[str, Any]] | None) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for item in media_items or []:
+        if not isinstance(item, Mapping):
+            continue
+        asset = item.get("media_asset")
+        if not isinstance(asset, Mapping):
+            continue
+        if collapse_ws(asset.get("kind") or "photo") != "photo":
+            continue
+        raw_path = collapse_ws(asset.get("path"))
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(path)
+        if len(paths) >= MAX_MEDIA_ITEMS:
+            break
+    return paths
+
+
+def _guide_digest_carousel_dir(issue_id: int) -> Path:
+    return GUIDE_MEDIA_STORE_ROOT / "_digest_carousel" / str(int(issue_id))
+
+
+def _existing_guide_digest_carousel_slide_paths(issue_id: int) -> list[Path]:
+    root = _guide_digest_carousel_dir(issue_id)
+    if not root.is_dir():
+        return []
+    paths = sorted(root.glob("slide_*.jpg"))
+    return [path for path in paths if path.is_file() and path.stat().st_size > 0]
+
+
+async def _ensure_guide_digest_carousel_slide_paths(
+    *,
+    issue_id: int,
+    rows: Sequence[Mapping[str, Any]],
+    media_items: Sequence[Mapping[str, Any]] | None,
+) -> list[Path]:
+    existing = _existing_guide_digest_carousel_slide_paths(issue_id)
+    if len(existing) >= 2:
+        return existing
+    from .hook_carousel import build_carousel_slides
+
+    slides = await build_carousel_slides(rows, media_items, seed=int(issue_id))
+    if len(slides) < 2:
+        return []
+    root = _guide_digest_carousel_dir(issue_id)
+    root.mkdir(parents=True, exist_ok=True)
+    for stale in root.glob("slide_*.jpg"):
+        try:
+            stale.unlink()
+        except OSError:
+            logger.warning("guide_digest_carousel stale_unlink_failed path=%s", stale, exc_info=True)
+    paths: list[Path] = []
+    for idx, payload in enumerate(slides):
+        path = root / f"slide_{idx}.jpg"
+        tmp = root / f".slide_{idx}.jpg.tmp"
+        tmp.write_bytes(payload)
+        tmp.replace(path)
+        paths.append(path)
+    logger.info("guide_digest_carousel_prepared issue_id=%s slides=%s dir=%s", issue_id, len(paths), root)
+    return paths
+
+
+async def _upload_guide_vk_media_attachments(
+    *,
+    group_id: int,
+    media_items: Sequence[Mapping[str, Any]] | None,
+    db: Database | None,
+    bot: Bot | None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]],
+) -> list[str]:
+    paths = _guide_vk_media_asset_paths(media_items)
+    if not paths:
+        raise RuntimeError("Guide VK digest requires materialized media assets")
+    attachments: list[str] = []
+    missing_paths: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            missing_paths.append(str(path))
+            continue
+        attachment = await upload_vk_photo_bytes_fn(
+            str(group_id),
+            path.read_bytes(),
+            db,
+            bot,
+            filename=path.name or "guide.jpg",
+        )
+        if attachment:
+            attachments.append(attachment)
+    if not attachments:
+        details = f"; missing={missing_paths[:3]}" if missing_paths else ""
+        raise RuntimeError(f"Guide VK digest media upload failed{details}")
+    if missing_paths:
+        logger.warning("guide_digest_vk_media_missing paths=%s", missing_paths[:5])
+    return attachments
+
+
+async def _build_guide_vk_hook_card_attachments(
+    *,
+    group_id: int,
+    rows: Sequence[Mapping[str, Any]],
+    existing_image_count: int,
+    db: Database | None,
+    bot: Bot | None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]],
+    seed: int = 0,
+) -> list[str]:
+    """Render + upload marketing hook cards as extra VK attachments (best-effort).
+
+    Cards only fill grid slots not taken by real afishas (see
+    :func:`guide_excursions.hook_cards.generate_hook_cards`). Any failure here is
+    swallowed so the digest still publishes with its afishas.
+    """
+    try:
+        from .hook_cards import generate_hook_cards
+    except Exception as exc:  # pragma: no cover - optional dependency (Pillow)
+        logger.warning("guide_hook_cards unavailable: %s", exc)
+        return []
+    try:
+        cards = await generate_hook_cards(
+            rows, existing_image_count=existing_image_count, seed=seed
+        )
+    except Exception as exc:
+        logger.warning("guide_hook_cards generate failed: %s", exc)
+        return []
+    attachments: list[str] = []
+    for idx, card in enumerate(cards):
+        try:
+            png = card.render_png()
+        except Exception as exc:
+            logger.warning("guide_hook_cards render failed occ=%s: %s", card.occurrence_id, exc)
+            continue
+        try:
+            attachment = await upload_vk_photo_bytes_fn(
+                str(group_id), png, db, bot, filename=f"hook_{seed}_{idx}.png"
+            )
+        except Exception as exc:
+            logger.warning("guide_hook_cards upload failed occ=%s: %s", card.occurrence_id, exc)
+            continue
+        if attachment:
+            attachments.append(attachment)
+    if cards:
+        logger.info(
+            "guide_hook_cards uploaded cards=%s attachments=%s occ=%s palettes=%s",
+            len(cards),
+            len(attachments),
+            [c.occurrence_id for c in cards],
+            [c.palette.id for c in cards],
+        )
+    return attachments
 
 
 def _vk_public_target_key(*, group_id: int, target: str | None = None) -> str:
@@ -515,6 +696,255 @@ def _parse_json_array(value: Any) -> list[Any]:
 def _safe_filename_fragment(value: Any) -> str:
     text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())
     return text.strip("._") or "media"
+
+
+def _vk_wall_ref_from_url(url: str | None) -> str | None:
+    match = _VK_WALL_URL_RE.search(collapse_ws(url))
+    if not match:
+        return None
+    return f"{int(match.group('owner'))}_{int(match.group('post'))}"
+
+
+def _best_vk_photo_attachment(att: Mapping[str, Any]) -> tuple[dict[str, Any], str] | None:
+    if collapse_ws(att.get("type")) != "photo":
+        return None
+    photo = att.get("photo") if isinstance(att.get("photo"), Mapping) else {}
+    sizes = photo.get("sizes") if isinstance(photo.get("sizes"), list) else []
+    best_url = ""
+    best_score = -1
+    for size in sizes:
+        if not isinstance(size, Mapping):
+            continue
+        url = collapse_ws(size.get("url"))
+        if not url:
+            continue
+        try:
+            score = int(size.get("width") or 0) * int(size.get("height") or 0)
+        except Exception:
+            score = 0
+        if score > best_score:
+            best_score = score
+            best_url = url
+    if not best_url:
+        return None
+    ref = {
+        "message_id": int(photo.get("post_id") or photo.get("id") or 0) or None,
+        "kind": "photo",
+        "owner_id": int(photo.get("owner_id") or 0) or None,
+        "id": int(photo.get("id") or 0) or None,
+        "url": best_url,
+    }
+    return ref, best_url
+
+
+def _download_guide_vk_media_bytes(url: str, *, max_bytes: int = GUIDE_VK_MEDIA_RECOVERY_MAX_BYTES) -> bytes:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "events-bot-guide-monitor/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = response.read(int(max_bytes) + 1)
+    if len(payload) > int(max_bytes):
+        raise RuntimeError("VK guide media is too large")
+    return bytes(payload)
+
+
+async def _media_items_for_occurrence_ids(
+    db: Database,
+    occurrence_ids: Sequence[int],
+) -> list[dict[str, Any]]:
+    if not occurrence_ids:
+        return []
+    media_items: list[dict[str, Any]] = []
+    media_positions: dict[str, int] = {}
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        for occurrence_id in occurrence_ids:
+            if len(media_items) >= MAX_MEDIA_ITEMS:
+                break
+            cur = await conn.execute(
+                """
+                SELECT
+                    gmp.id AS post_id,
+                    gmp.source_url,
+                    gmp.media_refs_json,
+                    gmp.media_assets_json,
+                    gs.username
+                FROM guide_occurrence_source gos
+                JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+                JOIN guide_source gs ON gs.id = gmp.source_id
+                WHERE gos.occurrence_id=?
+                ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
+                LIMIT 1
+                """,
+                (int(occurrence_id),),
+            )
+            media_row = await cur.fetchone()
+            if not media_row:
+                continue
+            refs = _parse_json_array(media_row["media_refs_json"])
+            assets = _parse_json_array(media_row["media_assets_json"])
+            if not refs and not assets:
+                continue
+            media_key = collapse_ws(media_row["source_url"]) or f"post:{int(media_row['post_id'])}"
+            position = int(media_positions.get(media_key) or 0)
+            if position >= max(len(refs), len(assets)):
+                continue
+            media_positions[media_key] = position + 1
+            media_items.append(
+                {
+                    "occurrence_id": int(occurrence_id),
+                    "source_username": str(media_row["username"]),
+                    "source_url": str(media_row["source_url"] or ""),
+                    "media_ref": refs[position] if position < len(refs) else None,
+                    "media_asset": assets[position] if position < len(assets) else None,
+                }
+            )
+    return media_items
+
+
+async def recover_missing_vk_media_assets_for_occurrences(
+    db: Database,
+    occurrence_ids: Sequence[int],
+    *,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+    bot: Bot | None = None,
+) -> int:
+    """Recover materialized guide media for already imported VK posts.
+
+    This is a production repair path for rows imported before the normal Kaggle
+    VK scanner learned to materialize photo attachments.
+    """
+    if not occurrence_ids:
+        return 0
+    if vk_api_fn is None:
+        import main
+
+        vk_api_fn = main._vk_api  # type: ignore[attr-defined]
+
+    placeholders = ",".join("?" for _ in occurrence_ids)
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        cur = await conn.execute("PRAGMA table_info(guide_monitor_post)")
+        post_columns = {
+            collapse_ws(row["name"])
+            for row in await cur.fetchall()
+            if collapse_ws(row["name"])
+        }
+        required_columns = {
+            "id",
+            "source_id",
+            "message_id",
+            "source_url",
+            "media_refs_json",
+            "media_assets_json",
+        }
+        if not required_columns.issubset(post_columns):
+            return 0
+        cur = await conn.execute(
+            f"""
+            SELECT DISTINCT
+                gmp.id AS post_id,
+                gmp.message_id,
+                gmp.source_url,
+                gmp.media_refs_json,
+                gmp.media_assets_json,
+                gs.username,
+                gs.platform
+            FROM guide_occurrence_source gos
+            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+            JOIN guide_source gs ON gs.id = gmp.source_id
+            WHERE gos.occurrence_id IN ({placeholders})
+              AND COALESCE(gs.platform, 'telegram')='vk'
+            """,
+            tuple(int(item) for item in occurrence_ids),
+        )
+        rows = [dict(row) for row in await cur.fetchall()]
+
+    recovered = 0
+    for row in rows:
+        if _parse_json_array(row.get("media_assets_json")):
+            continue
+        wall_ref = _vk_wall_ref_from_url(row.get("source_url"))
+        if not wall_ref:
+            continue
+        try:
+            response = await vk_api_fn("wall.getById", {"posts": wall_ref}, db, bot)
+        except Exception as exc:
+            logger.warning(
+                "guide_vk_media_recovery fetch_failed post_id=%s source_url=%s error=%s",
+                row.get("post_id"),
+                row.get("source_url"),
+                exc,
+            )
+            continue
+        payload = response.get("response", response) if isinstance(response, Mapping) else response
+        posts = payload if isinstance(payload, list) else ([payload] if isinstance(payload, Mapping) else [])
+        post = posts[0] if posts and isinstance(posts[0], Mapping) else {}
+        attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
+        refs: list[dict[str, Any]] = []
+        assets: list[dict[str, Any]] = []
+        target_root = GUIDE_MEDIA_STORE_ROOT / _safe_filename_fragment(row.get("username"))
+        target_root.mkdir(parents=True, exist_ok=True)
+        for idx, att in enumerate(attachments[:MAX_MEDIA_ITEMS]):
+            best = _best_vk_photo_attachment(att) if isinstance(att, Mapping) else None
+            if not best:
+                continue
+            ref, url = best
+            ref["message_id"] = int(row.get("message_id") or ref.get("message_id") or 0) or None
+            ref["attachment_index"] = idx
+            try:
+                payload_bytes = await asyncio.to_thread(_download_guide_vk_media_bytes, url)
+            except Exception as exc:
+                logger.warning(
+                    "guide_vk_media_recovery download_failed post_id=%s idx=%s error=%s",
+                    row.get("post_id"),
+                    idx,
+                    exc,
+                )
+                continue
+            if not payload_bytes:
+                continue
+            dest = target_root / (
+                f"{_safe_filename_fragment(row.get('username'))}_"
+                f"{int(row.get('message_id') or 0)}_{idx}_{len(assets)}.jpg"
+            )
+            dest.write_bytes(payload_bytes)
+            refs.append(ref)
+            assets.append(
+                {
+                    "message_id": int(row.get("message_id") or 0),
+                    "kind": "photo",
+                    "attachment_index": idx,
+                    "owner_id": ref.get("owner_id"),
+                    "id": ref.get("id"),
+                    "path": str(dest),
+                    "size_bytes": len(payload_bytes),
+                }
+            )
+            if len(assets) >= MAX_MEDIA_ITEMS:
+                break
+        if not assets:
+            continue
+        async with db.raw_conn() as conn:
+            await _enable_row_factory(conn)
+            await conn.execute(
+                """
+                UPDATE guide_monitor_post
+                SET media_refs_json=?, media_assets_json=?, last_scanned_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (_json_dump(refs), _json_dump(assets), int(row["post_id"])),
+            )
+            await conn.commit()
+        recovered += len(assets)
+        logger.info(
+            "guide_vk_media_recovery recovered post_id=%s source_url=%s assets=%s",
+            row.get("post_id"),
+            row.get("source_url"),
+            len(assets),
+        )
+    return recovered
 
 
 def _median(values: Sequence[int]) -> int | None:
@@ -3238,6 +3668,11 @@ async def run_guide_monitor(
                         nonlocal kaggle_status_message_id
                         if not (send_progress and bot and chat_id):
                             return
+                        status = await enrich_kaggle_status_from_ledger(
+                            db,
+                            f"guide_monitor:{run_id}",
+                            status,
+                        )
                         text = format_kaggle_status_message(phase, kernel_ref, status)
                         try:
                             if kaggle_status_message_id is None:
@@ -3260,6 +3695,7 @@ async def run_guide_monitor(
                     try:
                         await raise_if_remote_telegram_session_busy(
                             current_job_type="guide_monitoring",
+                            current_auth_scope=remote_telegram_auth_scope(),
                         )
                         results_path, kaggle_meta = await run_guide_monitor_kaggle(
                             db,
@@ -3474,29 +3910,47 @@ async def resume_guide_monitor_jobs(
             if results_path is None:
                 try:
                     status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
-                except Exception:
-                    logger.exception("guide_monitor_recovery.status_failed kernel=%s", kernel_ref)
-                    continue
-
-                state = str(status.get("status") or "").lower()
-                if state in {"error", "failed", "cancelled"}:
-                    failure = collapse_ws(extract_guide_failure_message(status))
-                    await remove_job("guide_monitoring", kernel_ref)
-                    if bot and notify_chat_id:
-                        await bot.send_message(
-                            int(notify_chat_id),
-                            (
-                                "⚠️ guide_monitor recovery: "
-                                f"kernel {kernel_ref} завершился ошибкой"
-                                f"{': ' + failure if failure else ''}"
-                            ),
-                            disable_web_page_preview=True,
+                except Exception as exc:
+                    logger.warning(
+                        "guide_monitor_recovery.status_failed_try_output kernel=%s run_id=%s",
+                        kernel_ref,
+                        run_id,
+                        exc_info=True,
+                    )
+                    status = {
+                        "status": "UNKNOWN",
+                        "failureMessage": str(exc) or type(exc).__name__,
+                    }
+                    try:
+                        results_path = await download_guide_results(client, kernel_ref, run_id)
+                    except Exception:
+                        logger.exception(
+                            "guide_monitor_recovery.output_download_failed kernel=%s run_id=%s",
+                            kernel_ref,
+                            run_id,
                         )
-                    continue
-                if state != "complete":
-                    continue
+                        continue
 
-                results_path = await download_guide_results(client, kernel_ref, run_id)
+                if results_path is None:
+                    state = str(status.get("status") or "").lower()
+                    if state in {"error", "failed", "cancelled"}:
+                        failure = collapse_ws(extract_guide_failure_message(status))
+                        await remove_job("guide_monitoring", kernel_ref)
+                        if bot and notify_chat_id:
+                            await bot.send_message(
+                                int(notify_chat_id),
+                                (
+                                    "⚠️ guide_monitor recovery: "
+                                    f"kernel {kernel_ref} завершился ошибкой"
+                                    f"{': ' + failure if failure else ''}"
+                                ),
+                                disable_web_page_preview=True,
+                            )
+                        continue
+                    if state != "complete":
+                        continue
+
+                    results_path = await download_guide_results(client, kernel_ref, run_id)
 
             import_result = await run_guide_import_from_results(
                 db,
@@ -4040,6 +4494,24 @@ async def publish_guide_digest(
 ) -> dict[str, Any]:
     preview = await build_guide_digest_preview(db, family=family)
     issue_id = int(preview["issue_id"])
+    preview_media_items = list(preview.get("media_items") or [])
+    covered_occurrence_ids = [int(item) for item in (preview.get("covered_occurrence_ids") or []) if int(item or 0) > 0]
+    if preview.get("items") and covered_occurrence_ids and not _guide_vk_media_asset_paths(preview_media_items):
+        recovered_media = await recover_missing_vk_media_assets_for_occurrences(
+            db,
+            covered_occurrence_ids,
+            bot=bot,
+        )
+        if recovered_media:
+            preview_media_items = await _media_items_for_occurrence_ids(db, covered_occurrence_ids)
+            preview["media_items"] = preview_media_items
+            async with db.raw_conn() as conn:
+                await _enable_row_factory(conn)
+                await conn.execute(
+                    "UPDATE guide_digest_issue SET media_items_json=? WHERE id=?",
+                    (_json_dump(preview_media_items), issue_id),
+                )
+                await conn.commit()
     targets = list(_resolve_digest_target_chats(target_chat))
     primary_target = targets[0] if targets else GUIDE_DIGEST_TARGET_CHAT
     texts: list[str] = list(preview["texts"])
@@ -4088,6 +4560,29 @@ async def publish_guide_digest(
         media_payload: list[types.InputMediaPhoto | types.InputMediaVideo] = []
         requested_media = list(preview["media_items"][:MAX_MEDIA_ITEMS])
         missing_media_assets: list[str] = []
+        generated_single_slide_path: Path | None = None
+        if len(requested_media) == 1:
+            item = requested_media[0]
+            media_asset = dict(item.get("media_asset") or {})
+            media_ref = dict(item.get("media_ref") or {})
+            asset_kind = collapse_ws(media_asset.get("kind")) or collapse_ws(media_ref.get("kind")) or "photo"
+            if asset_kind == "photo":
+                try:
+                    slide_paths = await _ensure_guide_digest_carousel_slide_paths(
+                        issue_id=issue_id,
+                        rows=preview["items"],
+                        media_items=requested_media,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "guide_digest: single-card generation failed issue_id=%s target=%s: %s",
+                        issue_id,
+                        target,
+                        exc,
+                    )
+                    slide_paths = []
+                if slide_paths:
+                    generated_single_slide_path = slide_paths[0]
         for idx, item in enumerate(requested_media):
             media_asset = dict(item.get("media_asset") or {})
             media_ref = dict(item.get("media_ref") or {})
@@ -4097,7 +4592,7 @@ async def publish_guide_digest(
             if not asset_path_raw:
                 missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=no_path")
                 continue
-            asset_path = Path(asset_path_raw)
+            asset_path = generated_single_slide_path if generated_single_slide_path is not None else Path(asset_path_raw)
             if not asset_path.is_file():
                 missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=missing_file")
                 continue
@@ -4121,7 +4616,7 @@ async def publish_guide_digest(
                 _build_media_input(
                     payload=payload,
                     filename=asset_path.name or f"guide_{idx}.jpg",
-                    asset_kind=asset_kind,
+                    asset_kind="photo" if generated_single_slide_path is not None else asset_kind,
                     caption=caption,
                 )
             )
@@ -4313,13 +4808,16 @@ async def publish_latest_guide_digest_to_vk(
     target: str | None = None,
     vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
+    edit_vk_post_fn: Callable[..., Awaitable[bool]] | None = None,
+    repair_existing: bool = False,
 ) -> dict[str, Any]:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         if issue_id is not None:
             cur = await conn.execute(
                 """
-                SELECT id, family, status, items_json, published_targets_json
+                SELECT id, family, status, items_json, media_items_json, published_targets_json
                 FROM guide_digest_issue
                 WHERE id=? AND family=?
                 """,
@@ -4328,7 +4826,7 @@ async def publish_latest_guide_digest_to_vk(
         else:
             cur = await conn.execute(
                 """
-                SELECT id, family, status, items_json, published_targets_json
+                SELECT id, family, status, items_json, media_items_json, published_targets_json
                 FROM guide_digest_issue
                 WHERE family=? AND status IN ('published', 'partial')
                 ORDER BY id DESC
@@ -4341,6 +4839,7 @@ async def publish_latest_guide_digest_to_vk(
             return {"published": False, "reason": "no_issue", "family": family}
         issue_id_resolved = int(issue["id"] or 0)
         occurrence_ids = _issue_occurrence_ids(issue["items_json"])
+        media_items = _issue_media_items(issue["media_items_json"])
         rows = await _fetch_digest_rows_by_ids(conn, occurrence_ids)
 
     if not rows:
@@ -4354,6 +4853,31 @@ async def publish_latest_guide_digest_to_vk(
         import main
 
         post_to_vk_fn = main.post_to_vk  # type: ignore[attr-defined]
+    if upload_vk_photo_bytes_fn is None:
+        import main
+
+        upload_vk_photo_bytes_fn = main.upload_vk_photo_bytes  # type: ignore[attr-defined]
+    if edit_vk_post_fn is None:
+        import main
+
+        edit_vk_post_fn = main.edit_vk_post  # type: ignore[attr-defined]
+
+    if not _guide_vk_media_asset_paths(media_items):
+        recovered_media = await recover_missing_vk_media_assets_for_occurrences(
+            db,
+            occurrence_ids,
+            vk_api_fn=vk_api_fn,
+            bot=bot,
+        )
+        if recovered_media:
+            media_items = await _media_items_for_occurrence_ids(db, occurrence_ids)
+            async with db.raw_conn() as conn:
+                await _enable_row_factory(conn)
+                await conn.execute(
+                    "UPDATE guide_digest_issue SET media_items_json=? WHERE id=?",
+                    (_json_dump(media_items), issue_id_resolved),
+                )
+                await conn.commit()
 
     vk_group_id = await _resolve_vk_digest_group_id(
         db=db,
@@ -4371,7 +4895,12 @@ async def publish_latest_guide_digest_to_vk(
         )
         current = await cur.fetchone()
     published_targets_raw = _json_load(current["published_targets_json"] if current else None, fallback={})
-    if isinstance(published_targets_raw, Mapping) and target_key in published_targets_raw:
+    existing_target_payload = (
+        published_targets_raw.get(target_key)
+        if isinstance(published_targets_raw, Mapping)
+        else None
+    )
+    if existing_target_payload is not None and not repair_existing:
         return {
             "published": False,
             "reason": "already_published",
@@ -4391,7 +4920,113 @@ async def publish_latest_guide_digest_to_vk(
         raise RuntimeError(
             f"Guide VK digest too long for one post: {len(text)} > {GUIDE_DIGEST_VK_MAX_CHARS}"
         )
-    url = await post_to_vk_fn(str(vk_group_id), text, db, bot)
+    attachments: list[str] = []
+    afisha_attachments_count = 0
+    # Best-effort: replace the afisha grid with a swipeable carousel of slides
+    # (photo+hook / afisha / text-only hook cards + CTA). Any failure falls back
+    # to the plain afisha-grid post below. Build it before requiring materialized
+    # afishas so imageless digests can still publish hook-only cards.
+    carousel_mode = False
+    carousel_slide_paths: list[Path] = []
+    try:
+        carousel_slide_paths = await _ensure_guide_digest_carousel_slide_paths(
+            issue_id=issue_id_resolved,
+            rows=rows,
+            media_items=media_items,
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("guide_digest_vk_carousel_build_failed: %s", exc)
+    if carousel_slide_paths and len(carousel_slide_paths) >= 2:
+        slide_atts: list[str] = []
+        for idx, slide_path in enumerate(carousel_slide_paths):
+            try:
+                att = await upload_vk_photo_bytes_fn(
+                    str(vk_group_id),
+                    slide_path.read_bytes(),
+                    db,
+                    bot,
+                    filename=slide_path.name or f"slide_{idx}.jpg",
+                )
+            except Exception as exc:
+                logger.warning("guide_digest_vk_carousel_upload_failed idx=%s: %s", idx, exc)
+                att = None
+            if att:
+                slide_atts.append(att)
+        if len(slide_atts) >= 2:
+            attachments = slide_atts
+            carousel_mode = True
+            logger.info(
+                "guide_digest_vk_carousel issue_id=%s slides=%s afishas=%s",
+                issue_id_resolved, len(slide_atts), afisha_attachments_count,
+            )
+        else:
+            raise RuntimeError(
+                "Guide VK digest carousel upload failed: "
+                f"uploaded {len(slide_atts)}/{len(carousel_slide_paths)} slides"
+            )
+    if not attachments:
+        attachments = await _upload_guide_vk_media_attachments(
+            group_id=vk_group_id,
+            media_items=media_items,
+            db=db,
+            bot=bot,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
+        )
+        afisha_attachments_count = len(attachments)
+
+    if existing_target_payload is not None and repair_existing:
+        post_urls = []
+        if isinstance(existing_target_payload, Mapping):
+            post_urls = [
+                collapse_ws(item)
+                for item in (existing_target_payload.get("post_urls") or [])
+                if collapse_ws(item)
+            ]
+        if not post_urls:
+            return {
+                "published": False,
+                "reason": "no_existing_vk_url",
+                "issue_id": issue_id_resolved,
+                "target": target_key,
+                "group_id": vk_group_id,
+            }
+        edited = await edit_vk_post_fn(
+            post_urls[0], text, db, bot, attachments=attachments, carousel=carousel_mode
+        )
+        next_targets = dict(published_targets_raw) if isinstance(published_targets_raw, Mapping) else {}
+        current_payload = dict(existing_target_payload) if isinstance(existing_target_payload, Mapping) else {}
+        actual_post_id = _extract_wall_post_id(post_urls[0])
+        if actual_post_id:
+            current_payload["message_ids"] = [int(actual_post_id)]
+            current_payload["text_message_ids"] = [int(actual_post_id)]
+            current_payload["media_message_ids"] = [int(actual_post_id)]
+        else:
+            current_payload["media_message_ids"] = [post_id for post_id in current_payload.get("message_ids", [])]
+        current_payload["attachments_count"] = len(attachments)
+        current_payload["transport"] = "vk_wall"
+        next_targets[target_key] = current_payload
+        async with db.raw_conn() as conn:
+            await _enable_row_factory(conn)
+            await conn.execute(
+                "UPDATE guide_digest_issue SET published_targets_json=? WHERE id=?",
+                (_json_dump(next_targets), issue_id_resolved),
+            )
+            await conn.commit()
+        return {
+            "published": False,
+            "repaired": bool(edited),
+            "issue_id": issue_id_resolved,
+            "family": family,
+            "target": target_key,
+            "group_id": vk_group_id,
+            "url": post_urls[0],
+            "attachments_count": len(attachments),
+            "text": text,
+        }
+
+    url = await post_to_vk_fn(
+        str(vk_group_id), text, db, bot, attachments=attachments, carousel=carousel_mode
+    )
     if not url:
         raise RuntimeError("Guide VK digest wall.post failed")
 
@@ -4400,10 +5035,11 @@ async def publish_latest_guide_digest_to_vk(
     next_targets[target_key] = {
         "message_ids": [int(post_id)] if post_id else [],
         "text_message_ids": [int(post_id)] if post_id else [],
-        "media_message_ids": [],
+        "media_message_ids": [int(post_id)] if post_id else [],
         "post_urls": [url],
         "group_id": int(vk_group_id),
         "transport": "vk_wall",
+        "attachments_count": len(attachments),
     }
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
@@ -4419,6 +5055,7 @@ async def publish_latest_guide_digest_to_vk(
         "target": target_key,
         "group_id": vk_group_id,
         "url": url,
+        "attachments_count": len(attachments),
         "text": text,
     }
 

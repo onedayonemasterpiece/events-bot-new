@@ -368,6 +368,13 @@ class Database:
                     emoji TEXT,
                     end_date TEXT,
                     end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
+                    identity_status TEXT NOT NULL DEFAULT 'canonical',
+                    merged_into_event_id INTEGER,
+                    date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
+                    date_provenance TEXT,
+                    date_confidence REAL,
+                    end_date_provenance TEXT,
+                    end_date_confidence REAL,
                     is_free BOOLEAN DEFAULT 0,
                     pushkin_card BOOLEAN DEFAULT 0,
                     silent BOOLEAN DEFAULT 0,
@@ -380,6 +387,10 @@ class Database:
                     source_post_url TEXT,
                     source_vk_post_url TEXT,
                     vk_repost_url TEXT,
+                    tg_event_post_url TEXT,
+                    tg_event_post_id INTEGER,
+                    tg_event_post_mode TEXT,
+                    tg_event_source_hash TEXT,
                     ics_hash TEXT,
                     ics_file_id TEXT,
                     ics_updated_at TIMESTAMP,
@@ -394,13 +405,15 @@ class Database:
                     topics TEXT DEFAULT '[]',
                     topics_manual BOOLEAN DEFAULT 0,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    content_hash TEXT
+                    content_hash TEXT,
+                    FOREIGN KEY(merged_into_event_id) REFERENCES event(id) ON DELETE SET NULL
                 )
                 """
             )
             dbg("event core columns")
             await _add_column(conn, "event", "photo_urls JSON")
             await _add_column(conn, "event", "source_texts JSON")
+            await _add_column(conn, "event", "tg_source_author TEXT")
             await _add_column(conn, "event", "ics_hash TEXT")
             await _add_column(conn, "event", "ics_file_id TEXT")
             await _add_column(conn, "event", "ics_updated_at TIMESTAMP")
@@ -408,6 +421,10 @@ class Database:
             await _add_column(conn, "event", "ics_post_id INTEGER")
             await _add_column(conn, "event", "vk_repost_url TEXT")
             await _add_column(conn, "event", "vk_source_hash TEXT")
+            await _add_column(conn, "event", "tg_event_post_url TEXT")
+            await _add_column(conn, "event", "tg_event_post_id INTEGER")
+            await _add_column(conn, "event", "tg_event_post_mode TEXT")
+            await _add_column(conn, "event", "tg_event_source_hash TEXT")
             await _add_column(conn, "event", "vk_ticket_short_url TEXT")
             await _add_column(conn, "event", "vk_ticket_short_key TEXT")
             await _add_column(conn, "event", "vk_ics_short_url TEXT")
@@ -434,8 +451,26 @@ class Database:
             await _add_column(conn, "event", "preview_3d_url TEXT")
             await _add_column(conn, "event", "time_is_default BOOLEAN NOT NULL DEFAULT 0")
             await _add_column(conn, "event", "end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0")
+            await _add_column(
+                conn, "event", "identity_status TEXT NOT NULL DEFAULT 'canonical'"
+            )
+            await _add_column(conn, "event", "merged_into_event_id INTEGER")
+            await _add_column(conn, "event", "date_is_inferred BOOLEAN NOT NULL DEFAULT 0")
+            await _add_column(conn, "event", "date_provenance TEXT")
+            await _add_column(conn, "event", "date_confidence REAL")
+            await _add_column(conn, "event", "end_date_provenance TEXT")
+            await _add_column(conn, "event", "end_date_confidence REAL")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_event_tourist_label ON event(tourist_label)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_status ON event(identity_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_merged_into_event ON event(merged_into_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
             dbg("eventposter")
 
@@ -495,6 +530,45 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_media_asset_kind ON event_media_asset(kind)"
             )
 
+            dbg("poll_repost_run")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS poll_repost_run(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_key TEXT NOT NULL,
+                    run_key TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    target_event_date TEXT NOT NULL,
+                    poll_chat_id TEXT,
+                    poll_message_id INTEGER,
+                    poll_id TEXT,
+                    question_text TEXT,
+                    options_json TEXT NOT NULL DEFAULT '[]',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    winner_option_id TEXT,
+                    winner_text TEXT,
+                    chosen_event_id INTEGER,
+                    kldevents_chat_id TEXT,
+                    kldevents_message_id INTEGER,
+                    kldevents_post_url TEXT,
+                    reply_message_id INTEGER,
+                    forwarded_message_id INTEGER,
+                    resolve_after TIMESTAMP,
+                    error_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(profile_key, run_key),
+                    FOREIGN KEY(chosen_event_id) REFERENCES event(id)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_poll_repost_run_status_resolve ON poll_repost_run(profile_key, status, resolve_after)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_poll_repost_run_event_updated ON poll_repost_run(chosen_event_id, updated_at)"
+            )
+
             dbg("event_source")
             await conn.execute(
                 """
@@ -526,6 +600,58 @@ class Database:
             # поэтому держим отдельный индекс по source_url.
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_url ON event_source(source_url)"
+            )
+
+            dbg("event_identity")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_identity_decision_log(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER,
+                    candidate_event_id INTEGER,
+                    source_id INTEGER,
+                    source_type TEXT,
+                    source_url TEXT,
+                    decision TEXT NOT NULL,
+                    decision_reason TEXT,
+                    confidence REAL,
+                    decided_by TEXT,
+                    decision_payload JSON,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(candidate_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(source_id) REFERENCES event_source(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_event ON event_identity_decision_log(event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_candidate ON event_identity_decision_log(candidate_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_source ON event_identity_decision_log(source_type, source_url)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_created ON event_identity_decision_log(created_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_identity_lock(
+                    event_id INTEGER PRIMARY KEY,
+                    lock_status TEXT NOT NULL DEFAULT 'active',
+                    lock_reason TEXT,
+                    locked_by TEXT,
+                    locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    details JSON,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_lock_status ON event_identity_lock(lock_status, expires_at)"
             )
 
             dbg("event_source_fact")
@@ -693,6 +819,33 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_tg_force_source ON telegram_source_force_message(source_id)"
             )
 
+            dbg("telegram_monitoring_on_demand_queue")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS telegram_monitoring_on_demand_queue(
+                    source_username TEXT PRIMARY KEY,
+                    source_id INTEGER NOT NULL,
+                    chat_id INTEGER,
+                    latest_message_id INTEGER,
+                    latest_message_date TIMESTAMP,
+                    first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    next_run_at TIMESTAMP NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    last_run_at TIMESTAMP,
+                    last_error TEXT,
+                    FOREIGN KEY(source_id) REFERENCES telegram_source(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_tg_on_demand_status_next_run ON telegram_monitoring_on_demand_queue(status, next_run_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_tg_on_demand_source ON telegram_monitoring_on_demand_queue(source_id)"
+            )
+
             dbg("telegram_post_metric")
             await conn.execute(
                 """
@@ -706,6 +859,7 @@ class Database:
                     collected_ts INTEGER NOT NULL,
                     views INTEGER,
                     likes INTEGER,
+                    comments INTEGER,
                     reactions_json JSON,
                     UNIQUE(source_id, message_id, age_day),
                     FOREIGN KEY(source_id) REFERENCES telegram_source(id) ON DELETE CASCADE
@@ -718,6 +872,7 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_tg_metric_source_message ON telegram_post_metric(source_id, message_id)"
             )
+            await _add_column(conn, "telegram_post_metric", "comments INTEGER")
             await _add_column(conn, "telegram_post_metric", "reactions_json JSON")
 
             dbg("guide_profile")
@@ -881,6 +1036,7 @@ class Database:
                     likes INTEGER,
                     published_new_digest_issue_id INTEGER,
                     published_last_call_digest_issue_id INTEGER,
+                    published_visual_digest_issue_id INTEGER,
                     first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     last_seen_post_at TIMESTAMP,
@@ -900,6 +1056,11 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_guide_occurrence_last_call ON guide_occurrence(is_last_call, published_last_call_digest_issue_id)"
             )
             await _add_column(conn, "guide_occurrence", "fact_pack_json JSON")
+            await _add_column(conn, "guide_occurrence", "published_visual_digest_issue_id INTEGER")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_guide_occurrence_visual_digest "
+                "ON guide_occurrence(digest_eligible, published_visual_digest_issue_id, updated_at)"
+            )
 
             dbg("guide_occurrence_source")
             await conn.execute(
@@ -1469,6 +1630,55 @@ class Database:
                     """,
                     ("Бар Бастион, Судостроительная 6/1, Калининград", 149955604),
                 )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR UPPER(TRIM(location)) IN (
+                            'ЛЕКЦИОННЫЙ ЗАЛ',
+                            '4 ЭТАЖ ЛЕКЦИОННЫЙ ЗАЛ',
+                            'ЛЕКЦИОННЫЙ ЗАЛ, 4 ЭТАЖ'
+                        )
+                      )
+                    """,
+                    ("Научная библиотека, Мира 9, Калининград", 30777579),
+                )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Дворец спорта «Юность»',
+                            'Дворец спорта «Юность», Маршала Баграмяна 2, Калининград'
+                        )
+                      )
+                    """,
+                    ("Дворец спорта «Янтарный», Согласия 39, Калининград", 179910542),
+                )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Калининград Сити Джаз Клуб',
+                            'Калининград Сити Джаз Клуб, Мира 33-35, Калининград'
+                        )
+                      )
+                    """,
+                    ("Центр «Мой бизнес», Уральская 18, Калининград", 39437155),
+                )
                 skip_vk_source_seed = (
                     (os.getenv("DB_INIT_SKIP_VK_SOURCES_SEED") or "").strip().lower()
                     in {"1", "true", "yes", "on"}
@@ -1535,6 +1745,8 @@ class Database:
                     collected_ts INTEGER NOT NULL,
                     views INTEGER,
                     likes INTEGER,
+                    comments INTEGER,
+                    reposts INTEGER,
                     UNIQUE(group_id, post_id, age_day)
                 )
                 """
@@ -1544,6 +1756,32 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_vk_metric_group_post ON vk_post_metric(group_id, post_id)"
+            )
+            await _add_column(conn, "vk_post_metric", "comments INTEGER")
+            await _add_column(conn, "vk_post_metric", "reposts INTEGER")
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_publication(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    platform TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    stored_url TEXT,
+                    live_url TEXT,
+                    stored_post_id INTEGER,
+                    live_post_id INTEGER,
+                    match_method TEXT,
+                    match_confidence REAL,
+                    status TEXT NOT NULL DEFAULT 'unknown',
+                    resolved_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(event_id, platform, target),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_publication_target_status ON event_publication(target, status)"
             )
 
             await conn.execute(
@@ -1700,6 +1938,51 @@ class Database:
                 "ON geo_city_region_cache(created_at)"
             )
 
+            # Cache for optional VK wall.post location markers. The publisher is
+            # fail-open: only confident Kaliningrad Oblast marker payloads are
+            # reused; negative/ambiguous rows prevent repeated resolution work
+            # for a bounded TTL in vk_location_marker.py.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_location_marker_cache(
+                    query_norm TEXT PRIMARY KEY,
+                    query_display TEXT,
+                    display_title TEXT,
+                    city TEXT,
+                    is_kaliningrad_oblast BOOLEAN,
+                    lat REAL,
+                    long REAL,
+                    place_id TEXT,
+                    confidence REAL,
+                    provenance TEXT,
+                    status TEXT,
+                    details JSON,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            for column_def in (
+                "query_display TEXT",
+                "display_title TEXT",
+                "city TEXT",
+                "is_kaliningrad_oblast BOOLEAN",
+                "lat REAL",
+                "long REAL",
+                "place_id TEXT",
+                "confidence REAL",
+                "provenance TEXT",
+                "status TEXT",
+                "details JSON",
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            ):
+                await _add_column(conn, "vk_location_marker_cache", column_def)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_location_marker_cache_updated_at "
+                "ON vk_location_marker_cache(updated_at)"
+            )
+
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_festival_name ON festival(name)"
             )
@@ -1726,6 +2009,15 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_content_hash ON event(content_hash)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_status ON event(identity_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_merged_into_event ON event(merged_into_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_event_date_time ON event(date, time)"
@@ -1807,6 +2099,9 @@ class Database:
             )
             await _add_column(
                 conn, "promo_campaign", "priority INTEGER NOT NULL DEFAULT 2"
+            )
+            await _add_column(
+                conn, "promo_activity", "config_json JSON NOT NULL DEFAULT '{}'"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_target_campaign ON promo_target(campaign_id)"
@@ -2023,6 +2318,73 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_vk_repost_job_source ON promo_vk_repost_job(source_owner_id, source_post_id, executed_at)"
+            )
+
+            dbg("kaggle_status")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_run_ledger(
+                    run_id TEXT PRIMARY KEY,
+                    session_id INTEGER,
+                    kind TEXT,
+                    notebook TEXT,
+                    kernel_ref TEXT,
+                    dataset_ref TEXT,
+                    status TEXT NOT NULL DEFAULT 'created',
+                    phase TEXT,
+                    token_hash TEXT NOT NULL,
+                    progress_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_heartbeat_at TEXT,
+                    terminal_at TEXT,
+                    error TEXT
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_run_event(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    event_name TEXT NOT NULL,
+                    phase TEXT,
+                    status TEXT,
+                    event_uid TEXT,
+                    progress_json TEXT NOT NULL DEFAULT '{}',
+                    message TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(run_id, seq)
+                )
+                """
+            )
+            await _add_column(conn, "kaggle_run_event", "event_uid TEXT")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_run_event_run_id ON kaggle_run_event(run_id, seq)"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_kaggle_run_event_uid ON kaggle_run_event(run_id, event_uid) WHERE event_uid IS NOT NULL"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_run_event_created_at ON kaggle_run_event(created_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_resource_lease(
+                    resource_key TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    holder_kind TEXT,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    released_at TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_resource_lease_status ON kaggle_resource_lease(status, expires_at)"
             )
 
             await conn.commit()

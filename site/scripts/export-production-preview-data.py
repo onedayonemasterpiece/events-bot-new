@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -212,7 +212,111 @@ def slugify(value: str, fallback: str = "event") -> str:
 
 def normalize_date(value: Any) -> str | None:
     text = str(value or "").strip()
-    return text if re.fullmatch(r"20\d\d-\d\d-\d\d", text) else None
+    if not re.fullmatch(r"20\d\d-\d\d-\d\d", text):
+        return None
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return None
+    return text
+
+
+PUBLIC_REVIEW_STATUS_MARKERS = {
+    "cancelled",
+    "deleted",
+    "duplicate",
+    "review",
+    "needs_review",
+    "manual_review",
+    "eventness_review",
+    "quality_review",
+    "quarantine",
+    "quarantined",
+    "rejected",
+}
+PUBLIC_STATUS_COLUMNS = (
+    "lifecycle_status",
+    "status",
+    "review_status",
+    "moderation_status",
+    "quality_status",
+    "publication_status",
+)
+PUBLIC_TEXT_FIELDS = ("title", "location_name", "location_address", "city")
+PROMPT_OR_CODE_LEAK_RE = re.compile(
+    r"```|</?[a-z][^>]*>|(?:^|\s)(?:def|class|function|const|let|var|import)\s+|"
+    r"\bselect\s+.+\s+from\b|\{\\?\"[a-z_][a-z0-9_]*\\?\"\s*:|"
+    r"\b(?:system|assistant|user)\s*:|\bas an ai\b|"
+    r"\b(?:return|output)\s+json\b|"
+    r"(?:вот\s+(?:обновлен|обновлён|готовый)|обновл[её]нн\w+\s+текст|"
+    r"я\s+не\s+могу|не\s+могу\s+помочь|сформируй\s+|ответь\s+)",
+    re.I | re.U,
+)
+LOCATION_PROSE_START_RE = re.compile(
+    r"^(?:в\s+программе|и\s+не\s+забывайте|не\s+забудьте|подробности|"
+    r"приходите|жд[её]м|можно\s+будет|вы\s+сможете|здесь|там)\b",
+    re.I | re.U,
+)
+LOCATION_PROSE_VERB_RE = re.compile(
+    r"\b(?:будет|будут|можно|сможете|узнаете|приходите|жд[её]м|не\s+забывайте|не\s+забудьте)\b",
+    re.I | re.U,
+)
+
+
+def row_has_key(row: sqlite3.Row, key: str) -> bool:
+    try:
+        return key in row.keys()
+    except Exception:
+        return False
+
+
+def status_value_blocks_public_projection(value: Any) -> bool:
+    status = clean_text(value).lower().replace("-", "_")
+    if not status:
+        return False
+    return (
+        status in PUBLIC_REVIEW_STATUS_MARKERS
+        or status.endswith("_review")
+        or status.startswith("review")
+        or "quarantine" in status
+        or status.startswith("rejected")
+    )
+
+
+def text_value_blocks_public_projection(field: str, value: Any) -> bool:
+    text = clean_text(value)
+    if not text:
+        return False
+    if PROMPT_OR_CODE_LEAK_RE.search(text):
+        return True
+    if field in {"location_name", "location_address", "city"}:
+        lowered = text.lower()
+        if LOCATION_PROSE_START_RE.search(lowered):
+            return True
+        if len(text) >= 28 and LOCATION_PROSE_VERB_RE.search(lowered):
+            return True
+        if len(text) >= 70 and re.search(r"[!?…]|[.]\s", text):
+            return True
+    return False
+
+
+def public_projection_gate_reason(row: sqlite3.Row) -> str | None:
+    """Return why an event row must not enter public static-site projection."""
+    if row_has_key(row, "identity_status") and clean_text(row_get(row, "identity_status")).lower() != "canonical":
+        return "identity_status:not_canonical"
+    if row_has_key(row, "merged_into_event_id") and clean_text(row_get(row, "merged_into_event_id")) not in {"", "0", "none", "null"}:
+        return "merged_into_event_id"
+    for field in PUBLIC_STATUS_COLUMNS:
+        if row_has_key(row, field) and status_value_blocks_public_projection(row_get(row, field)):
+            return f"{field}:blocked_status"
+    if not normalize_date(row_get(row, "date")):
+        return "date:invalid_iso"
+    if row_has_key(row, "end_date") and clean_text(row_get(row, "end_date")) and not normalize_date(row_get(row, "end_date")):
+        return "end_date:invalid_iso"
+    for field in PUBLIC_TEXT_FIELDS:
+        if row_has_key(row, field) and text_value_blocks_public_projection(field, row_get(row, field)):
+            return f"{field}:leakage"
+    return None
 
 
 def split_time(value: Any) -> tuple[str | None, str | None, str | None]:
@@ -709,7 +813,7 @@ def fetch_rows(
     ordered_rows: list[sqlite3.Row] = []
 
     def add_row(row: sqlite3.Row) -> bool:
-        if not normalize_date(row["date"]):
+        if public_projection_gate_reason(row):
             return False
         if title_looks_prompt_leak(row["title"]):
             return False

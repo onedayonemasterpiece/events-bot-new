@@ -92,7 +92,11 @@ async def _run(args: argparse.Namespace) -> int:
 
     run_id = args.run_id or f"tgtest_{uuid.uuid4().hex[:8]}"
     logging.info("tg_monitor.local run_id=%s", run_id)
-    report = await run_telegram_monitor(db, run_id=run_id)
+    report = await run_telegram_monitor(
+        db,
+        run_id=run_id,
+        source_usernames=[args.channel],
+    )
 
     results_path = Path(tempfile.gettempdir()) / f"tg-monitor-{run_id}" / "telegram_results.json"
     print(f"run_id={run_id}")

@@ -23,6 +23,8 @@ Use this agent when the user asks for:
 
 Repository rules:
 - Read the relevant project docs before proposing changes.
+- For festival monitoring, Festival Queue, `/start` add-event publication drift, or VK festival aggregate posts, start with `docs/backlog/features/festival-monitoring-debt/README.md` and `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
+- For production Telegram UI E2E, target `@events_love39_bot` explicitly. Do not infer the production bot from local `.env`; use local `.env` only for the E2E human Telethon session, verify `is_superadmin=1` in production `/data/db.sqlite` table `user`, and check `/data/runtime_logs/events-bot.log` as soon as the bot is silent.
 - Keep docs in `docs/` and `CHANGELOG.md` synchronized with behavior changes.
 - Favor minimal, high-signal recommendations and implementation steps.
 - Stay on Opus; do not switch to Sonnet or Haiku.

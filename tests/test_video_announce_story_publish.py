@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
+import base64
+from datetime import datetime
+
 import pytest
 
-from video_announce.scenario import VideoAnnounceScenario
+from video_announce.scenario import (
+    VideoAnnounceScenario,
+    apply_popular_review_story_caption,
+    build_popular_review_story_caption,
+)
 from video_announce import story_publish
 from video_announce.partner_tracks import PARTNER_KONB_LIBRARY
 from telegram_business import cache_business_connection
@@ -11,6 +19,12 @@ from telegram_business import cache_business_connection
 class Obj:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+
+def _auth_bundle(session: str) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps({"session": session}, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
 
 
 def test_story_session_payload_includes_optional_source_channel_id(monkeypatch):
@@ -29,6 +43,91 @@ def test_story_session_payload_includes_optional_source_channel_id(monkeypatch):
     assert payload["source_channel_id"] == -100987654321
 
 
+def test_story_remote_auth_scope_prefers_bundle_env(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_SESSION_ENV", "TELEGRAM_SESSION")
+
+    assert story_publish.story_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_STORY"
+
+
+def test_story_remote_auth_scope_prefers_lane_selection_params(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+
+    assert (
+        story_publish.story_remote_auth_scope(
+            {"_video_lane_auth_env": "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"}
+        )
+        == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    )
+
+
+def test_story_session_payload_can_use_lane_auth_bundle(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "12345")
+    monkeypatch.setenv("TG_API_HASH", "hash-123")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_STORY", _auth_bundle("story-session"))
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_S22_VIDEO1", _auth_bundle("video1-session"))
+
+    payload = story_publish._story_session_payload(
+        auth_bundle_env="TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    )
+
+    assert payload["session"] == "video1-session"
+    assert payload["auth_source"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+
+
+def test_create_or_update_story_dataset_versions_existing_dataset() -> None:
+    calls: list[tuple[str, str]] = []
+
+    class Client:
+        def dataset_status(self, dataset_slug: str) -> str:
+            calls.append(("status", dataset_slug))
+            return "ready"
+
+        def create_dataset(self, path):  # noqa: ANN001
+            calls.append(("create", str(path)))
+
+        def create_dataset_version(self, path, **kwargs):  # noqa: ANN001,ANN003
+            calls.append(("version", kwargs["version_notes"]))
+
+    story_publish._create_or_update_dataset(
+        Client(),
+        "zigomaro/crumple-video-story-secrets-cipher",
+        title="Secrets",
+        filename="story_publish.enc",
+        data=b"encrypted",
+    )
+
+    assert calls == [
+        ("status", "zigomaro/crumple-video-story-secrets-cipher"),
+        ("version", "refresh story secrets"),
+    ]
+
+
+def test_popular_review_story_caption_uses_session_number_and_day_month():
+    assert (
+        build_popular_review_story_caption(677, "2026-06-15")
+        == "Видеоанонс #677 · 15 июня"
+    )
+
+
+def test_apply_popular_review_story_caption_fills_public_story_message_only():
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+
+    selection_params = scenario._popular_review_selection_params()
+    selection_params["target_date"] = "2026-06-15"
+    params = apply_popular_review_story_caption(
+        selection_params, session_id=677
+    )
+
+    assert params["story_caption"] == "Видеоанонс #677 · 15 июня"
+    targets = params["story_targets_override"]
+    assert targets[1]["transport"] == "telegram_story_message"
+    assert targets[1]["caption"] == "Видеоанонс #677 · 15 июня"
+    assert targets[2]["transport"] == "vk_wall"
+    assert targets[2]["caption"] == "Видеоанонс"
+
+
 def test_popular_review_selection_params_enable_story_publish_with_repost_target():
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
@@ -45,6 +144,16 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "blocking": False,
         },
         {
+            "peer": "@kenigevents",
+            "label": "tg:@kenigevents:post",
+            "delay_seconds": 30,
+            "mode": "repost_previous",
+            "transport": "telegram_story_message",
+            "caption": "Видеоанонс",
+            "blocking": False,
+            "required": True,
+        },
+        {
             "peer": "club231828790",
             "label": "vk:club231828790:wall",
             "delay_seconds": 300,
@@ -56,19 +165,20 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
         {
             "peer": "club231828790",
             "label": "vk:club231828790:story",
-            "delay_seconds": 300,
+            "delay_seconds": 0,
             "mode": "upload",
-            "transport": "vk_story",
+            "transport": "vk_wall_story",
         },
         {"peer": "@loving_guide39", "delay_seconds": 300, "mode": "repost_previous"},
         {
             "peer": "klgdevents",
             "label": "vk:klgdevents:story",
-            "delay_seconds": 300,
+            "delay_seconds": 600,
             "mode": "upload",
-            "transport": "vk_story",
+            "transport": "vk_wall_story",
         },
         {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
+        {"peer": "@i_love_kaliningrad", "delay_seconds": 600, "mode": "repost_previous"},
     ]
 
 
@@ -79,18 +189,28 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
+    selection_params = scenario._popular_review_selection_params()
+    selection_params["target_date"] = "2026-05-17"
+    selection_params = apply_popular_review_story_caption(
+        selection_params, session_id=677
+    )
+
     config = await story_publish.build_story_publish_config(
         None,
         main_chat_id=None,
-        selection_params=scenario._popular_review_selection_params(),
+        selection_params=selection_params,
         selected_event_dates=["2026-05-17"],
         selected_event_cities=["Калининград", "Светлогорск"],
     )
 
     assert config is not None
+    assert "auth_source" in config
     assert config["targets"][0]["blocking"] is False
-    vk_wall_target = config["targets"][1]
-    assert vk_wall_target["caption"].startswith("Видеоанонс\n\n")
+    assert config["targets"][1]["transport"] == "telegram_story_message"
+    assert config["caption"] == "Видеоанонс #677 · 17 мая"
+    assert config["targets"][1]["caption"] == "Видеоанонс #677 · 17 мая"
+    vk_wall_target = config["targets"][2]
+    assert vk_wall_target["caption"].startswith("Видеоанонс #677 · 17 мая\n\n")
     assert "#Калининград" in vk_wall_target["caption"]
     assert "#Светлогорск" in vk_wall_target["caption"]
     assert "#17мая" in vk_wall_target["caption"]
@@ -100,13 +220,83 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         for target in config["targets"]
     ] == [
         ("@kenigevents", "telethon"),
+        ("@kenigevents", "telegram_story_message"),
         ("club231828790", "vk_wall"),
         ("@lovekenig", "telethon"),
-        ("club231828790", "vk_story"),
+        ("club231828790", "vk_wall_story"),
         ("@loving_guide39", "telethon"),
-        ("klgdevents", "vk_story"),
+        ("klgdevents", "vk_wall_story"),
         ("@catwithbag", "telethon"),
+        ("@i_love_kaliningrad", "telethon"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_default_story_targets_add_crumple_vk_official_wall(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setattr(
+        story_publish,
+        "datetime",
+        type(
+            "_FixedStoryDatetime",
+            (datetime,),
+            {
+                "now": classmethod(
+                    lambda cls, tz=None: (
+                        datetime(2026, 6, 9, 12, 0).replace(tzinfo=tz)
+                        if tz is not None
+                        else datetime(2026, 6, 9, 12, 0)
+                    )
+                )
+            },
+        ),
+    )
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
+        json.dumps(
+            [
+                {"peer": "me", "delay_seconds": 0, "mode": "upload"},
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "delay_seconds": 300,
+                    "mode": "upload",
+                    "transport": "vk_wall",
+                    "caption_variant": "crumple_official",
+                    "blocking": False,
+                    "required": False,
+                },
+                {
+                    "peer": "@kenigevents",
+                    "delay_seconds": 0,
+                    "mode": "repost_previous",
+                    "required": True,
+                },
+            ],
+            ensure_ascii=False,
+        ),
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+        },
+        selected_event_dates=["2026-06-10"],
+        selected_event_cities=["Калининград"],
+    )
+
+    assert config is not None
+    official_wall_target = config["targets"][1]
+    assert official_wall_target["peer"] == "kenigeventsofficial"
+    assert official_wall_target["transport"] == "vk_wall"
+    assert official_wall_target["blocking"] is False
+    assert official_wall_target["required"] is True
+    assert official_wall_target["caption"] == (
+        "События на завтра #Калининград #10_июня #10июня"
+    )
 
 
 @pytest.mark.asyncio
@@ -173,6 +363,28 @@ async def test_build_story_publish_config_keeps_native_upload_profile(monkeypatc
 
     assert config is not None
     assert config["upload_profile"] == "telegram_story_native_hevc_720p_v1"
+
+
+@pytest.mark.asyncio
+async def test_build_story_publish_config_keeps_legacy_h264_upload_profile(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_upload_profile": "legacy_h264_transcode",
+            "story_targets_override": [
+                {"peer": "@mostvkenig", "delay_seconds": 0, "mode": "upload"},
+            ],
+        },
+        selected_event_dates=["2026-06-12"],
+    )
+
+    assert config is not None
+    assert config["upload_profile"] == "legacy_h264_transcode"
 
 
 @pytest.mark.asyncio
@@ -382,13 +594,16 @@ async def test_business_story_targets_are_allowed_for_kenigsberg(monkeypatch, tm
 
 
 @pytest.mark.asyncio
-async def test_build_story_publish_config_preserves_self_blocking_target(monkeypatch):
+async def test_build_story_publish_config_preserves_crumple_story_message_target(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
     monkeypatch.setenv(
         "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
         (
             '[{"peer":"me","delay_seconds":0,"mode":"upload"},'
             '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous","required":true},'
+            '{"peer":"@kenigevents","label":"tg:@kenigevents:story-message",'
+            '"delay_seconds":600,"mode":"repost_previous",'
+            '"transport":"telegram_story_message","required":true},'
             '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous","required":true}]'
         ),
     )
@@ -414,6 +629,14 @@ async def test_build_story_publish_config_preserves_self_blocking_target(monkeyp
             "delay_seconds": 0,
             "mode": "repost_previous",
             "required": True,
+        },
+        {
+            "peer": "@kenigevents",
+            "label": "tg:@kenigevents:story-message",
+            "delay_seconds": 600,
+            "mode": "repost_previous",
+            "required": True,
+            "transport": "telegram_story_message",
         },
         {
             "peer": "@lovekenig",

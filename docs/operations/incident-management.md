@@ -51,6 +51,26 @@
 - incident-related change держать как можно уже по scope;
 - если нужен emergency deploy, соблюдать `docs/operations/release-governance.md`.
 
+### 3.1 LLM-first semantic gate
+
+Перед prevention/fix агент обязан явно классифицировать root cause:
+
+- **Semantic/event meaning** — `title`, `description`, `search_digest`,
+  `location_name`, `location_address`, eventness/non-event, duplicate/match,
+  venue identity, ticket/free status, date interpretation from prose, public
+  writer copy. Такие инциденты чинятся LLM-first: prompts, staged review/rescue,
+  Smart Update LLM shortlist/merge, schema tightening или provider/runtime
+  contract. Deterministic code допустим только как validation, grounding,
+  fail-closed guard или routing к LLM.
+- **Mechanical/idempotency/transport** — Bot/API timeout, retry policy, queue
+  state, DB transaction, exact source URL identity, public cleanup bookkeeping.
+  Deterministic fix допустим, если он не принимает semantic decisions широкими
+  regex/keyword rules.
+
+Если proposed fix использует broad regex/keywords для решения смысла события,
+venue, duplicate, ticket/free или copy quality, closure запрещён до redesign в
+LLM-first или узкий fail-closed guard с negative controls.
+
 ### 4. Regression Contract
 
 Для каждого incident record должны быть явно перечислены:

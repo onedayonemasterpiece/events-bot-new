@@ -54,6 +54,7 @@
 
 - Если `SUPABASE_ICS_BUCKET`/`SUPABASE_MEDIA_BUCKET` не заданы, код использует `SUPABASE_BUCKET`.
 - Если и `SUPABASE_BUCKET` не задан, дефолт остаётся `events-ics` (как сейчас).
+- ICS-публикация (`ics_publish`) при настроенных `SUPABASE_URL` + service key загружает `.ics` напрямую в Supabase Storage API (`/storage/v1/object/<bucket>/<path>`, `x-upsert: true`). Это намеренно не идёт через Yandex Object Storage и не использует PostgREST `/rest/v1/...`; изображения/постеры могут идти в Yandex, а ICS остаются в Supabase bucket.
 
 ### Форматы ключей (paths)
 

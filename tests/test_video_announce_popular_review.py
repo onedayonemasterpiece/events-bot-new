@@ -208,7 +208,9 @@ async def test_popular_review_partner_filter_applies_to_promo_candidates(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_popular_review_partner_allows_one_off_filter_promo_after_three_matches(tmp_path, monkeypatch):
+async def test_popular_review_partner_rejects_off_filter_promo_even_after_profile_matches(
+    tmp_path, monkeypatch
+):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
@@ -308,7 +310,7 @@ async def test_popular_review_partner_allows_one_off_filter_promo_after_three_ma
     selection = await build_popular_review_selection(
         db,
         max_events=4,
-        min_events=4,
+        min_events=3,
         anti_repeat_days=7,
         candidate_limit=10,
         now_utc=now_utc,
@@ -320,11 +322,9 @@ async def test_popular_review_partner_allows_one_off_filter_promo_after_three_ma
 
     profile_ids = {int(event.id) for event in profile_events}
     promo_ids = [int(event.id) for event in promo_events]
-    assert profile_ids.issubset(set(selection.event_ids))
-    assert selection.event_ids.count(promo_ids[0]) == 1
+    assert set(selection.event_ids) == profile_ids
+    assert promo_ids[0] not in selection.event_ids
     assert promo_ids[1] not in selection.event_ids
-    assert selection.trace[promo_ids[0]]["promo_placement_kind"] == "guaranteed_any_position"
-    assert selection.trace[promo_ids[0]]["partner_filter"]["partner_promo_off_filter_admitted"] is True
     await db.close()
 
 
@@ -897,8 +897,9 @@ async def test_popular_review_seeded_promo_uses_only_future_festival_events(tmp_
 
     async with db.get_session() as session:
         campaigns = (await session.execute(select(PromoCampaign))).scalars().all()
-    assert len(campaigns) == 1
-    assert campaigns[0].status == "active"
+    by_title = {campaign.title: campaign for campaign in campaigns}
+    campaign = by_title["80 историй о главном / summer visibility"]
+    assert campaign.status == "active"
     await db.close()
 
 

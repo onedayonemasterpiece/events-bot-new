@@ -6,6 +6,8 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -21,6 +23,14 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from kaggle_status import (
+    KAGGLE_RUN_FILENAME,
+    create_kaggle_run_config,
+    enrich_kaggle_status_from_ledger,
+    format_kaggle_status_label,
+    write_kaggle_status_files,
+)
+from kaggle_registry import remove_job
 from main import format_day_pretty
 from models import (
     Event,
@@ -31,9 +41,23 @@ from models import (
     VideoAnnounceSessionStatus,
 )
 from promo import record_video_promo_exposures
-from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient
+from .kaggle_client import (
+    LOCAL_KERNEL_PREFIX,
+    KaggleClient,
+    await_dataset_ready,
+    await_kernel_dataset_sources,
+    resolve_kaggle_slug as _accel_pref_resolve_slug,
+)
+from .story_publish import (
+    STORY_PUBLISH_CIPHER_FILENAME,
+    STORY_PUBLISH_CONFIG_FILENAME,
+    STORY_PUBLISH_KEY_FILENAME,
+    build_story_publish_config,
+    encrypt_secret,
+)
 
 logger = logging.getLogger(__name__)
+KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE = "kenigsberg_story"
 
 _status_messages: dict[int, tuple[int, int]] = {}
 _status_locks: dict[int, asyncio.Lock] = {}
@@ -70,17 +94,112 @@ VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES = _read_positive_int(
     "VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES",
     10,
 )
+VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES",
+    15,
+)
+VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES",
+    30,
+)
+VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES",
+    12 * 60,
+)
+STORY_PUBLISH_ONLY_TIMEOUT_MINUTES = _read_positive_int(
+    "VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_TIMEOUT_MINUTES",
+    45,
+)
+STORY_PUBLISH_ONLY_KERNEL_REF = (
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_KERNEL_REF")
+    or "local:CrumpleStoryPublishOnly"
+).strip()
+STORY_PUBLISH_ONLY_RECOVERY_ENABLED = (
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_RECOVERY", "1").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+STORY_PUBLISH_ONLY_LOCK_DIR = Path(
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_LOCK_DIR")
+    or "/tmp/events-bot-locks"
+)
 
 logger.info(
-    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s",
+    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s remote_alive_grace_min=%s",
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
     VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES,
+    VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
 )
 
 
 def _is_local_kernel_ref(kernel_ref: str | None) -> bool:
     return str(kernel_ref or "").strip().startswith(LOCAL_KERNEL_PREFIX)
+
+
+def _parse_utc_iso(value: object) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _fresh_kaggle_ledger_heartbeat(
+    db: Database,
+    run_id: str,
+    *,
+    now: datetime | None = None,
+    grace_minutes: int = VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+) -> dict | None:
+    now = now or datetime.now(timezone.utc)
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT status, phase, last_heartbeat_at, updated_at, terminal_at, progress_json
+                FROM kaggle_run_ledger
+                WHERE run_id=?
+                """,
+                (run_id,),
+            )
+            row = await cur.fetchone()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read Kaggle ledger heartbeat run_id=%s", run_id)
+        return None
+    if not row:
+        return None
+    status = str(row[0] or "").strip().casefold()
+    if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
+        return None
+    if row[4]:
+        return None
+    heartbeat_at = _parse_utc_iso(row[2]) or _parse_utc_iso(row[3])
+    if heartbeat_at is None:
+        return None
+    age_seconds = (now - heartbeat_at).total_seconds()
+    if age_seconds < 0 or age_seconds > max(60, int(grace_minutes) * 60):
+        return None
+    progress: dict = {}
+    try:
+        parsed = json.loads(row[5] or "{}")
+        if isinstance(parsed, dict):
+            progress = parsed
+    except Exception:
+        progress = {}
+    return {
+        "status": row[0],
+        "phase": row[1],
+        "last_heartbeat_at": row[2],
+        "updated_at": row[3],
+        "age_seconds": age_seconds,
+        "progress": progress,
+    }
 
 
 def _local_handoff_grace_deadline(session_obj: VideoAnnounceSession) -> datetime | None:
@@ -93,6 +212,72 @@ def _local_handoff_grace_deadline(session_obj: VideoAnnounceSession) -> datetime
     if reference.tzinfo is None:
         reference = reference.replace(tzinfo=timezone.utc)
     return reference + timedelta(minutes=VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES)
+
+
+async def _live_video_ledger_session_ids(
+    db: Database,
+    *,
+    now: datetime | None = None,
+    grace_minutes: int = VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+) -> set[int]:
+    """Return video session ids whose Kaggle status ledger is freshly alive.
+
+    This is used by recovery after a bot restart to rescue sessions that were
+    falsely marked FAILED by stale Kaggle status/output while the newly pushed
+    notebook had already started and was still sending heartbeats.
+    """
+
+    if db is None or not hasattr(db, "raw_conn"):
+        return set()
+    now = now or datetime.now(timezone.utc)
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT run_id, session_id, kind, notebook, status,
+                       last_heartbeat_at, updated_at, terminal_at
+                FROM kaggle_run_ledger
+                WHERE run_id LIKE 'videoannounce:%'
+                  AND session_id IS NOT NULL
+                """
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read live Kaggle video ledgers")
+        return set()
+
+    live: set[int] = set()
+    for (
+        run_id_raw,
+        session_id,
+        kind_raw,
+        notebook_raw,
+        status_raw,
+        heartbeat_raw,
+        updated_raw,
+        terminal_raw,
+    ) in rows:
+        run_id = str(run_id_raw or "").strip()
+        kind = str(kind_raw or "").strip().casefold()
+        notebook = str(notebook_raw or "").strip().casefold()
+        if ":publish-only:" in run_id or kind.endswith("publish_only") or "publishonly" in notebook:
+            continue
+        status = str(status_raw or "").strip().casefold()
+        if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
+            continue
+        if terminal_raw:
+            continue
+        heartbeat_at = _parse_utc_iso(heartbeat_raw) or _parse_utc_iso(updated_raw)
+        if heartbeat_at is None:
+            continue
+        age_seconds = (now - heartbeat_at).total_seconds()
+        if 0 <= age_seconds <= max(60, int(grace_minutes) * 60):
+            try:
+                live.add(int(session_id))
+            except (TypeError, ValueError):
+                continue
+    return live
 
 
 def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
@@ -231,7 +416,40 @@ def start_kernel_poller_task(
         )
     )
     _track_poller_task(session_obj.id, task)
+    _track_remote_telegram_session_cleanup(session_obj, task)
     return task
+
+
+def _track_remote_telegram_session_cleanup(
+    session_obj: VideoAnnounceSession,
+    task: asyncio.Task,
+) -> None:
+    if str(getattr(session_obj, "profile_key", "") or "") != KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE:
+        return
+    kernel_ref = str(getattr(session_obj, "kaggle_kernel_ref", "") or "").strip()
+    if not kernel_ref or kernel_ref.startswith("local:"):
+        return
+
+    def _cleanup(_task: asyncio.Task) -> None:
+        async def _remove() -> None:
+            try:
+                await remove_job(KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE, kernel_ref)
+            except Exception:
+                logger.warning(
+                    "video_announce: failed to clear kenigsberg remote telegram job kernel=%s",
+                    kernel_ref,
+                    exc_info=True,
+                )
+
+        try:
+            asyncio.create_task(_remove())
+        except RuntimeError:
+            logger.warning(
+                "video_announce: no running loop to clear kenigsberg remote telegram job kernel=%s",
+                kernel_ref,
+            )
+
+    task.add_done_callback(_cleanup)
 
 
 def _parse_positive_int(value: object) -> int | None:
@@ -345,16 +563,7 @@ async def _build_video_caption(
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = status.get("failureMessage") or status.get("failure_message")
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _status_text(
@@ -383,11 +592,17 @@ async def update_status_message(
     session_obj: VideoAnnounceSession,
     kaggle_status: dict | None,
     *,
+    db: Database | None = None,
     chat_id: int | None = None,
     message_id: int | None = None,
     allow_send: bool = False,
     note: str | None = None,
 ) -> tuple[int, int] | None:
+    kaggle_status = await enrich_kaggle_status_from_ledger(
+        db,
+        f"videoannounce:{session_obj.id}",
+        kaggle_status,
+    )
     text = _status_text(session_obj, kaggle_status, note=note)
     markup = _status_keyboard(session_obj.id)
     lock = _get_status_lock(session_obj.id)
@@ -462,6 +677,37 @@ def _load_story_report(path: Path | None) -> dict | None:
         logger.exception("video_announce: failed to parse story report %s", path)
         return None
     return payload if isinstance(payload, dict) else None
+
+
+async def _load_session_if_publish_only_allowed(
+    db: Database,
+    session_id: int,
+) -> VideoAnnounceSession | None:
+    """Return a fresh session unless publish-only recovery is already moot.
+
+    Publish-only recovery can be invoked both by the standard poller and by the
+    operator catch-up script.  The filesystem lock prevents concurrent work in a
+    single machine lifetime, but Fly deploy/restart can drop /tmp locks while a
+    second recovery is being scheduled.  Re-check the durable DB state before
+    creating a new Kaggle publish-only dataset so a session already recovered by
+    another invocation is not published to VK twice.
+    """
+
+    async with db.get_session() as session:
+        obj = await session.get(VideoAnnounceSession, session_id)
+        if not obj:
+            return None
+        if obj.status in {
+            VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+        }:
+            logger.info(
+                "video_announce: publish-only recovery skipped; session already published session=%s status=%s",
+                session_id,
+                obj.status,
+            )
+            return None
+        return obj
 
 
 async def _maybe_register_kenigsberg_manifest(
@@ -577,6 +823,423 @@ def _story_failure_message(report: dict | None) -> str | None:
     return "story publish failed"
 
 
+def _vk_failed_target_labels(report: dict | None) -> set[str]:
+    labels: set[str] = set()
+    if not isinstance(report, dict):
+        return labels
+    for item in report.get("targets") or []:
+        if not isinstance(item, dict) or bool(item.get("ok")):
+            continue
+        transport = str(item.get("transport") or "").strip().lower()
+        if transport not in {"vk_story", "vk_wall", "vk_wall_story"}:
+            continue
+        label = str(item.get("label") or item.get("peer") or "").strip()
+        if label:
+            labels.add(label)
+    return labels
+
+
+def _acquire_story_publish_only_lock(session_id: int):
+    import fcntl
+
+    STORY_PUBLISH_ONLY_LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = STORY_PUBLISH_ONLY_LOCK_DIR / f"crumple-story-publish-only-{session_id}.lock"
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    handle.seek(0)
+    handle.truncate()
+    handle.write(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "pid": os.getpid(),
+                "acquired_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+    )
+    handle.flush()
+    return handle
+
+
+def _release_story_publish_only_lock(handle) -> None:
+    if handle is None:
+        return
+    try:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        logger.debug("video_announce: failed to unlock publish-only lock", exc_info=True)
+    try:
+        handle.close()
+    except Exception:
+        logger.debug("video_announce: failed to close publish-only lock", exc_info=True)
+
+
+def _filter_story_config_for_publish_only_recovery(
+    config: dict,
+    *,
+    story_report: dict | None,
+) -> dict | None:
+    failed_vk_labels = _vk_failed_target_labels(story_report)
+    targets: list[dict] = []
+    for raw in config.get("targets") or []:
+        if not isinstance(raw, dict):
+            continue
+        transport = str(raw.get("transport") or "").strip().lower()
+        if transport not in {"vk_story", "vk_wall", "vk_wall_story"}:
+            continue
+        label = str(raw.get("label") or raw.get("peer") or "").strip()
+        if failed_vk_labels and label not in failed_vk_labels:
+            continue
+        target = dict(raw)
+        target["delay_seconds"] = 0
+        target["required"] = True
+        target.setdefault("blocking", False)
+        targets.append(target)
+    if not targets:
+        return None
+    filtered = dict(config)
+    filtered["targets"] = targets
+    filtered["publish_only_recovery"] = True
+    return filtered
+
+
+async def _selected_event_dates_for_session(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+) -> list[str]:
+    limit = _selection_render_limit(session_obj)
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(VideoAnnounceItem)
+            .where(VideoAnnounceItem.session_id == session_obj.id)
+            .where(VideoAnnounceItem.status == VideoAnnounceItemStatus.READY)
+            .order_by(VideoAnnounceItem.position)
+        )
+        items = res.scalars().all()
+        if limit:
+            items = items[:limit]
+        event_ids = [item.event_id for item in items]
+        if not event_ids:
+            return []
+        ev_res = await session.execute(select(Event).where(Event.id.in_(event_ids)))
+        events = ev_res.scalars().all()
+    by_id = {ev.id: ev for ev in events}
+    dates: list[str] = []
+    for item in items:
+        ev = by_id.get(item.event_id)
+        if ev and ev.date:
+            dates.append(str(ev.date).split("..", 1)[0])
+    return dates
+
+
+async def _selected_event_cities_for_session(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+) -> list[str]:
+    limit = _selection_render_limit(session_obj)
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(VideoAnnounceItem)
+            .where(VideoAnnounceItem.session_id == session_obj.id)
+            .where(VideoAnnounceItem.status == VideoAnnounceItemStatus.READY)
+            .order_by(VideoAnnounceItem.position)
+        )
+        items = res.scalars().all()
+        if limit:
+            items = items[:limit]
+        event_ids = [item.event_id for item in items]
+        if not event_ids:
+            return []
+        ev_res = await session.execute(select(Event).where(Event.id.in_(event_ids)))
+        events = ev_res.scalars().all()
+    by_id = {ev.id: ev for ev in events}
+    cities: list[str] = []
+    for item in items:
+        ev = by_id.get(item.event_id)
+        city = str(getattr(ev, "city", "") or "").strip() if ev else ""
+        if city and city not in cities:
+            cities.append(city)
+    return cities
+
+
+async def _create_story_publish_only_dataset(
+    db: Database,
+    client: KaggleClient,
+    session_obj: VideoAnnounceSession,
+    *,
+    video_path: Path,
+    story_report: dict | None,
+) -> tuple[str, list[str]]:
+    username = os.getenv("KAGGLE_USERNAME", "").strip()
+    if not username:
+        raise RuntimeError("KAGGLE_USERNAME not set")
+    if not video_path.exists():
+        raise RuntimeError(f"publish-only source video missing: {video_path}")
+
+    run_suffix = f"{session_obj.id}-{int(time.time())}"
+    dataset_id = f"{username}/crumple-story-publish-session-{run_suffix}"
+    meta = {
+        "title": f"Crumple Story Publish Session {session_obj.id} {run_suffix}",
+        "id": dataset_id,
+        "licenses": [{"name": "CC0-1.0"}],
+    }
+
+    selection_params = (
+        dict(session_obj.selection_params)
+        if isinstance(session_obj.selection_params, dict)
+        else {}
+    )
+    story_config = await build_story_publish_config(
+        db,
+        main_chat_id=session_obj.main_chat_id,
+        selection_params=selection_params,
+        selected_event_dates=await _selected_event_dates_for_session(db, session_obj),
+        selected_event_cities=await _selected_event_cities_for_session(db, session_obj),
+    )
+    if not story_config:
+        raise RuntimeError("publish-only recovery could not build story_publish.json")
+    story_config = _filter_story_config_for_publish_only_recovery(
+        story_config,
+        story_report=story_report,
+    )
+    if not story_config:
+        raise RuntimeError("publish-only recovery has no failed VK targets")
+
+    vk_access_token = str(os.getenv("VK_ACCESS_TOKEN5") or "").strip()
+    if not vk_access_token:
+        raise RuntimeError("publish-only recovery requires VK_ACCESS_TOKEN5")
+    auth_payload = json.dumps({"vk_access_token": vk_access_token}, ensure_ascii=False)
+    encrypted_auth, auth_key = encrypt_secret(auth_payload)
+    if not encrypted_auth or not auth_key:
+        raise RuntimeError("publish-only recovery could not encrypt VK auth")
+
+    story_dataset_sources: list[str] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        (tmp_path / "dataset-metadata.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        shutil.copy2(video_path, tmp_path / "crumple_video_final.mp4")
+        (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
+            json.dumps(story_config, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (tmp_path / STORY_PUBLISH_CIPHER_FILENAME).write_bytes(encrypted_auth)
+        (tmp_path / STORY_PUBLISH_KEY_FILENAME).write_bytes(auth_key)
+        project_root = Path(__file__).resolve().parent.parent
+        helper_src = project_root / "kaggle" / "CrumpleVideo" / "story_publish.py"
+        helper_dest = tmp_path / "kaggle_common" / "story_publish.py"
+        if not helper_src.exists():
+            raise RuntimeError(f"Missing CrumpleVideo story helper: {helper_src}")
+        helper_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(helper_src, helper_dest)
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"videoannounce:{session_obj.id}:publish-only:{int(time.time())}",
+            session_id=session_obj.id,
+            kind="crumple_story_publish_only",
+            notebook="CrumpleStoryPublishOnly",
+            kernel_ref=STORY_PUBLISH_ONLY_KERNEL_REF,
+            dataset_ref=dataset_id,
+            resource_leases=[],
+        )
+        if kaggle_run_config:
+            write_kaggle_status_files(tmp_path, kaggle_run_config)
+        (tmp_path / "publish_only_manifest.json").write_text(
+            json.dumps(
+                {
+                    "session_id": session_obj.id,
+                    "source_session_id": session_obj.id,
+                    "source_video": video_path.name,
+                    "targets": story_config.get("targets") or [],
+                    "files": [
+                        "crumple_video_final.mp4",
+                        STORY_PUBLISH_CONFIG_FILENAME,
+                        STORY_PUBLISH_CIPHER_FILENAME,
+                        STORY_PUBLISH_KEY_FILENAME,
+                        "kaggle_common/story_publish.py",
+                        KAGGLE_RUN_FILENAME,
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        await asyncio.to_thread(client.create_dataset, tmp_path)
+    logger.warning(
+        "video_announce: publish-only dataset created session=%s dataset=%s sources=%s",
+        session_obj.id,
+        dataset_id,
+        story_dataset_sources,
+    )
+    return dataset_id, story_dataset_sources
+
+
+async def run_story_publish_only_recovery(
+    db: Database,
+    client: KaggleClient,
+    session_obj: VideoAnnounceSession,
+    *,
+    bot,
+    notify_chat_id: int,
+    video_path: Path | None = None,
+    story_report: dict | None = None,
+    download_dir: Path | None = None,
+) -> bool:
+    """Republish failed CrumpleVideo VK story/wall targets without rerendering."""
+
+    if not STORY_PUBLISH_ONLY_RECOVERY_ENABLED:
+        return False
+    lock_handle = _acquire_story_publish_only_lock(session_obj.id)
+    if lock_handle is None:
+        logger.warning(
+            "video_announce: publish-only recovery already running session=%s",
+            session_obj.id,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                f"⚠️ Сессия #{session_obj.id}: publish-only компенсация уже выполняется",
+            )
+        return False
+    fresh_session = await _load_session_if_publish_only_allowed(db, session_obj.id)
+    if fresh_session is None:
+        _release_story_publish_only_lock(lock_handle)
+        return False
+    session_obj = fresh_session
+
+    dataset_slug: str | None = None
+    kernel_ref = STORY_PUBLISH_ONLY_KERNEL_REF
+    try:
+        source_video = video_path
+        output_dir: Path | None = None
+        if source_video is None:
+            source_kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip()
+            if not source_kernel_ref:
+                return False
+            tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+            output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            files = await asyncio.to_thread(
+                client.download_kernel_output,
+                source_kernel_ref,
+                path=output_dir,
+                force=True,
+                quiet=True,
+            )
+            output_files = _expand_output_paths([output_dir / item for item in files])
+            source_video = _find_video(output_files)
+            if story_report is None:
+                story_report = _load_story_report(_find_story_report(output_files))
+        if not _vk_failed_target_labels(story_report):
+            return False
+        if source_video is None or not source_video.exists():
+            return False
+
+        dataset_slug, extra_sources = await _create_story_publish_only_dataset(
+            db,
+            client,
+            session_obj,
+            video_path=source_video,
+            story_report=story_report,
+        )
+        await await_dataset_ready(
+            client,
+            dataset_slug,
+            timeout_seconds=180,
+            poll_interval_seconds=5,
+            expected_files=[
+                "crumple_video_final.mp4",
+                STORY_PUBLISH_CONFIG_FILENAME,
+                "kaggle_common/story_publish.py",
+                STORY_PUBLISH_CIPHER_FILENAME,
+                STORY_PUBLISH_KEY_FILENAME,
+            ],
+        )
+        dataset_sources = [dataset_slug, *extra_sources]
+        kernel_ref = await asyncio.to_thread(
+            client.deploy_kernel_update,
+            kernel_ref,
+            dataset_sources,
+        )
+        await await_kernel_dataset_sources(
+            client,
+            kernel_ref,
+            dataset_sources,
+            timeout_seconds=120,
+            poll_interval_seconds=10,
+        )
+        deadline = datetime.now(timezone.utc) + timedelta(
+            minutes=STORY_PUBLISH_ONLY_TIMEOUT_MINUTES
+        )
+        while datetime.now(timezone.utc) < deadline:
+            status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
+            state = str(status.get("status") or "").lower()
+            if state == "complete":
+                break
+            if state in {"error", "failed", "cancelled", "canceled"}:
+                raise RuntimeError(f"publish-only Kaggle failed: {status}")
+            await asyncio.sleep(30)
+        else:
+            raise RuntimeError("publish-only Kaggle timeout")
+
+        tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+        recovery_output_dir = tmp_dir / f"videoannounce-publish-only-{session_obj.id}"
+        recovery_output_dir.mkdir(parents=True, exist_ok=True)
+        files = await asyncio.to_thread(
+            client.download_kernel_output,
+            kernel_ref,
+            path=recovery_output_dir,
+            force=True,
+            quiet=True,
+        )
+        output_files = _expand_output_paths([recovery_output_dir / item for item in files])
+        recovery_report = _load_story_report(_find_story_report(output_files))
+        recovery_failure = _story_failure_message(recovery_report)
+        if recovery_failure:
+            raise RuntimeError(recovery_failure)
+        session_obj = await _update_status(
+            db,
+            session_obj.id,
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            error=None,
+            video_url=session_obj.video_url or source_video.name,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                (
+                    f"✅ Сессия #{session_obj.id if session_obj else '?'}: "
+                    "publish-only компенсация без ререндера завершена"
+                ),
+            )
+        return True
+    except Exception as exc:
+        logger.exception(
+            "video_announce: publish-only recovery failed session=%s",
+            session_obj.id,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                f"⚠️ Сессия #{session_obj.id}: publish-only компенсация не удалась: {exc}",
+            )
+        return False
+    finally:
+        if dataset_slug:
+            await _cleanup_dataset(client, dataset_slug)
+        _release_story_publish_only_lock(lock_handle)
+
+
 def _expand_output_paths(paths: Iterable[Path]) -> list[Path]:
     files: list[Path] = []
     seen: set[Path] = set()
@@ -608,7 +1271,11 @@ async def _update_status(
                 if not obj:
                     return None
                 obj.status = status
-                if status in {VideoAnnounceSessionStatus.DONE, VideoAnnounceSessionStatus.FAILED}:
+                if status in {
+                    VideoAnnounceSessionStatus.DONE,
+                    VideoAnnounceSessionStatus.FAILED,
+                    VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                }:
                     obj.finished_at = datetime.now(timezone.utc)
                 if status == VideoAnnounceSessionStatus.PUBLISHED_TEST and obj.published_at is None:
                     obj.published_at = datetime.now(timezone.utc)
@@ -632,6 +1299,14 @@ async def _update_status(
     if last_exc:
         raise last_exc
     return None
+
+
+async def _load_session_for_status(
+    db: Database,
+    session_id: int,
+) -> VideoAnnounceSession | None:
+    async with db.get_session() as session:
+        return await session.get(VideoAnnounceSession, session_id)
 
 
 async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) -> None:
@@ -870,7 +1545,10 @@ async def run_kernel_poller(
     download_dir: Path | None = None,
     dataset_slug: str | None = None,
 ) -> None:
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=timeout_minutes)
+    started_at = datetime.now(timezone.utc)
+    deadline = started_at + timedelta(minutes=timeout_minutes)
+    absolute_timeout_minutes = max(timeout_minutes, VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES)
+    absolute_deadline = started_at + timedelta(minutes=absolute_timeout_minutes)
     kernel_ref = session_obj.kaggle_kernel_ref
     if not kernel_ref:
         await _update_status(
@@ -885,6 +1563,7 @@ async def run_kernel_poller(
         bot,
         session_obj,
         {},
+        db=db,
         chat_id=status_chat_id,
         message_id=status_message_id,
         allow_send=True,
@@ -898,8 +1577,62 @@ async def run_kernel_poller(
     # Kaggle kernel can take a while to start, API returns None during startup
     # At ~1 min poll interval, 30 attempts = ~30 minutes before failing
     MAX_UNKNOWN_STATUS_COUNT = 30
-    
-    while datetime.now(timezone.utc) < deadline:
+
+    # INC-2026-05-26 round 3: track when the kernel first went QUEUED to drive
+    # an auto-demote to a lower accelerator tier when P100 is congested.
+    from . import accel_pref as _accel_pref
+
+    queued_since: datetime | None = None
+
+    timed_out = True
+    status: dict = {}
+    timeout_status: dict | None = None
+    timeout_note_sent_at: datetime | None = None
+    output_probe_failure_error: str | None = None
+    output_probe_failure_message: str | None = None
+    output_probe_status: dict | None = None
+    while True:
+        now = datetime.now(timezone.utc)
+        if now >= deadline:
+            heartbeat = await _fresh_kaggle_ledger_heartbeat(
+                db,
+                f"videoannounce:{session_obj.id}",
+                now=now,
+            )
+            if heartbeat and now < absolute_deadline:
+                extension_deadline = now + timedelta(
+                    minutes=VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES
+                )
+                deadline = min(extension_deadline, absolute_deadline)
+                progress_label = ""
+                progress = heartbeat.get("progress") or {}
+                if isinstance(progress, dict) and progress.get("progress_label"):
+                    progress_label = f" · {progress.get('progress_label')}"
+                logger.warning(
+                    "video_announce: fixed timeout reached but Kaggle ledger is alive; extending poller "
+                    "session=%s kernel=%s heartbeat_age=%.1fs phase=%s new_deadline=%s absolute_deadline=%s",
+                    session_obj.id,
+                    kernel_ref,
+                    float(heartbeat.get("age_seconds") or 0),
+                    heartbeat.get("phase"),
+                    deadline.isoformat(),
+                    absolute_deadline.isoformat(),
+                )
+                if (
+                    timeout_note_sent_at is None
+                    or (now - timeout_note_sent_at).total_seconds() >= 60 * 60
+                ):
+                    await bot.send_message(
+                        notify_chat_id,
+                        (
+                            f"⏳ Сессия #{session_obj.id}: лимит {timeout_minutes} мин достигнут, "
+                            f"но Kaggle живой ({heartbeat.get('phase') or heartbeat.get('status')}"
+                            f"{progress_label}); продолжаю ждать до {deadline:%H:%M UTC}."
+                        ),
+                    )
+                    timeout_note_sent_at = now
+                continue
+            break
         try:
             status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
             logger.info(
@@ -915,6 +1648,7 @@ async def run_kernel_poller(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,
             allow_send=True,
@@ -933,51 +1667,142 @@ async def run_kernel_poller(
             )
             if unknown_status_count >= MAX_UNKNOWN_STATUS_COUNT:
                 error_msg = f"Kaggle API returns unknown status after {MAX_UNKNOWN_STATUS_COUNT} attempts"
-                session_obj = await _update_status(
+                heartbeat = await _fresh_kaggle_ledger_heartbeat(
                     db,
+                    f"videoannounce:{session_obj.id}",
+                    now=datetime.now(timezone.utc),
+                )
+                if heartbeat:
+                    logger.warning(
+                        "video_announce: Kaggle status is unknown but ledger heartbeat is fresh; "
+                        "continuing poll session=%s kernel=%s heartbeat_age=%.1fs phase=%s",
+                        session_obj.id,
+                        kernel_ref,
+                        float(heartbeat.get("age_seconds") or 0),
+                        heartbeat.get("phase"),
+                    )
+                    unknown_status_count = 0
+                    await asyncio.sleep(poll_interval)
+                    continue
+                logger.warning(
+                    "video_announce: Kaggle status remained unknown; probing output before failing "
+                    "session=%s kernel=%s",
                     session_obj.id,
-                    status=VideoAnnounceSessionStatus.FAILED,
-                    error=error_msg,
-                )
-                if not session_obj:
-                    return
-                await update_status_message(
-                    bot,
-                    session_obj,
-                    status,
-                    chat_id=status_chat_id,
-                    message_id=status_message_id,
-                    allow_send=True,
-                )
-                await bot.send_message(
-                    notify_chat_id,
-                    f"⚠️ Сессия #{session_obj.id}: Kaggle API не возвращает статус.\n"
-                    "Проверьте ноутбук вручную на kaggle.com",
-                )
-                await _download_and_send_logs(
-                    client,
                     kernel_ref,
-                    bot,
-                    notify_chat_id,
-                    session_obj.id,
-                    download_dir=download_dir,
-                    caption_prefix="⚠️ Логи (неизвестный статус)",
                 )
-                await _cleanup_dataset(client, dataset_slug)
-                return
+                output_probe_failure_error = error_msg
+                output_probe_failure_message = (
+                    f"⚠️ Сессия #{session_obj.id}: Kaggle API не возвращает статус, "
+                    "и готовый output не подтвердился.\n"
+                    "Проверьте ноутбук вручную на kaggle.com"
+                )
+                output_probe_status = dict(status)
+                timed_out = False
+                break
             await asyncio.sleep(poll_interval)
             continue
         else:
             # Reset counter if we get a valid status
             unknown_status_count = 0
         
+        # INC-2026-05-26 round 3: stuck-in-queue auto-demote.
+        # If the kernel sits in QUEUED beyond the threshold (default 5 min),
+        # write an accel-pref demotion for this slug so the *next* push uses
+        # T4 instead, fail this session in our DB, and exit. The current
+        # zombie Kaggle session can't be cancelled programmatically (Kaggle
+        # public API rejects it), so it stays QUEUED on Kaggle's side and
+        # will eventually run uselessly — that's acceptable; the kernel-slug
+        # lock prevents us from piling up more versions on the same slug.
+        if state == "queued":
+            if queued_since is None:
+                queued_since = datetime.now(timezone.utc)
+            else:
+                stuck_for = (datetime.now(timezone.utc) - queued_since).total_seconds()
+                if stuck_for >= _accel_pref.queue_demote_threshold_sec():
+                    slug = _accel_pref_resolve_slug(kernel_ref)
+                    # Skip auto-demote when this slug has no configured ladder
+                    # (e.g. CPU-only kernels like crumple-video). Without this
+                    # check the demote call returns None ("ladder exhausted")
+                    # and we wrongly hard-fail a CPU run that would have
+                    # finished naturally. INC-2026-05-26 round 4 regression.
+                    if slug and _accel_pref.ladder_for(slug):
+                        current_pref = await _accel_pref.read_active_pref(db, slug)
+                        current_tier = (
+                            current_pref.tier if current_pref else _accel_pref.TIER_DEFAULT
+                        )
+                        reason = (
+                            f"queue >{int(stuck_for)}s on {current_tier} "
+                            f"(session #{session_obj.id})"
+                        )
+                        new_pref = await _accel_pref.demote(
+                            db, slug, current_tier=current_tier, reason=reason
+                        )
+                        if new_pref is None:
+                            err_msg = (
+                                f"kaggle_queue: ladder exhausted on {current_tier} "
+                                f"after {int(stuck_for)}s"
+                            )
+                            session_obj = await _update_status(
+                                db,
+                                session_obj.id,
+                                status=VideoAnnounceSessionStatus.FAILED,
+                                error=err_msg,
+                            )
+                            await bot.send_message(
+                                notify_chat_id,
+                                f"🛑 Сессия #{session_obj.id if session_obj else '?'}: все Kaggle тиеры исчерпаны для {slug} ({int(stuck_for)}с в очереди). Рендер не пойдёт; нужно ручное вмешательство.",
+                            )
+                            return
+                        err_msg = (
+                            f"queue_demote: {current_tier}->{new_pref.tier} "
+                            f"after {int(stuck_for)}s queue"
+                        )
+                        session_obj = await _update_status(
+                            db,
+                            session_obj.id,
+                            status=VideoAnnounceSessionStatus.FAILED,
+                            error=err_msg,
+                        )
+                        expires_local = new_pref.expires_at.astimezone(timezone.utc).strftime(
+                            "%Y-%m-%d %H:%M UTC"
+                        )
+                        # INC-2026-05-26 round 5: delete the session-specific
+                        # dataset so the zombie Kaggle run (which we cannot
+                        # cancel via API) fails at the mount step instead of
+                        # mounting our payload + Telegram bundle and
+                        # conflicting with the next push from a different IP
+                        # (previous incident: AuthKeyDuplicatedError when
+                        # v128 zombie + v129 fresh both opened the same
+                        # Telegram session simultaneously).
+                        await _cleanup_dataset(client, dataset_slug)
+                        await bot.send_message(
+                            notify_chat_id,
+                            (
+                                f"⚠️ Сессия #{session_obj.id if session_obj else '?'}: "
+                                f"Kaggle очередь {int(stuck_for)}s на {current_tier} → "
+                                f"следующие пуши {slug} идут на {new_pref.tier} "
+                                f"до {expires_local}. Dataset зомби-сессии удалён, "
+                                f"чтобы избежать конфликта Telegram-сессии. "
+                                f"Watchdog подберёт пропущенный слот."
+                            ),
+                        )
+                        return
+        else:
+            queued_since = None
+
         if state == "complete":
+            timed_out = False
             break
-        if state in {"error", "failed"}:
+        if state in {
+            "cancel_acknowledged",
+            "cancel_requested",
+            "cancelled",
+            "canceled",
+        }:
             failure_msg = status.get("failureMessage") or status.get("failure_message") or ""
             error_detail = f"{state}: {failure_msg}" if failure_msg else str(status)
             logger.warning(
-                "video_announce: kernel failed session=%s kernel=%s error=%s",
+                "video_announce: kernel cancelled session=%s kernel=%s error=%s",
                 session_obj.id,
                 kernel_ref,
                 error_detail,
@@ -994,14 +1819,14 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
             )
             await bot.send_message(
-                notify_chat_id, f"❌ Сессия #{session_obj.id} завершилась ошибкой Kaggle: {state}"
+                notify_chat_id, f"❌ Сессия #{session_obj.id} отменена в Kaggle: {state}"
             )
-            # Download and send logs on failure
             await _download_and_send_logs(
                 client,
                 kernel_ref,
@@ -1009,54 +1834,96 @@ async def run_kernel_poller(
                 notify_chat_id,
                 session_obj.id,
                 download_dir=download_dir,
-                caption_prefix="❌ Логи ошибки Kaggle",
+                caption_prefix="❌ Логи отменённого Kaggle run",
             )
             await _cleanup_dataset(client, dataset_slug)
             return
+        if state in {"error", "failed"}:
+            failure_msg = status.get("failureMessage") or status.get("failure_message") or ""
+            error_detail = f"{state}: {failure_msg}" if failure_msg else str(status)
+            logger.warning(
+                "video_announce: kernel failed session=%s kernel=%s error=%s",
+                session_obj.id,
+                kernel_ref,
+                error_detail,
+            )
+            heartbeat = await _fresh_kaggle_ledger_heartbeat(
+                db,
+                f"videoannounce:{session_obj.id}",
+                now=datetime.now(timezone.utc),
+            )
+            if heartbeat:
+                display_status = dict(status)
+                display_status["status"] = heartbeat.get("status") or "alive"
+                display_status["phase"] = heartbeat.get("phase")
+                display_status.pop("failureMessage", None)
+                display_status.pop("failure_message", None)
+                display_status.pop("error", None)
+                logger.warning(
+                    "video_announce: Kaggle terminal status conflicts with fresh notebook heartbeat; "
+                    "continuing poll session=%s kernel=%s provider_state=%s heartbeat_age=%.1fs phase=%s",
+                    session_obj.id,
+                    kernel_ref,
+                    state,
+                    float(heartbeat.get("age_seconds") or 0),
+                    heartbeat.get("phase"),
+                )
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    display_status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note=(
+                        f"Kaggle API сообщил {state}, но notebook heartbeat свежий "
+                        f"({int(float(heartbeat.get('age_seconds') or 0))}с); продолжаю ждать."
+                    ),
+                )
+                await asyncio.sleep(poll_interval)
+                continue
+            logger.warning(
+                "video_announce: probing Kaggle output before accepting terminal failure "
+                "session=%s kernel=%s state=%s",
+                session_obj.id,
+                kernel_ref,
+                state,
+            )
+            output_probe_failure_error = error_detail
+            output_probe_failure_message = (
+                f"❌ Сессия #{session_obj.id} завершилась ошибкой Kaggle: {state}; "
+                "готовый output не подтвердился."
+            )
+            output_probe_status = dict(status)
+            timed_out = False
+            break
         await asyncio.sleep(poll_interval)
-    else:
+    if timed_out:
+        timeout_status = status if "status" in locals() else {}
         logger.warning(
             "video_announce: kernel timeout session=%s kernel=%s timeout_min=%s",
             session_obj.id,
             kernel_ref,
             timeout_minutes,
         )
-        session_obj = await _update_status(
-            db,
+        logger.warning(
+            "video_announce: probing Kaggle output before timeout failure session=%s kernel=%s",
             session_obj.id,
-            status=VideoAnnounceSessionStatus.FAILED,
-            error=f"timeout after {timeout_minutes}min",
-        )
-        if not session_obj:
-            return
-        await update_status_message(
-            bot,
-            session_obj,
-            status,
-            chat_id=status_chat_id,
-            message_id=status_message_id,
-            allow_send=True,
-        )
-        await bot.send_message(
-            notify_chat_id,
-            f"⏱️ Сессия #{session_obj.id} не завершилась за {timeout_minutes} минут",
-        )
-        # Download and send logs on timeout
-        await _download_and_send_logs(
-            client,
             kernel_ref,
-            bot,
-            notify_chat_id,
-            session_obj.id,
-            download_dir=download_dir,
-            caption_prefix="⏱️ Логи (таймаут) Kaggle",
         )
-        await _cleanup_dataset(client, dataset_slug)
-        return
+        output_probe_failure_error = f"timeout after {timeout_minutes}min"
+        output_probe_failure_message = (
+            f"⏱️ Сессия #{session_obj.id} не завершилась за {timeout_minutes} минут; "
+            "готовый output не подтвердился."
+        )
+        output_probe_status = dict(timeout_status)
 
     tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
     output_dir = tmp_dir / f"videoannounce-{session_obj.id}"
     output_dir.mkdir(parents=True, exist_ok=True)
+    render_output_ready = False
+    ready_video_name: str | None = None
     try:
         max_attempts = 3
         files: list[str] = []
@@ -1094,6 +1961,38 @@ async def run_kernel_poller(
                 session_obj.id,
                 files or [p.name for p in output_files],
             )
+            story_failure = _story_failure_message(story_report)
+            if story_failure:
+                session_obj = await _update_status(
+                    db,
+                    session_obj.id,
+                    status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                    error=story_failure,
+                )
+                if not session_obj:
+                    return
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Story publish/preflight заблокировал render",
+                )
+                await bot.send_message(
+                    notify_chat_id,
+                    f"⚠️ Сессия #{session_obj.id}: {story_failure}. Полный Kaggle rerender не требуется без изменения target/access.",
+                )
+                if log_files:
+                    await _send_logs(
+                        bot,
+                        notify_chat_id,
+                        log_files,
+                        caption=f"⚠️ Логи preflight/publish blocker сессии #{session_obj.id}",
+                    )
+                return
             session_obj = await _update_status(
                 db,
                 session_obj.id,
@@ -1106,6 +2005,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1120,12 +2020,15 @@ async def run_kernel_poller(
                     caption=f"❌ Логи (нет видео) сессии #{session_obj.id}",
                 )
             return
+        render_output_ready = True
+        ready_video_name = video_path.name
         if video_path.stat().st_size > VIDEO_MAX_MB * 1024 * 1024:
             session_obj = await _update_status(
                 db,
                 session_obj.id,
-                status=VideoAnnounceSessionStatus.FAILED,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
                 error=f"video exceeds {VIDEO_MAX_MB}MB",
+                video_url=video_path.name,
             )
             if not session_obj:
                 return
@@ -1133,13 +2036,15 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
             )
             await bot.send_message(
                 notify_chat_id,
-                f"Видео из сессии #{session_obj.id} превышает {VIDEO_MAX_MB} MB",
+                f"⚠️ Видео из сессии #{session_obj.id} превышает {VIDEO_MAX_MB} MB. "
+                "Артефакт есть; нужен узкий publish/encode fix, не blind rerender.",
             )
             return
         session_obj = await _update_status(
@@ -1154,6 +2059,7 @@ async def run_kernel_poller(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,
             allow_send=True,
@@ -1161,64 +2067,140 @@ async def run_kernel_poller(
         caption = await _build_video_caption(db, session_obj)
         story_failure = _story_failure_message(story_report)
         if story_failure:
+            recovered = await run_story_publish_only_recovery(
+                db,
+                client,
+                session_obj,
+                bot=bot,
+                notify_chat_id=notify_chat_id,
+                video_path=video_path,
+                story_report=story_report,
+                download_dir=download_dir,
+            )
+            if recovered:
+                refreshed = await _load_session_for_status(db, session_obj.id)
+                if refreshed:
+                    await update_status_message(
+                        bot,
+                        refreshed,
+                        status,
+                        db=db,
+                        chat_id=status_chat_id,
+                        message_id=status_message_id,
+                        allow_send=True,
+                        note="Story publish восстановлен без ререндера",
+                    )
+            else:
+                session_obj = await _update_status(
+                    db,
+                    session_obj.id,
+                    status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                    error=story_failure,
+                )
+                if not session_obj:
+                    return
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Story publish завершился ошибкой",
+                )
+                await bot.send_message(
+                    notify_chat_id,
+                    f"⚠️ Сессия #{session_obj.id}: {story_failure}",
+                )
+                try:
+                    await _send_video_with_preview(
+                        bot,
+                        notify_chat_id,
+                        video_path,
+                        caption=f"{caption}\n\n⚠️ Story publish failed",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send failed-story video to notify chat %s",
+                        notify_chat_id,
+                        exc_info=True,
+                    )
+                report_and_logs = []
+                if story_report_path:
+                    report_and_logs.append(story_report_path)
+                report_and_logs.extend(
+                    file for file in log_files if story_report_path is None or file != story_report_path
+                )
+                if report_and_logs:
+                    await _send_logs(
+                        bot,
+                        notify_chat_id,
+                        report_and_logs,
+                        caption=f"⚠️ Story publish report сессии #{session_obj.id}",
+                    )
+                return
+        await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
+        target_test = test_chat_id or notify_chat_id
+        test_delivery_ok = False
+        try:
+            await _send_video_with_preview(bot, target_test, video_path, caption=caption)
+            test_delivery_ok = True
+        except Exception as e:
+            logger.warning("video_announce: failed to send video to test chat %s: %s", target_test, e)
+            # Fallback to notify_chat_id if test_chat_id fails.  A fallback
+            # failure is a post-render delivery blocker, not a render/output
+            # failure, so keep it inside this phase instead of letting the
+            # broad download handler turn it into a full-rerender signal.
+            if target_test != notify_chat_id:
+                try:
+                    await _send_video_with_preview(bot, notify_chat_id, video_path, caption=caption)
+                    test_delivery_ok = True
+                except Exception as fallback_exc:
+                    logger.warning(
+                        "video_announce: failed to send video fallback to notify chat %s: %s",
+                        notify_chat_id,
+                        fallback_exc,
+                    )
+        try:
+            await _send_logs(bot, notify_chat_id, log_files, caption=f"✅ Логи сессии #{session_obj.id}")
+        except Exception as logs_exc:
+            logger.warning(
+                "video_announce: failed to send post-render logs session=%s chat=%s: %s",
+                session_obj.id,
+                notify_chat_id,
+                logs_exc,
+            )
+        if not test_delivery_ok:
             session_obj = await _update_status(
                 db,
                 session_obj.id,
-                status=VideoAnnounceSessionStatus.FAILED,
-                error=story_failure,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                error="post-render bot delivery failed",
             )
-            if not session_obj:
-                return
-            await update_status_message(
-                bot,
-                session_obj,
-                status,
-                chat_id=status_chat_id,
-                message_id=status_message_id,
-                allow_send=True,
-                note="Story publish завершился ошибкой",
-            )
-            await bot.send_message(
-                notify_chat_id,
-                f"⚠️ Сессия #{session_obj.id}: {story_failure}",
-            )
-            try:
-                await _send_video_with_preview(
+            if session_obj:
+                await update_status_message(
                     bot,
-                    notify_chat_id,
-                    video_path,
-                    caption=f"{caption}\n\n⚠️ Story publish failed",
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Видео готово; доставка ботом заблокирована",
                 )
-            except Exception:
-                logger.warning(
-                    "video_announce: failed to send failed-story video to notify chat %s",
-                    notify_chat_id,
-                    exc_info=True,
-                )
-            report_and_logs = []
-            if story_report_path:
-                report_and_logs.append(story_report_path)
-            report_and_logs.extend(
-                file for file in log_files if story_report_path is None or file != story_report_path
-            )
-            if report_and_logs:
-                await _send_logs(
-                    bot,
-                    notify_chat_id,
-                    report_and_logs,
-                    caption=f"⚠️ Story publish report сессии #{session_obj.id}",
-                )
+                try:
+                    await bot.send_message(
+                        notify_chat_id,
+                        f"⚠️ Сессия #{session_obj.id}: видео готово, но бот не смог доставить mp4 в тест/notify чат. Полный Kaggle rerender не требуется.",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send post-render blocked notification session=%s",
+                        session_obj.id,
+                        exc_info=True,
+                    )
             return
-        await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
-        target_test = test_chat_id or notify_chat_id
-        try:
-            await _send_video_with_preview(bot, target_test, video_path, caption=caption)
-        except Exception as e:
-            logger.warning("video_announce: failed to send video to test chat %s: %s", target_test, e)
-            # Fallback to notify_chat_id if test_chat_id fails
-            if target_test != notify_chat_id:
-                await _send_video_with_preview(bot, notify_chat_id, video_path, caption=caption)
-        await _send_logs(bot, notify_chat_id, log_files, caption=f"✅ Логи сессии #{session_obj.id}")
         session_obj = await _update_status(
             db,
             session_obj.id,
@@ -1234,6 +2216,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1250,6 +2233,7 @@ async def run_kernel_poller(
                         bot,
                         refreshed,
                         status,
+                        db=db,
                         chat_id=status_chat_id,
                         message_id=status_message_id,
                         allow_send=True,
@@ -1257,42 +2241,93 @@ async def run_kernel_poller(
                     )
             except Exception as e:
                 logger.warning("video_announce: failed to send video to main chat %s: %s", main_chat_id, e)
-    except Exception:
+    except Exception as exc:
+        if render_output_ready:
+            logger.exception(
+                "video_announce: post-render handling failed session=%s kernel=%s",
+                session_obj.id,
+                kernel_ref,
+            )
+            session_obj = await _update_status(
+                db,
+                session_obj.id,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                error=f"post-render handling failed: {exc}",
+                video_url=ready_video_name,
+            )
+            if session_obj:
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Видео готово; post-render доставка/фанаут заблокированы",
+                )
+                try:
+                    await bot.send_message(
+                        notify_chat_id,
+                        f"⚠️ Сессия #{session_obj.id}: видео уже готово, но post-render обработка упала. Полный Kaggle rerender запрещён; нужен узкий retry/reconcile.",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send post-render exception notification session=%s",
+                        session_obj.id,
+                        exc_info=True,
+                    )
+            return
         logger.exception(
             "video_announce: failed to download kernel output session=%s kernel=%s",
             session_obj.id,
             kernel_ref,
         )
+        final_error = output_probe_failure_error or "kernel output download failed"
         session_obj = await _update_status(
             db,
             session_obj.id,
             status=VideoAnnounceSessionStatus.FAILED,
-            error="kernel output download failed",
+            error=final_error,
         )
         if session_obj:
             await update_status_message(
                 bot,
                 session_obj,
-                status,
+                output_probe_status or status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
             )
         await bot.send_message(
             notify_chat_id,
-            f"⚠️ Сессия #{session_obj.id}: не удалось скачать вывод kernel",
+            output_probe_failure_message
+            or f"⚠️ Сессия #{session_obj.id}: не удалось скачать вывод kernel",
         )
     finally:
         await _cleanup_dataset(client, dataset_slug)
 
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
+    live_ledger_session_ids = await _live_video_ledger_session_ids(db)
+    resumable_live_statuses = {
+        VideoAnnounceSessionStatus.RENDERING,
+        VideoAnnounceSessionStatus.FAILED,
+    }
     async with db.get_session() as session:
-        res = await session.execute(
-            select(VideoAnnounceSession).where(
-                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
-            )
+        query = select(VideoAnnounceSession).where(
+            VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
         )
+        if live_ledger_session_ids:
+            query = select(VideoAnnounceSession).where(
+                (VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING)
+                | (
+                    VideoAnnounceSession.id.in_(live_ledger_session_ids)
+                    & VideoAnnounceSession.status.in_(resumable_live_statuses)
+                )
+            )
+        res = await session.execute(query)
         sessions = res.scalars().all()
     if not sessions:
         return 0
@@ -1309,6 +2344,57 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
         )
         if not notify_chat_id:
             continue
+        dataset_slug = str(sess.kaggle_dataset or "").strip()
+        if not dataset_slug:
+            grace_deadline = _local_handoff_grace_deadline(sess)
+            now_utc = datetime.now(timezone.utc)
+            if grace_deadline is not None and now_utc < grace_deadline:
+                logger.warning(
+                    "video_announce: skipping recovery for pre-handoff session without dataset "
+                    "session_id=%s kernel_ref=%s grace_until=%s",
+                    sess.id,
+                    kernel_ref,
+                    grace_deadline.isoformat(),
+                )
+                continue
+            logger.error(
+                "video_announce: refusing to resume session_id=%s without Kaggle dataset kernel_ref=%s",
+                sess.id,
+                kernel_ref,
+            )
+            failed = await _update_status(
+                db,
+                sess.id,
+                status=VideoAnnounceSessionStatus.FAILED,
+                error="runtime restart before Kaggle handoff; rerun required",
+            )
+            if failed:
+                await bot.send_message(
+                    notify_chat_id,
+                    (
+                        f"⚠️ Сессия #{failed.id}: рантайм перезапустился до подтверждённого запуска Kaggle.\n"
+                        "Сессия переведена в FAILED; нужен повторный запуск."
+                    ),
+                )
+            continue
+        if sess.id in live_ledger_session_ids and sess.status == VideoAnnounceSessionStatus.FAILED:
+            async with db.get_session() as session:
+                obj = await session.get(VideoAnnounceSession, sess.id)
+                if obj and obj.status == VideoAnnounceSessionStatus.FAILED:
+                    logger.warning(
+                        "video_announce: reviving false-failed session from fresh Kaggle heartbeat "
+                        "session_id=%s kernel_ref=%s dataset=%s",
+                        sess.id,
+                        kernel_ref,
+                        dataset_slug,
+                    )
+                    obj.status = VideoAnnounceSessionStatus.RENDERING
+                    obj.finished_at = None
+                    obj.error = None
+                    session.add(obj)
+                    await session.commit()
+                    await session.refresh(obj)
+                    sess = obj
         if _is_local_kernel_ref(kernel_ref):
             grace_deadline = _local_handoff_grace_deadline(sess)
             now_utc = datetime.now(timezone.utc)
@@ -1353,7 +2439,7 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
             main_chat_id=sess.main_chat_id,
             poll_interval=60,
             timeout_minutes=VIDEO_KAGGLE_TIMEOUT_MINUTES,
-            dataset_slug=sess.kaggle_dataset,
+            dataset_slug=dataset_slug,
         )
         recovered += 1
     return recovered

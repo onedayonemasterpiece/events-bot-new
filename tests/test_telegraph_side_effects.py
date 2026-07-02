@@ -93,6 +93,54 @@ async def test_update_event_page_edits_without_create(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_event_page_does_not_create_replacement_on_flood(tmp_path, monkeypatch):
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = m.Event(
+            title="T",
+            description="D",
+            date="2025-09-01",
+            time="12:00",
+            location_name="Loc",
+            source_text="SRC",
+            telegraph_path="abc",
+            telegraph_url="https://telegra.ph/abc",
+        )
+        session.add(ev)
+        await session.commit()
+        eid = ev.id
+
+    async def fake_bspc(*a, **k):
+        return "<p>x</p>", "", ""
+
+    monkeypatch.setattr(m, "build_source_page_content", fake_bspc)
+    monkeypatch.setattr(m, "get_telegraph_token", lambda: "t")
+    monkeypatch.setattr(m, "Telegraph", FakeTG)
+    monkeypatch.setattr(m, "telegraph_call", fake_call)
+    create_calls = []
+
+    async def fake_create(*a, **k):
+        create_calls.append(1)
+        return {"url": "https://telegra.ph/new", "path": "new"}
+
+    async def fake_edit(tg, path, **k):
+        raise RuntimeError("Flood control exceeded. Retry in 1592 seconds")
+
+    monkeypatch.setattr(m, "telegraph_create_page", fake_create)
+    monkeypatch.setattr(m, "telegraph_edit_page", fake_edit)
+
+    with pytest.raises(RuntimeError, match="Flood control exceeded"):
+        await m.update_telegraph_event_page(eid, db, None)
+    assert create_calls == []
+    async with db.get_session() as session:
+        refreshed = await session.get(m.Event, eid)
+        assert refreshed.telegraph_path == "abc"
+        assert refreshed.telegraph_url == "https://telegra.ph/abc"
+
+
+@pytest.mark.asyncio
 async def test_navigation_builds_do_not_touch_events(tmp_path, monkeypatch):
     m = importlib.reload(orig_main)
     db = m.Database(str(tmp_path / "db.sqlite"))
@@ -240,3 +288,66 @@ async def test_telegraph_rehydrates_missing_media_from_event_sources(tmp_path, m
             )
         ).all()
         assert {r[0] for r in rows} == {"existing", "vk", "tg3191", "tg3193"}
+
+
+@pytest.mark.asyncio
+async def test_telegraph_rehydrate_skips_shared_multi_event_source(tmp_path, monkeypatch):
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        ev1 = m.Event(
+            title="Лекция Летова",
+            description="D",
+            date="2026-06-19",
+            time="20:00",
+            location_name="Дом китобоя",
+            source_text="SRC",
+            photo_urls=[],
+            photo_count=0,
+        )
+        ev2 = m.Event(
+            title="Другое событие из той же подборки",
+            description="D",
+            date="2026-06-19",
+            time="18:00",
+            location_name="Дом китобоя",
+            source_text="SRC",
+            photo_urls=[],
+            photo_count=0,
+        )
+        session.add_all([ev1, ev2])
+        await session.commit()
+        await session.refresh(ev1)
+        await session.refresh(ev2)
+        eid = int(ev1.id)
+        shared_url = "https://t.me/kulturnaya_chaika/7860"
+        session.add_all(
+            [
+                m.EventSource(event_id=eid, source_type="telegram", source_url=shared_url, source_text="tg"),
+                m.EventSource(event_id=int(ev2.id), source_type="telegram", source_url=shared_url, source_text="tg"),
+            ]
+        )
+        await session.commit()
+
+    calls = []
+
+    async def fake_fetch(source_type, source_url, *, limit):
+        calls.append(source_url)
+        return [SimpleNamespace(catbox_url="https://cdn.example/wrong.jpg", sha256="wrong")]
+
+    monkeypatch.setattr(m, "_fetch_event_source_poster_candidates", fake_fetch)
+    monkeypatch.setenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH", "1")
+
+    async with db.get_session() as session:
+        ev = await session.get(m.Event, eid)
+        added = await m._rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            ev,
+            event_id=eid,
+        )
+        await session.commit()
+
+    assert added == 0
+    assert calls == []

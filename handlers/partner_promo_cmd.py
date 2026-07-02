@@ -4,9 +4,11 @@ Routes ``ppromo:*`` callbacks invoked from the per-event ``🎬`` button on
 ``/events``. The user-facing spec is
 ``docs/backlog/features/promo-campaigns/partner-promo.md``.
 
-Phase A scope: video_general surface with three slot policies.
-``vk_repost`` surface is recognised but currently shown as "coming soon"
-because the scheduler/runner is implemented in Phase B.
+Phase A scope: video_general surface with three slot policies. The
+``vk_publication`` and ``vk_repost`` surfaces are now live (runner in
+``promo.run_promo_vk_activities``); this handler renders them in the campaign
+card and per-activity statistics, while the per-event ``+ Активность`` add
+flow still focuses on video/repost.
 """
 
 from __future__ import annotations
@@ -17,10 +19,18 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from aiogram import Bot, types
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from db import Database
-from models import Event, Organization, PromoActivity, PromoCampaign, PromoTarget, User
+from models import (
+    Event,
+    Organization,
+    PromoActivity,
+    PromoCampaign,
+    PromoExposure,
+    PromoTarget,
+    User,
+)
 from partner_promo import (
     PARTNER_PROMO_INPUT_COUNT,
     PARTNER_PROMO_INPUT_DISCLOSURE,
@@ -39,11 +49,16 @@ from promo import (
     PROMO_POLICY_FIRST_TWO_SLOTS,
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_SURFACE_VIDEO_GENERAL,
+    PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
     PROMO_SURFACE_VK_REPOST,
+    PROMO_SURFACE_VK_STORY,
+    PROMO_VK_DEFAULT_WINDOW_HOURS,
     PartnerPromoSpec,
     build_partner_campaign_title,
     clamp_campaign_end_to_event,
     create_partner_event_promo_campaign,
+    _initial_80_vk_channel_publish_activity,
     normalize_promo_priority,
 )
 
@@ -58,6 +73,10 @@ SLOT_ORDER = (
 )
 COUNT_PRESETS = (1, 2, 3, 5, 7, 10)
 DEFAULT_DURATIONS_DAYS = (7, 14, 30)
+
+
+def _current_or_future_campaign_filter(now_utc: datetime):
+    return or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc)
 
 
 def _status_label(status: str) -> str:
@@ -122,6 +141,7 @@ async def _list_campaigns_covering_event(
     partner sees only their own campaigns, regardless of target type.
     """
 
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
         festival_name = (getattr(event, "festival", None) or "").strip() if event else ""
@@ -132,6 +152,7 @@ async def _list_campaigns_covering_event(
             .where(PromoTarget.target_type == "event")
             .where(PromoTarget.event_id == int(event_id))
             .where(PromoCampaign.status != "archived")
+            .where(_current_or_future_campaign_filter(now_utc))
             .order_by(PromoCampaign.created_at.desc())
         )
         if not user.is_superadmin:
@@ -146,6 +167,7 @@ async def _list_campaigns_covering_event(
                 .where(PromoTarget.target_type == "festival")
                 .where(PromoTarget.festival_name == festival_name)
                 .where(PromoCampaign.status != "archived")
+                .where(_current_or_future_campaign_filter(now_utc))
                 .order_by(PromoCampaign.created_at.desc())
             )
             if not user.is_superadmin:
@@ -1285,7 +1307,10 @@ _SURFACE_LABELS: dict[str, str] = {
     "daily_highlight": "📅 Ежедневная подборка",
     "telegraph_month": "📰 Telegraph: месяц",
     "telegraph_weekend": "📰 Telegraph: выходные",
-    "vk_repost": "📨 Репост ВК",
+    "vk_publication": "📢 VK-публикация",
+    "vk_channel_publish": "📣 VK-канал",
+    "vk_repost": "📨 VK-репост",
+    "vk_story": "VK-история",
     "placeholder": "—",
 }
 
@@ -1316,18 +1341,55 @@ def _humanize_activity(activity: PromoActivity) -> str:
 
     surface = _SURFACE_LABELS.get(activity.surface, activity.surface or "—")
     bits: list[str] = [surface]
-    if activity.profile_key:
-        bits.append(_PROFILE_LABELS.get(activity.profile_key, activity.profile_key))
-    if activity.surface == "video_general":
-        policy_label = _SLOT_POLICY_LABELS.get(
-            activity.selection_policy or "", activity.selection_policy or ""
-        )
-        if policy_label:
-            bits.append(policy_label)
-    elif activity.surface == "vk_repost":
-        # ВК-репост — слотовая политика не применима; покажем целевую группу.
-        bits.append("в партнёрский паблик")
-    if activity.daily_cap:
+    cfg = activity.config_json if isinstance(activity.config_json, dict) else {}
+    if activity.surface == PROMO_SURFACE_VK_PUBLICATION:
+        # VK-публикация: слотовая политика не применима; показываем целевой паблик.
+        group = str(cfg.get("target_group") or activity.profile_key or "").strip()
+        if group:
+            bits.append(f"vk.com/{group}")
+        window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+        bits.append(f"минимум {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
+    elif activity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH:
+        channel = str(cfg.get("target_channel") or activity.profile_key or "").strip()
+        if channel:
+            bits.append(channel)
+        peer_hint = str(cfg.get("peer_id_env") or cfg.get("peer_ids_env") or "").strip()
+        if peer_hint:
+            bits.append(peer_hint)
+        window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+        bits.append(f"сообщений {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
+    elif activity.surface == PROMO_SURFACE_VK_REPOST:
+        # VK-репост: показываем направление source → target.
+        source = str(cfg.get("source_group") or "").strip()
+        target = str(cfg.get("target_group") or "").strip()
+        if source and target:
+            bits.append(f"vk.com/{source} → vk.com/{target}")
+        elif activity.profile_key:
+            bits.append(str(activity.profile_key))
+    elif activity.surface == PROMO_SURFACE_VK_STORY:
+        source = str(cfg.get("source_group") or "").strip()
+        target = str(cfg.get("target_group") or activity.profile_key or "").strip()
+        if source and target:
+            bits.append(f"vk.com/{source} → story vk.com/{target}")
+        elif target:
+            bits.append(f"story vk.com/{target}")
+        window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+        bits.append(f"историй {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
+    else:
+        if activity.profile_key:
+            bits.append(_PROFILE_LABELS.get(activity.profile_key, activity.profile_key))
+        if activity.surface == "video_general":
+            policy_label = _SLOT_POLICY_LABELS.get(
+                activity.selection_policy or "", activity.selection_policy or ""
+            )
+            if policy_label:
+                bits.append(policy_label)
+    if activity.daily_cap and activity.surface not in (
+        PROMO_SURFACE_VK_PUBLICATION,
+        PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+        PROMO_SURFACE_VK_REPOST,
+        PROMO_SURFACE_VK_STORY,
+    ):
         bits.append(f"не более {int(activity.daily_cap)} в день")
     if activity.target_exposure_goal:
         bits.append(f"всего показов: {int(activity.target_exposure_goal)}")
@@ -1350,12 +1412,15 @@ async def _load_user(db: Database, user_id: int) -> User | None:
 async def _list_campaigns_for_role(
     db: Database, *, user: User, include_archived: bool
 ) -> list[PromoCampaign]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         stmt = select(PromoCampaign).order_by(
             PromoCampaign.status, PromoCampaign.created_at.desc()
         )
         if not include_archived:
-            stmt = stmt.where(PromoCampaign.status != "archived")
+            stmt = stmt.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         if not user.is_superadmin:
             stmt = stmt.where(PromoCampaign.created_by == int(user.user_id))
         res = await session.execute(stmt)
@@ -1499,6 +1564,13 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
             target_lines.append(f"Событие #{t.event_id}: {html.escape(t.query_text or '')}")
         elif t.target_type == "festival":
             target_lines.append(f"Фестиваль: {html.escape(t.festival_name or '')}")
+        elif t.target_type == "tg_chat_author":
+            chat, _, author = str(t.query_text or "").partition(":")
+            chat = chat.strip().lstrip("@")
+            author = author.strip().lstrip("@")
+            target_lines.append(
+                f"Чат: t.me/{html.escape(chat)} · автор @{html.escape(author)}"
+            )
 
     act_lines: list[str] = [
         "• " + _humanize_activity(a) for a in activities
@@ -1528,7 +1600,11 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
 
 
 def _campaign_card_keyboard(
-    campaign: PromoCampaign, *, is_superadmin: bool
+    campaign: PromoCampaign,
+    *,
+    is_superadmin: bool,
+    activities: list[PromoActivity] | None = None,
+    is_initial_80: bool = False,
 ) -> types.InlineKeyboardMarkup:
     cid = int(campaign.id or 0)
     rows: list[list[types.InlineKeyboardButton]] = []
@@ -1584,6 +1660,29 @@ def _campaign_card_keyboard(
                 )
             ]
         )
+        activity_rows: list[types.InlineKeyboardButton] = []
+        channel_seen = False
+        for activity in activities or []:
+            if activity.id is None:
+                continue
+            if activity.surface != PROMO_SURFACE_VK_CHANNEL_PUBLISH:
+                continue
+            channel_seen = True
+            activity_rows.append(
+                types.InlineKeyboardButton(
+                    text=("➖ VK-канал" if activity.enabled else "➕ VK-канал"),
+                    callback_data=f"ppromo:acttoggle:{cid}:{int(activity.id)}",
+                )
+            )
+        if is_initial_80 and not channel_seen:
+            activity_rows.append(
+                types.InlineKeyboardButton(
+                    text="➕ VK-канал",
+                    callback_data=f"ppromo:add80vkchan:{cid}",
+                )
+            )
+        for idx in range(0, len(activity_rows), 2):
+            rows.append(activity_rows[idx : idx + 2])
     if is_superadmin:
         rows.append(
             [
@@ -1614,7 +1713,33 @@ async def _render_campaign_card(
     campaign: PromoCampaign,
 ) -> None:
     text = await _campaign_card_text(db, campaign)
-    markup = _campaign_card_keyboard(campaign, is_superadmin=bool(user.is_superadmin))
+    async with db.get_session() as session:
+        activities = list(
+            (
+                await session.execute(
+                    select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
+                )
+            ).scalars().all()
+        )
+        target = (
+            await session.execute(
+                select(PromoTarget).where(PromoTarget.campaign_id == campaign.id)
+            )
+        ).scalars().first()
+    is_initial_80 = (
+        str(campaign.title or "") == "80 историй о главном / summer visibility"
+        or (
+            target is not None
+            and target.target_type == "festival"
+            and str(target.festival_name or "") == "80 историй о главном"
+        )
+    )
+    markup = _campaign_card_keyboard(
+        campaign,
+        is_superadmin=bool(user.is_superadmin),
+        activities=activities,
+        is_initial_80=is_initial_80,
+    )
     if callback is not None and callback.message is not None:
         try:
             await callback.message.edit_text(
@@ -1671,53 +1796,178 @@ async def _change_campaign_priority(
     return True, f"P{priority}"
 
 
+# Statuses that count as a real public action. ``VK_SCHEDULED`` is included
+# because promo VK posts land in the community postponed queue, not as an
+# immediate ``wall.post`` — excluding it would under-count VK activities.
+_STATS_PUBLISHED_STATUSES = (
+    "PUBLISHED_MAIN",
+    "PUBLISHED_TEST",
+    "VK_SCHEDULED",
+    "VK_CHANNEL_SENT",
+)
+_STATUS_RU = {
+    "PUBLISHED_MAIN": "опубликовано",
+    "PUBLISHED_TEST": "тест",
+    "VK_SCHEDULED": "в отложке",
+    "VK_CHANNEL_SENT": "отправлено в VK-канал",
+}
+
+
+def _exposure_url(exposure: PromoExposure) -> str:
+    details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
+    url = str(details.get("target_url") or "").strip()
+    if not url:
+        targets = (
+            exposure.public_targets_json
+            if isinstance(exposure.public_targets_json, list)
+            else []
+        )
+        if targets and isinstance(targets[0], dict):
+            url = str(targets[0].get("url") or "").strip()
+    return url
+
+
+def _link_html(url: str) -> str:
+    if not url:
+        return "ссылка готовится"
+    short = url.replace("https://", "").replace("http://", "")
+    return f'<a href="{html.escape(url, quote=True)}">{html.escape(short)}</a>'
+
+
+def _stats_when(exposure: PromoExposure) -> str:
+    if exposure.published_at is None:
+        return "—"
+    return exposure.published_at.astimezone(timezone.utc).strftime("%d.%m %H:%M")
+
+
+def _stats_exposure_line(exposure: PromoExposure, title: str, *, is_vk: bool) -> str:
+    when = _stats_when(exposure)
+    status_ru = _STATUS_RU.get(exposure.publish_status, exposure.publish_status or "")
+    title_s = html.escape((title or "")[:40])
+    ev = int(exposure.event_id or 0)
+    if is_vk:
+        url = _exposure_url(exposure)
+        details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
+        source_url = str(details.get("source_url") or "").strip()
+        tail = f" ← {_link_html(source_url)}" if source_url else ""
+        return (
+            f"  • {when} · ev#{ev} «{title_s}» · "
+            f"{html.escape(status_ru)} · {_link_html(url)}{tail}"
+        )
+    return (
+        f"  • {when} · ev#{ev} «{title_s}» · "
+        f"поз. {int(exposure.position or 0)} · {html.escape(status_ru)}"
+    )
+
+
 async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
     async with db.get_session() as session:
-        per_surface_res = await session.execute(
-            select(
-                PromoExposure.surface,
-                func.count(PromoExposure.id),
-            )
-            .where(PromoExposure.campaign_id == campaign.id)
-            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST")))
-            .group_by(PromoExposure.surface)
+        activities = list(
+            (
+                await session.execute(
+                    select(PromoActivity)
+                    .where(PromoActivity.campaign_id == campaign.id)
+                    .order_by(PromoActivity.id)
+                )
+            ).scalars().all()
         )
-        per_surface = list(per_surface_res.all())
-        recent_res = await session.execute(
-            select(
-                PromoExposure.published_at,
-                PromoExposure.surface,
-                PromoExposure.event_id,
-                PromoExposure.position,
-                PromoExposure.publish_status,
-            )
+        totals_res = await session.execute(
+            select(PromoExposure.activity_id, func.count(PromoExposure.id))
             .where(PromoExposure.campaign_id == campaign.id)
-            .order_by(PromoExposure.published_at.desc())
-            .limit(8)
+            .where(PromoExposure.publish_status.in_(_STATS_PUBLISHED_STATUSES))
+            .group_by(PromoExposure.activity_id)
         )
-        recent = list(recent_res.all())
+        totals = {aid: int(cnt or 0) for aid, cnt in totals_res.all()}
+        recent_rows = list(
+            (
+                await session.execute(
+                    select(PromoExposure, Event.title)
+                    .join(Event, Event.id == PromoExposure.event_id)
+                    .where(PromoExposure.campaign_id == campaign.id)
+                    .order_by(
+                        PromoExposure.published_at.desc(), PromoExposure.id.desc()
+                    )
+                    .limit(200)
+                )
+            ).all()
+        )
 
+    by_activity: dict[Optional[int], list[tuple[PromoExposure, str]]] = {}
+    for exposure, title in recent_rows:
+        by_activity.setdefault(exposure.activity_id, []).append((exposure, title or ""))
+
+    now_utc = datetime.now(timezone.utc)
+    current_ids = {int(a.id) for a in activities if a.id is not None}
     lines = [f"<b>📊 Статистика #{campaign.id}</b>", ""]
-    if not per_surface:
-        lines.append("Публичных показов пока нет.")
-    else:
-        lines.append("По поверхностям:")
-        for surface, count in per_surface:
-            lines.append(f"• {html.escape(str(surface))}: {int(count or 0)}")
-    if recent:
-        lines.append("")
-        lines.append("Последние показы:")
-        for published_at, surface, event_id, position, status in recent:
-            when = (
-                published_at.astimezone(timezone.utc).strftime("%d.%m %H:%M")
-                if published_at is not None
-                else "—"
+
+    if not activities:
+        lines.append("Активностей пока нет.")
+        return "\n".join(lines)
+
+    for activity in activities:
+        aid = int(activity.id) if activity.id is not None else None
+        total = totals.get(aid, 0)
+        bucket = by_activity.get(aid, [])
+        is_vk = activity.surface in (
+            PROMO_SURFACE_VK_PUBLICATION,
+            PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+            PROMO_SURFACE_VK_REPOST,
+            PROMO_SURFACE_VK_STORY,
+        )
+        lines.append(f"<b>{html.escape(_humanize_activity(activity))}</b>")
+        if is_vk:
+            cfg = activity.config_json if isinstance(activity.config_json, dict) else {}
+            window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+            since = now_utc - timedelta(hours=window)
+            in_window = sum(
+                1
+                for exp, _t in bucket
+                if exp.publish_status in _STATS_PUBLISHED_STATUSES
+                and exp.published_at is not None
+                and exp.published_at.astimezone(timezone.utc) >= since
             )
+            target_n = int(activity.daily_cap or activity.max_per_publish or 1)
             lines.append(
-                f"• {when} · {html.escape(str(surface))} · ev#{int(event_id or 0)} "
-                f"· поз. {int(position or 0)} · {html.escape(str(status or ''))}"
+                f"  промо-действий за {window}ч: {in_window} / цель {target_n}; "
+                f"всего: {total}"
             )
-    return "\n".join(lines)
+        else:
+            lines.append(f"  всего показов: {total}")
+        shown = 0
+        for exposure, title in bucket:
+            if shown >= 5:
+                break
+            shown += 1
+            lines.append(_stats_exposure_line(exposure, title, is_vk=is_vk))
+        if shown == 0:
+            lines.append("  — показов пока нет")
+        lines.append("")
+
+    # Exposures not linked to a current activity (legacy / unlinked rows).
+    leftover_total = sum(cnt for aid, cnt in totals.items() if aid not in current_ids)
+    leftover_recent = [
+        (exp, title)
+        for aid, items in by_activity.items()
+        if aid not in current_ids
+        for exp, title in items
+    ]
+    if leftover_total or leftover_recent:
+        lines.append("<b>Прочее (без привязки к активности)</b>")
+        lines.append(f"  всего показов: {leftover_total}")
+        leftover_recent.sort(
+            key=lambda it: it[0].published_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        for exposure, title in leftover_recent[:5]:
+            is_vk = exposure.surface in (
+                PROMO_SURFACE_VK_PUBLICATION,
+                PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+                PROMO_SURFACE_VK_REPOST,
+                PROMO_SURFACE_VK_STORY,
+            )
+            lines.append(_stats_exposure_line(exposure, title, is_vk=is_vk))
+
+    return "\n".join(lines).rstrip()
 
 
 async def _render_campaign_stats(
@@ -1886,6 +2136,96 @@ async def _handle_campaign_priority(
     )
 
 
+async def _handle_activity_toggle(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+    activity_id: int,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    async with db.get_session() as session:
+        activity = await session.get(PromoActivity, int(activity_id))
+        if activity is None or int(activity.campaign_id) != int(campaign_id):
+            await callback.answer("Активность не найдена", show_alert=True)
+            return
+        new_enabled = not bool(activity.enabled)
+        activity.enabled = new_enabled
+        campaign_obj = await session.get(PromoCampaign, int(campaign_id))
+        if campaign_obj is not None:
+            campaign_obj.updated_at = datetime.now(timezone.utc)
+            session.add(campaign_obj)
+        session.add(activity)
+        await session.commit()
+    fresh = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    await callback.answer("Активность включена" if new_enabled else "Активность выключена")
+    if fresh is not None:
+        await _render_campaign_card(bot, callback, callback.message.chat.id, db=db, user=user, campaign=fresh)
+
+
+async def _handle_add_initial_80_vk_channel(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    async with db.get_session() as session:
+        target = (
+            await session.execute(
+                select(PromoTarget).where(PromoTarget.campaign_id == campaign_id)
+            )
+        ).scalars().first()
+        is_initial_80 = (
+            str(campaign.title or "") == "80 историй о главном / summer visibility"
+            or (
+                target is not None
+                and target.target_type == "festival"
+                and str(target.festival_name or "") == "80 историй о главном"
+            )
+        )
+        if not is_initial_80:
+            await callback.answer("VK-канал сейчас доступен только кампании 80 историй.", show_alert=True)
+            return
+        existing = (
+            await session.execute(
+                select(PromoActivity)
+                .where(PromoActivity.campaign_id == campaign_id)
+                .where(PromoActivity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH)
+            )
+        ).scalars().first()
+        if existing is None:
+            session.add(_initial_80_vk_channel_publish_activity(int(campaign_id)))
+        else:
+            existing.enabled = True
+            session.add(existing)
+        campaign_obj = await session.get(PromoCampaign, int(campaign_id))
+        if campaign_obj is not None:
+            campaign_obj.updated_at = datetime.now(timezone.utc)
+            session.add(campaign_obj)
+        await session.commit()
+    fresh = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    await callback.answer("VK-канал добавлен")
+    if fresh is not None:
+        await _render_campaign_card(bot, callback, callback.message.chat.id, db=db, user=user, campaign=fresh)
+
+
 async def _handle_campaign_stats(
     callback: types.CallbackQuery, db: Database, bot: Bot, *, campaign_id: int
 ) -> None:
@@ -2030,6 +2370,20 @@ async def handle_partner_promo_callback(  # noqa: F811 — extend dispatch
             return True
         if action == "addact" and len(parts) >= 3:
             await _open_add_activity_form(
+                callback, db, bot, campaign_id=int(parts[2])
+            )
+            return True
+        if action == "acttoggle" and len(parts) >= 4:
+            await _handle_activity_toggle(
+                callback,
+                db,
+                bot,
+                campaign_id=int(parts[2]),
+                activity_id=int(parts[3]),
+            )
+            return True
+        if action == "add80vkchan" and len(parts) >= 3:
+            await _handle_add_initial_80_vk_channel(
                 callback, db, bot, campaign_id=int(parts[2])
             )
             return True

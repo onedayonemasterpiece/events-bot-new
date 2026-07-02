@@ -57,6 +57,7 @@ async def test_update_keyboard_with_ics(tmp_path, monkeypatch):
                 time="19:00",
                 location_name="Hall",
                 city="Town",
+                ics_url="https://example.com/event.ics",
                 ics_post_url="https://t.me/c/asset/1",
                 source_chat_id=-100,
                 source_message_id=10,
@@ -67,7 +68,7 @@ async def test_update_keyboard_with_ics(tmp_path, monkeypatch):
     assert bot.edits
     markup = bot.edits[0][2]
     assert len(markup.inline_keyboard) == 2
-    assert markup.inline_keyboard[0][0].url == "https://t.me/c/asset/1"
+    assert markup.inline_keyboard[0][0].url == "https://example.com/event.ics"
     assert "Добавить в календарь" == markup.inline_keyboard[0][0].text
     assert len(markup.inline_keyboard[1]) == 2
     assert markup.inline_keyboard[1][0].url == "https://t.me/c/m1"
@@ -184,6 +185,7 @@ async def test_update_keyboard_fallback_service_message(tmp_path, monkeypatch):
                 time="19:00",
                 location_name="Hall",
                 city="Town",
+                ics_url="https://example.com/event.ics",
                 ics_post_url="https://t.me/c/asset/1",
                 source_chat_id=-100,
                 source_message_id=10,
@@ -198,7 +200,7 @@ async def test_update_keyboard_fallback_service_message(tmp_path, monkeypatch):
     chat_id, text, markup = bot.sent[0]
     assert chat_id == 1
     assert text == "Добавить в календарь/Навигация по месяцам"
-    assert markup.inline_keyboard[0][0].url == "https://t.me/c/asset/1"
+    assert markup.inline_keyboard[0][0].url == "https://example.com/event.ics"
     async with db.get_session() as session:
         ev = await session.get(Event, 1)
         assert ev.source_message_id == 10
@@ -236,6 +238,7 @@ async def test_update_keyboard_fallback_private_chat(tmp_path, monkeypatch):
                 time="19:00",
                 location_name="Hall",
                 city="Town",
+                ics_url="https://example.com/event.ics",
                 ics_post_url="https://t.me/c/asset/1",
                 source_chat_id=1,
                 source_message_id=10,
@@ -249,7 +252,7 @@ async def test_update_keyboard_fallback_private_chat(tmp_path, monkeypatch):
     chat_id, text, markup = bot.sent[0]
     assert chat_id == 1
     assert text == "Добавить в календарь/Навигация по месяцам"
-    assert markup.inline_keyboard[0][0].url == "https://t.me/c/asset/1"
+    assert markup.inline_keyboard[0][0].url == "https://example.com/event.ics"
     async with db.get_session() as session:
         ev = await session.get(Event, 1)
         assert ev.source_message_id == 99

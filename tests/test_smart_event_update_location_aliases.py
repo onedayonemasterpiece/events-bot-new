@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smart_event_update as su
 from location_reference import (
+    canonicalize_known_place_name,
     find_known_venue_in_text,
     match_known_venue,
     normalise_event_location_from_reference,
@@ -20,6 +21,80 @@ def test_gate_locations_do_not_collapse_into_one_bucket() -> None:
     assert (
         su._normalize_location("Железнодорожные ворота, Гвардейский проспект 51А, Калининград")
         == "железнодорожные ворота"
+    )
+
+
+def test_solenaya_vorona_railway_street_is_not_railway_gates() -> None:
+    """Regression for INC-2026-06-29: street name != Kaliningrad Railway Gates."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="Театральная гостиная Солёная ворона",
+            location_address="Железнодорожная 1",
+            city="Зеленоградск",
+        )
+        == ("Театральная гостиная Солёная ворона", "Железнодорожная 1", "Зеленоградск")
+    )
+    assert (
+        su._normalize_location(
+            "Театральная гостиная Солёная ворона, Железнодорожная 1, Зеленоградск"
+        )
+        != "железнодорожные ворота"
+    )
+
+
+def test_konb_room_location_uses_source_building_not_room() -> None:
+    """Regression for INC-2026-06-29: KОНБ room names are not public venues."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="ЧИТАЛЬНЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15489",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="4 ЭТАЖ ЛЕКЦИОННЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15501",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="читальный зал, 2 этаж",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15514",
+        )
+        == ("Научная библиотека", "Мира 9", "Калининград")
+    )
+
+
+def test_konb_room_location_negative_controls() -> None:
+    """Do not classify generic room names without the source grounding."""
+
+    assert (
+        su._canonicalize_location_fields(
+            location_name="ЧИТАЛЬНЫЙ ЗАЛ",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-123_456",
+        )
+        == ("ЧИТАЛЬНЫЙ ЗАЛ", "Мира 9", "Калининград")
+    )
+    assert (
+        su._canonicalize_location_fields(
+            location_name="Дом китобоя",
+            location_address="Мира 9",
+            city="Калининград",
+            source_url="https://vk.com/wall-30777579_15489",
+        )
+        == ("Дом китобоя", "Мира 9", "Калининград")
     )
 
 
@@ -45,6 +120,40 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     assert fort is not None
     assert fort.name == "Форт №11 Дёнхофф"
     assert fort.city == "Калининград"
+
+    cultural_place_payload = {
+        "location_name": "Культурное место на Острове Канта",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(cultural_place_payload)
+    assert cultural_place_payload == {
+        "location_name": "Культурное место",
+        "location_address": "Остров Канта",
+        "city": "Калининград",
+    }
+
+
+def test_place_alias_canonicalizes_yantarnoe_to_yantarny() -> None:
+    assert canonicalize_known_place_name("Янтарное") == "Янтарный"
+    assert canonicalize_known_place_name("Янтарный") == "Янтарный"
+    payload = {
+        "location_name": "Янтарное",
+        "location_address": None,
+        "city": "Янтарное",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload["location_name"] == "Янтарный"
+    assert payload["city"] == "Янтарный"
+
+    already_canonical = {
+        "location_name": "Янтарный",
+        "location_address": None,
+        "city": "Янтарный",
+    }
+    normalise_event_location_from_reference(already_canonical)
+    assert already_canonical["location_name"] == "Янтарный"
+    assert already_canonical["city"] == "Янтарный"
 
 
 def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
@@ -90,3 +199,22 @@ def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
     icae = match_known_venue("ИЦАЭ Калининграда", city="Калининград")
     assert icae is not None
     assert icae.name == "ИЦАЭ (в КГТУ)"
+
+
+def test_russian_art_center_reference_resolves_oktyabrskaya_10() -> None:
+    venue = match_known_venue("Русский центр искусств", city="Калининград")
+    assert venue is not None
+    assert venue.name == "Русский центр искусства"
+    assert venue.address == "Октябрьская 10"
+
+    payload = {
+        "location_name": "РЦИ",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Русский центр искусства",
+        "location_address": "Октябрьская 10",
+        "city": "Калининград",
+    }

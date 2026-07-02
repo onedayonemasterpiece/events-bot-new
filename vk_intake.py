@@ -12,7 +12,9 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, List, Sequence
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import aiohttp
 from db import Database
 from poster_media import (
     PosterMedia,
@@ -546,6 +548,14 @@ EVENT_ACTION_PREFIXES = (
 )
 DATE_RANGE_RE = re.compile(r"\b(\d{1,2})[–-](\d{1,2})(?:[./](\d{1,2}))\b")
 MONTH_NAME_RE = re.compile(r"\b(\d{1,2})\s+([а-яё.]+)\b", re.I)
+_DAY_MONTH_NUM_RE = re.compile(
+    r"\b\d{1,2}\s*[./-]\s*\d{1,2}(?:\s*[./-]\s*\d{2,4})?\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_DAY_MONTH_WORD_RE = re.compile(
+    rf"\b\d{{1,2}}\s+(?:{MONTH_NAMES_DET})\.?\b",
+    re.IGNORECASE | re.UNICODE,
+)
 TIME_RE = re.compile(r"\b([01]?\d|2[0-3])[:.][0-5]\d\b")
 TIME_H_RE = re.compile(r"\bв\s*([01]?\d|2[0-3])\s*(?:ч|час(?:а|ов)?)\b")
 BARE_TIME_H_RE = re.compile(r"\b([01]?\d|2[0-3])\s*(?:ч|час(?:а|ов)?)\b")
@@ -563,6 +573,146 @@ RECENT_PAST_THRESHOLD = timedelta(days=92)
 
 # cumulative processing time for VK event intake (seconds)
 processing_time_seconds_total: float = 0.0
+
+
+_POSTER_EXACT_DATETIME_RE = re.compile(
+    rf"\b(?P<day>\d{{1,2}})\s+(?P<month>{MONTH_NAMES_DET})\.?\s+"
+    r"(?P<hour>[01]?\d|2[0-3])[:.](?P<minute>[0-5]\d)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_RELATIVE_TEXT_DATE_RE = re.compile(
+    r"\b("
+    r"сегодня|завтра|послезавтра|"
+    r"в\s+эт(?:от|у|и)\s+"
+    r"(?:понед(?:ельник)?|вторник|сред(?:а)?|четверг|пятниц(?:а)?|суббот(?:а)?|воскресень(?:е|е)|выходные)|"
+    r"в\s+(?:понед(?:ельник)?|вторник|сред(?:а)?|четверг|пятниц(?:а)?|суббот(?:а)?|воскресень(?:е|е)|пн|вт|ср|чт|пт|сб|вс)"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_POSTER_VENUE_RE = re.compile(
+    r"\b("
+    r"образовательн\w+\s+центр|музей|театр|кинотеатр|библиотек|филармони|"
+    r"галере|центр\s+культур|дом\s+культур|дом\s+искусств|пространств|зал|клуб|кирх"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_POSTER_ADDRESS_RE = re.compile(
+    r"\b(ул\.?|улица|пр-?т|проспект|наб\.?|набережн|пер\.?|переулок|пл\.?|площадь|"
+    r"б-?р|бульвар|аллея|шоссе|д\.)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _poster_anchor_date(year_anchor: date, day: int, month: int) -> date | None:
+    candidate = _safe_construct_date(year_anchor.year, month, day)
+    if not candidate:
+        return None
+    # Normal yearly rollover: only jump a year when the date is not just a
+    # nearby recent-past mention around the crawl date.
+    if candidate < year_anchor and (year_anchor - candidate) > RECENT_PAST_THRESHOLD:
+        candidate = _safe_construct_date(year_anchor.year + 1, month, day)
+    return candidate
+
+
+def _clean_poster_line(line: str | None) -> str:
+    raw = unicodedata.normalize("NFKC", str(line or "")).strip()
+    raw = raw.strip("•·-–—|: ")
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
+def _looks_like_poster_address_line(line: str | None) -> bool:
+    raw = _clean_poster_line(line)
+    return bool(raw and _POSTER_ADDRESS_RE.search(raw) and re.search(r"\d", raw))
+
+
+def _looks_like_poster_venue_line(line: str | None) -> bool:
+    raw = _clean_poster_line(line)
+    if not raw or _looks_like_poster_address_line(raw):
+        return False
+    if re.search(r"\d{1,2}\s+[а-яё.]+\s+\d{1,2}[:.]\d{2}", raw, re.IGNORECASE):
+        return False
+    return bool(_POSTER_VENUE_RE.search(raw))
+
+
+def _infer_poster_venue_address(lines: Sequence[str], *, date_line_index: int) -> tuple[str | None, str | None]:
+    venue: str | None = None
+    address: str | None = None
+
+    # Prefer the local block after the date/time line: event posters typically
+    # place title/speaker first and venue/address near the bottom.
+    scan_lines = list(lines[date_line_index + 1 : date_line_index + 8]) + list(lines[:date_line_index])
+    for idx, line in enumerate(scan_lines):
+        clean = _clean_poster_line(line)
+        if not clean:
+            continue
+        if venue is None and _looks_like_poster_venue_line(clean):
+            venue = clean
+            for follow in scan_lines[idx + 1 : idx + 4]:
+                if _looks_like_poster_address_line(follow):
+                    address = _clean_poster_line(follow)
+                    break
+        if address is None and _looks_like_poster_address_line(clean):
+            address = clean
+        if venue and address:
+            break
+    return venue, address
+
+
+def _extract_single_poster_datetime_anchor(
+    poster_texts: Sequence[str] | None,
+    *,
+    anchor_date: date,
+) -> PosterDatetimeAnchor | None:
+    anchors: list[PosterDatetimeAnchor] = []
+    seen: set[tuple[str, str]] = set()
+    for text in poster_texts or []:
+        raw = str(text or "")
+        if not raw.strip():
+            continue
+        lines = [_clean_poster_line(line) for line in raw.splitlines()]
+        for idx, line in enumerate(lines):
+            for match in _POSTER_EXACT_DATETIME_RE.finditer(line):
+                month = MONTHS_RU.get((match.group("month") or "").casefold().replace("ё", "е").strip("."))
+                if not month:
+                    continue
+                try:
+                    day = int(match.group("day"))
+                    hour = int(match.group("hour"))
+                    minute = int(match.group("minute"))
+                except Exception:
+                    continue
+                dt = _poster_anchor_date(anchor_date, day, int(month))
+                if not dt:
+                    continue
+                time_value = f"{hour:02d}:{minute:02d}"
+                key = (dt.isoformat(), time_value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                venue, address = _infer_poster_venue_address(lines, date_line_index=idx)
+                anchors.append(
+                    PosterDatetimeAnchor(
+                        date=dt.isoformat(),
+                        time=time_value,
+                        venue=venue,
+                        address=address,
+                    )
+                )
+    if len(anchors) != 1:
+        return None
+    return anchors[0]
+
+
+def _source_text_has_relative_date_anchor(text: str | None) -> bool:
+    return bool(_RELATIVE_TEXT_DATE_RE.search(str(text or "")))
+
+
+def _source_text_has_absolute_date_anchor(text: str | None) -> bool:
+    raw = str(text or "")
+    if not raw.strip():
+        return False
+    return bool(_DAY_MONTH_NUM_RE.search(raw) or _DAY_MONTH_WORD_RE.search(raw))
 
 
 def match_keywords(text: str) -> tuple[bool, list[str]]:
@@ -1256,6 +1406,14 @@ class EventDraft:
     reject_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class PosterDatetimeAnchor:
+    date: str
+    time: str
+    venue: str | None = None
+    address: str | None = None
+
+
 @dataclass
 class PersistResult:
     event_id: int
@@ -1272,6 +1430,102 @@ class PersistResult:
     smart_created: bool = False
     smart_merged: bool = False
     smart_added_posters: int = 0
+
+
+_EXTERNAL_SHORT_TICKET_HOSTS = {"clck.ru"}
+_RESOLVED_SHORTLINK_TRACKING_KEYS = {
+    "clckid",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "yclid",
+    "fbclid",
+    "gclid",
+}
+
+
+def _ticket_link_host(url: str | None) -> str:
+    try:
+        return urlsplit(str(url or "").strip()).netloc.lower().removeprefix("www.")
+    except Exception:
+        return ""
+
+
+def _strip_resolved_shortlink_tracking(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+    except Exception:
+        return url
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key.casefold() not in _RESOLVED_SHORTLINK_TRACKING_KEYS
+    ]
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query, doseq=True),
+            "",
+        )
+    ).rstrip("/")
+
+
+async def _resolve_external_short_ticket_link(url: str | None) -> str | None:
+    """Resolve source-owned short registration links before they reach public posts.
+
+    This is intentionally narrow: it expands third-party shorteners such as
+    clck.ru, but does not touch our managed vk.cc output links or arbitrary
+    ticket hosts. On any network/provider problem the original URL is kept.
+    """
+
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    if raw.lower().startswith(("clck.ru/",)):
+        raw = "https://" + raw
+    if _ticket_link_host(raw) not in _EXTERNAL_SHORT_TICKET_HOSTS:
+        return raw
+    headers = {
+        "User-Agent": os.getenv("HTTP_SHORTLINK_UA", "Mozilla/5.0"),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    try:
+        timeout_total = float(os.getenv("VK_TICKET_SHORTLINK_RESOLVE_TIMEOUT_SEC", "8"))
+    except (TypeError, ValueError):
+        timeout_total = 8.0
+    timeout = aiohttp.ClientTimeout(total=timeout_total)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            try:
+                async with session.head(
+                    raw,
+                    headers=headers,
+                    allow_redirects=True,
+                    max_redirects=8,
+                    ssl=False,
+                ) as resp:
+                    final_url = str(resp.url)
+            except Exception:
+                async with session.get(
+                    raw,
+                    headers=headers,
+                    allow_redirects=True,
+                    max_redirects=8,
+                    ssl=False,
+                ) as resp:
+                    final_url = str(resp.url)
+        if final_url and _ticket_link_host(final_url) not in _EXTERNAL_SHORT_TICKET_HOSTS:
+            resolved = _strip_resolved_shortlink_tracking(final_url)
+            if resolved and resolved != raw:
+                logger.info("vk_intake ticket_shortlink_resolved url=%s resolved=%s", raw, resolved)
+                return resolved
+    except Exception as exc:
+        logger.warning("vk_intake ticket_shortlink_resolve_failed url=%s err=%s", raw, exc)
+    return raw
 
 
 def _vk_wall_source_ids_from_url(source_post_url: str | None) -> tuple[int | None, int | None]:
@@ -1647,8 +1901,34 @@ async def build_event_drafts_from_vk(
         "или отдельного venue/source anchor. "
         "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
         "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
-        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца."
+        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца. "
+        "Если текст поста даёт относительный или разговорный якорь даты вроде «в этот четверг», "
+        "а OCR афиши даёт точные `DD месяц HH:MM` и площадку/адрес, считай OCR афиши более точным "
+        "источником для date/time/location и обязательно перенеси эти значения в событие. "
+        "Но если сам текст поста явно пишет точную календарную дату (`18 июня`, `18.06`), "
+        "не считай афишу автоматически сильнее этой явной даты. "
+        "Не оставляй time пустым, когда афиша явно содержит время начала."
     )
+    room_probe = "\n".join(
+        part
+        for part in [
+            text or "",
+            source_name or "",
+            "\n".join(poster_texts),
+        ]
+        if part
+    ).casefold().replace("ё", "е")
+    if re.search(
+        r"\b(?:лекционн\w*\s+зал|читальн\w*\s+зал|конференц[-\s]?зал|аудитори\w*|[24]\s*этаж)\b",
+        room_probe,
+    ):
+        llm_text += (
+            "\nRoom/floor is not venue: `лекционный зал`/`читальный зал`/`2 этаж`/`4 этаж` -> infer building. "
+            "If the explicit place is only a room, hall, audience room, or floor, treat venue "
+            "as missing and use the source organization/source_location/location hint as the "
+            "building when source text/OCR supports it. КОНБ+Мира9 => "
+            "location_name=Научная библиотека."
+        )
     try:
         hint_parts: list[str] = [text or ""]
         if poster_texts:
@@ -1823,55 +2103,6 @@ async def build_event_drafts_from_vk(
         except (TypeError, ValueError):
             return bool(value)
 
-    # Title grounding: prevent hallucinated/garbled short tokens in titles from leaking into UI.
-    ground_parts: list[str] = []
-    if isinstance(text, str) and text.strip():
-        ground_parts.append(text)
-    if poster_texts:
-        ground_parts.extend([p for p in poster_texts if isinstance(p, str) and p.strip()])
-    ground_norm = unicodedata.normalize("NFKC", "\n".join(ground_parts)).casefold().replace("ё", "е")
-
-    _title_word_re = re.compile(r"[а-яё]{3,}", re.IGNORECASE)
-    _title_prefix_re = re.compile(r"^([^a-zа-я0-9]+\\s+)", re.IGNORECASE)
-
-    def _token_in_ground(token: str) -> bool:
-        tok = token.casefold().replace("ё", "е").strip()
-        if not tok:
-            return True
-        if tok in ground_norm:
-            return True
-        # Best-effort: allow simple inflection differences.
-        if len(tok) >= 5 and tok[:-1] in ground_norm:
-            return True
-        if len(tok) >= 6 and tok[:-2] in ground_norm:
-            return True
-        return False
-
-    def _missing_title_tokens(title: str) -> list[str]:
-        words = [w for w in _title_word_re.findall(title or "") if w]
-        missing: list[str] = []
-        for w in words:
-            if _token_in_ground(w):
-                continue
-            missing.append(w)
-        return missing
-
-    def _fallback_title(title: str, *, event_type: str | None, venue: str | None) -> str:
-        prefix = ""
-        m = _title_prefix_re.match(title or "")
-        if m:
-            prefix = m.group(1)
-        et = (event_type or "").strip().casefold()
-        if any(k in et for k in ("выстав", "экспоз")):
-            base = "Интерактивная экспозиция"
-        elif et:
-            base = (event_type or "").strip().capitalize()
-        else:
-            base = "Событие"
-        venue_short = (venue or "").split(",", 1)[0].strip()
-        core = f"{base} — {venue_short}" if venue_short else base
-        return (prefix + core).strip()
-
     drafts: list[EventDraft] = []
 
     def _source_norm_text() -> str:
@@ -1883,6 +2114,12 @@ async def build_event_drafts_from_vk(
         return s.casefold().replace("ё", "е")
 
     source_norm = _source_norm_text()
+    poster_datetime_anchor = _extract_single_poster_datetime_anchor(
+        poster_texts,
+        anchor_date=anchor_dt.date(),
+    )
+    source_has_relative_date_anchor = _source_text_has_relative_date_anchor(text)
+    source_has_absolute_date_anchor = _source_text_has_absolute_date_anchor(text)
 
     def _sanitize_false_time_from_date(
         *,
@@ -1924,13 +2161,7 @@ async def build_event_drafts_from_vk(
         time_colon = f"{hh:02d}:{mm:02d}"
         # Source contains DD.MM, but not HH:MM -> likely date, not time.
         if (date_dot in source_norm or date_dot2 in source_norm) and (time_colon not in source_norm):
-            # If there is any other explicit time token in the source, do not touch.
-            # (We only fix the "time copied from date" case when the source otherwise has no time.)
-            other_times = re.findall(r"\b\d{1,2}[:.]\d{2}\b", source_norm)
-            # Filter out the date-like token itself.
-            other_times = [x for x in other_times if x.replace(".", ":") != time_colon]
-            if not other_times:
-                return None
+            return None
         return draft_time
 
     def _looks_like_program_schedule_source() -> bool:
@@ -2060,6 +2291,10 @@ async def build_event_drafts_from_vk(
         ticket_price_min = clean_int(data.get("ticket_price_min"))
         ticket_price_max = clean_int(data.get("ticket_price_max"))
         ticket_link = clean_str(data.get("ticket_link"))
+        if ticket_link:
+            ticket_link = await _resolve_external_short_ticket_link(ticket_link)
+        elif fallback_ticket_link:
+            fallback_ticket_link = await _resolve_external_short_ticket_link(fallback_ticket_link)
         links: list[str] | None
         if ticket_link:
             links = [ticket_link]
@@ -2095,26 +2330,51 @@ async def build_event_drafts_from_vk(
         if final_date and (not final_time) and default_time:
             final_time = default_time
             time_is_default = True
+        poster_anchor_applied = False
+        if poster_datetime_anchor and len(parsed_events) == 1:
+            poster_date = poster_datetime_anchor.date
+            poster_time = poster_datetime_anchor.time
+            has_poster_date_conflict = bool(final_date and final_date != poster_date)
+            should_apply_poster_anchor = False
+            if not final_date:
+                should_apply_poster_anchor = True
+            elif final_date == poster_date and (not final_time or final_time == poster_time):
+                should_apply_poster_anchor = True
+            elif (
+                has_poster_date_conflict
+                and source_has_relative_date_anchor
+                and not source_has_absolute_date_anchor
+            ):
+                # Text such as "в этот четверг" is often copied before final
+                # poster details are ready. A single poster with exact DD month
+                # HH:MM is stronger than that relative anchor, but not stronger
+                # than an explicit date written in the text.
+                should_apply_poster_anchor = True
+            if should_apply_poster_anchor:
+                logger.warning(
+                    "vk_intake.poster_datetime_anchor_applied old_date=%s old_time=%s new_date=%s new_time=%s source=%s reason=%s",
+                    final_date or "",
+                    final_time or "",
+                    poster_date,
+                    poster_time,
+                    source_name or "vk",
+                    "relative_text_conflict" if has_poster_date_conflict else "missing_or_matching_anchor",
+                )
+                final_date = poster_date
+                final_time = poster_time
+                time_is_default = False
+                poster_anchor_applied = True
 
         title_raw = clean_str(data.get("title")) or ""
         event_type_val = clean_str(data.get("event_type"))
-        missing_tokens = _missing_title_tokens(title_raw)
-        # Heuristic: if the title contains any Cyrillic word (3+ chars) absent from the source
-        # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer a safe fallback.
-        if missing_tokens:
-            venue_val = _clean_llm_text_field(data.get("location_name"), field_name="location_name") or source_name or ""
-            fallback = _fallback_title(
-                title_raw,
-                event_type=event_type_val,
-                venue=venue_val,
-            )
-            logger.warning(
-                "vk_intake suspicious_title replaced title=%r missing=%s fallback=%r",
-                title_raw,
-                ",".join(missing_tokens[:4]),
-                fallback,
-            )
-            title_raw = fallback
+
+        venue_value = _clean_llm_text_field(data.get("location_name"), field_name="location_name")
+        address_value = _clean_llm_text_field(data.get("location_address"), field_name="location_address")
+        if poster_datetime_anchor and len(parsed_events) == 1 and poster_anchor_applied:
+            if poster_datetime_anchor.venue:
+                venue_value = poster_datetime_anchor.venue
+            if poster_datetime_anchor.address:
+                address_value = poster_datetime_anchor.address
 
         drafts.append(
             EventDraft(
@@ -2122,10 +2382,10 @@ async def build_event_drafts_from_vk(
                 date=final_date,
                 time=final_time,
                 time_is_default=time_is_default,
-                venue=_clean_llm_text_field(data.get("location_name"), field_name="location_name"),
+                venue=venue_value,
                 description=data.get("short_description"),
                 festival=clean_str(data.get("festival")),
-                location_address=_clean_llm_text_field(data.get("location_address"), field_name="location_address"),
+                location_address=address_value,
                 city=_clean_llm_text_field(data.get("city"), field_name="city"),
                 ticket_price_min=ticket_price_min,
                 ticket_price_max=ticket_price_max,
@@ -3526,7 +3786,7 @@ def _build_smart_update_posters(
                 catbox_url=catbox_url,
                 supabase_url=supabase_url,
                 sha256=item.digest,
-                phash=None,
+                phash=getattr(item, "phash", None),
                 ocr_text=item.ocr_text,
                 ocr_title=item.ocr_title,
                 prompt_tokens=int(getattr(item, "prompt_tokens", 0) or 0),

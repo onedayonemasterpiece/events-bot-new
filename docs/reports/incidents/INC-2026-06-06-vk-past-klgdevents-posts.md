@@ -1,0 +1,220 @@
+# INC-2026-06-06-vk-past-klgdevents-posts Past events published to klgdevents
+
+Status: monitoring
+Severity: sev2
+Service: VK outbound event publishing (`klgdevents`)
+Opened: 2026-06-06
+Closed: —
+Owners: Codex
+Related incidents: `INC-2026-05-19-vk-posts-personal-author`, `INC-2026-06-05-vk-story-forward-wall-first`
+Related docs: `docs/features/vk-publishing/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
+
+## Summary
+
+Operator reported that fully past events are appearing in `https://vk.com/klgdevents`, with `https://vk.com/wall-231920894_2270` as an example. The inbound Smart Update path already skips many past automated candidates, and the VK prune job can delete some stale managed posts after the fact, but the outbound `vk_sync` path still allowed an active/non-silent event row that had already ended to create a new managed community post.
+
+## User / Business Impact
+
+- `klgdevents` followers can see stale event announcements in the community feed.
+- VK recommendations can amplify already-ended events until the prune job removes eligible posts.
+- Operators lose trust in the database-backed VK publication path because past rows can still produce fresh wall posts.
+
+## Detection
+
+- Detected by operator report on 2026-06-06 with a concrete VK post URL.
+- Live VK API inspection was completed with the service VK token after release.
+- Fly production runtime/DB evidence collection was completed with the service Fly token from `~/.fly/config.yml`; `flyctl auth whoami` alone was not a sufficient auth discovery check.
+
+## Timeline
+
+- 2026-06-06 UTC — operator reported past events appearing in `klgdevents`, example `wall-231920894_2270`.
+- 2026-06-06 UTC — code review found `schedule_event_update_tasks` only skipped `vk_sync` for non-active/silent rows or already-managed `klgdevents` URLs, not for fully past events.
+- 2026-06-06 UTC — prevention fix prepared on `hotfix/vk-past-klgdevents-20260606`.
+- 2026-06-06 UTC — release auth discovery was corrected: Fly service token found in `~/.fly/config.yml`, and AGENTS/release-governance docs updated to require checking that location before declaring auth unavailable.
+- 2026-06-06 UTC — PR #5 merged to `origin/main` as merge commit `428d59d33830f16d9aca0aec0cd0f132443ed9f7`.
+- 2026-06-06 UTC — deployed to Fly app `events-bot-new-wngqia`, release version `1202`.
+- 2026-06-06 UTC — post-deploy health and production DB audit confirmed no pending/running `vk_sync` jobs for fully past events.
+- 2026-06-06 UTC — manual prune pass deleted 40 stale managed VK posts and found 10 already missing posts with zero API errors; scheduled prune remains responsible for draining the remaining backlog.
+- 2026-06-06 UTC — follow-up audit found the scheduled prune path still failed
+  at the scheduler wrapper (`Database.ensure_connection` does not exist in
+  production), the default cap of 50 candidates was too low for the backlog, and
+  the safety contract needed the operator-requested `comments.count == 0` guard.
+- 2026-06-06 UTC — follow-up prune fix deployed to Fly and production
+  `VK_POST_PRUNE_DRY_RUN` secret removed so the scheduled job can delete again.
+- 2026-06-06 UTC — compensating catch-up drained the live deletable backlog:
+  manual real passes deleted `263` then `286` eligible stale posts; final dry-run
+  found `0` remaining deletable posts, `30` protected by reposts, and `234`
+  already missing wall URLs.
+
+## Root Cause
+
+1. `schedule_event_update_tasks` enqueued `vk_sync` for active, non-silent events even when their `date`/`end_date` was strictly before the current local day.
+2. `job_sync_vk_source_post` had no second boundary check before calling `sync_vk_source_post`, so already-pending jobs could still reach `wall.post` after a deploy.
+3. The existing `prune_past_event_vk_posts` cleanup was post-publication mitigation, not a prevention guard.
+4. The first scheduled prune wrapper used `db.ensure_connection()`, which exists
+   only in some tests/fakes and not on the production `Database` class.
+
+## Contributing Factors
+
+- The VK publishing doc explicitly said imported VK events should still receive managed `klgdevents` posts, but did not qualify that with event freshness.
+- Regression tests covered external VK source fanout and managed-post dedupe, but not the fully-past event case.
+- Initial Fly auth discovery stopped too early at `flyctl auth whoami` instead of checking the service token in `~/.fly/config.yml`; release-governance docs now pin the required lookup.
+- The initial cleanup cap was `50`; when the first 50 candidates included 10
+  already-missing wall posts, a real pass deleted only 40. That is too low while
+  draining the historical backlog.
+- The first safety contract protected reposts/story shares via `reposts.count`,
+  but did not protect posts with comments.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- Changing `schedule_event_update_tasks`, `enqueue_job` behavior for `JobTask.vk_sync`, `job_sync_vk_source_post`, `sync_vk_source_post`, or managed `klgdevents` URL detection.
+- Changing `Event.date` / `Event.end_date` lifecycle semantics or cleanup/prune rules for past events.
+- Changing VK post-prune behavior in a way that could be mistaken for publish prevention.
+- Changing `vk_post_prune_scheduler` or its production `Database` interaction.
+
+### Affected surfaces
+
+- `main.py::schedule_event_update_tasks`
+- `main.py::job_sync_vk_source_post`
+- `main.py::_event_has_managed_vk_post`
+- `main_part2.py::prune_past_event_vk_posts`
+- `docs/features/vk-publishing/README.md`
+- Production env: `VK_EVENTS_GROUP_ID`, `VK_AFISHA_GROUP_ID`, `ENABLE_VK_POST_PRUNE`
+- Production env: `VK_POST_PRUNE_LIMIT`, `VK_POST_PRUNE_DRY_RUN`
+- External system: VK `wall.post` for `vk.com/klgdevents`
+
+### Mandatory checks before closure or deploy
+
+- Unit tests prove:
+  - future VK-imported events still enqueue `vk_sync`;
+  - fully past VK-imported events do not enqueue `vk_sync`;
+  - already-pending `job_sync_vk_source_post` for a fully past event returns without calling `sync_vk_source_post`;
+  - managed `klgdevents` posts still suppress duplicate `vk_sync`.
+- Production config check confirms `VK_EVENTS_GROUP_ID=231920894` or the expected target group.
+- Runtime evidence check follows `docs/operations/runtime-logs.md`: inspect file mirror env/dir first; if unavailable, record that fact and use Fly logs / production DB snapshot / ops rows.
+- Post-deploy smoke or DB audit confirms no pending `vk_sync` jobs remain for fully past events and no new managed `klgdevents` posts are created for fully past rows.
+- Post-deploy prune audit confirms scheduled `vk_post_prune` can run without
+  `Database.ensure_connection` and keeps posts with `comments.count > 0`.
+- Release-governance check: deployed SHA must be reachable from `origin/main`.
+
+### Required evidence
+
+- Test command output.
+- Commit SHA / branch / deploy path.
+- Production query output for past events with pending `vk_sync` and managed `source_vk_post_url`.
+- VK/API or DB evidence for `wall-231920894_2270`: event id, title, event date/end date, and whether cleanup/remediation deleted or retained the post.
+- Confirmation that fix is reachable from `origin/main` before incident closure.
+
+## Immediate Mitigation
+
+- Code-side prevention prepared: fully past events no longer enqueue `vk_sync`, and the `vk_sync` job handler skips fully past events before external VK side effects.
+- Existing VK prune remains the after-the-fact cleanup path for already-created eligible managed posts.
+- Follow-up fix prepared: scheduled prune should call
+  `prune_past_event_vk_posts` directly, preserve commented posts, and default to
+  a larger backlog-drain cap.
+
+## Corrective Actions
+
+- Added `_event_vk_publish_end_date` / `_event_has_ended_before_today` guard in `main.py`.
+- Updated `schedule_event_update_tasks` to skip `vk_sync` for fully past events while leaving Telegraph/page cleanup available.
+- Updated `job_sync_vk_source_post` to return before `sync_vk_source_post` for fully past events, covering already-pending jobs.
+- Added regression tests in `tests/test_vk_source.py`.
+- Added `comments.count` guard, raised default `VK_POST_PRUNE_LIMIT` from `50`
+  to `300`, and removed the bad `db.ensure_connection()` scheduler dependency.
+- Added prune regression tests for commented posts and scheduler execution with
+  a plain production-shaped `Database`.
+- Updated canonical VK publishing docs and `CHANGELOG.md`.
+
+## Follow-up Actions
+
+- [x] events-bot / after Fly auth is available / collect live production DB evidence for `wall-231920894_2270` and any other managed `klgdevents` posts created for fully past events.
+- [x] events-bot / after deploy / run a production audit for pending `vk_sync` jobs whose event ended before today and record the result here.
+- [x] events-bot / after deploy / confirm manual remediation handled the first batch of already-created stale managed posts.
+- [x] events-bot / scheduled prune follow-up / confirm why the remaining stale managed-post backlog did not drain.
+- [x] events-bot / after follow-up deploy / run compensating catch-up for the
+  stale managed-post backlog.
+- [ ] events-bot / after follow-up deploy / confirm the next scheduled prune
+  tick continues to run without VK API errors.
+
+## Release And Closure Evidence
+
+- deployed SHA:
+  - PR branch head: `b884266352acbecdbee22726cf54b09f12b90d47`.
+  - `origin/main` merge commit: `428d59d33830f16d9aca0aec0cd0f132443ed9f7`.
+  - `git branch -r --contains b884266352acbecdbee22726cf54b09f12b90d47` includes `origin/main`.
+- deploy path:
+  - Manual Fly deploy from a clean worktree after PR #5 was merged to `origin/main`.
+  - Command: `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`.
+  - Auth: process-local `FLY_ACCESS_TOKEN` loaded from `~/.fly/config.yml`; token value was not printed.
+  - Fly release: version `1202`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KTDY1BM76DYWGFSB6G2TDYDV`, machine `48e42d5b714228`, `1/1` checks passing.
+- regression checks:
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/dev/projects/events-bot-new/.venv/bin/pytest -q -p pytest_asyncio.plugin tests/test_vk_source.py tests/test_vk_post_prune.py` -> `39 passed in 7.32s` (pytest process printed the terminal result but did not exit; local hung process was killed after result collection).
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py tests/test_vk_source.py` -> passed.
+- runtime log evidence:
+  - Production file mirror enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, basename `events-bot.log`, retention `24h`.
+  - Active `/data/runtime_logs/events-bot.log` and rotated files exist.
+  - Post-deploy logs contained unrelated Kaggle recovery `GetKernelSessionStatus` 500 noise; `/healthz` stayed ready with no issues.
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "issues": []}` after deploy and again after the prune pass.
+  - Production DB audit for fully past events with pending/running `vk_sync` returned `0` rows for `today_utc=2026-06-06`.
+  - Existing old `vk_sync` rows for fully past events were only historical `error` rows with `next_run_at` in 2035/2036, so they will not execute.
+  - VK API check for `wall-231920894_2270` returned text preview `Пост удалён`; no live `event` row matched that wall URL in `source_vk_post_url`, `source_post_url`, or `vk_repost_url`.
+  - Manual prune dry-run found `853` stale managed-post candidates.
+  - Manual prune real run with `limit=50` deleted `40`, found `10` missing, kept `0` pinned/reposts, and had `0` errors.
+  - Follow-up live dry-run mirror found `813` DB candidates after the manual
+    pass: `549` still live/deletable by repost/comment rules as implemented at
+    the time, `234` already missing, `30` kept by repost/story-share count,
+    `0` VK API errors.
+  - Runtime log showed scheduled `vk_post_prune_0` at `2026-06-06 00:30 UTC`
+    failed with `'Database' object has no attribute 'ensure_connection'`.
+- residual risk:
+  - The prevention fix is deployed; the live deletable backlog was drained by
+    manual catch-up. The remaining known risk is observing the next natural
+    scheduled prune tick after the scheduler/comment-guard deploy.
+  - Branch drift audit found unrelated remote branch `origin/hotfix/google-ai-reserve-overflow` still ahead of `origin/main` by one commit.
+
+### Follow-up Prune Deploy Evidence
+
+- deployed SHA:
+  - `d6882206dc397adb3194e0ce422ab45145c6261d`
+    (`fix(vk): protect commented stale posts during prune`).
+  - Commit was pushed to `origin/main` before deploy.
+- deploy path:
+  - Manual Fly deploy from clean worktree
+    `hotfix/vk-prune-comments-20260606` aligned with `origin/main`.
+  - Command: `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`.
+  - Fly image:
+    `registry.fly.io/events-bot-new-wngqia:deployment-01KTE31RW3SR65XPH7QF1BEKXM`.
+  - Machine `48e42d5b714228`, Fly version `1204`, `1/1` checks passing.
+  - `VK_POST_PRUNE_DRY_RUN` Fly secret was unset after deploy; `fly secrets list`
+    showed only `VK_AFISHA_GROUP_ID` and `VK_EVENTS_GROUP_ID`.
+- regression checks:
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/dev/projects/events-bot-new/.venv/bin/pytest -q -p pytest_asyncio.plugin tests/test_vk_post_prune.py tests/test_vk_source.py`
+    -> `41 passed in 8.08s` (pytest printed the terminal result but did not
+    exit; the local hung process was killed after result collection).
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main_part2.py tests/test_vk_post_prune.py tests/test_vk_source.py`
+    -> passed.
+  - Promo VK story regression:
+    `tests/test_promo.py::test_initial_80_stories_campaign_priority_and_any_position_policy`
+    and `tests/test_promo.py::test_vk_story_image_uses_source_post_photo_without_text_panel`
+    -> `2 passed in 0.39s`.
+- production prune evidence:
+  - Pre-catch-up production dry-run with the deployed code:
+    `{"candidates": 813, "deleted": 549, "dry_run": 1, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - First real catch-up, `limit=300`:
+    `{"candidates": 813, "deleted": 263, "dry_run": 0, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 27, "missing": 10}`.
+  - Intermediate dry-run after first pass:
+    `{"candidates": 550, "deleted": 292, "dry_run": 1, "errors": 0, "kept_comments": 1, "kept_pinned": 0, "kept_reposts": 23, "missing": 234}`.
+  - Second real catch-up, `limit=0` drain:
+    `{"candidates": 550, "deleted": 286, "dry_run": 0, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - Final dry-run:
+    `{"candidates": 264, "deleted": 0, "dry_run": 1, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - Final `/healthz` returned `ok=true`, `ready=true`, `issues=[]`, scheduler
+    and worker tasks `ok`.
+
+## Prevention
+
+- The VK publish boundary now has prevention before `wall.post`, not only a cleanup job after stale posts appear.
+- Regression tests pin the distinction between current/future VK source imports (still publish) and fully past rows (do not publish).

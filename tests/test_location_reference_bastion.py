@@ -45,3 +45,22 @@ def test_event_parse_reference_normalizes_bastion_without_alias_file() -> None:
 
     assert payload["location_name"] == "Бар Бастион"
     assert payload["location_address"] == "Судостроительная 6/1"
+
+
+def test_vostok_na_zapade_reference_aliases_normalize_to_museum() -> None:
+    venue = match_known_venue("музейное пространство Восток на Западе", city="Калининград")
+    assert venue is not None
+    assert venue.name == "Музей «Восток на Западе»"
+    assert venue.address == "Клиническая 19А"
+
+    payload = {
+        "location_name": 'музейное пространство "Восток на Западе"',
+        "location_address": "Клиническая 19а",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Музей «Восток на Западе»",
+        "location_address": "Клиническая 19А",
+        "city": "Калининград",
+    }

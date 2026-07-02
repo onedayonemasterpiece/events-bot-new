@@ -3,6 +3,7 @@ import sys
 import json
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import pytest
@@ -179,6 +180,65 @@ async def test_run_vk_auto_import_uses_existing_ops_run_id(tmp_path, monkeypatch
     assert int(row_id) == int(ops_run_id)
     assert status == "success"
     assert details["run_id"] == "sched-existing"
+
+
+@pytest.mark.asyncio
+async def test_manual_vk_auto_import_does_not_wait_for_heavy_gate_by_default(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async def fake_pick_next(*_args, **_kwargs):
+        return None
+
+    def forbidden_heavy_operation(**_kwargs):
+        raise AssertionError("manual vk_auto_import should not enter heavy gate by default")
+
+    class BusyMeta:
+        kind = "tg_monitoring"
+        trigger = "scheduled"
+        run_id = "tg-run"
+        operator_id = 0
+
+    monkeypatch.delenv("VK_AUTO_IMPORT_HEAVY_MODE", raising=False)
+    monkeypatch.setattr(vk_auto_queue.vk_review, "pick_next", fake_pick_next)
+    monkeypatch.setattr(vk_auto_queue, "current_heavy_meta", lambda: BusyMeta())
+    monkeypatch.setattr(vk_auto_queue, "heavy_operation", forbidden_heavy_operation)
+
+    bot = DummyBot()
+    await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
+
+    assert bot.messages
+    assert all("ждёт завершения другой тяжёлой операции" not in text for _, text in bot.messages)
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async def fake_pick_next(*_args, **_kwargs):
+        return None
+
+    @asynccontextmanager
+    async def fake_heavy_operation(**_kwargs):
+        yield True
+
+    class BusyMeta:
+        kind = "tg_monitoring"
+        trigger = "scheduled"
+        run_id = "tg-run"
+        operator_id = 0
+
+    monkeypatch.setenv("VK_AUTO_IMPORT_HEAVY_MODE", "wait")
+    monkeypatch.setattr(vk_auto_queue.vk_review, "pick_next", fake_pick_next)
+    monkeypatch.setattr(vk_auto_queue, "current_heavy_meta", lambda: BusyMeta())
+    monkeypatch.setattr(vk_auto_queue, "describe_heavy_meta", lambda _meta: "tg_monitoring (scheduled)")
+    monkeypatch.setattr(vk_auto_queue, "heavy_operation", fake_heavy_operation)
+
+    bot = DummyBot()
+    await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
+
+    assert any("ждёт завершения другой тяжёлой операции" in text for _, text in bot.messages)
 
 
 @pytest.mark.asyncio
@@ -851,7 +911,10 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
             smart_merged=False,
         )
 
+    captured_allowed: list[set[main.JobTask]] = []
+
     async def fake_run_jobs(*_args, **_kwargs):
+        captured_allowed.append(set(_kwargs.get("allowed_tasks") or ()))
         return None
 
     async def fake_report(*_args, **_kwargs):
@@ -867,6 +930,12 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     assert captured_waits == [expected_wait_for_telegraph]
+    if inline_jobs_env is None:
+        assert captured_allowed == [
+            {main.JobTask.telegraph_build, main.JobTask.tg_event_publish}
+        ]
+    else:
+        assert captured_allowed == []
 
 
 @pytest.mark.asyncio

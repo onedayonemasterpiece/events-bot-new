@@ -30,6 +30,19 @@ def test_canonical_guide_sources_include_kaliningradlibrary_channel() -> None:
     assert source.flags == {"organization": True, "mixed_topic": True, "library": True}
 
 
+def test_canonical_guide_sources_include_progulki_s_katey_channel() -> None:
+    sources = canonical_guide_sources()
+    by_source = {(source.platform, source.username): source for source in sources}
+
+    assert ("telegram", "progulki_s_katey") in by_source
+    source = by_source[("telegram", "progulki_s_katey")]
+    assert source.profile_slug == "progulki-s-katey"
+    assert source.display_name == "ПРОгулки с Катей"
+    assert source.source_kind == "guide_personal"
+    assert source.trust_level == "medium"
+    assert source.flags == {"mixed_topic": True}
+
+
 def test_canonical_guide_sources_include_vk_publics() -> None:
     sources = canonical_guide_sources()
     by_source = {(source.platform, source.username): source for source in sources}

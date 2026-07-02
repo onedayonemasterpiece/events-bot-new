@@ -163,6 +163,52 @@ def read_known_venue_aliases() -> dict[str, str]:
     return aliases
 
 
+@lru_cache(maxsize=1)
+def read_known_place_aliases() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    path = os.path.join("docs", "reference", "kaliningrad_oblast_places.md")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f]
+    except Exception:
+        return aliases
+    for line in lines:
+        if not line or line.startswith("#") or "=>" not in line:
+            continue
+        alias_raw, canonical_raw = line.split("=>", 1)
+        alias_key = normalize_venue_key(alias_raw)
+        canonical = canonical_raw.strip()
+        if alias_key and canonical:
+            aliases[alias_key] = canonical
+    return aliases
+
+
+@lru_cache(maxsize=1)
+def read_known_place_names() -> dict[str, str]:
+    names: dict[str, str] = {}
+    path = os.path.join("docs", "reference", "kaliningrad_oblast_places.md")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f]
+    except Exception:
+        return names
+    for line in lines:
+        if not line or line.startswith("#"):
+            continue
+        value = line.split("=>", 1)[1].strip() if "=>" in line else line
+        key = normalize_venue_key(value)
+        if key and value:
+            names[key] = value
+    return names
+
+
+def canonicalize_known_place_name(value: str | None) -> str | None:
+    key = normalize_venue_key(value)
+    if not key:
+        return None
+    return read_known_place_aliases().get(key) or read_known_place_names().get(key)
+
+
 def _filter_venues_by_city(
     venues: tuple[KnownVenue, ...],
     city: str | None,
@@ -453,8 +499,29 @@ def normalise_event_location_from_reference(
     raw_location_name = event_obj.get("location_name")
     raw_location_address = event_obj.get("location_address")
 
+    canonical_city = canonicalize_known_place_name(raw_city)
+    if canonical_city:
+        event_obj["city"] = canonical_city
+        raw_city = canonical_city
+
+    canonicalized_location_place = False
+    canonical_location_place = canonicalize_known_place_name(raw_location_name)
+    if canonical_location_place and not str(raw_location_address or "").strip():
+        city_key = normalize_venue_key(raw_city)
+        name_key_for_place = normalize_venue_key(raw_location_name)
+        canonical_key = normalize_venue_key(canonical_location_place)
+        if not city_key or city_key in {name_key_for_place, canonical_key}:
+            event_obj["location_name"] = canonical_location_place
+            raw_location_name = canonical_location_place
+            canonicalized_location_place = True
+            if not raw_city:
+                event_obj["city"] = canonical_location_place
+                raw_city = canonical_location_place
+
     name_key = normalize_venue_key(raw_location_name)
     addr_key = normalize_address_key(raw_location_address, city=raw_city)
+    if canonicalized_location_place:
+        return None
     if (
         addr_key in {"мира 9", "мира 9 11"}
         and "библиотек" in name_key

@@ -121,6 +121,32 @@ def test_story_report_includes_media_probe(monkeypatch, tmp_path: Path) -> None:
     assert report["media"] == {"path": str(src), "width": 720}
 
 
+def test_vk_only_config_does_not_require_telegram_client() -> None:
+    assert helper._config_requires_telegram_client(
+        {
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                }
+            ]
+        }
+    ) is False
+    assert helper._config_requires_telegram_client(
+        {
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                },
+                {"peer": "@kenigevents", "mode": "repost_previous"},
+            ]
+        }
+    ) is True
+
+
 def test_validate_native_story_video_accepts_hevc_render(monkeypatch, tmp_path: Path) -> None:
     src = tmp_path / "final.mp4"
     src.write_bytes(b"video")
@@ -187,6 +213,11 @@ class _FakeSendStoryRequest:
         self.kwargs = kwargs
 
 
+class _FakeSendMediaRequest:
+    def __init__(self, **kwargs):  # noqa: ANN003
+        self.kwargs = kwargs
+
+
 class _FakeCanSendResult:
     def __init__(self, peer: str):
         self.peer = peer
@@ -200,6 +231,7 @@ class _FakeStoryClient:
         self.boost_fail_peers = boost_fail_peers
         self.story_ids = story_ids
         self.sent_requests: list[dict[str, object]] = []
+        self.sent_media_requests: list[dict[str, object]] = []
         self.sent_files: list[dict[str, object]] = []
 
     async def get_me(self) -> SimpleNamespace:
@@ -222,6 +254,9 @@ class _FakeStoryClient:
                 story_id=self.story_ids[peer],
                 to_dict=lambda: {"story_id": self.story_ids[peer]},
             )
+        if isinstance(request, _FakeSendMediaRequest):
+            self.sent_media_requests.append(request.kwargs)
+            return SimpleNamespace(id=9101, to_dict=lambda: {"id": 9101})
         raise AssertionError(f"Unexpected request: {request!r}")
 
     async def send_file(self, peer, file, **kwargs):  # noqa: ANN001,ANN003
@@ -232,6 +267,7 @@ class _FakeStoryClient:
 def _patch_story_request_types(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(helper.functions.stories, "CanSendStoryRequest", _FakeCanSendStoryRequest)
     monkeypatch.setattr(helper.functions.stories, "SendStoryRequest", _FakeSendStoryRequest)
+    monkeypatch.setattr(helper.functions.messages, "SendMediaRequest", _FakeSendMediaRequest)
     monkeypatch.setattr(
         helper.types,
         "InputPrivacyValueAllowAll",
@@ -324,6 +360,62 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
     assert len(client.sent_requests) == 2
     assert client.sent_requests[1]["fwd_from_story"] == 101
     assert client.sent_requests[1]["fwd_from_id"] == "peer:@kenigevents"
+
+
+@pytest.mark.asyncio
+async def test_telegram_story_message_target_forwards_previous_story_to_channel(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers=set(),
+        story_ids={"peer:@kenigevents": 101},
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {"peer": "@kenigevents", "mode": "upload"},
+                {
+                    "peer": "@kenigevents",
+                    "label": "tg:@kenigevents:story-message",
+                    "transport": "telegram_story_message",
+                    "mode": "repost_previous",
+                    "caption": "Видеоанонс #677 · 15 июня",
+                    "required": True,
+                },
+                {"peer": "@lovekenig", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][1]["transport"] == "telegram_story_message"
+    assert report["targets"][1]["message_id"] == 9101
+    assert report["targets"][1]["source_story_id"] == 101
+    assert len(client.sent_requests) == 2
+    assert len(client.sent_media_requests) == 1
+    story_message = client.sent_media_requests[0]
+    assert story_message["peer"] == "peer:@kenigevents"
+    assert story_message["media"] == {"peer": "peer:@kenigevents", "id": 101}
+    assert story_message["message"] == ""
+    assert client.sent_requests[1]["fwd_from_story"] == 101
 
 
 @pytest.mark.asyncio
@@ -546,6 +638,162 @@ async def test_telegram_chat_target_posts_without_story_preflight(
     assert client.sent_requests == []
     assert client.sent_files[0]["peer"] == "peer:@keniggpt"
     assert client.sent_files[0]["caption"] == "Видеоанонс КОНБ"
+
+
+@pytest.mark.asyncio
+async def test_vk_targets_continue_when_telethon_client_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+    published_wall: list[str] = []
+
+    def fake_wall_video(*, auth, config, target_cfg, media_path):  # noqa: ANN001
+        published_wall.append(str(target_cfg["label"]))
+        return {
+            "post_url": "https://vk.com/wall-231828790_42",
+            "owner_id": -231828790,
+            "post_id": 42,
+        }
+
+    def fake_wall_story(*, auth, config, target_cfg, media_path, source_wall):  # noqa: ANN001
+        return {
+            "source_wall_post_url": source_wall["post_url"],
+            "story_id": 456,
+            "owner_id": -231828790,
+            "expires_at": 1,
+        }
+
+    monkeypatch.setattr(helper, "_publish_vk_wall_video", fake_wall_video)
+    monkeypatch.setattr(helper, "_publish_vk_wall_story_forward", fake_wall_story)
+    monkeypatch.setattr(helper, "_video_probe", lambda path: {"path": str(path)})
+    monkeypatch.setattr(helper, "_vk_group_id", lambda *_args, **_kwargs: 231828790)
+
+    report = await helper._story_targets_report(
+        None,
+        auth={"vk_access_token": "tok", "vk_group_ids": {"konb39": 231828790}},
+        config={
+            "targets": [
+                {
+                    "peer": "@kaliningradlibrary",
+                    "label": "tg:@kaliningradlibrary:story",
+                    "blocking": False,
+                    "required": False,
+                },
+                {
+                    "peer": "konb39",
+                    "label": "vk:konb39:wall",
+                    "transport": "vk_wall",
+                    "blocking": False,
+                    "required": False,
+                },
+                {
+                    "peer": "konb39",
+                    "label": "vk:konb39:story",
+                    "transport": "vk_wall_story",
+                    "blocking": False,
+                    "required": False,
+                },
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+        telegram_auth_error="Story publish Telethon client is not authorized",
+    )
+
+    assert report["ok"] is True
+    assert report["fanout_ok"] is False
+    assert report["partial_ok"] is True
+    assert [item["ok"] for item in report["targets"]] == [False, True, True]
+    assert "not authorized" in report["targets"][0]["error"]
+    assert published_wall == ["vk:konb39:wall"]
+
+
+@pytest.mark.asyncio
+async def test_vk_wall_story_uploads_video_with_previous_wall_post_link(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(boost_fail_peers=set(), story_ids={})
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    api_calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_vk_api(method: str, *, auth, config, **params):  # noqa: ANN001,ANN003
+        api_calls.append((method, dict(params)))
+        if method == "video.save":
+            return {
+                "upload_url": "https://upload.example/video",
+                "owner_id": -231828790,
+                "video_id": 77,
+            }
+        if method == "wall.post":
+            return {"post_id": 123}
+        if method == "stories.getPhotoUploadServer":
+            raise AssertionError("vk_wall_story must upload the mp4 as a video story")
+        if method == "stories.getVideoUploadServer":
+            assert params["group_id"] == "231828790"
+            assert params["link_url"] == "https://vk.com/wall-231828790_123"
+            assert params["link_text"] == "watch"
+            return {"upload_url": "https://upload.example/story-video"}
+        if method == "stories.save":
+            assert params["upload_results"] == "story-upload-result"
+            return {"items": [{"id": 456, "owner_id": -231828790, "expires_at": 1}]}
+        raise AssertionError(method)
+
+    class _Response:
+        status_code = 200
+
+        def __init__(self, payload: dict[str, object]):
+            self._payload = payload
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_post(url, files=None, timeout=None):  # noqa: ANN001,ARG001
+        if str(url).endswith("/video"):
+            return _Response({})
+        if str(url).endswith("/story-video"):
+            return _Response({"response": {"upload_result": "story-upload-result"}})
+        raise AssertionError(url)
+
+    monkeypatch.setattr(helper, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(helper.requests, "post", fake_post)
+
+    report = await helper._story_targets_report(
+        client,
+        auth={"vk_access_token": "tok"},
+        config={
+            "targets": [
+                {
+                    "peer": "club231828790",
+                    "label": "vk:wall",
+                    "transport": "vk_wall",
+                    "caption": "Видеоанонс",
+                },
+                {
+                    "peer": "club231828790",
+                    "label": "vk:story",
+                    "transport": "vk_wall_story",
+                },
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][1]["source_wall_post_url"] == "https://vk.com/wall-231828790_123"
+    assert report["targets"][1]["story_id"] == 456
+    assert "stories.getVideoUploadServer" in [method for method, _ in api_calls]
+    assert "stories.getPhotoUploadServer" not in [method for method, _ in api_calls]
 
 
 @pytest.mark.asyncio

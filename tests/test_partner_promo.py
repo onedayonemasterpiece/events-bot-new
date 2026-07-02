@@ -552,6 +552,42 @@ async def test_list_campaigns_covering_event_includes_festival(tmp_path) -> None
 
 
 @pytest.mark.asyncio
+async def test_partner_campaign_menu_hides_ended_active_campaigns_by_default(tmp_path) -> None:
+    from handlers.partner_promo_cmd import _list_campaigns_for_role
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        admin = User(user_id=1, username="root", is_superadmin=True)
+        session.add(admin)
+        session.add_all(
+            [
+                PromoCampaign(
+                    title="Past partner promo",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2020, 1, 2, tzinfo=timezone.utc),
+                ),
+                PromoCampaign(
+                    title="Future partner promo",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2099, 1, 2, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        await session.commit()
+        admin = await session.get(User, 1)
+
+    current = await _list_campaigns_for_role(db, user=admin, include_archived=False)
+    report = await _list_campaigns_for_role(db, user=admin, include_archived=True)
+
+    assert [c.title for c in current] == ["Future partner promo"]
+    assert {c.title for c in report} == {"Past partner promo", "Future partner promo"}
+
+
+@pytest.mark.asyncio
 async def test_list_campaigns_covering_event_partner_hides_admin_festival(tmp_path) -> None:
     """A partner does not see a festival campaign created by another user."""
 
@@ -650,3 +686,105 @@ async def test_list_campaigns_covering_event_combines_event_and_festival(tmp_pat
     assert int(event_camps[0].id) == int(ev_res.campaign.id)
     assert len(fest_camps) == 1
     assert int(fest_camps[0].id) == int(fest_res.campaign.id)
+
+
+@pytest.mark.asyncio
+async def test_campaign_stats_text_per_vk_activity_with_links(tmp_path) -> None:
+    """Stats screen breaks down per activity, counts VK_SCHEDULED, shows links."""
+    from datetime import timedelta
+
+    from models import PromoExposure
+    from promo import PROMO_SURFACE_VK_PUBLICATION
+    from handlers.partner_promo_cmd import _campaign_stats_text, _humanize_activity
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_event("Событие фестиваля", "2026-06-20", creator_id=1))
+        await session.commit()
+        ev_id = int(
+            (await session.execute(select(Event.id))).scalars().first()
+        )
+        campaign = PromoCampaign(title="80 историй", status="active", starts_at=now_utc)
+        session.add(campaign)
+        await session.commit()
+        await session.refresh(campaign)
+        cid = int(campaign.id)
+        pub = PromoActivity(
+            campaign_id=cid,
+            surface=PROMO_SURFACE_VK_PUBLICATION,
+            profile_key="klgdevents",
+            max_per_publish=2,
+            daily_cap=2,
+            enabled=True,
+            config_json={"target_group": "klgdevents", "window_hours": 24},
+        )
+        rep = PromoActivity(
+            campaign_id=cid,
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key="klgdevents->kenigeventsofficial",
+            max_per_publish=1,
+            daily_cap=1,
+            enabled=True,
+            config_json={"source_group": "klgdevents", "target_group": "kenigeventsofficial"},
+        )
+        session.add_all([pub, rep])
+        await session.commit()
+        await session.refresh(pub)
+        await session.refresh(rep)
+        pub_id, rep_id = int(pub.id), int(rep.id)
+        # vk_publication recorded as VK_SCHEDULED (postponed) — must still count.
+        session.add(
+            PromoExposure(
+                campaign_id=cid,
+                activity_id=pub_id,
+                event_id=ev_id,
+                surface=PROMO_SURFACE_VK_PUBLICATION,
+                placement_kind="rolling_window_deficit",
+                publish_status="VK_SCHEDULED",
+                public_target_count=1,
+                public_targets_json=[{"type": "vk_wall", "url": "https://vk.com/wall-1_123"}],
+                published_at=now_utc - timedelta(hours=2),
+                details_json={"target_url": "https://vk.com/wall-1_123"},
+            )
+        )
+        session.add(
+            PromoExposure(
+                campaign_id=cid,
+                activity_id=rep_id,
+                event_id=ev_id,
+                surface=PROMO_SURFACE_VK_REPOST,
+                placement_kind="repost",
+                publish_status="VK_SCHEDULED",
+                public_target_count=1,
+                public_targets_json=[{"type": "vk_wall", "url": "https://vk.com/wall-2_55"}],
+                published_at=now_utc - timedelta(hours=1),
+                details_json={
+                    "target_url": "https://vk.com/wall-2_55",
+                    "source_url": "https://vk.com/wall-1_123",
+                },
+            )
+        )
+        await session.commit()
+        camp_obj = await session.get(PromoCampaign, cid)
+
+    text = await _campaign_stats_text(db, camp_obj)
+    # Per-activity sections present with humanized labels.
+    assert "📢 VK-публикация" in text
+    assert "📨 VK-репост" in text
+    # VK_SCHEDULED counted (the under-count fix): window + total.
+    assert "промо-действий за 24ч: 1 / цель 2" in text
+    # Concrete clickable links shown, with repost source link.
+    assert "vk.com/wall-1_123" in text
+    assert "vk.com/wall-2_55" in text
+    assert "←" in text
+
+    # Humanized card labels for the new surfaces.
+    pub_label = _humanize_activity(pub)
+    assert "📢 VK-публикация" in pub_label
+    assert "vk.com/klgdevents" in pub_label
+    assert "минимум 2/24ч" in pub_label
+    rep_label = _humanize_activity(rep)
+    assert "vk.com/klgdevents → vk.com/kenigeventsofficial" in rep_label

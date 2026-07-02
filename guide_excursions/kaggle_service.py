@@ -22,10 +22,27 @@ import aiosqlite
 
 from db import Database
 from kaggle_registry import register_job, update_job_meta
+from kaggle_status import create_kaggle_run_config, format_kaggle_status_label, write_kaggle_status_files
 from source_parsing.telegram.split_secrets import encrypt_secret
 from video_announce.kaggle_client import KaggleClient
 
 logger = logging.getLogger(__name__)
+
+
+def _is_transient_kaggle_status_error(exc: Exception) -> bool:
+    if isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError"):
+        return True
+    if isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError"):
+        return True
+    if exc.__class__.__name__.endswith("Timeout"):
+        return True
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        status_int = int(status_code)
+    except Exception:
+        status_int = 0
+    return 500 <= status_int <= 599
 
 
 def _env_int(name: str, default: int) -> int:
@@ -185,6 +202,10 @@ def _resolve_auth_bundle_env_key() -> str | None:
             )
         return "TELEGRAM_AUTH_BUNDLE_E2E"
     return None
+
+
+def remote_telegram_auth_scope() -> str:
+    return _resolve_auth_bundle_env_key() or "TG_SESSION"
 
 
 def _require_kaggle_username() -> str:
@@ -401,6 +422,7 @@ def _create_dataset(
 
 async def _prepare_kaggle_datasets(
     *,
+    db: Database,
     client: KaggleClient,
     config_payload: dict[str, Any],
     secrets_payload: str,
@@ -409,6 +431,14 @@ async def _prepare_kaggle_datasets(
     encrypted, fernet_key = encrypt_secret(secrets_payload)
     username = _require_kaggle_username()
     slug_suffix = _slugify(run_id, max_len=16)
+    kaggle_run_config = await create_kaggle_run_config(
+        db,
+        run_id=f"guide_monitor:{run_id}",
+        session_id=None,
+        kind="guide_excursions_monitor",
+        notebook="GuideExcursionsMonitor",
+        resource_leases=["telegram_session:s22"],
+    )
 
     def write_cipher(path: Path) -> None:
         (path / "config.json").write_text(
@@ -416,6 +446,7 @@ async def _prepare_kaggle_datasets(
             encoding="utf-8",
         )
         (path / "secrets.enc").write_bytes(encrypted)
+        write_kaggle_status_files(path, kaggle_run_config)
 
     def write_key(path: Path) -> None:
         (path / "fernet.key").write_bytes(fernet_key)
@@ -648,6 +679,9 @@ def _prepared_kernel_path(kernel_path: Path) -> Path:
         prepared = tmp_path / kernel_path.name
         shutil.copytree(kernel_path, prepared)
         stage_repo_bundle(prepared)
+        status_client_src = PROJECT_ROOT / "kaggle" / "kaggle_status_client.py"
+        if status_client_src.exists():
+            shutil.copy2(status_client_src, prepared / "kaggle_status_client.py")
         _apply_kernel_slug_override(prepared)
         _sync_notebook_entrypoint(prepared)
         yield prepared
@@ -777,11 +811,7 @@ async def _poll_kaggle_kernel(
             consecutive_poll_errors = 0
         except Exception as exc:
             consecutive_poll_errors += 1
-            is_ssl = isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError")
-            is_conn = isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError")
-            is_timeout = exc.__class__.__name__.endswith("Timeout")
-            is_transient = is_ssl or is_conn or is_timeout
-            if not is_transient:
+            if not _is_transient_kaggle_status_error(exc):
                 raise
             msg = str(exc) or repr(exc)
             if len(msg) > 280:
@@ -801,7 +831,7 @@ async def _poll_kaggle_kernel(
                 "poll_error",
                 {
                     "status": shown_state or "RUNNING",
-                    "failureMessage": f"⚠️ временная ошибка Kaggle API (SSL/сеть), продолжаю опрос: {msg}",
+                    "failureMessage": f"⚠️ временная ошибка Kaggle API, продолжаю опрос: {msg}",
                     "_poll_timeout_minutes": timeout_minutes,
                     "_elapsed_seconds": time.monotonic() - started,
                 },
@@ -1113,9 +1143,7 @@ def format_kaggle_status_message(phase: str, kernel_ref: str, status: dict | Non
         f"Этап: {labels.get(phase, phase)}",
     ]
     if status:
-        state = str(status.get("status") or "UNKNOWN")
-        failure = _extract_failure_message(status)
-        lines.append(f"Статус Kaggle: {html.escape(state if not failure else f'{state} ({failure})')}")
+        lines.append(f"Статус Kaggle: {html.escape(format_kaggle_status_label(status))}")
         timeout_minutes = status.get("_poll_timeout_minutes")
         elapsed_seconds = status.get("_elapsed_seconds")
         if timeout_minutes:
@@ -1149,6 +1177,7 @@ async def run_guide_monitor_kaggle(
     config_payload = await _build_config_payload(db, run_id=run_id, mode=mode, limit=limit, days_back=days_back)
     sources_count = len(config_payload.get("sources") or [])
     timeout_minutes = _compute_poll_timeout_minutes(sources_count=sources_count)
+    auth_scope = remote_telegram_auth_scope()
     secrets_payload = _build_secrets_payload()
     dataset_slugs: list[str] = []
     kernel_ref = _kernel_ref_from_meta(KERNEL_PATH)
@@ -1159,6 +1188,7 @@ async def run_guide_monitor_kaggle(
         if status_callback:
             await status_callback("prepare", kernel_ref, None)
         slug_cipher, slug_key = await _prepare_kaggle_datasets(
+            db=db,
             client=client,
             config_payload=config_payload,
             secrets_payload=secrets_payload,
@@ -1183,6 +1213,7 @@ async def run_guide_monitor_kaggle(
                     "mode": mode,
                     "chat_id": chat_id,
                     "pid": os.getpid(),
+                    "remote_telegram_auth_scope": auth_scope,
                     "dataset_slugs": list(dataset_slugs),
                     **dict(recovery_meta or {}),
                 },
@@ -1229,6 +1260,7 @@ async def run_guide_monitor_kaggle(
             "duration_sec": int(max(0, round(duration))),
             "timeout_minutes": timeout_minutes,
             "sources_count": sources_count,
+            "remote_telegram_auth_scope": auth_scope,
             "dataset_slugs": list(dataset_slugs),
             "remote_kernel_meta": dict(remote_kernel_meta or {}),
         }

@@ -25,14 +25,59 @@
   - объект сохраняется **в WebP** (только WebP, без JPEG) для экономии объёма;
   - ключ объекта content‑addressed по перцептивному хешу (dHash16), чтобы одно и то же изображение (даже при разном разрешении/реэнкоде) не загружалось повторно:
     - `supabase_path`: `<prefix>/dh16/<first2>/<dhash>.webp` (prefix по умолчанию `p`, настраивается через `TG_MONITORING_POSTERS_PREFIX`);
-    - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
+  - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
+- Empty-caption poster-only posts remain part of the normal LLM-first extraction path:
+  when Telegram text/caption is empty but OCR contains event facts (title/date/time/venue/price/registration),
+  TelegramMonitor passes the OCR text as primary source evidence instead of returning `events=[]` at the caption guard.
+  The server import also preserves that OCR as event/source text and may derive a narrow `tel:+...` booking contact
+  from explicit `Запись/регистрация по телефону` evidence before any group post-author fallback is considered.
+  Regression contract: `INC-2026-06-30-kraftmarket317-poster-only-zero-events`.
 - Сервер скачивает `telegram_results.json` и импортирует события через Smart Update:
   - создаёт новые события;
   - мерджит существующие;
   - добавляет источники в `event_source`.
+  - запускает основной event-pass в стандартном scheduling-режиме Smart Update: созданные/обновлённые события
+    должны получить обычные `JobOutbox` задачи, включая `vk_sync`, если само событие не `silent`/не отменено.
+    Это обязательный контракт для промо-событий, которые дальше должны попасть в VK-публикацию и VK/promo surfaces.
+    При повторном импорте уже созданного события результат `skipped_nochange` также re-arm'ит стандартные задачи,
+    чтобы catch-up мог чинить старое состояние "event есть, VK job отсутствует".
+    Forced single-event replay всегда пропускает свежий payload через Smart Update, даже если точный
+    `event_source.source_url` уже есть в БД: это нужно, чтобы исправлять данные события (например конкретную
+    hidden/entity registration ссылку вместо широкого landing-page `ticket_link`) и уже затем re-arm'ить публикации
+    при `skipped_nochange`.
+    Smart Update сохраняет более конкретную same-host registration ссылку из Telegram candidate даже если LLM merge
+    не вернул `ticket_link`; при смене ссылки старый `vk_ticket_short_url` сбрасывается, чтобы VK-пост не переиспользовал
+    короткую ссылку на broad landing page.
+    Обычный `/tg` импорт re-arm'ит только события, затронутые текущим `telegram_results.json`; глобальный catch-up
+    старых Telegram-origin событий отключён по умолчанию, чтобы single-source E2E не создавал неожиданные старые VK
+    посты. Исторический широкий reconcile доступен только как явный операторский режим через
+    `TG_MONITORING_GLOBAL_VK_RECONCILE=1`.
+    `vk_sync` в outbox имеет высокий глобальный priority, но всё ещё ждёт свои per-event prerequisites; готовые
+    Telegram imports не должны стоять за чужим Telegraph/page backlog.
+    Re-arm `tg_event_publish` при открытом дневном publish window не должен сдвигаться на завтра из-за старого pending
+    anchor на следующий день; если pending job уже существует, его `next_run_at` должен заменяться на слот текущего
+    цикла. Forced single-source E2E должен доводить затронутые события до видимого `@kldevents` поста в текущем цикле
+    после Telegraph/VK prerequisites.
+    Telegraph prerequisite не должен сам превращаться в far-future `stale` blocker на нормальном LLM-first render пути:
+    runtime budget `telegraph_build` должен быть достаточно длинным для Gemma/Gemini fallback и повторный import обязан
+    re-arm'ить ошибочный Telegraph job через стандартный Smart Update path.
+    Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
+    и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
+    Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media
+    ingestion/source parsing, а не принимать silent text-only публикацию.
+    Venue/location semantics остаются LLM-first: regex/OCR helpers may only provide narrow structural hints
+    (address normalization, explicit `адрес, студия/зал` parsing) or fail-closed safety gates. They must not
+    override an LLM-extracted/source-default known venue with a free-text comma fragment unless a separate LLM-owned
+    venue-review stage confirms that offsite venue from source-grounded evidence. Regression contract:
+    `INC-2026-06-18-tg-location-prose-still-extracted`.
+    Telegraph/source-media rehydration must also be event-local: if one source URL is attached to multiple event rows,
+    the rehydrate pass must not attach all source images to each row; media recovery needs event-local assignment/OCR
+    evidence instead of broad deterministic source-context reuse.
   - обрабатывает Telegram-посты в хронологическом порядке (старые → новые), чтобы старые посты не перезатирали более свежие обновления того же события.
   - во время импорта в `/tg` показывает live-прогресс по каждому посту (`X/Y`, ссылка на пост, `Smart Update: ✅/🔄`, `event_ids`, иллюстрации, `took_sec`), чтобы оператор видел, что импорт не завис.
   - отправляет подробный блок `Smart Update (детали событий)` сразу после обработки конкретного поста (не дожидаясь завершения всего импорта).
+    В event-блоке строка `Посты:` обязана показывать оба publication surface: `VK` со ссылкой на managed `klgdevents` пост и `TG` со ссылкой на пост в `@kldevents`.
+    Если Telegram-анонс уже поставлен в `JobOutbox`, но отложен до утреннего окна, строка показывает `TG ⏳`, чтобы оператор видел, что это расписание, а не потеря публикации.
   - в интерактивном режиме (`/tg`) финальный отчёт **не повторяет полный список созданных/обновлённых событий**, чтобы не дублировать ленту (подробности уже пришли per-post).
     - переопределение: `TG_MONITORING_FINAL_EVENT_LIST=1` (вернуть полный список в финале) или `=0`.
   - в `Smart Update (детали событий)` дополнительно показываются операторские блоки:
@@ -46,12 +91,13 @@
   - fallback полного текста из публичной страницы `t.me/s/...` остаётся single-event only.
   - если в fallback сломалась загрузка poster media в Catbox/Supabase, импорт не обнуляет иллюстрации: используется прямой CDN URL целевого Telegram media (`cdn*.telesco.pe`) как последний аварийный fallback.
   - `linked_source_urls` теперь обогащают медиа события: сервер пытается подтянуть афиши из linked Telegram постов (сначала из того же `telegram_results.json`, затем через `t.me/s/...` fallback) и добавляет их в candidate до Smart Update.
-- `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам.
+- `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам. Эти вспомогательные linked-pass вызовы подавляют `vk_sync`, потому что публикационную задачу должен ставить только основной источник события.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
   - если extractor разложил соседнюю прозу между `location_name` и `location_address`, сервер отбрасывает prose-like address-фрагмент и восстанавливает структурные `location_name/location_address/city` из единственной известной площадки в исходном тексте/алиасах.
 - если афиша явно содержит несколько дат/времён одного и того же события (например «12 июня 19:00» и «13 июня 15:00»), а extractor их схлопнул в одну дату, сервер (best-effort) расширяет карточку до нескольких событий по OCR афиши.
+  Dotted tokens that can also be dates (`9.08`, `26.07`) are not accepted as times unless nearby OCR context says it is a time (`начало`, `в`, `часов`, etc.); this is a guardrail for `INC-2026-06-07-future-event-quality-recurrence.md`.
   - сохраняет `source_title`/`sources_meta[].title` в `telegram_source.title` (человекочитаемое название канала/группы).
   - сохраняет метаданные источника из `sources_meta[]`: `about`, `about_links_json`, `meta_hash`, `meta_fetched_at`.
   - сохраняет подсказки серии/сайта (`suggested_*`) в `telegram_source` и показывает их в UI `/tg` отдельной кнопкой принятия (без автоперезаписи ручного `festival_series`).
@@ -61,7 +107,7 @@
     - контакт/ссылка для записи:
       - `@username` в контексте «запись/бронь/напиши» → `ticket_link=https://t.me/username`;
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
-    - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста.
+    - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста. Short contentful titles returned by the LLM (`Идиот`, `Гараж`, `№ 13`) are valid and must not be overwritten only because they are short; umbrella/service lines such as `завтра в театре`, `афиша`, `анонс`, `в продаже репертуар` are skipped by this fallback.
 - В Kaggle используются только модели Gemma (текст/vision); 4o там не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
@@ -72,14 +118,16 @@
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
 - `Gemma 4` extract prompt различает явные work-hours notices и события в музеях/библиотеках: `график/режим/часы работы`, `санитарный день`, `не работает/закрыто` возвращают `[]`, но лекции, шоу, мастер-классы, экскурсии и фестивальные слоты с датой/временем должны извлекаться даже при venue/address словах вроде `Библиотека ...` или `Музейная аллея`.
-- `Gemma 4` producer-level contract for `location_name`: поле должно быть реальным venue/place name, а не соседней прозой, биографией спикера, schedule commentary, film metadata, ticket instruction или описанием события. Для расписаний schedule-rescue передаёт в каждый day-block prompt общий контекст поста, чтобы хвостовые venue-линии вроде `📍Остров Канта` были видны LLM для всех строк расписания.
+- `Gemma 4` producer-level contract for `location_name`: поле должно быть реальным venue/place name, а не соседней прозой, биографией спикера, schedule commentary, non-location emoji/list bullet, discussion-topic строкой (`о концертах` / `об итогах ...`), film metadata, ticket instruction, описанием события или temporal/date fragment. Запрещены и decorated формы вроде `🤗Завтра` / bullet-prefixed `Сегодня`: producer schema и venue-review prompt обязаны отправлять такие значения в LLM review / empty+fallback path до server import safety-net. Одна prose/list sentence не должна раскладываться между `location_name` и `location_address`. Для расписаний schedule-rescue передаёт в каждый day-block prompt общий контекст поста, чтобы хвостовые venue-линии вроде `📍Остров Канта` были видны LLM для всех строк расписания.
 - После `INC-2026-05-17-future-event-quality-regressions` этот contract дополнен профилактикой для реальных May 17 форм:
   - очевидные имена персон в `location_name` (например `ТАТЬЯНА БОРИСОВА`) являются только триггером LLM venue-review; смысловую площадку выбирает review-pass по source text/OCR/source default, а серверный импорт держит такой же fail-closed safety-net;
   - compact theatre lines вида `17.05 | GROZA` трактуются как date marker + title, не как `time=17:05`;
   - service/digest headings вроде `неделя в театре`, `афиша`, `репертуар`, `анонс` не считаются attendee-facing title, если рядом есть реальное название события;
   - если producer всё равно вернул `events=[]` для structurally clear single-event post с датой, временем и ticket/venue evidence, запускается узкий LLM single-event rescue. Сервер дополнительно сохраняет диагностический `telegram_scanned_message.error=producer_zero_events:clear_event_signals`, чтобы DB-аудит видел “producer false negative”, а не “пост не сканировался”; такая строка допускает переобработку, когда новый producer output уже содержит events.
 - После `INC-2026-05-02-pre-daily-event-quality` prompt contract дополнительно закрепляет **event-local venue grounding**: в multi-event/digest/repost постах площадка, адрес и город берутся из ближайшего блока конкретного события, а source/default location используется только когда event-local блок не называет свою площадку. Литералы имён полей (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) считаются синтаксическими placeholders и должны стать пустыми строками, не публичными значениями.
-- `Gemma 4` venue-review stage: если extracted `location_name` имеет широкий плохой shape (слишком длинная фраза, schedule row, короткий section label вроде `Кинозал:`, короткое предложение с точкой) или источник имеет `default_location`, Kaggle делает отдельный LLM-pass только по `location_name/location_address/city` на original message + OCR + source context + `default_location`. После `INC-2026-05-09-event-location-alias-free-dup-regressions` stage также запускается, когда извлечённая площадка не grounded в тексте/OCR/source context, а рядом есть venue/address cues, или когда адрес есть в источнике, но не попал в structured fields. Детерминированная часть решает только “нужна проверка”; смысловую площадку выбирает LLM через быстрый Gemma 4 native-schema response. Это canonical fix path для произвольных фрагментов вроде случайно попавшей фразы из соседнего предложения и для похожих venue-alias drift случаев вроде `Дворец спорта «Янтарный»` vs `Дворец спорта «Юность»`.
+- После `INC-2026-06-24-future-event-date-default-venue-regressions` contract дополнительно закрепляет real-source date/default-location guard: русские числовые даты в мониторинге всегда трактуются как `DD.MM` (`10.05` = 10 мая, не 10 сентября), даты словами/хэштегом (`26 июля`, `#13_июня`, `#21_июня`) являются authoritative event date и не переносятся в месяц публикации, а `гейт 2.6`, этажи, адреса, координаты, цены, телефоны и номера домов не могут становиться датой/временем. Для single-event output producer может узко исправить LLM-date drift только если в тексте/OCR есть ровно одна явная дата; это safety-net, не классификатор eventness. Если пост явно даёт offsite `Место:`/`📍`/адрес, эта event-local площадка/адрес выигрывает у `source.default_location` даже когда extractor изначально оставил venue пустым.
+- `Gemma 4` venue-review stage: если extracted `location_name` имеет широкий плохой shape (слишком длинная фраза, schedule row, короткий section label вроде `Кинозал:`, короткое предложение с точкой, non-location emoji/list bullet вроде `📩 ...`, topic fragment вроде `о концертах`) или источник имеет `default_location`, Kaggle делает отдельный LLM-pass только по `location_name/location_address/city` на original message + OCR + source context + `default_location`. После `INC-2026-05-09-event-location-alias-free-dup-regressions` stage также запускается, когда извлечённая площадка не grounded в тексте/OCR/source context, а рядом есть venue/address cues, или когда адрес есть в источнике, но не попал в structured fields. Детерминированная часть решает только “нужна проверка”; смысловую площадку выбирает LLM через быстрый Gemma 4 native-schema response. Это canonical fix path для произвольных фрагментов вроде случайно попавшей фразы из соседнего предложения и для похожих venue-alias drift случаев вроде `Дворец спорта «Янтарный»` vs `Дворец спорта «Юность»`.
+- После `INC-2026-05-27-dachniki-prose-venue-duplicates` title prompt дополнительно закрепляет приоритет caption/source event name над poster OCR slogan/CTA: если сообщение называет событие/проект (`Живой сундук`), а афиша несёт лозунг вроде `Читайте бумажные книги!`, extractor должен взять название события из caption/source и оставить лозунг в `raw_excerpt/search_digest`, а не переименовывать карточку.
 - Второй hardening wave по реальным Gemma 4 outputs (`run_id=48fa98294333486d94dd0e14785d774f`) точечно лечит наблюдавшиеся регрессии: prompt явно запрещает inline `//`/`#` комментарии и markdown (`**`/`__`) внутри JSON-значений, запрещает ghost-события с пустыми `title` и `date`, запрещает литерал `"unknown"` в любом поле, требует lowercase русский `event_type` (`концерт`/`выставка`/`лекция`/...) вместо английских токенов вроде `"exhibition"`/`"meetup"`, не даёт копировать город из parenthetical origin notes (`"(Санкт-Петербург)"` в описании коллекции ≠ место события), и скипает fundraiser/video-recap/book-review посты без приглашения на будущее событие. Те же правила дублированы в exhibition fallback prompt и в json-fix retry, чтобы retry не пропускал те же классы ошибок.
 - Schema `EVENT_ARRAY_SCHEMA` получил `description` по ключевым полям (`title`/`city`/`event_type`/`date`/`time`/`location_*`), которые Gemini structured output уважает как дополнительный канал подсказок; hard constraints остаются в prompt text, чтобы не нарушать schema-совместимость Gemma 4.
 - Добавлен LLM-output safety-net `_sanitize_extracted_events` (детерминированный post-LLM хелпер без semantic rewriting): срезает leaked inline `//`/`#` хвосты, снимает оставшиеся markdown-маркеры, нормализует placeholder-литералы (`unknown`/`n/a`/`none`) до пустой строки и дропает ghost-события, где пусты и `title`, и `date`. Это не заменяет LLM — просто не даёт известным Gemma 4 failure modes доехать до Smart Update и Telegraph.
@@ -173,6 +221,8 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 ## Точки входа
 
 - `/tg` — управление источниками и ручной запуск мониторинга (есть пагинация списка источников).
+- `/tg` -> `Только @kraftmarket39` — emergency/containment запуск того же Telegram Monitoring + Smart Update pipeline, но с Kaggle config scope ровно для `@kraftmarket39`. Это временный обходной путь для отладки фестивальных источников без полного multi-source прогона; он не создаёт отдельный импортёр и не обходит Smart Update. Канонический техдолг: `docs/backlog/features/festival-monitoring-debt/README.md`.
+- Bot API `channel_post` on-demand — fast-path для allowlisted каналов (v1 default `@kraftmarket39`): новый пост coalesce'ится в durable очередь, после 10-минутного debounce ставится source-specific запуск того же Telegram Monitoring pipeline. Если `_RUN_LOCK`/global lock/remote Telegram session заняты, очередь retry'ится через 10 минут; scheduled monitoring остаётся catch-up. Детали: `docs/features/tg-monitoring-on-demand/README.md`.
 - `/tg` → `♻️ Импорт из JSON` — debug/import-only режим: позволяет выбрать один из последних локальных `telegram_results.json` (по умолчанию показываются 4, newest → older) и повторить server-import без нового запуска Kaggle.
   - После выбора файла показывается выбор режима:
     - `Импорт (обычно)` — обычный `run_telegram_import_from_results(...)`.
@@ -197,7 +247,11 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 
 - Статус Kaggle kernel опрашивается с интервалом `TG_MONITORING_POLL_INTERVAL` (по умолчанию 30s) до динамического лимита ожидания (или фиксированного, если включён `fixed` mode).
 - Транзиентные ошибки сети/SSL при опросе Kaggle API (например `UNEXPECTED_EOF_WHILE_READING`) **не валят прогон**: мониторинг продолжает опрос до получения `COMPLETE/FAILED` или таймаута, а в UI этап показывается как «временная ошибка сети».
-- Перед `push` сервер теперь дополнительно проверяет общий `kaggle_registry`: если другой remote Telegram Kaggle job (`guide_monitoring`, `tg_monitoring`, `telegraph_cache_probe`) ещё жив или его status lookup закончился неопределённо, `tg_monitoring` обязан завершиться `skipped` с `remote_telegram_session_busy`, а не запускать вторую удалённую Telethon session поверх той же auth key.
+- Если status API продолжает отдавать транзиентные `HTTP 429/5xx`, сервер параллельно пробует скачать Kaggle output.
+  `telegram_results.json` принимается как завершение только если его `run_id` совпадает с текущим запуском; после этого
+  обычный server-import продолжается без рестарта Fly machine.
+- Перед `push` сервер теперь дополнительно проверяет общий `kaggle_registry`: если другой remote Telegram Kaggle job (`guide_monitoring`, `tg_monitoring`, `telegraph_cache_probe`, `kenigsberg_story`) с тем же `remote_telegram_auth_scope` ещё жив или его status lookup закончился неопределённо, `tg_monitoring` обязан завершиться `skipped` с `remote_telegram_session_busy`, а не запускать вторую удалённую Telethon session поверх той же auth key. Jobs с разными explicit scopes могут идти параллельно; unknown scope считается конфликтующим.
+- Для fresh `UNKNOWN` status lookup guard остаётся fail-closed. Если же registry-запись старше `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` (default `390`) и lookup падает только транзиентно (`HTTP 5xx`, сеть, SSL, timeout), guard помечает её как `stale_transient_status_lookup_failure` и больше не считает владельцем remote Telegram session. Это предотвращает вечный `remote_telegram_session_busy` от старых Kaggle refs, но не разрешает запускать вторую сессию поверх свежего неизвестного run.
 - Отменённые Kaggle runs со статусом `CANCEL_ACKNOWLEDGED` считаются terminal для shared remote Telegram session guard: такой job не должен блокировать следующий компенсирующий `/tg` catch-up после ручной отмены.
 
 ## Recovery после рестарта бота
@@ -207,6 +261,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - если kernel ещё работает в Kaggle, запись остаётся в реестре и будет проверена позже;
   - если kernel завершился `complete`, бот заново скачивает `telegram_results.json` из Kaggle и запускает обычный server-import;
   - если kernel рано сообщает `failed/error/cancelled`, запись не удаляется мгновенно: recovery ещё несколько часов перепроверяет output, потому что Kaggle иногда дозавершает `telegram_results.json` уже после раннего terminal-status; только после истечения `TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES` (default `360`) запись удаляется как окончательно невосстановимая.
+- Recovery пропускает job, принадлежащий текущему PID, только пока текущий процесс реально держит Telegram Monitoring `_RUN_LOCK`.
+  После cancellation/restart stale registry entry с тем же `pid` обязан снова импортироваться, иначе хвост `telegram_results.json`
+  может остаться без prod-side `event_source` / `telegram_scanned_message` evidence (`INC-2026-06-04-kraftmarket271`).
 - Локальный poll-timeout в сервере тоже не считается окончательной потерей результата: recovery продолжает проверять kernel в фоне и подхватывает поздно дозавершившийся output без ручного пересканирования.
 - Это значит, что для восстановления **не требуется** сохранять `telegram_results.json` в `/data`: источником истины остаётся Kaggle output, а локальный `/tmp` используется только как временный download/cache путь.
 
@@ -218,7 +275,10 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 - `error` — results не были получены/разобраны или run был прерван до завершения import.
 - Важно: `empty` выставляется **только** когда бот реально прочитал `telegram_results.json`. Пустой in-memory `TelegramMonitorReport` после рестарта/отмены больше не считается `success`.
 - Scheduled entrypoint теперь создаёт bootstrap `ops_run` ещё до резолва superadmin и до входа в `run_telegram_monitor()`. Если bootstrap-слой падает раньше основного runner'а, запись закрывается как `error` с `scheduler_entrypoint/fatal_error` в `details_json`; если run стартовал нормально, он переиспользует ту же запись вместо создания второй строки.
-- Если APScheduler задержал или потерял слот до входа в `telegram_monitor_scheduler()` (`JOB_SUBMITTED`/`JOB_MISSED` без строки `ops_run`), общий critical-run watchdog после grace-окна сверяет последний плановый слот с `ops_run` и запускает тот же scheduled entrypoint как catch-up. Catch-up использует `run_id` с префиксом `startup_catchup_tg_monitoring_...` или `watchdog_tg_monitoring_...`, поэтому такие восстановления видны в обычных логах `tg_monitoring`.
+- Если APScheduler задержал, потерял или deploy/restart оборвал слот до регистрации Kaggle kernel, общий `critical_scheduler_watchdog` после grace-окна сверяет последний локальный плановый слот с `ops_run`. `running/success/partial/empty` считаются доставкой, а `crashed/error/skipped` — нет; поэтому deploy-killed run, вроде `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog`, будет запущен заново как scheduled catch-up.
+- Watchdog вычисляет именно последний локальный слот `TG_MONITORING_TIME_LOCAL`, включая предыдущий день после полуночи, и запускает `telegram_monitor_scheduler()` с `run_id` вида `catchup-tg-monitoring-...`. Такой catch-up проходит через тот же remote Telegram session guard и `heavy_operation`, что и обычный scheduled run.
+- Если в `kaggle_registry` уже есть незавершённая запись `tg_monitoring`, watchdog не запускает новый catch-up поверх неё: он откладывает повтор на `TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `300`) и даёт `kaggle_recovery` скачать/import'нуть output или убрать terminal запись. Это важно для `TELEGRAM_AUTH_BUNDLE_S22`: даже когда старый server-side `ops_run` был отменён рестартом, Kaggle kernel может всё ещё держать Telethon session.
+- Если catch-up материализовался как `status='skipped'` из-за `remote_telegram_session_busy`, watchdog тоже ставит короткий retry-hold вместо повторного тика каждую минуту.
 
 ## Надёжность импорта (SQLite lock)
 
@@ -273,6 +333,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
     только если OCR уверенно матчит `title/date/time` события (иначе лучше не прикреплять вовсе, чем прикрепить “чужую” афишу).
 - Smart Update не “вымывает” уже прикреплённые афиши, если новая выборка `posters[]` оказалась пустой
   (защита от ложного prune).
+- Для multi-event текстовых постов без приложенных афиш допустимы события без media в БД, но они не должны silently
+  становиться текстовыми VK-постами: публикационная граница требует хотя бы одно renderable VK attachment для
+  Telegram-origin managed post.
 - Если в payload мониторинга `posters[]` отсутствуют из-за upstream media сбоев, сервер может сделать best-effort
   fallback: вытащить фото из публичной HTML страницы `t.me/s/<username>/<message_id>`.
   Этот fallback извлекает **только** медиа‑изображения из самого поста (photo wrap + video thumbnail) и **не** должен подхватывать
@@ -329,6 +392,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - URL, найденные в тексте;
   - URL из `MessageEntityTextUrl`/`MessageEntityUrl` (hidden links);
   - URL из кнопок (`reply_markup`) типа “More info”/“билеты”.
+  Если extractor вернул широкий landing URL, а hidden/entity link на том же
+  домене имеет ticket/registration label и более конкретный path/query, импорт
+  должен уточнить `ticket_link` до этой конкретной registration/ticket ссылки.
 - В UI (`/events` → Edit) OCR виден в блоке **Poster OCR**.
 - Проверка OCR в UI: см. `tests/e2e/features/telegram_monitoring.feature` (сценарий «Полный пользовательский поток мониторинга (UI)»).
 - Для каналов с заданным `default_location` это значение считается **сильным prior** (защита от контекстных городов вроде «(г. Москва)» в описании участников), но это не «жёсткий игнор»:

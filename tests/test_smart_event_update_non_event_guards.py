@@ -154,6 +154,195 @@ def test_museum_work_hours_still_skip_as_work_schedule() -> None:
     assert su._looks_like_work_schedule_notice("График работы музея", text) is True
 
 
+def test_completed_festival_recap_with_unconfirmed_next_location_is_non_event() -> None:
+    source_text = (
+        "Калининград, спасибо!\n"
+        "Было классно\n\n"
+        "Стояли солнечные выходные, но все кто пришёл на Гаражку — лучшие.\n\n"
+        "Спасибо мастерам — что не уехали на море, а радовали нас своим творчеством.\n"
+        "Спасибо гостям — что вы с нами!\n\n"
+        "Следующий фестиваль:\n"
+        "5–6 сентября\n"
+        "Локация уточняется!\n"
+        "До сентября."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/garazhka_kld/1505",
+        source_text=source_text,
+        title="Гаражка",
+        date="2026-09-05",
+        end_date="2026-09-06",
+        location_name="спасибо!",
+        location_address="Мира 9",
+        city="Калининград",
+        festival="Гаражка",
+        festival_source=True,
+        festival_series="Гаражка",
+    )
+
+    assert (
+        su._looks_like_completed_event_report_not_event(
+            "Гаражка",
+            source_text,
+            candidate=candidate,
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_garazhka_recap_replay_skips_before_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Калининград, спасибо!\n"
+            "Было классно\n\n"
+            "Стояли солнечные выходные — половина города уехала на море, "
+            "но все кто пришёл на Гаражку в любимую локацию ПОНАРТ — лучшие.\n\n"
+            "Спасибо мастерам — что не уехали на море, а радовали нас своим творчеством.\n"
+            "Спасибо гостям — что вы с нами!\n\n"
+            "Следующий фестиваль:\n"
+            "5–6 сентября\n"
+            "Локация уточняется!\n"
+            "До сентября."
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/garazhka_kld/1505",
+            source_text=source_text,
+            title="Гаражка",
+            date="2026-09-05",
+            end_date="2026-09-06",
+            location_name="спасибо!",
+            location_address="Мира 9",
+            city="Калининград",
+            festival="Гаражка",
+            festival_source=True,
+            festival_series="Гаражка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "completed_event_report"
+    finally:
+        await db.close()
+
+
+def test_future_festival_announcement_with_grounded_location_is_not_recap_skip() -> None:
+    source_text = (
+        "Следующая Гаражка пройдет 5–6 сентября в пространстве Понарт.\n"
+        "Ждём гостей и участников на маркете, мастер-классах и кинопоказах.\n"
+        "Адрес: Судостроительная 6, Калининград."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/garazhka_kld/1510",
+        source_text=source_text,
+        title="Гаражка",
+        date="2026-09-05",
+        end_date="2026-09-06",
+        location_name="Понарт",
+        location_address="Судостроительная 6",
+        city="Калининград",
+        festival="Гаражка",
+        festival_source=True,
+        festival_series="Гаражка",
+    )
+
+    assert (
+        su._looks_like_completed_event_report_not_event(
+            "Гаражка",
+            source_text,
+            candidate=candidate,
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_festdir_entry_notice_replay_skips_before_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Важная информация для гостей концерта 14 июня в арт-пространстве «Понарт».\n\n"
+            "Обращаем внимание, что вход на концертную площадку будет организован "
+            "не через привычный вход на территорию арт-пространства.\n\n"
+            "В связи с особенностями размещения сцены проход для зрителей будет "
+            "осуществляться через другой вход. Пожалуйста, ориентируйтесь на навигацию на месте.\n\n"
+            "До встречи!\n\n"
+            "Проект реализуется при поддержке Президентского фонда культурных инициатив.\n"
+            "АНО «Фестивальная дирекция» Кантата"
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/festdir/4673",
+            source_text=source_text,
+            title="Концерт",
+            date="2026-09-04",
+            time="14:00",
+            location_name="Понарт",
+            location_address="Судостроительная 6",
+            city="Калининград",
+            festival="Кантата",
+            event_type="концерт",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "event_logistics_notice"
+    finally:
+        await db.close()
+
+
+def test_event_logistics_notice_for_existing_concert_is_non_event() -> None:
+    source_text = (
+        "Важная информация для гостей концерта 14 июня в арт-пространстве «Понарт».\n\n"
+        "Обращаем внимание, что вход на концертную площадку будет организован "
+        "не через привычный вход на территорию арт-пространства.\n\n"
+        "В связи с особенностями размещения сцены проход для зрителей будет "
+        "осуществляться через другой вход. Пожалуйста, ориентируйтесь на навигацию на месте.\n\n"
+        "До встречи!\n\n"
+        "Проект реализуется при поддержке Президентского фонда культурных инициатив.\n"
+        "АНО «Фестивальная дирекция» Кантата"
+    )
+
+    assert (
+        su._looks_like_event_logistics_notice_not_event(
+            "Концерт",
+            source_text,
+        )
+        is True
+    )
+
+
+def test_new_concert_invite_with_entry_details_is_not_logistics_skip() -> None:
+    source_text = (
+        "Приглашаем на концерт 4 сентября в 19:00 в арт-пространстве «Понарт».\n"
+        "Билеты по ссылке. Вход на площадку будет организован через центральные ворота."
+    )
+
+    assert (
+        su._looks_like_event_logistics_notice_not_event(
+            "Концерт в Понарте",
+            source_text,
+        )
+        is False
+    )
+
+
 def test_weekend_wording_without_work_hours_headline_stays_llm_owned() -> None:
     text = (
         "В выходные дни в библиотеке пройдут лекции и мастер-классы.\n"
@@ -280,6 +469,111 @@ async def test_exhibition_teaser_without_exact_date_is_skipped(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_digest_stub_is_routed_to_llm_eventness_and_skipped(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append((label, schema))
+        assert label == "eventness_review"
+        assert "Дайджест - посмотри, приходи" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.91,
+            "reason_short": "source is a digest/rubric stub, not a concrete event",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["event title", "venue"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/molod_kld/3750",
+            source_text="🏠 Дайджест - посмотри, приходи",
+            title="Дайджест",
+            date="2026-06-21",
+            time="18:00",
+            location_name="приходи",
+            city="Калининград",
+            event_type="встреча",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls and calls[0][0] == "eventness_review"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_concise_real_invite_survives_eventness_review(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        if label == "eventness_review":
+            return {
+                "decision": "event",
+                "confidence": 0.86,
+                "reason_short": "source names one concrete lecture with time and venue",
+                "grounded_title": "Лекция о городе",
+                "has_single_concrete_event": True,
+                "missing_anchors": [],
+            }
+        raise AssertionError(f"unexpected LLM label after eventness review: {label}")
+
+    async def fake_create_bundle(*args, **kwargs):
+        return {
+            "description": "Короткая лекция о городе с конкретным временем и местом.",
+            "facts": ["Лекция пройдёт 21 июня в 18:00"],
+            "search_digest": "лекция о городе",
+            "short_description": "Лекция о городе для тех, кто любит локальную историю.",
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setattr(
+            su,
+            "_llm_create_description_facts_and_digest",
+            fake_create_bundle,
+        )
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/example/42",
+            source_text="Афиша: 21 июня в 18:00 ждём на лекции «Лекция о городе» в Доме китобоя.",
+            title="Афиша",
+            date="2026-06-21",
+            time="18:00",
+            location_name="Дом китобоя",
+            city="Калининград",
+            event_type="лекция",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.title == "Афиша"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_dated_exhibition_with_curator_excursions_is_not_course_promo(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -315,6 +609,51 @@ async def test_dated_exhibition_with_curator_excursions_is_not_course_promo(tmp_
             saved = await session.get(Event, result.event_id)
             assert saved is not None
             assert saved.date == "2026-05-13"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_opening_only_exhibition_title_does_not_get_default_month_range(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Завтра, 5 июня, в 19:00 состоится открытие выставки-экзамена "
+            "четвертого семестра первого в Калининграде курса художников-сценографов "
+            "«Обход 2.0».\n\n"
+            "Вход: 350 руб.\n"
+            "Билеты: на нашем сайте"
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/barn_kaliningrad/1033",
+            source_text=source_text,
+            title="Открытие выставки-экзамена «Обход 2.0»",
+            date="2026-06-05",
+            time="19:00",
+            location_name="Барн",
+            location_address="Каштановая аллея 1а",
+            city="Калининград",
+            ticket_price_min=350,
+            ticket_price_max=350,
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.date == "2026-06-05"
+            assert saved.time == "19:00"
+            assert saved.end_date is None
+            assert saved.end_date_is_inferred is False
     finally:
         await db.close()
 
@@ -371,5 +710,70 @@ async def test_grounded_exhibition_date_corrects_inferred_legacy_range(tmp_path,
             assert rows[0].date == "2026-05-13"
             assert rows[0].end_date == "2026-06-13"
             assert rows[0].end_date_is_inferred is True
+    finally:
+        await db.close()
+
+
+def test_short_non_location_fragments_are_unsupported_prose_locations() -> None:
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/agropark39/1885",
+        source_text="И не забывайте , что парк работает для прогулок каждый день",
+        title="Самосбор клубники",
+        date="2026-07-05",
+        location_name="И не забывайте",
+        city="Калининград",
+    )
+
+    assert su._candidate_location_looks_unsupported_prose(candidate) is True
+
+
+@pytest.mark.asyncio
+async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Веди родителей в музей" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.9,
+            "reason_short": "discount campaign, not one concrete event",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["concrete event program"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-29891284_13962",
+            source_text=(
+                "Акция «Веди родителей в музей». С 1 июля по 15 августа "
+                "обладатели Пушкинской карты смогут получить скидку 10%. "
+                "Как принять участие? Приобретите билет и предъявите документы."
+            ),
+            title="Акция «Веди родителей в музей»",
+            date="2026-07-01",
+            end_date="2026-08-15",
+            location_name="Историко-художественный музей",
+            location_address="Клиническая 21",
+            city="Калининград",
+            event_type="акция",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls == ["eventness_review"]
     finally:
         await db.close()

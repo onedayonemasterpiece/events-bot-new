@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from dataclasses import dataclass
 
 from sqlmodel import Field, SQLModel
@@ -375,6 +375,9 @@ class Event(SQLModel, table=True):
         Index("ix_event_date_city", "date", "city"),
         Index("ix_event_date_festival", "date", "festival"),
         Index("ix_event_content_hash", "content_hash"),
+        Index("ix_event_identity_status", "identity_status"),
+        Index("ix_event_merged_into_event", "merged_into_event_id"),
+        Index("ix_event_date_inferred", "date_is_inferred", "date"),
         Index(
             "ix_event_telegraph_not_null",
             "date",
@@ -406,6 +409,13 @@ class Event(SQLModel, table=True):
     emoji: Optional[str] = None
     end_date: Optional[str] = None
     end_date_is_inferred: bool = False
+    identity_status: str = "canonical"
+    merged_into_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    date_is_inferred: bool = False
+    date_provenance: Optional[str] = None
+    date_confidence: Optional[float] = None
+    end_date_provenance: Optional[str] = None
+    end_date_confidence: Optional[float] = None
     is_free: bool = False
     pushkin_card: bool = False
     silent: bool = False
@@ -421,6 +431,10 @@ class Event(SQLModel, table=True):
     # Kept separate from `content_hash` (Telegraph HTML hash).
     vk_source_hash: Optional[str] = None
     vk_repost_url: Optional[str] = None
+    tg_event_post_url: Optional[str] = None
+    tg_event_post_id: Optional[int] = None
+    tg_event_post_mode: Optional[str] = None
+    tg_event_source_hash: Optional[str] = None
     ics_hash: Optional[str] = None
     ics_file_id: Optional[str] = None
     ics_updated_at: Optional[datetime] = None
@@ -428,6 +442,10 @@ class Event(SQLModel, table=True):
     ics_post_id: Optional[int] = None
     source_chat_id: Optional[int] = None
     source_message_id: Optional[int] = None
+    # Telegram chat post author username (lowercased, no @). Set only for
+    # group/supergroup sources where the post was sent by a user — used by the
+    # author-in-chat promo trigger. None for channels and non-Telegram sources.
+    tg_source_author: Optional[str] = None
     creator_id: Optional[int] = None
     tourist_label: Optional[int] = Field(
         default=None, sa_column=Column(SmallInteger)
@@ -522,6 +540,7 @@ class PromoActivity(SQLModel, table=True):
     target_exposure_goal: Optional[int] = None
     daily_cap: Optional[int] = None
     selection_policy: str = "diverse_shuffle"
+    config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     enabled: bool = Field(default=True, sa_column=Column(Boolean, default=True))
     created_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
@@ -606,6 +625,7 @@ class VideoAnnounceSessionStatus(str, Enum):
     RENDERING = "RENDERING"
     DONE = "DONE"
     FAILED = "FAILED"
+    PUBLISH_BLOCKED = "PUBLISH_BLOCKED"
     PUBLISHED_TEST = "PUBLISHED_TEST"
     PUBLISHED_MAIN = "PUBLISHED_MAIN"
 
@@ -805,6 +825,52 @@ class EventSource(SQLModel, table=True):
     trust_level: Optional[str] = None
 
 
+class EventIdentityDecisionLog(SQLModel, table=True):
+    __tablename__ = "event_identity_decision_log"
+    __table_args__ = (
+        Index("ix_event_identity_decision_log_event", "event_id"),
+        Index("ix_event_identity_decision_log_candidate", "candidate_event_id"),
+        Index("ix_event_identity_decision_log_source", "source_type", "source_url"),
+        Index("ix_event_identity_decision_log_created", "created_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    candidate_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    source_id: Optional[int] = Field(default=None, foreign_key="event_source.id")
+    source_type: Optional[str] = None
+    source_url: Optional[str] = None
+    decision: str
+    decision_reason: Optional[str] = None
+    confidence: Optional[float] = None
+    decided_by: Optional[str] = None
+    decision_payload: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON)
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventIdentityLock(SQLModel, table=True):
+    __tablename__ = "event_identity_lock"
+    __table_args__ = (
+        Index("ix_event_identity_lock_status", "lock_status", "expires_at"),
+    )
+
+    event_id: int = Field(primary_key=True, foreign_key="event.id")
+    lock_status: str = Field(default="active")
+    lock_reason: Optional[str] = None
+    locked_by: Optional[str] = None
+    locked_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    expires_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    details: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+
 class EventSourceFact(SQLModel, table=True):
     __tablename__ = "event_source_fact"
     __table_args__ = (
@@ -896,6 +962,37 @@ class TelegramSourceForceMessage(SQLModel, table=True):
     )
 
 
+class TelegramMonitoringOnDemandQueue(SQLModel, table=True):
+    __tablename__ = "telegram_monitoring_on_demand_queue"
+    __table_args__ = (
+        Index("ix_tg_on_demand_status_next_run", "status", "next_run_at"),
+        Index("ix_tg_on_demand_source", "source_id"),
+    )
+
+    source_username: str = Field(primary_key=True)
+    source_id: int = Field(foreign_key="telegram_source.id")
+    chat_id: Optional[int] = None
+    latest_message_id: Optional[int] = None
+    latest_message_date: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    first_seen_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    next_run_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    attempts: int = 0
+    status: str = "pending"
+    last_run_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    last_error: Optional[str] = None
+
+
 class TelegramPostMetric(SQLModel, table=True):
     __tablename__ = "telegram_post_metric"
     __table_args__ = (
@@ -913,6 +1010,7 @@ class TelegramPostMetric(SQLModel, table=True):
     collected_ts: int = Field(default_factory=lambda: int(utc_now().timestamp()))
     views: Optional[int] = None
     likes: Optional[int] = None
+    comments: Optional[int] = None
     reactions_json: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
 
 
@@ -933,6 +1031,8 @@ class VkPostMetric(SQLModel, table=True):
     collected_ts: int = Field(default_factory=lambda: int(utc_now().timestamp()))
     views: Optional[int] = None
     likes: Optional[int] = None
+    comments: Optional[int] = None
+    reposts: Optional[int] = None
 
 
 class TomorrowPage(SQLModel, table=True):
@@ -1163,6 +1263,7 @@ class OpsRun(SQLModel, table=True):
 class JobTask(str, Enum):
     telegraph_build = "telegraph_build"
     vk_sync = "vk_sync"
+    tg_event_publish = "tg_event_publish"
     ics_publish = "ics_publish"
     tg_ics_post = "tg_ics_post"
     month_pages = "month_pages"

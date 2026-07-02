@@ -1,0 +1,32 @@
+[
+  {
+    "title": "FLAVA INTENSIVE (VALERA & LERA VOYNITS)",
+    "description": "",
+    "age_restriction": "0+",
+    "date_raw": "2026-07-04T14:10:00+02:00",
+    "parsed_date": "2026-07-04",
+    "parsed_time": "14:10",
+    "end_date": "2026-07-07",
+    "location": "КОНЦЕПТ",
+    "location_address": "ул. Ленинский проспект, 42Б, Калининград, Россия",
+    "url": "https://kaliningrad.qtickets.events/241277-flava-intensive-valera-lera-voynits",
+    "photos": ["https://cdn.qtickets.tech/thumbs/566275_445_0_0_0_auto_90_88237d64.jpg"],
+    "ticket_price_min": 1800,
+    "ticket_price_max": null,
+    "ticket_status": "available",
+    "source_type": "qtickets"
+  },
+  {
+    "title": "Контрольное событие без афишного конфликта",
+    "description": "Обычная билетная страница без OCR-конфликта.",
+    "date_raw": "2026-08-01T18:00:00+02:00",
+    "parsed_date": "2026-08-01",
+    "parsed_time": "18:00",
+    "location": "Тестовая площадка",
+    "url": "https://kaliningrad.qtickets.events/negative-control",
+    "photos": [],
+    "ticket_price_min": 0,
+    "ticket_status": "available",
+    "source_type": "qtickets"
+  }
+]

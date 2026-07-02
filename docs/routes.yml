@@ -16,6 +16,7 @@ sections:
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
       scheduler_defaults: scheduling.py

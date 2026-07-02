@@ -111,6 +111,20 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             notes="Added from operator request on 2026-04-28; guide channel for individual Kaliningrad excursions.",
         ),
         GuideSourceSpec(
+            username="progulki_s_katey",
+            profile_slug="progulki-s-katey",
+            profile_kind="person",
+            display_name="ПРОгулки с Катей",
+            marketing_name="ПРОгулки с Катей",
+            source_kind="guide_personal",
+            trust_level="medium",
+            flags={"mixed_topic": True},
+            notes=(
+                "Added from operator request on 2026-06-30; Telegram channel monitored "
+                "for future public walking tours and excursion announcements."
+            ),
+        ),
+        GuideSourceSpec(
             username="twometerguide",
             profile_slug="twometerguide",
             profile_kind="project",

@@ -7,9 +7,11 @@ import pytest
 
 from google_ai.client import (
     _DEFAULT_ENV_CANDIDATE_CACHE,
+    _OVERFLOW_ENV_CANDIDATE_CACHE,
     GoogleAIClient,
     RequestContext,
 )
+from google_ai.exceptions import ProviderError
 
 
 class _FakeModel:
@@ -123,6 +125,56 @@ async def test_gemma4_keeps_native_json_config_and_filters_thought_parts():
 
 
 @pytest.mark.asyncio
+async def test_thought_only_response_raises_instead_of_leaking_sdk_repr():
+    # Regression for INC-2026-05-17: the model emitted only a thought-channel part
+    # (and ran out of the output-token budget before producing an answer). The
+    # extractor must NOT stringify the raw SDK response as a last resort — that is
+    # exactly how the GenerateContentResponse repr leaked into public VK/Telegraph
+    # posts. It must raise empty_response so the caller falls back / retries.
+    class _Resp:
+        candidates = [
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[{"text": "* Task: Edit/Rewrite ...", "thought": True}]
+                ),
+                finish_reason="MAX_TOKENS",
+            )
+        ]
+        usage_metadata = SimpleNamespace(
+            prompt_token_count=2562,
+            candidates_token_count=0,
+            total_token_count=4459,
+            thoughts_token_count=1897,
+        )
+
+        def __repr__(self) -> str:
+            return (
+                "sdk_http_response=HttpResponse(headers=) candidates=[Candidate("
+                "content=Content(parts=[Part(text=\"...\", thought=True)]))]"
+            )
+
+    fake_genai = _FakeGenAI(_Resp())
+    client = GoogleAIClient()
+    client._genai = fake_genai
+
+    with pytest.raises(ProviderError) as exc_info:
+        await client._call_provider(
+            api_key="test-key",
+            model="gemma-4-31b",
+            prompt="hello",
+            generation_config={"temperature": 0},
+            safety_settings=None,
+            max_output_tokens=64,
+        )
+
+    err = exc_info.value
+    assert getattr(err, "error_type", "") == "empty_response"
+    # The raw SDK repr must never be surfaced as model output or in the error.
+    assert "sdk_http_response" not in str(err)
+    assert "HttpResponse" not in str(err)
+
+
+@pytest.mark.asyncio
 async def test_gemma3_still_strips_native_json_config():
     response = SimpleNamespace(text='{"ok":true}', usage_metadata={})
     fake_genai = _FakeGenAI(response)
@@ -157,6 +209,37 @@ def test_requested_gemma_model_stays_first_in_model_chain():
         "gemma-3-27b",
         "gemma-4-26b-a4b",
     ]
+
+
+@pytest.mark.asyncio
+async def test_no_supabase_uses_local_rpm_limiter_by_default(monkeypatch):
+    monkeypatch.delenv("GOOGLE_AI_LOCAL_RPM", raising=False)
+    GoogleAIClient._local_limiter_minute_bucket = None
+    GoogleAIClient._local_limiter_used_rpm = 0
+    GoogleAIClient._local_limiter_used_tpm = 0
+    GoogleAIClient._local_limiter_day_bucket = None
+    GoogleAIClient._local_limiter_used_rpd = 0
+    client = GoogleAIClient(supabase_client=None, consumer="video_partner_filter")
+    ctx = RequestContext(
+        request_uid="req-local-rpm",
+        consumer="video_partner_filter",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="gemma-4-31b-it",
+        reserved_tpm=100,
+    )
+
+    ok_reserves = [
+        await client._reserve(ctx, attempt_no=i + 1, candidate_key_ids=None)
+        for i in range(15)
+    ]
+    blocked = await client._reserve(ctx, attempt_no=16, candidate_key_ids=None)
+
+    assert all(reserve.ok for reserve in ok_reserves)
+    assert ok_reserves[-1].key_alias == "local-fallback-no-supabase"
+    assert ok_reserves[-1].used_after["rpm"] == 15
+    assert blocked.ok is False
+    assert blocked.blocked_reason == "rpm"
 
 
 @pytest.mark.asyncio
@@ -306,3 +389,203 @@ async def test_provider_call_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch)
             safety_settings=None,
             max_output_tokens=None,
         )
+
+
+# --- Emergency reserve overflow (INC-2026-06-03) -------------------------------
+
+_OVERFLOW_KEY_ROWS = [
+    {"id": "id-key1", "env_var_name": "GOOGLE_API_KEY", "priority": 10},
+    {"id": "id-key3", "env_var_name": "GOOGLE_API_KEY3", "priority": 3},
+    {"id": "id-key2", "env_var_name": "GOOGLE_API_KEY2", "priority": 5},
+]
+_SPARE_KEY_IDS = {"id-key3", "id-key2"}
+
+
+class _OverflowFakeSupabase:
+    """Reserve RPC that blocks the scoped lane and frees up once a spare joins."""
+
+    def __init__(self, *, scoped_block: str = "rpd", spare_ok: bool = True):
+        self.scoped_block = scoped_block
+        self.spare_ok = spare_ok
+        self.rpc_calls: list[dict] = []
+
+    def table(self, _name: str):
+        return _FakeSupabaseQuery(_OVERFLOW_KEY_ROWS)
+
+    def rpc(self, _name: str, payload: dict):
+        self.rpc_calls.append(dict(payload))
+        candidates = payload.get("p_candidate_key_ids") or []
+        has_spare = any(c in _SPARE_KEY_IDS for c in candidates)
+        if has_spare and self.spare_ok:
+            data = {
+                "ok": True,
+                "env_var_name": "GOOGLE_API_KEY3",
+                "key_alias": "k3",
+                "api_key_id": "id-key3",
+            }
+        elif has_spare:  # spare present but still exhausted
+            data = {"ok": False, "blocked_reason": "rpd", "api_key_id": None}
+        else:
+            data = {
+                "ok": False,
+                "blocked_reason": self.scoped_block,
+                "api_key_id": None,
+                "retry_after_ms": 1000 if self.scoped_block in {"rpm", "tpm"} else None,
+            }
+        return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
+
+
+def _overflow_client(supabase, monkeypatch, **kwargs):
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    _OVERFLOW_ENV_CANDIDATE_CACHE.clear()
+    monkeypatch.setenv("GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV", "1")
+    return GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update",
+        default_env_var_name="GOOGLE_API_KEY",
+        **kwargs,
+    )
+
+
+def _overflow_ctx(uid: str = "req-of") -> RequestContext:
+    return RequestContext(
+        request_uid=uid,
+        consumer="smart_update",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=100,
+    )
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_borrows_spare_key_on_rpd(monkeypatch: pytest.MonkeyPatch) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx(), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is True
+    assert reserve.env_var_name == "GOOGLE_API_KEY3"
+    # Phase 1 = scoped lane only; phase 2 = scoped + spares (scoped key first).
+    assert len(supabase.rpc_calls) == 2
+    assert supabase.rpc_calls[0]["p_candidate_key_ids"] == ["id-key1"]
+    assert supabase.rpc_calls[1]["p_candidate_key_ids"] == ["id-key1", "id-key3", "id-key2"]
+    # Same request/attempt reused across phases (no idempotency conflict).
+    assert supabase.rpc_calls[0]["p_request_uid"] == supabase.rpc_calls[1]["p_request_uid"]
+    assert supabase.rpc_calls[0]["p_attempt_no"] == supabase.rpc_calls[1]["p_attempt_no"]
+
+
+@pytest.mark.asyncio
+async def test_reserve_no_overflow_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(supabase, monkeypatch)  # no overflow envs
+
+    reserve = await client._reserve(_overflow_ctx("req-noof"), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpd"
+    assert len(supabase.rpc_calls) == 1  # never expands
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_not_triggered_on_per_minute_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpm", spare_ok=True)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx("req-rpm"), attempt_no=1, candidate_key_ids=None)
+
+    # rpm is a per-minute spike: stay on the scoped key, do not borrow spares.
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpm"
+    assert len(supabase.rpc_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_returns_block_when_spares_also_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=False)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx("req-allfull"), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpd"
+    assert len(supabase.rpc_calls) == 2  # tried overflow, still blocked
+
+
+def test_normalize_overflow_envs_parses_csv_and_list() -> None:
+    assert GoogleAIClient._normalize_overflow_envs(None) == []
+    assert GoogleAIClient._normalize_overflow_envs("") == []
+    assert GoogleAIClient._normalize_overflow_envs(" A , B ,A, ") == ["A", "B"]
+    assert GoogleAIClient._normalize_overflow_envs(["A", "B", "A"]) == ["A", "B"]
+
+
+@pytest.mark.asyncio
+async def test_embed_content_async_reserves_before_provider_call(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_EMBED", "test-embedding-key")
+    monkeypatch.setenv("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "1")
+    supabase = _FakeSupabaseClient(
+        data=[{"id": "id-embed", "env_var_name": "GOOGLE_API_KEY_EMBED", "priority": 1}],
+        reserve_data={
+            "ok": True,
+            "api_key_id": "id-embed",
+            "env_var_name": "GOOGLE_API_KEY_EMBED",
+            "key_alias": "embedding-key",
+        },
+    )
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update_identity_embedding",
+        default_env_var_name="GOOGLE_API_KEY_EMBED",
+    )
+
+    provider_calls: list[dict] = []
+
+    class _EmbeddingResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self):
+            return b'{"embedding":{"values":[0.1,0.2,0.3]}}'
+
+    def fake_urlopen(request, timeout=None):
+        provider_calls.append(
+            {
+                "url": request.full_url,
+                "headers": dict(request.header_items()),
+                "body": request.data.decode("utf-8"),
+                "timeout": timeout,
+            }
+        )
+        return _EmbeddingResponse()
+
+    monkeypatch.setattr("google_ai.client.urllib.request.urlopen", fake_urlopen)
+
+    values, usage = await client.embed_content_async(
+        model="gemini-embedding-2",
+        text="identity document",
+        output_dimensionality=3,
+    )
+
+    assert values == (0.1, 0.2, 0.3)
+    assert usage.total_tokens > 0
+    assert provider_calls, "provider must be called after reserve"
+    assert provider_calls[0]["url"].endswith("/models/gemini-embedding-2:embedContent")
+    assert "test-embedding-key" in provider_calls[0]["headers"].values()
+    assert supabase.rpc_calls[0]["p_model"] == "gemini-embedding-2"
+    assert supabase.rpc_calls[0]["p_consumer"] == "smart_update_identity_embedding"
+    assert supabase.rpc_calls[0]["p_reserved_tpm"] > 0
+    assert any("p_provider_status" in call for call in supabase.rpc_calls), "finalize RPC must be called"

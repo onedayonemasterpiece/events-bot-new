@@ -5,13 +5,22 @@ import re
 from datetime import date, datetime, timezone
 
 from aiogram import Bot, types
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 
 from db import Database
-from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
+from models import Event, EventSource, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
 from promo import (
     INITIAL_80_STORIES_FESTIVAL,
     INITIAL_80_STORIES_PRIORITY,
+    PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
+    PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
+    PROMO_SURFACE_TG_EVENT_PUBLISH,
+    PROMO_SURFACE_TG_REPOST,
+    PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+    PROMO_SURFACE_VK_REPOST,
+    PROMO_SURFACE_VK_STORY,
+    _parse_chat_author_query,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     default_campaign_end,
@@ -163,7 +172,7 @@ def _promo_keyboard(campaigns: list[PromoCampaign]) -> types.InlineKeyboardMarku
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f"P{priority}",
+                    text={0: "P0 max", 1: "P1", 2: "P2", 3: "P3 min"}[priority],
                     callback_data=f"vidpromo:priority:{cid}:{priority}",
                 )
                 for priority in range(0, 4)
@@ -175,7 +184,12 @@ def _promo_keyboard(campaigns: list[PromoCampaign]) -> types.InlineKeyboardMarku
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def _current_or_future_campaign_filter(now_utc: datetime):
+    return or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc)
+
+
 async def _active_campaigns(db: Database, *, include_archived: bool = False) -> list[PromoCampaign]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         query = select(PromoCampaign).order_by(
             PromoCampaign.priority,
@@ -183,7 +197,9 @@ async def _active_campaigns(db: Database, *, include_archived: bool = False) -> 
             PromoCampaign.created_at,
         )
         if not include_archived:
-            query = query.where(PromoCampaign.status != "archived")
+            query = query.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         res = await session.execute(query)
         return list(res.scalars().all())
 
@@ -207,7 +223,8 @@ async def send_promo_menu(
     )
     lines.append("")
     lines.append(
-        "Priority: 0 — высший, 3 — низкий. 80 историй держим на priority "
+        "Priority: P0 — высший, P3 — низкий. Кнопки P0..P3 только меняют приоритет кампании; "
+        "публикации сами не запускают. 80 историй держим на P"
         f"{INITIAL_80_STORIES_PRIORITY}."
     )
     await bot.send_message(
@@ -315,6 +332,76 @@ async def _video_publication_groups_for_campaign(
     )
 
 
+def _activity_label(activity: PromoActivity) -> str:
+    surface_label = {
+        "video_general": "Видеоанонс",
+        "daily_highlight": "Ежедневная подборка",
+        "telegraph_month": "Telegraph: месяц",
+        "telegraph_weekend": "Telegraph: выходные",
+        PROMO_SURFACE_TG_BUTTON_HIGHLIGHT: "TG-кнопка «Подробнее»",
+        PROMO_SURFACE_TG_EVENT_PUBLISH: "TG-публикация",
+        PROMO_SURFACE_TG_REPOST: "TG-репост",
+        PROMO_SURFACE_VK_PUBLICATION: "VK-публикация",
+        PROMO_SURFACE_VK_CHANNEL_PUBLISH: "VK-канал",
+        PROMO_SURFACE_VK_REPOST: "VK-репост",
+        PROMO_SURFACE_VK_STORY: "VK-история",
+    }.get(activity.surface, activity.surface)
+    parts = [surface_label]
+    if activity.profile_key:
+        parts.append(str(activity.profile_key))
+    if activity.max_per_publish:
+        parts.append(f"x{activity.max_per_publish}")
+    if activity.daily_cap:
+        parts.append(f"не более {activity.daily_cap}/день")
+    return " · ".join(parts)
+
+
+async def _vk_exposures_for_campaign(
+    db: Database,
+    campaign: PromoCampaign,
+) -> list[dict[str, object]]:
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(PromoExposure, Event.title, Event.date)
+                .join(Event, Event.id == PromoExposure.event_id)
+                .where(PromoExposure.campaign_id == campaign.id)
+                .where(
+                    PromoExposure.surface.in_(
+                        [
+                            PROMO_SURFACE_VK_PUBLICATION,
+                            PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+                            PROMO_SURFACE_VK_REPOST,
+                            PROMO_SURFACE_VK_STORY,
+                        ]
+                    )
+                )
+                .order_by(PromoExposure.published_at.desc(), PromoExposure.id.desc())
+                .limit(12)
+            )
+        ).all()
+    result: list[dict[str, object]] = []
+    for exposure, title, event_date in rows:
+        details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
+        targets = exposure.public_targets_json if isinstance(exposure.public_targets_json, list) else []
+        url = str(details.get("target_url") or "").strip()
+        if not url and targets and isinstance(targets[0], dict):
+            url = str(targets[0].get("url") or "").strip()
+        result.append(
+            {
+                "surface": exposure.surface,
+                "status": exposure.publish_status,
+                "event_id": exposure.event_id,
+                "title": title or "",
+                "event_date": event_date or "",
+                "published_at": exposure.published_at,
+                "url": url,
+                "source_url": str(details.get("source_url") or "").strip(),
+            }
+        )
+    return result
+
+
 async def _future_count_for_campaign(db: Database, campaign: PromoCampaign) -> int:
     async with db.get_session() as session:
         target_res = await session.execute(
@@ -347,6 +434,24 @@ async def _future_count_for_campaign(db: Database, campaign: PromoCampaign) -> i
                     query = query.where(Event.date <= campaign.ends_at.date().isoformat())
                 res = await session.execute(query)
                 total += int(res.scalar() or 0)
+            elif target.target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR:
+                chat, author = _parse_chat_author_query(target.query_text)
+                if not chat or not author:
+                    continue
+                query = (
+                    select(func.count(func.distinct(Event.id)))
+                    .select_from(Event)
+                    .join(EventSource, EventSource.event_id == Event.id)
+                    .where(func.lower(EventSource.source_chat_username) == chat)
+                    .where(func.lower(Event.tg_source_author) == author)
+                    .where(Event.date >= today_iso)
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                )
+                if campaign.ends_at is not None:
+                    query = query.where(Event.date <= campaign.ends_at.date().isoformat())
+                res = await session.execute(query)
+                total += int(res.scalar() or 0)
         return total
 
 
@@ -356,10 +461,13 @@ async def _campaign_lines(
     include_archived: bool = False,
     include_details: bool = False,
 ) -> list[str]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         query = select(PromoCampaign).order_by(PromoCampaign.status, PromoCampaign.created_at)
         if not include_archived:
-            query = query.where(PromoCampaign.status != "archived")
+            query = query.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         res = await session.execute(query)
         campaigns = res.scalars().all()
     if not campaigns:
@@ -381,16 +489,13 @@ async def _campaign_lines(
             )
             recorded_exposures = int(exposure_res.scalar() or 0)
         video_groups = await _video_publication_groups_for_campaign(db, campaign)
+        vk_exposures = await _vk_exposures_for_campaign(db, campaign)
         video_show_count = sum(len(group.get("items") or []) for group in video_groups)
         activity_labels = ", ".join(
             filter(
                 None,
                 [
-                    (
-                        f"{activity.surface}"
-                        + (f":{activity.profile_key}" if activity.profile_key else "")
-                        + (f" x{activity.max_per_publish}" if activity.max_per_publish else "")
-                    )
+                    _activity_label(activity)
                     for activity in activities
                     if activity.enabled
                 ],
@@ -406,7 +511,8 @@ async def _campaign_lines(
             ),
             (
                 f"Будущих событий сейчас: {future_count}; "
-                f"видео-публикаций: {len(video_groups)}; промо-показов: {video_show_count}"
+                f"видео-публикаций: {len(video_groups)}; промо-показов: {video_show_count}; "
+                f"VK-активностей: {len(vk_exposures)}"
             ),
             f"Активности: {html.escape(activity_labels or '—')}",
         ]
@@ -433,7 +539,28 @@ async def _campaign_lines(
                 )
             if len(video_groups) > 8:
                 block.append(f"• … ещё {len(video_groups) - 8}")
-        elif include_details and recorded_exposures:
+        if include_details and vk_exposures:
+            block.append("VK:")
+            for item in vk_exposures[:8]:
+                label = {
+                    PROMO_SURFACE_VK_PUBLICATION: "публикация",
+                    PROMO_SURFACE_VK_CHANNEL_PUBLISH: "канал",
+                    PROMO_SURFACE_VK_REPOST: "репост",
+                    PROMO_SURFACE_VK_STORY: "история",
+                }.get(str(item["surface"]), str(item["surface"]))
+                source = f" ← {item['source_url']}" if item.get("source_url") else ""
+                url = str(item.get("url") or "")
+                block.append(
+                    (
+                        f"• {_fmt_dt(item.get('published_at'))}: {label} · "
+                        f"ev#{item['event_id']} ({html.escape(str(item.get('event_date') or ''))}) · "
+                        f"{html.escape(str(item.get('status') or ''))} · "
+                        f"{html.escape(url or 'url pending')}{html.escape(source)}"
+                    )
+                )
+            if len(vk_exposures) > 8:
+                block.append(f"• … ещё {len(vk_exposures) - 8}")
+        elif include_details and recorded_exposures and not video_groups:
             block.append(f"Записанных exposure rows: {recorded_exposures}")
         lines.append("\n".join(block))
     return lines

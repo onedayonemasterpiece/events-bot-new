@@ -155,6 +155,17 @@ def test_fp_unrelated_titles_vetoed_unless_junk_location():
     assert not ok and code == "unrelated_titles"
 
 
+
+
+def test_high_confidence_anchor_match_bypasses_title_only_veto():
+    cand = _Cand(title="Валерия", date="2026-07-01", time="19:00", location_name="Янтарь холл")
+    ev = _Event(id=1, title="Концерт Валерии", date="2026-07-01", time="19:00", location_name="Янтарь холл")
+    ok, code = _dedup_adjudicator_accept_merge(
+        cand, ev, decision=_decide("match", "identical_anchors_dup", 0.97), allow_parallel=False
+    )
+    assert ok and code == "identical_anchors_dup"
+
+
 def test_parallel_venue_raises_confidence_threshold():
     # allow_parallel venue needs >=0.90; a 0.85 merge is rejected.
     cand = _Cand(title="Выставка А", date="2026-06-01", time="12:00", location_name="Музей")

@@ -100,17 +100,6 @@ Initial agreement was order **3 → 5 → 1** (opt 4 title-emoji normalisation d
 
 Curated from `db_prod_fresh_20260530.sqlite` (future window, civic-generic excluded). **26 true-duplicate pairs** (all from DISTINCT source posts — genuine cross-source reposts of one event) are merge candidates; **1 pair is KEEP** (`5426`/`5427`, legitimate two-session split from one `t.me/gusmuseum/4509` post). Merge MUST go through the bot's merge flow (re-runs Smart Update merge + operator visibility), NOT blind SQL, because a few pairs need a same-event judgment call, e.g. `3722`/`5359` «Золотой ключик» (Драматический театр 17:00 vs Театр кукол 12:00 — possibly two different productions, do not auto-merge).
 
-### Executed 2026-05-30 (~09:52 Europe/Kaliningrad)
-
-- Deployed the opt-1 adjudicator first (`deployment-01KSW2ZH13...`, `/healthz` 200, no startup errors) so NEW dups stop.
-- Volume backup before any mutation: `/data/db.sqlite.dedup_bak_20260530_095205` (consistent `sqlite.backup`).
-- Ran `scripts/inspect/dedup_event_duplicates.py --apply` on `/data/db.sqlite` with **17 explicit `--merge` clusters** (the vetted future-window pairs below). The same tool additionally auto-merged **17 high-confidence strict clusters** (same date+title+venue+time, cross-source — mostly past events, incl. the documented INC-2026-05-08 `3824`/`3983` Эдит Пиаф pair). Result: `After merge: remaining duplicate clusters=0`. Active events `5086 → 5049` (−37: 18 future drops + 19 past drops).
-- Verified on live prod: all dropped ids non-active, all kept ids present.
-- **Excluded (review-only, NOT merged):** `3722`/`5359` (Золотой ключик — possibly two productions), `5433`/`5437` + `5434`/`5438` (films at two cinemas — possibly two screenings), `5431` (АгроПарк recurring-series session), `3772`/`4213` (festival vs opening ceremony), `5105`/`5244` (possibly two concerts of one festival), `5426`/`5427` (legitimate two-session split).
-- **Surfaces:** stored Telegraph month/weekend pages self-heal via `nightly_page_sync` (`ENABLE_NIGHTLY_PAGE_SYNC=1`, 02:00 Europe/Kaliningrad, full rebuild `force=True`); on-demand surfaces already reflect the merged state.
-
-Executed merge clusters (KEEP ← DROP): `4902←4769`, `5496←5441`, `5377←5432`, `5446←5402`, `4812←4835,5215`, `5018←5037`, `5464←4690`, `4772←5404`, `5010←4978`, `5011←4979`, `5012←4980`, `5013←4981`, `5126←5125`, `5202←5411`, `4671←4794`, `5380←4486`, `4961←4903`.
-
 Merge candidates (canonical id ← duplicate id, verify each before merge):
 - `4769`/`4902` Саша Ветров (doors/start); `5433`/`5437` «Вот это драма!»; `5441`/`5496` зоопарк-экскурсия; `5377`/`5432` DeLight Project; `5402`/`5446`/`5431` «Газеты Пишут» (triple, one bad time); `5434`/`5438` «Исцеление»; `4812`/`4835`/`5215` «Путешествие налегке» (triple); `3772`/`4213` «Цветы России»; `5018`/`5037` «Руки вверх»; `4690`/`5464` Матч сборной; `5105`/`5244` Pianissimo-фестиваль; `4772`/`5404` «Капитанская дочка»; `4978`/`5010`, `4979`/`5011`, `4980`/`5012`, `4981`/`5013` Закулисье театра (recurring series, 4 dates); `5125`/`5126` ПроСТО век Зацепина; `5202`/`5411` Pianissimo: Папоян; `4671`/`4794` Эпидемия; `4486`/`5380` Скитальцы/Беркут&Маврин; `4903`/`4961` Балтийский леторуб.
 - Needs judgment (do NOT auto-merge): `3722`/`5359` «Золотой ключик» (two venues, possibly two productions).
