@@ -108,7 +108,7 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending commit; Edge Function `event-search` deployed to personalization Supabase project `epyznmylqmchteykjsqj` from the same local diff.
+- deployed SHA: commit `0c9fd9e6` on branch `recovery/static-site-smart-search-full-20260701`; Edge Function `event-search` deployed to personalization Supabase project `epyznmylqmchteykjsqj` from the same diff before commit.
 - deploy path: static preview `https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/` (`npm --prefix site run build:preview`, `check:preview`, `deploy:preview` passed; public preview verification ok).
 - regression checks: live batch-size probe artifact `artifacts/codex/prod-smart-search-20260702/window-tuning-live.json`; post-deploy mobile Playwright artifact `artifacts/codex/prod-smart-search-20260702/post-deploy-batch-smoke.json`.
 - post-deploy verification: query `искусство у моря` on public preview returned first page in `2572ms` backend total with `limit=8`, `candidate_window=10`, `retrieved_count=10`, `has_more=true`; skeleton became visible at `96ms` and hid after result cards rendered. “Показать ещё” sent `offset=10` and appended cards.
