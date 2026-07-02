@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Codex server-wide fanout defaults**: clarified that complex multi-point tasks auto-trigger the fanout workflow from task shape, with the user-level global skill as this server's source of truth and the repo-local setup as a team-shared anchor.
 - **Codex parallel feature workflow**: added the repo-local `$feature-fanout` skill, project-scoped Codex agents, subagent limits, helper scripts, usage documentation, and AGENTS.md lane/worktree discipline for complex multi-point requests.
 - **Yandex Cloud infra skill**: added a project `yandex-cloud-infra` skill documenting the existing local `yc` path, user-level auth cache location, KenigEvents CDN/DNS folder ids, static CDN resource/certificate ids, and public TLS acceptance checks so agents do not start unnecessary browser auth flows or print secrets.
 - **Smart Update / event reference enrichment design**: added the canonical feature spec for Smart Update-called event reference enrichment, with Wikipedia/Wikidata as the first strict provider, source-role separation (`event_source` vs `reference_source`), sparse/giveaway gates, writer coverage rules, and a required Smart Update bot-report line whenever Wikipedia facts are accepted or used.

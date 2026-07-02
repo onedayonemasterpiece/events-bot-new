@@ -1,11 +1,11 @@
 ---
 name: feature-fanout
-description: Use for complex multi-point feature work with 5+ distinct requirements, requests for parallel agents/subagents/background agents, or broad features that need decomposition, worktrees, lane ownership, merge gates, and final closure audit. Do not use for simple one-file fixes.
+description: Automatically use for complex multi-point feature work, broad change lists, 5+ distinct requirements, many unrelated edits, or tasks that need subagents, branches, worktrees, lane ownership, integration gates, and final closure audit. The user does not need to invoke this skill explicitly.
 ---
 
 # Feature Fanout
 
-Use this skill when a user gives a feature or bugfix request containing many independent or semi-independent requirements.
+Use automatically when the task is complex or multi-point. In this repository this file is the team-shared repo-local copy; on this server the user-level global skill is the source of truth for automatic triggering.
 
 Core invariant:
 

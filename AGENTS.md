@@ -144,7 +144,7 @@
 
 ## Complex multi-point feature work
 
-When a user provides 5+ distinct requirements, asks for parallel agents/subagents/background agents, or gives a broad feature with many unrelated edits, use `$feature-fanout`.
+When a user provides 5+ distinct requirements, asks for parallel agents/subagents/background agents, or gives a broad feature with many unrelated edits, automatically use the `feature-fanout` workflow. The user does not need to type `$feature-fanout`; detect this from the task shape.
 
 Do not implement the entire list linearly in one long pass.
 
@@ -170,3 +170,24 @@ Required sequence:
 - Do not run `git reset --hard`, `git clean -fd`, `git checkout -- .`, or destructive stash/reset operations on user changes without explicit permission.
 - Do not use bare `git push --force`; use `--force-with-lease` only when explicitly approved.
 - Do not delete worker branches/worktrees until their lane is recorded as merged, rejected, blocked, or superseded.
+
+<!-- codex-feature-fanout-anchor:start -->
+## Complex multi-point work
+
+This repository uses the user's global Codex `feature-fanout` workflow for complex multi-point work.
+
+When the user gives many distinct requirements, a broad feature, a numbered list of changes, or several unrelated edits, Codex must automatically use the fanout workflow. The user does not need to type `$feature-fanout`.
+
+Required behavior:
+- preserve every original requirement as a stable ID;
+- create an execution matrix before editing;
+- create a lane map with dependencies, writable files, forbidden files, owner, branch, and worktree;
+- use read-only parallel agents for exploration/review when useful;
+- use writable parallel workers only through branch/worktree isolation;
+- one writable lane = one branch + one worktree + one owner;
+- final integration is serial and owned by one integrator;
+- no lane may disappear from the final report;
+- no worker may leave abandoned dirty worktrees;
+- dirty current worktree is not an excuse to do nothing; preserve it and continue in isolated worktrees when safe;
+- final response must include Done / Partial / Missing / Blocked / Superseded for every original requirement.
+<!-- codex-feature-fanout-anchor:end -->

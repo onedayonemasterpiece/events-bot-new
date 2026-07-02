@@ -2,6 +2,13 @@
 
 Use this for large feature requests with many independent requirements.
 
+## Server-wide default layer
+
+On this server, the user-level global Codex setup is the source of truth for automatic `feature-fanout` triggering. The repo-local skill and agents in this branch are optional/team-shared anchors for this repository.
+
+Users do not need to type `$feature-fanout`, "use subagents", or "use worktrees". Broad numbered/bulleted tasks, 5+ requirements, or many unrelated edits should auto-trigger the execution matrix, lane map, branch/worktree worker discipline, serial integration, and final closure audit.
+
+
 ## Start prompt
 
 Use:
