@@ -1517,7 +1517,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
         from telethon import TelegramClient
         from telethon.sessions import StringSession
         from telethon.tl.functions.channels import GetFullChannelRequest
-        from telethon.tl.types import PeerChannel
+        from telethon.tl.types import InputPeerChannel, PeerChannel
     except Exception as exc:
         diagnostics.append(f"telethon unavailable: {exc}")
         return [], [], diagnostics
@@ -1585,14 +1585,14 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             }
             _status_event("alive", phase="telegram_scan", status="running", progress=progress)
             await _human_pause_async(multiplier=0.8 if processed > 1 else 0.2)
+            seed_meta = _metadata_for_tg_seed(raw_url, handle, tg_seed_meta)
             try:
-                entity_ref = PeerChannel(int(handle)) if str(handle).isdigit() else handle
+                entity_ref = _telegram_entity_ref_from_seed(handle, seed_meta)
                 entity = await client.get_entity(entity_ref)
             except Exception as exc:
                 diagnostics.append(f"{handle}: get_entity failed: {exc}")
                 continue
             TG_SCAN_STATS["surfaces_attempted"] += 1
-            seed_meta = _metadata_for_tg_seed(raw_url, handle, tg_seed_meta)
             seed_surface_type = str(seed_meta.get("surface_type") or "").strip().lower()
             seed_source = str(seed_meta.get("source") or "").strip()
             surface_type = "channel" if bool(getattr(entity, "broadcast", False)) else "group" if bool(getattr(entity, "megagroup", False)) else "chat"
@@ -1645,6 +1645,10 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             "reach": {"members": getattr(linked, "participants_count", None), "confidence": "low", "basis": "telegram_linked_discussion"},
                             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only linked discussion scan"},
                         })
+                        linked_access_hash = getattr(linked, "access_hash", None)
+                        linked_id = getattr(linked, "id", None)
+                        if linked_id is not None and linked_access_hash is not None:
+                            linked_surface["telegram_access"] = {"id": str(linked_id), "access_hash": str(linked_access_hash)}
                         if _is_out_of_region_surface(linked_surface):
                             linked_surface = _mark_out_of_region_surface(linked_surface, reason="linked discussion title/handle is outside Kaliningrad Oblast")
                             surfaces[linked_surface["external_id"]] = linked_surface
@@ -1823,6 +1827,17 @@ def _metadata_for_tg_seed(raw_url: str, handle: str, metadata: dict[str, dict[st
         if key and key in metadata:
             return metadata[key]
     return {}
+
+
+def _telegram_entity_ref_from_seed(handle: str, seed_meta: dict[str, Any]) -> Any:
+    access = seed_meta.get("telegram_access") if isinstance(seed_meta.get("telegram_access"), dict) else {}
+    access_id = str(access.get("id") or handle or "").strip()
+    access_hash = str(access.get("access_hash") or "").strip()
+    if access_id.isdigit() and access_hash.lstrip("-").isdigit():
+        return InputPeerChannel(int(access_id), int(access_hash))
+    if str(handle or "").isdigit():
+        return PeerChannel(int(handle))
+    return handle
 
 
 def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None, scanned_opportunities: list[dict[str, Any]] | None = None, diagnostics: list[str] | None = None) -> dict[str, Any]:

@@ -228,6 +228,32 @@ async def test_import_seed_placeholder_does_not_downgrade_existing_replyable_sur
 
 
 @pytest.mark.asyncio
+async def test_import_preserves_telegram_access_hash_privately(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "reach": {"basis": "telegram_linked_discussion"},
+            "risk": {"reason": "read-only linked discussion scan"},
+            "telegram_access": {"id": "1481648829", "access_hash": "123456789"},
+        }
+    ]
+    payload["opportunities"] = []
+
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:1481648829"))).scalar_one()
+    assert surface.risk_json["_telegram_access"]["access_hash"] == "123456789"
+
+
+@pytest.mark.asyncio
 async def test_import_rejects_telegram_bot_surfaces(db, sample_payload):
     payload = json.loads(json.dumps(sample_payload))
     payload["surfaces"][0]["external_id"] = "tg:RK39_bot"
@@ -579,6 +605,37 @@ async def test_surface_map_xlsx_links_channel_to_linked_discussion(db, sample_pa
     assert row[policy_idx].value == "channel_metadata_only_use_linked_discussion"
     assert row[linked_idx].value == "https://t.me/source_chat"
     assert row[linked_idx].hyperlink.target == "https://t.me/source_chat"
+
+
+@pytest.mark.asyncio
+async def test_surface_map_xlsx_hides_telegram_access_hash(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "reach": {"basis": "telegram_linked_discussion"},
+            "risk": {"_telegram_access": {"id": "1481648829", "access_hash": "123456789"}, "reason": "scan"},
+        }
+    ]
+    payload["opportunities"] = []
+    await import_discovery_result(db, payload)
+
+    path = await export_surface_map_xlsx(db)
+    from openpyxl import load_workbook
+    wb = load_workbook(path)
+    ws = wb["groups"]
+    headers = [cell.value for cell in ws[1]]
+    risk_idx = headers.index("risk")
+    row = next(ws.iter_rows(min_row=2, values_only=True))
+
+    assert "access_hash" not in row[risk_idx]
+    assert "_telegram_access" not in row[risk_idx]
 
 
 @pytest.mark.asyncio

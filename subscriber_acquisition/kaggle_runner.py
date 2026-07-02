@@ -174,8 +174,8 @@ class DiscoveryRuntimeResult:
     status: str | None = None
 
 
-def _json_env_value(items: list[str]) -> str:
-    return json.dumps([str(item) for item in items if str(item).strip()], ensure_ascii=False)
+def _json_env_value(items: list[Any]) -> str:
+    return json.dumps([item for item in items if str(item).strip()], ensure_ascii=False)
 
 
 def _vk_seed_item_priority(item: dict[str, Any], index: int) -> tuple[int, int]:
@@ -480,13 +480,18 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
             url = str(item.get("url") or "").strip()
             if not url:
                 continue
-            tg_seed_meta.append({
+            risk_json = item.get("risk_json") if isinstance(item.get("risk_json"), dict) else {}
+            telegram_access = risk_json.get("_telegram_access") if isinstance(risk_json.get("_telegram_access"), dict) else None
+            meta = {
                 "url": url,
                 "handle": item.get("handle"),
                 "external_id": item.get("external_id"),
                 "surface_type": item.get("surface_type"),
                 "source": item.get("source"),
-            })
+            }
+            if telegram_access:
+                meta["telegram_access"] = telegram_access
+            tg_seed_meta.append(meta)
         if tg_seed_meta:
             env["ACQ_TG_SEED_SURFACES_JSON"] = _json_env_value(tg_seed_meta[:1000])
     if vk_seeds:

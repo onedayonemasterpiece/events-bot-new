@@ -657,6 +657,27 @@ def test_runtime_env_passes_tg_channel_resolve_budget():
     assert "ACQ_TG_SEED_SURFACES_JSON" in env
 
 
+def test_runtime_env_passes_private_telegram_access_metadata():
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    env = _runtime_env_from_config(AcqConfig(), {"surfaces": [
+        {
+            "platform": "tg",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "surface_type": "linked_discussion",
+            "source": "linked_discussion",
+            "status": "candidate",
+            "risk_json": {"_telegram_access": {"id": "1481648829", "access_hash": "123456789"}},
+        },
+    ]})
+
+    seed_meta = json.loads(env["ACQ_TG_SEED_SURFACES_JSON"])
+    assert seed_meta[0]["telegram_access"]["access_hash"] == "123456789"
+
+
 def test_smartik_vk_seeds_are_configured():
     from subscriber_acquisition.kaggle_runner import SMARTIK_KALININGRAD_VK_SEEDS
 

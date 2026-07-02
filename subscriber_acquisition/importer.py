@@ -149,6 +149,13 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 )).scalar_one_or_none()
             reach = _jsonable(item.get("reach"), {})
             risk = _jsonable(item.get("risk"), {})
+            telegram_access = item.get("telegram_access") if isinstance(item.get("telegram_access"), dict) else None
+            if telegram_access and platform == "tg":
+                risk = dict(risk or {})
+                risk["_telegram_access"] = {
+                    "id": str(telegram_access.get("id") or ""),
+                    "access_hash": str(telegram_access.get("access_hash") or ""),
+                }
             scanned_this_run = _surface_was_scanned(item)
             if existing is None:
                 surfaces_created += 1

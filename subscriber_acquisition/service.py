@@ -168,6 +168,20 @@ def _dt_text(value: Any) -> str:
         return str(value)
 
 
+def _public_json(value: Any) -> str:
+    def scrub(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {
+                str(k): scrub(v)
+                for k, v in obj.items()
+                if "access_hash" not in str(k).lower() and str(k) != "_telegram_access"
+            }
+        if isinstance(obj, list):
+            return [scrub(v) for v in obj]
+        return obj
+    return json.dumps(scrub(value or {}), ensure_ascii=False)
+
+
 async def export_surface_map_xlsx(db) -> Path:
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -220,8 +234,8 @@ async def export_surface_map_xlsx(db) -> Path:
             linked_url,
             surface.source,
             surface.topic_hint,
-            json.dumps(surface.reach_json or {}, ensure_ascii=False),
-            json.dumps(surface.risk_json or {}, ensure_ascii=False),
+            _public_json(surface.reach_json),
+            _public_json(surface.risk_json),
             _dt_text(surface.last_scan_at),
             _dt_text(surface.next_scan_after),
             total,

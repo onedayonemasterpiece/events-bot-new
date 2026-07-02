@@ -78,7 +78,7 @@ Channel posts may be sampled only for new-link discovery, never as reply
 candidates.
 Seed rotation treats resolved/rejected Telegram catalog channels as already seen when building the next Kaggle payload, so subsequent runs do not re-add the same `rejected_no_comments` or `resolved_has_linked_discussion` channels from static Telega.in seeds.; the same terminal handles are passed as `ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON`, so links rediscovered inside later scanned messages are skipped instead of being queued again.
 Each import stores `surface_import_delta` counters in `acq_discovery_run.stats_json` so the operator can see actual map growth: created surfaces, status changes, newly replyable surfaces, newly rejected surfaces, and newly resolved channels.
-The Kaggle config also passes compact Telegram seed metadata (`ACQ_TG_SEED_SURFACES_JSON`) so linked-discussion rows keep their relation/source in the runtime; numeric `t.me/c/<id>` links are resolved as channel peers rather than user ids.
+The Kaggle config also passes compact Telegram seed metadata (`ACQ_TG_SEED_SURFACES_JSON`) so linked-discussion rows keep their relation/source in the runtime. When a channel is first resolved to a numeric `t.me/c/<id>` linked discussion, the runtime stores private Telegram access metadata for future scans; operator XLSX/report exports scrub access hashes.
 VK discovery is also comment-first: the runtime reads only public wall/comment
 methods, requests `filter=all` wall posts, skips posts with zero comments, reads
 comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`
