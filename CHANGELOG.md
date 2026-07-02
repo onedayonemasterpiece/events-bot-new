@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Smart Update now has explicit date provenance helpers and a conservative date-update policy, plus poster merge dedup by poster hash, Supabase path, phash, and exact URL fallback to avoid duplicate stored posters.
 - Promoted the visual guide digest to its final scheduled production flow: a
   separate morning one-card Telegram+VK digest, Telegram title-links without
   vk.cc, VK wall postponed by 10 minutes, dynamic city/location hashtags, and a

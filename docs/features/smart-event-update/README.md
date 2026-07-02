@@ -187,6 +187,11 @@ Smart Update по умолчанию строит публичный текст 
   - `event_identity_lock` — per-event lock для временной или ручной защиты identity от автоматического merge/update.
 - Trust‑логика:
   - хранится `event.ticket_trust_level` и применяется при обновлении ticket‑полей.
+  - для даты есть явная лестница provenance/trust: `missing` → `ungrounded` → `source_text` → `poster_ocr` → `canonical_source` → `operator`;
+    обычный merge не переписывает `event.date` только потому, что новый источник принёс другую дату. Разрешённые автоматические случаи остаются узкими:
+    canonical `parser:*`/site source может исправить якорь, а grounded дата из source text/OCR может исправить старый inferred range у long‑running события при совпадающей площадке.
+  - афиши при merge дедуплицируются не только по `poster_hash`, но и по `supabase_path`, точному `phash`, а затем по точному URL как weak fallback;
+    если новый storage URL относится к уже сохранённой афише, строка `eventposter` обновляется без добавления визуального дубля в `event.photo_urls`.
 
 ## Где используется
 

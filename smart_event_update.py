@@ -7797,6 +7797,30 @@ _DAY_MONTH_WORD_RE = (
     else None
 )
 
+DATE_PROVENANCE_MISSING = "missing"
+DATE_PROVENANCE_UNGROUNDED = "ungrounded"
+DATE_PROVENANCE_SOURCE_TEXT = "source_text"
+DATE_PROVENANCE_POSTER_OCR = "poster_ocr"
+DATE_PROVENANCE_CANONICAL_SOURCE = "canonical_source"
+DATE_PROVENANCE_OPERATOR = "operator"
+
+DATE_PROVENANCE_TRUST_LADDER: tuple[str, ...] = (
+    DATE_PROVENANCE_MISSING,
+    DATE_PROVENANCE_UNGROUNDED,
+    DATE_PROVENANCE_SOURCE_TEXT,
+    DATE_PROVENANCE_POSTER_OCR,
+    DATE_PROVENANCE_CANONICAL_SOURCE,
+    DATE_PROVENANCE_OPERATOR,
+)
+DATE_PROVENANCE_TRUST_RANK: dict[str, int] = {
+    level: idx for idx, level in enumerate(DATE_PROVENANCE_TRUST_LADDER)
+}
+
+_DATE_PROVENANCE_SOURCE_TYPES_OPERATOR = frozenset({"bot", "manual"})
+_DATE_UPDATE_REASON_NONE = "no_update"
+_DATE_UPDATE_REASON_CANONICAL = "canonical_source"
+_DATE_UPDATE_REASON_INFERRED_LONG_GROUNDED = "inferred_long_event_grounded"
+
 
 def _extract_day_month_pairs(text: str | None) -> set[tuple[int, int]]:
     raw = str(text or "").strip()
@@ -7833,6 +7857,57 @@ def _poster_day_month_pairs(posters: Sequence[PosterCandidate]) -> set[tuple[int
         pairs |= _extract_day_month_pairs(getattr(poster, "ocr_title", None))
         pairs |= _extract_day_month_pairs(getattr(poster, "ocr_text", None))
     return pairs
+
+
+def _candidate_date_grounding_channels(candidate: EventCandidate) -> set[str]:
+    cand_start = _parse_iso_date(candidate.date)
+    if not cand_start:
+        return set()
+    target = (int(cand_start.day), int(cand_start.month))
+    channels: set[str] = set()
+    source_pairs = _extract_day_month_pairs(
+        "\n".join(
+            part
+            for part in (
+                str(candidate.source_text or ""),
+                str(candidate.raw_excerpt or ""),
+            )
+            if part
+        ).strip()
+    )
+    if target in source_pairs:
+        channels.add(DATE_PROVENANCE_SOURCE_TEXT)
+    poster_pairs = _poster_day_month_pairs(candidate.posters)
+    if target in poster_pairs:
+        channels.add(DATE_PROVENANCE_POSTER_OCR)
+    return channels
+
+
+def _candidate_date_provenance_level(
+    candidate: EventCandidate,
+    *,
+    is_canonical_site: bool = False,
+) -> str:
+    if not _parse_iso_date(candidate.date):
+        return DATE_PROVENANCE_MISSING
+    source_type = str(candidate.source_type or "").strip().lower()
+    if source_type in _DATE_PROVENANCE_SOURCE_TYPES_OPERATOR:
+        return DATE_PROVENANCE_OPERATOR
+    if is_canonical_site:
+        return DATE_PROVENANCE_CANONICAL_SOURCE
+    channels = _candidate_date_grounding_channels(candidate)
+    if DATE_PROVENANCE_POSTER_OCR in channels:
+        return DATE_PROVENANCE_POSTER_OCR
+    if DATE_PROVENANCE_SOURCE_TEXT in channels:
+        return DATE_PROVENANCE_SOURCE_TEXT
+    return DATE_PROVENANCE_UNGROUNDED
+
+
+def _date_provenance_trust_rank(level: str | None) -> int:
+    return DATE_PROVENANCE_TRUST_RANK.get(
+        str(level or "").strip().lower(),
+        DATE_PROVENANCE_TRUST_RANK[DATE_PROVENANCE_UNGROUNDED],
+    )
 
 
 def _format_day_month_pairs(pairs: set[tuple[int, int]]) -> str:
@@ -8032,18 +8107,43 @@ def _candidate_date_range(candidate: EventCandidate) -> tuple[date | None, date 
 
 
 def _candidate_date_is_grounded_in_sources(candidate: EventCandidate) -> bool:
-    cand_start = _parse_iso_date(candidate.date)
-    if not cand_start:
-        return False
-    hay_parts = [
-        str(candidate.source_text or ""),
-        str(candidate.raw_excerpt or ""),
-    ]
-    for poster in candidate.posters or []:
-        hay_parts.append(str(getattr(poster, "ocr_text", "") or ""))
-        hay_parts.append(str(getattr(poster, "ocr_title", "") or ""))
-    pairs = _extract_day_month_pairs("\n".join(part for part in hay_parts if part).strip())
-    return (int(cand_start.day), int(cand_start.month)) in pairs
+    return bool(_candidate_date_grounding_channels(candidate))
+
+
+def _can_apply_conservative_date_update(
+    event_db: Event,
+    candidate: EventCandidate,
+    *,
+    is_canonical_site: bool,
+) -> tuple[bool, str]:
+    """Return whether Smart Update may rewrite event.date outside create.
+
+    The helper is intentionally narrow: it captures the existing safe update
+    cases (canonical parser/site truth, or a grounded exact date fixing an old
+    inferred long-event range) and otherwise fail-closes.
+    """
+    candidate_date = str(candidate.date or "").strip()
+    if not candidate_date or candidate_date == str(getattr(event_db, "date", "") or "").strip():
+        return False, _DATE_UPDATE_REASON_NONE
+    provenance = _candidate_date_provenance_level(
+        candidate,
+        is_canonical_site=is_canonical_site,
+    )
+    if provenance == DATE_PROVENANCE_CANONICAL_SOURCE:
+        return True, _DATE_UPDATE_REASON_CANONICAL
+    if (
+        bool(getattr(event_db, "end_date_is_inferred", False))
+        and _is_long_event_type_value(getattr(event_db, "event_type", None) or candidate.event_type)
+        and _date_provenance_trust_rank(provenance)
+        >= DATE_PROVENANCE_TRUST_RANK[DATE_PROVENANCE_SOURCE_TEXT]
+        and (
+            not candidate.location_name
+            or not getattr(event_db, "location_name", None)
+            or _event_candidate_location_matches(event_db, candidate)
+        )
+    ):
+        return True, _DATE_UPDATE_REASON_INFERRED_LONG_GROUNDED
+    return False, _DATE_UPDATE_REASON_NONE
 
 
 def _looks_like_unsupported_exhibition_teaser_date(candidate: EventCandidate, text: str | None) -> bool:
@@ -15082,6 +15182,11 @@ async def _smart_event_update_impl(
         ]
         event_trust_level, event_trust_pr = _max_trust_level(existing_trusts)
         candidate_trust_pr = _trust_priority(candidate.trust_level)
+        can_update_date, date_update_reason = _can_apply_conservative_date_update(
+            event_db,
+            candidate,
+            is_canonical_site=is_canonical_site,
+        )
 
         # Fill placeholder/missing time from any matched source (TG/VK/etc.), not only parser sources.
         # This prevents duplicate creation like: existing time=00:00 (legacy placeholder) + new source brings 19:00.
@@ -15108,7 +15213,7 @@ async def _smart_event_update_impl(
         if is_canonical_site:
             # Canonical site/parser source: allow correcting anchors on an existing event.
             # This makes Telegram-first -> /parse merge converge to the site truth.
-            if candidate.date and candidate.date != (event_db.date or ""):
+            if can_update_date and date_update_reason == _DATE_UPDATE_REASON_CANONICAL:
                 event_db.date = candidate.date
                 updated_fields = True
                 updated_keys.append("date")
@@ -15146,18 +15251,7 @@ async def _smart_event_update_impl(
                 event_db.location_address = candidate.location_address.strip()
                 updated_fields = True
                 updated_keys.append("location_address")
-        elif (
-            candidate.date
-            and candidate.date != (event_db.date or "")
-            and bool(getattr(event_db, "end_date_is_inferred", False))
-            and _is_long_event_type_value(getattr(event_db, "event_type", None) or candidate.event_type)
-            and _candidate_date_is_grounded_in_sources(candidate)
-            and (
-                not candidate.location_name
-                or not getattr(event_db, "location_name", None)
-                or _event_candidate_location_matches(event_db, candidate)
-            )
-        ):
+        elif can_update_date and date_update_reason == _DATE_UPDATE_REASON_INFERRED_LONG_GROUNDED:
             # A later exact source can correct legacy exhibition rows created from vague
             # month/message-date teasers. Only do this when the old range is inferred and
             # the new start date is explicitly grounded in the candidate source/OCR.
@@ -16437,6 +16531,123 @@ def _event_poster_quality(row: EventPoster) -> int:
     return score
 
 
+def _normalize_poster_identity_url(url: str | None) -> str | None:
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    try:
+        parts = urlsplit(raw)
+        if parts.scheme and parts.netloc:
+            return urlunsplit(
+                (
+                    parts.scheme.lower(),
+                    parts.netloc.lower(),
+                    parts.path,
+                    parts.query,
+                    "",
+                )
+            )
+    except Exception:
+        return raw
+    return raw
+
+
+def _poster_identity_keys(
+    poster: PosterCandidate | EventPoster,
+    *,
+    include_weak_url: bool = True,
+) -> tuple[tuple[str, str], ...]:
+    """Return deterministic identity keys for poster merge dedup.
+
+    Strong keys are exact poster hash, Supabase object path, and exact phash.
+    URL is intentionally last and weak: it is used only as a conservative
+    fallback for legacy rows that lack stronger metadata.
+    """
+    keys: list[tuple[str, str]] = []
+    poster_hash = (
+        getattr(poster, "poster_hash", None)
+        or getattr(poster, "sha256", None)
+        or ""
+    )
+    poster_hash_s = str(poster_hash or "").strip().lower()
+    if poster_hash_s:
+        keys.append(("poster_hash", poster_hash_s))
+    supabase_path = str(getattr(poster, "supabase_path", "") or "").strip()
+    if supabase_path:
+        keys.append(("supabase_path", supabase_path))
+    phash = str(getattr(poster, "phash", "") or "").strip().lower()
+    if phash:
+        keys.append(("phash", phash))
+    if include_weak_url:
+        seen_urls: set[str] = set()
+        for raw_url in (getattr(poster, "supabase_url", None), getattr(poster, "catbox_url", None)):
+            url = _normalize_poster_identity_url(str(raw_url or "").strip())
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                keys.append(("url", url))
+    return tuple(keys)
+
+
+def _build_eventposter_identity_index(
+    rows: Sequence[EventPoster],
+) -> dict[tuple[str, str], EventPoster]:
+    index: dict[tuple[str, str], EventPoster] = {}
+    for row in rows or []:
+        for key in _poster_identity_keys(row):
+            index.setdefault(key, row)
+    return index
+
+
+def _find_duplicate_eventposter_by_identity(
+    poster: PosterCandidate,
+    index: dict[tuple[str, str], EventPoster],
+) -> tuple[EventPoster | None, str | None]:
+    for key in _poster_identity_keys(poster, include_weak_url=False):
+        row = index.get(key)
+        if row is not None:
+            return row, key[0]
+    for key in _poster_identity_keys(poster, include_weak_url=True):
+        if key[0] != "url":
+            continue
+        row = index.get(key)
+        if row is not None:
+            return row, key[0]
+    return None, None
+
+
+def _dedup_poster_candidates_by_identity(
+    posters: Sequence[PosterCandidate],
+) -> list[PosterCandidate]:
+    if len(posters or []) < 2:
+        return list(posters or [])
+    kept: list[PosterCandidate] = []
+    index: dict[tuple[str, str], int] = {}
+    for poster in posters:
+        keys = _poster_identity_keys(poster)
+        duplicate_idx: int | None = None
+        duplicate_key: tuple[str, str] | None = None
+        for key in keys:
+            if key in index:
+                duplicate_idx = index[key]
+                duplicate_key = key
+                break
+        if duplicate_idx is None:
+            kept.append(poster)
+            new_idx = len(kept) - 1
+            for key in keys:
+                index.setdefault(key, new_idx)
+            continue
+        if _poster_relevance_quality(poster) > _poster_relevance_quality(kept[duplicate_idx]):
+            kept[duplicate_idx] = poster
+            for key in keys:
+                index[key] = duplicate_idx
+        logger.info(
+            "smart_update: dropped duplicate poster candidate by %s",
+            duplicate_key[0] if duplicate_key else "identity",
+        )
+    return kept
+
+
 async def _backfill_missing_eventposter_phashes(rows: Sequence[EventPoster]) -> None:
     for row in rows or []:
         if (getattr(row, "phash", None) or "").strip():
@@ -16633,10 +16844,12 @@ async def _apply_posters(
         return 0, [], False, 0, False
     await _backfill_missing_poster_candidate_phashes(posters)
     posters = _dedup_near_duplicate_posters(posters)
+    posters = _dedup_poster_candidates_by_identity(posters)
     existing_rows = (
         await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
     ).scalars().all()
     existing_map = {row.poster_hash: row for row in existing_rows}
+    existing_identity_index = _build_eventposter_identity_index(existing_rows)
     added = 0
     now = datetime.now(timezone.utc)
     extra_urls: list[str] = []
@@ -16659,6 +16872,7 @@ async def _apply_posters(
         if isinstance(h, str) and h.strip()
     }
     pruned_urls: set[str] = set()
+    replaced_urls: set[str] = set()
     to_delete_by_hash: dict[str, EventPoster] = {}
 
     # 1) Exact prune: if the source provided the poster hash scope AND we have a non-empty
@@ -16690,16 +16904,38 @@ async def _apply_posters(
             url = _pick_display_url(poster)
             if url:
                 extra_urls.append(url)
-            continue
-        row = existing_map.get(digest)
+            row, duplicate_reason = _find_duplicate_eventposter_by_identity(
+                poster,
+                existing_identity_index,
+            )
+            if not row:
+                continue
+        else:
+            row = existing_map.get(digest)
+            duplicate_reason = "poster_hash" if row else None
+            if not row:
+                row, duplicate_reason = _find_duplicate_eventposter_by_identity(
+                    poster,
+                    existing_identity_index,
+                )
         if row:
+            if duplicate_reason and duplicate_reason != "poster_hash":
+                logger.info(
+                    "smart_update: merged duplicate poster by %s event_id=%s",
+                    duplicate_reason,
+                    event_id,
+                )
             changed = False
             if poster.catbox_url:
                 if row.catbox_url != poster.catbox_url:
+                    if row.catbox_url:
+                        replaced_urls.add(str(row.catbox_url))
                     row.catbox_url = poster.catbox_url
                     changed = True
             if poster.supabase_url:
                 if getattr(row, "supabase_url", None) != poster.supabase_url:
+                    if getattr(row, "supabase_url", None):
+                        replaced_urls.add(str(getattr(row, "supabase_url")))
                     row.supabase_url = poster.supabase_url
                     changed = True
             if poster.supabase_path:
@@ -16766,8 +17002,9 @@ async def _apply_posters(
         before_urls = list(event.photo_urls or [])
         before_count = int(getattr(event, "photo_count", 0) or len(before_urls))
         current = list(event.photo_urls or [])
-        if pruned_urls:
-            current = [u for u in current if u not in pruned_urls]
+        removed_urls = pruned_urls | replaced_urls
+        if removed_urls:
+            current = [u for u in current if u not in removed_urls]
         persisted_known_urls: set[str] = set()
         persisted_display_urls: list[str] = []
         for row in persisted_rows:
