@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AcqConfig
-from .surface_filters import is_tg_bot_or_service_surface, is_vk_community_surface, vk_handle_from_surface
+from .surface_filters import is_tg_bot_or_service_surface, is_vk_community_surface, tg_handle_from_surface, vk_handle_from_surface
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "kaggle" / "SubscriberAcquisitionDiscovery"
@@ -236,10 +236,18 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
         # can be reintroduced from Telega.in as a fresh `needs_comment_resolve`
         # seed, making later Kaggle runs loop over the same publics.
         all_rows = (await session.execute(select(AcqSurface).limit(1000))).scalars().all()
+        terminal_tg_handles: set[str] = set()
         for row in all_rows:
             key = (str(row.platform or ""), str(row.external_id or row.url or ""))
             if key[0] and key[1]:
                 seen.add(key)
+            status = str(row.status or "").strip().lower()
+            if str(row.platform or "").strip().lower() == "tg" and (
+                status.startswith("rejected") or status == "resolved_has_linked_discussion"
+            ):
+                handle = tg_handle_from_surface(url=row.url, handle=row.handle, external_id=row.external_id).casefold()
+                if handle:
+                    terminal_tg_handles.add(handle)
         rows = [
             row for row in all_rows
             if str(row.status or "").strip().lower() in {"seed", "candidate", "approved", "needs_comment_resolve"}
@@ -419,6 +427,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     payload: dict[str, Any] = {"surfaces": visible_surfaces}
     if seen_payload:
         payload["seen_opportunities"] = [{"context_url": url} for url in seen_payload[0].get("context_urls", [])]
+    if terminal_tg_handles:
+        payload["known_terminal_tg_handles"] = sorted(terminal_tg_handles)
     return payload
 
 
@@ -454,6 +464,13 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
     ]
     if seen_context_urls:
         env["ACQ_SEEN_CONTEXT_URLS_JSON"] = _json_env_value(seen_context_urls[:2000])
+    terminal_tg_handles = [
+        str(handle).strip().strip("/").lower()
+        for handle in seed_payload.get("known_terminal_tg_handles") or []
+        if str(handle).strip()
+    ]
+    if terminal_tg_handles:
+        env["ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON"] = _json_env_value(sorted(set(terminal_tg_handles))[:5000])
     if tg_seeds:
         env["ACQ_TG_SEEDS_JSON"] = _json_env_value(tg_seeds)
     if vk_seeds:

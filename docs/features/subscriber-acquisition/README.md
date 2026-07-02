@@ -76,7 +76,7 @@ frontier summaries are built only from confirmed replyable surfaces:
 Telegram groups/chats/linked discussions and VK communities/discussion threads.
 Channel posts may be sampled only for new-link discovery, never as reply
 candidates.
-Seed rotation treats resolved/rejected Telegram catalog channels as already seen when building the next Kaggle payload, so subsequent runs do not re-add the same `rejected_no_comments` or `resolved_has_linked_discussion` channels from static Telega.in seeds.
+Seed rotation treats resolved/rejected Telegram catalog channels as already seen when building the next Kaggle payload, so subsequent runs do not re-add the same `rejected_no_comments` or `resolved_has_linked_discussion` channels from static Telega.in seeds.; the same terminal handles are passed as `ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON`, so links rediscovered inside later scanned messages are skipped instead of being queued again.
 Each import stores `surface_import_delta` counters in `acq_discovery_run.stats_json` so the operator can see actual map growth: created surfaces, status changes, newly replyable surfaces, newly rejected surfaces, and newly resolved channels.
 VK discovery is also comment-first: the runtime reads only public wall/comment
 methods, requests `filter=all` wall posts, skips posts with zero comments, reads

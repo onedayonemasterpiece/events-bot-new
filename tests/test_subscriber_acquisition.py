@@ -584,6 +584,7 @@ async def test_runtime_seed_payload_does_not_reintroduce_resolved_or_rejected_te
 
     assert "tg:kpkld" not in by_external
     assert "tg:anons39" not in by_external
+    assert set(payload["known_terminal_tg_handles"]) == {"anons39", "kpkld"}
     assert "https://t.me/kpkld" not in tg_seeds
     assert "https://t.me/anons39" not in tg_seeds
 

@@ -1272,6 +1272,8 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
     seen_contexts = _seen_context_urls()
+    known_terminal_tg = _known_terminal_tg_handles()
+    known_terminal_tg_skipped: set[str] = set()
     opportunity_keys: set[str] = set()
     deadline = _deadline_after_seconds()
     for raw_url in seed_urls[:max_surfaces]:
@@ -1662,6 +1664,13 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 text = str(getattr(message, "message", None) or "")
                 for discovered in extract_candidate_surfaces(text):
                     discovered["topic_hint"] = f"discovered in {scan_surface.get('external_id')}"
+                    if discovered.get("platform") == "tg":
+                        discovered_handle = str(discovered.get("handle") or _handle_from_url(str(discovered.get("url") or ""))).strip().casefold()
+                        if discovered_handle and discovered_handle in known_terminal_tg:
+                            if discovered_handle not in known_terminal_tg_skipped:
+                                diagnostics.append(f"{discovered_handle}: skipped discovered terminal tg surface from previous runs")
+                                known_terminal_tg_skipped.add(discovered_handle)
+                            continue
                     if _is_out_of_region_surface(discovered):
                         discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in Telegram message")
                     surfaces.setdefault(discovered["external_id"], discovered)
@@ -1772,6 +1781,11 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
 def _seen_context_urls() -> set[str]:
     raw = _json_env("ACQ_SEEN_CONTEXT_URLS_JSON", [])
     return {str(x).strip() for x in list(raw or []) if str(x).strip()}
+
+
+def _known_terminal_tg_handles() -> set[str]:
+    raw = _json_env("ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON", [])
+    return {str(x).strip().strip("/").casefold() for x in list(raw or []) if str(x).strip()}
 
 
 def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None, scanned_opportunities: list[dict[str, Any]] | None = None, diagnostics: list[str] | None = None) -> dict[str, Any]:

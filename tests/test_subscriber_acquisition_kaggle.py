@@ -693,9 +693,14 @@ def test_runtime_env_passes_seen_context_urls():
     from subscriber_acquisition.config import AcqConfig
     from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
 
-    env = _runtime_env_from_config(AcqConfig(), {"surfaces": [], "seen_opportunities": [{"context_url": "https://t.me/example/1"}]})
+    env = _runtime_env_from_config(AcqConfig(), {
+        "surfaces": [],
+        "seen_opportunities": [{"context_url": "https://t.me/example/1"}],
+        "known_terminal_tg_handles": ["Anons39"],
+    })
 
     assert env["ACQ_SEEN_CONTEXT_URLS_JSON"] == '["https://t.me/example/1"]'
+    assert env["ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON"] == '["anons39"]'
 
 
 def test_remote_session_marker_cooldown_blocks_fast_reuse(monkeypatch, tmp_path):
@@ -727,6 +732,13 @@ def test_seen_context_urls_env_parser(monkeypatch):
     monkeypatch.setenv("ACQ_SEEN_CONTEXT_URLS_JSON", '["https://t.me/example/1"]')
 
     assert runtime._seen_context_urls() == {"https://t.me/example/1"}
+
+
+def test_known_terminal_tg_handles_env_parser(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON", '["Anons39", "kpkld"]')
+
+    assert runtime._known_terminal_tg_handles() == {"anons39", "kpkld"}
 
 
 def test_kaggle_dataset_slug_stays_within_current_api_limit():
