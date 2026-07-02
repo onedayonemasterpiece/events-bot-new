@@ -29,6 +29,7 @@ contract:
 - seed collection prioritizes pending discovered/linked Telegram replyable surfaces before static catalog seed groups, so each follow-up Kaggle run spends its small replyable budget on newly found comment groups first;
 - importer merge policy treats the previous Kaggle resolver result as durable state: later seed-only placeholders for the same `external_id` must not overwrite `linked_discussion` type/source/title/topic metadata or the private Telegram access hash needed for numeric `t.me/c/<id>` rescans;
 - the Kaggle runtime resolves numeric linked discussions with stored access metadata via Telethon `InputPeerChannel`, and seed-only diagnostic rows apply the stored `linked_discussion` metadata instead of falling back to `unknown_public`;
+- VK allowlist means “safe to scan read-only”, not “human-approved to reply”: scanned VK communities are marked `comments_available` when wall comments or discussion-board comments are readable, `rejected_no_comments` when the bounded scan finds no replyable comments/boards, and `rejected_inaccessible` when the wall and boards are not readable with configured tokens;
 - seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
 - optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
 - Telegram channels without accessible linked discussion/comments are marked

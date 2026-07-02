@@ -135,8 +135,10 @@ def _surface_reply_policy(surface: AcqSurface) -> str:
     surface_type = str(surface.surface_type or "").strip().lower()
     if status == "approved":
         return "confirmed_can_reply_after_human_review"
-    if status in {"rejected", "rejected_no_comments", "rejected_out_of_region", "rejected_bot_or_service", "rejected_non_community"}:
+    if status in {"rejected", "rejected_no_comments", "rejected_out_of_region", "rejected_bot_or_service", "rejected_non_community", "rejected_inaccessible"}:
         return "rejected_do_not_reply"
+    if status == "comments_available":
+        return "candidate_comment_surface_needs_human_review"
     if status == "paused":
         return "paused_recheck_later"
     if status == "resolved_has_linked_discussion":

@@ -208,6 +208,9 @@ VK_SCAN_STATS: dict[str, int] = {
     "wall_search_posts_seen": 0,
     "comment_prefilter_candidates": 0,
     "rate_limit_backoffs": 0,
+    "surfaces_with_comments_or_boards": 0,
+    "surfaces_rejected_no_comments": 0,
+    "surfaces_rejected_inaccessible": 0,
 }
 TG_SCAN_STATS: dict[str, int] = {
     "surfaces_attempted": 0,
@@ -1252,6 +1255,54 @@ def _scan_vk_board_discussions(
     return False
 
 
+def _mark_vk_surface_inaccessible(surface: dict[str, Any], *, reason: str) -> dict[str, Any]:
+    surface["status"] = "rejected_inaccessible"
+    surface["scan_state"] = "checked_inaccessible"
+    surface["reach"] = {"confidence": "low", "basis": "vk_inaccessible"}
+    surface["risk"] = {
+        "level": "rejected",
+        "spam_risk": "n/a",
+        "safety_risk": "low",
+        "reply_policy": "no_reply_surface",
+        "reason": reason,
+    }
+    return surface
+
+
+def _mark_vk_surface_no_comments(surface: dict[str, Any]) -> dict[str, Any]:
+    surface["status"] = "rejected_no_comments"
+    surface["scan_state"] = "checked_no_public_comments_or_boards"
+    surface["reach"] = {"confidence": "low", "basis": "vk_no_public_comments_or_boards"}
+    surface["risk"] = {
+        "level": "rejected",
+        "spam_risk": "n/a",
+        "safety_risk": "low",
+        "reply_policy": "no_reply_surface",
+        "reason": "VK surface had no readable wall comments or discussion-board comments in the bounded scan",
+    }
+    return surface
+
+
+def _mark_vk_surface_comments_available(surface: dict[str, Any], *, wall_comments: int, board_comments: int) -> dict[str, Any]:
+    surface["status"] = "comments_available"
+    surface["scan_state"] = "comments_available"
+    surface["reach"] = {
+        "confidence": "low",
+        "basis": "vk_comments_or_boards",
+        "wall_comments_seen": wall_comments,
+        "board_comments_seen": board_comments,
+    }
+    risk = dict(surface.get("risk") or {})
+    risk.update({
+        "spam_risk": "unknown",
+        "safety_risk": "low",
+        "reply_policy": "candidate_comment_surface",
+        "reason": "read-only VK scan found wall comments or discussion-board comments",
+    })
+    surface["risk"] = risk
+    return surface
+
+
 def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only VK discovery for explicitly allowlisted communities.
 
@@ -1289,12 +1340,15 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
         surface = _seed_surface(f"https://vk.com/{domain}", platform="vk")
         surface.update({
             "surface_type": "community",
-            "status": "approved",
+            "status": "candidate",
             "source": "allowlist",
             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only VK wall/comment scan"},
             "reach": {"confidence": "low", "basis": "vk_wall"},
         })
         surfaces[surface["external_id"]] = surface
+        wall_comments_before = int(VK_SCAN_STATS.get("comments_seen", 0))
+        board_comments_before = int(VK_SCAN_STATS.get("board_comments_seen", 0))
+        board_topics_before = int(VK_SCAN_STATS.get("board_topics_seen", 0))
         try:
             wall, wall_lane = _vk_api_with_fallback("wall.get", token_lanes=token_lanes, params={"domain": domain, "count": max_posts, "filter": "all"})
             diagnostics.append(f"vk {domain}: wall.get ok via {wall_lane}")
@@ -1311,7 +1365,24 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 opportunities=opportunities,
                 deadline=deadline,
             ):
+                _mark_vk_surface_comments_available(
+                    surface,
+                    wall_comments=max(0, int(VK_SCAN_STATS.get("comments_seen", 0)) - wall_comments_before),
+                    board_comments=max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before),
+                )
+                VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
                 return list(surfaces.values()), opportunities, diagnostics
+            board_delta = max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before)
+            topic_delta = max(0, int(VK_SCAN_STATS.get("board_topics_seen", 0)) - board_topics_before)
+            if board_delta > 0:
+                _mark_vk_surface_comments_available(surface, wall_comments=0, board_comments=board_delta)
+                VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
+            elif topic_delta > 0:
+                _mark_vk_surface_no_comments(surface)
+                VK_SCAN_STATS["surfaces_rejected_no_comments"] += 1
+            else:
+                _mark_vk_surface_inaccessible(surface, reason="VK wall and discussion board are not readable with configured tokens")
+                VK_SCAN_STATS["surfaces_rejected_inaccessible"] += 1
             continue
         _human_pause_sync(multiplier=0.6)
         for post in wall.get("items") or []:
@@ -1396,7 +1467,21 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             opportunities=opportunities,
             deadline=deadline,
         ):
+            _mark_vk_surface_comments_available(
+                surface,
+                wall_comments=max(0, int(VK_SCAN_STATS.get("comments_seen", 0)) - wall_comments_before),
+                board_comments=max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before),
+            )
+            VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
             return list(surfaces.values()), opportunities, diagnostics
+        wall_delta = max(0, int(VK_SCAN_STATS.get("comments_seen", 0)) - wall_comments_before)
+        board_delta = max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before)
+        if wall_delta > 0 or board_delta > 0:
+            _mark_vk_surface_comments_available(surface, wall_comments=wall_delta, board_comments=board_delta)
+            VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
+        else:
+            _mark_vk_surface_no_comments(surface)
+            VK_SCAN_STATS["surfaces_rejected_no_comments"] += 1
     return list(surfaces.values()), opportunities, diagnostics
 
 def _load_status_loader():
@@ -1897,7 +1982,7 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             seed = {**_seed_surface(normalized, platform="vk"), "status": "candidate"}
             surfaces_by_external[seed["external_id"]] = seed
             continue
-        seed = {**_seed_surface(normalized, platform="vk"), "status": "approved"}
+        seed = {**_seed_surface(normalized, platform="vk"), "status": "candidate", "source": "allowlist"}
         surfaces_by_external[seed["external_id"]] = seed
     for scanned in scanned_surfaces or []:
         if scanned.get("external_id"):

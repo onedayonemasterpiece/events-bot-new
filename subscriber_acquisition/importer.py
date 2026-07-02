@@ -126,6 +126,8 @@ def _should_apply_runtime_status(existing: AcqSurface, incoming_status: str, *, 
         return True
     if status == "resolved_has_linked_discussion":
         return current not in {"approved", "rejected", "paused"}
+    if status == "comments_available":
+        return current not in {"rejected", "paused"}
     if status == "needs_comment_resolve":
         return scanned_this_run and current not in {"approved", "rejected", "paused"}
     if status == "candidate":

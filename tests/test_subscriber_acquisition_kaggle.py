@@ -381,6 +381,85 @@ def test_vk_allowlist_without_token_is_safe_seed_only(monkeypatch):
     assert diagnostics and "token is not configured" in diagnostics[0]
 
 
+def test_vk_scan_marks_comments_available_surface(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", "1")
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", "2")
+
+    def fake_vk(method, *, token_lanes, params):
+        if method == "wall.get":
+            return {"items": [{"owner_id": -123, "id": 5, "text": "Отчёт", "comments": {"count": 1}}]}, "TEST_TOKEN"
+        if method == "wall.getComments":
+            return {"items": [{"id": 9, "date": 1782900000, "text": "Спасибо"}]}, "TEST_TOKEN"
+        if method == "board.getTopics":
+            return {"items": []}, "TEST_TOKEN"
+        raise AssertionError(method)
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+
+    surfaces, opportunities, diagnostics = runtime.scan_vk_shadow_surfaces(
+        ["https://vk.com/club123"],
+        ["https://vk.com/club123"],
+    )
+
+    assert opportunities == []
+    assert diagnostics[0] == "vk club123: wall.get ok via TEST_TOKEN"
+    assert surfaces[0]["status"] == "comments_available"
+    assert surfaces[0]["scan_state"] == "comments_available"
+    assert surfaces[0]["reach"]["wall_comments_seen"] == 1
+    assert surfaces[0]["risk"]["reply_policy"] == "candidate_comment_surface"
+
+
+def test_vk_scan_marks_inaccessible_surface(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+
+    def fake_vk(method, *, token_lanes, params):
+        raise RuntimeError(f"{method} access denied")
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+
+    surfaces, opportunities, diagnostics = runtime.scan_vk_shadow_surfaces(
+        ["https://vk.com/club123"],
+        ["https://vk.com/club123"],
+    )
+
+    assert opportunities == []
+    assert any("wall.get failed" in item for item in diagnostics)
+    assert surfaces[0]["status"] == "rejected_inaccessible"
+    assert surfaces[0]["scan_state"] == "checked_inaccessible"
+    assert surfaces[0]["risk"]["reply_policy"] == "no_reply_surface"
+
+
+def test_vk_scan_marks_no_comments_surface(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", "1")
+
+    def fake_vk(method, *, token_lanes, params):
+        if method == "wall.get":
+            return {"items": [{"owner_id": -123, "id": 5, "text": "Пост", "comments": {"count": 0}}]}, "TEST_TOKEN"
+        if method == "board.getTopics":
+            return {"items": []}, "TEST_TOKEN"
+        raise AssertionError(method)
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+
+    surfaces, opportunities, diagnostics = runtime.scan_vk_shadow_surfaces(
+        ["https://vk.com/club123"],
+        ["https://vk.com/club123"],
+    )
+
+    assert opportunities == []
+    assert surfaces[0]["status"] == "rejected_no_comments"
+    assert surfaces[0]["scan_state"] == "checked_no_public_comments_or_boards"
+    assert surfaces[0]["risk"]["reply_policy"] == "no_reply_surface"
+
+
 
 def test_vk_token_lanes_prefer_monitoring_token_without_leaking_values(monkeypatch):
     runtime = load_runtime()

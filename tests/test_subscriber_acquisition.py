@@ -199,6 +199,42 @@ async def test_import_seed_placeholder_does_not_overwrite_linked_discussion_meta
 
 
 @pytest.mark.asyncio
+async def test_import_updates_vk_auto_approved_to_comments_available(db, sample_payload):
+    first = json.loads(json.dumps(sample_payload))
+    first["surfaces"] = [
+        {
+            "platform": "vk",
+            "surface_type": "community",
+            "url": "https://vk.com/club123",
+            "handle": "club123",
+            "external_id": "vk:club123",
+            "status": "approved",
+            "source": "allowlist",
+            "reach": {"basis": "seed_only"},
+            "risk": {},
+        }
+    ]
+    first["opportunities"] = []
+    await import_discovery_result(db, first)
+
+    second = json.loads(json.dumps(first))
+    second["run_id"] = "vk-comments-available"
+    second["surfaces"][0]["status"] = "comments_available"
+    second["surfaces"][0]["scan_state"] = "comments_available"
+    second["surfaces"][0]["reach"] = {"basis": "vk_comments_or_boards", "wall_comments_seen": 1, "board_comments_seen": 0}
+    second["surfaces"][0]["risk"] = {"reply_policy": "candidate_comment_surface", "reason": "comments found"}
+    await import_discovery_result(db, second)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "vk:club123"))).scalar_one()
+
+    assert surface.status == "comments_available"
+    assert surface.last_scan_at is not None
+    assert surface.reach_json["basis"] == "vk_comments_or_boards"
+    assert surface.risk_json["reply_policy"] == "candidate_comment_surface"
+
+
+@pytest.mark.asyncio
 async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sample_payload):
     first = json.loads(json.dumps(sample_payload))
     first["surfaces"][0]["external_id"] = "tg:visitNavahrudak"
