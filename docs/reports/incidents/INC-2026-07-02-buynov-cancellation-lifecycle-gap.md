@@ -1,10 +1,10 @@
 # INC-2026-07-02-buynov-cancellation-lifecycle-gap Buynov cancellation did not change event lifecycle
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: events-bot Smart Update / VK auto-import / public event fanout
 Opened: 2026-07-02
-Closed: —
+Closed: 2026-07-02
 Owners: events-bot
 Related incidents: `INC-2026-05-07-vk-time-reschedule-wrong-match`, `INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement`
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/event-email-notifications/README.md`, `docs/llm/prompts.md`
@@ -30,7 +30,9 @@ Cancellation information for event `5988` (Александр Буйнов, 2026
 - 2026-07-02 — user reported cancellation requirements and later clarified that transactional email must use Yandex Cloud Postbox serverless with queue statistics.
 - 2026-07-02 — production SQL showed event `5988` active, cancellation poster already primary, and source fact `Статус события: отменено` present.
 - 2026-07-02 — VK API confirmed our managed post `https://vk.com/wall-231920894_5432` exists and the external source cancellation post is `https://vk.com/wall-100137391_165125`.
-- 2026-07-02 — root fix prepared: LLM-first lifecycle field in event parsing and Smart Update merge, public fanout edits for existing non-active posts, controlled `target_post_url` replay.
+- 2026-07-02 — root fix prepared and deployed: LLM-first lifecycle field in event parsing and Smart Update merge, public fanout edits for existing non-active posts, controlled `target_post_url` replay.
+- 2026-07-02 07:13–07:16 UTC — exact source replay `https://vk.com/wall-100137391_165125` processed `vk_inbox.id=9546`: `processed=1 imported=1 updated=[5988] errors=[]`; event became `lifecycle_status=cancelled`.
+- 2026-07-02 07:16–07:23 UTC — public surfaces repaired: Telegraph and managed VK jobs completed; Telegram event post edited through the standard event publisher job function and job marked done after successful edit.
 
 ## Root Cause
 
@@ -109,10 +111,16 @@ Cancellation information for event `5988` (Александр Буйнов, 2026
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: Fly app `events-bot-new-wngqia`
-- regression checks: pending final run/deploy evidence
-- post-deploy verification: pending production replay and public smoke
+- deployed SHA: `d9dda1ac`
+- deploy path: Fly app `events-bot-new-wngqia`, remote-only deploy; machine health reached good state.
+- regression checks: `python3 -m py_compile main.py main_part2.py smart_event_update.py vk_auto_queue.py vk_intake.py`; targeted pytest commands passed (`27 passed`, then `3 passed` after vk_sync requeue fix; uv process needed manual Ctrl-C after pytest due known thread shutdown hang).
+- production replay: `vk_auto_queue.run_vk_auto_import(..., target_post_url="https://vk.com/wall-100137391_165125")` returned `processed=1 imported=1 rejected=0 failed=0 deferred=0 updated=[5988] errors=[]`; backup tables suffix `20260702_071322`.
+- post-deploy verification:
+  - DB: event `5988` title `Александр Буйнов: Лучшие песни`, `lifecycle_status=cancelled`, `source_vk_post_url=https://vk.com/wall-231920894_5432`.
+  - Telegraph: `https://telegra.ph/Aleksandr-Bujnov-Luchshie-pesni-06-13` title starts `❌ ОТМЕНЕНО:` and page contains `❌ Отменено`.
+  - VK: `https://vk.com/wall-231920894_5432` edited in place; text starts `Александр Буйнов: Лучшие песни` + `❌ Отменено`.
+  - Telegram: `https://t.me/kldevents/473` embed contains `🎤 Александр Буйнов: Лучшие песни`, `❌ Отменено`, and the cancellation note.
+  - Jobs: `telegraph_build`, `vk_sync`, `tg_event_publish` all `done`; `/healthz` ready/ok.
 
 ## Prevention
 
