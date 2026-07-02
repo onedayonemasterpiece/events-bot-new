@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+
 ### Added
 
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
@@ -36,6 +37,50 @@
 
 ### Fixed
 
+- **Incident / kldevents/1778 VK OCR location-time regression (INC-2026-07-02)**:
+  VK parsing now keeps compact poster OCR logistics under long-caption token
+  budgets, and Smart Update location reference matching no longer fuzzy-binds
+  generic `Городской парк, Пионерский` to the Зеленоградск culture center.
+- Smart Update now has explicit date provenance helpers and a conservative date-update policy, plus poster merge dedup by poster hash, Supabase path, phash, and exact URL fallback to avoid duplicate stored posters.
+- Added an exporter-side static-site public projection gate so preview/control
+  event ids cannot publish non-canonical, merged, review/quarantine/rejected,
+  invalid-date, or prompt/code/prose-leaked event rows.
+- Promoted the visual guide digest to its final scheduled production flow: a
+  separate morning one-card Telegram+VK digest, Telegram title-links without
+  vk.cc, VK wall postponed by 10 minutes, dynamic city/location hashtags, and a
+  follow-up VK Story due after the wall post is live.
+- Visual guide digest production selection now starts from tomorrow in the
+  guide timezone, so same-day excursions no longer enter the daily card; the
+  issue badge was rebalanced with centered number-only typography and cleaner
+  padding.
+- Tuned the visual guide digest header: the issue badge is now smaller and
+  number-only (without `№`), while the main `Дайджест экскурсий` heading is
+  slightly larger for faster VK preview scanning.
+- Restored the visual guide digest brand lockup from the accepted v18 SVG as a
+  committed PNG asset, so `Ух ты, Калининград!` no longer drifts in italic
+  direction, stroke weight or letter proportions between renders.
+- Refined the production visual guide digest after VK mobile review: restored a
+  safer slanted/glowing `Ух ты, Калининград!` lockup with carousel-counter
+  clearance, enlarged guide avatars, raised date numerals inside calendar tiles,
+  and resolved `@progulki_s_katey` rows to `Катя Костюгова` with a channel
+  avatar.
+- Visual guide digest repeat selection now stores a per-card fact snapshot and
+  republishes already-covered excursions only for serious viewer-facing changes
+  (date/time/status/title/place/meeting/booking/price, last call, or low seats),
+  not for ordinary `updated_at` churn.
+- VK user-token actor resolution now honors the existing `VK_ACCESS_TOKEN4`
+  fallback for helper API calls such as `utils.getShortLink`, so visual guide
+  digest links can be shortened without requiring a duplicate `VK_USER_TOKEN` env.
+- Fixed visual guide digest card regressions found during review: restored the
+  right-aligned brand lockup, kept weekday/time labels inside date tiles,
+  removed technical `1–5 из 15` carousel ranges, eliminated month-bar corner
+  artifacts, and increased excursion title readability.
+- **Incident / kraftmarket317 poster-only zero-events (INC-2026-06-30)**:
+  TelegramMonitor now routes empty-caption poster-only posts through OCR-backed
+  LLM extraction instead of returning `events=[]`; Telegram import now preserves
+  OCR-only source text, converts phone-only booking contacts to `tel:+...`, and
+  `Музей «Восток на Западе»` is now a standard venue with aliases.
+- Routed campaign/discount/action candidates through LLM eventness review, rejected short prose/program/reminder fragments as event locations, and added durable daily-announcement scheduler claims to prevent same-day duplicate daily posts after releases/restarts.
 - **Static smart search latency SLA**: kept Gemini Lite verification enabled on public `/poisk/`, but bounded the synchronous path to `limit=8` / `candidate_window=10`, compact facts, no-recursion `10→5→3` shrink retries, a 4.3s Lite budget and no Gemma overflow in the browser request; vector cards still render first if the verifier tail is slow.
 - **Static smart search query embedding cache**: added a service-role Supabase cache keyed by salted query hash + embedding model/dim so repeated authorized `/poisk/` queries can skip the Google embedding call and expose `embedding_cache_status` in profiling metadata.
 - **Static smart search vector-first rendering**: switched authorized search back to NDJSON streaming and now renders real pgvector cards as soon as the vector stage completes, while the LLM verifier continues and later replaces them with the final checked list.
