@@ -1272,9 +1272,6 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
     seen_contexts = _seen_context_urls()
-    known_terminal_tg = _known_terminal_tg_handles()
-    known_terminal_tg_skipped: set[str] = set()
-    tg_seed_meta = _tg_seed_metadata()
     opportunity_keys: set[str] = set()
     deadline = _deadline_after_seconds()
     for raw_url in seed_urls[:max_surfaces]:
@@ -1549,6 +1546,9 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
     seen_contexts = _seen_context_urls()
+    known_terminal_tg = _known_terminal_tg_handles()
+    known_terminal_tg_skipped: set[str] = set()
+    tg_seed_meta = _tg_seed_metadata()
     opportunity_keys: set[str] = set()
     queue: list[str] = []
     queued: set[str] = set()

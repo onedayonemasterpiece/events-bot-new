@@ -756,6 +756,15 @@ def test_tg_seed_metadata_env_parser(monkeypatch):
     assert runtime._metadata_for_tg_seed("https://t.me/c/1481648829", "1481648829", meta)["external_id"] == "tg:1481648829"
 
 
+def test_tg_seed_metadata_is_initialized_inside_telegram_scan():
+    source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
+    telegram_body = source.split("async def scan_telegram_shadow_surfaces", 1)[1].split("def _seen_context_urls", 1)[0]
+    vk_body = source.split("def scan_vk_shadow_surfaces", 1)[1].split("def _load_status_loader", 1)[0]
+
+    assert "tg_seed_meta = _tg_seed_metadata()" in telegram_body
+    assert "tg_seed_meta = _tg_seed_metadata()" not in vk_body
+
+
 def test_kaggle_dataset_slug_stays_within_current_api_limit():
     from subscriber_acquisition.kaggle_runner import (
         CONFIG_DATASET_CIPHER,
