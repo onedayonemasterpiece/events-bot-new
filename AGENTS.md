@@ -141,3 +141,32 @@
 
 - Один факт/инструкция — один “канонический” документ.
 - Старые пути допускаются только как **короткие redirect-stub файлы** без повторения контента (“Актуально тут: …”).
+
+## Complex multi-point feature work
+
+When a user provides 5+ distinct requirements, asks for parallel agents/subagents/background agents, or gives a broad feature with many unrelated edits, use `$feature-fanout`.
+
+Do not implement the entire list linearly in one long pass.
+
+Required sequence:
+
+1. Preserve every original requirement as a stable ID.
+2. Create an execution matrix before edits.
+3. Create a lane map with dependencies, writable files, forbidden files, verification owner, branch, and worktree.
+4. Use read-only parallel agents for exploration/review whenever useful.
+5. Use writable parallel workers only for disjoint scopes or separate branch/worktree lanes.
+6. Serialize final integration in one integration branch.
+7. Do not leave abandoned dirty worker worktrees.
+8. A worker lane is complete only when committed, merged/rejected by the integrator, or blocked with a patch artifact.
+9. Dirty current worktree is not a reason to do nothing. Preserve it, avoid touching dirty files, and continue in isolated worktrees when safe.
+10. Final response must include a requirement closure table: Done / Partial / Missing / Blocked / Superseded, with evidence.
+
+### Branch and worktree discipline
+
+- One writable worker lane = one branch + one worktree + one owner.
+- Worker branches use `agent/<feature>/<lane-id>`.
+- Integration branches use `integration/<feature>`.
+- The integrator is the only owner of final merge/cherry-pick.
+- Do not run `git reset --hard`, `git clean -fd`, `git checkout -- .`, or destructive stash/reset operations on user changes without explicit permission.
+- Do not use bare `git push --force`; use `--force-with-lease` only when explicitly approved.
+- Do not delete worker branches/worktrees until their lane is recorded as merged, rejected, blocked, or superseded.
