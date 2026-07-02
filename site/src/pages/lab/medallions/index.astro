@@ -8,6 +8,7 @@ const title = `Лаборатория медальонов | ${SITE_NAME}`;
 const description = 'Визуальная проверка медальонов организаторов и быстрых признаков событий для статических страниц KenigEvents.';
 const organizers = (medallionData as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; fallbackPngUrl?: string; ariaLabel?: string; renderNote?: string; background?: string; ring?: string; sourcePage?: string }> }).items;
 const webpSource = (url: string) => url.endsWith('.webp');
+const primaryImageSrc = (avatarUrl: string, fallbackPngUrl?: string) => avatarUrl.endsWith('.webp') ? (fallbackPngUrl || avatarUrl) : avatarUrl;
 const sourceTokens = [
   {
     slug: 'meow-afisha',
@@ -22,7 +23,7 @@ const pushkin = {
   slug: 'pushkin-card',
   name: 'Пушкинская карта',
   shortName: 'Пушкинская карта',
-  avatarUrl: '/assets/badges/pushkin-card-medallion.png',
+  avatarUrl: '/assets/badges/pushkin-card-medallion.webp',
   fallbackPngUrl: '/assets/badges/pushkin-card-medallion.png',
   ariaLabel: 'Можно оплатить Пушкинской картой',
   renderNote: 'Единый композитный PNG из исходников: бюст внутри круглого медальона, исходная надпись «Пушкинская карта» наложена поверх круга и выступает вправо.',
@@ -53,7 +54,7 @@ const pushkin = {
                 <span class="event-token__circle" aria-hidden="true">
                   <picture>
                     {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
-                    <img src={withBase(item.fallbackPngUrl || item.avatarUrl)} alt="" loading="lazy" decoding="async" />
+                    <img src={withBase(primaryImageSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
                   </picture>
                 </span>
               </li>
@@ -73,7 +74,10 @@ const pushkin = {
           <ul class="event-token-row" role="list">
             <li class="event-token event-token--pushkin" aria-label={pushkin.ariaLabel} title={pushkin.name}>
               <span class="event-token__pushkin-frame" aria-hidden="true">
-                <img class="event-token__pushkin-composite" src={withBase(pushkin.avatarUrl)} alt="" loading="lazy" decoding="async" />
+                <picture>
+                  <source srcset={withBase(pushkin.avatarUrl)} type="image/webp" />
+                  <img class="event-token__pushkin-composite" src={withBase(pushkin.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
+                </picture>
               </span>
             </li>
           </ul>

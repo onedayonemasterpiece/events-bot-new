@@ -1,7 +1,7 @@
 {
   "schemaVersion": "organizer_medallion_assets_v1",
-  "generatedAt": "2026-06-29T00:00:00Z",
-  "usage": "Event-detail organizer medallions. Use avatarUrl in the organizer token; fallbackPngUrl is for older clients or QA.",
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
   "items": [
     {
       "slug": "world-ocean-museum",
@@ -23,11 +23,12 @@
         114
       ],
       "ariaLabel": "Организатор: Музей Мирового океана",
-      "renderNote": "Из официального мобильного SVG-логотипа использован крупный знак ММО без мелкой подписи, чтобы медальон читался на 44–56 px.",
-      "avatarUrl": "/assets/organizers/world-ocean-museum.webp",
+      "renderNote": "Runtime asset переведён в SVG-примитивы по официальному мобильному SVG-логотипу; PNG/WebP сохранены только как QA/fallback.",
+      "avatarUrl": "/assets/organizers/world-ocean-museum.svg",
       "fallbackPngUrl": "/assets/organizers/world-ocean-museum.png",
       "sourcePath": "site/src/assets/organizers/source/world-ocean-museum.logo_new_mobile_v2.svg",
-      "retrievedAt": "2026-06-29"
+      "retrievedAt": "2026-06-29",
+      "assetFormat": "svg"
     },
     {
       "slug": "history-art-museum",
@@ -49,11 +50,12 @@
         142
       ],
       "ariaLabel": "Организатор: Историко-художественный музей",
-      "renderNote": "Из официального белого PNG-логотипа использована левая часть со зданием и подписью КОИХМ; тёмный круг нужен для контраста.",
-      "avatarUrl": "/assets/organizers/history-art-museum.webp",
+      "renderNote": "SVG-исходник не найден; runtime SVG получен локальной векторизацией геометричного белого KOIHM-знака из текущего source-faithful PNG-медальона; PNG/WebP сохранены как fallback.",
+      "avatarUrl": "/assets/organizers/history-art-museum.svg",
       "fallbackPngUrl": "/assets/organizers/history-art-museum.png",
       "sourcePath": "site/src/assets/organizers/source/history-art-museum.logo_koihm_white.png",
-      "retrievedAt": "2026-06-29"
+      "retrievedAt": "2026-06-29",
+      "assetFormat": "svg"
     },
     {
       "slug": "kaliningrad-philharmonic",
@@ -75,13 +77,14 @@
         154
       ],
       "ariaLabel": "Организатор: Калининградская филармония",
-      "renderNote": "Официальный чёрный SVG-знак вписан в жёлтый круг #FAB534, как в текущем аватаре Telegram-канала филармонии; знак не перерисовывался.",
-      "avatarUrl": "/assets/organizers/kaliningrad-philharmonic.webp",
+      "renderNote": "Runtime asset теперь SVG, использует официальный чёрный SVG-знак без растрирования на жёлтом фоне #FAB534; PNG/WebP сохранены как fallback.",
+      "avatarUrl": "/assets/organizers/kaliningrad-philharmonic.svg",
       "fallbackPngUrl": "/assets/organizers/kaliningrad-philharmonic.png",
       "sourcePath": "site/src/assets/organizers/source/kaliningrad-philharmonic.logo_black.svg",
       "retrievedAt": "2026-06-29",
       "brandBackgroundSource": "https://t.me/filarmonia_39",
-      "backgroundEvidence": "Telegram profile OG image uses yellow harp background; dominant sampled color #FAB534 on 2026-06-29."
+      "backgroundEvidence": "Telegram profile OG image uses yellow harp background; dominant sampled color #FAB534 on 2026-06-29.",
+      "assetFormat": "svg"
     },
     {
       "slug": "kant-island",
@@ -103,11 +106,12 @@
         454
       ],
       "ariaLabel": "Организатор: Остров Канта",
-      "renderNote": "Из официального SVG-логотипа взят знак Кафедрального собора; для mobile-медальона знак увеличен, чтобы собор читался заметно лучше.",
-      "avatarUrl": "/assets/organizers/kant-island.webp",
+      "renderNote": "Runtime asset теперь SVG: из официального sobor39 SVG взят path знака Кафедрального собора и увеличен внутри круга без растрирования; PNG/WebP сохранены как fallback.",
+      "avatarUrl": "/assets/organizers/kant-island.svg",
       "fallbackPngUrl": "/assets/organizers/kant-island.png",
       "sourcePath": "site/src/assets/organizers/source/kant-island.sobor-logo.svg",
-      "retrievedAt": "2026-06-29"
+      "retrievedAt": "2026-06-29",
+      "assetFormat": "svg"
     },
     {
       "slug": "dom-kitoboya",
@@ -129,13 +133,14 @@
         640
       ],
       "ariaLabel": "Локация: Дом китобоя",
-      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA.",
-      "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.png",
+      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA. SVG-исходник на сайте не найден (проверены публичные logo.svg-кандидаты); медальон оставлен в исходном WebP виде с PNG fallback по design contract.",
+      "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.webp",
       "fallbackPngUrl": "/assets/organizers/dom-kitoboya-stacked.png",
       "sourcePath": "site/src/assets/organizers/source/dom-kitoboya.logo.webp",
       "retrievedAt": "2026-07-01",
       "brandBackgroundSource": "https://t.me/domkitoboya",
-      "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette."
+      "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette.",
+      "assetFormat": "webp-source-only"
     },
     {
       "slug": "tretyakovka-kaliningrad",
@@ -159,13 +164,14 @@
         512
       ],
       "ariaLabel": "Локация: филиал Третьяковской галереи",
-      "renderNote": "Медальон использует публичный Telegram-аватар @tretyakovka_kaliningrad: золотой знак «Т» на светлом фоне, без дополнительных подписей, вписан в круг без перерисовки.",
-      "avatarUrl": "/assets/organizers/tretyakovka-kaliningrad.webp",
+      "renderNote": "Runtime asset переведён в SVG-примитивы по простому геометричному T-знаку из публичного Telegram-аватара; PNG/WebP сохранены как fallback.",
+      "avatarUrl": "/assets/organizers/tretyakovka-kaliningrad.svg",
       "fallbackPngUrl": "/assets/organizers/tretyakovka-kaliningrad.png",
       "sourcePath": "site/src/assets/organizers/source/tretyakovka-kaliningrad.telegram-avatar-20260701.jpg",
       "retrievedAt": "2026-07-01",
       "brandBackgroundSource": "https://t.me/tretyakovka_kaliningrad",
-      "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01."
+      "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01.",
+      "assetFormat": "svg"
     },
     {
       "slug": "konb",
@@ -188,11 +194,103 @@
         512
       ],
       "ariaLabel": "Локация: Калининградская областная научная библиотека",
-      "renderNote": "Из исходного логотипа удалена правая текстовая часть «Калининградская областная научная библиотека»; в медальоне оставлены только рисунок здания и надпись «КОНБ» сверху.",
+      "renderNote": "Из исходного логотипа удалена правая текстовая часть «Калининградская областная научная библиотека»; в медальоне оставлены только рисунок здания и надпись «КОНБ» сверху. Оставлен raster exception: КОНБ не переводится в SVG в текущей задаче.",
       "avatarUrl": "/assets/organizers/konb.webp",
       "fallbackPngUrl": "/assets/organizers/konb.png",
       "sourcePath": "site/src/assets/organizers/source/konb.logo.png",
-      "retrievedAt": "2026-07-01"
+      "retrievedAt": "2026-07-01",
+      "assetFormat": "webp-raster-exception"
+    },
+    {
+      "slug": "act-opus",
+      "name": "Театр «Акт Опус»",
+      "shortName": "Акт Опус",
+      "aliases": [
+        "Театр Акт Опус",
+        "Акт Опус",
+        "Актопус",
+        "Act Opus",
+        "ActOpus",
+        "actop.us",
+        "actopustheatre"
+      ],
+      "sourcePage": "https://actop.us/plays",
+      "sourceUrl": "https://actop.us/plays (Next image /_next/static/media/logo_new_black.3136802c.png and actopus_logo_old_white 1.4f7d262e.png)",
+      "sourceFile": "act-opus.old-white.png",
+      "background": "#F6EFE5",
+      "ring": "#111111",
+      "logoCrop": "official-octopus-symbol-from-site-header",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Организатор: театр «Акт Опус»",
+      "renderNote": "Официальный сайт отдаёт PNG-логотипы через Next image; публичный runtime asset сделан WebP-first с PNG fallback, без SVG-исходника и без OpenAI image generation.",
+      "avatarUrl": "/assets/organizers/act-opus.webp",
+      "fallbackPngUrl": "/assets/organizers/act-opus.png",
+      "sourcePath": "site/src/assets/organizers/source/act-opus.old-white.png",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "znanie-russia",
+      "name": "Российское общество «Знание»",
+      "shortName": "Знание",
+      "aliases": [
+        "Российское общество Знание",
+        "Российское общество «Знание»",
+        "Общество Знание",
+        "Знание Лекторий",
+        "Знание.Лекторий",
+        "znanierussia.ru",
+        "znanie russia"
+      ],
+      "sourcePage": "/home/dev/projects/kdg80/site/public/shared-assets/",
+      "sourceUrl": "KGD80 shared assets: logo-znanie-festival.svg + logo-znanie-main.svg",
+      "sourceFile": "znanie.logo-znanie-festival.svg",
+      "background": "#F3F0EC",
+      "ring": "#76706A",
+      "logoCrop": "left-z-symbol-from-kgd80-znanie-festival-logo",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Организатор или партнёр: Российское общество «Знание»",
+      "renderNote": "Runtime SVG берёт серый знак «З» из локальных kgd80 shared-assets; PNG/WebP сохранены только как fallback/QA. Детекция дополнительно ловит контекстные упоминания, где Знание явно названо организатором/партнёром.",
+      "avatarUrl": "/assets/organizers/znanie-russia.svg",
+      "fallbackPngUrl": "/assets/organizers/znanie-russia.png",
+      "sourcePath": "site/src/assets/organizers/source/znanie.logo-znanie-festival.svg",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "svg"
+    },
+    {
+      "slug": "kantata-festival",
+      "name": "Фестиваль «Кантата»",
+      "shortName": "Кантата",
+      "aliases": [
+        "Фестиваль Кантата",
+        "фестиваль «Кантата»",
+        "Кантатафест",
+        "kantatafest.ru",
+        "festkantata"
+      ],
+      "sourcePage": "https://kantatafest.ru/obrazovatelnaya-programma",
+      "sourceUrl": "https://static.tildacdn.com/tild6532-3334-4662-b835-383932633238/Kantata_logo_Black_R.png (captured in prior static-site asset lane)",
+      "sourceFile": "kantata-education.Kantata_logo_Black_R.png",
+      "background": "#F8F4EE",
+      "ring": "#251A13",
+      "logoCrop": "official-wordmark-kantata",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Фестиваль: Кантата",
+      "renderNote": "По фестивалю используется начертание слова «КАНТАТА». Официальный доступный source — PNG, поэтому runtime medallion WebP-first с PNG fallback.",
+      "avatarUrl": "/assets/organizers/kantata-festival.webp",
+      "fallbackPngUrl": "/assets/organizers/kantata-festival.png",
+      "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "webp-source-only"
     }
   ]
 }

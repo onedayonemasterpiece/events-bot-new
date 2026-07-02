@@ -15,6 +15,8 @@
 
 ### Changed
 
+- **Static site / information partners grid**: merged the medallion SVG upgrade branch so `/partners/` renders real SVG/WebP partner logos in an aspect-aware dense grid; kept SVG-first/WebP-if-raster rules documented for partner and medallion assets.
+- **Static site pages / organizer medallion SVG pass**: switched the starter organizer medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония, Остров Канта and Третьяковка to SVG runtime assets, while keeping documented WebP raster exceptions where no reliable SVG source exists.
 - **Static site pages / fresh recovery preview**: rebuilt `preview-20260702t0755-fresh-ui-fixes` from the 2026-07-02 production snapshot with `376` active/future events through id `6585`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and stable CDN ICS files, and kept the KEY5 smart-search quota/auth env contract enabled in the static build.
 - **Static site pages / recovery preview refresh**: rebuilt and redeployed the recovered static-site + smart-search preview from the fresh 2026-07-01 production snapshot, increasing exported public events to `380`, including late events `6563`–`6565`, while keeping prompt-leak event `6518` out of static pages and search fixtures.
 - **Static site pages / full-preview export recovery**: restored the latest static export safety guards for source URL arrays/counts, truncated-description fallback, hero image dimension probing/quality rescue and JSON-LD paid-price extraction without rolling back the two-document pgvector/Gemma related-chain contract.

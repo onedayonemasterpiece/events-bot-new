@@ -1,131 +1,193 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import { INFO_PARTNERS } from '../../data/info-partners';
+import type { InfoPartner } from '../../data/info-partners';
 import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const title = `Информационные партнёры | ${SITE_NAME}`;
-const description = 'Информационные партнёры Полюбить Калининград Анонсы: официальные логотипы партнёрских организаций и программ.';
+const description = 'Список информационных партнёров Полюбить Калининград Анонсы: организации, институции и фестивальные программы.';
 const canonicalUrl = absoluteUrl('/partners/');
+const webpSource = (partner: InfoPartner) => Boolean(partner.logoUrl?.endsWith('.webp') && partner.logoFallbackUrl);
+const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.webp') ? (partner.logoFallbackUrl || partner.logoUrl) : partner.logoUrl;
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <main id="main" class="partners-page">
-    <div class="page-shell partners-shell">
+    <div class="page-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={withBase('/__preview/')}>Афиша</a>
         <span aria-hidden="true">/</span>
-        <span>Инфопартнёры</span>
+        <span>Информационные партнёры</span>
       </nav>
 
-      <section class="partners-hero" aria-labelledby="partners-title">
-        <p class="eyebrow">Информационные партнёры</p>
-        <h1 id="partners-title">Логотипы партнёров</h1>
-        <p class="lead">Организации и программы, которые помогают анонсам находить свою аудиторию.</p>
+      <section class="section-card partners-hero">
+        <div class="section-card__inner partners-hero__inner">
+          <p class="eyebrow">Информационные партнёры</p>
+          <h1>Организации и фестивали, с которыми мы делаем анонсы заметнее</h1>
+          <p class="lead">Эта страница собирает статус информационного партнёра в одном месте: логотипы ведут на сайты организаций, а ссылки помечены как внешние nofollow.</p>
+          <div class="source-links">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/poisk/')}>Поиск по афише</a>
+          </div>
+        </div>
       </section>
 
-      <section class="partners-logo-wall" aria-label="Логотипы информационных партнёров">
+      <section class="partners-grid" aria-label="Список информационных партнёров">
         {INFO_PARTNERS.map((partner) => (
-          <a
-            class:list={[
-              'partner-logo-link',
-              `partner-logo-link--${partner.logoTone || 'light'}`,
-              `partner-logo-link--${partner.logoScale || 'wide'}`,
-            ]}
-            style={`--partner-accent: ${partner.accent}`}
-            href={partner.href}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            aria-label={`${partner.name}: открыть сайт партнёра`}
-          >
-            <img src={withBase(partner.logoUrl)} alt={`${partner.shortName} — ${partner.name}`} loading="lazy" decoding="async" />
-          </a>
+          <article class={`partner-card partner-card--${partner.logoShape} partner-card--${partner.logoSurface || 'light'} ${partner.priority === 'primary' ? 'partner-card--primary' : ''}`} style={`--partner-accent: ${partner.accent}`}>
+            <a
+              class="partner-card__logo-link"
+              href={partner.href}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              aria-label={`${partner.name}: открыть сайт партнёра`}
+            >
+              <span class="partner-card__logo" aria-hidden="true">
+                {partner.logoUrl ? (
+                  <picture>
+                    {webpSource(partner) && <source srcset={withBase(partner.logoUrl)} type="image/webp" />}
+                    <img class="partner-card__logo-img" src={withBase(primaryLogoSrc(partner) || partner.logoUrl)} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                ) : (
+                  <span>{partner.logoText}</span>
+                )}
+              </span>
+            </a>
+            <div class="partner-card__body">
+              <p class="eyebrow">Инфопартнёр</p>
+              <h2>{partner.shortName}</h2>
+              <p>{partner.name}</p>
+              <p class="partner-card__description">{partner.description}</p>
+              <a
+                class="partner-card__site"
+                href={partner.href}
+                target="_blank"
+                rel="nofollow noopener noreferrer"
+              >
+                Сайт партнёра ↗
+              </a>
+            </div>
+          </article>
         ))}
       </section>
 
-      <p class="partners-note" data-nosnippet>
-        Логотипы ведут на официальные сайты партнёров. По вопросам информационного партнёрства: <a href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>.
-      </p>
+      <section class="section-card section-card--quiet partners-note" data-nosnippet>
+        <div class="section-card__inner">
+          <h2>Статус страницы</h2>
+          <p>Стартовый список партнёров задан вручную и использует локальные SVG/WebP-логотипы с исходниками в репозитории. Grid не нормализует все логотипы в один квадрат: длинные wordmark занимают широкие ячейки, вертикальные эмблемы — более компактные высокие ячейки, чтобы партнёров можно было быстро считать глазами.</p>
+        </div>
+      </section>
     </div>
   </main>
 </EventLayout>
 
 <style>
   .partners-page { padding-bottom: 6rem; }
-  .partners-shell { max-width: 980px; }
-  .partners-hero {
-    margin: clamp(1.4rem, 6vw, 4.2rem) auto clamp(1.4rem, 4vw, 2.4rem);
-    text-align: center;
-  }
-  .partners-hero h1 {
-    max-width: none;
-    margin: 0 auto;
-    font-size: clamp(2rem, 9vw, 5rem);
-    letter-spacing: -0.07em;
-  }
-  .partners-hero .lead {
-    max-width: 46rem;
-    margin-inline: auto;
-    color: var(--muted);
-  }
-  .partners-logo-wall {
+  .partners-hero { overflow: hidden; }
+  .partners-hero__inner {
+    position: relative;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: center;
-    gap: clamp(1rem, 4vw, 2.4rem);
-    margin: 0 auto;
+    gap: 0.75rem;
   }
-  .partner-logo-link {
-    min-height: clamp(128px, 22vw, 184px);
+  .partners-hero h1 { max-width: 18ch; }
+  .partners-grid {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 158px), 1fr));
+    grid-auto-flow: dense;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .partner-card {
+    --partner-logo-max-h: 116px;
+    --partner-logo-pad: 1.1rem;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    min-height: 100%;
+    border: 1px solid rgba(121, 48, 20, 0.13);
+    border-radius: var(--radius-xl);
+    background: rgba(255, 253, 248, 0.94);
+    box-shadow: var(--shadow);
+  }
+  .partner-card--wide { grid-column: span 2; }
+  .partner-card--tall { grid-row: span 2; }
+  .partner-card--primary.partner-card--wide { grid-column: span 2; }
+  .partner-card--compact { --partner-logo-max-h: 92px; }
+  .partner-card--tall { --partner-logo-max-h: 154px; }
+  .partner-card__logo-link {
+    display: grid;
+    min-height: 150px;
+    place-items: center;
+    padding: var(--partner-logo-pad);
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--partner-accent) 16%, transparent), transparent 62%),
+      linear-gradient(135deg, rgba(255,255,255,0.96), rgba(247,239,227,0.88));
+    text-decoration: none;
+  }
+  .partner-card--tall .partner-card__logo-link { min-height: 230px; }
+  .partner-card--dark .partner-card__logo-link {
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, #ffffff 20%, transparent), transparent 58%),
+      linear-gradient(135deg, color-mix(in srgb, var(--partner-accent) 92%, #111), color-mix(in srgb, var(--partner-accent) 74%, #3d0f0f));
+  }
+  .partner-card__logo {
+    width: 100%;
+    min-height: 96px;
     display: grid;
     place-items: center;
-    padding: clamp(1.1rem, 4vw, 2rem);
-    border: 1px solid rgba(121,48,20,0.08);
-    border-radius: clamp(24px, 5vw, 38px);
-    background: rgba(255,253,248,0.56);
-    text-decoration: none;
-    box-shadow: 0 14px 34px rgba(72,45,25,0.06);
-    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
-  }
-  .partner-logo-link:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--partner-accent) 34%, rgba(121,48,20,0.12));
-    background: rgba(255,253,248,0.92);
-    box-shadow: 0 18px 42px color-mix(in srgb, var(--partner-accent) 10%, rgba(72,45,25,0.08));
-  }
-  .partner-logo-link img {
-    width: min(100%, 250px);
-    max-height: 92px;
-    object-fit: contain;
-  }
-  .partner-logo-link--wide img { width: min(100%, 300px); }
-  .partner-logo-link--compact img { width: min(100%, 132px); max-height: 82px; }
-  .partner-logo-link--tall img { max-height: 114px; }
-  .partner-logo-link--brand {
-    background:
-      radial-gradient(circle at top left, color-mix(in srgb, var(--partner-accent) 20%, transparent), transparent 65%),
-      linear-gradient(135deg, color-mix(in srgb, var(--partner-accent) 84%, #42140f), color-mix(in srgb, var(--partner-accent) 58%, #15110f));
-    border-color: color-mix(in srgb, var(--partner-accent) 44%, rgba(255,255,255,0.2));
-  }
-  .partner-logo-link--brand:hover {
-    background:
-      radial-gradient(circle at top left, rgba(255,255,255,0.22), transparent 64%),
-      linear-gradient(135deg, color-mix(in srgb, var(--partner-accent) 88%, #42140f), color-mix(in srgb, var(--partner-accent) 62%, #15110f));
-  }
-  .partners-note {
-    max-width: 38rem;
-    margin: clamp(1.5rem, 5vw, 2.6rem) auto 0;
-    color: var(--muted);
-    font-size: 0.92rem;
-    line-height: 1.55;
+    padding: 0.9rem;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.78);
+    color: var(--partner-accent);
+    box-shadow: 0 18px 38px color-mix(in srgb, var(--partner-accent) 10%, transparent);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    font-size: clamp(1.75rem, 7vw, 3.2rem);
+    line-height: 1;
     text-align: center;
   }
-  .partners-note a { color: var(--primary-strong); font-weight: 780; }
-  @media (max-width: 640px) {
-    .partners-shell { width: min(100% - 24px, 980px); }
-    .partners-logo-wall { grid-template-columns: 1fr; }
-    .partner-logo-link { min-height: 124px; }
+  .partner-card--dark .partner-card__logo { background: transparent; box-shadow: none; }
+  .partner-card__logo picture {
+    width: 100%;
+    display: grid;
+    place-items: center;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .partner-logo-link { transition: none; }
-    .partner-logo-link:hover { transform: none; }
+  .partner-card__logo-img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: var(--partner-logo-max-h);
+    object-fit: contain;
+  }
+  .partner-card--wide .partner-card__logo-img { max-width: min(100%, 360px); }
+  .partner-card--tall .partner-card__logo-img { max-width: min(100%, 210px); }
+  .partner-card--compact .partner-card__logo-img { max-width: min(100%, 190px); }
+  .partner-card__body {
+    display: grid;
+    align-content: start;
+    gap: 0.48rem;
+    padding: clamp(1rem, 3vw, 1.25rem);
+  }
+  .partner-card__body h2 { margin: 0; font-size: clamp(1.35rem, 4vw, 1.9rem); }
+  .partner-card__body p { margin: 0; }
+  .partner-card__description { color: var(--muted); }
+  .partner-card__site {
+    min-height: 40px;
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    margin-top: 0.35rem;
+    color: var(--primary-strong);
+    font-weight: 800;
+  }
+  .partners-note { margin-top: 1rem; }
+  .partners-note h2 { margin-top: 0; }
+  .partners-note p { margin-bottom: 0; color: var(--muted); }
+  @media (max-width: 620px) {
+    .partners-grid { grid-template-columns: 1fr; }
+    .partner-card,
+    .partner-card--wide,
+    .partner-card--tall { grid-column: auto; grid-row: auto; }
+    .partner-card--tall .partner-card__logo-link { min-height: 170px; }
   }
 </style>
