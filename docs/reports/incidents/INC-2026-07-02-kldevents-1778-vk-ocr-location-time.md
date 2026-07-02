@@ -127,8 +127,8 @@ The same source created sibling event `6609` for 2026-07-19 with the same wrong 
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending prevention deploy
-- deploy path: pending prevention deploy
+- deployed SHA: `deb3cb9a779ca5b444e4be02609febc1bc334ed0` (reachable from `origin/main`)
+- deploy path: clean incident worktree `/home/dev/projects/events-bot-new-worktrees/inc-kldevents-1778`, branch `hotfix/inc-kldevents-1778-vk-ocr-location`, manual `flyctl deploy --remote-only --app events-bot-new-wngqia`
 - regression checks:
   - `pytest -q tests/test_smart_event_update_location_aliases.py tests/test_known_venue_alias_overwrite.py tests/test_vk_intake_poster_budget.py` → 20 passed;
   - `python -m py_compile location_reference.py vk_intake.py smart_event_update.py main.py main_part2.py`;
@@ -138,7 +138,11 @@ The same source created sibling event `6609` for 2026-07-19 with the same wrong 
   - Telegram `https://t.me/kldevents/1778` shows corrected date/time/location;
   - VK postponed queue contains only corrected `5608` and `5610` for this title/source and no wrong Зеленоградск copies;
   - Telegraph pages show `Городской парк, Пионерский` and no `Зеленоградский городской центр культуры и искусства` / `Курортный проспект 11`.
-- post-deploy verification: pending prevention deploy
+- post-deploy verification:
+  - Fly image `events-bot-new-wngqia:deployment-01KWJHMW29EYB0MC3PCFA0A7KP`; machine `683961db016e28`, version `1568`, checks `1 total, 1 passing`;
+  - `/healthz` returned `ok=true`, `ready=true`, DB/scheduler/tasks `ok`, `issues=[]`;
+  - deployed `/app/vk_intake.py` contains `_extract_vk_parse_poster_logistics_block` and `poster OCR logistics kept for long post`;
+  - deployed `/app/location_reference.py` contains generic-token stopwords for `парк`/`городской`/`культура`/`искусства`.
 
 ## Prevention
 
