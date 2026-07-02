@@ -440,7 +440,7 @@ Live public smoke additionally verified HTTP 200 for the preview index and the g
 
 ## Verified on 2026-07-01
 
-Recovery preview `preview-20260701t2314-recovery-full` combines the restored full static-site branch work with the `feature/smart-search-quota-key5-site` authorized-search quota/key rollout. It was exported from the current production SQLite snapshot for `2026-07-01`, generated `377` public events, passed `npm run build:preview` and `npm run check:preview`, and was deployed to `https://kenigevents.ru/preview-20260701t2314-recovery-full/__preview/` with `377` stable CDN ICS files.
+Recovery preview `preview-20260701t2341-recovery-full` combines the restored full static-site branch work with the `feature/smart-search-quota-key5-site` authorized-search quota/key rollout. It was exported from the refreshed production SQLite snapshot for `2026-07-01`, generated `380` public events, passed `npm run build:preview` and `npm run check:preview`, and was deployed to `https://kenigevents.ru/preview-20260701t2341-recovery-full/__preview/` with `380` stable CDN ICS files. The refresh includes the late production events `6563`, `6564` and `6565`, verified by public HTTP checks against their generated event pages.
 
 The export includes a narrow prompt-leak publication guard: rows whose title is obvious prompt/debug leakage are skipped before static pages and search fixtures are built. This is only a stopgap for preview/publication safety; the canonical production row still needs source/Smart Update repair. The recovery run used this guard to exclude event `6518` from the static preview and removed its stale `event_search_documents` / `event_embeddings` personalization rows.
 
