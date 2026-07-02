@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-02-static-search-92-percent-no-cards.md`
+  - Scope: Static site authorized smart search `/poisk/`, personalization Supabase Edge Function `event-search`, frontend progress/rendering, card-shaped shimmer/halo loading state, LLM/vector sequencing, and production root/preview entrypoint promotion. Must not regress: reported natural-language searches must not stay stuck at 92% without cards when backend has returned or can return vector candidates; `/poisk/`/root CTA must point to the current searchable build; backend stage timings and client render evidence must be available for closure.
 - `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
   - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
   - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.
