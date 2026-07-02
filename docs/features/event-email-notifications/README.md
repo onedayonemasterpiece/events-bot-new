@@ -1,6 +1,6 @@
 # Event email notifications
 
-Status: requirements / implementation backlog
+Status: requirements / implementation backlog — **not implemented yet**
 Owner surfaces: static event pages, auth/profile, calendar-follow flow, event lifecycle updates, Yandex Cloud Postbox, YDB analytics.
 
 ## Scope
@@ -8,6 +8,12 @@ Owner surfaces: static event pages, auth/profile, calendar-follow flow, event li
 This feature covers transactional email notifications for users who explicitly add an event to their calendar from the static site while authenticated.
 
 Notifications are not marketing mailouts. They are user-requested transactional messages about a specific followed event.
+
+## Implementation status
+
+As of 2026-07-02 this feature is **requirements-only**. No production email outbox, Yandex Cloud Postbox sender, user notification-email persistence, or YDB email-statistics writer has been implemented yet.
+
+Use `docs/features/event-email-notifications/implementation-prompt.md` as the handoff prompt for the implementation window.
 
 ## Product requirements
 
@@ -78,7 +84,7 @@ Initial rate limits:
 
 ## Statistics and YDB
 
-Persist operational statistics to YDB (or the project analytics store backed by YDB) in addition to local queue rows:
+Persist operational statistics to YDB in addition to local queue rows. This is mandatory; local-only logs/SQLite counters are not enough:
 
 - queue depth by status/kind;
 - oldest pending age;
@@ -99,4 +105,5 @@ An admin/status command or dashboard must expose current queue stats before prod
 - Add Postbox sender adapter with idempotency, retry/backoff, suppression handling, and provider message-id persistence.
 - Add YDB stats sink and admin queue status view.
 - Add static-page lifecycle badge and notification preference UI.
-- Add tests for confirmation, 24-hour reminder, reschedule diff, cancellation disclaimer, rate limits, idempotency, retry, and suppression.
+- Add tests for confirmation, 24-hour reminder, reschedule diff, cancellation disclaimer, rate limits, idempotency, retry, suppression, and YDB stats writes.
+- Implement from `docs/features/event-email-notifications/implementation-prompt.md`.
