@@ -1160,6 +1160,7 @@ type ProgressStage = {
   progress: number;
   label: string;
   detail?: string;
+  data?: Record<string, unknown>;
 };
 
 type ProgressCallback = (stage: ProgressStage) => void | Promise<void>;
@@ -1356,6 +1357,43 @@ async function runEventSearch(
     const retrievedCount = items.length;
     const nextOffset = offset + retrievedCount;
     const hasMore = retrievedCount >= verificationWindow && nextOffset < 60;
+
+    await progress?.({
+      stage: "vector_results",
+      progress: 62,
+      label: "Нашёл варианты по смыслу",
+      data: {
+        schema_version: "event-search-results-v1",
+        surface: "authorized_event_search",
+        algorithm_id: "pgvector_gemini_embedding_2_vector_first_v1",
+        request_id: requestId,
+        query_hash: queryHash,
+        query_facets: queryFacets,
+        quota: quotaState,
+        items: items.slice(0, limit),
+        fallback_items: [],
+        has_more: hasMore,
+        next_offset: nextOffset,
+        retrieved_count: retrievedCount,
+        verification_window: verificationWindow,
+        llm_verifier: {
+          requested: useLlmVerifier,
+          used: false,
+          status: useLlmVerifier && llmQuotaReserved ? "pending" : "disabled",
+          model: null,
+          policy: null,
+          attempts: [],
+          gemma_overflow_allowed: llmGemmaOverflowAllowed,
+          prompt_chars: null,
+          prompt_fact_chars: null,
+          compact_candidate_count: null,
+          candidate_fact_count: null,
+          rejected_count: 0,
+          query_interpretation: null,
+        },
+        timings_ms: { ...timings, total_ms: nowMs() - Math.round(requestStartedAt) },
+      },
+    });
 
     let llmResult: LlmVerifyResult = {
       exact: [],

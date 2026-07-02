@@ -544,20 +544,95 @@ const HeadingTag = headingLevel;
       lastResultEventIds = [];
     }
 
-    async function invokeEventSearch(body, session) {
+    function markInsertedCards(startIndex, phase, pageOffset) {
+      if (!results) return;
+      Array.from(results.children).slice(startIndex).forEach((node) => {
+        if (node.matches?.('[data-event-card]')) {
+          node.dataset.searchPhase = phase;
+          node.dataset.searchPageOffset = String(pageOffset);
+        }
+      });
+    }
+
+    function removeVectorPreview(pageOffset) {
+      if (!results) return;
+      results.querySelectorAll(`[data-search-phase="vector"][data-search-page-offset="${String(pageOffset)}"]`).forEach((node) => node.remove());
+      results.querySelectorAll(`[data-search-vector-note][data-search-page-offset="${String(pageOffset)}"]`).forEach((node) => node.remove());
+    }
+
+    function appendPhaseNote(text, pageOffset) {
+      if (!results) return;
+      const note = document.createElement('p');
+      note.className = 'authorized-search__phase-note';
+      note.dataset.searchVectorNote = 'true';
+      note.dataset.searchPageOffset = String(pageOffset);
+      note.textContent = text;
+      results.appendChild(note);
+    }
+
+    function insertCardHtml(items, rankBase, phase, pageOffset) {
+      if (!results || !items.length) return;
+      const startIndex = results.children.length;
+      results.insertAdjacentHTML('beforeend', renderCards(items, rankBase));
+      markInsertedCards(startIndex, phase, pageOffset);
+    }
+
+    function renderSearchPayload(data, options = {}) {
+      const { append = false, phase = 'final', pageOffset = offset } = options;
+      const isVector = phase === 'vector';
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const fallbackItems = isVector ? [] : (Array.isArray(data?.fallback_items) ? data.fallback_items : []);
+      if (!results) return { itemCount: items.length, fallbackCount: fallbackItems.length };
+
+      if (!append || !isVector) removeVectorPreview(pageOffset);
+      if (!append) {
+        results.innerHTML = '';
+        fallbackStarted = false;
+        if (!isVector) lastResultEventIds = [];
+      }
+
+      setResultContext(data);
+      if (isVector) {
+        if (items.length > 0 && results.children.length === 0) appendSectionHeading('Нашёл по смыслу');
+        insertCardHtml(items, pageOffset, 'vector', pageOffset);
+        if (items.length > 0) appendPhaseNote('Это быстрые результаты векторного поиска. ИИ ещё проверяет точность и может переставить или убрать часть карточек.', pageOffset);
+        results.hidden = !results.children.length;
+        if (results.children.length) setSkeletonLoading(false);
+        setStatus(items.length > 0 ? 'Нашёл варианты по смыслу. ИИ проверяет точность…' : 'Векторный поиск пока не нашёл карточки. Проверяю дальше…');
+        return { itemCount: items.length, fallbackCount: 0 };
+      }
+
+      if (!append && items.length > 0 && results.children.length === 0) {
+        appendSectionHeading('Результаты поиска');
+      }
+      insertCardHtml(items, pageOffset, 'final', pageOffset);
+      lastResultEventIds.push(...items.map(candidateEventId).filter((id) => id != null));
+      if (items.length === 0 && !fallbackStarted) {
+        appendSectionHeading('Возможно, вам будет интересно');
+        fallbackStarted = true;
+      }
+      if (fallbackItems.length) {
+        if (!fallbackStarted) {
+          appendSectionHeading('Возможно, вам будет интересно');
+          fallbackStarted = true;
+        }
+        insertCardHtml(fallbackItems, pageOffset + items.length, 'final', pageOffset);
+        lastResultEventIds.push(...fallbackItems.map(candidateEventId).filter((id) => id != null));
+      }
+      appendFeedbackPrompt(currentQuery || input?.value || '');
+      results.hidden = !results.children.length;
+      return { itemCount: items.length, fallbackCount: fallbackItems.length };
+    }
+
+    async function invokeEventSearch(body, session, options = {}) {
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
-      // Mobile Chrome/WebView proved unreliable with the streamed final payload:
-      // progress events reached 96%, the backend wrote a successful audit row,
-      // but the browser sometimes never delivered the terminal `result` event.
-      // For the MVP, reliability is more important than backend-stage streaming,
-      // so the browser requests one JSON response and renders cards from it.
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           apikey: root.dataset.supabaseKey,
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          Accept: 'application/x-ndjson',
         },
         body: JSON.stringify(body),
       });
@@ -585,6 +660,16 @@ const HeadingTag = headingLevel;
         }
         return { data: finalData, error: null };
       }
+      function handleStreamEvent(event) {
+        if (event.type === 'progress') {
+          setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
+          if (event.stage === 'vector_results' && event.data) {
+            options.onVectorResult?.(event.data);
+          }
+        } else if (event.type === 'error') {
+          finalError = event;
+        }
+      }
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -597,13 +682,8 @@ const HeadingTag = headingLevel;
           let event;
           try { event = JSON.parse(trimmed); }
           catch (_error) { continue; }
-          if (event.type === 'progress') {
-            setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
-          } else if (event.type === 'result') {
-            return await finishWithResult(event);
-          } else if (event.type === 'error') {
-            finalError = event;
-          }
+          if (event.type === 'result') return await finishWithResult(event);
+          handleStreamEvent(event);
         }
       }
       const tail = buffer.trim();
@@ -613,9 +693,9 @@ const HeadingTag = headingLevel;
           if (event.type === 'result') {
             finalData = event.data;
             setSearchProgress(100, event.label || 'Готово');
+          } else {
+            handleStreamEvent(event);
           }
-          else if (event.type === 'error') finalError = event;
-          else if (event.type === 'progress') setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
         } catch (_error) {
           // Ignore malformed trailing stream fragments.
         }
@@ -640,8 +720,9 @@ const HeadingTag = headingLevel;
       }
       const query = validation.query;
       if (input) input.value = query;
-      setSearchLoading(true, { showSkeleton: !append });
+      setSearchLoading(true, { showSkeleton: false });
       if (append) setMoreLoading(true);
+      let vectorRendered = false;
       setSearchProgress(1, append ? 'Загружаю следующую пачку…' : 'Запускаю поиск…');
       const progressTimers = [
         window.setTimeout(() => { if (loading) setSearchProgress(28, 'Понимаю смысл запроса'); }, 500),
@@ -662,12 +743,17 @@ const HeadingTag = headingLevel;
             setResultContext({});
           }
         }
+        const pageOffset = offset;
         const { data, error } = await withTimeout(
           invokeEventSearch(
-            // JSON response path stays reliable; LLM verifier is bounded on the Edge side
-            // and falls back to vector order on timeout/provider failure.
-            { query, limit: 8, offset, candidate_window: 10, include_fallback: true, use_llm_verifier: true },
+            { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true },
             session,
+            {
+              onVectorResult: (vectorData) => {
+                vectorRendered = true;
+                renderSearchPayload(vectorData, { append, phase: 'vector', pageOffset });
+              },
+            },
           ),
           searchTimeoutMs,
           'search_timeout',
@@ -688,31 +774,9 @@ const HeadingTag = headingLevel;
         }
         const items = Array.isArray(data?.items) ? data.items : [];
         const fallbackItems = Array.isArray(data?.fallback_items) ? data.fallback_items : [];
-        if (results) {
-          setResultContext(data);
-          if (!append && items.length > 0 && results.children.length === 0) {
-            appendSectionHeading('Результаты поиска');
-          }
-          const html = renderCards(items, offset);
-          if (html) results.insertAdjacentHTML('beforeend', html);
-          lastResultEventIds.push(...items.map(candidateEventId).filter((id) => id != null));
-          if (items.length === 0 && !fallbackStarted) {
-            appendSectionHeading('Возможно, вам будет интересно');
-            fallbackStarted = true;
-          }
-          if (fallbackItems.length) {
-            if (!fallbackStarted) {
-              appendSectionHeading('Возможно, вам будет интересно');
-              fallbackStarted = true;
-            }
-            results.insertAdjacentHTML('beforeend', renderCards(fallbackItems, offset + items.length));
-            lastResultEventIds.push(...fallbackItems.map(candidateEventId).filter((id) => id != null));
-          }
-          appendFeedbackPrompt(query);
-          results.hidden = !results.children.length;
-        }
+        renderSearchPayload(data, { append, phase: 'final', pageOffset });
         const nextOffset = Number(data?.next_offset);
-        offset = Number.isFinite(nextOffset) && nextOffset >= offset ? nextOffset : offset + items.length;
+        offset = Number.isFinite(nextOffset) && nextOffset >= pageOffset ? nextOffset : pageOffset + items.length;
         if (more) more.hidden = !data?.has_more;
         const quota = data?.quota;
         if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
@@ -722,7 +786,8 @@ const HeadingTag = headingLevel;
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
         const message = String(error?.message || error);
-        if (message === 'search_timeout') setStatus('Поиск занял слишком много времени. Попробуйте ещё раз — кнопка снова активна.', 'error');
+        if (message === 'search_timeout' && vectorRendered) setStatus('Показал быстрые результаты по смыслу. Финальная ИИ-проверка не ответила вовремя, можно смотреть эти карточки или повторить запрос.', 'error');
+        else if (message === 'search_timeout') setStatus('Поиск занял слишком много времени. Попробуйте ещё раз — кнопка снова активна.', 'error');
         else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
       } finally {
         for (const timer of progressTimers) window.clearTimeout(timer);
