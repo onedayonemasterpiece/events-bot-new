@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-02-boyko-exhibition-smart-update-glue.md`
+  - Scope: Smart Update source aggregation and Telegram/Telegraph public surfaces for KGD80 / «80 историй о главном» lecture-vs-exhibition events sharing date, venue, and campaign context.
+  - Must not regress: a lecture by a named speaker and a same-day exhibition at the same venue must not be glued into one event; `semantic_title_mismatch` / date-conflict facts must block merge side effects instead of absorbing source facts/posters; public `@kldevents` and Telegraph pages must not imply a speaker is related to an unrelated exhibition.
 - `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
   - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
   - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.
