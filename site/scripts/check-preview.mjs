@@ -293,6 +293,11 @@ for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https:
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }
 if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('Info partners external links must be nofollow/noopener/noreferrer');
+if (!partnersHtml.includes('class="partner-tile ') || !partnersHtml.includes('partner-tile__logo') || !partnersHtml.includes('partner-tile__meta')) throw new Error('Info partners page must render compact full-tile partner links');
+if (partnersHtml.includes('partner-card') || partnersVisibleHtml.includes('Сайт партнёра')) throw new Error('Info partners page must not render oversized partner cards or separate site CTA copy');
+const compactPartnersCss = bundledCss.replace(/\s+/gu, '');
+if (!/\.partners-grid(?:\[[^\]]+\])?\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/u.test(compactPartnersCss)) throw new Error('Info partners mobile layout must keep a compact two-column grid');
+if (!compactPartnersCss.includes('@media(min-width:680px)') || !/\.partner-tile--wide(?:\[[^\]]+\])?\{grid-column:span2\}/u.test(compactPartnersCss) || !/\.partner-tile--tall(?:\[[^\]]+\])?\{grid-row:span2/u.test(compactPartnersCss)) throw new Error('Info partners desktop/tablet layout must keep aspect-aware wide/tall spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
 if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');

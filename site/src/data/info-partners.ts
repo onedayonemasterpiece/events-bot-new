@@ -5,6 +5,7 @@ export type InfoPartner = {
   name: string;
   shortName: string;
   description: string;
+  compactLabel: string;
   href: string;
   accent: string;
   logoText: string;
@@ -22,6 +23,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     name: 'АО «Калининградская пригородная пассажирская компания»',
     shortName: 'КППК',
     description: 'Региональный железнодорожный перевозчик пригородных маршрутов Калининградской области.',
+    compactLabel: 'Пригородные маршруты',
     href: 'https://www.kppk39.ru/',
     accent: '#d71920',
     logoText: 'КППК',
@@ -35,6 +37,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     name: 'Российское общество «Знание»',
     shortName: 'Знание',
     description: 'Просветительская организация и партнёр событий с образовательной программой.',
+    compactLabel: 'Просветительские события',
     href: 'https://znanierussia.ru/',
     accent: '#2b2522',
     logoText: 'Знание',
@@ -49,6 +52,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     name: 'Фестиваль «80 историй о главном»',
     shortName: '80 историй',
     description: 'Просветительский фестиваль к 80-летию Калининградской области.',
+    compactLabel: 'Фестиваль 80-летия',
     href: 'https://kgd80.ru/',
     accent: '#df452d',
     logoText: '80',
@@ -63,6 +67,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     name: 'Фестиваль «Кантата» · образовательная программа',
     shortName: 'Кантата',
     description: 'Бесплатные лекции и кинопоказы образовательной программы международного фестиваля классической музыки.',
+    compactLabel: 'Лекции и музыка',
     href: 'https://kantatafest.ru/obrazovatelnaya-programma',
     accent: '#251a13',
     logoText: 'Кантата',
@@ -78,6 +83,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     name: 'Театр «Акт Опус»',
     shortName: 'Акт Опус',
     description: 'Калининградский театр с собственной афишей спектаклей и премьер.',
+    compactLabel: 'Театр и премьеры',
     href: 'https://actop.us/plays',
     accent: '#111111',
     logoText: 'Акт Опус',
