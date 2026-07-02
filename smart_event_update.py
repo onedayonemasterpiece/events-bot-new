@@ -28,6 +28,7 @@ from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCa
 from sections import MONTHS_RU
 from smart_update_identity import (
     IdentityGateMode,
+    IdentityVectorEvidence,
     build_identity_gate_verdict,
     identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
@@ -171,6 +172,23 @@ if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
 SMART_UPDATE_IDENTITY_GATE_MODE = parse_identity_gate_mode(
     os.getenv("SMART_UPDATE_IDENTITY_GATE", "off")
 )
+SMART_UPDATE_IDENTITY_VECTOR_RECALL = os.getenv(
+    "SMART_UPDATE_IDENTITY_VECTOR_RECALL", "1"
+).strip().lower() not in {"0", "false", "off", "no"}
+SMART_UPDATE_IDENTITY_VECTOR_TOP_K = int(os.getenv("SMART_UPDATE_IDENTITY_VECTOR_TOP_K", "8") or "8")
+SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY = float(
+    os.getenv("SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY", "0.75") or "0.75"
+)
+SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS = float(
+    os.getenv("SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS", "2.5") or "2.5"
+)
+SMART_UPDATE_IDENTITY_EMBEDDING_MODEL = os.getenv(
+    "SMART_UPDATE_IDENTITY_EMBEDDING_MODEL", "gemini-embedding-2"
+).strip() or "gemini-embedding-2"
+SMART_UPDATE_IDENTITY_EMBEDDING_DIM = int(os.getenv("SMART_UPDATE_IDENTITY_EMBEDDING_DIM", "768") or "768")
+SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV = os.getenv(
+    "SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV", "GOOGLE_API_KEY4"
+).strip() or "GOOGLE_API_KEY4"
 
 # Per-stage primary model overrides. Default route fact extraction and the
 # main writer to gemini-3.1-flash-lite (500 RPD per key, stable on Google's
@@ -8171,6 +8189,107 @@ def _looks_like_unsupported_exhibition_teaser_date(candidate: EventCandidate, te
     return bool(_UNSUPPORTED_EXHIBITION_TEASER_RE.search(combined))
 
 
+
+
+async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> IdentityVectorEvidence | None:
+    """Best-effort vector recall evidence for the create-path identity gate.
+
+    The candidate embedding is ephemeral and never stored.  Missing credentials or
+    provider/RPC failures return structured error evidence so enforce mode can
+    fail safe while shadow mode only logs.
+    """
+
+    if not SMART_UPDATE_IDENTITY_VECTOR_RECALL:
+        return None
+    try:
+        from event_identity import (
+            EventIdentityRecallConfig,
+            SupabaseRestRpcClient,
+            build_identity_candidate_document,
+            embed_identity_document_with_gemini,
+            recall_identity_candidates_across_doc_kinds,
+        )
+
+        supabase_url = (os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip()
+        supabase_key = (
+            os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY")
+            or os.getenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+            or ""
+        ).strip()
+        google_key = (os.getenv(SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV) or "").strip()
+        if not supabase_url or not supabase_key or not google_key:
+            missing = []
+            if not supabase_url:
+                missing.append("PERSONALIZATION_SUPABASE_URL")
+            if not supabase_key:
+                missing.append("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY")
+            if not google_key:
+                missing.append(SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV)
+            return IdentityVectorEvidence(
+                available=False,
+                error="missing vector identity env: " + ",".join(missing),
+            )
+
+        doc = build_identity_candidate_document(candidate)
+
+        def _recall_sync() -> IdentityVectorEvidence:
+            embedding = embed_identity_document_with_gemini(
+                doc,
+                api_key=google_key,
+                model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+                dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+                timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
+            )
+            if not embedding.ok:
+                return IdentityVectorEvidence(
+                    available=False,
+                    error=f"embedding_failed:{embedding.error_type}:{embedding.error_message}",
+                )
+            client = SupabaseRestRpcClient(
+                supabase_url,
+                supabase_key,
+                timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
+            )
+            recall = recall_identity_candidates_across_doc_kinds(
+                client,
+                embedding.embedding,
+                city=candidate.city,
+                event_type=candidate.event_type,
+                config=EventIdentityRecallConfig(
+                    top_k=SMART_UPDATE_IDENTITY_VECTOR_TOP_K,
+                    min_similarity=SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY,
+                    timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
+                    embedding_model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+                    embedding_dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+                ),
+            )
+            if not recall.ok:
+                return IdentityVectorEvidence(
+                    available=False,
+                    error=f"rpc_failed:{recall.error_type}:{recall.error_message}",
+                )
+            if not recall.candidates:
+                return IdentityVectorEvidence(
+                    available=True,
+                    reason=f"no_vector_candidates doc={doc.sha256[:12]}",
+                )
+            top = recall.candidates[0]
+            return IdentityVectorEvidence(
+                available=True,
+                nearest_event_id=top.event_id,
+                score=top.similarity,
+                reason=(
+                    f"vector_recall doc={doc.sha256[:12]} kind={top.embedding_doc_kind} "
+                    f"title={top.title or ''}"
+                ).strip(),
+            )
+
+        return await asyncio.to_thread(_recall_sync)
+    except Exception as exc:
+        logger.warning("smart_update.identity_gate vector recall failed", exc_info=True)
+        return IdentityVectorEvidence(available=False, error=f"vector_recall_error:{type(exc).__name__}:{exc}")
+
+
 def _smart_update_skip_past_events_enabled() -> bool:
     raw = (os.getenv("SMART_UPDATE_SKIP_PAST_EVENTS") or "1").strip().lower()
     return raw in {"1", "true", "yes", "on"}
@@ -14301,10 +14420,20 @@ async def _smart_event_update_impl(
 
         if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
             try:
+                vector_evidence = await _smart_update_identity_vector_evidence(candidate)
+                gate_existing_events = list(identity_gate_candidates or shortlist)
+                if vector_evidence and vector_evidence.nearest_event_id is not None:
+                    known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
+                    if vector_evidence.nearest_event_id not in known_ids:
+                        async with db.get_session() as session:
+                            vector_event = await session.get(Event, vector_evidence.nearest_event_id)
+                        if vector_event is not None:
+                            gate_existing_events.append(vector_event)
                 identity_verdict = build_identity_gate_verdict(
                     candidate,
-                    identity_gate_candidates or shortlist,
+                    gate_existing_events,
                     mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                    vector_evidence=vector_evidence,
                 )
                 logger.info(
                     "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",

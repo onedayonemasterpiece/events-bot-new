@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from smart_update_identity import (
     IdentityGateAction,
     IdentityGateMode,
+    IdentityVectorEvidence,
     build_identity_gate_verdict,
     identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
@@ -35,7 +36,9 @@ class _Event:
     title: str
     date: str
     time: str | None = None
+    end_date: str | None = None
     location_name: str | None = None
+    event_type: str | None = None
     ticket_link: str | None = None
     source_post_url: str | None = None
     source_vk_post_url: str | None = None
@@ -137,3 +140,73 @@ def test_fail_safe_verdict_only_blocks_when_mode_is_enforce():
     assert shadow.action is IdentityGateAction.VETO_CREATE
     assert not shadow.should_veto_create
     assert enforce.should_veto_create
+
+
+def test_enforce_vector_high_confidence_vetoes_create_without_existing_shortlist_match():
+    cand = _Cand(
+        title="Розовый натюрморт",
+        date="2026-07-02",
+        location_name="Музей",
+        source_type="telegram",
+    )
+
+    verdict = build_identity_gate_verdict(
+        cand,
+        [_Event(id=6080, title="Розовый натюрморт", date="2026-07-01", end_date="2026-08-01", location_name="Музей", event_type="выставка")],
+        mode=IdentityGateMode.ENFORCE,
+        vector_evidence=IdentityVectorEvidence(
+            available=True,
+            nearest_event_id=6080,
+            score=0.956,
+            reason="related_v1/search_v3 union top candidate",
+        ),
+    )
+
+    assert verdict.should_veto_create
+    assert verdict.reason_code == "vector_nearest_identity"
+    assert verdict.matched_event_id == 6080
+    assert verdict.vector and verdict.vector.score == 0.956
+
+
+def test_shadow_vector_error_is_logged_as_would_veto_only():
+    cand = _Cand(title="Выставка", date="2026-07-02", source_type="parser:example")
+
+    verdict = build_identity_gate_verdict(
+        cand,
+        [],
+        mode=IdentityGateMode.SHADOW,
+        vector_evidence=IdentityVectorEvidence(available=False, error="rpc_failed:Timeout"),
+    )
+
+    assert verdict.would_veto_create
+    assert not verdict.should_veto_create
+    assert verdict.fail_safe
+    assert verdict.reason_code == "vector_identity_error"
+
+
+def test_recurring_different_date_is_not_blocked_by_vector_similarity_alone():
+    cand = _Cand(
+        title="Стендап: Гассан Джабер",
+        date="2026-07-20",
+        time="20:00",
+        location_name="Клуб",
+        source_type="telegram",
+    )
+    ev = _Event(
+        id=6405,
+        title="Стендап: Гассан Джабер",
+        date="2026-07-10",
+        time="20:00",
+        location_name="Клуб",
+        event_type="стендап",
+    )
+
+    verdict = build_identity_gate_verdict(
+        cand,
+        [ev],
+        mode=IdentityGateMode.ENFORCE,
+        vector_evidence=IdentityVectorEvidence(available=True, nearest_event_id=6405, score=0.986),
+    )
+
+    assert not verdict.should_veto_create
+    assert verdict.reason_code == "no_identity_veto"

@@ -49,11 +49,11 @@
 - Added Smart Update identity schema foundation: event identity/date provenance
   fields, decision-log and lock tables, SQLModel mappings, and indexes for the
   future vector identity gate.
-- Added the Smart Update vector identity foundation without wiring it into
-  matching yet: an `identity_candidate_v1` document builder, a service-role-only
-  Supabase vector recall RPC, and a safe Python recall helper with timeout/top-K
-  controls.
-- Added the Smart Update create-path identity gate skeleton behind `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce`, with structured verdict helpers, deterministic create vetoes, and fail-safe enforce behavior for future vector identity evidence.
+- Added the Smart Update vector identity foundation: an `identity_candidate_v1`
+  document builder, a service-role-only Supabase vector recall RPC, and a safe
+  Python recall helper with timeout/top-K controls.
+- Added the Smart Update create-path identity gate behind `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce`, with structured verdict helpers, deterministic create vetoes, vector recall evidence over `related_v1`/`search_v3`, and fail-safe enforce behavior.
+- Added replay-contract tests for the known exhibition duplicate clusters and high-similarity recurring negative controls that motivated the vector identity gate.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

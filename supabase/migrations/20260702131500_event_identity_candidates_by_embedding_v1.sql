@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE OR REPLACE FUNCTION public.event_identity_candidates_by_embedding_v1(
     p_embedding vector,
-    p_embedding_doc_kind text DEFAULT 'identity_candidate_v1',
+    p_embedding_doc_kind text DEFAULT 'related_v1',
     p_city text DEFAULT NULL,
     p_event_type text DEFAULT NULL,
     p_limit integer DEFAULT 8,
@@ -221,7 +221,7 @@ BEGIN
                 %s AS document_id,
                 %s AS embedding_id,
                 %s AS embedding_doc_kind,
-                %s AS candidate_doc_kind,
+                'identity_candidate_v1'::text AS candidate_doc_kind,
                 (%s)::double precision AS distance,
                 %s AS title,
                 %s AS event_date,
@@ -288,7 +288,6 @@ BEGIN
         v_event_id_expr,
         v_document_id_expr,
         v_embedding_id_expr,
-        v_kind_expr,
         v_kind_expr,
         v_distance_expr,
         v_title_expr,

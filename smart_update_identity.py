@@ -52,6 +52,7 @@ class IdentitySubject:
     location_name: str | None = None
     location_address: str | None = None
     city: str | None = None
+    event_type: str | None = None
     ticket_link: str | None = None
     source_url: str | None = None
     source_flags: IdentitySourceFlags = field(default_factory=IdentitySourceFlags)
@@ -200,6 +201,7 @@ def identity_subject_from(obj: Any, *, role: str) -> IdentitySubject:
         location_name=_clean_str(_get(obj, "location_name")),
         location_address=_clean_str(_get(obj, "location_address")),
         city=_clean_str(_get(obj, "city")),
+        event_type=_clean_str(_get(obj, "event_type")),
         ticket_link=_clean_str(_get(obj, "ticket_link")),
         source_url=_clean_str(_source_url_for(obj, role)),
         source_flags=source_flags_for(_get(obj, "source_type")),
@@ -254,7 +256,7 @@ def deterministic_identity_veto(
         ):
             return _veto("deterministic_same_poster_identity", candidate, ev, 0.9, "same poster hash and compatible date/title/location")
 
-    if vector_evidence and vector_evidence.available and vector_evidence.error:
+    if vector_evidence and vector_evidence.error:
         return IdentityGateVerdict(
             mode=IdentityGateMode.ENFORCE,
             action=IdentityGateAction.VETO_CREATE,
@@ -267,21 +269,17 @@ def deterministic_identity_veto(
             vector=vector_evidence,
             fail_safe=True,
         )
-    if (
-        vector_evidence
-        and vector_evidence.available
-        and vector_evidence.nearest_event_id is not None
-        and vector_evidence.score is not None
-        and vector_evidence.score >= 0.94
-    ):
+    vector_match = _vector_supported_identity_match(candidate, existing, vector_evidence)
+    if vector_match is not None:
+        ev, reason = vector_match
         return IdentityGateVerdict(
             mode=IdentityGateMode.ENFORCE,
             action=IdentityGateAction.VETO_CREATE,
             reason_code="vector_nearest_identity",
-            reasons=(vector_evidence.reason or "high-confidence vector identity evidence",),
+            reasons=(reason,),
             candidate=candidate,
-            matched_event_id=vector_evidence.nearest_event_id,
-            confidence=float(vector_evidence.score),
+            matched_event_id=ev.event_id,
+            confidence=float(vector_evidence.score or 0.0),
             deterministic=False,
             vector=vector_evidence,
         )
@@ -362,6 +360,48 @@ def _veto(code: str, candidate: IdentitySubject, ev: IdentitySubject, confidence
         confidence=confidence,
         deterministic=True,
     )
+
+
+def _vector_supported_identity_match(
+    candidate: IdentitySubject,
+    existing: Sequence[IdentitySubject],
+    vector_evidence: IdentityVectorEvidence | None,
+) -> tuple[IdentitySubject, str] | None:
+    if (
+        not vector_evidence
+        or not vector_evidence.available
+        or vector_evidence.nearest_event_id is None
+        or vector_evidence.score is None
+        or vector_evidence.score < 0.94
+    ):
+        return None
+    ev = next((item for item in existing if item.event_id == vector_evidence.nearest_event_id), None)
+    if ev is None:
+        return None
+    if not _date_overlaps(candidate, ev):
+        return None
+    if _is_long_running(candidate) or _is_long_running(ev):
+        if _locations_related(candidate, ev) or _titles_related(candidate.title, ev.title) or _strong_shared_anchor(candidate, ev):
+            return ev, vector_evidence.reason or "high-confidence vector identity for overlapping long-running event"
+        return None
+    if _same_known_time(candidate, ev) and (_titles_related(candidate.title, ev.title) or _locations_related(candidate, ev) or _strong_shared_anchor(candidate, ev)):
+        return ev, vector_evidence.reason or "high-confidence vector identity for same dated slot"
+    return None
+
+
+def _strong_shared_anchor(left: IdentitySubject, right: IdentitySubject) -> bool:
+    if left.source_url and right.source_url and left.source_url == right.source_url:
+        return True
+    if left.ticket_link and right.ticket_link and _normalize_url(left.ticket_link) == _normalize_url(right.ticket_link):
+        return True
+    return bool(left.poster_hashes and right.poster_hashes and set(left.poster_hashes).intersection(right.poster_hashes))
+
+
+def _is_long_running(subject: IdentitySubject) -> bool:
+    event_type = _normalize_text(subject.event_type)
+    if any(word in event_type for word in ("выстав", "ярмарк", "exhibition", "fair")):
+        return True
+    return bool(subject.end_date and subject.date and subject.end_date != subject.date)
 
 
 def _coerce_int(value: Any) -> int | None:

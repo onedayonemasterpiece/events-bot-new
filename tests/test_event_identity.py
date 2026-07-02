@@ -6,9 +6,12 @@ from types import SimpleNamespace
 
 from event_identity import (
     EVENT_IDENTITY_RPC_NAME,
+    EVENT_RELATED_DOC_KIND,
+    EVENT_SEARCH_DOC_KIND,
     IDENTITY_CANDIDATE_DOC_KIND,
     EventIdentityRecallConfig,
     build_identity_candidate_document,
+    recall_identity_candidates_across_doc_kinds,
     recall_identity_candidates_by_embedding,
 )
 
@@ -113,12 +116,41 @@ def test_recall_identity_candidates_calls_service_role_rpc_with_configured_paylo
     assert client.calls[0][0] == EVENT_IDENTITY_RPC_NAME
     assert client.calls[0][1] == {
         "p_embedding": [0.1, 0.2, 0.3],
-        "p_embedding_doc_kind": IDENTITY_CANDIDATE_DOC_KIND,
+        "p_embedding_doc_kind": EVENT_RELATED_DOC_KIND,
         "p_city": "Калининград",
         "p_event_type": "concert",
         "p_limit": 5,
         "p_min_similarity": 0.82,
     }
+
+
+def test_recall_identity_candidates_across_related_and_search_dedupes_by_best_score():
+    class _KindClient(_Client):
+        def rpc(self, name, payload):
+            self.calls.append((name, payload))
+            kind = payload["p_embedding_doc_kind"]
+            rows = {
+                EVENT_RELATED_DOC_KIND: [
+                    {"event_id": 1, "similarity": 0.88, "embedding_doc_kind": EVENT_RELATED_DOC_KIND},
+                    {"event_id": 2, "similarity": 0.84, "embedding_doc_kind": EVENT_RELATED_DOC_KIND},
+                ],
+                EVENT_SEARCH_DOC_KIND: [
+                    {"event_id": 1, "similarity": 0.92, "embedding_doc_kind": EVENT_SEARCH_DOC_KIND},
+                    {"event_id": 3, "similarity": 0.81, "embedding_doc_kind": EVENT_SEARCH_DOC_KIND},
+                ],
+            }[kind]
+            return _RpcBuilder(self, rows)
+
+    client = _KindClient()
+    result = recall_identity_candidates_across_doc_kinds(client, [0.1, 0.2], top_k=4)
+
+    assert result.ok is True
+    assert [c.event_id for c in result.candidates] == [1, 2, 3]
+    assert result.candidates[0].similarity == 0.92
+    assert [call[1]["p_embedding_doc_kind"] for call in client.calls] == [
+        EVENT_RELATED_DOC_KIND,
+        EVENT_SEARCH_DOC_KIND,
+    ]
 
 
 def test_recall_identity_candidates_returns_safe_failure_on_exception_and_bad_embedding():
@@ -153,6 +185,7 @@ def test_supabase_migration_is_service_role_only():
     assert "event_identity_candidates_by_embedding_v1" in sql
     assert "p_embedding vector" in sql
     assert "p_embedding_doc_kind text" in sql
+    assert "related_v1" in sql
     assert "p_city text" in sql
     assert "p_event_type text" in sql
     assert "p_limit integer" in sql

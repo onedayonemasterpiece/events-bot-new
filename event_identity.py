@@ -8,13 +8,18 @@ with an injected service-role Supabase client.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from queue import Queue
 from threading import Thread
 from typing import Any, Mapping, Sequence
 
 IDENTITY_CANDIDATE_DOC_KIND = "identity_candidate_v1"
+EVENT_RELATED_DOC_KIND = "related_v1"
+EVENT_SEARCH_DOC_KIND = "search_v3"
 EVENT_IDENTITY_RPC_NAME = "event_identity_candidates_by_embedding_v1"
 _DEFAULT_DOC_MAX_CHARS = 1800
 _DEFAULT_FIELD_MAX_CHARS = 420
@@ -40,8 +45,14 @@ class EventIdentityRecallConfig:
     top_k: int = 8
     min_similarity: float = 0.75
     timeout_seconds: float = 2.5
-    embedding_doc_kind: str = IDENTITY_CANDIDATE_DOC_KIND
+    # Existing event embeddings are stored under document kinds such as
+    # ``related_v1`` and ``search_v3``.  The incoming candidate document remains
+    # ``identity_candidate_v1``; this value selects the *target* embedding kind
+    # to search against.
+    embedding_doc_kind: str = EVENT_RELATED_DOC_KIND
     max_top_k: int = 50
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dim: int = 768
 
     def normalized_top_k(self, override: int | None = None) -> int:
         raw = self.top_k if override is None else override
@@ -66,6 +77,59 @@ class EventIdentityRecallConfig:
         if math.isnan(value):
             return 0.75
         return max(-1.0, min(1.0, value))
+
+
+
+
+@dataclass(frozen=True)
+class EventIdentityEmbeddingResult:
+    """Safe wrapper around ephemeral candidate embedding generation."""
+
+    ok: bool
+    embedding: tuple[float, ...] = ()
+    model: str = "gemini-embedding-2"
+    dim: int = 768
+    error_type: str | None = None
+    error_message: str | None = None
+
+
+class SupabaseRestRpcClient:
+    """Tiny service-role REST RPC client compatible with ``recall_*`` helpers."""
+
+    def __init__(self, url: str, service_key: str, *, timeout_seconds: float = 2.5) -> None:
+        self.url = (url or "").rstrip("/")
+        self.service_key = service_key or ""
+        self.timeout_seconds = max(0.05, float(timeout_seconds or 2.5))
+
+    def rpc(self, name: str, payload: Mapping[str, Any]) -> "_SupabaseRpcRequest":
+        return _SupabaseRpcRequest(self, name, payload)
+
+
+class _SupabaseRpcRequest:
+    def __init__(self, client: SupabaseRestRpcClient, name: str, payload: Mapping[str, Any]) -> None:
+        self.client = client
+        self.name = name
+        self.payload = dict(payload)
+
+    def execute(self) -> Any:
+        if not self.client.url or not self.client.service_key:
+            raise RuntimeError("Supabase URL and service-role key are required")
+        endpoint = f"{self.client.url}/rest/v1/rpc/{self.name}"
+        body = json.dumps(self.payload, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(
+            endpoint,
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "apikey": self.client.service_key,
+                "Authorization": f"Bearer {self.client.service_key}",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=self.client.timeout_seconds) as response:
+            data = json.loads(response.read().decode("utf-8") or "[]")
+        return data
 
 
 @dataclass(frozen=True)
@@ -260,6 +324,60 @@ def build_identity_candidate_document(
     )
 
 
+def embed_identity_document_with_gemini(
+    document: IdentityCandidateDocument | str,
+    *,
+    api_key: str,
+    model: str = "gemini-embedding-2",
+    dim: int = 768,
+    timeout_seconds: float = 10.0,
+) -> EventIdentityEmbeddingResult:
+    """Generate an ephemeral Gemini embedding for a candidate identity document.
+
+    The candidate embedding is not stored.  Failures are returned as data so
+    Smart Update can log/review instead of silently bypassing the identity gate.
+    """
+
+    text = document.text if isinstance(document, IdentityCandidateDocument) else _as_clean_text(document)
+    try:
+        if not api_key:
+            raise RuntimeError("Google API key is required for identity embedding")
+        if not text:
+            raise RuntimeError("identity document text is empty")
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
+        payload = {
+            "model": f"models/{model}",
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": int(dim),
+        }
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+        )
+        with urllib.request.urlopen(request, timeout=max(0.1, float(timeout_seconds or 10.0))) as response:
+            response_payload = json.loads(response.read().decode("utf-8") or "{}")
+        values = response_payload.get("embedding", {}).get("values")
+        if not isinstance(values, list) or len(values) != int(dim):
+            got = len(values) if isinstance(values, list) else "missing"
+            raise RuntimeError(f"Gemini embedding returned unexpected dimension: {got}")
+        return EventIdentityEmbeddingResult(
+            ok=True,
+            embedding=tuple(float(v) for v in values),
+            model=model,
+            dim=int(dim),
+        )
+    except Exception as exc:
+        return EventIdentityEmbeddingResult(
+            ok=False,
+            model=model,
+            dim=int(dim),
+            error_type=type(exc).__name__,
+            error_message=str(exc)[:300],
+        )
+
+
 def _coerce_embedding(values: Sequence[float] | Sequence[int]) -> list[float]:
     out: list[float] = []
     for value in values or []:
@@ -426,3 +544,68 @@ def recall_identity_candidates_by_embedding(
             error_type=type(exc).__name__,
             error_message=str(exc)[:300],
         )
+
+
+def recall_identity_candidates_across_doc_kinds(
+    supabase_client: Any,
+    embedding: Sequence[float] | Sequence[int],
+    *,
+    city: str | None = None,
+    event_type: str | None = None,
+    doc_kinds: Sequence[str] = (EVENT_RELATED_DOC_KIND, EVENT_SEARCH_DOC_KIND),
+    config: EventIdentityRecallConfig | None = None,
+    top_k: int | None = None,
+    min_similarity: float | None = None,
+) -> EventIdentityRecallResult:
+    """Search existing event vectors across related/search document kinds.
+
+    Results are unioned by event id and the strongest similarity is retained.
+    ``search_v3`` is recall evidence only; deterministic/LLM guard layers decide
+    whether it can veto create.
+    """
+
+    cfg = config or EventIdentityRecallConfig()
+    merged: dict[int, EventIdentityCandidateEvidence] = {}
+    errors: list[str] = []
+    any_ok = False
+    for kind in tuple(dict.fromkeys(k for k in doc_kinds if k)) or (EVENT_RELATED_DOC_KIND,):
+        kind_cfg = EventIdentityRecallConfig(
+            top_k=cfg.top_k,
+            min_similarity=cfg.min_similarity,
+            timeout_seconds=cfg.timeout_seconds,
+            embedding_doc_kind=str(kind),
+            max_top_k=cfg.max_top_k,
+            embedding_model=cfg.embedding_model,
+            embedding_dim=cfg.embedding_dim,
+        )
+        result = recall_identity_candidates_by_embedding(
+            supabase_client,
+            embedding,
+            city=city,
+            event_type=event_type,
+            config=kind_cfg,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+        if not result.ok:
+            errors.append(f"{kind}:{result.error_type or 'error'}")
+            continue
+        any_ok = True
+        for cand in result.candidates:
+            if cand.event_id is None:
+                continue
+            old = merged.get(cand.event_id)
+            old_score = old.similarity if old and old.similarity is not None else -999.0
+            new_score = cand.similarity if cand.similarity is not None else -999.0
+            if old is None or new_score > old_score:
+                merged[cand.event_id] = cand
+    if not any_ok and errors:
+        return EventIdentityRecallResult(
+            ok=False,
+            error_type=";".join(errors)[:120],
+            error_message="all identity vector recall doc-kind searches failed",
+        )
+    ordered = tuple(
+        sorted(merged.values(), key=lambda c: (c.similarity if c.similarity is not None else -999.0), reverse=True)
+    )
+    return EventIdentityRecallResult(ok=True, candidates=ordered)
