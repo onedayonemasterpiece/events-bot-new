@@ -262,6 +262,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             is_social_search = vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE
             is_curated_social = is_smartik or is_social_search
             is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
+            is_discovered_replyable_tg = source in {"discovered", "linked_discussion"}
             is_replyable_tg = str(row.platform or "").lower() == "tg" and surface_type in {"group", "chat", "megagroup", "linked_discussion"}
             needs_tg_comment_resolve = str(row.platform or "").lower() == "tg" and (
                 status == "needs_comment_resolve" or surface_type in {"channel", "unknown_public"}
@@ -272,7 +273,14 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             next_scan = row.next_scan_after or datetime.min.replace(tzinfo=timezone.utc)
             if next_scan.tzinfo is None:
                 next_scan = next_scan.replace(tzinfo=timezone.utc)
-            source_rank = 0 if is_replyable_tg else (1 if needs_tg_comment_resolve else (2 if is_curated_social else (3 if is_new_frontier else 4)))
+            if is_replyable_tg:
+                # Linked/discovered comment surfaces are the main discovery
+                # output. Keep them ahead of generic catalog seed groups so the
+                # next Kaggle run grows through newly found replyable places
+                # instead of spending the first replyable budget on static seeds.
+                source_rank = 0 if is_discovered_replyable_tg else 1
+            else:
+                source_rank = 2 if needs_tg_comment_resolve else (3 if is_curated_social else (4 if is_new_frontier else 5))
             return (
                 source_rank,
                 0 if is_seed_only else 1,

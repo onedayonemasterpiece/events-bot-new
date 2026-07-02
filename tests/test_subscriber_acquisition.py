@@ -819,11 +819,21 @@ async def test_runtime_seed_payload_prioritizes_new_frontier_surfaces(db):
             status="candidate",
             source="linked_discussion",
         ))
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="group",
+            url="https://t.me/static_catalog_group",
+            external_id="tg:static_catalog_group",
+            status="candidate",
+            source="telega_in",
+            reach_json={"basis": "telega_in_seed"},
+        ))
         await session.commit()
 
     payload = await collect_runtime_seed_payload(db)
 
     assert payload["surfaces"][0]["external_id"] == "tg:123"
+    assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:123")) < payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:static_catalog_group"))
     assert any(item["external_id"] == "tg:anons39" for item in payload["surfaces"][:14])
     assert payload["surfaces"].index(next(item for item in payload["surfaces"] if item["external_id"] == "tg:old_seed")) > 1
 
