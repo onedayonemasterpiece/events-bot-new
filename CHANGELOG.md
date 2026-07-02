@@ -49,6 +49,7 @@
   matching yet: an `identity_candidate_v1` document builder, a service-role-only
   Supabase vector recall RPC, and a safe Python recall helper with timeout/top-K
   controls.
+- Added the Smart Update create-path identity gate skeleton behind `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce`, with structured verdict helpers, deterministic create vetoes, and fail-safe enforce behavior for future vector identity evidence.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

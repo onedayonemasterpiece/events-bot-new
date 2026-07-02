@@ -26,6 +26,12 @@ from markup import looks_like_genai_response_dump, unescape_public_text_escapes
 from media_dedup import compute_dhash_hex, hamming_distance_hex
 from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCache
 from sections import MONTHS_RU
+from smart_update_identity import (
+    IdentityGateMode,
+    build_identity_gate_verdict,
+    identity_gate_fail_safe_verdict,
+    parse_identity_gate_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +168,9 @@ if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
         SMART_UPDATE_MODEL,
     )
     SMART_UPDATE_MODEL = "gemma-4-31b-it"
+SMART_UPDATE_IDENTITY_GATE_MODE = parse_identity_gate_mode(
+    os.getenv("SMART_UPDATE_IDENTITY_GATE", "off")
+)
 
 # Per-stage primary model overrides. Default route fact extraction and the
 # main writer to gemini-3.1-flash-lite (500 RPD per key, stable on Google's
@@ -14091,6 +14100,8 @@ async def _smart_event_update_impl(
                 _clip_title(getattr(match_event, "title", None)),
             )
 
+    identity_gate_candidates: list[Event] = []
+
     # LLM dedup adjudicator over WIDENED recall (INC-2026-05-30 opt 1).
     # Last-line, create-path only: even after every deterministic matcher + the
     # match/create bundle + rescue + probe said "no match", the genuine sibling may
@@ -14129,6 +14140,7 @@ async def _smart_event_update_impl(
                 db, [ev.id for ev in wide_pool if ev.id]
             )
             blocked = _dedup_adjudicator_block_candidates(candidate, wide_pool, wide_posters)
+            identity_gate_candidates = blocked or wide_pool[:10]
             if blocked:
                 decision = await _llm_dedup_adjudicator(
                     candidate, blocked, posters_map=wide_posters
@@ -14186,6 +14198,47 @@ async def _smart_event_update_impl(
                 _clip_title(candidate.location_name, 120),
             )
             return SmartUpdateResult(status="invalid", reason="prose_location")
+
+        if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
+            try:
+                identity_verdict = build_identity_gate_verdict(
+                    candidate,
+                    identity_gate_candidates or shortlist,
+                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                )
+                logger.info(
+                    "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",
+                    identity_verdict.mode.value,
+                    identity_verdict.action.value,
+                    identity_verdict.reason_code,
+                    identity_verdict.matched_event_id,
+                    identity_verdict.confidence,
+                    identity_verdict.deterministic,
+                    identity_verdict.fail_safe,
+                    identity_verdict.candidate.source_flags.source_kind
+                    if identity_verdict.candidate is not None
+                    else None,
+                    identity_verdict.candidate.source_flags.source_type
+                    if identity_verdict.candidate is not None
+                    else None,
+                )
+                if identity_verdict.should_veto_create:
+                    return SmartUpdateResult(
+                        status="skipped_identity_gate",
+                        reason=identity_verdict.reason_code,
+                    )
+            except Exception as exc:
+                logger.warning("smart_update: identity gate failed", exc_info=True)
+                identity_verdict = identity_gate_fail_safe_verdict(
+                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                    candidate=candidate,
+                    reason=str(exc) or "identity gate error",
+                )
+                if identity_verdict.should_veto_create:
+                    return SmartUpdateResult(
+                        status="skipped_identity_gate",
+                        reason=identity_verdict.reason_code,
+                    )
 
         normalized_event_type = _normalize_event_type_value(
             candidate.title, candidate.raw_excerpt or candidate.source_text, candidate.event_type
