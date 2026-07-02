@@ -1587,7 +1587,12 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             await _human_pause_async(multiplier=0.8 if processed > 1 else 0.2)
             seed_meta = _metadata_for_tg_seed(raw_url, handle, tg_seed_meta)
             try:
-                entity_ref = _telegram_entity_ref_from_seed(handle, seed_meta)
+                entity_ref = _telegram_entity_ref_from_seed(
+                    handle,
+                    seed_meta,
+                    input_peer_channel_cls=InputPeerChannel,
+                    peer_channel_cls=PeerChannel,
+                )
                 entity = await client.get_entity(entity_ref)
             except Exception as exc:
                 diagnostics.append(f"{handle}: get_entity failed: {exc}")
@@ -1834,14 +1839,24 @@ def _metadata_for_tg_seed(raw_url: str, handle: str, metadata: dict[str, dict[st
     return {}
 
 
-def _telegram_entity_ref_from_seed(handle: str, seed_meta: dict[str, Any]) -> Any:
+def _telegram_entity_ref_from_seed(
+    handle: str,
+    seed_meta: dict[str, Any],
+    *,
+    input_peer_channel_cls: Any | None = None,
+    peer_channel_cls: Any | None = None,
+) -> Any:
     access = seed_meta.get("telegram_access") if isinstance(seed_meta.get("telegram_access"), dict) else {}
     access_id = str(access.get("id") or handle or "").strip()
     access_hash = str(access.get("access_hash") or "").strip()
     if access_id.isdigit() and access_hash.lstrip("-").isdigit():
-        return InputPeerChannel(int(access_id), int(access_hash))
+        if input_peer_channel_cls is None:
+            from telethon.tl.types import InputPeerChannel as input_peer_channel_cls
+        return input_peer_channel_cls(int(access_id), int(access_hash))
     if str(handle or "").isdigit():
-        return PeerChannel(int(handle))
+        if peer_channel_cls is None:
+            from telethon.tl.types import PeerChannel as peer_channel_cls
+        return peer_channel_cls(int(handle))
     return handle
 
 
@@ -1849,9 +1864,26 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
     tg_seeds = _json_env("ACQ_TG_SEEDS_JSON", DEFAULT_TG_SEEDS)
     vk_seeds = _json_env("ACQ_VK_SEEDS_JSON", [])
     vk_allowlist = _json_env("ACQ_VK_ALLOWLIST_JSON", [])
+    tg_seed_meta = _tg_seed_metadata()
     surfaces_by_external: dict[str, dict[str, Any]] = {}
     for url in list(tg_seeds or []):
-        seed = _seed_surface(str(url), platform="tg")
+        seed_url = str(url)
+        seed = _seed_surface(seed_url, platform="tg")
+        seed_meta = _metadata_for_tg_seed(seed_url, str(seed.get("handle") or ""), tg_seed_meta)
+        if seed_meta:
+            if seed_meta.get("external_id"):
+                seed["external_id"] = str(seed_meta["external_id"])
+            if seed_meta.get("surface_type"):
+                seed["surface_type"] = str(seed_meta["surface_type"])
+            if seed_meta.get("source"):
+                seed["source"] = str(seed_meta["source"])
+            if seed_meta.get("topic_hint"):
+                seed["topic_hint"] = str(seed_meta["topic_hint"])
+            if seed_meta.get("title"):
+                seed["title"] = str(seed_meta["title"])
+            if seed["surface_type"] == "linked_discussion":
+                seed["status"] = "candidate"
+                seed["scan_state"] = "queued_waiting_replyable_budget"
         surfaces_by_external[seed["external_id"]] = seed
     # VK-ready but disabled unless explicit allowlist is provided. Seed rows are
     # stored for map/queue visibility, but scanned rows must overwrite them below

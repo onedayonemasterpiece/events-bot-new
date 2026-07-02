@@ -777,6 +777,44 @@ def test_tg_seed_metadata_env_parser(monkeypatch):
     assert runtime._metadata_for_tg_seed("https://t.me/c/1481648829", "1481648829", meta)["external_id"] == "tg:1481648829"
 
 
+def test_telegram_entity_ref_from_seed_uses_injected_input_peer_class():
+    runtime = load_runtime()
+
+    class DummyInputPeerChannel:
+        def __init__(self, channel_id, access_hash):
+            self.channel_id = channel_id
+            self.access_hash = access_hash
+
+    ref = runtime._telegram_entity_ref_from_seed(
+        "1481648829",
+        {"telegram_access": {"id": "1481648829", "access_hash": "5526881181816195856"}},
+        input_peer_channel_cls=DummyInputPeerChannel,
+    )
+
+    assert isinstance(ref, DummyInputPeerChannel)
+    assert ref.channel_id == 1481648829
+    assert ref.access_hash == 5526881181816195856
+
+
+def test_shadow_payload_applies_tg_seed_metadata_to_linked_discussion_rows(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_TG_SEEDS_JSON", '["https://t.me/c/1481648829"]')
+    monkeypatch.setenv(
+        "ACQ_TG_SEED_SURFACES_JSON",
+        '[{"url":"https://t.me/c/1481648829","handle":"1481648829","external_id":"tg:1481648829","surface_type":"linked_discussion","source":"linked_discussion","title":"КП Chat","topic_hint":"linked discussion for kpkld"}]',
+    )
+
+    payload = runtime.build_shadow_payload(scanned_surfaces=[], scanned_opportunities=[])
+
+    surface = payload["surfaces"][0]
+    assert surface["external_id"] == "tg:1481648829"
+    assert surface["surface_type"] == "linked_discussion"
+    assert surface["source"] == "linked_discussion"
+    assert surface["status"] == "candidate"
+    assert surface["scan_state"] == "queued_waiting_replyable_budget"
+    assert surface["title"] == "КП Chat"
+
+
 def test_tg_seed_metadata_is_initialized_inside_telegram_scan():
     source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
     telegram_body = source.split("async def scan_telegram_shadow_surfaces", 1)[1].split("def _seen_context_urls", 1)[0]

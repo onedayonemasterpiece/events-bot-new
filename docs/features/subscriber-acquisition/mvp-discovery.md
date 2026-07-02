@@ -28,6 +28,7 @@ contract:
 - server import keeps seed-only and budget-queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces; linked discussion groups found while resolving a channel but skipped by the replyable budget stay pending for the next Kaggle run instead of being delayed as already scanned;
 - seed collection prioritizes pending discovered/linked Telegram replyable surfaces before static catalog seed groups, so each follow-up Kaggle run spends its small replyable budget on newly found comment groups first;
 - importer merge policy treats the previous Kaggle resolver result as durable state: later seed-only placeholders for the same `external_id` must not overwrite `linked_discussion` type/source/title/topic metadata or the private Telegram access hash needed for numeric `t.me/c/<id>` rescans;
+- the Kaggle runtime resolves numeric linked discussions with stored access metadata via Telethon `InputPeerChannel`, and seed-only diagnostic rows apply the stored `linked_discussion` metadata instead of falling back to `unknown_public`;
 - seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
 - optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
 - Telegram channels without accessible linked discussion/comments are marked

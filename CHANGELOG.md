@@ -24,6 +24,7 @@
 - Subscriber Acquisition runtime now marks linked discussions that were found but skipped by the replyable-surface budget as queued/unscanned, so imports keep `last_scan_at` empty and the next Kaggle run continues with those real comment groups instead of delaying them as already scanned.
 - Subscriber Acquisition seed collection now prioritizes pending discovered/linked Telegram replyable surfaces ahead of static catalog seed groups, so follow-up Kaggle runs analyze newly found comment groups first.
 - Subscriber Acquisition import now preserves existing linked-discussion metadata and private Telegram access data when a later Kaggle payload contains only a seed-placeholder row for the same surface, preventing follow-up runs from discarding the previous resolver result.
+- Subscriber Acquisition Kaggle runtime now resolves stored numeric `t.me/c/<id>` linked discussions through the injected Telethon `InputPeerChannel` class instead of a missing global import, and seed-only output rows apply stored linked-discussion metadata for clearer diagnostics.
 - Subscriber Acquisition Discovery now has an optional Yandex Managed Service
   for YDB serverless stats sink for run/surface/opportunity state, plus
   Telega.in Kaliningrad regional Telegram seeds for broader frontier discovery.
