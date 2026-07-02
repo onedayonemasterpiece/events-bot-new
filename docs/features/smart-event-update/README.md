@@ -56,6 +56,20 @@ Smart Update по умолчанию строит публичный текст 
   - Telegram Monitoring помечает extracted time как `time_is_default=true`, если это время не поддержано текстом поста, linked source text или OCR. Такой кандидат может смержиться с уже существующей карточкой по дате/площадке/смыслу, не создавая дубль только из-за неподтверждённого времени.
   - rescue‑match на create‑пути: если LLM на шаге `match_or_create` выбрал `create`, но вернул осмысленный `bundle.title`, Smart Update делает дополнительную детерминированную попытку матчинга по shortlist через `bundle.title`, чтобы не создавать дубль при слабом/плохом `candidate.title`.
   - **LLM dedup adjudicator (widened recall, create-path only — INC‑2026‑05‑30 opt 1).** Самый последний рубеж: когда все детерминированные матчеры, `match_or_create` bundle, rescue‑match и `_pre_create_duplicate_probe` сказали «нет совпадения», настоящий дубль мог просто не попасть в anchor‑gated shortlist (дрейф строки площадки или времени doors/start). Поэтому Smart Update делает **отдельный широкий recall** (дата ±1 день + soft‑city, БЕЗ фильтра по точной площадке/времени), сужает его дешёвым blocking‑ключом (`_titles_look_related` OR совпадение площадки OR паритет `ticket_link` OR пересечение poster‑hash, топ‑8) и спрашивает LLM (`_llm_dedup_adjudicator`, decision‑only JSON: `action/match_event_id/confidence/reason_code/reason`) — это дубль или отдельное событие. Промпт явно: doors‑vs‑start и алиас/касса/билетный‑оператор площадки — НЕ признак различия; два разных вендора билетов на один слот — это всё ещё один ивент; но несколько сеансов из одного поста, утренник+вечер, разные шоу и `allow_parallel` площадки — РАЗНЫЕ события. Решение проходит детерминированный guard‑ladder `_dedup_adjudicator_accept_merge` (порог `confidence ≥ 0.80`, для `allow_parallel` `≥ 0.90`; veto по конфликту времени кроме `doors_start_skew ≤ 90 мин`; unrelated‑title overrule кроме `junk_location_same_venue`; `generic_ticket_false_friend`; и **жёсткий инвариант**: один и тот же `source_url` + конфликт времени ⇒ всегда create — это легитимный multi‑session split вроде `5426/5427` из `t.me/gusmuseum/4509`). Адъюдикатор работает ТОЛЬКО на create‑пути (никогда не переопределяет уже найденный match), не запускается для `parser:*` и под `anchor_forced`, и управляется флагом `SMART_UPDATE_DEDUP_ADJUDICATOR` (default ON). Он не противоречит детерминированным rescue‑веткам выше — запускается строго после них.
+  - **Vector identity foundation (not wired into Smart Update yet).**
+    `event_identity.py` now defines the `identity_candidate_v1` compact
+    candidate document format for future embedding recall: every emitted line is
+    provenance-labelled (`candidate.title`, `candidate.location_name`,
+    `candidate.source_text`, poster OCR/hash labels, etc.), large fields are
+    bounded/truncated, and the final document carries a stable SHA-256 hash. The
+    backend helper `recall_identity_candidates_by_embedding()` accepts an
+    injected service-role Supabase client, configurable `top_k`,
+    `min_similarity`, `timeout_seconds`, and returns a safe empty failure result
+    on RPC/network/schema/timeout errors. The Supabase migration
+    `event_identity_candidates_by_embedding_v1` is service-role-only and reads
+    nearest-neighbour evidence from `event_search_documents` +
+    `event_embeddings`; no browser/public API and no Smart Update matching path
+    calls it yet.
   - create-bundle title guard теперь жёстче:
     - prompt прямо запрещает редакционные/идеологические заголовки вместо фактического имени события;
     - если явного имени нет, LLM должен предпочесть нейтральный формат вроде `<event_type> в <venue>`, а не промо-слоган;
