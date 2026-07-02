@@ -19,6 +19,8 @@ import random
 import re
 import time
 import uuid
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Optional, TYPE_CHECKING
@@ -96,6 +98,7 @@ class GoogleAIClient:
     DEFAULT_MAX_OUTPUT_TOKENS = 8192
     DEFAULT_TPM_RESERVE_EXTRA = 1000
     DEFAULT_MULTIMODAL_IMAGE_TOKENS = 1600
+    DEFAULT_EMBEDDING_TPM_RESERVE_EXTRA = 64
     # Heuristic budget for prompt token estimation. We intentionally overestimate
     # to avoid passing Supabase reserve checks and then hitting provider 429
     # on input-token-per-minute quotas.
@@ -824,6 +827,174 @@ class GoogleAIClient:
 
         raise last_error or ProviderError(error_type="unknown", error_message="Max retries exceeded")
     
+
+    async def embed_content_async(
+        self,
+        model: str,
+        text: str,
+        *,
+        output_dimensionality: int = 768,
+        task_type: Optional[str] = None,
+        title: Optional[str] = None,
+        candidate_key_ids: Optional[list[str]] = None,
+    ) -> tuple[tuple[float, ...], UsageInfo]:
+        """Generate a text embedding through the same reserve/finalize limiter.
+
+        Embedding provider calls must not bypass ``google_ai_reserve``.  The
+        Google embedding REST response does not currently expose token usage in
+        the shape we use here, so finalize records a conservative reserved-token
+        estimate as best-effort usage and does not reduce the reserved TPM.
+        """
+
+        request_uid = str(uuid.uuid4())
+        model_name = (model or "").strip()
+        limit_model = self._normalize_rate_limit_model(model_name)
+        provider_model, provider_model_name = self._resolve_provider_model(model_name or limit_model)
+        reserved_tpm = self._calculate_reserved_embedding_tpm(text)
+        ctx = RequestContext(
+            request_uid=request_uid,
+            consumer=self.consumer,
+            account_name=self.account_name,
+            model=limit_model,
+            requested_model=model_name or limit_model,
+            provider_model=provider_model,
+            provider_model_name=provider_model_name,
+            reserved_tpm=reserved_tpm,
+        )
+
+        last_error: Optional[Exception] = None
+        for attempt_no in range(1, self.max_retries + 1):
+            try:
+                return await self._attempt_embed(
+                    ctx=ctx,
+                    attempt_no=attempt_no,
+                    text=text,
+                    output_dimensionality=output_dimensionality,
+                    task_type=task_type,
+                    title=title,
+                    candidate_key_ids=candidate_key_ids,
+                )
+            except RateLimitError:
+                raise
+            except ReservationError:
+                raise
+            except ProviderError as exc:
+                last_error = exc
+                if int(getattr(exc, "status_code", 0) or 0) == 429:
+                    raise
+                can_retry = bool(exc.retryable) and attempt_no < self.max_retries
+                if can_retry:
+                    delay_ms = self.retry_delays_ms[min(attempt_no - 1, len(self.retry_delays_ms) - 1)]
+                    if exc.retry_after_ms:
+                        delay_ms = max(int(delay_ms), int(exc.retry_after_ms))
+                    await asyncio.sleep((delay_ms + random.randint(0, 100)) / 1000)
+                    self._log_event("google_ai.embedding_retry", ctx, attempt_no=attempt_no, error=str(exc))
+                    continue
+                raise
+        raise last_error or ProviderError(error_type="unknown", error_message="Max embedding retries exceeded")
+
+    async def _attempt_embed(
+        self,
+        *,
+        ctx: RequestContext,
+        attempt_no: int,
+        text: str,
+        output_dimensionality: int,
+        task_type: Optional[str],
+        title: Optional[str],
+        candidate_key_ids: Optional[list[str]],
+    ) -> tuple[tuple[float, ...], UsageInfo]:
+        reserve_result = await self._reserve(ctx, attempt_no, candidate_key_ids)
+        if not reserve_result.ok:
+            raise RateLimitError(
+                blocked_reason=reserve_result.blocked_reason or "unknown",
+                retry_after_ms=reserve_result.retry_after_ms,
+                model=ctx.model,
+                api_key_id=reserve_result.api_key_id,
+                minute_bucket=reserve_result.minute_bucket,
+                day_bucket=reserve_result.day_bucket,
+            )
+
+        ctx.api_key_id = reserve_result.api_key_id
+        self._log_event("google_ai.reserve_ok", ctx, attempt_no=attempt_no, reserve=reserve_result)
+
+        api_key = self._get_api_key(reserve_result.env_var_name)
+        if not api_key:
+            await self._notify_incident(
+                "missing_api_key",
+                ctx=ctx,
+                severity="critical",
+                message=f"API key not found: {reserve_result.env_var_name}",
+                details={"env_var_name": reserve_result.env_var_name},
+            )
+            raise ReservationError(f"API key not found: {reserve_result.env_var_name}")
+
+        await self._mark_sent(ctx, attempt_no)
+        start_time = _monotonic()
+        try:
+            if self.dry_run:
+                values = tuple(0.0 for _ in range(max(1, int(output_dimensionality))))
+            else:
+                values = await self._call_embedding_provider(
+                    api_key=api_key,
+                    model=ctx.requested_model or ctx.model,
+                    text=text,
+                    output_dimensionality=output_dimensionality,
+                    task_type=task_type,
+                    title=title,
+                )
+            duration_ms = int((_monotonic() - start_time) * 1000)
+        except Exception as exc:
+            duration_ms = int((_monotonic() - start_time) * 1000)
+            provider_error = self._classify_error(exc)
+            await self._finalize(ctx=ctx, attempt_no=attempt_no, usage=None, duration_ms=duration_ms, error=provider_error)
+            self._log_event("google_ai.embedding_call_error", ctx, attempt_no=attempt_no, duration_ms=duration_ms, error=provider_error)
+            raise provider_error
+
+        usage = UsageInfo(input_tokens=int(ctx.reserved_tpm or 0), output_tokens=0, total_tokens=int(ctx.reserved_tpm or 0))
+        await self._finalize(ctx=ctx, attempt_no=attempt_no, usage=usage, duration_ms=duration_ms)
+        self._log_event("google_ai.embedding_call_ok", ctx, attempt_no=attempt_no, duration_ms=duration_ms, usage=usage)
+        return values, usage
+
+    async def _call_embedding_provider(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        text: str,
+        output_dimensionality: int,
+        task_type: Optional[str],
+        title: Optional[str],
+    ) -> tuple[float, ...]:
+        def _sync_call() -> tuple[float, ...]:
+            provider_model, provider_model_name = self._resolve_provider_model(model)
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/{provider_model_name}:embedContent"
+            payload: dict[str, Any] = {
+                "model": provider_model_name,
+                "content": {"parts": [{"text": text}]},
+                "outputDimensionality": int(output_dimensionality),
+            }
+            if task_type:
+                payload["taskType"] = str(task_type)
+            if title:
+                payload["title"] = str(title)
+            request = urllib.request.Request(
+                endpoint,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                method="POST",
+                headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            )
+            timeout_sec = float(self.provider_timeout_seconds or 0.0) or None
+            with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+                response_payload = json.loads(response.read().decode("utf-8") or "{}")
+            values = response_payload.get("embedding", {}).get("values")
+            if not isinstance(values, list) or len(values) != int(output_dimensionality):
+                got = len(values) if isinstance(values, list) else "missing"
+                raise RuntimeError(f"Gemini embedding returned unexpected dimension: {got}")
+            return tuple(float(value) for value in values)
+
+        return await asyncio.to_thread(_sync_call)
+
     async def _attempt_generate(
         self,
         ctx: RequestContext,
@@ -1846,6 +2017,12 @@ class GoogleAIClient:
         if blob_count > 0:
             est += blob_count * int(self.DEFAULT_MULTIMODAL_IMAGE_TOKENS)
         return max(1, est)
+
+
+    def _calculate_reserved_embedding_tpm(self, text: Any) -> int:
+        input_est = self._estimate_prompt_tokens(text)
+        extra = self._read_int_env("GOOGLE_AI_EMBEDDING_TPM_RESERVE_EXTRA", self.DEFAULT_EMBEDDING_TPM_RESERVE_EXTRA)
+        return max(1, int(input_est) + int(extra))
 
     def _calculate_reserved_tpm(self, *, prompt: Any, max_output_tokens: int) -> int:
         """Calculate tokens to reserve for TPM check.

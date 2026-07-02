@@ -69,7 +69,10 @@ Smart Update по умолчанию строит публичный текст 
     (not stored), call the service-role-only Supabase RPC
     `event_identity_candidates_by_embedding_v1` over existing `related_v1` and
     `search_v3` vectors, hydrate the nearest SQLite event by id, and feed that
-    vector evidence into deterministic create-veto checks. `search_v3` is broad
+    vector evidence into deterministic create-veto checks. The ephemeral
+    embedding provider call must go through `GoogleAIClient.embed_content_async()`
+    and `google_ai_reserve`/`google_ai_finalize`; direct `embedContent` calls are
+    disabled unless an explicit local/debug bypass is set. `search_v3` is broad
     recall evidence only; high vector similarity alone is not enough to block
     recurring/single-slot events with different explicit dates.
   - create-bundle title guard теперь жёстче:

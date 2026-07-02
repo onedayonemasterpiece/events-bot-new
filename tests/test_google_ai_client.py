@@ -528,3 +528,64 @@ def test_normalize_overflow_envs_parses_csv_and_list() -> None:
     assert GoogleAIClient._normalize_overflow_envs("") == []
     assert GoogleAIClient._normalize_overflow_envs(" A , B ,A, ") == ["A", "B"]
     assert GoogleAIClient._normalize_overflow_envs(["A", "B", "A"]) == ["A", "B"]
+
+
+@pytest.mark.asyncio
+async def test_embed_content_async_reserves_before_provider_call(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_EMBED", "test-embedding-key")
+    monkeypatch.setenv("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "1")
+    supabase = _FakeSupabaseClient(
+        data=[{"id": "id-embed", "env_var_name": "GOOGLE_API_KEY_EMBED", "priority": 1}],
+        reserve_data={
+            "ok": True,
+            "api_key_id": "id-embed",
+            "env_var_name": "GOOGLE_API_KEY_EMBED",
+            "key_alias": "embedding-key",
+        },
+    )
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update_identity_embedding",
+        default_env_var_name="GOOGLE_API_KEY_EMBED",
+    )
+
+    provider_calls: list[dict] = []
+
+    class _EmbeddingResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self):
+            return b'{"embedding":{"values":[0.1,0.2,0.3]}}'
+
+    def fake_urlopen(request, timeout=None):
+        provider_calls.append(
+            {
+                "url": request.full_url,
+                "headers": dict(request.header_items()),
+                "body": request.data.decode("utf-8"),
+                "timeout": timeout,
+            }
+        )
+        return _EmbeddingResponse()
+
+    monkeypatch.setattr("google_ai.client.urllib.request.urlopen", fake_urlopen)
+
+    values, usage = await client.embed_content_async(
+        model="gemini-embedding-2",
+        text="identity document",
+        output_dimensionality=3,
+    )
+
+    assert values == (0.1, 0.2, 0.3)
+    assert usage.total_tokens > 0
+    assert provider_calls, "provider must be called after reserve"
+    assert provider_calls[0]["url"].endswith("/models/gemini-embedding-2:embedContent")
+    assert "test-embedding-key" in provider_calls[0]["headers"].values()
+    assert supabase.rpc_calls[0]["p_model"] == "gemini-embedding-2"
+    assert supabase.rpc_calls[0]["p_consumer"] == "smart_update_identity_embedding"
+    assert supabase.rpc_calls[0]["p_reserved_tpm"] > 0
+    assert any("p_provider_status" in call for call in supabase.rpc_calls), "finalize RPC must be called"

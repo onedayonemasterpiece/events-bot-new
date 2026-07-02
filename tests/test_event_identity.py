@@ -197,3 +197,14 @@ def test_supabase_migration_is_service_role_only():
     assert "REVOKE ALL ON FUNCTION public.event_identity_candidates_by_embedding_v1" in sql
     assert "GRANT EXECUTE ON FUNCTION public.event_identity_candidates_by_embedding_v1" in sql
     assert "TO service_role" in sql
+
+
+def test_direct_identity_embedding_requires_explicit_limiter_bypass(monkeypatch):
+    from event_identity import embed_identity_document_with_gemini
+
+    monkeypatch.delenv("EVENT_IDENTITY_ALLOW_DIRECT_EMBEDDING", raising=False)
+    result = embed_identity_document_with_gemini("hello", api_key="test-key", dim=3)
+
+    assert not result.ok
+    assert result.error_type == "RuntimeError"
+    assert "without GoogleAIClient limiter is disabled" in (result.error_message or "")

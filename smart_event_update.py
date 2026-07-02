@@ -8254,6 +8254,68 @@ def _looks_like_unsupported_exhibition_teaser_date(candidate: EventCandidate, te
 
 
 
+
+@lru_cache(maxsize=1)
+def _get_identity_embedding_client():
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+        from main import get_supabase_client, notify_llm_incident
+    except Exception as exc:  # pragma: no cover - optional dependency
+        logger.warning("smart_update.identity_gate embedding client unavailable: %s", exc)
+        return None
+    return GoogleAIClient(
+        supabase_client=get_supabase_client(),
+        secrets_provider=SecretsProvider(),
+        consumer="smart_update_identity_embedding",
+        account_name="smart-update-identity-embedding",
+        default_env_var_name=SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV,
+        incident_notifier=notify_llm_incident,
+    )
+
+
+async def _smart_update_embed_identity_document_with_limiter(doc: Any):
+    try:
+        from event_identity import EventIdentityEmbeddingResult
+    except Exception as exc:  # pragma: no cover
+        return None
+    client = _get_identity_embedding_client()
+    if client is None:
+        return EventIdentityEmbeddingResult(
+            ok=False,
+            model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+            dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+            error_type="MissingGoogleAIClient",
+            error_message="GoogleAIClient unavailable for identity embedding limiter",
+        )
+    previous_timeout = getattr(client, "provider_timeout_seconds", 0.0)
+    try:
+        client.provider_timeout_seconds = max(0.1, float(SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS or 10.0))
+        values, _usage = await client.embed_content_async(
+            model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+            text=getattr(doc, "text", None) or str(doc or ""),
+            output_dimensionality=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+        )
+        return EventIdentityEmbeddingResult(
+            ok=True,
+            embedding=tuple(float(v) for v in values),
+            model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+            dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+        )
+    except Exception as exc:
+        return EventIdentityEmbeddingResult(
+            ok=False,
+            model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+            dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+            error_type=type(exc).__name__,
+            error_message=str(exc)[:300],
+        )
+    finally:
+        try:
+            client.provider_timeout_seconds = previous_timeout
+        except Exception:
+            pass
+
+
 async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> IdentityVectorEvidence | None:
     """Best-effort vector recall evidence for the create-path identity gate.
 
@@ -8269,7 +8331,6 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
             EventIdentityRecallConfig,
             SupabaseRestRpcClient,
             build_identity_candidate_document,
-            embed_identity_document_with_gemini,
             recall_identity_candidates_across_doc_kinds,
         )
 
@@ -8301,19 +8362,14 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
 
         doc = build_identity_candidate_document(candidate)
 
-        def _recall_sync() -> IdentityVectorEvidence:
-            embedding = embed_identity_document_with_gemini(
-                doc,
-                api_key=google_key,
-                model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
-                dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
-                timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
+        embedding = await _smart_update_embed_identity_document_with_limiter(doc)
+        if embedding is None or not embedding.ok:
+            return IdentityVectorEvidence(
+                available=False,
+                error=f"embedding_failed:{getattr(embedding, 'error_type', None)}:{getattr(embedding, 'error_message', None)}",
             )
-            if not embedding.ok:
-                return IdentityVectorEvidence(
-                    available=False,
-                    error=f"embedding_failed:{embedding.error_type}:{embedding.error_message}",
-                )
+
+        def _recall_sync() -> IdentityVectorEvidence:
             client = SupabaseRestRpcClient(
                 supabase_url,
                 supabase_key,

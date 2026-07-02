@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -337,15 +338,27 @@ def embed_identity_document_with_gemini(
     model: str = "gemini-embedding-2",
     dim: int = 768,
     timeout_seconds: float = 10.0,
+    allow_direct_without_limiter: bool = False,
 ) -> EventIdentityEmbeddingResult:
     """Generate an ephemeral Gemini embedding for a candidate identity document.
 
     The candidate embedding is not stored.  Failures are returned as data so
     Smart Update can log/review instead of silently bypassing the identity gate.
+
+    This is a low-level/debug helper. Production code must use GoogleAIClient's
+    limiter-aware embedding path. To avoid accidental quota bypasses, direct
+    provider access requires either ``allow_direct_without_limiter=True`` from a
+    trusted local caller or ``EVENT_IDENTITY_ALLOW_DIRECT_EMBEDDING=1``.
     """
 
     text = document.text if isinstance(document, IdentityCandidateDocument) else _as_clean_text(document)
     try:
+        direct_allowed = bool(allow_direct_without_limiter) or (
+            os.getenv("EVENT_IDENTITY_ALLOW_DIRECT_EMBEDDING", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+        if not direct_allowed:
+            raise RuntimeError("direct identity embedding without GoogleAIClient limiter is disabled")
         if not api_key:
             raise RuntimeError("Google API key is required for identity embedding")
         if not text:
