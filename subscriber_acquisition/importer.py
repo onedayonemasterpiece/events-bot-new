@@ -78,6 +78,36 @@ def _surface_was_scanned(item: dict[str, Any]) -> bool:
     return bool(basis and basis != "seed_only")
 
 
+def _is_unscanned_seed_placeholder(item: dict[str, Any], *, scanned_this_run: bool) -> bool:
+    if scanned_this_run:
+        return False
+    status = str((item or {}).get("status") or "").strip().lower()
+    source = str((item or {}).get("source") or "").strip().lower()
+    surface_type = str((item or {}).get("surface_type") or "").strip().lower()
+    reach = item.get("reach") if isinstance(item, dict) else None
+    basis = str((reach or {}).get("basis") or "").strip().lower()
+    return (
+        status in {"", "seed", "candidate", "needs_comment_resolve"}
+        and source in {"", "seed"}
+        and surface_type in {"", "unknown", "unknown_public"}
+        and basis in {"", "seed_only"}
+    )
+
+
+def _merge_risk_json(existing: Any, incoming: Any) -> Any:
+    existing_dict = existing if isinstance(existing, dict) else {}
+    incoming_dict = incoming if isinstance(incoming, dict) else {}
+    merged = dict(existing_dict)
+    merged.update(incoming_dict)
+    existing_access = existing_dict.get("_telegram_access")
+    incoming_access = incoming_dict.get("_telegram_access")
+    if isinstance(incoming_access, dict):
+        merged["_telegram_access"] = incoming_access
+    elif isinstance(existing_access, dict):
+        merged["_telegram_access"] = existing_access
+    return merged
+
+
 def _should_apply_runtime_status(existing: AcqSurface, incoming_status: str, *, scanned_this_run: bool) -> bool:
     """Apply crawler status without overwriting human moderation decisions.
 
@@ -215,13 +245,21 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                             newly_rejected_surfaces += 1
                         if incoming_status == "resolved_has_linked_discussion":
                             newly_resolved_channels += 1
-                surface.title = item.get("title") or surface.title
-                surface.url = str(item.get("url") or surface.url or "")
-                surface.handle = item.get("handle") or surface.handle
-                surface.topic_hint = item.get("topic_hint") or surface.topic_hint
-                surface.topic_cluster = item.get("topic_cluster") or surface.topic_cluster
-                surface.reach_json = reach or surface.reach_json
-                surface.risk_json = risk or surface.risk_json
+                seed_placeholder = _is_unscanned_seed_placeholder(item, scanned_this_run=scanned_this_run)
+                if not seed_placeholder:
+                    surface.title = item.get("title") or surface.title
+                    surface.url = str(item.get("url") or surface.url or "")
+                    surface.handle = item.get("handle") or surface.handle
+                    surface.topic_hint = item.get("topic_hint") or surface.topic_hint
+                    surface.topic_cluster = item.get("topic_cluster") or surface.topic_cluster
+                    surface.reach_json = reach or surface.reach_json
+                if seed_placeholder:
+                    access_only = {}
+                    if isinstance(risk, dict) and isinstance(risk.get("_telegram_access"), dict):
+                        access_only["_telegram_access"] = risk["_telegram_access"]
+                    surface.risk_json = _merge_risk_json(surface.risk_json, access_only)
+                else:
+                    surface.risk_json = _merge_risk_json(surface.risk_json, risk)
                 if scanned_this_run:
                     surface.last_scan_at = generated_at
                     surface.next_scan_after = next_surface_scan_after(surface.status, now=generated_at)

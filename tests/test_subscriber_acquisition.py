@@ -144,6 +144,61 @@ async def test_import_keeps_queued_linked_discussion_unscanned(db, sample_payloa
 
 
 @pytest.mark.asyncio
+async def test_import_seed_placeholder_does_not_overwrite_linked_discussion_metadata(db, sample_payload):
+    first = json.loads(json.dumps(sample_payload))
+    first["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "title": "Комсомольская правда — Калининград Chat",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "scan_state": "queued_waiting_replyable_budget",
+            "topic_hint": "linked discussion for kpkld",
+            "reach": {"basis": "telegram_linked_discussion", "confidence": "low"},
+            "risk": {"reason": "linked", "spam_risk": "unknown"},
+            "telegram_access": {"id": "1481648829", "access_hash": "secret-hash"},
+        }
+    ]
+    first["opportunities"] = []
+    await import_discovery_result(db, first)
+
+    second = json.loads(json.dumps(sample_payload))
+    second["run_id"] = "seed-placeholder-follow-up"
+    second["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "unknown_public",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "status": "needs_comment_resolve",
+            "source": "seed",
+            "topic_hint": "Kaliningrad public/community seed",
+            "reach": {"basis": "seed_only", "confidence": "low"},
+            "risk": {"reason": "not scanned yet"},
+        }
+    ]
+    second["opportunities"] = []
+    await import_discovery_result(db, second)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:1481648829"))).scalar_one()
+
+    assert surface.surface_type == "linked_discussion"
+    assert surface.status == "candidate"
+    assert surface.source == "linked_discussion"
+    assert surface.title == "Комсомольская правда — Калининград Chat"
+    assert surface.topic_hint == "linked discussion for kpkld"
+    assert surface.reach_json["basis"] == "telegram_linked_discussion"
+    assert surface.risk_json["reason"] == "linked"
+    assert surface.risk_json["_telegram_access"]["access_hash"] == "secret-hash"
+
+
+@pytest.mark.asyncio
 async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sample_payload):
     first = json.loads(json.dumps(sample_payload))
     first["surfaces"][0]["external_id"] = "tg:visitNavahrudak"
