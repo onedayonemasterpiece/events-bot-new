@@ -1,5 +1,5 @@
 name = "code_mapper"
-description = "Read-only mapper for locating relevant files, execution paths, dependencies, and safe lane boundaries before implementation."
+description = "Read-only mapper for locating relevant files, execution paths, dependencies, hidden coupling, and safe lane boundaries before implementation."
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 

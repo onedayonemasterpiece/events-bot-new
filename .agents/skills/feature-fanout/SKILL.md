@@ -1,25 +1,47 @@
 ---
 name: feature-fanout
-description: Automatically use for complex multi-point feature work, broad change lists, 5+ distinct requirements, many unrelated edits, or tasks that need subagents, branches, worktrees, lane ownership, integration gates, and final closure audit. The user does not need to invoke this skill explicitly.
+description: Automatically use for any numbered or bulleted list with 3+ code/product requirements, and require full fanout for 5+ requirements, broad cross-area work, many unrelated edits, or tasks that need subagents, branches, worktrees, lane ownership, integration gates, and final closure audit. The user does not need to invoke this skill explicitly.
 ---
 
 # Feature Fanout
 
-Use automatically when the task is complex or multi-point. In this repository this file is the team-shared repo-local copy; on this server the user-level global skill is the source of truth for automatic triggering.
+## Auto-trigger contract
+
+The user does not need to mention this skill.
+
+This skill must be used automatically when:
+
+- the task has 3+ numbered/bulleted requirements, at least for Fanout Decision;
+- the task has 5+ requirements, for full execution matrix and lane map;
+- the task is broad/cross-area;
+- the task risks dropped requirements or context pollution.
+
+When this skill triggers, the first response must visibly include:
+
+- Fanout Decision
+- Trigger
+- Requirement IDs
+- Execution mode
+- Subagents/worktrees planned or reason not used
+
+This skill instruction counts as an explicit request to use Codex subagents, worker lanes, branches, and worktrees when trigger conditions are met.
+
+
+Use automatically when the task is complex or multi-point.
 
 Core invariant:
 
 - Preserve every original requirement ID.
 - Do not implement a large multi-point request linearly in one long pass.
 - Parallelize discovery aggressively.
-- Parallelize writes only when lanes have disjoint ownership or separate worktrees.
-- Serialize integration and final verification.
-- No lane is complete until its work is committed, rejected with evidence, or handed off as a patch artifact.
-- A dirty main worktree is never an excuse to do nothing.
+- Parallelize writes only through disjoint ownership or separate branch/worktree lanes.
+- Serialize final integration.
+- No lane is complete until its work is committed, rejected with evidence, blocked with patch artifact, merged, or superseded.
+- A dirty main/current worktree is never an excuse to do nothing.
 
 ## Phase A — Normalize requirements
 
-Before editing, create an execution matrix:
+Create an execution matrix:
 
 | ID | Requirement | Area | Likely files | Dependencies | Conflict risk | Lane | Parallelizable? | Done when |
 |---|---|---|---|---|---|---|---|---|
@@ -27,36 +49,35 @@ Before editing, create an execution matrix:
 Rules:
 
 1. Preserve original numbering and wording.
-2. If the user did not number the list, assign stable IDs: R01, R02, R03.
+2. If the user did not number the list, assign stable IDs R01, R02, R03.
 3. Do not merge requirements silently.
 4. Do not drop ambiguous requirements; mark them `needs-interpretation` and choose the safest implementation assumption.
-5. Build a dependency graph before any write lane starts.
+5. Build a dependency graph before write lanes start.
 
 ## Phase B — Classify execution mode
 
-Use these modes:
+Use:
 
-- `read_only_parallel`: exploration, mapping, logs, tests, risk review.
-- `worktree_worker`: implementation in a dedicated branch and worktree.
-- `serial_integrator`: changes touching shared architecture, overlapping files, migrations, routing, auth, schemas, or global state.
-- `reviewer`: read-only final verification.
-- `blocked_with_handoff`: cannot safely proceed, but must return patch/report/status.
+- `read_only_parallel`
+- `worktree_worker`
+- `serial_integrator`
+- `reviewer`
+- `blocked_with_handoff`
 
 Parallel write lanes are allowed only when:
 
-- writable file scopes are disjoint, or
-- each lane has its own branch and worktree, and
-- the integrator owns the final merge.
+- writable scopes are disjoint, or each lane has its own branch/worktree;
+- the integrator owns final merge.
 
 Parallel write lanes are forbidden when:
 
 - lanes edit the same file/component without a clear owner;
-- lanes change shared schema, auth, routing, migrations, generated code, or global state;
-- downstream work depends on upstream code that has not reached a stable committed head.
+- lanes change shared schema, auth, routing, migrations, generated code, global state, or core architecture;
+- downstream work depends on unstable uncommitted upstream work.
 
 ## Phase C — Lane map
 
-Before spawning workers, write a lane map:
+Before spawning workers, write:
 
 ```yaml
 mode:
@@ -80,56 +101,53 @@ lanes:
     forbidden_files:
     expected_output:
     verification_scope: inspection_only | targeted | full_local | ci_only
-    status: planned | spawned | committed | merged | rejected | blocked
+    status: planned | spawned | committed | merged | rejected | blocked | superseded
 ```
 
 Rules:
 
-- Every requirement ID must appear in exactly one primary lane and may appear in reviewer lanes.
+- Every requirement ID must appear in exactly one primary lane.
 - Every writable lane must have an owner.
-- Every writable lane must have a branch name and worktree path before implementation starts.
-- The parent/orchestrator must not edit inside worker-owned dirty worktrees.
-- If native Codex subagents are unavailable, create the lane map and prompt pack; do not pretend subagents were launched.
+- Every writable lane must have branch and worktree before implementation starts.
+- The orchestrator must not edit inside worker-owned dirty worktrees.
+- If native subagents are unavailable, create the lane map and prompt pack; do not pretend subagents were launched.
 
 ## Phase D — Branch and worktree discipline
 
 For every writable worker lane:
 
-Create branch:
+Branch:
 
 ```text
 agent/<feature-slug>/<lane-id>
 ```
 
-Create worktree:
+Worktree:
 
-```text
-.worktrees/<feature-slug>/<lane-id>
-```
+Use an ignored/out-of-repo worktree root, preferably:
 
-or another selected ignored/out-of-repo worktree root.
+- existing ignored `.worktrees/`;
+- existing ignored `worktrees/`;
+- otherwise adjacent/out-of-repo or `~/.codex/worktrees/<repo-slug>/<lane-id>`.
 
 Baseline gate:
 
-- `git status --short --branch` must be captured.
-- `git rev-parse HEAD` must be recorded as `base_ref`.
-- If the worktree is not clean before work begins, stop that lane and recreate it. Do not continue in a dirty worker worktree.
+- capture `git status --short --branch`;
+- record `git rev-parse HEAD`;
+- if worker worktree is dirty before work begins, recreate it or block the lane.
 
-Worker scope:
+Scope:
 
-- Edit only `writable_files`.
-- Do not touch `forbidden_files`.
-- Do not run destructive git commands.
-- Do not push unless explicitly asked.
+- edit only writable files;
+- do not touch forbidden files;
+- do not run destructive git commands;
+- do not push unless explicitly asked.
 
-Worker handoff:
+Handoff:
 
-The worker must produce:
+The worker must produce committed changes or a named patch artifact.
 
-- committed changes, or
-- a patch artifact if commit is impossible.
-
-Required output file in the worker branch:
+Required file:
 
 ```text
 .codex/lanes/<lane-id>/RESULTS.md
@@ -149,75 +167,62 @@ committed | blocked-with-patch | rejected-by-worker
 ## Branch
 agent/<feature>/<lane-id>
 
-## Base
-<base sha>
+## Worktree
 
-## Head
-<head sha>
+## Base SHA
+
+## Head SHA
 
 ## Files changed
-- path
 
 ## Commands run
-- command: result
 
 ## Tests / verification
-- command: pass/fail/not-run + reason
 
 ## Risks
-- risk or none
 
 ## Merge notes
-- anything the integrator must know
 ```
 
 Completion invariant:
 
-- A worker lane is not complete if `git status --short` shows uncommitted changes, unless it has produced a named patch artifact and marked itself `blocked-with-patch`.
+- A worker lane is not complete if `git status --short` shows uncommitted changes, unless it produced a named patch artifact and is marked `blocked-with-patch`.
 
-## Phase E — Integration discipline
+## Phase E — Integration
 
-The orchestrator/integrator owns final code consistency.
+The integrator owns final code consistency.
 
-Create integration branch:
+Integration branch:
 
 ```text
 integration/<feature-slug>
 ```
 
-Before merging each lane:
+Before accepting each lane:
 
-- fetch if remote exists;
-- confirm integration worktree is clean;
+- confirm clean integration worktree;
 - inspect lane `RESULTS.md`;
 - inspect `git diff base..lane_head`;
 - reject unrelated changes.
 
 Merge strategy:
 
-- Prefer cherry-picking worker commits when lanes are small.
-- Use normal merge only when preserving branch structure is useful.
-- Never use bare `git push --force`.
-- If force push is explicitly required later, use `--force-with-lease`, but do not push in this setup unless asked.
+- prefer cherry-picking small worker commits;
+- use normal merge only when useful;
+- never use bare `git push --force`;
+- if force push is explicitly required later, use `--force-with-lease`.
 
 Conflict policy:
 
-- Resolve conflicts only in the integration worktree.
-- Do not edit worker-owned dirty worktrees.
-- If a conflict cannot be resolved safely, create `.codex/integration/<lane-id>-conflict.md` and mark the lane blocked.
+- resolve conflicts only in integration worktree;
+- do not edit worker-owned dirty worktrees;
+- if conflict cannot be safely resolved, create `.codex/integration/<lane-id>-conflict.md` and mark blocked.
 
 No lost work:
 
-Every lane must end in one of:
+- Every lane must end as merged, rejected, blocked-with-patch, or superseded.
 
-- merged into integration branch;
-- rejected with reason and evidence;
-- blocked with patch artifact path;
-- superseded by another lane, with explicit mapping.
-
-Integration output:
-
-Create or update:
+Integration report:
 
 ```text
 .codex/integration/INTEGRATION_REPORT.md
@@ -225,31 +230,12 @@ Create or update:
 
 Include:
 
-```markdown
-# Integration Report
-
-## Base
-## Integration branch
-## Lanes
-| Lane | Requirement IDs | Branch | Status | Head SHA | Merge commit/cherry-pick | Evidence |
+| Lane | Requirement IDs | Branch | Status | Head SHA | Merge/cherry-pick | Evidence |
 |---|---|---|---|---|---|---|
-
-## Rejected or blocked lanes
-| Lane | Reason | Patch/report |
-|---|---|---|
-
-## Verification
-| Command | Result |
-|---|---|
-
-## Dirty worktree audit
-| Worktree | Branch | Status |
-|---|---|---|
-```
 
 ## Phase F — Final closure audit
 
-Before final response, run a checklist review against the original requirements:
+Before final response:
 
 | ID | Requirement | Status | Evidence | Missing/Risk |
 |---|---|---|---|---|
@@ -262,18 +248,7 @@ Allowed statuses:
 - Blocked
 - Superseded
 
-Rules:
-
-- Do not claim the feature is complete unless every requirement is Done or explicitly marked otherwise.
-- Final verification must be tied to the current integration head SHA.
-- The final report must include:
-  - changed files;
-  - tests/checks run;
-  - lanes spawned;
-  - lanes merged;
-  - lanes rejected/blocked;
-  - dirty worktree audit;
-  - remaining risks.
-- Do not hide skipped tests.
-- Do not hide unmerged worker changes.
-- Do not abandon a worker branch with uncommitted code.
+Do not claim completion unless every requirement is Done or explicitly explained.
+Do not hide skipped tests.
+Do not hide unmerged worker changes.
+Do not abandon dirty worker worktrees.

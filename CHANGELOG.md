@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Codex fanout v2 hardening**: strengthened automatic fanout triggers so 3+ numbered/bulleted requirements require a visible Fanout Decision, 5+ or cross-area work requires an execution matrix and lane map, and repo-portable bootstrap/rules/docs travel with the project.
 - **Codex server-wide fanout defaults**: clarified that complex multi-point tasks auto-trigger the fanout workflow from task shape, with the user-level global skill as this server's source of truth and the repo-local setup as a team-shared anchor.
 - **Codex parallel feature workflow**: added the repo-local `$feature-fanout` skill, project-scoped Codex agents, subagent limits, helper scripts, usage documentation, and AGENTS.md lane/worktree discipline for complex multi-point requests.
 - **Yandex Cloud infra skill**: added a project `yandex-cloud-infra` skill documenting the existing local `yc` path, user-level auth cache location, KenigEvents CDN/DNS folder ids, static CDN resource/certificate ids, and public TLS acceptance checks so agents do not start unnecessary browser auth flows or print secrets.

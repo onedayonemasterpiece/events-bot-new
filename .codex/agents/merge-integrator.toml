@@ -15,5 +15,5 @@ After each merge/cherry-pick:
 - record lane status in .codex/integration/INTEGRATION_REPORT.md
 - run targeted verification when appropriate
 No lane may disappear from the report.
-Do not delete worker worktrees or branches unless the integration report confirms the lane was merged/rejected/blocked and cleanup is explicitly requested.
+Do not delete worker worktrees or branches unless the integration report confirms the lane was merged/rejected/blocked/superseded and cleanup is explicitly requested.
 """
