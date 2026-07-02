@@ -55,10 +55,25 @@ function matchesZnanieContext(haystack: string): boolean {
     || /знание\s+(?:организатор|соорганизатор|партнер|партн[её]р|поддерживает|проводит|представляет)/u.test(haystack);
 }
 
+function isKgd80Festival(festivalValue?: string | null): boolean {
+  return normalize(festivalValue).includes('80 историй о главном');
+}
+
 function matchesOrganizer(item: OrganizerMedallion, haystack: string, festivalValue?: string | null): boolean {
-  if (item.slug === 'znanie-russia') return matchesZnanieContext(haystack);
+  const kgd80Festival = isKgd80Festival(festivalValue);
+  if (item.slug === 'znanie-russia') return matchesZnanieContext(haystack) || kgd80Festival;
+  if (item.slug === 'kgd80') return kgd80Festival || includesAlias(haystack, item.aliases || []);
   if (item.slug === 'kantata-festival') return includesAlias(haystack, item.aliases || []) || normalize(festivalValue).includes('кантата');
   return includesAlias(haystack, item.aliases || [item.name, item.shortName || '']);
+}
+
+function organizerPriority(item: OrganizerMedallion, festivalValue?: string | null): number {
+  if (isKgd80Festival(festivalValue)) {
+    if (item.slug === 'kgd80') return 0;
+    if (item.slug === 'znanie-russia') return 1;
+  }
+  if (item.slug === 'kantata-festival' && normalize(festivalValue).includes('кантата')) return 0;
+  return 10;
 }
 
 const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
@@ -73,7 +88,10 @@ const organizerHaystack = normalize([
   event.source_url,
   ...sourceUrls,
 ].filter(Boolean).join(' '));
-const organizers = (manifest.items || []).filter((item) => matchesOrganizer(item, organizerHaystack, event.festival)).slice(0, 3);
+const organizers = (manifest.items || [])
+  .filter((item) => matchesOrganizer(item, organizerHaystack, event.festival))
+  .sort((left, right) => organizerPriority(left, event.festival) - organizerPriority(right, event.festival))
+  .slice(0, 3);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
@@ -172,7 +190,8 @@ if (hasCharity) {
     tone: 'green',
   });
 }
-if (event.festival && tokens.length < 6) {
+const hasFestivalLogoToken = organizers.some((organizer) => organizer.slug === 'kgd80' || organizer.slug === 'kantata-festival');
+if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
   tokens.push({
     kind: 'pill',
     key: 'festival',

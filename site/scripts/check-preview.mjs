@@ -37,6 +37,12 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+const kgd80Events = eventsData.events.filter((event) => String(event.festival || '').trim() === '80 историй о главном');
+for (const event of kgd80Events) {
+  const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  if (!html.includes('event-token--kgd80')) throw new Error(`80 Stories event ${event.id} misses KGD80 festival medallion`);
+  if (!html.includes('event-token--znanie-russia')) throw new Error(`80 Stories event ${event.id} misses curated Znanie organizer medallion`);
+}
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
   if (!eventsData.events.length) throw new Error('Preview fixture must contain at least one event');

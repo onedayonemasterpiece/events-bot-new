@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb`, `act-opus` and `kantata-festival` are WebP-first raster items until source SVGs are found.
+> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb` and `kantata-festival` are WebP-first raster items until source SVGs are found; `act-opus` is a self-contained SVG medallion assembled from the official raster wordmark.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -119,8 +119,9 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains WebP-first raster for now |
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
-| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.webp` (`.png` fallback) | official `actop.us/plays` Next image PNG; no SVG found, so the octopus medallion is WebP-first |
-| Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | local kgd80 `logo-znanie-festival.svg` / `logo-znanie-main.svg`; the round medallion crops the grey `З` symbol |
+| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol |
+| Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the white internal `З` symbol |
+| Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; forced for `event.festival=80 историй о главном` |
 | Фестиваль «Кантата» | `kantata-festival` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | official Tilda PNG wordmark `КАНТАТА`; WebP-first because source is raster |
 
 Asset inventory:
@@ -136,8 +137,11 @@ Asset inventory:
 - `tretyakovka-kaliningrad` is reconstructed as simple SVG primitives from the geometric Telegram avatar;
 - `dom-kitoboya` is intentionally not SVG because no source SVG was found (`logo.svg` candidates returned 404); it is WebP-first with PNG fallback;
 - `konb` is intentionally unchanged as the explicit raster exception for this pass;
-- `act-opus` and `kantata-festival` are added as WebP-first raster medallions because the available official sources are PNG;
-- `znanie-russia` is added as SVG from local kgd80 vector assets and is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`.
+- `act-opus` is updated to a self-contained SVG medallion that stacks the official `АКТ` / `ОПУС` wordmark instead of using the octopus symbol;
+- `znanie-russia` is updated to the official blue `#0501D0` full circle with the internal `З` kept white;
+- `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo;
+- `kantata-festival` remains a WebP-first raster medallion because the available official source is PNG;
+- `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 

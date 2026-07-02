@@ -215,22 +215,22 @@
         "actopustheatre"
       ],
       "sourcePage": "https://actop.us/plays",
-      "sourceUrl": "https://actop.us/plays (Next image /_next/static/media/logo_new_black.3136802c.png and actopus_logo_old_white 1.4f7d262e.png)",
-      "sourceFile": "act-opus.old-white.png",
+      "sourceUrl": "https://actop.us/plays (Next image /_next/static/media/logo_new_black.3136802c.png)",
+      "sourceFile": "act-opus.logo_new_black.png",
       "background": "#F6EFE5",
       "ring": "#111111",
-      "logoCrop": "official-octopus-symbol-from-site-header",
+      "logoCrop": "official-wordmark-act-over-opus-stacked",
       "fitBox": [
         512,
         512
       ],
       "ariaLabel": "Организатор: театр «Акт Опус»",
-      "renderNote": "Официальный сайт отдаёт PNG-логотипы через Next image; публичный runtime asset сделан WebP-first с PNG fallback, без SVG-исходника и без OpenAI image generation.",
-      "avatarUrl": "/assets/organizers/act-opus.webp",
+      "renderNote": "Медальон заменён с осьминога на надпись из официального логотипа: блок «АКТ» и слово «ОПУС» сохранены из source PNG и размещены друг над другом, как стековый знак внутри круга. Runtime SVG self-contained; PNG fallback сохранён для QA/старых клиентов.",
+      "avatarUrl": "/assets/organizers/act-opus.svg",
       "fallbackPngUrl": "/assets/organizers/act-opus.png",
-      "sourcePath": "site/src/assets/organizers/source/act-opus.old-white.png",
+      "sourcePath": "site/src/assets/organizers/source/act-opus.logo_new_black.png",
       "retrievedAt": "2026-07-02",
-      "assetFormat": "webp-source-only"
+      "assetFormat": "svg-embedded-source-png"
     },
     {
       "slug": "znanie-russia",
@@ -245,21 +245,51 @@
         "znanierussia.ru",
         "znanie russia"
       ],
-      "sourcePage": "/home/dev/projects/kdg80/site/public/shared-assets/",
-      "sourceUrl": "KGD80 shared assets: logo-znanie-festival.svg + logo-znanie-main.svg",
+      "sourcePage": "https://znanierussia.ru/",
+      "sourceUrl": "Official site CSS primary color #0501D0 plus local kgd80 shared assets logo-znanie-festival.svg / logo-znanie-main.svg",
       "sourceFile": "znanie.logo-znanie-festival.svg",
-      "background": "#F3F0EC",
-      "ring": "#76706A",
-      "logoCrop": "left-z-symbol-from-kgd80-znanie-festival-logo",
+      "background": "#0501D0",
+      "ring": "#FFFFFF",
+      "logoCrop": "white-inner-z-symbol-from-kgd80-znanie-vector-on-official-blue-circle",
       "fitBox": [
         512,
         512
       ],
       "ariaLabel": "Организатор или партнёр: Российское общество «Знание»",
-      "renderNote": "Runtime SVG берёт серый знак «З» из локальных kgd80 shared-assets; PNG/WebP сохранены только как fallback/QA. Детекция дополнительно ловит контекстные упоминания, где Знание явно названо организатором/партнёром.",
+      "renderNote": "Медальон обновлён под текущую палитру официального сайта «Знание»: полный круг залит brand primary #0501D0, внутренний знак «З» оставлен белым и оптически центрирован. Для событий фестиваля «80 историй о главном» медальон показывается по curated festival policy, даже если source text не повторяет организатора.",
       "avatarUrl": "/assets/organizers/znanie-russia.svg",
       "fallbackPngUrl": "/assets/organizers/znanie-russia.png",
       "sourcePath": "site/src/assets/organizers/source/znanie.logo-znanie-festival.svg",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "svg",
+      "brandBackgroundSource": "https://znanierussia.ru/ production CSS --primary / --primary-default",
+      "backgroundEvidence": "Official site CSS sampled 2026-07-02 exposes --primary-default / --primary as #0501D0; legacy --color-primary-old is #426FFF."
+    },
+    {
+      "slug": "kgd80",
+      "name": "Фестиваль «80 историй о главном»",
+      "shortName": "80 историй",
+      "aliases": [
+        "80 историй о главном",
+        "Фестиваль 80 историй о главном",
+        "kgd80",
+        "kgd80.ru"
+      ],
+      "sourcePage": "https://kgd80.ru/",
+      "sourceUrl": "site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg copied from KGD80 hero logo",
+      "sourceFile": "kgd80.logo-80-istorii-hero.svg",
+      "background": "#F8F4EE",
+      "ring": "#D84B31",
+      "logoCrop": "official-hero-logo-centered-in-circle",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Фестиваль: 80 историй о главном",
+      "renderNote": "Медальон использует официальный hero lockup фестиваля «80 историй о главном» из kgd80 shared assets, вписанный в светлый круг с оранжевым ring. Для event.festival=«80 историй о главном» показывается вместе с медальоном Российского общества «Знание».",
+      "avatarUrl": "/assets/organizers/kgd80.svg",
+      "fallbackPngUrl": "/assets/organizers/kgd80.png",
+      "sourcePath": "site/src/assets/organizers/source/kgd80.logo-80-istorii-hero.svg",
       "retrievedAt": "2026-07-02",
       "assetFormat": "svg"
     },
