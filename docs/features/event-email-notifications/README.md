@@ -1,6 +1,6 @@
 # Event email notifications
 
-Status: requirements / implementation backlog — **not implemented yet**
+Status: **foundation implemented / production sending dry-run** (2026-07-02)
 Owner surfaces: static event pages, auth/profile, calendar-follow flow, event lifecycle updates, Yandex Cloud Postbox, YDB analytics.
 
 ## Scope
@@ -11,9 +11,27 @@ Notifications are not marketing mailouts. They are user-requested transactional 
 
 ## Implementation status
 
-As of 2026-07-02 this feature is **requirements-only**. No production email outbox, Yandex Cloud Postbox sender, user notification-email persistence, or YDB email-statistics writer has been implemented yet.
+Implemented in this branch:
 
-Use `docs/features/event-email-notifications/implementation-prompt.md` as the handoff prompt for the implementation window.
+- Yandex OAuth email capture is supported through `supabase/functions/yandex-userinfo/index.ts`: Yandex `default_email` / `emails[0]` is mapped to Supabase `email`.
+- Static calendar buttons in `site/src/components/CalendarLink.astro` ask an authenticated user for explicit notification consent before enqueueing email notifications; if Yandex/Supabase has no email, the UI asks for a fallback email.
+- `supabase/functions/event-email-follow/index.ts` validates the Supabase session, stores `user_notification_profiles` + `event_follows`, and enqueues `calendar_confirmation` plus a 24-hour reminder or a persisted `skipped` event.
+- `supabase/migrations/20260702_event_email_notifications.sql` creates durable personalization-DB tables: `user_notification_profiles`, `event_follows`, `email_outbox`, `email_delivery_events`, `email_suppressions`, and `email_rate_limit_ledger` with explicit grants/RLS.
+- `email_notifications/` provides the worker-side foundation: templates, idempotency keys, lifecycle/reschedule diff detection, cancellation disclaimer, conservative rate limiter, Postbox SMTP sender, and YDB stats adapter contract.
+- `scripts/email_notifications_smoke.py` renders a dry-run queue/Postbox smoke without sending real email.
+
+Still gated before production sending:
+
+- `POSTBOX_ENABLED=0` / `POSTBOX_DRY_RUN=1` remains the safe default.
+- YDB stats table/credentials must be provisioned and `EMAIL_YDB_STATS_ENABLED=1` must pass a real write smoke before `POSTBOX_DRY_RUN=0`.
+- Postbox identity/DKIM/SPF/DMARC for `info@kenigevents.ru` must be verified by operators before real sends.
+- Provider callback ingestion for bounce/complaint notifications is not enabled yet; suppression primitives are in place.
+
+## Yandex OAuth email contract
+
+Official Yandex ID docs say that when the OAuth token has the email-address permission, JSON userinfo includes `default_email` and `emails`; the JWT form exposes `email`. Therefore the Supabase custom OAuth provider for `custom:yandex` must request `login:email login:info` and must keep the `yandex-userinfo` adapter as the userinfo endpoint.
+
+If Yandex does not return email, Supabase can still allow sign-in with `email_optional=true`, but event email notifications must stay disabled until the user provides a valid fallback email and gives explicit consent.
 
 ## Product requirements
 
@@ -97,13 +115,39 @@ Persist operational statistics to YDB in addition to local queue rows. This is m
 
 An admin/status command or dashboard must expose current queue stats before production enablement.
 
+YDB statistics are mandatory before real sending. The adapter contract is in `email_notifications/ydb_stats.py`:
+
+- `EMAIL_YDB_STATS_ENABLED=1`
+- `EMAIL_YDB_ENDPOINT`
+- `EMAIL_YDB_DATABASE`
+- `EMAIL_YDB_STATS_TABLE` or `EMAIL_YDB_TABLE_PREFIX`
+- optional `EMAIL_YDB_SERVICE_ACCOUNT_KEY_FILE`
+
+Until this is configured and smoke-tested, `YDBStatsSink` fails visibly and Postbox must remain dry-run. Every queue state transition and delivery result should be projected as `EmailStatsEvent` with provider correlation, dry-run flag, recipient hash, event id, kind/status and metadata.
+
+## Smoke / tests
+
+Dry-run smoke:
+
+```bash
+python3 scripts/email_notifications_smoke.py --to operator@example.invalid
+```
+
+Targeted tests:
+
+```bash
+pytest tests/test_event_email_notifications.py
+```
+
+## Regression contract
+
+This feature is a regression surface for `INC-2026-07-02-buynov-cancellation-lifecycle-gap.md`: followed cancelled/rescheduled events must have a queued transactional notification path; emails must stay durable/idempotent and must not bypass Postbox/YDB dry-run gates.
+
 ## Open implementation tasks
 
-- Add user email/profile persistence for Yandex OAuth result and fallback email capture UI.
-- Add event-follow persistence when users add events to calendar on the static site.
-- Add lifecycle/version diff detector for `date`, `time`, `location_name`, `location_address`, `city`, `ticket_link`, and `lifecycle_status`.
-- Add Postbox sender adapter with idempotency, retry/backoff, suppression handling, and provider message-id persistence.
-- Add YDB stats sink and admin queue status view.
+- Provision and verify real YDB stats tables/UPSERT wiring.
+- Deploy `event-email-follow` after migration is applied to the personalization Supabase project.
+- Wire the production worker to drain `email_outbox` with Postbox only after YDB stats write smoke passes.
+- Add provider callback ingestion for bounce/complaint notifications.
+- Add admin queue status view.
 - Add static-page lifecycle badge and notification preference UI.
-- Add tests for confirmation, 24-hour reminder, reschedule diff, cancellation disclaimer, rate limits, idempotency, retry, suppression, and YDB stats writes.
-- Implement from `docs/features/event-email-notifications/implementation-prompt.md`.

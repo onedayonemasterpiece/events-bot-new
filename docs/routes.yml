@@ -95,6 +95,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_buynov_cancellation_lifecycle_gap_2026_07_02: docs/reports/incidents/INC-2026-07-02-buynov-cancellation-lifecycle-gap.md
     incident_vk_story_forward_wall_first_2026_06_05: docs/reports/incidents/INC-2026-06-05-vk-story-forward-wall-first.md
     incident_vk_posts_personal_author_2026_05_19: docs/reports/incidents/INC-2026-05-19-vk-posts-personal-author.md
     incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
@@ -232,6 +233,18 @@ features:
       - main_part2.py
       - promo.py
       - handlers/promo_cmd.py
+  event_email_notifications:
+    status: foundation
+    docs: docs/features/event-email-notifications/README.md
+    implementation_prompt: docs/features/event-email-notifications/implementation-prompt.md
+    migration: supabase/migrations/20260702_event_email_notifications.sql
+    edge_function: supabase/functions/event-email-follow/index.ts
+    entrypoints:
+      - site/src/components/CalendarLink.astro
+      - email_notifications/core.py
+      - email_notifications/postbox.py
+      - email_notifications/ydb_stats.py
+      - scripts/email_notifications_smoke.py
   static_site_pages:
     status: preview
     docs: docs/features/static-site-pages/README.md

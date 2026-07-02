@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Event email notifications / calendar follows**: added the dry-run transactional email foundation for authenticated static-site calendar adds: Yandex OAuth email capture/fallback consent UI, Supabase follow/outbox schema and Edge enqueue function, Postbox sender adapter, YDB stats contract, rate-limit/idempotency primitives and targeted tests.
 - **Static site pages / expanded medallions**: added the next event-detail medallion assets and QA lab for Дом китобоя, Третьяковка, КОНБ, MEOW Афиша and the Pushkin-card composite, while preserving existing ticket/family/charity/festival fact pills on event pages.
 - **Personalization / authorized search key rotation**: added direct multi-key Google provider rotation/failover to the `event-search` Edge Function for `gemini-embedding-2` query embeddings, Gemini Lite verification and Gemma overflow calls, with non-secret key-lane telemetry in audit metadata.
 - **Personalization / two-document pgvector retrieval**: implemented `search_v3` and `related_v1` embedding document kinds in Supabase (`embedding_doc_kind`, related digest/hash, partial HNSW indexes and doc-kind-aware RPCs), updated the vector sync to maintain both representations incrementally, and wired static related generation to use the cleaner `related_v1` recall layer before Gemma verification.

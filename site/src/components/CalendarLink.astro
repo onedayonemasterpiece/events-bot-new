@@ -1,11 +1,171 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref, isCalendarEligible } from '../lib/events';
+import { eventAbsoluteUrl, eventCalendarHref, isCalendarEligible } from '../lib/events';
 interface Props { event: PreviewEvent; className?: string; label?: string }
 const { event, className = 'secondary-button', label = 'В календарь' } = Astro.props;
 const canAddToCalendar = isCalendarEligible(event);
+const calendarHref = eventCalendarHref(event);
+const ticketHref = event.ticket?.href || '';
 ---
 {canAddToCalendar && (
-  <a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>
+  <a
+    class={className}
+    href={calendarHref}
+    type="text/calendar"
+    aria-label={`Добавить в календарь: ${event.title}`}
+    data-event-email-follow
+    data-event-id={event.id}
+    data-event-title={event.title}
+    data-event-url={eventAbsoluteUrl(event)}
+    data-event-starts-at={event.starts_at || ''}
+    data-event-start-date={event.start_date || ''}
+    data-event-display-time={event.display_time || ''}
+    data-event-venue-name={event.venue_name || ''}
+    data-event-address={event.address || ''}
+    data-event-city={event.city || ''}
+    data-event-source-url={event.source_url || ''}
+    data-event-ticket-link={ticketHref}
+    data-event-lifecycle-status={event.lifecycle_status || 'active'}
+  ><Icon name="calendar" /> <span>{label}</span></a>
 )}
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+
+  const followSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+  const followSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+  const followProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
+  const followEnabled = (import.meta.env.PUBLIC_EVENT_EMAIL_FOLLOW_ENABLED || '1') !== '0';
+  const followFunctionName = import.meta.env.PUBLIC_EVENT_EMAIL_FOLLOW_FUNCTION || 'event-email-follow';
+  const followIntentKey = 'ke_event_email_follow_intent_v1';
+
+  function cleanCallbackUrl() {
+    const url = new URL(window.location.href);
+    for (const key of ['code', 'state', 'error', 'error_code', 'error_description']) {
+      url.searchParams.delete(key);
+    }
+    url.hash = '';
+    return url.toString();
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(String(value || '').trim());
+  }
+
+  function eventSnapshotFromLink(link) {
+    return {
+      id: Number(link.dataset.eventId || '0'),
+      title: link.dataset.eventTitle || '',
+      event_url: link.dataset.eventUrl || window.location.href,
+      starts_at: link.dataset.eventStartsAt || null,
+      start_date: link.dataset.eventStartDate || null,
+      display_time: link.dataset.eventDisplayTime || null,
+      venue_name: link.dataset.eventVenueName || null,
+      location_address: link.dataset.eventAddress || null,
+      city: link.dataset.eventCity || null,
+      source_url: link.dataset.eventSourceUrl || null,
+      ticket_link: link.dataset.eventTicketLink || null,
+      lifecycle_status: link.dataset.eventLifecycleStatus || 'active',
+    };
+  }
+
+  function yandexEmailFromUser(user) {
+    const metadata = user?.user_metadata || {};
+    return String(user?.email || metadata.email || metadata.default_email || '').trim().toLowerCase();
+  }
+
+  async function bindEventEmailFollowLinks() {
+    if (!followEnabled || !followSupabaseUrl || !followSupabaseKey) return;
+    const links = Array.from(document.querySelectorAll('[data-event-email-follow]'));
+    if (!links.length) return;
+    const supabase = createClient(followSupabaseUrl, followSupabaseKey, {
+      auth: {
+        flowType: 'pkce',
+        detectSessionInUrl: false,
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    });
+
+    for (const link of links) {
+      if (link.dataset.eventEmailFollowBound === 'true') continue;
+      link.dataset.eventEmailFollowBound = 'true';
+      link.addEventListener('click', async (event) => {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const href = link.getAttribute('href') || '';
+        if (!href) return;
+        event.preventDefault();
+
+        try {
+          const { data } = await supabase.auth.getSession();
+          let session = data?.session || null;
+          if (!session) {
+            try {
+              window.localStorage.setItem(followIntentKey, JSON.stringify({ event_id: link.dataset.eventId || '', href, created_at: new Date().toISOString() }));
+            } catch (_error) {
+              // UX hint only.
+            }
+            const ok = window.confirm('Чтобы получать письмо об изменениях/отмене этого события, войдите через Яндекс. После входа нажмите «В календарь» ещё раз.');
+            if (ok) {
+              await supabase.auth.signInWithOAuth({ provider: followProvider, options: { redirectTo: cleanCallbackUrl() } });
+              return;
+            }
+            window.location.href = href;
+            return;
+          }
+
+          let email = yandexEmailFromUser(session.user);
+          if (!email) {
+            const manual = window.prompt('Яндекс не вернул email. Укажите почту для уведомлений по этому событию:');
+            if (!manual) {
+              window.location.href = href;
+              return;
+            }
+            email = String(manual).trim().toLowerCase();
+          }
+          if (!isValidEmail(email)) {
+            window.alert('Не удалось включить email-уведомления: почта выглядит некорректно. Файл календаря всё равно откроется.');
+            window.location.href = href;
+            return;
+          }
+          const consent = window.confirm(`Добавить событие в календарь и получать на ${email} транзакционные уведомления об отмене, переносе и напоминание за 24 часа?`);
+          if (!consent) {
+            window.location.href = href;
+            return;
+          }
+
+          const response = await fetch(`${followSupabaseUrl}/functions/v1/${followFunctionName}`, {
+            method: 'POST',
+            headers: {
+              apikey: followSupabaseKey,
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              notification_consent: true,
+              notification_email: email,
+              event: eventSnapshotFromLink(link),
+            }),
+          });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            console.warn('event email follow failed', payload);
+            window.alert('Календарь откроется, но email-уведомления сейчас не включились. Попробуйте позже.');
+          }
+        } catch (error) {
+          console.warn('event email follow error', error);
+          window.alert('Календарь откроется, но email-уведомления сейчас не включились. Попробуйте позже.');
+        }
+        window.location.href = href;
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindEventEmailFollowLinks, { once: true });
+  } else {
+    bindEventEmailFollowLinks();
+  }
+</script>

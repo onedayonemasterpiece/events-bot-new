@@ -31,6 +31,7 @@
 
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
 - `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: MVP-0 `event_detail_related`, localStorage + Supabase telemetry/profile без auth
+- `docs/features/event-email-notifications/README.md` — transactional email notifications for authenticated calendar follows: Yandex OAuth email capture, durable outbox, Postbox dry-run sender, YDB stats contract
 
 ## Как добавлять новую фичу
 
