@@ -521,3 +521,9 @@ grounding.  Immediately before inserting a new event row, Smart Update reruns a
 cheap duplicate probe inside the create transaction window; if it finds a fresh
 duplicate it records a decision-log row and returns `skipped_identity_gate`
 instead of creating another public row.
+
+The `/vystavki/` enforce rollout is monitored independently from page rendering
+with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the
+canonical SQLite event inventory read-only and emits JSON/Prometheus acceptance
+metrics, including
+`events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"}`.

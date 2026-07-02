@@ -372,7 +372,6 @@ def _vector_supported_identity_match(
         or not vector_evidence.available
         or vector_evidence.nearest_event_id is None
         or vector_evidence.score is None
-        or vector_evidence.score < 0.94
     ):
         return None
     ev = next((item for item in existing if item.event_id == vector_evidence.nearest_event_id), None)
@@ -381,8 +380,12 @@ def _vector_supported_identity_match(
     if not _date_overlaps(candidate, ev):
         return None
     if _is_long_running(candidate) or _is_long_running(ev):
+        if vector_evidence.score < 0.86:
+            return None
         if _locations_related(candidate, ev) or _titles_related(candidate.title, ev.title) or _strong_shared_anchor(candidate, ev):
             return ev, vector_evidence.reason or "high-confidence vector identity for overlapping long-running event"
+        return None
+    if vector_evidence.score < 0.94:
         return None
     if _same_known_time(candidate, ev) and (_titles_related(candidate.title, ev.title) or _locations_related(candidate, ev) or _strong_shared_anchor(candidate, ev)):
         return ev, vector_evidence.reason or "high-confidence vector identity for same dated slot"

@@ -58,3 +58,28 @@
   - `tests/e2e/features/smart_event_update.feature`
     - `Выставка не дублируется при новом источнике внутри периода`
     - `Выставка не принимает продление периода от источника с более низким trust`
+
+## Enforce acceptance monitor for `/vystavki/`
+
+After `SMART_UPDATE_IDENTITY_GATE=enforce`, the 14-day acceptance gate for the
+current exhibition-duplicate incident is the read-only SQLite monitor:
+
+```bash
+python3 scripts/inspect/audit_public_exhibition_duplicates.py \
+  --db /data/db.sqlite \
+  --current-date <YYYY-MM-DD> \
+  --since-days 14 \
+  --format both \
+  --fail-on-high-confidence
+```
+
+The monitor applies a schema-adaptive public gate (`identity_status=canonical`,
+`merged_into_event_id IS NULL`, active lifecycle, valid ISO dates), selects
+current/future exhibition-like rows, and reports high-confidence pairs where
+long-running exhibition ranges overlap and title/source/venue evidence indicates
+one public identity.  Rollout closure requires:
+
+- `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"} 0`;
+- no critical false positives on recurring/multi-session controls;
+- any detected pair is treated as an incident/regression, not auto-merged by the
+  monitor.
