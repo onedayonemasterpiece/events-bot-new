@@ -49,6 +49,18 @@ function includesAlias(haystack: string, aliases: string[] | undefined): boolean
   }));
 }
 
+function matchesZnanieContext(haystack: string): boolean {
+  if (includesAlias(haystack, ['Российское общество Знание', 'Общество Знание', 'Знание Лекторий', 'Знание.Лекторий', 'znanierussia.ru', 'znanie russia'])) return true;
+  return /(?:организатор|организаторы|соорганизатор|партнер|партн[её]р|при поддержке|совместно с)\s+(?:российское\s+общество\s+)?знание/u.test(haystack)
+    || /знание\s+(?:организатор|соорганизатор|партнер|партн[её]р|поддерживает|проводит|представляет)/u.test(haystack);
+}
+
+function matchesOrganizer(item: OrganizerMedallion, haystack: string, festivalValue?: string | null): boolean {
+  if (item.slug === 'znanie-russia') return matchesZnanieContext(haystack);
+  if (item.slug === 'kantata-festival') return includesAlias(haystack, item.aliases || []) || normalize(festivalValue).includes('кантата');
+  return includesAlias(haystack, item.aliases || [item.name, item.shortName || '']);
+}
+
 const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
 const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map((url) => String(url))));
 const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
@@ -61,7 +73,7 @@ const organizerHaystack = normalize([
   event.source_url,
   ...sourceUrls,
 ].filter(Boolean).join(' '));
-const organizer = (manifest.items || []).find((item) => includesAlias(organizerHaystack, item.aliases || [item.name, item.shortName || '']));
+const organizers = (manifest.items || []).filter((item) => matchesOrganizer(item, organizerHaystack, event.festival)).slice(0, 3);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
@@ -70,7 +82,7 @@ const hasKids = /\b(kids|family)\b/u.test(explicitText) || /детск|детя�
 const hasCharity = /благотвор|пожертв|донат/u.test(normalize([event.summary, event.description_html, ticket.label, ticket.note].join(' ')));
 
 const tokens: Token[] = [];
-if (organizer) {
+organizers.forEach((organizer) => {
   tokens.push({
     kind: 'organizer',
     key: `organizer:${organizer.slug}`,
@@ -84,7 +96,7 @@ if (organizer) {
     ring: organizer.ring,
     slug: organizer.slug,
   });
-}
+});
 if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
   tokens.push({
     kind: 'source',

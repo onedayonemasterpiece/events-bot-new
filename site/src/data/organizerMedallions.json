@@ -1,7 +1,7 @@
 {
   "schemaVersion": "organizer_medallion_assets_v1",
   "generatedAt": "2026-07-02T00:00:00Z",
-  "usage": "Event-detail organizer medallions. Use avatarUrl in the organizer token; fallbackPngUrl is for older clients or QA.",
+  "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
   "items": [
     {
       "slug": "world-ocean-museum",
@@ -199,7 +199,98 @@
       "fallbackPngUrl": "/assets/organizers/konb.png",
       "sourcePath": "site/src/assets/organizers/source/konb.logo.png",
       "retrievedAt": "2026-07-01",
-      "assetFormat": "png-exception"
+      "assetFormat": "webp-raster-exception"
+    },
+    {
+      "slug": "act-opus",
+      "name": "Театр «Акт Опус»",
+      "shortName": "Акт Опус",
+      "aliases": [
+        "Театр Акт Опус",
+        "Акт Опус",
+        "Актопус",
+        "Act Opus",
+        "ActOpus",
+        "actop.us",
+        "actopustheatre"
+      ],
+      "sourcePage": "https://actop.us/plays",
+      "sourceUrl": "https://actop.us/plays (Next image /_next/static/media/logo_new_black.3136802c.png and actopus_logo_old_white 1.4f7d262e.png)",
+      "sourceFile": "act-opus.old-white.png",
+      "background": "#F6EFE5",
+      "ring": "#111111",
+      "logoCrop": "official-octopus-symbol-from-site-header",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Организатор: театр «Акт Опус»",
+      "renderNote": "Официальный сайт отдаёт PNG-логотипы через Next image; публичный runtime asset сделан WebP-first с PNG fallback, без SVG-исходника и без OpenAI image generation.",
+      "avatarUrl": "/assets/organizers/act-opus.webp",
+      "fallbackPngUrl": "/assets/organizers/act-opus.png",
+      "sourcePath": "site/src/assets/organizers/source/act-opus.old-white.png",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "znanie-russia",
+      "name": "Российское общество «Знание»",
+      "shortName": "Знание",
+      "aliases": [
+        "Российское общество Знание",
+        "Российское общество «Знание»",
+        "Общество Знание",
+        "Знание Лекторий",
+        "Знание.Лекторий",
+        "znanierussia.ru",
+        "znanie russia"
+      ],
+      "sourcePage": "/home/dev/projects/kdg80/site/public/shared-assets/",
+      "sourceUrl": "KGD80 shared assets: logo-znanie-festival.svg + logo-znanie-main.svg",
+      "sourceFile": "znanie.logo-znanie-festival.svg",
+      "background": "#F3F0EC",
+      "ring": "#76706A",
+      "logoCrop": "left-z-symbol-from-kgd80-znanie-festival-logo",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Организатор или партнёр: Российское общество «Знание»",
+      "renderNote": "Runtime SVG берёт серый знак «З» из локальных kgd80 shared-assets; PNG/WebP сохранены только как fallback/QA. Детекция дополнительно ловит контекстные упоминания, где Знание явно названо организатором/партнёром.",
+      "avatarUrl": "/assets/organizers/znanie-russia.svg",
+      "fallbackPngUrl": "/assets/organizers/znanie-russia.png",
+      "sourcePath": "site/src/assets/organizers/source/znanie.logo-znanie-festival.svg",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "svg"
+    },
+    {
+      "slug": "kantata-festival",
+      "name": "Фестиваль «Кантата»",
+      "shortName": "Кантата",
+      "aliases": [
+        "Фестиваль Кантата",
+        "фестиваль «Кантата»",
+        "Кантатафест",
+        "kantatafest.ru",
+        "festkantata"
+      ],
+      "sourcePage": "https://kantatafest.ru/obrazovatelnaya-programma",
+      "sourceUrl": "https://static.tildacdn.com/tild6532-3334-4662-b835-383932633238/Kantata_logo_Black_R.png (captured in prior static-site asset lane)",
+      "sourceFile": "kantata-education.Kantata_logo_Black_R.png",
+      "background": "#F8F4EE",
+      "ring": "#251A13",
+      "logoCrop": "official-wordmark-kantata",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Фестиваль: Кантата",
+      "renderNote": "По фестивалю используется начертание слова «КАНТАТА». Официальный доступный source — PNG, поэтому runtime medallion WebP-first с PNG fallback.",
+      "avatarUrl": "/assets/organizers/kantata-festival.webp",
+      "fallbackPngUrl": "/assets/organizers/kantata-festival.png",
+      "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
+      "retrievedAt": "2026-07-02",
+      "assetFormat": "webp-source-only"
     }
   ]
 }

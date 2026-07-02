@@ -286,10 +286,10 @@ if (!controlHtml.includes('/partners/') || !controlHtml.includes('Инфопар
 
 const partnersHtml = readFileSync(join(root, 'partners/index.html'), 'utf8');
 const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
-for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата']) {
+for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
-for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma']) {
+for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays']) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }
 if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('Info partners external links must be nofollow/noopener/noreferrer');

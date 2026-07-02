@@ -1,6 +1,6 @@
 # Organizer medallion source assets
 
-Retrieved: 2026-06-29; `dom-kitoboya` social avatar rechecked 2026-07-01; SVG runtime pass checked 2026-07-02.
+Retrieved: 2026-06-29; `dom-kitoboya` social avatar rechecked 2026-07-01; SVG/WebP runtime pass checked 2026-07-02.
 
 These files are official/source-faithful inputs for the first event-page organizer medallions. Final runtime assets live in `site/public/assets/organizers/`.
 
@@ -13,5 +13,8 @@ These files are official/source-faithful inputs for the first event-page organiz
 | `dom-kitoboya` | Дом китобоя | https://domkitoboya.ru/ + https://t.me/domkitoboya | source logo snapshot `dom-kitoboya.logo.webp` + Telegram avatar snapshot `dom-kitoboya.telegram-avatar-20260701.jpg` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | Медальон собирается из фирменного логотипа без верхней мелочи; public `logo.svg` candidates returned 404 on 2026-07-02 while `logo.webp`/`logo.png` exist, so the medallion remains WebP-first raster until a source SVG is found. |
 | `tretyakovka-kaliningrad` | Филиал Третьяковской галереи | https://t.me/tretyakovka_kaliningrad | Telegram avatar snapshot `tretyakovka-kaliningrad.telegram-avatar-20260701.jpg` | `/assets/organizers/tretyakovka-kaliningrad.svg` + PNG/WebP fallback | Простая геометричная золотая буква `Т` реконструирована как SVG-примитивы на тёплом светлом фоне. |
 | `konb` | Калининградская областная научная библиотека | local docs/reference/лого КОНБ (1)(1).png | `konb.logo.png` | `/assets/organizers/konb.webp` / `/assets/organizers/konb.png` | Explicit raster exception for the 2026-07-02 SVG pass; this task intentionally does not convert КОНБ. |
+| `act-opus` | Театр «Акт Опус» | https://actop.us/plays | Next image PNGs `logo_new_black.3136802c.png`, `actopus_logo_old_white 1.4f7d262e.png` | `/assets/organizers/act-opus.webp` (`.png` fallback) | Официальный сайт отдаёт raster PNG; для круглого медальона используется осьминог, runtime оставлен WebP-first. |
+| `znanie-russia` | Российское общество «Знание» | local kgd80 shared assets | `logo-znanie-festival.svg` + `logo-znanie-main.svg` | `/assets/organizers/znanie-russia.svg` + PNG/WebP fallback | SVG-медальон берёт серую букву/знак `З` из kgd80-ассетов. |
+| `kantata-festival` | Фестиваль «Кантата» | https://kantatafest.ru/obrazovatelnaya-programma | `Kantata_logo_Black_R.png` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | Используется официальный wordmark «КАНТАТА»; source raster, поэтому runtime WebP-first. |
 
-No OpenAI image generation/editing was used. The medallions were produced by local SVG rendering/vectorization, source cropping, and alpha-preserving WebP/PNG fallback export.
+No OpenAI image generation/editing was used. The medallions were produced by local SVG rendering/vectorization, source cropping, and alpha-preserving WebP/PNG fallback export. If no SVG source/vector-safe source exists, browser-facing runtime assets should be WebP-first, with PNG only as fallback/QA.

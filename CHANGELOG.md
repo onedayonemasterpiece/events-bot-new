@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Static site / partner and organizer medallions**: added Teatro «Акт Опус» to information partners and event medallions, added «Знание» and «Кантата» organizer medallions with SVG/WebP provenance, and extended medallion detection so explicit «Знание» organizer/partner mentions show the badge.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
@@ -15,6 +16,7 @@
 
 ### Changed
 
+- **Static site / information partners grid**: changed `/partners/` to render real SVG/WebP partner logos in an aspect-aware dense grid instead of normalizing every logo into one square text lockup; documented SVG-first/WebP-first raster rules for partner and medallion assets.
 - **Static site pages / organizer medallion SVG pass**: switched the starter organizer medallions for Музей Мирового океана, Историко-художественный музей, Калининградская филармония, Остров Канта and Третьяковка to SVG runtime assets; kept `dom-kitoboya` and `konb` WebP-first raster because no public/source SVG was found for Дом китобоя and `konb` is the explicit raster exception; PNG remains fallback/QA only.
 - **Static site pages / recovery preview refresh**: rebuilt and redeployed the recovered static-site + smart-search preview from the fresh 2026-07-01 production snapshot, increasing exported public events to `380`, including late events `6563`–`6565`, while keeping prompt-leak event `6518` out of static pages and search fixtures.
 - **Static site pages / full-preview export recovery**: restored the latest static export safety guards for source URL arrays/counts, truncated-description fallback, hero image dimension probing/quality rescue and JSON-LD paid-price extraction without rolling back the two-document pgvector/Gemma related-chain contract.

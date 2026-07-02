@@ -1,3 +1,5 @@
+export type InfoPartnerLogoShape = 'square' | 'wide' | 'tall' | 'compact';
+
 export type InfoPartner = {
   id: string;
   name: string;
@@ -6,6 +8,12 @@ export type InfoPartner = {
   href: string;
   accent: string;
   logoText: string;
+  logoUrl?: string;
+  logoFallbackUrl?: string;
+  logoAlt?: string;
+  logoShape: InfoPartnerLogoShape;
+  logoSurface?: 'light' | 'dark' | 'transparent';
+  priority?: 'primary' | 'standard';
 };
 
 export const INFO_PARTNERS: InfoPartner[] = [
@@ -17,6 +25,10 @@ export const INFO_PARTNERS: InfoPartner[] = [
     href: 'https://www.kppk39.ru/',
     accent: '#d71920',
     logoText: 'КППК',
+    logoUrl: '/assets/partners/kppk-rzd.svg',
+    logoAlt: 'Логотип КППК / РЖД',
+    logoShape: 'compact',
+    logoSurface: 'dark',
   },
   {
     id: 'znanie-russia',
@@ -24,8 +36,13 @@ export const INFO_PARTNERS: InfoPartner[] = [
     shortName: 'Знание',
     description: 'Просветительская организация и партнёр событий с образовательной программой.',
     href: 'https://znanierussia.ru/',
-    accent: '#1769ff',
+    accent: '#2b2522',
     logoText: 'Знание',
+    logoUrl: '/assets/partners/znanie-russia.svg',
+    logoAlt: 'Логотип Российского общества «Знание»',
+    logoShape: 'wide',
+    logoSurface: 'light',
+    priority: 'primary',
   },
   {
     id: 'kgd80',
@@ -33,8 +50,13 @@ export const INFO_PARTNERS: InfoPartner[] = [
     shortName: '80 историй',
     description: 'Просветительский фестиваль к 80-летию Калининградской области.',
     href: 'https://kgd80.ru/',
-    accent: '#8d3b20',
+    accent: '#df452d',
     logoText: '80',
+    logoUrl: '/assets/partners/kgd80.svg',
+    logoAlt: 'Вертикальный логотип фестиваля «80 историй о главном»',
+    logoShape: 'tall',
+    logoSurface: 'light',
+    priority: 'primary',
   },
   {
     id: 'kantata-education',
@@ -42,7 +64,28 @@ export const INFO_PARTNERS: InfoPartner[] = [
     shortName: 'Кантата',
     description: 'Бесплатные лекции и кинопоказы образовательной программы международного фестиваля классической музыки.',
     href: 'https://kantatafest.ru/obrazovatelnaya-programma',
-    accent: '#5236a7',
+    accent: '#251a13',
     logoText: 'Кантата',
+    logoUrl: '/assets/partners/kantata-education.webp',
+    logoFallbackUrl: '/assets/partners/kantata-education.png',
+    logoAlt: 'Логотип фестиваля «Кантата» в начертании слова «КАНТАТА»',
+    logoShape: 'wide',
+    logoSurface: 'light',
+    priority: 'primary',
+  },
+  {
+    id: 'act-opus',
+    name: 'Театр «Акт Опус»',
+    shortName: 'Акт Опус',
+    description: 'Калининградский театр с собственной афишей спектаклей и премьер.',
+    href: 'https://actop.us/plays',
+    accent: '#111111',
+    logoText: 'Акт Опус',
+    logoUrl: '/assets/partners/act-opus.webp',
+    logoFallbackUrl: '/assets/partners/act-opus.png',
+    logoAlt: 'Логотип театра «Акт Опус»',
+    logoShape: 'wide',
+    logoSurface: 'light',
+    priority: 'primary',
   },
 ];
