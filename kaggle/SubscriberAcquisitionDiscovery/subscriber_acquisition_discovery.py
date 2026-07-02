@@ -1603,6 +1603,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                 "surface_type": surface_type,
                 "title": getattr(entity, "title", None),
                 "status": "needs_comment_resolve" if surface_type == "channel" else "candidate",
+                "scan_state": "pending_comment_resolve" if surface_type == "channel" else "queued_waiting_replyable_budget",
                 "reach": {"members": getattr(entity, "participants_count", None), "confidence": "low", "basis": "telegram_entity"},
                 "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only public scan"},
             })
@@ -1640,6 +1641,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             "surface_type": "linked_discussion",
                             "title": getattr(linked, "title", None),
                             "status": "candidate",
+                            "scan_state": "queued_waiting_replyable_budget",
                             "source": "linked_discussion",
                             "topic_hint": f"linked discussion for {handle}",
                             "reach": {"members": getattr(linked, "participants_count", None), "confidence": "low", "basis": "telegram_linked_discussion"},
@@ -1655,6 +1657,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                             diagnostics.append(f"{linked_handle}: rejected out-of-region linked discussion")
                         else:
                             surface = _mark_tg_channel_resolved_with_linked_discussion(surface, linked_surface=linked_surface)
+                            surface["scan_state"] = "resolved_commentability"
                             surfaces[surface["external_id"]] = surface
                             surfaces[linked_surface["external_id"]] = linked_surface
                             if replyable_processed < max_surfaces:
@@ -1669,6 +1672,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     diagnostics.append(f"{handle}: linked discussion lookup failed: {exc}")
                 if not linked_comment_scan_added:
                     surface = _mark_tg_channel_rejected_no_comments(surface)
+                    surface["scan_state"] = "resolved_no_comments"
                     surfaces[surface["external_id"]] = surface
                     TG_SCAN_STATS["channels_rejected_no_comments"] += 1
                     diagnostics.append(f"{handle}: rejected channel without accessible comments")
@@ -1733,6 +1737,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
             for scan_entity, scan_surface, relation in [*channel_link_scan_entities, *scan_entities]:
                 relation_is_channel_link_discovery = relation == "channel_link_discovery"
                 if not relation_is_channel_link_discovery and _is_tg_replyable_surface_type(str(scan_surface.get("surface_type") or "")):
+                    scan_surface["scan_state"] = "scanned"
                     replyable_processed += 1
                     TG_SCAN_STATS["replyable_surfaces_scanned"] += 1
                     if relation == "linked_discussion":

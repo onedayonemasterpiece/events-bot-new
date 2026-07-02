@@ -100,6 +100,50 @@ async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload)
 
 
 @pytest.mark.asyncio
+async def test_import_keeps_queued_linked_discussion_unscanned(db, sample_payload):
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/c/1659216966",
+            "handle": "1659216966",
+            "external_id": "tg:1659216966",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "scan_state": "queued_waiting_replyable_budget",
+            "reach": {"basis": "telegram_linked_discussion", "confidence": "low"},
+            "risk": {"reason": "read-only linked discussion scan"},
+            "telegram_access": {"id": "1659216966", "access_hash": "secret-hash"},
+        },
+        {
+            "platform": "tg",
+            "surface_type": "linked_discussion",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "status": "candidate",
+            "source": "linked_discussion",
+            "scan_state": "scanned",
+            "reach": {"basis": "telegram_linked_discussion", "confidence": "low"},
+            "risk": {"reason": "read-only linked discussion scan"},
+        },
+    ]
+    payload["opportunities"] = []
+
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        rows = (await session.execute(select(AcqSurface))).scalars().all()
+    by_external = {row.external_id: row for row in rows}
+    assert by_external["tg:1659216966"].last_scan_at is None
+    assert by_external["tg:1659216966"].next_scan_after is None
+    assert by_external["tg:1659216966"].risk_json["_telegram_access"]["access_hash"] == "secret-hash"
+    assert by_external["tg:1481648829"].last_scan_at is not None
+    assert by_external["tg:1481648829"].next_scan_after is not None
+
+
+@pytest.mark.asyncio
 async def test_import_updates_existing_surface_to_out_of_region_rejected(db, sample_payload):
     first = json.loads(json.dumps(sample_payload))
     first["surfaces"][0]["external_id"] = "tg:visitNavahrudak"

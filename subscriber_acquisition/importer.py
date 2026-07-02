@@ -49,6 +49,27 @@ def _surface_was_scanned(item: dict[str, Any]) -> bool:
     next Kaggle run will keep starting from the same head of the seed list instead
     of walking the unscanned frontier.
     """
+    explicit_scan_state = str((item or {}).get("scan_state") or "").strip().lower()
+    if explicit_scan_state:
+        if explicit_scan_state in {
+            "queued",
+            "queued_unscanned",
+            "queued_waiting_replyable_budget",
+            "pending_first_scan",
+            "pending_comment_resolve",
+            "seed_only",
+        }:
+            return False
+        if explicit_scan_state in {
+            "scanned",
+            "scanned_this_run",
+            "commentability_resolved",
+            "resolved_commentability",
+            "resolved_no_comments",
+            "rejected_after_resolve",
+        }:
+            return True
+
     status = str((item or {}).get("status") or "").strip().lower()
     if status == "needs_comment_resolve":
         return False

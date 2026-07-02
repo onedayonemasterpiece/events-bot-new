@@ -25,7 +25,7 @@ contract:
   dev/test fallback only; sample fixture import requires `ACQ_DISCOVERY_USE_SAMPLE=1`
   so production does not review fake evidence;
 - review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
-- server import keeps seed-only queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces and later runs walk the remaining frontier rather than the same first seeds;
+- server import keeps seed-only and budget-queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces; linked discussion groups found while resolving a channel but skipped by the replyable budget stay pending for the next Kaggle run instead of being delayed as already scanned;
 - seed payload includes Kaliningrad Telega.in regional-card channels/chats as `source=telega_in`, giving discovery enough new TG surfaces before relying on organic frontier links;
 - optional YDB serverless stats sink writes run/surface/opportunity stats outside local SQLite when `ACQ_YDB_STATS_ENABLED=1`;
 - Telegram channels without accessible linked discussion/comments are marked
