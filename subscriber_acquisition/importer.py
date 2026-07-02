@@ -80,6 +80,16 @@ def _should_apply_runtime_status(existing: AcqSurface, incoming_status: str, *, 
     return scanned_this_run and current not in {"approved", "rejected", "paused"}
 
 
+def _is_replyable_surface(platform: str, surface_type: str) -> bool:
+    platform_norm = str(platform or "").strip().lower()
+    type_norm = str(surface_type or "").strip().lower()
+    if platform_norm == "tg":
+        return type_norm in {"group", "chat", "megagroup", "linked_discussion"}
+    if platform_norm == "vk":
+        return type_norm == "community"
+    return False
+
+
 @dataclass
 class ImportResult:
     run: AcqDiscoveryRun
@@ -105,6 +115,11 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
 
         surfaces_by_external: dict[str, AcqSurface] = {}
         surfaces: list[AcqSurface] = []
+        surfaces_created = 0
+        surface_status_changed = 0
+        newly_replyable_surfaces = 0
+        newly_rejected_surfaces = 0
+        newly_resolved_channels = 0
         for item in surfaces_in:
             platform = str(item.get("platform") or "").strip().lower() or "tg"
             external_id = str(item.get("external_id") or item.get("url") or "").strip() or None
@@ -134,6 +149,13 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
             risk = _jsonable(item.get("risk"), {})
             scanned_this_run = _surface_was_scanned(item)
             if existing is None:
+                surfaces_created += 1
+                if _is_replyable_surface(platform, str(item.get("surface_type") or "unknown")) and not incoming_status.startswith("rejected"):
+                    newly_replyable_surfaces += 1
+                if incoming_status.startswith("rejected"):
+                    newly_rejected_surfaces += 1
+                if incoming_status == "resolved_has_linked_discussion":
+                    newly_resolved_channels += 1
                 surface = AcqSurface(
                     platform=platform,
                     surface_type=str(item.get("surface_type") or "unknown"),
@@ -154,8 +176,15 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
                 await session.flush()
             else:
                 surface = existing
+                old_status = str(surface.status or "").strip().lower()
                 if _should_apply_runtime_status(surface, incoming_status, scanned_this_run=scanned_this_run):
                     surface.status = incoming_status
+                    if incoming_status != old_status:
+                        surface_status_changed += 1
+                        if incoming_status.startswith("rejected"):
+                            newly_rejected_surfaces += 1
+                        if incoming_status == "resolved_has_linked_discussion":
+                            newly_resolved_channels += 1
                 surface.title = item.get("title") or surface.title
                 surface.url = str(item.get("url") or surface.url or "")
                 surface.handle = item.get("handle") or surface.handle
@@ -253,6 +282,13 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
             "surfaces": len(surfaces),
             "opportunities": len(opportunities),
             "skipped_duplicate_contexts": skipped,
+            "surface_import_delta": {
+                "created": surfaces_created,
+                "status_changed": surface_status_changed,
+                "newly_replyable": newly_replyable_surfaces,
+                "newly_rejected": newly_rejected_surfaces,
+                "newly_resolved_channels": newly_resolved_channels,
+            },
             "ydb_export": ydb_export,
         }
         session.add(run)

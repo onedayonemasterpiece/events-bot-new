@@ -53,6 +53,8 @@ async def test_import_discovery_result_creates_schema_rows(db, sample_payload):
     assert opps[0].sticker_fit == "possible"
     assert targets[0].kind == "topic_landing"
     assert runs[0].status == "done"
+    assert runs[0].stats_json["surface_import_delta"]["created"] == 1
+    assert runs[0].stats_json["surface_import_delta"]["newly_replyable"] == 1
 
 
 
@@ -177,6 +179,11 @@ async def test_import_updates_channel_to_resolved_linked_discussion_status(db, s
     assert channel.risk_json["linked_discussion_url"] == "https://t.me/source_chat"
     assert linked.surface_type == "linked_discussion"
     assert linked.status == "candidate"
+    async with db.get_session() as session:
+        run = (await session.execute(select(AcqDiscoveryRun).order_by(AcqDiscoveryRun.id.desc()).limit(1))).scalar_one()
+    assert run.stats_json["surface_import_delta"]["status_changed"] == 1
+    assert run.stats_json["surface_import_delta"]["newly_resolved_channels"] == 1
+    assert run.stats_json["surface_import_delta"]["newly_replyable"] == 1
 
 
 @pytest.mark.asyncio
@@ -543,6 +550,42 @@ async def test_runtime_seed_payload_includes_telega_in_kaliningrad_seeds(db):
     assert by_external["tg:anons39"]["source"] == "telega_in"
     assert by_external["tg:anons39"]["status"] == "needs_comment_resolve"
     assert "telega.in/channels/anons39" in by_external["tg:anons39"]["topic_hint"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_seed_payload_does_not_reintroduce_resolved_or_rejected_telega_channels(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _approved_seed_urls_from_payload
+
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/kpkld",
+            handle="kpkld",
+            external_id="tg:kpkld",
+            status="resolved_has_linked_discussion",
+            source="telega_in",
+            risk_json={"linked_discussion_url": "https://t.me/c/1481648829"},
+        ))
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/anons39",
+            handle="anons39",
+            external_id="tg:anons39",
+            status="rejected_no_comments",
+            source="telega_in",
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    tg_seeds, _vk_seeds = _approved_seed_urls_from_payload(payload)
+
+    assert "tg:kpkld" not in by_external
+    assert "tg:anons39" not in by_external
+    assert "https://t.me/kpkld" not in tg_seeds
+    assert "https://t.me/anons39" not in tg_seeds
 
 
 @pytest.mark.asyncio

@@ -231,9 +231,19 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
     surfaces: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     async with db.get_session() as session:
-        rows = (await session.execute(
-            select(AcqSurface).where(AcqSurface.status.in_(["seed", "candidate", "approved", "needs_comment_resolve"])).limit(250)
-        )).scalars().all()
+        # Keep a separate all-status seen set before appending static catalog
+        # seeds. Otherwise a channel already resolved/rejected in a previous run
+        # can be reintroduced from Telega.in as a fresh `needs_comment_resolve`
+        # seed, making later Kaggle runs loop over the same publics.
+        all_rows = (await session.execute(select(AcqSurface).limit(1000))).scalars().all()
+        for row in all_rows:
+            key = (str(row.platform or ""), str(row.external_id or row.url or ""))
+            if key[0] and key[1]:
+                seen.add(key)
+        rows = [
+            row for row in all_rows
+            if str(row.status or "").strip().lower() in {"seed", "candidate", "approved", "needs_comment_resolve"}
+        ][:250]
 
         def _surface_priority(row: AcqSurface) -> tuple[int, int, int, float, int]:
             source = str(row.source or "").strip().lower()

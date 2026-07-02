@@ -17,6 +17,8 @@
   `rejected_no_comments`, channels with linked chats store clickable linked
   discussion metadata, and frontier summaries/review opportunities only surface
   replyable chats/linked discussions/VK communities instead of raw channels.
+- Subscriber Acquisition seed rotation now remembers resolved/rejected Telegram catalog channels when building the next Kaggle payload, so static Telega.in seeds do not reintroduce the same no-comments/resolved channels as fresh work.
+- Subscriber Acquisition imports now record `surface_import_delta` counters (created, status_changed, newly_replyable, newly_rejected, newly_resolved_channels) so each Kaggle run can be judged by map growth rather than raw public/channel count.
 - Subscriber Acquisition Discovery now has an optional Yandex Managed Service
   for YDB serverless stats sink for run/surface/opportunity state, plus
   Telega.in Kaliningrad regional Telegram seeds for broader frontier discovery.

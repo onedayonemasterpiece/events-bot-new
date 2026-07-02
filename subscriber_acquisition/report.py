@@ -31,6 +31,7 @@ def render_report_html(run: AcqDiscoveryRun, surfaces: list[AcqSurface], opportu
     stats = run.stats_json or {}
     tg_scan = stats.get("tg_scan") if isinstance(stats.get("tg_scan"), dict) else {}
     vk_scan = stats.get("vk_scan") if isinstance(stats.get("vk_scan"), dict) else {}
+    delta = stats.get("surface_import_delta") if isinstance(stats.get("surface_import_delta"), dict) else {}
     replyable_types = {"group", "chat", "megagroup", "linked_discussion", "community"}
     replyable_surfaces = [s for s in surfaces if str(s.surface_type or "").lower() in replyable_types and not str(s.status or "").startswith("rejected")]
     no_comment_channels = [s for s in surfaces if str(s.status or "").lower() == "rejected_no_comments"]
@@ -40,6 +41,7 @@ def render_report_html(run: AcqDiscoveryRun, surfaces: list[AcqSurface], opportu
     lines.append(f"<li>run id: {run.id}</li>")
     lines.append(f"<li>status: {html.escape(run.status)}</li>")
     lines.append(f"<li>surfaces scanned: {stats.get('surfaces', len(surfaces))}</li>")
+    lines.append(f"<li>surface delta: created={delta.get('created', 0)}, status_changed={delta.get('status_changed', 0)}, newly_replyable={delta.get('newly_replyable', 0)}, newly_rejected={delta.get('newly_rejected', 0)}</li>")
     lines.append(f"<li>replyable surfaces in this import: {len(replyable_surfaces)}</li>")
     lines.append(f"<li>TG channels resolved with linked discussion: {tg_scan.get('channels_with_linked_discussion', len(resolved_channels))}</li>")
     lines.append(f"<li>TG channels rejected without comments: {tg_scan.get('channels_rejected_no_comments', len(no_comment_channels))}</li>")
