@@ -42,6 +42,9 @@
 
 ### Added
 
+- Added Smart Update identity schema foundation: event identity/date provenance
+  fields, decision-log and lock tables, SQLModel mappings, and indexes for the
+  future vector identity gate.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

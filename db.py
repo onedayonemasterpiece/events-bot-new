@@ -368,6 +368,13 @@ class Database:
                     emoji TEXT,
                     end_date TEXT,
                     end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
+                    identity_status TEXT NOT NULL DEFAULT 'canonical',
+                    merged_into_event_id INTEGER,
+                    date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
+                    date_provenance TEXT,
+                    date_confidence REAL,
+                    end_date_provenance TEXT,
+                    end_date_confidence REAL,
                     is_free BOOLEAN DEFAULT 0,
                     pushkin_card BOOLEAN DEFAULT 0,
                     silent BOOLEAN DEFAULT 0,
@@ -398,7 +405,8 @@ class Database:
                     topics TEXT DEFAULT '[]',
                     topics_manual BOOLEAN DEFAULT 0,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    content_hash TEXT
+                    content_hash TEXT,
+                    FOREIGN KEY(merged_into_event_id) REFERENCES event(id) ON DELETE SET NULL
                 )
                 """
             )
@@ -443,8 +451,26 @@ class Database:
             await _add_column(conn, "event", "preview_3d_url TEXT")
             await _add_column(conn, "event", "time_is_default BOOLEAN NOT NULL DEFAULT 0")
             await _add_column(conn, "event", "end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0")
+            await _add_column(
+                conn, "event", "identity_status TEXT NOT NULL DEFAULT 'canonical'"
+            )
+            await _add_column(conn, "event", "merged_into_event_id INTEGER")
+            await _add_column(conn, "event", "date_is_inferred BOOLEAN NOT NULL DEFAULT 0")
+            await _add_column(conn, "event", "date_provenance TEXT")
+            await _add_column(conn, "event", "date_confidence REAL")
+            await _add_column(conn, "event", "end_date_provenance TEXT")
+            await _add_column(conn, "event", "end_date_confidence REAL")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_event_tourist_label ON event(tourist_label)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_status ON event(identity_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_merged_into_event ON event(merged_into_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
             dbg("eventposter")
 
@@ -574,6 +600,58 @@ class Database:
             # поэтому держим отдельный индекс по source_url.
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_url ON event_source(source_url)"
+            )
+
+            dbg("event_identity")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_identity_decision_log(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER,
+                    candidate_event_id INTEGER,
+                    source_id INTEGER,
+                    source_type TEXT,
+                    source_url TEXT,
+                    decision TEXT NOT NULL,
+                    decision_reason TEXT,
+                    confidence REAL,
+                    decided_by TEXT,
+                    decision_payload JSON,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(candidate_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(source_id) REFERENCES event_source(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_event ON event_identity_decision_log(event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_candidate ON event_identity_decision_log(candidate_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_source ON event_identity_decision_log(source_type, source_url)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_decision_log_created ON event_identity_decision_log(created_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_identity_lock(
+                    event_id INTEGER PRIMARY KEY,
+                    lock_status TEXT NOT NULL DEFAULT 'active',
+                    lock_reason TEXT,
+                    locked_by TEXT,
+                    locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    details JSON,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_lock_status ON event_identity_lock(lock_status, expires_at)"
             )
 
             dbg("event_source_fact")
@@ -1931,6 +2009,15 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_content_hash ON event(content_hash)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_identity_status ON event(identity_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_merged_into_event ON event(merged_into_event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_event_date_time ON event(date, time)"

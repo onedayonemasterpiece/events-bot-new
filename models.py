@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from dataclasses import dataclass
 
 from sqlmodel import Field, SQLModel
@@ -375,6 +375,9 @@ class Event(SQLModel, table=True):
         Index("ix_event_date_city", "date", "city"),
         Index("ix_event_date_festival", "date", "festival"),
         Index("ix_event_content_hash", "content_hash"),
+        Index("ix_event_identity_status", "identity_status"),
+        Index("ix_event_merged_into_event", "merged_into_event_id"),
+        Index("ix_event_date_inferred", "date_is_inferred", "date"),
         Index(
             "ix_event_telegraph_not_null",
             "date",
@@ -406,6 +409,13 @@ class Event(SQLModel, table=True):
     emoji: Optional[str] = None
     end_date: Optional[str] = None
     end_date_is_inferred: bool = False
+    identity_status: str = "canonical"
+    merged_into_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    date_is_inferred: bool = False
+    date_provenance: Optional[str] = None
+    date_confidence: Optional[float] = None
+    end_date_provenance: Optional[str] = None
+    end_date_confidence: Optional[float] = None
     is_free: bool = False
     pushkin_card: bool = False
     silent: bool = False
@@ -813,6 +823,52 @@ class EventSource(SQLModel, table=True):
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
     trust_level: Optional[str] = None
+
+
+class EventIdentityDecisionLog(SQLModel, table=True):
+    __tablename__ = "event_identity_decision_log"
+    __table_args__ = (
+        Index("ix_event_identity_decision_log_event", "event_id"),
+        Index("ix_event_identity_decision_log_candidate", "candidate_event_id"),
+        Index("ix_event_identity_decision_log_source", "source_type", "source_url"),
+        Index("ix_event_identity_decision_log_created", "created_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    candidate_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    source_id: Optional[int] = Field(default=None, foreign_key="event_source.id")
+    source_type: Optional[str] = None
+    source_url: Optional[str] = None
+    decision: str
+    decision_reason: Optional[str] = None
+    confidence: Optional[float] = None
+    decided_by: Optional[str] = None
+    decision_payload: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON)
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventIdentityLock(SQLModel, table=True):
+    __tablename__ = "event_identity_lock"
+    __table_args__ = (
+        Index("ix_event_identity_lock_status", "lock_status", "expires_at"),
+    )
+
+    event_id: int = Field(primary_key=True, foreign_key="event.id")
+    lock_status: str = Field(default="active")
+    lock_reason: Optional[str] = None
+    locked_by: Optional[str] = None
+    locked_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    expires_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    details: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
 
 
 class EventSourceFact(SQLModel, table=True):

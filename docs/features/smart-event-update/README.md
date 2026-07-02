@@ -164,6 +164,12 @@ Smart Update по умолчанию строит публичный текст 
     - fallback: поиск по `event_source.source_url`, если источник уже был сохранён у события.
     - форс‑матч применяется только когда он безопасен: если на один `source_url` приходится несколько событий (schedule‑посты), матч делается только при одинаковой “сигнатуре дубля” (дата + начало времени/пустое время + площадка + нормализованный `title`).
   - для Telegram `group/supergroup` постов, где автор публикации — пользователь Telegram, мониторинг может использовать автора как fallback‑контакт для `ticket_link`, если явная ссылка/handle на запись не найдена и в тексте нет phone/email контакта; приоритет: `https://t.me/<username>`, fallback — `tg://user?id=<id>`.
+- Identity/schema foundation:
+  - `event.identity_status` хранит статус идентичности карточки (`canonical` по умолчанию; будущий merge/gate сможет помечать merged/review states без смешивания с `lifecycle_status`);
+  - `event.merged_into_event_id` хранит каноническую карточку, если текущая строка позже будет сведена как дубль;
+  - `event.date_is_inferred`, `date_provenance`, `date_confidence`, `end_date_provenance`, `end_date_confidence` добавлены как first-class provenance/trust поля для будущих решений о датах; существующий `end_date_is_inferred` сохраняется и остаётся отдельным durable marker;
+  - `event_identity_decision_log` — append-only foundation для решений identity gate/adjudicator: участвующие event/source ids, решение, причина, confidence, actor и JSON payload;
+  - `event_identity_lock` — per-event lock для временной или ручной защиты identity от автоматического merge/update.
 - Trust‑логика:
   - хранится `event.ticket_trust_level` и применяется при обновлении ticket‑полей.
 
@@ -221,7 +227,7 @@ Smart Update содержит детекцию фестивалей как ча�
 
 - `smart_event_update.py` — основная логика матчинга/мерджа.
 - `docs/reference/location-flags.md` — `allow_parallel_events`.
-- `models.py` / `db.py` — `event_source`, `eventposter.phash`, `telegram_*` таблицы.
+- `models.py` / `db.py` — `event_source`, `event_identity_*`, `eventposter.phash`, `telegram_*` таблицы.
 
 ## Примечания
 
