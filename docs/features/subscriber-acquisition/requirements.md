@@ -27,6 +27,39 @@ Status: reconciled draft; Discovery MVP addendum 2026-06-29
 - The reply may mention concrete event names and, when appropriate, include links to those events.
 - The reply format should support replying directly to the source message/comment when the platform allows it.
 
+
+### Organizer clarification acquisition
+
+- Publics that belong to event organizers, venues, festivals, parks or similar
+  event hosts are a separate acquisition surface: the useful action may be not a
+  recommendation to a third-party user, but a polite public clarification
+  question to the organizer under their own event post.
+- The goal is still audience acquisition: a useful, non-spammy clarification can
+  draw attention to the operator/profile that contains information about the
+  event service, and in some cases can later justify linking to the enriched
+  canonical event page.
+- The scanner should first check whether the organizer post corresponds to an
+  event already known to the system. Use the existing event retrieval/vector
+  search capability to match the post to a canonical event candidate before
+  proposing any clarification.
+- Clarification is eligible only when the matched event is missing information
+  needed for an “ideal event card”. The ideal-card checklist should include, at
+  minimum, date/time, venue/address, price/ticket status/link, age restriction,
+  duration, registration/entry rules, accessibility/children constraints where
+  relevant, and other practical organizer nuances that make the event complete.
+- The system should learn typical clarification patterns from real public
+  questions in organizer threads (for example age limits, duration, entry rules,
+  whether registration is required, what is included in the ticket, weather/
+  outdoor constraints), but it must not blindly ask generic questions.
+- Before creating a review opportunity, the system must guarantee that the same
+  or materially equivalent question was not already asked earlier in the same
+  thread by another participant or by us.
+- LLM usage for this subfeature should be minimized: deterministic event-post
+  detection, vector-search retrieval, metadata-diffing against the ideal-card
+  checklist, thread dedupe, and cheap pattern clustering should happen before
+  spending LLM budget on final semantic validation and wording.
+
+
 ### Link targets and platform routing
 
 - In Telegram contexts, recommendation links should prefer Telegram announcement/channel links when available and appropriate.
@@ -83,6 +116,9 @@ Additional discovery topics from the 2026-07-01 static-site documentation update
 - organizer-side acquisition: people asking where to add/send/publish an event announcement or how to arrange information partnership;
 - quick-filter/badge needs: Pushkin card, kids/family, charity, recording/stream, free-entry questions that map to event-token medallions and future filters;
 - trip-route recommendation contexts from `trip-recomendation`: questions like where to go/sъездить for one day from Kaliningrad by train/car, where a concrete collected route should be recommended instead of a general public.
+- organizer clarification acquisition: event organizer/venue/festival publics
+  where a post can be matched to an existing event and a polite question can
+  clarify missing details from the ideal event-card checklist.
 
 These topics are discovery/review candidates, not automatic replies. Broad semantic
 classification and final reply suitability remain LLM-first.
@@ -175,6 +211,10 @@ LLM requirement:
 - 2026-06-29: Added conservative potential-reach scoring as a product-prioritization signal for opportunities and surfaces.
 - 2026-06-29: Added Telegraph report output as the primary link-heavy manual/external review artifact.
 - 2026-06-29: Added sticker-strategy suitability analysis as research-only MVP output; sticker creation/sending remains follow-up.
+- 2026-07-02: Added organizer clarification acquisition as a separate
+  subfeature: match organizer posts to known events through vector search,
+  compare against an ideal event-card checklist, dedupe existing questions in
+  the thread, and use LLM only for final validation/wording.
 
 ## Archived intake 2026-06-27T20:27:51+00:00
 

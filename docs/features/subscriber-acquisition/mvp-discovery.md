@@ -182,6 +182,49 @@ selection of accessible/free events.
 These deterministic matches are low-cost shadow prefilters. Final classification
 and reply wording remain LLM-first before any public response.
 
+
+### Organizer clarification acquisition
+
+Treat organizer-owned publics as a distinct acquisition target class, not as the
+same thing as answering generic “куда сходить?” comments. In an organizer public
+(for example a venue/park/festival page such as `vagonka39`), Discovery may
+surface a review candidate to ask the organizer for missing practical details
+about their own event.
+
+Eligibility pipeline:
+
+1. **Organizer/post detection:** cheaply classify whether the surface and post
+   are controlled by an event organizer or venue, and whether the post is about a
+   concrete event.
+2. **Event match:** use the existing vector-search/event retrieval capability to
+   find whether the post corresponds to an event already known in our event
+   corpus. If no confident match exists, keep only a diagnostic/research row, not
+   a public-question candidate.
+3. **Ideal-event diff:** compare the matched event against an explicit ideal
+   event-card checklist: exact date/time, venue/address, price/ticket status and
+   ticket URL, age limit, duration, registration/entry rules, accessibility,
+   kids/family constraints, cancellation/weather/format notes where relevant,
+   and other organizer-specific nuances needed for a complete public event page.
+4. **Question-pattern mining:** analyze real questions already asked in similar
+   organizer threads to derive realistic clarification templates (age limit,
+   duration, entry/registration, what is included, accessibility, rain plan,
+   ticket availability). This pattern mining is used to avoid unnatural generic
+   prompts, not to bypass semantic validation.
+5. **Same-thread dedupe:** before creating a review opportunity, scan the current
+   thread for already asked equivalent questions and suppress duplicates. This
+   dedupe should be deterministic/embedding-assisted first and LLM-backed only
+   for ambiguous near-duplicates.
+6. **LLM final gate:** after the cheap stages, Gemma validates whether the
+   clarification is useful, non-spammy, answerable by the organizer, and phrased
+   like a normal human question. It should reject questions that exist only to
+   manufacture engagement.
+
+This subfeature has its own opportunity type, for example
+`organizer_clarification`. Its success metric is not direct event recommendation
+conversion; it is useful public interaction that exposes the profile/service with
+better event information, and in clearly appropriate cases creates a natural path
+to an enriched event link later.
+
 ## MVP output
 
 The first production rollout writes **review data only**:

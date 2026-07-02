@@ -138,6 +138,37 @@ coast hints so route opportunities are not missed before Gemma does the semantic
 gate. These remain shadow opportunities for review only after Gemma 4 accepts
 the checklist; broad semantic acceptance is never owned by regex/keywords.
 
+
+### Organizer clarification acquisition
+
+Organizer/venue/festival publics are a separate audience-acquisition subfeature.
+For communities such as `vagonka39`, the useful public action may be a polite
+clarifying question to the organizer under their event post, rather than a
+recommendation to another commenter.
+
+The discovery flow should be:
+
+1. Classify the surface/post as an organizer-owned event context.
+2. Use existing event retrieval/vector search to match the post to a known event
+   candidate in our corpus.
+3. Compare the matched event against an “ideal event card” checklist: date/time,
+   venue/address, price/ticket status and link, age restriction, duration,
+   registration/entry rules, accessibility/children constraints when relevant,
+   and other practical organizer nuances.
+4. Mine recent thread questions to learn realistic clarification patterns, but
+   do not ask generic questions just because a field is absent.
+5. Before review-card creation, dedupe against earlier same-thread questions so
+   we never repeat a materially equivalent question already asked by someone
+   else or by us.
+6. Spend LLM budget only after deterministic organizer detection, vector
+   retrieval, metadata-diffing and thread dedupe have produced a plausible
+   missing-information gap; the LLM owns final suitability and wording.
+
+This is still shadow/review-only in MVP. The acquisition value is that a helpful
+question can attract attention to the public profile/service where richer event
+information is visible; only in clearly appropriate cases should the eventual
+reply include a link to the enriched event page.
+
 ## Operator map
 
 Use `/acq_map` or the `🗺 Карта групп XLSX` button in `/acq` to download a
