@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Codex fanout child-agent effort policy**: documented adaptive per-lane effort selection so child agents do not blindly inherit parent effort; narrow mapping can stay medium, normal bounded lanes use high, and high-risk architecture/security/schema/incident work should use extra-high/max where available.
 - **Codex fanout v2 hardening**: strengthened automatic fanout triggers so 3+ numbered/bulleted requirements require a visible Fanout Decision, 5+ or cross-area work requires an execution matrix and lane map, and repo-portable bootstrap/rules/docs travel with the project.
 - **Codex server-wide fanout defaults**: clarified that complex multi-point tasks auto-trigger the fanout workflow from task shape, with the user-level global skill as this server's source of truth and the repo-local setup as a team-shared anchor.
 - **Codex parallel feature workflow**: added the repo-local `$feature-fanout` skill, project-scoped Codex agents, subagent limits, helper scripts, usage documentation, and AGENTS.md lane/worktree discipline for complex multi-point requests.
