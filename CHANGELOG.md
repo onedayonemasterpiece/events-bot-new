@@ -50,6 +50,7 @@
 
 ### Added
 
+- Added the Yandex Cloud Serverless YDB analytics/storage split audit for static site, bot, SQLite thinning, and Supabase size guard planning.
 - Added Smart Update identity schema foundation: event identity/date provenance
   fields, decision-log and lock tables, SQLModel mappings, and indexes for the
   future vector identity gate.

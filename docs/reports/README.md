@@ -11,3 +11,4 @@
 - Telegram monitoring malformed festival incident (redirect): `tg-monitoring-festival-bool-incident-2026-04-10.md`
 - Gemma 4 migration research: `gemma-4-migration-research-2026-04-19.md`
 - Gemma 4 migration repo-wide status: `gemma-4-migration-status-2026-04-22.md`
+- Yandex Cloud Serverless YDB analytics/storage split audit: `ydb-serverless-analytics-2026-07-02.md`
