@@ -177,6 +177,10 @@ function tokenStyle(token: Token): string | undefined {
   if (token.ring) parts.push(`--token-brand-ring:${token.ring}`);
   return parts.length ? parts.join(';') : undefined;
 }
+
+function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
+  return imageUrl.endsWith('.webp') ? (fallbackImageUrl || imageUrl) : imageUrl;
+}
 ---
 {visibleTokens.length > 0 && (
   <section class="event-token-section" aria-label="Быстрые признаки события">
@@ -187,7 +191,7 @@ function tokenStyle(token: Token): string | undefined {
             <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
               <picture>
                 {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
-                <img src={withBase(token.fallbackImageUrl || token.imageUrl)} alt="" loading="lazy" decoding="async" />
+                <img src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
               </picture>
             </span>
           ) : token.kind === 'pushkin' && token.imageUrl ? (

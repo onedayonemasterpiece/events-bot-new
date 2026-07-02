@@ -1,6 +1,6 @@
 # Event token medallions / quick-read badges
 
-> **Status:** design + first runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview.
+> **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for all starter organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; `konb` stays a raster exception and `dom-kitoboya` stays raster until an official/source SVG is found.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -59,7 +59,7 @@ The medallion row stays in normal document flow on the event detail page, not as
 
 ### Sizes
 
-Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels.
+Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels. Organizer medallions should prefer SVG `avatarUrl` assets and keep PNG/WebP files only as QA/fallback unless the item is an explicit raster exception.
 
 | Surface | Desktop | Tablet | Mobile |
 | --- | --- | --- | --- |
@@ -112,21 +112,29 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 
 | Organization | Slug | Runtime asset | Source/provenance |
 | --- | --- | --- | --- |
-| Музей Мирового океана | `world-ocean-museum` | `/assets/organizers/world-ocean-museum.webp` (`.png` fallback) | official mobile SVG logo from `world-ocean.ru`, cropped to the large `ММО` mark |
-| Историко-художественный музей | `history-art-museum` | `/assets/organizers/history-art-museum.webp` (`.png` fallback) | official white KOIHM PNG from `koihm.ru`, left building/`КОИХМ` mark on a contrast circle |
-| Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.webp` (`.png` fallback) | official black SVG logo from `filarmonia39.ru`; yellow background `#FAB534` matched to the current Telegram profile avatar at `t.me/filarmonia_39` |
-| Остров Канта | `kant-island` | `/assets/organizers/kant-island.webp` (`.png` fallback) | official `sobor39.ru` SVG logo, cropped to the cathedral mark |
-| Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.png` | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; palette from public Telegram profile `t.me/domkitoboya`: dominant blue `#5060A0` (average sampled blue `#4D62A0`), light handwritten mark `#D0D8E5`, ring `#CFD6EA` |
-| Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.webp` (`.png` fallback) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`: gold `Т` mark on a warm light background, centered and fitted into the circle without extra labels |
-| Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; right-side descriptive text removed, only the building mark and top `КОНБ` retained and fitted into a circle |
+| Музей Мирового океана | `world-ocean-museum` | `/assets/organizers/world-ocean-museum.svg` (`.png` fallback/QA) | official mobile SVG logo from `world-ocean.ru`, simplified to the large geometric `ММО` mark without raster runtime |
+| Историко-художественный музей | `history-art-museum` | `/assets/organizers/history-art-museum.svg` (`.png` fallback/QA) | official white KOIHM PNG from `koihm.ru`; SVG source was not found on the checked public URLs, so the geometric building/`КОИХМ` mark was locally vectorized into SVG on the accepted contrast circle |
+| Калининградская филармония | `kaliningrad-philharmonic` | `/assets/organizers/kaliningrad-philharmonic.svg` (`.png` fallback/QA) | official black SVG logo from `filarmonia39.ru`; yellow background `#FAB534` matched to the current Telegram profile avatar at `t.me/filarmonia_39` |
+| Остров Канта | `kant-island` | `/assets/organizers/kant-island.svg` (`.png` fallback/QA) | official `sobor39.ru` SVG logo; the exact cathedral-mark path is embedded directly into the medallion SVG |
+| Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.png` | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains raster for now |
+| Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
+| Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
 
 Asset inventory:
 
-- runtime optimized assets: `site/public/assets/organizers/`;
+- runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
 - browser-facing manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`.
 
-No OpenAI image generation/editing was used for these assets; they were produced by local SVG/PNG rendering, source-faithful cropping and alpha-preserving PNG/WebP export.
+2026-07-02 SVG pass:
+
+- `kant-island`, `kaliningrad-philharmonic` and `world-ocean-museum` use local/official SVG source material directly;
+- `history-art-museum` had no public SVG source in the checked KOIHM candidates, so the existing geometric PNG medallion was locally vectorized into SVG;
+- `tretyakovka-kaliningrad` is reconstructed as simple SVG primitives from the geometric Telegram avatar;
+- `dom-kitoboya` is intentionally unchanged because no source SVG was found (`logo.svg` candidates returned 404 while `logo.webp`/`logo.png` exist);
+- `konb` is intentionally unchanged as the explicit raster exception for this pass.
+
+No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving PNG/WebP fallback export.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
