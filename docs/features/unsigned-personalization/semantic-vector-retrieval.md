@@ -1,6 +1,6 @@
 # Semantic vector retrieval for events
 
-> Status: **two-document pgvector retrieval implemented; v62 full-catalog preview generated and uploaded, public-read gate pending**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`), now split by `embedding_doc_kind`: `search_v3` for user search and `related_v1` for event-to-event related pages. The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
+> Status: **two-document pgvector retrieval implemented and used by the current full-catalog static preview**. The accepted production candidate is the separate personalization Supabase project with `pgvector` + `gemini-embedding-2` (`vector(768)`), now split by `embedding_doc_kind`: `search_v3` for user search and `related_v1` for event-to-event related pages. The earlier TF-IDF/sparse chain remains only an honest lexical rollback/baseline and must not be called semantic search.
 
 ## Why this document exists
 
@@ -73,6 +73,18 @@ Document: title: {title} | text: {search_digest}
 Query:    task: search result | query: {user_query}
 ```
 
+### Poster/OCR boundary
+
+Raw poster OCR does **not** go directly into either vector document kind:
+
+- `/poisk/` embeds and searches `search_v3`, built from canonical public event facts and the curated `search_digest`;
+- static event-to-event related chains embed and search `related_v1`, built from cleaner title/type/category/summary/venue/audience context;
+- the LLM verifier for `/poisk/` receives retrieved event ids plus compact public facts (`search_digest`/card facts), not raw poster OCR text.
+
+Poster OCR can still influence search **indirectly** when Smart Update has already promoted a source-grounded poster fact into the canonical event row, for example a corrected title, date/time, venue/address, ticket status, topic or `search_digest`. That is intentional: the vector layer indexes the accepted event meaning, not the raw image transcript.
+
+Do not add raw OCR dumps, poster service headings or unreviewed poster venue strings to `search_v3`/`related_v1`. Posters often contain commercial venue names, sponsor names, ticket-office brands and layout labels; embedding them raw would let those high-salience names swamp semantic similarity and make unrelated events look close. If OCR supplies a venue, it must first pass the extraction/update grounding path and become a canonical venue/address before it appears in vector search.
+
 ### Two-document vector decision (implemented)
 
 The current implementation deliberately uses **one embedding model and one table**, but **two document representations** per event:
@@ -97,6 +109,8 @@ It consumes the exported `site/src/data/preview-events.json`, builds compact sea
 - controlled tags, Pushkin-card/family/charity/tourist hints when source text or existing topics explicitly support them;
 - a cleaner `related_v1` digest that removes most calendar/price noise and keeps theme/format/audience/venue context;
 - trusted card URL/snapshot fields.
+
+The list above is deliberately canonical-field-only. It excludes raw OCR, raw source HTML, raw poster text and provider/debug payloads; see the poster/OCR boundary above for the only supported indirect path.
 
 The sync is incremental by `(event_id, embedding_model, embedding_dim, embedding_doc_kind, text_hash)`: unchanged `search_v3` or `related_v1` rows are skipped independently, so adding the second document kind does not force a full re-embedding after the initial backfill.
 

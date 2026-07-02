@@ -575,8 +575,8 @@ async def test_smart_update_rejects_reaction_text_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "invalid"
-        assert result.reason == "prose_location"
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_uncertain"
     finally:
         await db.close()
 

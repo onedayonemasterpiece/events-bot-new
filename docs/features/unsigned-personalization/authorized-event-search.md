@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. The 2026-07-02 recovery preview `preview-20260702t0755-fresh-ui-fixes` keeps that backend contract, restores the latest avatar/account-menu and bottom search-button progress UI, and verifies the public static build exposes only browser-safe Supabase/Yandex auth envs.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. The current 2026-07-02 preview `preview-20260702t1536-merged-vector-medallions` keeps that backend contract, includes the vector-identity gate and medallion SVG branches, and verifies the public static build exposes only browser-safe Supabase/Yandex auth envs.
 
 ## Product contract
 
@@ -212,6 +212,8 @@ Query:    task: search result | query: {user_query}
 ```
 
 Authorized search uses only `embedding_doc_kind=search_v3`. Static event-page related generation uses `related_v1`; the Edge Function passes `p_embedding_doc_kind` to the RPC and defaults to `search_v3` so a future related-vector backfill cannot pollute user search results.
+
+Raw poster OCR is not embedded or sent to the online `/poisk/` verifier. OCR can affect authorized search only after Smart Update promotes a source-grounded poster fact into canonical public event fields such as `title`, `search_digest`, venue/address, ticket status or topics. This boundary is intentional because posters often contain commercial venue/partner labels that would otherwise over-weight unrelated events in vector recall.
 
 ## LLM verifier
 

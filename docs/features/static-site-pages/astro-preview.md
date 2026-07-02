@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** current full-catalog review target `preview-20260702t0755-fresh-ui-fixes` (376 active/future events from the 2026-07-02 production snapshot, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, restored smart-search UI polish). Historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are now part of the deploy verification gate; current preview HTML/CSS/JS, partner logos and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are expected to be publicly testable after `npm --prefix site run deploy:preview`.
+> **Build ID:** current full-catalog review target `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). Historical same-day target: `preview-20260702t0755-fresh-ui-fixes`; historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
+> **Preview index target:** <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate; current preview HTML/CSS/JS, partner logos, medallion assets and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are publicly testable after `npm --prefix site run deploy:preview`.
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
@@ -10,22 +10,24 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/vyhodnye/>
-- Search page: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/poisk/>
-- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/vystavki/>
-- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/populyarnoe/>
-- Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/partnerstvo/>
-- Information partners directory: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/partners/>
-- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/lab/medallions/>
-- Broken-image regression event: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sobytiya/festival-pianissimo-kaliningrad-5264/>
-- Fresh-snapshot event: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sobytiya/vyhodnye-v-agroparke-nekrasovo-pole-gurevsk-6585/>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/data/discovery/5264.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260702t0755-fresh-ui-fixes/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/>
+- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vystavki/>
+- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/populyarnoe/>
+- Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partnerstvo/>
+- Information partners directory: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partners/>
+- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/lab/medallions/>
+- Broken-image regression event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/festival-pianissimo-kaliningrad-5264/>
+- Fresh merged-branch event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/detskaya-igrovaya-programma-s-animatorami-kaliningrad-6601/>
+- Fresh VK auto-import event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/semeynaya-sreda-atomy-semi-kaliningrad-6605/>
+- Latest snapshot event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/master-klass-po-igre-na-barabanah-ot-sergeya-lukinova-kaliningrad-6613/>
+- Golden related discovery JSON: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/data/discovery/5264.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260702t1536-merged-vector-medallions/__preview/>
 
 CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
 
@@ -70,6 +72,23 @@ site/
   src/data/preview-events.json
   src/data/preview-related.json
 ```
+
+
+## 2026-07-02 merged vector-gate + medallion preview
+
+`preview-20260702t1536-merged-vector-medallions` supersedes `preview-20260702t0755-fresh-ui-fixes` for the Static Site MVP review because it merges the parallel medallion SVG upgrade and the Smart Update vector identity gate branch before exporting from the latest 2026-07-02 production SQLite snapshot.
+
+Evidence:
+
+- exported `399` active/future public events, max event id `6613`; the build includes production events `6601`–`6605` created after the vector-identity gate rollout;
+- related chains use `event_pgvector_related_chain_v2_two_doc` / `related_v1` over Supabase pgvector; the fresh sync upserted `399` documents and `101` changed/new embeddings, while `697` embeddings were skipped as unchanged;
+- build/check target: `PREVIEW_BUILD_ID=preview-20260702t1536-merged-vector-medallions`, `npm --prefix site run build:preview`, `npm --prefix site run check:preview`;
+- deploy target: `s3://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/` plus stable `s3://kenigevents.ru/ics/<event_id>.ics` files; deploy verification reported `Public preview verification: ok` and `Stable CDN ICS uploaded: 399`;
+- public HTTP smoke returned `200` for `__preview/`, `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/poisk/`, `/partners/`, `/lab/medallions/`, `sitemap.xml`, `robots.txt`, sample event pages `5264`, `6585`, `6601`, `6605`, `6613`, and stable ICS files for those ids;
+- authorized-search readiness passed with live Edge CORS, Supabase Auth redirect config, `custom:yandex` provider and `yandex-userinfo` adapter probes; mocked UI smoke and real Edge Playwright smoke passed (`интересно детям` returned rendered cards and quota status);
+- `/vystavki/` vector-identity regression audit with `--since-date 2026-07-02` returned `high_confidence_duplicate_count=0`; identity-gate rollout audit on the same snapshot reports `env_readiness.ready=true`, `identity_gate_vector_available_count=13`, and the only `vector_error_count=2` rows are the pre-secret 14:26/14:33 decisions.
+
+OCR/poster text contract for this preview: raw poster OCR is not embedded directly into `search_v3` or `related_v1`. It can affect search only indirectly if Smart Update has already promoted source-grounded poster facts into canonical public fields (`title`, `description`/`search_digest`, venue/address, topics). This prevents commercial venue names printed on posters from dominating `/poisk/` or static related cards unless the venue was canonically accepted by the event extraction/update pipeline.
 
 
 ## 2026-07-02 recovery preview: fresh data + UI repair
