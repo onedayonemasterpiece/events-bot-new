@@ -271,6 +271,7 @@ def build_audit_payload(
     *,
     current: date | None = None,
     since_days: int = 14,
+    since_date: date | None = None,
 ) -> dict:
     """Return the schema-adaptive duplicate-audit payload for a SQLite DB.
 
@@ -280,7 +281,7 @@ def build_audit_payload(
 
     current = current or date.today()
     since_days = max(1, int(since_days or 14))
-    since = current - timedelta(days=since_days)
+    since = since_date or (current - timedelta(days=since_days))
     conn = sqlite3.connect(f"file:{Path(db_path)}?mode=ro", uri=True)
     try:
         rows = load_public_exhibitions(conn, current)
@@ -309,6 +310,7 @@ def main() -> int:
     parser.add_argument("--db", required=True, type=Path)
     parser.add_argument("--current-date", default=date.today().isoformat())
     parser.add_argument("--since-days", type=int, default=14)
+    parser.add_argument("--since-date", help="Rollout start date YYYY-MM-DD; overrides --since-days window start")
     parser.add_argument("--format", choices=("text", "json", "prometheus", "both"), default="text")
     parser.add_argument("--json", action="store_true", help="Deprecated alias for --format json")
     parser.add_argument("--fail-on-high-confidence", "--fail-on-duplicates", action="store_true")
@@ -316,7 +318,8 @@ def main() -> int:
 
     try:
         current = date.fromisoformat(args.current_date)
-        payload = build_audit_payload(args.db, current=current, since_days=args.since_days)
+        since_date = date.fromisoformat(args.since_date) if args.since_date else None
+        payload = build_audit_payload(args.db, current=current, since_days=args.since_days, since_date=since_date)
         duplicates = [DuplicatePair(**pair) for pair in payload["duplicates"]]
     except Exception as exc:
         print(f"audit_public_exhibition_duplicates failed: {exc}", file=sys.stderr)

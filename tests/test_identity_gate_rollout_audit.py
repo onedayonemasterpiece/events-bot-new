@@ -184,3 +184,27 @@ def test_rollout_env_readiness_accepts_existing_supabase_env_fallback(tmp_path, 
     assert payload["env_readiness"]["personalization_supabase_service_role_present"] is True
     assert payload["env_readiness"]["ready"] is True
     assert "secret-existing" not in json.dumps(payload)
+
+
+def test_rollout_audit_since_date_overrides_since_days(tmp_path):
+    db_path = tmp_path / "events.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    _insert(
+        conn,
+        decision="veto_create",
+        reason="old_before_enforce",
+        payload={"mode": "enforce"},
+        created_at="2026-07-01 10:00:00",
+    )
+    conn.commit()
+    conn.close()
+
+    payload = build_rollout_payload(
+        db_path,
+        current=date(2026, 7, 2),
+        since_days=14,
+        since_date=date(2026, 7, 2),
+    )
+
+    assert payload["identity_gate_decision_count"] == 0

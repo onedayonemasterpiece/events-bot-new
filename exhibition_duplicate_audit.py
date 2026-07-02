@@ -35,6 +35,17 @@ def _env_enabled(name: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _date_env(name: str) -> date | None:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        logger.warning("invalid %s=%r; falling back to since_days", name, raw)
+        return None
+
+
 def _status_from_payload(payload: dict[str, Any]) -> str:
     return "failed" if int(payload.get("high_confidence_duplicate_count") or 0) > 0 else "success"
 
@@ -176,6 +187,7 @@ async def run_exhibition_duplicate_audit_scheduler(
 
     db_path = Path(getattr(db, "path", "") or "")
     since_days = _int_env("EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS", 14, minimum=1)
+    rollout_since_date = _date_env("EXHIBITION_DUPLICATE_AUDIT_SINCE_DATE")
     should_raise = _env_enabled("EXHIBITION_DUPLICATE_AUDIT_RAISE_ON_DUPLICATES", default=True)
     if raise_on_duplicates is not None:
         should_raise = bool(raise_on_duplicates)
@@ -184,6 +196,7 @@ async def run_exhibition_duplicate_audit_scheduler(
         "scheduler_run_id": run_id,
         "db_path": str(db_path),
         "since_days": since_days,
+        "since_date": rollout_since_date.isoformat() if rollout_since_date else None,
     }
     ops_run_id = await start_ops_run(
         db,
@@ -196,8 +209,12 @@ async def run_exhibition_duplicate_audit_scheduler(
     try:
         if not db_path or str(db_path) in {":memory:", ""}:
             raise RuntimeError("exhibition duplicate audit requires a file-backed SQLite DB")
-        payload = build_audit_payload(db_path, current=current_date, since_days=since_days)
-        rollout_payload = build_rollout_payload(db_path, current=current_date, since_days=since_days)
+        payload = build_audit_payload(
+            db_path, current=current_date, since_days=since_days, since_date=rollout_since_date
+        )
+        rollout_payload = build_rollout_payload(
+            db_path, current=current_date, since_days=since_days, since_date=rollout_since_date
+        )
         status = _status_from_payload(payload)
         metrics = _metrics_from_payload(payload, rollout_payload=rollout_payload)
         details = _details_from_payload(payload, run_id=run_id, rollout_payload=rollout_payload)

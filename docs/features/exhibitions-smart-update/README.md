@@ -80,7 +80,7 @@ long-running exhibition ranges overlap and title/source/venue evidence indicates
 one public identity. `events_public_exhibition_duplicate_pairs_total` reports all
 currently visible high-confidence pairs; `*_since_total` is the rollout-window
 acceptance metric and, when `event.added_at` exists, includes pairs where either
-row was added inside `current_date - since_days`. If a legacy/test schema lacks
+row was added inside the explicit `since_date`/`EXHIBITION_DUPLICATE_AUDIT_SINCE_DATE` rollout start, or `current_date - since_days` when no explicit start is set. If a legacy/test schema lacks
 `added_at`, the monitor fails closed and counts the pair in the window. Rollout
 closure requires:
 

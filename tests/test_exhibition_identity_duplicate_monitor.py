@@ -161,3 +161,39 @@ def test_monitor_since_window_uses_added_at_when_available(tmp_path):
     assert payload["high_confidence_duplicate_total_count"] == 2
     assert payload["high_confidence_duplicate_count"] == 1
     assert [(p["left_id"], p["right_id"]) for p in payload["duplicates"]] == [(3, 4)]
+
+
+def test_monitor_since_date_overrides_since_days(tmp_path):
+    db_path = tmp_path / "events.sqlite"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        create table event(
+            id integer primary key,
+            title text not null,
+            date text not null,
+            end_date text,
+            location_name text,
+            city text,
+            event_type text,
+            lifecycle_status text default 'active',
+            identity_status text default 'canonical',
+            merged_into_event_id integer,
+            added_at text
+        );
+        """
+    )
+    conn.execute("insert into event values(1,'Розовый натюрморт','2026-07-01','2026-08-01','Музей','Калининград','выставка','active','canonical',NULL,'2026-07-01 10:00:00')")
+    conn.execute("insert into event values(2,'Розовый натюрморт','2026-07-02','2026-08-02','Музей','Калининград','выставка','active','canonical',NULL,'2026-07-01 11:00:00')")
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(
+        db_path,
+        current=date(2026, 7, 2),
+        since_days=14,
+        since_date=date(2026, 7, 2),
+    )
+
+    assert payload["high_confidence_duplicate_total_count"] == 1
+    assert payload["high_confidence_duplicate_count"] == 0
