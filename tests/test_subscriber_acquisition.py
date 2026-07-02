@@ -187,6 +187,47 @@ async def test_import_updates_channel_to_resolved_linked_discussion_status(db, s
 
 
 @pytest.mark.asyncio
+async def test_import_seed_placeholder_does_not_downgrade_existing_replyable_surface(db, sample_payload):
+    async with db.get_session() as session:
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="linked_discussion",
+            url="https://t.me/c/1481648829",
+            handle="1481648829",
+            external_id="tg:1481648829",
+            status="candidate",
+            source="linked_discussion",
+            reach_json={"basis": "telegram_linked_discussion"},
+        ))
+        await session.commit()
+
+    payload = json.loads(json.dumps(sample_payload))
+    payload["surfaces"] = [
+        {
+            "platform": "tg",
+            "surface_type": "unknown_public",
+            "url": "https://t.me/c/1481648829",
+            "handle": "1481648829",
+            "external_id": "tg:1481648829",
+            "status": "needs_comment_resolve",
+            "source": "seed",
+            "reach": {"basis": "seed_only"},
+            "risk": {},
+        }
+    ]
+    payload["opportunities"] = []
+    await import_discovery_result(db, payload)
+
+    async with db.get_session() as session:
+        surface = (await session.execute(select(AcqSurface).where(AcqSurface.external_id == "tg:1481648829"))).scalar_one()
+        run = (await session.execute(select(AcqDiscoveryRun).order_by(AcqDiscoveryRun.id.desc()).limit(1))).scalar_one()
+
+    assert surface.status == "candidate"
+    assert surface.surface_type == "linked_discussion"
+    assert run.stats_json["surface_import_delta"]["status_changed"] == 0
+
+
+@pytest.mark.asyncio
 async def test_import_rejects_telegram_bot_surfaces(db, sample_payload):
     payload = json.loads(json.dumps(sample_payload))
     payload["surfaces"][0]["external_id"] = "tg:RK39_bot"

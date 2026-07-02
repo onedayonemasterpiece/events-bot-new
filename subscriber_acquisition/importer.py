@@ -73,8 +73,10 @@ def _should_apply_runtime_status(existing: AcqSurface, incoming_status: str, *, 
         return False
     if status.startswith("rejected"):
         return True
-    if status in {"resolved_has_linked_discussion", "needs_comment_resolve"}:
+    if status == "resolved_has_linked_discussion":
         return current not in {"approved", "rejected", "paused"}
+    if status == "needs_comment_resolve":
+        return scanned_this_run and current not in {"approved", "rejected", "paused"}
     if status == "candidate":
         return scanned_this_run and current not in {"approved", "rejected", "paused"}
     return scanned_this_run and current not in {"approved", "rejected", "paused"}
