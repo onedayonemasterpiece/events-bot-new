@@ -119,9 +119,9 @@ The starter organizer avatars are saved as local medallion-ready assets. Runtime
 | Дом китобоя | `dom-kitoboya` | `/assets/organizers/dom-kitoboya-stacked.webp` (`.png` fallback) | source logo snapshot from `domkitoboya.ru` split into two words and recomposed as v2 enlarged/left-shifted `дом` over `Китобоя`; no official/source SVG was found in the checked public candidates, so this medallion intentionally remains WebP-first raster for now |
 | Филиал Третьяковской галереи | `tretyakovka-kaliningrad` | `/assets/organizers/tretyakovka-kaliningrad.svg` (`.png` fallback/QA) | public Telegram avatar from `t.me/tretyakovka_kaliningrad`; the simple gold `Т` mark is reconstructed as SVG primitives on a warm light background |
 | Калининградская областная научная библиотека | `konb` | `/assets/organizers/konb.webp` (`.png` fallback) | local reference `docs/reference/лого КОНБ (1)(1).png`; explicit raster exception for the 2026-07-02 SVG pass |
-| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol |
-| Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the white internal `З` symbol |
-| Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; forced for `event.festival=80 историй о главном` |
+| Театр «Акт Опус» | `act-opus` | `/assets/organizers/act-opus.svg` (`.png` fallback/QA) | official `actop.us/plays` Next image PNG wordmark; medallion stacks `АКТ` over `ОПУС`, replacing the octopus symbol, with `АКТ` inset inside the circle |
+| Российское общество «Знание» | `znanie-russia` | `/assets/organizers/znanie-russia.svg` (`.png` fallback/QA) | current official site primary blue `#0501D0` from `znanierussia.ru`; local kgd80 vector supplies the enlarged white internal `З` symbol clipped by the lower circle edge |
+| Фестиваль «80 историй о главном» | `kgd80` | `/assets/organizers/kgd80.svg` (`.png` fallback/QA) | KGD80 hero lockup from `site/src/assets/partners/source/kgd80.logo-80-istorii-hero.svg`; tighter medallion viewBox with safe margins; forced for `event.festival=80 историй о главном` |
 | Фестиваль «Кантата» | `kantata-festival` | `/assets/organizers/kantata-festival.webp` (`.png` fallback) | official Tilda PNG wordmark `КАНТАТА`; WebP-first because source is raster |
 
 Asset inventory:
@@ -137,9 +137,9 @@ Asset inventory:
 - `tretyakovka-kaliningrad` is reconstructed as simple SVG primitives from the geometric Telegram avatar;
 - `dom-kitoboya` is intentionally not SVG because no source SVG was found (`logo.svg` candidates returned 404); it is WebP-first with PNG fallback;
 - `konb` is intentionally unchanged as the explicit raster exception for this pass;
-- `act-opus` is updated to a self-contained SVG medallion that stacks the official `АКТ` / `ОПУС` wordmark instead of using the octopus symbol;
-- `znanie-russia` is updated to the official blue `#0501D0` full circle with the internal `З` kept white;
-- `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo;
+- `act-opus` is updated to a self-contained SVG medallion that stacks the official `АКТ` / `ОПУС` wordmark instead of using the octopus symbol, with the `АКТ` crop safely inset inside the circle;
+- `znanie-russia` is updated to the official blue `#0501D0` full circle with the internal `З` kept white, scaled larger and clipped by the lower circle edge;
+- `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo, using a tighter lockup viewBox for fuller circular occupancy;
 - `kantata-festival` remains a WebP-first raster medallion because the available official source is PNG;
 - `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
 
