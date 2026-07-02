@@ -5,7 +5,9 @@ export type InfoPartner = {
   description: string;
   href: string;
   accent: string;
-  logoText: string;
+  logoUrl: string;
+  logoTone?: 'light' | 'brand';
+  logoScale?: 'compact' | 'wide' | 'tall';
 };
 
 export const INFO_PARTNERS: InfoPartner[] = [
@@ -16,7 +18,9 @@ export const INFO_PARTNERS: InfoPartner[] = [
     description: 'Региональный железнодорожный перевозчик пригородных маршрутов Калининградской области.',
     href: 'https://www.kppk39.ru/',
     accent: '#d71920',
-    logoText: 'КППК',
+    logoUrl: '/assets/partners/kppk-rzd.svg',
+    logoTone: 'brand',
+    logoScale: 'compact',
   },
   {
     id: 'znanie-russia',
@@ -25,7 +29,8 @@ export const INFO_PARTNERS: InfoPartner[] = [
     description: 'Просветительская организация и партнёр событий с образовательной программой.',
     href: 'https://znanierussia.ru/',
     accent: '#1769ff',
-    logoText: 'Знание',
+    logoUrl: '/assets/partners/znanie-russia.svg',
+    logoScale: 'wide',
   },
   {
     id: 'kgd80',
@@ -34,7 +39,8 @@ export const INFO_PARTNERS: InfoPartner[] = [
     description: 'Просветительский фестиваль к 80-летию Калининградской области.',
     href: 'https://kgd80.ru/',
     accent: '#8d3b20',
-    logoText: '80',
+    logoUrl: '/assets/partners/kgd80.svg',
+    logoScale: 'wide',
   },
   {
     id: 'kantata-education',
@@ -43,6 +49,7 @@ export const INFO_PARTNERS: InfoPartner[] = [
     description: 'Бесплатные лекции и кинопоказы образовательной программы международного фестиваля классической музыки.',
     href: 'https://kantatafest.ru/obrazovatelnaya-programma',
     accent: '#5236a7',
-    logoText: 'Кантата',
+    logoUrl: '/assets/partners/kantata-education.png',
+    logoScale: 'wide',
   },
 ];

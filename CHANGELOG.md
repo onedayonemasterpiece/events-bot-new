@@ -15,6 +15,7 @@
 
 ### Changed
 
+- **Static site pages / fresh recovery preview**: rebuilt `preview-20260702t0755-fresh-ui-fixes` from the 2026-07-02 production snapshot with `376` active/future events through id `6585`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and stable CDN ICS files, and kept the KEY5 smart-search quota/auth env contract enabled in the static build.
 - **Static site pages / recovery preview refresh**: rebuilt and redeployed the recovered static-site + smart-search preview from the fresh 2026-07-01 production snapshot, increasing exported public events to `380`, including late events `6563`–`6565`, while keeping prompt-leak event `6518` out of static pages and search fixtures.
 - **Static site pages / full-preview export recovery**: restored the latest static export safety guards for source URL arrays/counts, truncated-description fallback, hero image dimension probing/quality rescue and JSON-LD paid-price extraction without rolling back the two-document pgvector/Gemma related-chain contract.
 - **Personalization / smart-search key defaults**: aligned the `event-search` Edge Function and readiness probe defaults with the live KEY5 quota plan: embedding rotates across `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY`; Lite verification rotates across the four non-guide lanes and keeps `GOOGLE_API_KEY2` as LLM reserve/failover.
@@ -31,6 +32,7 @@
 
 ### Fixed
 
+- **Static site pages / mobile UI recovery**: fixed broken related-card images with a graceful fallback surface, restored the newer `/poisk/` avatar/progress/mobile-submit polish, raised the mobile terracotta drawer rail so it no longer overlaps the top navigation, converted `/partners/` to a minimalist logo wall, and made footer partner navigation a plain link.
 - **Static site pages / prompt-leak event guard**: added a narrow export-time safety filter for obvious prompt/debug titles so rows like event `6518` cannot be published into static previews or search vector fixtures before the production source row is repaired.
 - **Static site pages / event-detail discovery feed**: restored the accepted single neutral `Смотрите дальше` continuation feed on event pages and removed the visible extra exploration block from the recovered branch so preview checks match the event-detail product contract.
 - **Static site pages / popular listing contract**: restored `/populyarnoe/` to the same compact `listing-stack` item renderer as the other static listing pages so the preview gate covers it as a real listing surface, not a discovery-card grid.

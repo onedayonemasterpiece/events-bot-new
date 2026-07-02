@@ -289,6 +289,11 @@ const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
 for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
+for (const asset of ['kppk-rzd.svg', 'znanie-russia.svg', 'kgd80.svg', 'kantata-education.png']) {
+  if (!partnersHtml.includes(`/assets/partners/${asset}`)) throw new Error(`Info partners page misses logo asset: ${asset}`);
+  if (!existsSync(join(root, 'assets/partners', asset))) throw new Error(`Info partners logo asset was not copied: ${asset}`);
+}
+if (partnersHtml.includes('partner-card__body') || partnersHtml.includes('logoText')) throw new Error('Info partners page must stay logo-driven, not text-card/placeholder driven');
 for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma']) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }

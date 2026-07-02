@@ -48,7 +48,20 @@ const otherTimeLabels = getOtherDates(event)
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
       <span class={mediaShellClass}>
-        <img class="event-card__media" src={imageUrl} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined} />
+        <span class="event-card__image-fallback" aria-hidden="true">
+          <span>{dateLabel}</span>
+          <strong>{event.event_type || 'событие'}</strong>
+          {event.city && <span>{event.city}</span>}
+        </span>
+        <img
+          class="event-card__media"
+          src={imageUrl}
+          alt={event.image_alt || `Афиша события «${event.title}»`}
+          loading="lazy"
+          decoding="async"
+          style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined}
+          onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"
+        />
       </span>
     ) : (
       <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">

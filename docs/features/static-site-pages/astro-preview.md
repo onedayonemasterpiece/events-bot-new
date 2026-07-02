@@ -1,34 +1,33 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** current full-catalog review target `preview-20260630-event-pages-v62-two-vector-gemma-full` (343 future events, `search_v3` + `related_v1`, Supabase pgvector, strict Gemma 4 26B verifier/reranker cache, CDN media/ICS). Historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>. As of the latest 2026-06-30 verification, the objects are present in `s3://kenigevents.ru/...`, but public GET returns `404/403` because bucket/CDN public-read policy is not enabled for uploaded objects. `static.kenigevents.ru` also still presents a `*.yccdn.cloud.yandex.net` certificate, not a `static.kenigevents.ru` certificate. These are infrastructure blockers, not generator failures.
+> **Build ID:** current full-catalog review target `preview-20260702t0755-fresh-ui-fixes` (376 active/future events from the 2026-07-02 production snapshot, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, restored smart-search UI polish). Historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
+> **Preview index target:** <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are now part of the deploy verification gate; current preview HTML/CSS/JS, partner logos and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are expected to be publicly testable after `npm --prefix site run deploy:preview`.
 
-This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI source is present but remains gated by Supabase/Yandex/Edge deployment. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
+This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
 ## Public URLs
 
-Required URLs for the current preview once bucket/CDN public-read is restored:
+Required URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/vyhodnye/>
-- Search page: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/poisk/>
-- Exhibitions/long-running listing: `/vystavki/`.
-- Popular-by-source-engagement listing: `/populyarnoe/`.
-- Information partnership/reference block page: `/partnerstvo/`.
-- Information partners directory: `/partners/`.
-- Event-token medallion QA lab: `/lab/medallions/`.
-- Urban-planning golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/kak-dogovoritsya-o-buduschem-goroda-kaliningrad-6447/>
-- Music golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Art golden event: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sobytiya/tochka-i-liniya-kaliningrad-5370/>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/data/discovery/6447.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260630-event-pages-v62-two-vector-gemma-full/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260630-event-pages-v62-two-vector-gemma-full/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/poisk/>
+- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/vystavki/>
+- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/populyarnoe/>
+- Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/partnerstvo/>
+- Information partners directory: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/partners/>
+- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/lab/medallions/>
+- Broken-image regression event: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sobytiya/festival-pianissimo-kaliningrad-5264/>
+- Fresh-snapshot event: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sobytiya/vyhodnye-v-agroparke-nekrasovo-pole-gurevsk-6585/>
+- Golden related discovery JSON: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/data/discovery/5264.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260702t0755-fresh-ui-fixes/__preview/>
 
-CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 uses `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1` and `strict_verified_related=true`.
+CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
 
 ## Code layout
 
@@ -72,6 +71,22 @@ site/
   src/data/preview-related.json
 ```
 
+
+## 2026-07-02 recovery preview: fresh data + UI repair
+
+`preview-20260702t0755-fresh-ui-fixes` supersedes the earlier same-day UI-only preview because the first rebuild still carried `current_date=2026-07-01` data. The accepted preview is exported from the 2026-07-02 production SQLite snapshot and the personalization Supabase pgvector sidecar:
+
+- exported `376` active/future public events, max event id `6585`, including late ids `6566–6585` from the latest production snapshot;
+- related chains use `event_pgvector_related_chain_v2_two_doc` / `related_v1` over Supabase pgvector; the fresh sync upserted `376` documents and `64` changed/new embeddings, while `688` embeddings were skipped as unchanged;
+- build/check target: `PREVIEW_BUILD_ID=preview-20260702t0755-fresh-ui-fixes`, `npm --prefix site run build:preview`, `npm --prefix site run check:preview`;
+- deploy target: `s3://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/` plus stable `s3://kenigevents.ru/ics/<event_id>.ics` files; deploy verification reported `Public preview verification: ok` and `Stable CDN ICS uploaded: 376`;
+- public HTTP smoke returned `200` for `__preview/`, `/poisk/`, `/partners/`, the Pianissimo regression event `5264`, fresh event `6585`, and stable ICS files `5264.ics` / `6585.ics`;
+- public Playwright visual smoke passed: `5` broken upstream related-card images were converted to fallback surfaces with `0` visible broken icons, the mobile tag did not overlap nav links, four partner logos loaded, search submit/progress/avatar geometry matched the recovered UI, and the footer partner item was a transparent plain link;
+- UI regression fixes included in the build: broken related-card images fall back to a neutral image surface instead of showing raw alt text/broken icons, the mobile terracotta drawer rail is tall enough not to overlap the top navigation, `/poisk/` restores the account avatar/search-button progress polish, `/partners/` is a logo-first minimalist page, and footer partner navigation is a plain link rather than a pill button.
+
+Yandex Cloud CLI auth was not reinitialized for this recovery: the existing local profile/cache (`/home/dev/yandex-cloud/bin/yc`, `/home/dev/.config/yandex-cloud/`, profile `artkoder`) was verified with a control-plane API call. Static deploy still uses S3/Object Storage credentials from `.env`; no new browser `yc init` flow is part of the static-preview rebuild.
+
+Database routing remains dual-DB: canonical event data comes from Fly SQLite `/data/db.sqlite`; personalization/search data lives in the separate Supabase/Postgres project. No tracked code or `.env.example` wiring for Yandex YDB exists as of this recovery pass.
 
 ## v46d regression and related-chain evidence
 

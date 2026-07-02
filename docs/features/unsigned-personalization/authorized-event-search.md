@@ -1,6 +1,6 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. Current hotfix hardens the authorized search UX/test gate and quota behavior: account actions are hidden behind an avatar menu, the smoke suite proves scrollable cards against the real deployed `event-search`, exhausted optional LLM-rerank quota no longer blocks pgvector search results, and the mobile frontend requests one JSON result response instead of relying on the streamed final payload that failed in Chrome/WebView despite successful backend audit rows.
+> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. The 2026-07-02 recovery preview `preview-20260702t0755-fresh-ui-fixes` keeps that backend contract, restores the latest avatar/account-menu and bottom search-button progress UI, and verifies the public static build exposes only browser-safe Supabase/Yandex auth envs.
 
 ## Product contract
 
@@ -828,6 +828,20 @@ Verification evidence on 2026-06-29:
 - real Edge browser smoke passed: `authorized_search_real_edge_smoke=ok dist=preview-20260629-event-pages-v55-auth-search-smoke cards=16 first_event=5201 status="Осталось поисков: 4 сегодня, 29 в этом месяце."`;
 - readiness probe passed with Auth URL config, `custom:yandex` provider redirect, userinfo adapter and Edge Function OPTIONS;
 - live audit rows after the smoke show `event_search_requests.status=ok`, `request_kind=llm_rerank`, `result_count=8`, `llm_used=true`, with total backend time about `2.7–3.1s` for `query_length=16`.
+
+
+## v58/v20260702 recovery UI and quota smoke
+
+Public preview: <https://kenigevents.ru/preview-20260702t0755-fresh-ui-fixes/poisk/>.
+
+This recovery preview intentionally merges the latest static-site polish with the KEY5 smart-search quota branch without changing the deployed Edge Function contract:
+
+- `/poisk/` keeps the avatar/account menu from v55 and restores the newer mobile layout where the submit button sits below the input and carries the live progress bar;
+- the static build must be produced with `PUBLIC_PERSONALIZATION_SUPABASE_URL`, `PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and `PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex`; `check:preview` fails if the browser HTML does not contain those public markers;
+- readiness for the live project shows embedding lanes `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY`, and Lite verifier lanes `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY`; `GOOGLE_API_KEY2` stays guide-reserved for LLM except late failover;
+- the personalization database is the separate Supabase/Postgres project with `event_search_documents`, `event_embeddings`, `event_search_requests` and `user_search_quota_ledger`; no Yandex YDB integration is wired into this search path.
+
+Verification evidence for the recovery build is kept under `artifacts/codex/static-site-ui-fixes-20260702/`: redacted readiness passed after deploy, the fresh static build/check passed for `preview-20260702t0755-fresh-ui-fixes`, mocked browser UI smoke passed (`cards=1`, first event `6310`), and the live Edge smoke for `интересно детям` passed with `18` rendered cards, first event `5618`, scrolled event `6215`, and quota text `999/9999` after the smoke.
 
 ## LLM quota fallback hotfix, 2026-06-29
 
