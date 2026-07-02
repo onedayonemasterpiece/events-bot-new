@@ -56,6 +56,7 @@
 - Added replay-contract and Smart Update import-boundary tests for the known exhibition duplicate clusters and high-similarity recurring/multi-session negative controls that motivated the vector identity gate.
 - Smart Update identity gate invocations now persist decision-log rows, create-path rows populate date provenance/confidence fields, and the final pre-insert path reruns a cheap duplicate probe to reduce concurrent duplicate creates.
 - Added a read-only `/vystavki/` acceptance monitor (`scripts/inspect/audit_public_exhibition_duplicates.py`) that emits JSON/Prometheus metrics and fails on high-confidence public exhibition duplicates for the 14-day enforce window.
+- Added the optional scheduled exhibition duplicate acceptance audit (`ENABLE_EXHIBITION_DUPLICATE_AUDIT=1`) that reuses the read-only monitor, writes `ops_run(kind='exhibition_duplicate_audit')`, alerts admins on high-confidence pairs, and raises a scheduler job error after recording a failed run.
 - Added a separate production VK visual guide digest (`visual_schedule`): a
   deterministic 1080×1350 schedule card renderer, VK carousel publisher,
   idempotency column for refreshed future excursions, CLI, scheduler gate,

@@ -112,3 +112,52 @@ def test_monitor_cli_outputs_prometheus_and_exit_code(tmp_path):
 
     assert result.returncode == 2
     assert 'events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"} 1' in result.stdout
+
+
+def test_monitor_since_window_uses_added_at_when_available(tmp_path):
+    db_path = tmp_path / "events.sqlite"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        create table event(
+            id integer primary key,
+            title text not null,
+            date text not null,
+            end_date text,
+            location_name text,
+            city text,
+            event_type text,
+            source_post_url text,
+            source_vk_post_url text,
+            ticket_link text,
+            lifecycle_status text default 'active',
+            identity_status text default 'canonical',
+            merged_into_event_id integer,
+            added_at text
+        );
+        """
+    )
+    conn.execute(
+        """insert into event(id,title,date,end_date,location_name,city,event_type,lifecycle_status,identity_status,merged_into_event_id,added_at)
+           values(1,'Старая выставка','2026-07-01','2026-08-01','Музей','Калининград','выставка','active','canonical',NULL,'2026-06-01 10:00:00')"""
+    )
+    conn.execute(
+        """insert into event(id,title,date,end_date,location_name,city,event_type,lifecycle_status,identity_status,merged_into_event_id,added_at)
+           values(2,'Старая выставка','2026-07-02','2026-08-02','Музей','Калининград','выставка','active','canonical',NULL,'2026-06-02 10:00:00')"""
+    )
+    conn.execute(
+        """insert into event(id,title,date,end_date,location_name,city,event_type,lifecycle_status,identity_status,merged_into_event_id,added_at)
+           values(3,'Новая выставка','2026-07-02','2026-08-02','Галерея','Калининград','выставка','active','canonical',NULL,'2026-07-01 10:00:00')"""
+    )
+    conn.execute(
+        """insert into event(id,title,date,end_date,location_name,city,event_type,lifecycle_status,identity_status,merged_into_event_id,added_at)
+           values(4,'Новая выставка','2026-07-03','2026-08-03','Галерея','Калининград','выставка','active','canonical',NULL,'2026-07-02 10:00:00')"""
+    )
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(db_path, current=date(2026, 7, 2), since_days=14)
+
+    assert payload["high_confidence_duplicate_total_count"] == 2
+    assert payload["high_confidence_duplicate_count"] == 1
+    assert [(p["left_id"], p["right_id"]) for p in payload["duplicates"]] == [(3, 4)]

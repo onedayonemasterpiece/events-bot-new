@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Iterable
 
 _TOKEN_RE = re.compile(r"[\wа-яё]+", re.IGNORECASE)
+_ISO_DATE_RE = re.compile(r"20\d{2}-\d{2}-\d{2}")
 _EXHIBITION_RE = re.compile(r"(?iu)\b(выставк\w*|экспозиц\w*|ярмарк\w*|exhibition|fair)\b")
 _STOPWORDS = {
     "выставка",
@@ -50,6 +51,7 @@ class PublicExhibition:
     source_post_url: str | None = None
     source_vk_post_url: str | None = None
     ticket_link: str | None = None
+    added_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,8 @@ class DuplicatePair:
     left_title: str
     right_title: str
     venue: str | None
+    left_added_at: str | None = None
+    right_added_at: str | None = None
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -82,7 +86,10 @@ def _parse_date(value: str | None) -> date | None:
     if not value:
         return None
     try:
-        return date.fromisoformat(str(value).split("..", 1)[0].strip())
+        match = _ISO_DATE_RE.search(str(value))
+        if not match:
+            return None
+        return date.fromisoformat(match.group(0))
     except Exception:
         return None
 
@@ -148,6 +155,7 @@ def load_public_exhibitions(conn: sqlite3.Connection, current: date) -> list[Pub
             "identity_status",
             "merged_into_event_id",
             "lifecycle_status",
+            "added_at",
         )
     }
     sql = f"""
@@ -156,7 +164,7 @@ def load_public_exhibitions(conn: sqlite3.Connection, current: date) -> list[Pub
                {optional['event_type']}, {optional['source_post_url']},
                {optional['source_vk_post_url']}, {optional['ticket_link']},
                {optional['identity_status']}, {optional['merged_into_event_id']},
-               {optional['lifecycle_status']}
+               {optional['lifecycle_status']}, {optional['added_at']}
         FROM event
         WHERE date GLOB '20??-??-??'
     """
@@ -180,6 +188,7 @@ def load_public_exhibitions(conn: sqlite3.Connection, current: date) -> list[Pub
             source_post_url=row[7],
             source_vk_post_url=row[8],
             ticket_link=row[9],
+            added_at=row[13] if len(row) > 13 else None,
         )
         if _is_exhibition(ev) and _active_on_or_after(ev, current):
             out.append(ev)
@@ -207,6 +216,8 @@ def find_high_confidence_duplicates(events: Iterable[PublicExhibition]) -> list[
                         left_title=left.title,
                         right_title=right.title,
                         venue=left.location_name or right.location_name,
+                        left_added_at=left.added_at,
+                        right_added_at=right.added_at,
                     )
                 )
     return pairs
@@ -215,12 +226,13 @@ def find_high_confidence_duplicates(events: Iterable[PublicExhibition]) -> list[
 def _prometheus(payload: dict) -> str:
     lines = [
         f"events_public_exhibition_rows_total {payload['public_exhibition_count']}",
-        f"events_public_exhibition_duplicate_pairs_total{{confidence=\"high\"}} {payload['high_confidence_duplicate_count']}",
-        f"events_public_exhibition_duplicate_clusters_total{{confidence=\"high\"}} {payload['high_confidence_duplicate_cluster_count']}",
-        f"events_public_exhibition_duplicate_pairs_since_total{{confidence=\"high\",window_days=\"{payload['since_days']}\"}} {payload['high_confidence_duplicate_count']}",
+        f'events_public_exhibition_duplicate_pairs_total{{confidence="high"}} {payload["high_confidence_duplicate_total_count"]}',
+        f'events_public_exhibition_duplicate_clusters_total{{confidence="high"}} {payload["high_confidence_duplicate_total_cluster_count"]}',
+        f'events_public_exhibition_duplicate_pairs_since_total{{confidence="high",window_days="{payload["since_days"]}"}} {payload["high_confidence_duplicate_count"]}',
+        f'events_public_exhibition_duplicate_clusters_since_total{{confidence="high",window_days="{payload["since_days"]}"}} {payload["high_confidence_duplicate_cluster_count"]}',
     ]
     for reason, count in sorted(payload.get("gate_suppressed", {}).items()):
-        lines.append(f"events_public_exhibition_gate_suppressed_total{{reason=\"{reason}\"}} {count}")
+        lines.append(f'events_public_exhibition_gate_suppressed_total{{reason="{reason}"}} {count}')
     return "\n".join(lines) + "\n"
 
 
@@ -244,6 +256,54 @@ def _cluster_count(duplicates: list[DuplicatePair]) -> int:
     return len({find(x) for x in parent})
 
 
+def _pair_touches_since_window(pair: DuplicatePair, since: date) -> bool:
+    left_added = _parse_date(pair.left_added_at)
+    right_added = _parse_date(pair.right_added_at)
+    if left_added is None and right_added is None:
+        # Older snapshots/test fixtures may not have event.added_at. Fail closed:
+        # count the pair in the rollout window instead of silently hiding it.
+        return True
+    return bool((left_added and left_added >= since) or (right_added and right_added >= since))
+
+
+def build_audit_payload(
+    db_path: Path | str,
+    *,
+    current: date | None = None,
+    since_days: int = 14,
+) -> dict:
+    """Return the schema-adaptive duplicate-audit payload for a SQLite DB.
+
+    The connection is opened read-only so scheduled/CI acceptance checks cannot
+    mutate the production DB or a downloaded production snapshot.
+    """
+
+    current = current or date.today()
+    since_days = max(1, int(since_days or 14))
+    since = current - timedelta(days=since_days)
+    conn = sqlite3.connect(f"file:{Path(db_path)}?mode=ro", uri=True)
+    try:
+        rows = load_public_exhibitions(conn, current)
+        all_duplicates = find_high_confidence_duplicates(rows)
+    finally:
+        conn.close()
+
+    window_duplicates = [pair for pair in all_duplicates if _pair_touches_since_window(pair, since)]
+    return {
+        "current_date": current.isoformat(),
+        "since_days": since_days,
+        "since_date": since.isoformat(),
+        "public_exhibition_count": len(rows),
+        "high_confidence_duplicate_count": len(window_duplicates),
+        "high_confidence_duplicate_cluster_count": _cluster_count(window_duplicates),
+        "high_confidence_duplicate_total_count": len(all_duplicates),
+        "high_confidence_duplicate_total_cluster_count": _cluster_count(all_duplicates),
+        "gate_suppressed": {},
+        "duplicates": [asdict(pair) for pair in window_duplicates],
+        "all_duplicates": [asdict(pair) for pair in all_duplicates],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, type=Path)
@@ -256,28 +316,12 @@ def main() -> int:
 
     try:
         current = date.fromisoformat(args.current_date)
-        # Read-only URI keeps the monitor acceptance-safe for production snapshots.
-        conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
-        try:
-            rows = load_public_exhibitions(conn, current)
-            duplicates = find_high_confidence_duplicates(rows)
-        finally:
-            conn.close()
+        payload = build_audit_payload(args.db, current=current, since_days=args.since_days)
+        duplicates = [DuplicatePair(**pair) for pair in payload["duplicates"]]
     except Exception as exc:
         print(f"audit_public_exhibition_duplicates failed: {exc}", file=sys.stderr)
         return 3
 
-    since_days = max(1, int(args.since_days or 14))
-    payload = {
-        "current_date": current.isoformat(),
-        "since_days": since_days,
-        "since_date": (current - timedelta(days=since_days)).isoformat(),
-        "public_exhibition_count": len(rows),
-        "high_confidence_duplicate_count": len(duplicates),
-        "high_confidence_duplicate_cluster_count": _cluster_count(duplicates),
-        "gate_suppressed": {},
-        "duplicates": [asdict(pair) for pair in duplicates],
-    }
     output_format = "json" if args.json else args.format
     if output_format in {"json", "both"}:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -286,7 +330,8 @@ def main() -> int:
     if output_format == "text":
         print(
             f"public_exhibitions={payload['public_exhibition_count']} "
-            f"high_confidence_duplicates={payload['high_confidence_duplicate_count']}"
+            f"high_confidence_duplicates_since={payload['high_confidence_duplicate_count']} "
+            f"high_confidence_duplicates_total={payload['high_confidence_duplicate_total_count']}"
         )
         for pair in duplicates:
             print(f"{pair.left_id} {pair.right_id} {pair.confidence:.3f} {pair.reason}")

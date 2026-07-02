@@ -77,9 +77,28 @@ The monitor applies a schema-adaptive public gate (`identity_status=canonical`,
 `merged_into_event_id IS NULL`, active lifecycle, valid ISO dates), selects
 current/future exhibition-like rows, and reports high-confidence pairs where
 long-running exhibition ranges overlap and title/source/venue evidence indicates
-one public identity.  Rollout closure requires:
+one public identity. `events_public_exhibition_duplicate_pairs_total` reports all
+currently visible high-confidence pairs; `*_since_total` is the rollout-window
+acceptance metric and, when `event.added_at` exists, includes pairs where either
+row was added inside `current_date - since_days`. If a legacy/test schema lacks
+`added_at`, the monitor fails closed and counts the pair in the window. Rollout
+closure requires:
 
 - `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"} 0`;
 - no critical false positives on recurring/multi-session controls;
 - any detected pair is treated as an incident/regression, not auto-merged by the
   monitor.
+
+The same acceptance check can be scheduled after enforce:
+
+```env
+SMART_UPDATE_IDENTITY_GATE=enforce
+ENABLE_EXHIBITION_DUPLICATE_AUDIT=1
+EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL=07:45
+EXHIBITION_DUPLICATE_AUDIT_TZ=Europe/Kaliningrad
+EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS=14
+```
+
+Scheduled runs are read-only, write `ops_run(kind='exhibition_duplicate_audit')`,
+alert the superadmin/admin chat on high-confidence pairs, and by default raise a
+scheduler job error after recording `status='failed'`.

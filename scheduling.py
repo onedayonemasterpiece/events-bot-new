@@ -3248,6 +3248,7 @@ _HEAVY_JOB_IDS: set[str] = {
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
     "3di_scheduler": "3di",
+    "exhibition_duplicate_audit": "exhibition_duplicate_audit",
     "guide_excursions_light": "guide_monitoring",
     "guide_excursions_full": "guide_monitoring",
     "guide_visual_digest": "guide_visual_digest",
@@ -3492,9 +3493,15 @@ def startup(
 
     def _notify_admin_skip(job_name: str, reason: str) -> None:
         try:
-            asyncio.create_task(_notify_admin_skip_async(job_name, reason))
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             logging.warning("SCHED failed to notify admin: no running event loop")
+            return
+        except Exception:
+            logging.exception("SCHED failed to notify admin chat")
+            return
+        try:
+            loop.create_task(_notify_admin_skip_async(job_name, reason))
         except Exception:
             logging.exception("SCHED failed to notify admin chat")
 
@@ -4552,6 +4559,39 @@ def startup(
         )
     else:
         logging.info("SCHED skipping kenigsberg_story_daily outside production")
+
+    enable_exhibition_duplicate_audit = _env_enabled("ENABLE_EXHIBITION_DUPLICATE_AUDIT", default=False)
+    if enable_exhibition_duplicate_audit:
+        from exhibition_duplicate_audit import run_exhibition_duplicate_audit_scheduler
+
+        audit_time_raw = os.getenv("EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL", "07:45").strip()
+        audit_tz_name = os.getenv("EXHIBITION_DUPLICATE_AUDIT_TZ", "Europe/Kaliningrad").strip()
+        audit_hour, audit_minute = _cron_from_local(
+            audit_time_raw,
+            audit_tz_name,
+            default_hour="5",
+            default_minute="45",
+            label="EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL",
+        )
+        _register_job(
+            "exhibition_duplicate_audit",
+            _job_wrapper(
+                "exhibition_duplicate_audit",
+                run_exhibition_duplicate_audit_scheduler,
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id="exhibition_duplicate_audit",
+            hour=audit_hour,
+            minute=audit_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=1800,
+        )
+    else:
+        logging.info("SCHED skipping exhibition_duplicate_audit (ENABLE_EXHIBITION_DUPLICATE_AUDIT!=1)")
 
     enable_general_stats = _env_enabled("ENABLE_GENERAL_STATS", default=False)
     if enable_general_stats:
