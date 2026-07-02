@@ -14118,14 +14118,16 @@ async def enqueue_job(
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
             if job.status == JobStatus.done and task == JobTask.vk_sync:
-                if ev is None or await _event_has_existing_managed_vk_post(ev):
+                lifecycle_status = (getattr(ev, "lifecycle_status", None) or "active").strip().casefold() if ev is not None else "active"
+                if ev is None or (lifecycle_status == "active" and await _event_has_existing_managed_vk_post(ev)):
                     logline("ENQ", event_id, "skipped", job_key=job_key)
                     return "skipped"
                 logging.warning(
-                    "ENQ vk_sync done_without_managed_vk_requeue event_id=%s job_id=%s source_vk_post_url=%s",
+                    "ENQ vk_sync done_requeue event_id=%s job_id=%s source_vk_post_url=%s lifecycle_status=%s",
                     event_id,
                     job.id,
                     getattr(ev, "source_vk_post_url", None) if ev is not None else None,
+                    lifecycle_status,
                 )
             if job.status == JobStatus.running:
                 age = (now - job.updated_at).total_seconds()

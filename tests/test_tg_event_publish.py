@@ -1354,6 +1354,43 @@ async def test_schedule_event_update_tasks_edits_existing_cancelled_public_posts
     tg_publish = [item for item in tasks if item[0] == main.JobTask.tg_event_publish][0]
     assert f"vk_sync:{event.id}" in tg_publish[1]
 
+@pytest.mark.asyncio
+async def test_enqueue_job_requeues_done_vk_sync_for_cancelled_existing_post(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = _event(
+        id=None,
+        lifecycle_status="cancelled",
+        source_vk_post_url="https://vk.com/wall-231920894_5432",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        job = main.JobOutbox(
+            event_id=int(event.id),
+            task=main.JobTask.vk_sync,
+            status=main.JobStatus.done,
+            last_result="https://vk.com/wall-231920894_5432",
+        )
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+        job_id = int(job.id)
+
+    async def fake_existing_managed_vk(_event):
+        raise AssertionError("non-active vk_sync requeue must not be skipped by managed-post existence")
+
+    monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", fake_existing_managed_vk)
+
+    result = await main.enqueue_job(db, int(event.id), main.JobTask.vk_sync)
+
+    assert result == "requeued"
+    async with db.get_session() as session:
+        saved = await session.get(main.JobOutbox, job_id)
+    assert saved.status == main.JobStatus.pending
+    assert saved.attempts == 0
+
 
 @pytest.mark.asyncio
 async def test_schedule_event_update_tasks_skips_calendar_dependency_without_time(
