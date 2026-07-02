@@ -373,18 +373,124 @@ function bearerToken(header: string | null): string | null {
 type EmbeddingResult = {
   values: number[];
   key_env: string;
+  model: string;
+  cache_status: "hit" | "miss" | "unavailable" | "store_failed";
 };
+
+type QueryEmbeddingCacheOptions = {
+  supabaseUrl: string;
+  queryHash: string;
+};
+
+function personalizationServiceClient(supabaseUrl: string) {
+  const serviceKey =
+    env("SUPABASE_SERVICE_ROLE_KEY") ||
+    env("PERSONALIZATION_SUPABASE_SECRET_KEY") ||
+    env("PERSONALIZATION_SUPABASE_SERVICE_KEY") ||
+    env("SUPABASE_SERVICE_KEY");
+  if (!supabaseUrl || !serviceKey) return null;
+  return createClient(supabaseUrl, serviceKey, {
+    global: { headers: { Authorization: `Bearer ${serviceKey}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function parseEmbeddingValues(value: unknown): number[] | null {
+  if (Array.isArray(value)) {
+    const values = value.map((item) => Number(item));
+    return values.length === EMBEDDING_DIM && values.every(Number.isFinite)
+      ? values
+      : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim().replace(/^\[/u, "").replace(/\]$/u, "");
+    const values = trimmed
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item));
+    return values.length === EMBEDDING_DIM ? values : null;
+  }
+  return null;
+}
+
+async function queryEmbeddingCacheHash(query: string): Promise<string> {
+  const salt = env(
+    "EVENT_SEARCH_QUERY_HASH_SALT",
+    "kenigevents-event-search-query-cache-v1",
+  );
+  return sha256Hex(`${salt}:${query.toLowerCase()}`);
+}
+
+async function readCachedQueryEmbedding(
+  cache: QueryEmbeddingCacheOptions | undefined,
+  model: string,
+): Promise<number[] | null> {
+  if (!cache?.supabaseUrl || !cache.queryHash) return null;
+  const service = personalizationServiceClient(cache.supabaseUrl);
+  if (!service) return null;
+  try {
+    const { data, error } = await service.rpc(
+      "get_event_search_query_embedding_v1",
+      {
+        p_query_hash: cache.queryHash,
+        p_embedding_model: model,
+        p_embedding_dim: EMBEDDING_DIM,
+      },
+    );
+    if (error || !Array.isArray(data) || data.length === 0) return null;
+    return parseEmbeddingValues((data[0] as Candidate).embedding);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function storeCachedQueryEmbedding(
+  cache: QueryEmbeddingCacheOptions | undefined,
+  model: string,
+  values: number[],
+  keyEnv: string,
+): Promise<boolean> {
+  if (!cache?.supabaseUrl || !cache.queryHash || values.length !== EMBEDDING_DIM) {
+    return false;
+  }
+  const service = personalizationServiceClient(cache.supabaseUrl);
+  if (!service) return false;
+  try {
+    const { error } = await service.rpc("upsert_event_search_query_embedding_v1", {
+      p_query_hash: cache.queryHash,
+      p_embedding_model: model,
+      p_embedding_dim: EMBEDDING_DIM,
+      p_embedding: values,
+      p_metadata: { key_env: keyEnv, source: "event-search-edge" },
+    });
+    return !error;
+  } catch (_) {
+    return false;
+  }
+}
 
 async function embedQuery(
   query: string,
   keySeed: string,
+  cache?: QueryEmbeddingCacheOptions,
 ): Promise<EmbeddingResult> {
-  const keys = providerKeyAttempts("EMBEDDING", `embedding:${keySeed}`);
-  if (keys.length === 0) throw new Error("embedding_api_key_missing");
   const model = googleModelId(
     env("EVENT_SEARCH_EMBEDDING_MODEL"),
     "gemini-embedding-2",
   );
+  const cachedValues = await readCachedQueryEmbedding(cache, model);
+  if (cachedValues) {
+    return {
+      values: cachedValues,
+      key_env: "cache",
+      model,
+      cache_status: "hit",
+    };
+  }
+
+  const keys = providerKeyAttempts("EMBEDDING", `embedding:${keySeed}`);
+  if (keys.length === 0) throw new Error("embedding_api_key_missing");
+
   const text = `task: search result | query: ${query}`;
   const timeoutMs = envInt(
     "EVENT_SEARCH_EMBEDDING_TIMEOUT_MS",
@@ -428,9 +534,18 @@ async function embedQuery(
           `embedding_bad_dimension:${Array.isArray(values) ? values.length : "missing"}`,
         );
       }
+      const numericValues = values.map((value: unknown) => Number(value));
+      const stored = await storeCachedQueryEmbedding(
+        cache,
+        model,
+        numericValues,
+        key.env_name,
+      );
       return {
-        values: values.map((value: unknown) => Number(value)),
+        values: numericValues,
         key_env: key.env_name,
+        model,
+        cache_status: cache ? (stored ? "miss" : "store_failed") : "unavailable",
       };
     } catch (error) {
       const message = errorMessage(error).slice(0, 120);
@@ -1387,6 +1502,7 @@ async function runEventSearch(
       env("EVENT_SEARCH_LLM_ENABLED", "").toLowerCase(),
     );
   const queryHash = await sha256Hex(query.toLowerCase());
+  const queryEmbeddingHash = await queryEmbeddingCacheHash(query);
   const timings: Record<string, number> = {};
 
   await progress?.({
@@ -1453,7 +1569,10 @@ async function runEventSearch(
       label: "Понимаю смысл запроса",
     });
     const embeddingStartedAt = performance.now();
-    const embeddingResult = await embedQuery(query, queryHash);
+    const embeddingResult = await embedQuery(query, queryEmbeddingHash, {
+      supabaseUrl,
+      queryHash: queryEmbeddingHash,
+    });
     const embedding = embeddingResult.values;
     timings.embedding_ms = nowMs() - Math.round(embeddingStartedAt);
 
@@ -1502,6 +1621,7 @@ async function runEventSearch(
         request_id: requestId,
         query_hash: queryHash,
         query_facets: queryFacets,
+        embedding_cache_status: embeddingResult.cache_status,
         quota: quotaState,
         items: items.slice(0, limit),
         fallback_items: [],
@@ -1624,6 +1744,7 @@ async function runEventSearch(
         next_offset: nextOffset,
         embedding_model: embeddingModel,
         embedding_key_env: embeddingResult.key_env,
+        embedding_cache_status: embeddingResult.cache_status,
         query_facets: queryFacets,
         llm_status: llmResult.status,
         llm_quota_reserved: llmQuotaReserved,
@@ -1651,6 +1772,7 @@ async function runEventSearch(
       query_length: query.length,
       embedding_model: embeddingModel,
       embedding_key_env: embeddingResult.key_env,
+      embedding_cache_status: embeddingResult.cache_status,
       query_facets: queryFacets,
       result_count: items.length,
       retrieved_count: retrievedCount,
@@ -1684,6 +1806,7 @@ async function runEventSearch(
         served_list_hash: servedHash,
         query_hash: queryHash,
         query_facets: queryFacets,
+        embedding_cache_status: embeddingResult.cache_status,
         quota: quotaState,
         items,
         fallback_items: fallbackItems,

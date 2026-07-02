@@ -36,7 +36,8 @@
 
 ### Fixed
 
-- **Static smart search latency SLA**: moved the public `/poisk/` first page to a 4-card pgvector SLA path (`use_llm_verifier=false`) after live probes showed Gemini Lite can timeout even on 2-candidate prompts; terminal results now stay under 3.5s in the six-query probe while optional LLM verification remains backend-supported outside the critical path.
+- **Static smart search latency SLA**: kept Gemini Lite verification enabled on public `/poisk/`, but bounded the synchronous path to `limit=8` / `candidate_window=10`, compact facts, no-recursion `10→5→3` shrink retries, a 4.3s Lite budget and no Gemma overflow in the browser request; vector cards still render first if the verifier tail is slow.
+- **Static smart search query embedding cache**: added a service-role Supabase cache keyed by salted query hash + embedding model/dim so repeated authorized `/poisk/` queries can skip the Google embedding call and expose `embedding_cache_status` in profiling metadata.
 - **Static smart search vector-first rendering**: switched authorized search back to NDJSON streaming and now renders real pgvector cards as soon as the vector stage completes, while the LLM verifier continues and later replaces them with the final checked list.
 - **Static smart search UX**: made search placeholders graphite/dark, changed feedback buttons to respond optimistically with a visible “saving/saved/local” state, and kept “Показать ещё” visible as a disabled “Загружаю ещё…” button while the next batch is loading.
 - **Personalization / smart-search batch latency**: reduced the authorized search first-page verifier batch to `limit=8` / `candidate_window=10`, restored offset-based “Показать ещё”, and wired real shimmer card placeholders so mobile users see result-shaped loading instead of only a 92% button progress state.
