@@ -176,8 +176,10 @@ Tables:
 
 - `public.event_search_documents` — compact factual `search_digest`, cleaner `related_digest`, controlled facets and trusted `card_snapshot`; no raw OCR/source text;
 - `public.event_embeddings` — `gemini-embedding-2` vectors, `vector(768)`, `embedding_doc_kind`, partial HNSW cosine indexes for `search_v3` and `related_v1`;
-- `public.search_quota_plans` — default registered quota plan;
-- `public.user_search_quota_ledger` — day/month counters per Supabase user;
+- `public.search_quota_plans` — default registered quota plan, including active hourly limits;
+- `public.user_search_quota_hourly_ledger` — active one-hour cooling-window counters per Supabase user;
+- `public.user_search_quota_ledger` — day counters per Supabase user; legacy month rows may exist only for compatibility;
+- `public.event_search_result_cache` — private service-role short-lived result cache keyed by salted query hash and result-shaping signature;
 - `public.event_search_requests` — audit log with query hash and length only, no raw query text.
 - `public.event_search_feedback` — private authenticated feedback rows with raw query text for moderation only;
 - `public.event_search_tag_candidates` — private aggregated candidate tags keyed by query hash.
@@ -186,8 +188,9 @@ RPCs:
 
 - `search_events_by_embedding_v1(...)` — authenticated vector retrieval through `SECURITY DEFINER`, no direct table reads; it accepts optional query facets `p_weekday_iso`, `p_time_of_day_filter` and `p_admission_filter` and applies them as small boosts after the nearest pgvector candidate set is retrieved;
 - `event_search_fallback_cards_v1(...)` — authenticated fallback cards for “Возможно вам будет интересно”;
-- `get_event_search_quota_v1(...)` — visible quota state;
-- `reserve_event_search_quota_v1(...)` — atomic quota reservation before provider calls;
+- `get_event_search_quota_v2(...)` — visible quota state with hourly/daily remaining counts and hour reset time;
+- `reserve_event_search_quota_v3(...)` — atomic hourly+daily quota reservation before provider calls; cached results do not call it;
+- `get_event_search_result_cache_v1(...)` / `upsert_event_search_result_cache_v1(...)` / `purge_event_search_result_cache_v1(...)` — private service-role result-cache operations;
 - `record_event_search_request_v1(...)` — compact search audit.
 - `record_event_search_feedback_v1(...)` — authenticated feedback intake; records local result ids/count and updates a candidate tag aggregate, but exposes no raw feedback tables to browser roles.
 
@@ -325,6 +328,14 @@ The online search Edge Function caches query embeddings by a salted hash, not by
 
 On every search the Edge Function first calls `get_event_search_query_embedding_v1`; on hit it skips the Google embedding request and reports `embedding_cache_status=hit`. On miss it calls Gemini Embedding 2, then `upsert_event_search_query_embedding_v1`, and reports `miss` or `store_failed`. This saves repeated-query latency and embedding quota without storing the user's search phrase.
 
+### Short-lived result cache
+
+Repeated fully answered searches can be served from a short-lived result cache before quota reservation, embedding provider calls or LLM verification. The cache key uses the same salted query hash family as the query-embedding cache and also includes all result-shaping dimensions: embedding model, embedding document kind, current search date, limit, offset, verifier window, parsed facets, fallback flag and LLM policy signature. The cache stores only public result payload JSON and small metadata; it never stores raw query text and is not directly readable by `anon` or `authenticated`.
+
+The active TTL is intentionally short (`EVENT_SEARCH_RESULT_CACHE_TTL_SECONDS`, capped to `1 minute..6 hours`, default `3 hours`). A cache hit returns `result_cache_status=hit`, `served_from_cache=true` and does **not** consume the one-hour search window. A miss stores only successful full-quality responses (`llm_verifier.used=true`, or explicitly vector-only calls when LLM is disabled), so temporary LLM-quota fallback does not poison later verified searches.
+
+To avoid stale result payloads occupying the database after event changes, `event_search_result_cache` is physically cleared by statement-level triggers on `event_search_documents` and `event_embeddings`. In practice the recent vector-sidecar history has long quiet windows between rebuild bursts: the last seven days showed quiet gaps of about `27h40m`, `20h04m`, `16h49m`, `8h54m` and `7h08m` between indexed/vector update minute buckets; core event ingestion also had multiple `4–12h` gaps in the same period. A several-hour cache therefore protects against temporary visitor bursts while still being invalidated on the next event/vector corpus update.
+
 ## Quotas and privacy
 
 Registered plan is dynamic, not a fixed “tiny” per-user constant. Migration
@@ -353,10 +364,20 @@ the normal LLM verifier budget:
 For the current `1` effective registered site user, the normal shared search
 pool can serve `1000` fast Lite-verified searches/day while query embedding has
 `4000` searches/day after buffer. The applied safety/abuse ceiling is therefore
-`1000` searches/day and `1000` LLM verifications/day per registered Yandex user,
-with the existing `x10` monthly multiplier (`10000/month` for both counters).
+`1000` searches/day and `1000` LLM verifications/day per registered Yandex user.
+The active product contract no longer exposes or enforces a monthly user-facing
+limit: monthly columns remain only as legacy compatibility fields.
+
+The live abuse-control surface is a one-hour cooling window implemented by
+`get_event_search_quota_v2(...)` and `reserve_event_search_quota_v3(...)`.
+The registered plan currently allows `60` searches/hour and `60` LLM verifier
+reservations/hour, still bounded by the existing `1000/day` server-side budget.
+When the hour is exhausted, the product copy tells the user to come back after
+the hour window resets. If a request is served completely from result cache, it
+does not increment the hourly or daily ledgers.
 This keeps user-facing quota inside the shared non-guide Lite pool while leaving
-substantial capacity for the other production services.
+substantial capacity for the other production services and preventing one user
+from burning the full daily pool in one burst.
 
 Dynamic formula after this fix:
 
@@ -525,6 +546,8 @@ production mobile UX should not depend on streamed final payload delivery.
 - `served_list_hash` — SHA-256 over `query_hash`, returned event ids and fallback ids;
 - `query_facets` — compact parsed facets (`weekday_iso`, `weekday_ru`, `time_of_day`, `admission`), never raw query text;
 - `embedding_key_env` and `llm_attempts[].key_env` — non-secret key lane names used for provider rotation/failover analysis;
+- `embedding_cache_status` / `result_cache_status` — whether the query embedding or whole result payload came from the private salted-hash cache;
+- `served_from_cache` — true only when the whole result payload was returned before quota reservation/provider calls;
 - `timings_ms` — quota, embedding provider, pgvector RPC, optional LLM verifier, fallback RPC and total latency;
 - `llm_verifier` — `{requested, used, status}` so a search can be distinguished between pure pgvector and verified/reranked results.
 
@@ -564,7 +587,7 @@ Applied to the personalization Supabase project on 2026-06-28:
 Security smoke:
 
 - anonymous direct table select on `event_search_documents` returns `401 permission denied`;
-- anonymous call to `get_event_search_quota_v1` returns `401 permission denied`.
+- anonymous call to quota RPC returns `401 permission denied` (current contract: `get_event_search_quota_v2`).
 
 Golden semantic smoke for event `6447` (“Как договориться о будущем города”): backend pgvector RPC returns `6310` “Архитектурно-урбанистическая студия...” as the first non-self candidate (`vector_similarity≈0.8592` in the v48 build), ahead of `5261` “Музыка нашего города”. The published discovery JSON for 6447 also keeps `6310` first after Gemma 4 26B verification (`llm_semantic_score=0.92`).
 
@@ -854,7 +877,7 @@ This recovery preview intentionally merges the latest static-site polish with th
 - `/poisk/` keeps the avatar/account menu from v55 and restores the newer mobile layout where the submit button sits below the input and carries the live progress bar;
 - the static build must be produced with `PUBLIC_PERSONALIZATION_SUPABASE_URL`, `PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and `PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex`; `check:preview` fails if the browser HTML does not contain those public markers;
 - readiness for the live project shows embedding lanes `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY`, and Lite verifier lanes `GOOGLE_API_KEY5`, `GOOGLE_API_KEY4`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY`; `GOOGLE_API_KEY2` stays guide-reserved for LLM except late failover;
-- the personalization database is the separate Supabase/Postgres project with `event_search_documents`, `event_embeddings`, `event_search_requests` and `user_search_quota_ledger`; no Yandex YDB integration is wired into this search path.
+- the personalization database is the separate Supabase/Postgres project with `event_search_documents`, `event_embeddings`, `event_search_requests`, `user_search_quota_ledger` and hourly/cache search tables; no Yandex YDB integration is wired into this search path.
 
 Verification evidence for the recovery build is kept under `artifacts/codex/static-site-ui-fixes-20260702/`: redacted readiness passed after deploy, the fresh static build/check passed for `preview-20260702t0755-fresh-ui-fixes`, mocked browser UI smoke passed (`cards=1`, first event `6310`), and the live Edge smoke for `интересно детям` passed with `18` rendered cards, first event `5618`, scrolled event `6215`, and quota text `999/9999` after the smoke.
 

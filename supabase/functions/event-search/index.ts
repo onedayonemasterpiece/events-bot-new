@@ -382,6 +382,16 @@ type QueryEmbeddingCacheOptions = {
   queryHash: string;
 };
 
+type SearchResultCacheOptions = {
+  supabaseUrl: string;
+  cacheKey: string;
+  queryHash: string;
+  embeddingModel: string;
+  embeddingDocKind: string;
+  requestSignature: string;
+  ttlSeconds: number;
+};
+
 function personalizationServiceClient(supabaseUrl: string) {
   const serviceKey =
     env("SUPABASE_SERVICE_ROLE_KEY") ||
@@ -462,6 +472,66 @@ async function storeCachedQueryEmbedding(
       p_embedding_dim: EMBEDDING_DIM,
       p_embedding: values,
       p_metadata: { key_env: keyEnv, source: "event-search-edge" },
+    });
+    return !error;
+  } catch (_) {
+    return false;
+  }
+}
+
+function resultCacheTtlSeconds(): number {
+  return envInt("EVENT_SEARCH_RESULT_CACHE_TTL_SECONDS", 10800, 60, 21600);
+}
+
+async function searchResultCacheKey(parts: Record<string, unknown>): Promise<{
+  cacheKey: string;
+  requestSignature: string;
+}> {
+  const signature = JSON.stringify(parts);
+  const digest = await sha256Hex(signature);
+  return { cacheKey: digest, requestSignature: digest };
+}
+
+async function readCachedSearchResult(
+  cache: SearchResultCacheOptions | null,
+): Promise<Record<string, unknown> | null> {
+  if (!cache?.supabaseUrl || !cache.cacheKey) return null;
+  const service = personalizationServiceClient(cache.supabaseUrl);
+  if (!service) return null;
+  try {
+    const { data, error } = await service.rpc(
+      "get_event_search_result_cache_v1",
+      { p_cache_key: cache.cacheKey },
+    );
+    if (error || !Array.isArray(data) || data.length === 0) return null;
+    const response = (data[0] as Candidate)?.response;
+    return response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function storeCachedSearchResult(
+  cache: SearchResultCacheOptions | null,
+  response: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+): Promise<boolean> {
+  if (!cache?.supabaseUrl || !cache.cacheKey) return false;
+  const service = personalizationServiceClient(cache.supabaseUrl);
+  if (!service) return false;
+  try {
+    const { error } = await service.rpc("upsert_event_search_result_cache_v1", {
+      p_cache_key: cache.cacheKey,
+      p_query_hash: cache.queryHash,
+      p_embedding_model: cache.embeddingModel,
+      p_embedding_dim: EMBEDDING_DIM,
+      p_embedding_doc_kind: cache.embeddingDocKind,
+      p_request_signature: cache.requestSignature,
+      p_response: response,
+      p_ttl_seconds: cache.ttlSeconds,
+      p_metadata: metadata,
     });
     return !error;
   } catch (_) {
@@ -1503,7 +1573,84 @@ async function runEventSearch(
     );
   const queryHash = await sha256Hex(query.toLowerCase());
   const queryEmbeddingHash = await queryEmbeddingCacheHash(query);
+  const embeddingModel = googleModelId(
+    env("EVENT_SEARCH_EMBEDDING_MODEL"),
+    "gemini-embedding-2",
+  );
+  const embeddingDocKind = env("EVENT_SEARCH_EMBEDDING_DOC_KIND", "search_v3");
   const timings: Record<string, number> = {};
+  const dateFrom = new Date().toISOString().slice(0, 10);
+  const allowLlmFallback = body.allow_llm_fallback !== false;
+  const llmPolicySignature = JSON.stringify({
+    enabled: useLlmVerifier,
+    allow_fallback: allowLlmFallback,
+    lite_model: googleModelId(env("EVENT_SEARCH_LLM_MODEL"), "gemini-3.1-flash-lite"),
+    overflow_model: googleModelId(env("EVENT_SEARCH_LLM_FALLBACK_MODEL"), "gemma-4-26b-a4b-it"),
+  });
+  const resultCacheKey = await searchResultCacheKey({
+    v: 1,
+    query_hash: queryEmbeddingHash,
+    embedding_model: embeddingModel,
+    embedding_doc_kind: embeddingDocKind,
+    date_from: dateFrom,
+    limit,
+    offset,
+    verification_window: verificationWindow,
+    include_fallback: includeFallback,
+    query_facets: queryFacets,
+    llm_policy: llmPolicySignature,
+  });
+  const resultCache: SearchResultCacheOptions = {
+    supabaseUrl,
+    cacheKey: resultCacheKey.cacheKey,
+    queryHash: queryEmbeddingHash,
+    embeddingModel,
+    embeddingDocKind,
+    requestSignature: resultCacheKey.requestSignature,
+    ttlSeconds: resultCacheTtlSeconds(),
+  };
+
+  await progress?.({
+    stage: "result_cache",
+    progress: 14,
+    label: "Проверяю быстрый кэш",
+  });
+  const resultCacheStartedAt = performance.now();
+  const cachedResult = await readCachedSearchResult(resultCache);
+  timings.result_cache_ms = nowMs() - Math.round(resultCacheStartedAt);
+  if (cachedResult) {
+    const quotaStartedAt = performance.now();
+    const { data: quotaRows } = await supabase.rpc(
+      "get_event_search_quota_v2",
+      { p_plan_id: "registered" },
+    );
+    timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
+    timings.total_ms = nowMs() - Math.round(requestStartedAt);
+    const quotaState = Array.isArray(quotaRows) ? quotaRows[0] : quotaRows;
+    const bodyFromCache = {
+      ...cachedResult,
+      request_id: requestId,
+      quota: quotaState || cachedResult.quota || null,
+      result_cache_status: "hit",
+      served_from_cache: true,
+      timings_ms: {
+        ...((cachedResult.timings_ms as Record<string, unknown> | undefined) || {}),
+        ...timings,
+      },
+    };
+    logEvent("event_search_result_cache_hit", {
+      request_id: requestId,
+      user_hash: userHash,
+      query_hash: shortHash(queryHash),
+      query_cache_hash: shortHash(queryEmbeddingHash),
+      cache_key: shortHash(resultCache.cacheKey),
+      limit,
+      offset,
+      verification_window: verificationWindow,
+      timings_ms: timings,
+    });
+    return { status: 200, body: bodyFromCache };
+  }
 
   await progress?.({
     stage: "quota",
@@ -1512,7 +1659,7 @@ async function runEventSearch(
   });
   const quotaStartedAt = performance.now();
   const { data: quotaRows, error: quotaError } = await supabase.rpc(
-    "reserve_event_search_quota_v2",
+    "reserve_event_search_quota_v3",
     {
       p_plan_id: "registered",
       p_use_llm: useLlmVerifier,
@@ -1544,7 +1691,9 @@ async function runEventSearch(
       status: 429,
       body: {
         error: "quota_exceeded",
-        detail: quotaError.message,
+        detail: quotaError.message?.includes("hourly")
+          ? "Часовой лимит поисков закончился. Окно обновится в начале следующего часа; повтор уже найденного из кэша лимит не тратит."
+          : "Лимит поисков на сегодня закончился. Повтор уже найденного из кэша лимит не тратит.",
         request_id: requestId,
       },
     };
@@ -1554,15 +1703,10 @@ async function runEventSearch(
   const llmQuotaReserved = Boolean(
     (quotaState as Record<string, unknown> | null)?.llm_reserved,
   );
-  const allowLlmFallback = body.allow_llm_fallback !== false;
   const llmGemmaOverflowAllowed =
     useLlmVerifier && llmQuotaReserved && allowLlmFallback;
 
   try {
-    const embeddingModel = googleModelId(
-      env("EVENT_SEARCH_EMBEDDING_MODEL"),
-      "gemini-embedding-2",
-    );
     await progress?.({
       stage: "embedding",
       progress: 28,
@@ -1588,7 +1732,7 @@ async function runEventSearch(
         p_query_embedding: embedding,
         p_match_count: verificationWindow,
         p_offset_count: offset,
-        p_date_from: new Date().toISOString().slice(0, 10),
+        p_date_from: dateFrom,
         p_date_to: null,
         p_city_filter: null,
         p_category_filter: null,
@@ -1597,10 +1741,7 @@ async function runEventSearch(
         p_weekday_iso: queryFacets.weekday_iso,
         p_time_of_day_filter: queryFacets.time_of_day,
         p_admission_filter: queryFacets.admission,
-        p_embedding_doc_kind: env(
-          "EVENT_SEARCH_EMBEDDING_DOC_KIND",
-          "search_v3",
-        ),
+        p_embedding_doc_kind: embeddingDocKind,
       },
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
@@ -1702,7 +1843,7 @@ async function runEventSearch(
         {
           p_match_count: limit,
           p_offset_count: 0,
-          p_date_from: new Date().toISOString().slice(0, 10),
+          p_date_from: dateFrom,
         },
       );
       const seen = new Set(items.map(candidateId));
@@ -1723,6 +1864,61 @@ async function runEventSearch(
     const servedListId = crypto.randomUUID();
     const servedHash = await servedListHash(queryHash, items, fallbackItems);
     timings.total_ms = nowMs() - Math.round(requestStartedAt);
+    const responseBody: Record<string, unknown> = {
+      schema_version: "event-search-results-v1",
+      surface: "authorized_event_search",
+      algorithm_id: llmResult.used
+        ? "pgvector_gemini_embedding_2_llm_high_match_v1"
+        : "pgvector_gemini_embedding_2_possible_only_v1",
+      request_id: requestId,
+      served_list_id: servedListId,
+      served_list_hash: servedHash,
+      query_hash: queryHash,
+      query_facets: queryFacets,
+      embedding_cache_status: embeddingResult.cache_status,
+      result_cache_status: "miss",
+      served_from_cache: false,
+      quota: quotaState,
+      items,
+      fallback_items: fallbackItems,
+      has_more: hasMore,
+      next_offset: nextOffset,
+      retrieved_count: retrievedCount,
+      verification_window: verificationWindow,
+      llm_verifier: {
+        requested: useLlmVerifier,
+        used: llmResult.used,
+        status: llmResult.status,
+        model: llmResult.model || null,
+        policy: llmResult.policy || null,
+        attempts: llmResult.attempts || [],
+        gemma_overflow_allowed: llmGemmaOverflowAllowed,
+        prompt_chars: llmResult.prompt_chars ?? null,
+        prompt_fact_chars: llmResult.prompt_fact_chars ?? null,
+        compact_candidate_count: llmResult.compact_candidate_count ?? null,
+        candidate_fact_count: llmCandidateFactCount,
+        rejected_count: llmResult.rejected_ids.length,
+        query_interpretation: llmResult.query_interpretation || null,
+      },
+      timings_ms: timings,
+    };
+    let resultCacheStatus = "skipped";
+    if (llmResult.used || !useLlmVerifier) {
+      const cacheStoreStartedAt = performance.now();
+      const stored = await storeCachedSearchResult(resultCache, responseBody, {
+        source: "event-search-edge",
+        request_id: requestId,
+        served_list_hash: servedHash,
+        result_count: items.length,
+        fallback_count: fallbackItems.length,
+        llm_used: llmResult.used,
+      });
+      timings.result_cache_store_ms = nowMs() - Math.round(cacheStoreStartedAt);
+      resultCacheStatus = stored ? "stored" : "store_failed";
+    }
+    timings.total_ms = nowMs() - Math.round(requestStartedAt);
+    responseBody.result_cache_status = resultCacheStatus;
+    responseBody.timings_ms = timings;
 
     await recordSearchRequest(supabase, {
       p_request_kind: llmResult.used ? "llm_rerank" : "vector_search",
@@ -1745,6 +1941,8 @@ async function runEventSearch(
         embedding_model: embeddingModel,
         embedding_key_env: embeddingResult.key_env,
         embedding_cache_status: embeddingResult.cache_status,
+        result_cache_status: resultCacheStatus,
+        result_cache_key: shortHash(resultCache.cacheKey),
         query_facets: queryFacets,
         llm_status: llmResult.status,
         llm_quota_reserved: llmQuotaReserved,
@@ -1773,6 +1971,8 @@ async function runEventSearch(
       embedding_model: embeddingModel,
       embedding_key_env: embeddingResult.key_env,
       embedding_cache_status: embeddingResult.cache_status,
+      result_cache_status: resultCacheStatus,
+      result_cache_key: shortHash(resultCache.cacheKey),
       query_facets: queryFacets,
       result_count: items.length,
       retrieved_count: retrievedCount,
@@ -1793,45 +1993,7 @@ async function runEventSearch(
       timings_ms: timings,
     });
 
-    return {
-      status: 200,
-      body: {
-        schema_version: "event-search-results-v1",
-        surface: "authorized_event_search",
-        algorithm_id: llmResult.used
-          ? "pgvector_gemini_embedding_2_llm_high_match_v1"
-          : "pgvector_gemini_embedding_2_possible_only_v1",
-        request_id: requestId,
-        served_list_id: servedListId,
-        served_list_hash: servedHash,
-        query_hash: queryHash,
-        query_facets: queryFacets,
-        embedding_cache_status: embeddingResult.cache_status,
-        quota: quotaState,
-        items,
-        fallback_items: fallbackItems,
-        has_more: hasMore,
-        next_offset: nextOffset,
-        retrieved_count: retrievedCount,
-        verification_window: verificationWindow,
-        llm_verifier: {
-          requested: useLlmVerifier,
-          used: llmResult.used,
-          status: llmResult.status,
-          model: llmResult.model || null,
-          policy: llmResult.policy || null,
-          attempts: llmResult.attempts || [],
-          gemma_overflow_allowed: llmGemmaOverflowAllowed,
-          prompt_chars: llmResult.prompt_chars ?? null,
-          prompt_fact_chars: llmResult.prompt_fact_chars ?? null,
-          compact_candidate_count: llmResult.compact_candidate_count ?? null,
-          candidate_fact_count: llmCandidateFactCount,
-          rejected_count: llmResult.rejected_ids.length,
-          query_interpretation: llmResult.query_interpretation || null,
-        },
-        timings_ms: timings,
-      },
-    };
+    return { status: 200, body: responseBody };
   } catch (error) {
     await recordSearchRequest(supabase, {
       p_request_kind: "vector_search",

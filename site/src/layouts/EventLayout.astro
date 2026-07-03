@@ -351,7 +351,67 @@ const FOOTER_SOCIAL_LINKS = [
       .authorized-search__feedback.is-local { border-color: rgba(121,48,20,0.22); background: #fff6e5; }
       .authorized-search__fallback-title { margin: 1.1rem 0 0.2rem; color: var(--primary-strong); }
       .authorized-search__phase-note { margin: -0.15rem 0 0.35rem; padding: 0.68rem 0.78rem; border-radius: 16px; color: #f7efe3; background: linear-gradient(135deg, #20242a, #111316); box-shadow: 0 14px 28px rgba(12,14,18,0.22); font-size: 0.9rem; font-weight: 780; }
-      .authorized-search__results [data-search-phase="vector"] { outline: 1px solid rgba(255,255,255,0.16); box-shadow: 0 18px 36px rgba(17,19,24,0.18); }
+      .authorized-search__vector-card {
+        position: relative;
+        isolation: isolate;
+        min-height: 178px;
+        overflow: hidden;
+        display: grid;
+        align-content: start;
+        gap: 0.62rem;
+        padding: 1rem;
+        border-radius: 24px;
+        border: 1px solid rgba(255,255,255,0.14);
+        color: #f8f1e8;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(255,255,255,0.16), transparent 9rem),
+          linear-gradient(135deg, #2b2f35 0%, #171a1f 46%, #0d0f12 100%);
+        box-shadow: 0 18px 38px rgba(9,11,14,0.30), inset 0 1px 0 rgba(255,255,255,0.08);
+      }
+      .authorized-search__vector-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.04) 34%, rgba(255,255,255,0.24) 48%, rgba(255,255,255,0.04) 62%, transparent 100%);
+        transform: translateX(-120%);
+        animation: search-vector-card-shimmer 1.45s ease-in-out infinite;
+      }
+      .authorized-search__vector-card-glow {
+        position: absolute;
+        inset: auto -18% -48% 18%;
+        z-index: -1;
+        height: 72%;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(15,118,110,0.34), rgba(121,48,20,0.16) 42%, transparent 68%);
+        opacity: 0.92;
+        animation: search-vector-card-glow 2.2s ease-in-out infinite alternate;
+      }
+      .authorized-search__vector-card-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
+      .authorized-search__vector-pill,
+      .authorized-search__vector-rank {
+        width: max-content;
+        max-width: 100%;
+        border-radius: 999px;
+        padding: 0.18rem 0.54rem;
+        background: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.82);
+        font-size: 0.72rem;
+        line-height: 1.2;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+      }
+      .authorized-search__vector-rank { color: rgba(255,255,255,0.56); }
+      .authorized-search__vector-card strong { max-width: 24ch; color: #fff; font-size: clamp(1.04rem, 4.4vw, 1.34rem); line-height: 1.08; letter-spacing: -0.035em; }
+      .authorized-search__vector-meta,
+      .authorized-search__vector-place { color: rgba(255,255,255,0.72); font-size: 0.86rem; font-weight: 760; line-height: 1.25; }
+      .authorized-search__vector-place { color: rgba(255,255,255,0.58); }
+      .authorized-search__vector-bars { display: grid; gap: 0.34rem; margin-top: 0.12rem; max-width: 78%; }
+      .authorized-search__vector-bars span { height: 0.44rem; border-radius: 999px; background: linear-gradient(110deg, rgba(255,255,255,0.10), rgba(255,255,255,0.22), rgba(255,255,255,0.08)); background-size: 190% 100%; animation: search-skeleton-shimmer 1.35s ease-in-out infinite; }
+      .authorized-search__vector-bars span:nth-child(2) { width: 72%; animation-delay: 120ms; }
+      .authorized-search__vector-bars span:nth-child(3) { width: 48%; animation-delay: 220ms; }
+      @keyframes search-vector-card-shimmer { to { transform: translateX(120%); } }
+      @keyframes search-vector-card-glow { from { opacity: 0.64; transform: translate3d(-1.5rem, 0.4rem, 0) scale(0.96); } to { opacity: 0.96; transform: translate3d(0.8rem, -0.2rem, 0) scale(1.05); } }
       .authorized-search__more { margin-top: 0.85rem; transition: opacity 160ms ease, transform 160ms ease; }
       .authorized-search__more.is-loading { opacity: 0.82; cursor: progress; transform: translateY(1px); }
       .eyebrow { color: var(--primary-strong); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.5rem; }

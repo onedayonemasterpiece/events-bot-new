@@ -381,7 +381,7 @@ const HeadingTag = headingLevel;
     function errorMessageFromSearchPayload(payload) {
       const code = payload?.error || payload?.error_code || '';
       if (payload?.detail && /^query_/u.test(String(code))) return String(payload.detail);
-      if (code === 'quota_exceeded') return 'Лимит поисков на сегодня закончился. Попробуйте позже.';
+      if (code === 'quota_exceeded') return payload?.detail || 'Лимит поисков в текущем окне закончился. Попробуйте позже.';
       if (code === 'auth_required') return 'Сессия закончилась. Войдите через Яндекс ещё раз.';
       if (code === 'query_too_short') return 'Введите хотя бы 3 символа.';
       if (code === 'query_too_long') return `Слишком длинный запрос: максимум ${maxQueryLength} символов.`;
@@ -400,6 +400,38 @@ const HeadingTag = headingLevel;
         const href = display.href || candidate.href || '#';
         const title = display.title || candidate.title || 'Событие';
         return `<article class="event-card event-card--split-actions" data-event-card data-event-id="${String(candidate.event_id || candidate.id || '')}" data-event-title="${escapeHtml(title)}" data-card-href="${escapeHtml(href)}" tabindex="0"><div class="event-card__body"><a class="event-card__title" href="${escapeHtml(href)}">${escapeHtml(title)}</a><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(display.display_date_time || '')}</span></div></div></article>`;
+      }).join('');
+    }
+
+    function vectorPreviewDisplay(candidate) {
+      const display = candidate?.display || candidate || {};
+      return {
+        id: candidate?.event_id || candidate?.id || display.event_id || display.id || '',
+        title: display.title || candidate?.title || 'Событие',
+        href: display.href || candidate?.href || '#',
+        date: display.display_date_time || display.display_date || candidate?.display_date_time || '',
+        place: display.place || display.venue_name || candidate?.venue_name || candidate?.city || '',
+        type: display.event_type || candidate?.event_type || candidate?.category || 'вариант',
+        score: candidate?.semantic_score || candidate?.base_similarity || candidate?.similarity || 0,
+      };
+    }
+
+    function renderVectorPreviewCards(items, rankBase = offset, pageOffset = offset) {
+      return items.map((candidate, index) => {
+        const item = vectorPreviewDisplay(candidate);
+        const rank = rankBase + index + 1;
+        const score = Math.max(0, Math.min(99, Math.round(Number(item.score || 0) * 100)));
+        return `<article class="authorized-search__vector-card" data-search-vector-card data-search-phase="vector" data-search-page-offset="${escapeHtml(pageOffset)}" data-event-id="${escapeHtml(item.id)}" data-event-title="${escapeHtml(item.title)}" data-card-href="${escapeHtml(item.href)}" data-rank="${escapeHtml(rank)}" data-score="${escapeHtml(score)}" aria-busy="true" aria-label="${escapeHtml(`Кандидат ${rank}: ${item.title}. ИИ проверяет релевантность.`)}">
+          <div class="authorized-search__vector-card-glow" aria-hidden="true"></div>
+          <div class="authorized-search__vector-card-top">
+            <span class="authorized-search__vector-pill">${escapeHtml(item.type)}</span>
+            <span class="authorized-search__vector-rank">#${escapeHtml(rank)}</span>
+          </div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <div class="authorized-search__vector-meta">${escapeHtml(item.date || 'Дата уточняется')}</div>
+          ${item.place ? `<div class="authorized-search__vector-place">${escapeHtml(item.place)}</div>` : ''}
+          <div class="authorized-search__vector-bars" aria-hidden="true"><span></span><span></span><span></span></div>
+        </article>`;
       }).join('');
     }
 
@@ -503,10 +535,15 @@ const HeadingTag = headingLevel;
 
     async function refreshQuota() {
       if (!supabase) return;
-      const { data, error } = await supabase.rpc('get_event_search_quota_v1', { p_plan_id: 'registered' });
+      const { data, error } = await supabase.rpc('get_event_search_quota_v2', { p_plan_id: 'registered' });
       if (error) return;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row) setStatus(`Осталось поисков: ${row.day_remaining} сегодня, ${row.month_remaining} в этом месяце.`);
+      if (row?.hour_remaining != null) {
+        const reset = row.hour_reset_at ? new Date(row.hour_reset_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'через час';
+        setStatus(`Осталось поисков: ${row.hour_remaining} в этом часу. Окно обновится ${reset}.`);
+      } else if (row?.day_remaining != null) {
+        setStatus(`Осталось поисков: ${row.day_remaining} сегодня.`);
+      }
     }
 
     async function updateAuth(options = {}) {
@@ -577,6 +614,11 @@ const HeadingTag = headingLevel;
       markInsertedCards(startIndex, phase, pageOffset);
     }
 
+    function insertVectorPreviewHtml(items, rankBase, pageOffset) {
+      if (!results || !items.length) return;
+      results.insertAdjacentHTML('beforeend', renderVectorPreviewCards(items, rankBase, pageOffset));
+    }
+
     function renderSearchPayload(data, options = {}) {
       const { append = false, phase = 'final', pageOffset = offset } = options;
       const isVector = phase === 'vector';
@@ -595,11 +637,11 @@ const HeadingTag = headingLevel;
       if (isVector) {
         const verifierPending = data?.llm_verifier?.status === 'pending';
         if (items.length > 0 && results.children.length === 0) appendSectionHeading('Нашёл по смыслу');
-        insertCardHtml(items, pageOffset, 'vector', pageOffset);
+        insertVectorPreviewHtml(items, pageOffset, pageOffset);
         if (items.length > 0) appendPhaseNote(
           verifierPending
-            ? 'Это быстрые результаты векторного поиска. ИИ ещё проверяет точность и может переставить или убрать часть карточек.'
-            : 'Это быстрые результаты векторного поиска.',
+            ? 'Проверяю эти варианты: финальная выдача может стать короче или поменять порядок.'
+            : 'Быстрые варианты по смыслу.',
           pageOffset,
         );
         results.hidden = !results.children.length;
@@ -795,7 +837,8 @@ const HeadingTag = headingLevel;
         offset = Number.isFinite(nextOffset) && nextOffset >= pageOffset ? nextOffset : pageOffset + items.length;
         if (more) more.hidden = !data?.has_more;
         const quota = data?.quota;
-        if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня, ${quota.month_remaining} в этом месяце.`);
+        if (quota && quota.hour_remaining != null) setStatus(`Осталось поисков: ${quota.hour_remaining} в этом часу. Окно обновится ${quota.hour_reset_at ? new Date(quota.hour_reset_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'через час'}.`);
+        else if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня.`);
         else await refreshQuota();
         if (items.length === 0 && fallbackItems.length === 0) setStatus('Ничего не нашлось. Попробуйте описать запрос иначе.');
         if (results && results.children.length) setSkeletonLoading(false);

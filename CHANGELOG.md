@@ -16,6 +16,7 @@
 
 ### Changed
 
+- **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
 - **Static site pages / merged vector-medallion MVP preview**: merged the Smart Update vector-identity gate and medallion SVG upgrade branches, rebuilt `preview-20260702t1536-merged-vector-medallions` from the 2026-07-02 production snapshot with `399` active/future events through id `6613`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and `399` stable CDN ICS files, and verified public `/poisk/`, `/vystavki/`, `/partners/`, `/lab/medallions/`, sample fresh event pages `6601`/`6605`/`6613`, Yandex auth readiness, mocked UI search, real Edge search and the `/vystavki/` duplicate audit since `2026-07-02`.
 - **Personalization / poster OCR vector boundary**: documented that raw poster OCR is not embedded directly into `/poisk/` `search_v3` or static related `related_v1`; OCR can affect vectors only after Smart Update promotes a source-grounded poster fact into canonical public event fields, preventing commercial venue/partner labels on posters from swamping semantic recall.
 - **Static site / information partners grid**: merged the medallion SVG upgrade branch so `/partners/` renders real SVG/WebP partner logos in an aspect-aware dense grid; kept SVG-first/WebP-if-raster rules documented for partner and medallion assets.
@@ -37,6 +38,7 @@
 
 ### Fixed
 
+- **Static smart search vector-stage UX**: changed streamed vector candidates from normal final event cards into graphite shimmering preview cards without like/calendar/share actions, so candidates that LLM later rejects no longer look like disappearing final results.
 - **Static smart search slow-result UX**: changed `/poisk/` search timeout handling from a hard 6.5s failure into a soft slow-notice state; vector cards remain visible and the browser waits for the terminal result instead of replacing an available result with “search took too long”.
 - **Incident / kldevents/1778 VK OCR location-time regression (INC-2026-07-02)**:
   VK parsing now keeps compact poster OCR logistics under long-caption token
