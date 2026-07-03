@@ -10955,6 +10955,14 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     title = str(candidate.title or "").strip()
     loc = str(candidate.location_name or "").strip()
     raw = str(text or candidate.source_text or candidate.raw_excerpt or "").strip()
+    # A social-source candidate whose extracted date is not grounded in the
+    # source text or poster OCR is high-risk: upstream LLMs can fabricate a
+    # far-future date for non-event promo/editorial posts.  Do not decide the
+    # semantics with regex here; route the suspicious shape to the LLM-first
+    # eventness gate, whose prompt explicitly checks whether the date/place
+    # are supported by the source.
+    if _candidate_date_is_inferred(candidate, is_canonical_site=False):
+        return True
     if _WEAK_RUBRIC_TITLE_RE.match(title):
         return True
     if loc and _WEAK_IMPERATIVE_LOCATION_RE.match(loc):

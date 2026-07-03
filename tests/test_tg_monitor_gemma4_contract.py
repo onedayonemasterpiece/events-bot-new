@@ -257,6 +257,33 @@ def test_tg_monitor_source_datetime_guard_corrects_single_event_drift() -> None:
     assert 'temporal/date fragments (including emoji-prefixed values like "🤗Завтра")' in source
 
 
+def test_tg_monitor_ocr_date_ignores_vinyl_speed_metadata() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("MONTHS_MAP = {")
+    end = source.index("\n\nasync def extract_events", start)
+    ns = {
+        "date": date,
+        "datetime": datetime,
+        "re": re,
+        "timedelta": timedelta,
+        "timezone": timezone,
+        "logger": type("_L", (), {"info": lambda *a, **k: None})(),
+    }
+    exec(source[start:end], ns)
+
+    extract_ocr_datetime = ns["_extract_ocr_datetime"]
+
+    assert extract_ocr_datetime(
+        "Blues & Roots Lp 33 1/3 RPM Charlie Mingus",
+        "2026-06-15T08:00:43+00:00",
+    ) == (None, None)
+    assert extract_ocr_datetime("Концерт 10.05 начало 14:00", "2026-05-01T09:00:00+00:00") == (
+        "2026-05-10",
+        "14:00",
+    )
+    assert "Record/vinyl metadata such as \"LP 33 1/3 RPM\"" in source
+
+
 
 def test_tg_monitor_location_review_triggers_on_emoji_prefixed_temporal_location() -> None:
     ns = _load_location_review_helpers_in_isolation()

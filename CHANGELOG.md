@@ -38,6 +38,11 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Incident / event 6045 static defect (INC-2026-07-03)**:
+  Telegram Monitoring no longer treats vinyl/record metadata such as
+  `LP 33 1/3 RPM` as an OCR event date, and Smart Update now routes
+  Telegram/VK candidates with source-ungrounded dates through LLM-first
+  eventness review before creating public event rows.
 - **Incident / Boyko exhibition Smart Update glue (INC-2026-07-02)**:
   added a separate LLM-first merge identity gate behind
   `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` so related-but-distinct

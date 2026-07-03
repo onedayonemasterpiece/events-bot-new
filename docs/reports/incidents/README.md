@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-03-event-6045-static-defect.md`
+  - Scope: Telegram Monitoring OCR date extraction/merge, Smart Update social-candidate date provenance/eventness routing, writer grounding, and public/static repair for event `6045` from `@signalkld/11052`.
+  - Must not regress: record/vinyl metadata such as `LP 33 1/3 RPM` must not become an event date; social candidates with dates ungrounded in source text or poster OCR must route through LLM-first eventness review before create; non-event coffee/music promo sources must not publish active future static/Telegraph/Telegram/VK event surfaces.
 - `INC-2026-07-02-static-search-92-percent-no-cards.md`
   - Scope: Static site authorized smart search `/poisk/`, personalization Supabase Edge Function `event-search`, frontend progress/rendering, card-shaped shimmer/halo loading state, LLM/vector sequencing, and production root/preview entrypoint promotion. Must not regress: reported natural-language searches must not stay stuck at 92% without cards when backend has returned or can return vector candidates; `/poisk/`/root CTA must point to the current searchable build; backend stage timings and client render evidence must be available for closure.
 - `INC-2026-07-02-boyko-exhibition-smart-update-glue.md`
