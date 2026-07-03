@@ -20,6 +20,7 @@ Required URLs for the current preview:
 - Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partnerstvo/>
 - Information partners directory: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partners/>
 - Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/lab/medallions/>
+- Date-block design QA lab: `<preview>/lab/date-block/` shows the Gemini Pro split-badge and a-opus one-line strip variants.
 - Broken-image regression event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/festival-pianissimo-kaliningrad-5264/>
 - Fresh merged-branch event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/detskaya-igrovaya-programma-s-animatorami-kaliningrad-6601/>
 - Fresh VK auto-import event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/semeynaya-sreda-atomy-semi-kaliningrad-6605/>
@@ -54,6 +55,7 @@ site/
   src/pages/sobytiya/[slug]/event.ics.ts
   src/pages/data/discovery/[eventId].json.ts
   src/pages/lab/medallions/index.astro
+  src/pages/lab/date-block/index.astro
   src/pages/lab/hero/index.astro
   src/pages/lab/hero/review/index.astro
   src/pages/sitemap.xml.ts

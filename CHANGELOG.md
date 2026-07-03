@@ -7,6 +7,7 @@
 
 ### Added
 
+- **Static site pages / date-block lab**: added `/lab/date-block/` to show the separate Gemini Pro split-badge and a-opus one-line-strip designs for the event hero date/time/weekday block.
 - **Static site pages / venue medallions**: added source-grounded venue medallions for Янтарь холл, Драмтеатр, Музыкальный театр, Дом искусств/Театр эстрады, Kaliningrad City Jazz Club, Ростех Арена, Бар Бастион, Сигнал, Музей курортной моды, Калининградский зоопарк, Локация, Музей ИЗО and Дом-музей Брахерта, with official SVG/PNG/social-avatar provenance in the organizer manifest.
 - **Static event issue reporting**: added an admin-only event-page report link and Supabase/ArtKodex handoff so a Yandex-authenticated admin can launch an events-bot incident repair task from a static event page.
 - **Static event issue reporting history**: admin event pages now fetch existing report statuses and ArtKodex thread links dynamically while still allowing new reports.
@@ -23,6 +24,7 @@
 
 ### Changed
 
+- **Static site pages / event hero date block**: replaced the dark gradient date card with a semantic high-contrast split-badge date block, using a large terracotta date and readable weekday/time column before the CTA row.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
 - **Static site pages / merged vector-medallion MVP preview**: merged the Smart Update vector-identity gate and medallion SVG upgrade branches, rebuilt `preview-20260702t1536-merged-vector-medallions` from the 2026-07-02 production snapshot with `399` active/future events through id `6613`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and `399` stable CDN ICS files, and verified public `/poisk/`, `/vystavki/`, `/partners/`, `/lab/medallions/`, sample fresh event pages `6601`/`6605`/`6613`, Yandex auth readiness, mocked UI search, real Edge search and the `/vystavki/` duplicate audit since `2026-07-02`.
 - **Personalization / poster OCR vector boundary**: documented that raw poster OCR is not embedded directly into `/poisk/` `search_v3` or static related `related_v1`; OCR can affect vectors only after Smart Update promotes a source-grounded poster fact into canonical public event fields, preventing commercial venue/partner labels on posters from swamping semantic recall.

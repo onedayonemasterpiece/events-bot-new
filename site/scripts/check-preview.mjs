@@ -29,6 +29,7 @@ const required = [
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
   'lab/medallions/index.html',
+  'lab/date-block/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -45,6 +46,10 @@ for (const event of kgd80Events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
   if (!html.includes('event-token--kgd80')) throw new Error(`80 Stories event ${event.id} misses KGD80 festival medallion`);
   if (!html.includes('event-token--znanie-russia')) throw new Error(`80 Stories event ${event.id} misses curated Znanie organizer medallion`);
+}
+const dateBlockLabHtml = readFileSync(join(root, 'lab/date-block/index.html'), 'utf8');
+if (!dateBlockLabHtml.includes('date-lab-gemini') || !dateBlockLabHtml.includes('date-lab-opus') || !dateBlockLabHtml.includes('Gemini Pro') || !dateBlockLabHtml.includes('a-opus')) {
+  throw new Error('Date-block lab must show both Gemini Pro and a-opus variants');
 }
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {

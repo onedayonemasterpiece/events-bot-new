@@ -1,0 +1,157 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/date-block/');
+const title = `Лаборатория блока даты | ${SITE_NAME}`;
+const description = 'Сравнение двух внешних дизайн-вариантов блока даты, времени и дня недели для статических страниц KenigEvents.';
+const sample = {
+  weekday: 'суббота',
+  date: '5 июля',
+  time: '19:00',
+  datetime: '2026-07-05T19:00:00+02:00',
+};
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell date-block-lab">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <a href={withBase('/lab/medallions/')}>Медальоны</a>
+        <span aria-hidden="true">/</span>
+        <span>Блок даты</span>
+      </nav>
+
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Внешний дизайн</p>
+          <h1>Два варианта блока даты</h1>
+          <p class="lead">Gemini Pro и a-opus отдельно спроектировали компактный, контрастный блок, где дата, время и день недели считываются быстро даже на маленьком экране. Ниже — оба варианта на одном примере.</p>
+        </div>
+      </section>
+
+      <section class="date-block-lab__grid" aria-label="Варианты блока даты">
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">Gemini Pro</p>
+            <h2>Split-badge: дата как главный якорь</h2>
+            <div class="date-block-lab__mock-surface">
+              <time class="date-lab-gemini" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, начало в ${sample.time}`}>
+                <span class="date-lab-gemini__primary">{sample.date}</span>
+                <span class="date-lab-gemini__secondary">
+                  <span class="date-lab-gemini__weekday">{sample.weekday}</span>
+                  <span class="date-lab-gemini__time">{sample.time}</span>
+                </span>
+              </time>
+            </div>
+            <p class="muted-note">Дата крупнее всего и выделена терракотой; день недели и время собраны вторым столбцом за вертикальным разделителем. Этот подход выбран для production-блока события.</p>
+          </div>
+        </article>
+
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">a-opus</p>
+            <h2>One-line strip: быстрое чтение строкой</h2>
+            <div class="date-block-lab__mock-surface">
+              <div class="date-lab-opus" role="group" aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
+                <span class="date-lab-opus__weekday">{sample.weekday}</span>
+                <span class="date-lab-opus__day">{sample.date}</span>
+                <span class="date-lab-opus__time">{sample.time}</span>
+              </div>
+            </div>
+            <p class="muted-note">Одна строка с 4px терракотовым якорем слева, точечными разделителями и минимальной высотой. Хорошо экономит место, но слабее акцентирует время.</p>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style is:global>
+  .date-block-lab { display: grid; gap: 1rem; }
+  .date-block-lab__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
+  .date-block-lab__panel h2 { margin-bottom: 0.85rem; }
+  .date-block-lab__mock-surface {
+    min-height: 8.5rem;
+    display: grid;
+    align-items: center;
+    justify-items: start;
+    padding: clamp(1rem, 5vw, 2rem);
+    border: 1px dashed rgba(121, 48, 20, 0.2);
+    border-radius: 24px;
+    background: linear-gradient(180deg, #fffdf8, #fff8ef);
+  }
+
+  .date-lab-gemini {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.75rem 1.25rem;
+    background-color: #ffffff;
+    border: 1px solid rgba(121, 48, 20, 0.12);
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 16px rgba(38, 40, 45, 0.04);
+    color: #26282d;
+    font-family: inherit;
+  }
+  .date-lab-gemini__primary {
+    color: #793014;
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: -0.02em;
+  }
+  .date-lab-gemini__secondary {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-left: 2px solid rgba(121, 48, 20, 0.2);
+    padding-left: 0.875rem;
+  }
+  .date-lab-gemini__weekday { font-size: 1rem; font-weight: 500; line-height: 1.2; text-transform: lowercase; }
+  .date-lab-gemini__time { margin-top: 0.125rem; color: #26282d; font-size: 1.125rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+  .date-lab-opus {
+    --ev-accent: #793014;
+    --ev-bg: #fff3e8;
+    --ev-text: #26282d;
+    --ev-muted: #5a4a3f;
+    --ev-divider: #c9a68a;
+    --ev-gap: 0.75rem;
+    display: flex;
+    align-items: baseline;
+    gap: var(--ev-gap);
+    max-width: max-content;
+    padding: 0.625rem 1rem;
+    border-left: 4px solid var(--ev-accent);
+    border-radius: 6px;
+    background: var(--ev-bg);
+    color: var(--ev-text);
+    line-height: 1.3;
+  }
+  .date-lab-opus > span + span::before {
+    content: "·";
+    margin-right: var(--ev-gap);
+    color: var(--ev-divider);
+    font-weight: 700;
+    font-size: 1.25rem;
+    vertical-align: baseline;
+    pointer-events: none;
+  }
+  .date-lab-opus__weekday { color: var(--ev-muted); font-size: 1rem; font-weight: 500; letter-spacing: 0.01em; text-transform: lowercase; }
+  .date-lab-opus__day { color: var(--ev-text); font-size: 1.375rem; font-weight: 700; white-space: nowrap; }
+  .date-lab-opus__time { color: var(--ev-accent); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+  @media (max-width: 374px) {
+    .date-lab-opus { --ev-gap: 0.5rem; padding: 0.5rem 0.75rem; }
+    .date-lab-opus__day { font-size: 1.25rem; }
+  }
+  @media (min-width: 768px) {
+    .date-lab-gemini { padding: 1rem 1.5rem; gap: 1.25rem; border-radius: 1rem; }
+    .date-lab-gemini__primary { font-size: 2rem; }
+    .date-lab-gemini__weekday { font-size: 1.125rem; }
+    .date-lab-gemini__time { font-size: 1.25rem; }
+  }
+</style>

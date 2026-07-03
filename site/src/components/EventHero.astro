@@ -45,6 +45,7 @@ const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
 const heroDateLabel = displayDate(event);
 const heroWeekdayLabel = displayWeekdayLong(event);
+const heroDateTimeValue = event.starts_at || event.start_date;
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
@@ -171,11 +172,15 @@ const showTicketCta = Boolean(ctaHref);
   <div class="event-hero__decision">
     {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
-    <div class="event-hero__date-card" aria-label={[heroWeekdayLabel, heroDateLabel, event.display_time].filter(Boolean).join(', ')}>
-      {heroWeekdayLabel && <span class="event-hero__date-weekday">{heroWeekdayLabel}</span>}
-      <strong class="event-hero__date-day">{heroDateLabel}</strong>
-      {event.display_time && <span class="event-hero__date-time">{event.display_time}</span>}
-    </div>
+    <time class="event-hero__date-card" datetime={heroDateTimeValue} aria-label={[heroWeekdayLabel, heroDateLabel, event.display_time].filter(Boolean).join(', ')}>
+      <span class="event-hero__date-primary">
+        <strong class="event-hero__date-day">{heroDateLabel}</strong>
+      </span>
+      <span class="event-hero__date-secondary">
+        {heroWeekdayLabel && <span class="event-hero__date-weekday">{heroWeekdayLabel}</span>}
+        {event.display_time && <span class="event-hero__date-time">{event.display_time}</span>}
+      </span>
+    </time>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
       {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
