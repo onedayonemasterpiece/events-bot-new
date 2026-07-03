@@ -1,6 +1,6 @@
 # INC-2026-07-02 Boyko exhibition Smart Update glue
 
-Status: mitigated
+Status: monitoring
 Severity: sev2
 Service: events-bot Smart Update event identity / public `@kldevents` event correctness
 Opened: 2026-07-02
@@ -93,13 +93,15 @@ The incident predates the current vector-search/create identity gate. Vector rec
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `672c2e34c3559f71f6a3e674bd8e816146fabce2` (reachable from `origin/main`).
+- deploy path: manual `flyctl deploy --config fly.toml --remote-only` from clean worktree; Fly image `events-bot-new-wngqia:deployment-01KWK8AETKNW6NB3NY3PC6E6H8`; machine version `1570`.
+- rollout config: `SMART_UPDATE_MERGE_IDENTITY_GATE=shadow` set on Fly after deploy, so merge-gate decisions are logged without blocking live imports yet.
 - regression checks:
   - `python3 -m py_compile smart_update_identity.py smart_event_update.py` — passed locally.
   - `.venv/bin/pytest -q tests/test_smart_update_merge_identity_gate.py` — 6 passed locally.
   - `.venv/bin/pytest -q tests/test_smart_update_identity_gate.py tests/test_smart_update_identity_persistence.py tests/test_smart_update_identity_incident_replay.py tests/test_smart_update_merge_identity_gate.py` — 26 passed locally.
-- post-deploy verification: pending
+  - `.venv/bin/pytest -q tests/test_smart_event_update_non_event_guards.py` — 27 passed locally.
+- post-deploy verification: `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, DB/scheduler/tasks OK and no issues after the Fly secret restart.
 
 ## Prevention
 
