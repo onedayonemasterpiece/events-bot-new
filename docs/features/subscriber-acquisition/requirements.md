@@ -47,10 +47,16 @@ Status: reconciled draft; Discovery MVP addendum 2026-06-29
   minimum, date/time, venue/address, price/ticket status/link, age restriction,
   duration, registration/entry rules, accessibility/children constraints where
   relevant, and other practical organizer nuances that make the event complete.
+- For Telegram organizer clarification, discovery targets organizer-owned
+  channels, not ordinary chats. A channel is eligible only after resolver proof
+  of an accessible linked discussion and at least one recent non-empty human
+  comment/reply surface; an empty linked discussion or copied channel-post mirror
+  is not enough.
 - The system should learn typical clarification patterns from real public
   questions in organizer threads (for example age limits, duration, entry rules,
   whether registration is required, what is included in the ticket, weather/
-  outdoor constraints), but it must not blindly ask generic questions.
+  outdoor constraints), but it must not blindly ask generic questions. The
+  library stores semantic question classes/evidence, not public text templates.
 - Before creating a review opportunity, the system must guarantee that the same
   or materially equivalent question was not already asked earlier in the same
   thread by another participant or by us.
@@ -58,6 +64,15 @@ Status: reconciled draft; Discovery MVP addendum 2026-06-29
   detection, vector-search retrieval, metadata-diffing against the ideal-card
   checklist, thread dedupe, and cheap pattern clustering should happen before
   spending LLM budget on final semantic validation and wording.
+- Final clarification question text must be generated only by an LLM from
+  grounded facts and constraints. Deterministic code may prepare JSON facts,
+  labels and safety gates, but must not concatenate templates, fixed prefixes or
+  regex/synonym rewrites into `draft_question` or `published_question`.
+- A separate reviewer model/stage must validate every generated and every
+  actually published clarification question for naturalness, appropriateness,
+  clarity, answerability, grounding, duplicate risk and spam/self-promo risk. A
+  failed review drops the candidate or sends it back to the writer LLM; reviewer
+  text is not published directly.
 
 
 ### Link targets and platform routing

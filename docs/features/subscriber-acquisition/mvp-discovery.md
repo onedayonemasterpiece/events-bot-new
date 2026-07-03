@@ -191,39 +191,240 @@ same thing as answering generic “куда сходить?” comments. In an o
 surface a review candidate to ask the organizer for missing practical details
 about their own event.
 
-Eligibility pipeline:
+This subfeature is still **shadow/review-only** until a separate publication
+workflow is approved. The success metric is useful public interaction that
+improves event information and exposes the profile/service naturally; it is not
+immediate event-recommendation conversion.
 
-1. **Organizer/post detection:** cheaply classify whether the surface and post
-   are controlled by an event organizer or venue, and whether the post is about a
-   concrete event.
-2. **Event match:** use the existing vector-search/event retrieval capability to
+#### Surface acquisition rules
+
+Use the existing monitoring/import catalogs as the first frontier, but do not
+stop there:
+
+- **Telegram:** start from existing `telegram_source` / Telegram Monitoring
+  channels and from channel handles discovered in posts, comments, forwards,
+  organizer websites/about text, Telega.in regional cards, and manual
+  `/acq_surface_add` rows. For this subfeature, Telegram discovery should look
+  for **channels**, not ordinary chats. A channel becomes usable only after
+  resolver proof that it has an accessible linked discussion **and** a recent
+  non-empty human comment/reply surface. Generic chats/groups can stay in the
+  broader acquisition scanner, but they are not enough to classify an
+  organizer-owned event channel.
+- **VK:** start from existing `vk_source` community rows and the acquisition VK
+  social/catalog seeds, then expand through group links found in TG about text,
+  VK post text, source event URLs and organizer profile cross-links. Keep
+  `owner_type='user'` personal walls out of the MVP unless a separate policy task
+  explicitly allows them.
+- **Event corpus backfill:** when an event has a source URL or known organizer
+  channel/community that is not yet an acquisition surface, enqueue that
+  organizer surface for commentability scanning. If the surface cannot be matched
+  to a public TG channel/VK community, keep only a diagnostic row.
+- **Catalog/search expansion:** add small, bounded local searches for museums,
+  theatres, castles/forts, parks, festivals, concert halls, libraries, clubs,
+  galleries and municipal culture offices. These searches are only for finding
+  candidate surfaces; organizer ownership and event relevance still require the
+  later gates.
+
+A production inventory probe on 2026-07-03 found 52 enabled Telegram Monitoring
+sources and 119 VK community `vk_source` rows. Heuristic titles suggest many of
+them are organizer/venue-like (museums, theatres, parks, festivals, halls), but
+current post metrics prove open Telegram comment counts for only a small subset
+(`koihm`, `agropark39` at the time of the probe), while VK metrics show comments
+on many more community posts. Treat this as calibration evidence, not a static
+allowlist: the runtime must prove commentability from the live linked
+discussion/comment surface before surfacing a public-question candidate.
+
+#### Eligibility pipeline
+
+1. **Organizer/post detection:** classify whether the surface is controlled by an
+   event organizer, venue, festival, park, museum, theatre, club, cultural space
+   or municipal culture office, and whether the post is about one concrete
+   current/future event. This can use cheap metadata hints, but final eligibility
+   must be LLM-owned.
+2. **Reply-surface proof:** for Telegram channels, require `linked_chat_id` plus
+   at least one recent human `reply_to` comment in the linked discussion; copied
+   channel-post mirrors, forwarded posts, empty discussions and comments disabled
+   after the post do not count. For VK, require readable wall comments or
+   discussion-board comments for the concrete post/topic.
+3. **Event match:** use the existing event retrieval/vector-search capability to
    find whether the post corresponds to an event already known in our event
-   corpus. If no confident match exists, keep only a diagnostic/research row, not
-   a public-question candidate.
-3. **Ideal-event diff:** compare the matched event against an explicit ideal
-   event-card checklist: exact date/time, venue/address, price/ticket status and
-   ticket URL, age limit, duration, registration/entry rules, accessibility,
-   kids/family constraints, cancellation/weather/format notes where relevant,
-   and other organizer-specific nuances needed for a complete public event page.
-4. **Question-pattern mining:** analyze real questions already asked in similar
-   organizer threads to derive realistic clarification templates (age limit,
-   duration, entry/registration, what is included, accessibility, rain plan,
-   ticket availability). This pattern mining is used to avoid unnatural generic
-   prompts, not to bypass semantic validation.
-5. **Same-thread dedupe:** before creating a review opportunity, scan the current
-   thread for already asked equivalent questions and suppress duplicates. This
-   dedupe should be deterministic/embedding-assisted first and LLM-backed only
-   for ambiguous near-duplicates.
-6. **LLM final gate:** after the cheap stages, Gemma validates whether the
-   clarification is useful, non-spammy, answerable by the organizer, and phrased
-   like a normal human question. It should reject questions that exist only to
-   manufacture engagement.
+   corpus. If no confident match exists, keep only a diagnostic/research row
+   (`organizer_event_unmatched`), not a public-question candidate.
+4. **Ideal-event diff:** compare the matched event against an explicit ideal
+   event-card checklist: exact date/time, venue/address/meeting point,
+   price/ticket status and ticket URL, age limit, duration, registration/entry
+   rules, capacity/sold-out status, accessibility, kids/family constraints,
+   outdoor/weather/cancellation/format notes where relevant, and
+   organizer-specific nuances needed for a complete public event page.
+5. **Question-pattern mining:** analyze real questions already asked in the same
+   or similar organizer threads to learn realistic clarification needs. This
+   builds a semantic library of question types and evidence, **not** a phrase
+   template bank. It is used to avoid unnatural generic prompts, not to bypass
+   semantic validation.
+6. **Same-thread dedupe:** before creating a review opportunity, scan the current
+   thread/post/topic for already answered or already asked equivalent questions.
+   Use deterministic identity and embeddings for cheap recall, then an LLM check
+   for ambiguous near-duplicates. Suppress if another participant or our account
+   has already asked materially the same thing.
+7. **LLM final gate:** after the cheap stages, Gemma validates whether the
+   clarification is useful, non-spammy, answerable by the organizer, contextually
+   timely, and suitable for a normal human public question. It should reject
+   questions that exist only to manufacture engagement.
 
-This subfeature has its own opportunity type, for example
-`organizer_clarification`. Its success metric is not direct event recommendation
-conversion; it is useful public interaction that exposes the profile/service with
-better event information, and in clearly appropriate cases creates a natural path
-to an enriched event link later.
+Important routing pitfall: the generic acquisition prefilter currently rejects
+venue-policy/local logistics questions before LLM, which is correct for
+third-party recommendation replies. Organizer clarification needs its own route
+**before** that generic rejection. A local question such as age limit, rain plan,
+entry rules or accessibility can be eligible only when all organizer-mode gates
+above pass; the same text in a generic community remains a rejection.
+
+#### Question library and classification
+
+The library should store semantic question classes and evidence, not final
+wording. Suggested item shape:
+
+```json
+{
+  "question_type": "age_limit|duration|registration_entry|ticket_status|price_includes|venue_meeting_point|accessibility|kids_family|weather_rain_plan|capacity_sold_out|format_language|stream_recording|other",
+  "semantic_need": "what factual gap this question resolves",
+  "eligible_when": ["matched event lacks this field", "post/thread hints that users need it", "organizer can reasonably answer"],
+  "reject_when": ["already stated in post/image/comments", "event is past/expired", "field is irrelevant for this event type", "question would look like advertising or interrogation"],
+  "event_fields": ["fields/gaps touched"],
+  "evidence_examples": [{"platform": "tg|vk", "surface": "public handle", "context_url": "public URL", "snippet": "short public evidence"}],
+  "cluster_model": "model id used for mining",
+  "last_reviewed_at": "ISO timestamp"
+}
+```
+
+First classification set:
+
+- `age_limit`: ask only when age/audience constraints matter and are missing or
+  contradictory; skip if it is obvious from the venue/event type or already in a
+  poster.
+- `duration`: for timed performances, walks, master classes and routes where the
+  length affects attendance; skip for open-ended exhibitions/markets unless the
+  post itself implies a session.
+- `registration_entry`: when arrival, pre-registration, pass list, QR/ticket
+  check or free-entry rules are unclear; skip if the post already has a complete
+  registration link and rules.
+- `ticket_status` / `price_includes`: when the event page lacks price, ticket
+  availability, included services or booking link; skip if the post only has
+  broad sales copy and no actionable missing fact.
+- `venue_meeting_point`: for outdoor routes, parks, festivals, castles or large
+  venues where the exact entrance/meeting point is missing; skip if asking would
+  duplicate an address already shown.
+- `accessibility` / `kids_family`: only when the event audience, terrain,
+  stroller/wheelchair access, child participation or family constraints are
+  genuinely relevant. Do not ask every organizer about accessibility by default.
+- `weather_rain_plan`: for outdoor/festival/route events with visible weather
+  dependency; skip indoor events and posts with explicit cancellation/weather
+  rules.
+- `capacity_sold_out`: when comments or ticket state suggest limited seats or
+  possible sell-out; skip if ticket status is stable and recent.
+- `format_language` / `stream_recording`: for lectures, tours, performances and
+  hybrid events where language, online stream or recording materially changes
+  attendance.
+
+A candidate can carry several gaps, but the writer should ask **one** focused
+question unless the LLM reviewer explicitly accepts a short two-part question as
+more natural than two separate comments.
+
+#### LLM-only question drafting and review
+
+Final question text is owned by the LLM. Deterministic code may assemble facts,
+URLs, diff fields, candidate type labels and safety constraints into JSON, but
+must not concatenate phrase templates into the public question. No deterministic
+“question template”, synonym table, regex rewrite, or fixed prefix/suffix is
+allowed for `draft_question` / `published_question`.
+
+These organizer-specific stages should use the shared `GoogleAIClient` /
+LLM-gateway path instead of direct `google.genai` calls, so quota reservations,
+key-lane logging, provider retries, structured-output handling and Gemma
+thought-part filtering stay consistent with the rest of the repo. Keep the
+schemas provider-simple: no `anyOf`, no nullable unions, no
+`additionalProperties`; represent absence as empty strings/arrays and still
+prompt for strict JSON. The reviewer model may be a Gemma 4 26B-class lane only
+after a compact-schema smoke/contract test; otherwise keep the proven 31B lane
+and still record it as an independent stage/version.
+
+Recommended generation chain:
+
+1. **Planner/classifier LLM:** receives organizer post text, matched event card,
+   ideal-card gaps, same-thread mined questions and dedupe evidence; chooses
+   `question_type`, explains why one gap is worth asking, and may return
+   `do_not_ask`.
+2. **Writer LLM:** writes exactly one natural Russian public comment question,
+   no link by default, no mention of internal systems, no claim that “we are
+   updating a database”, and no hidden advertising. It returns strict JSON with
+   `draft_question`, `question_type`, `grounded_gap`, `tone`, and
+   `why_this_is_natural`.
+3. **Independent reviewer model:** run a different model/lane from the writer,
+   for example Gemma 4 26B/31B with `response_mime_type=application/json` and a
+   bounded schema. The reviewer must grade naturalness, appropriateness, clarity,
+   answerability, context fit, duplicate risk, spam/self-promo risk, factual
+   grounding, and whether a normal participant could plausibly ask it.
+4. **Human review card:** show the post, linked discussion/comment proof, matched
+   event, ideal-card gaps, generated question, reviewer verdict and model ids.
+   MVP must still not publish externally.
+5. **Post-publication verifier (post-MVP):** after an approved public question is
+   actually posted, fetch the visible comment URL/text and run the independent
+   reviewer again on the exact published text plus surrounding thread context.
+   Store `published_question_review` with verdict, model id, timestamp and any
+   mismatch between approved and visible text.
+
+Suggested reviewer schema:
+
+```json
+{
+  "approve": true,
+  "scores": {
+    "naturalness": 0.0,
+    "appropriateness": 0.0,
+    "clarity": 0.0,
+    "answerability": 0.0,
+    "grounding": 0.0,
+    "non_spam": 0.0,
+    "duplicate_safety": 0.0
+  },
+  "fail_reasons": ["too_generic|already_answered|sounds_like_bot|not_answerable|wrong_event|too_many_questions|hidden_ad|expired_event"],
+  "rewrite_allowed": false,
+  "rationale": "short grounded explanation"
+}
+```
+
+Fail closed unless all critical scores are high (start with `>=0.85`) and
+`fail_reasons` is empty. If the reviewer suggests a rewrite, send the revised
+semantic constraints back to the writer LLM; do not let reviewer text become the
+public question without a fresh writer + reviewer pass.
+
+#### Opportunity/report fields
+
+Organizer clarification candidates should be distinguishable from generic
+recommendation opportunities, for example:
+
+```json
+{
+  "opportunity_type": "organizer_clarification",
+  "surface_role": "organizer_channel|organizer_vk_community",
+  "source_post_url": "public organizer post URL",
+  "reply_surface_url": "linked discussion/comment/topic URL",
+  "commentability_proof": {"human_comments_seen": 1, "oldest_recent_comment_at": "ISO", "copied_channel_posts_excluded": true},
+  "matched_event": {"event_id": 123, "confidence": 0.0, "retrieval_basis": "vector|source_url|title_date_venue"},
+  "ideal_card_gaps": ["age_limit", "duration"],
+  "selected_question_type": "duration",
+  "same_thread_dedupe": {"status": "clear|duplicate|ambiguous", "checked_messages": 0, "nearest_existing_question": "short snippet"},
+  "question_generation": {"writer_model": "model id", "draft_question": "LLM-written text only"},
+  "question_review": {"reviewer_model": "model id", "approve": true, "scores": {}},
+  "published_question_review": null
+}
+```
+
+Run/report counters should include: organizer surfaces scanned, TG channels with
+linked discussion, TG channels with **non-empty human comments**, VK communities
+with readable comments/boards, organizer posts matched to known events,
+unmatched diagnostics, ideal-card gaps by type, duplicates suppressed, writer
+drafts created, reviewer rejects, human-approved drafts, and post-publication
+review failures.
 
 ## MVP output
 

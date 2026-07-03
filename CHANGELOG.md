@@ -12,6 +12,11 @@
 
 ### Changed
 
+- Expanded the Subscriber Acquisition `organizer_clarification` design with
+  Telegram channel/commentability proof, additional organizer-surface discovery
+  routes, semantic question-library taxonomy, LLM-only question drafting, and an
+  independent model review contract for generated and post-publication
+  clarification questions.
 - Subscriber Acquisition Telegram discovery is now resolver-first: channel rows
   are queued as `needs_comment_resolve`, live Kaggle runs get a separate channel
   linked-discussion budget, channels without comments become

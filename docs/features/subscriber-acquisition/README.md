@@ -149,25 +149,39 @@ recommendation to another commenter.
 The discovery flow should be:
 
 1. Classify the surface/post as an organizer-owned event context.
-2. Use existing event retrieval/vector search to match the post to a known event
+2. For Telegram, target organizer-owned channels and keep them only when the
+   linked discussion is accessible and has recent non-empty human comments;
+   ordinary chats remain broader acquisition surfaces, not organizer
+   clarification channels. For VK, require readable community wall comments or
+   discussion-board comments.
+3. Use existing event retrieval/vector search to match the post to a known event
    candidate in our corpus.
-3. Compare the matched event against an “ideal event card” checklist: date/time,
-   venue/address, price/ticket status and link, age restriction, duration,
-   registration/entry rules, accessibility/children constraints when relevant,
-   and other practical organizer nuances.
-4. Mine recent thread questions to learn realistic clarification patterns, but
-   do not ask generic questions just because a field is absent.
-5. Before review-card creation, dedupe against earlier same-thread questions so
+4. Compare the matched event against an “ideal event card” checklist: date/time,
+   venue/address/meeting point, price/ticket status and link, age restriction,
+   duration, registration/entry rules, capacity/sold-out state, accessibility,
+   children/family constraints, and weather/format details when relevant.
+5. Mine recent thread questions into a semantic question-type library
+   (age/duration/entry/tickets/accessibility/weather/etc.) without turning that
+   library into text templates.
+6. Before review-card creation, dedupe against earlier same-thread questions so
    we never repeat a materially equivalent question already asked by someone
    else or by us.
-6. Spend LLM budget only after deterministic organizer detection, vector
+7. Spend LLM budget only after deterministic organizer detection, vector
    retrieval, metadata-diffing and thread dedupe have produced a plausible
-   missing-information gap; the LLM owns final suitability and wording.
+   missing-information gap; the LLM owns final suitability and **all public
+   wording**. Deterministic code may prepare facts/constraints, but not compose
+   `draft_question` or `published_question`.
+8. Run an independent reviewer model/stage (for example a separate Gemma 4 lane)
+   before any review card/publication and again after post-MVP publication
+   evidence exists, checking naturalness, appropriateness, clarity,
+   answerability, grounding, duplicate safety and spam/self-promo risk.
 
 This is still shadow/review-only in MVP. The acquisition value is that a helpful
 question can attract attention to the public profile/service where richer event
 information is visible; only in clearly appropriate cases should the eventual
-reply include a link to the enriched event page.
+reply include a link to the enriched event page. Detailed taxonomy, LLM-only
+writer/reviewer contract, report fields and pitfalls are in
+[`mvp-discovery.md#organizer-clarification-acquisition`](mvp-discovery.md#organizer-clarification-acquisition).
 
 ## Operator map
 
