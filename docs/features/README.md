@@ -19,6 +19,7 @@
 - `docs/features/vk-dynamic-cover/README.md` — динамическая обложка VK-сообщества: генерация wide/mobile assets и `/cover`
 - `docs/features/tg-publishing/README.md` — исходящие Telegram-публикации отдельных событий после Smart Update
 - `docs/features/tg-premium-emojis-update/README.md` — Telethon-редактор premium/custom emoji для ежедневных Telegram-анонсов
+- `docs/features/tg-emoji-calibration/README.md` — калибровка pixel-safe области Telegram custom/premium emoji для 3×3 medallion-мозаик
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
 - `docs/features/festivals/README.md` — фестивали: серии/выпуски, очередь и связь с событиями
 - `docs/features/post-metrics/README.md` — статистика постов и популярность (TG/VK): медианы, уровни ⭐/👍, основа для ранжирования

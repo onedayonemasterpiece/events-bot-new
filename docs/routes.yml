@@ -136,6 +136,11 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  tg_emoji_calibration:
+    status: smoke
+    docs: docs/features/tg-emoji-calibration/README.md
+    entrypoints:
+      - scripts/tg_emoji_calibration.py
   digests:
     status: implemented
     docs: docs/features/digests/README.md

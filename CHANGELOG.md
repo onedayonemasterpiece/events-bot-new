@@ -6,6 +6,7 @@
 
 
 ### Added
+- Added Telegram custom emoji calibration tooling and docs for measuring pixel-safe `3×3` medallion mosaics via Telethon smoke tests.
 
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
