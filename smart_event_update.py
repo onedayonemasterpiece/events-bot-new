@@ -10818,6 +10818,20 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # attendable event rather than an entitlement/promo mechanic.
     if _LOCATION_VALUE_CAMPAIGN_RE.search("\n".join(part for part in (title, raw) if part)):
         return True
+    # INC-2026-07-03-signal-coffee-non-event-static: if an auto-ingested
+    # Telegram/VK candidate has a date that is not grounded in source text or
+    # poster OCR, and the source itself has no concrete date/time signals, do
+    # not let Smart Update materialize it directly. Route to the LLM-first
+    # eventness gate so product/menu/editorial posts like "Кофе и музыка"
+    # can fail closed, while a real "today/tomorrow" one-off announcement can
+    # still be accepted by the model.
+    if (
+        str(candidate.date or "").strip()
+        and not str(candidate.time or "").strip()
+        and not _candidate_date_is_grounded_in_sources(candidate)
+        and not _has_datetime_signals(raw)
+    ):
+        return True
     return False
 
 
@@ -10859,6 +10873,7 @@ async def _llm_review_candidate_eventness(
         "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
         "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
+        "- Посты про меню/напитки/товары/редакционные ассоциации с музыкой/книгами/искусством — non_event, если нет конкретного расписания, программы или самостоятельного события для посещения.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"
         "- Если сомневаешься для такого слабого кандидата, верни uncertain.\n\n"

@@ -777,3 +777,54 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
         assert calls == ["eventness_review"]
     finally:
         await db.close()
+
+@pytest.mark.asyncio
+async def test_ungrounded_product_music_post_routes_to_llm_eventness_and_skips(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Эспрессо из зёрен" in prompt
+        assert "Посты про меню/напитки/товары" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.93,
+            "reason_short": "menu/editorial coffee post, no concrete scheduled event",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["source-grounded date", "event programme"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/signalkld/11052",
+            source_text=(
+                "Кофе и Музыка: Эспрессо из зёрен Кооператива Чёрный и вдохновение Charlie Mingus\n\n"
+                "Друзья, сегодня мы приготовили для вас яркий дуэт — насыщенный эспрессо из отборных зёрен.\n\n"
+                "Эспрессо подарит мощный заряд энергии, а за музыкальным настроем обратимся к Charlie Mingus.\n\n"
+                "Приходите в Сигнал за вдохновением и отличным настроением!"
+            ),
+            title="Кофе и Музыка: Эспрессо из зёрен Кооператива Чёрный и вдохновение Charlie Mingus",
+            date="2027-03-01",
+            location_name="Сигнал",
+            location_address="Леонова 22",
+            city="Калининград",
+            event_type="концерт",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls == ["eventness_review"]
+    finally:
+        await db.close()

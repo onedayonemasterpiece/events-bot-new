@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-03-signal-coffee-non-event-static.md`
+  - Scope: Smart Update eventness routing for Telegram/VK candidates with ungrounded dates/no source schedule, generic unsupported writer copy, and static event page report intake for event `6045`. Must not regress: product/menu/editorial posts with music/art associations and no concrete date/time/programme must route to LLM-first eventness review and fail closed; canonical repair must remove/correct the static page on next generation.
 - `INC-2026-07-02-static-search-92-percent-no-cards.md`
   - Scope: Static site authorized smart search `/poisk/`, personalization Supabase Edge Function `event-search`, frontend progress/rendering, card-shaped shimmer/halo loading state, LLM/vector sequencing, and production root/preview entrypoint promotion. Must not regress: reported natural-language searches must not stay stuck at 92% without cards when backend has returned or can return vector candidates; `/poisk/`/root CTA must point to the current searchable build; backend stage timings and client render evidence must be available for closure.
 - `INC-2026-07-02-kldevents-1778-vk-ocr-location-time.md`
