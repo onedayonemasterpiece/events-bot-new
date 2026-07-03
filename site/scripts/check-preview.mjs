@@ -298,6 +298,18 @@ const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
 for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
+for (const needle of [
+  'Калининградская пригородная пассажирская компания',
+  'Информационный партнёр просветительских событий',
+  'Информационный партнёр фестиваля',
+  'партнёр по образовательной программе',
+  'Информационный партнёр театральной афиши',
+]) {
+  if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses partner-specific caption: ${needle}`);
+}
+for (const staleLabel of ['Пригородные маршруты', 'Просветительские события', 'Фестиваль 80-летия', 'Лекции и музыка', 'Театр и премьеры', 'КППК / РЖД']) {
+  if (partnersVisibleHtml.includes(staleLabel)) throw new Error(`Info partners page must not render category/wrong caption: ${staleLabel}`);
+}
 const expectedPartnerUrls = ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays'];
 for (const url of expectedPartnerUrls) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
@@ -309,6 +321,7 @@ if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('
 if (!partnersHtml.includes('class="partner-tile ') || !partnersHtml.includes('partner-tile__logo') || !partnersHtml.includes('partner-tile__meta')) throw new Error('Info partners page must render compact full-tile partner links');
 if (partnersHtml.includes('partner-card') || partnersVisibleHtml.includes('Сайт партнёра')) throw new Error('Info partners page must not render oversized partner cards or separate site CTA copy');
 const compactPartnersCss = bundledCss.replace(/\s+/gu, '');
+if (/\.partner-tile(?:\[[^\]]+\])?\{[^{}]*(box-shadow|border:|background:)/u.test(compactPartnersCss) || compactPartnersCss.includes('radial-gradient(circleat16%0%')) throw new Error('Info partners must stay a flat logo board without heavy card borders/backgrounds/shadows');
 if (!/\.partners-grid(?:\[[^\]]+\])?\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/u.test(compactPartnersCss)) throw new Error('Info partners mobile layout must keep a compact two-column grid');
 if (!compactPartnersCss.includes('@media(min-width:680px)') || !/\.partner-tile--wide(?:\[[^\]]+\])?\{grid-column:span2\}/u.test(compactPartnersCss) || !/\.partner-tile--tall(?:\[[^\]]+\])?\{grid-row:span2/u.test(compactPartnersCss)) throw new Error('Info partners desktop/tablet layout must keep aspect-aware wide/tall spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
