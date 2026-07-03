@@ -297,17 +297,17 @@ for (const needle of ['Информационные партнёры', 'КППК
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
 for (const needle of [
-  'Калининградская пригородная пассажирская компания',
-  'Информационный партнёр просветительских событий',
-  'Информационный партнёр фестиваля',
-  'партнёр по образовательной программе',
-  'Информационный партнёр театральной афиши',
+  'Полюбить Калининград Анонсы выступает информационным партнёром организаций',
+  'АО «КППК»',
+  'Просветительский фестиваль к 80-летию Калининградской области',
+  'Образовательная программа фестиваля',
 ]) {
-  if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses partner-specific caption: ${needle}`);
+  if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses required heading/caption: ${needle}`);
 }
-for (const staleLabel of ['Пригородные маршруты', 'Просветительские события', 'Фестиваль 80-летия', 'Лекции и музыка', 'Театр и премьеры', 'КППК / РЖД']) {
-  if (partnersVisibleHtml.includes(staleLabel)) throw new Error(`Info partners page must not render category/wrong caption: ${staleLabel}`);
+for (const staleLabel of ['Пригородные маршруты', 'Просветительские события', 'Фестиваль 80-летия', 'Лекции и музыка', 'Театр и премьеры', 'КППК / РЖД', 'Информационный партнёр просветительских событий', 'Информационный партнёр театральной афиши', 'партнёр по образовательной программе']) {
+  if (partnersVisibleHtml.includes(staleLabel)) throw new Error(`Info partners page must not render stale/category/wrong caption: ${staleLabel}`);
 }
+if (!partnersHtml.includes('/assets/partners/kppk-rzd-red.svg')) throw new Error('Info partners КППК tile must use the sourced RZD/KPPK mark, not an invented text-only logo');
 const expectedPartnerUrls = ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays'];
 for (const url of expectedPartnerUrls) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
@@ -316,12 +316,13 @@ const renderedPartnerUrls = [...partnersHtml.matchAll(/<a class="partner-tile[^"
 const expectedSortedPartnerUrls = [...expectedPartnerUrls].sort();
 if (JSON.stringify(renderedPartnerUrls) !== JSON.stringify(expectedSortedPartnerUrls)) throw new Error(`Info partners page must render exactly the approved partner URL set, got ${JSON.stringify(renderedPartnerUrls)}`);
 if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('Info partners external links must be nofollow/noopener/noreferrer');
-if (!partnersHtml.includes('class="partner-tile ') || !partnersHtml.includes('partner-tile__logo') || !partnersHtml.includes('partner-tile__meta')) throw new Error('Info partners page must render compact full-tile partner links');
+if (!partnersHtml.includes('class="partner-tile ') || !partnersHtml.includes('partner-tile__logo')) throw new Error('Info partners page must render compact full-tile partner links');
 if (partnersHtml.includes('partner-card') || partnersVisibleHtml.includes('Сайт партнёра')) throw new Error('Info partners page must not render oversized partner cards or separate site CTA copy');
 const compactPartnersCss = bundledCss.replace(/\s+/gu, '');
 if (/\.partner-tile(?:\[[^\]]+\])?\{[^{}]*(box-shadow|border:|background:)/u.test(compactPartnersCss) || compactPartnersCss.includes('radial-gradient(circleat16%0%')) throw new Error('Info partners must stay a flat logo board without heavy card borders/backgrounds/shadows');
-if (!/\.partners-grid(?:\[[^\]]+\])?\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/u.test(compactPartnersCss)) throw new Error('Info partners mobile layout must keep a compact two-column grid');
-if (!compactPartnersCss.includes('@media(min-width:680px)') || !/\.partner-tile--wide(?:\[[^\]]+\])?\{grid-column:span2\}/u.test(compactPartnersCss) || !/\.partner-tile--tall(?:\[[^\]]+\])?\{grid-row:span2/u.test(compactPartnersCss)) throw new Error('Info partners desktop/tablet layout must keep aspect-aware wide/tall spans');
+if (!compactPartnersCss.includes('grid-template-columns:repeat(4,minmax(0,1fr))')) throw new Error('Info partners mobile layout must keep a compact four-column bento grid');
+if (!compactPartnersCss.includes('@media(min-width:980px)') || !compactPartnersCss.includes('grid-template-columns:repeat(8,minmax(0,1fr))')) throw new Error('Info partners desktop layout must keep an eight-column aspect-aware grid');
+if (!partnersHtml.includes('--partner-col-start: 1') || !partnersHtml.includes('--partner-col-span: 4') || !partnersHtml.includes('--partner-row-span: 2') || !partnersHtml.includes('--partner-mobile-col-start: 3') || !partnersHtml.includes('--partner-mobile-col-span: 2')) throw new Error('Info partners tiles must keep explicit bento placement variables for greedy logo spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
 if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
