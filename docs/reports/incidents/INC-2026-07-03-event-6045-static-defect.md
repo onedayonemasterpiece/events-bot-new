@@ -1,6 +1,6 @@
 # INC-2026-07-03 Event 6045 Static Defect
 
-Status: mitigated
+Status: monitoring
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / public event pages
 Opened: 2026-07-03
@@ -117,13 +117,20 @@ Investigation confirmed this as a data-quality incident, not a static-rendering 
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending manual `flyctl deploy`
+- deployed SHA: `f71091d967a8f975c20551415190542beba94b8d`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia`
+- image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWKM4W5TQ5WEJ8H58BBNWXQR`
 - regression checks:
-  - `tests/test_tg_monitor_gemma4_contract.py::test_tg_monitor_ocr_date_ignores_vinyl_speed_metadata`
-  - `tests/test_smart_event_update_non_event_guards.py::test_ungrounded_social_date_routes_to_llm_eventness_and_skips`
-  - `tests/test_smart_event_update_non_event_guards.py::test_ungrounded_relative_date_can_survive_llm_eventness_review`
-- post-deploy verification: pending
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with-requirements requirements.txt python -m pytest -q -p pytest_asyncio.plugin tests/test_tg_monitor_gemma4_contract.py::test_tg_monitor_source_datetime_guard_corrects_single_event_drift tests/test_tg_monitor_gemma4_contract.py::test_tg_monitor_ocr_date_ignores_vinyl_speed_metadata tests/test_smart_event_update_non_event_guards.py::test_digest_stub_is_routed_to_llm_eventness_and_skipped tests/test_smart_event_update_non_event_guards.py::test_concise_real_invite_survives_eventness_review tests/test_smart_event_update_non_event_guards.py::test_ungrounded_social_date_routes_to_llm_eventness_and_skips tests/test_smart_event_update_non_event_guards.py::test_ungrounded_relative_date_can_survive_llm_eventness_review tests/test_smart_event_update_non_event_guards.py::test_campaign_discount_action_routes_to_llm_eventness_and_skips` → `7 passed`.
+  - `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py smart_event_update.py` → passed.
+- post-deploy verification:
+  - Fly status: machine `683961db016e28`, version `1571`, `1 total, 1 passing`.
+  - `/healthz` returned `{"ok": true, "ready": true, ...}` after deploy.
+  - deployed SHA is reachable from `origin/main`.
+  - DB repair verification: `event 6045 lifecycle_status='cancelled'`, `silent=1`, `static_active_count=0`.
+  - Telegram `@kldevents/591` edited to removal notice at `2026-07-03T09:12:29Z`.
+  - Telegraph page edited to removal notice; generic programme/ticket boilerplate no longer present.
+  - VK API `wall.getById -231920894_3468` returned zero items.
 
 ## Prevention
 
