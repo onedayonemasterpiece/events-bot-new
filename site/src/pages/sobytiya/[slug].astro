@@ -4,6 +4,7 @@ import EventHero, { type HeroComposition } from '../../components/EventHero.astr
 import EventFacts from '../../components/EventFacts.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
+import EventIssueReport from '../../components/EventIssueReport.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
@@ -76,6 +77,7 @@ const galleryCta = galleryCtaEvent ? {
         </article>
         <div class="side-col">
           <EventCtaPanel event={event} />
+          <EventIssueReport event={event} />
         </div>
       </div>
 

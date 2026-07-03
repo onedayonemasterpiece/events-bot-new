@@ -136,6 +136,12 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  event_issue_reporting:
+    status: mvp
+    docs: docs/features/event-issue-reporting/README.md
+    entrypoints:
+      - site/src/components/EventIssueReport.astro
+      - supabase/functions/event-issue-report/index.ts
   digests:
     status: implemented
     docs: docs/features/digests/README.md

@@ -1,0 +1,189 @@
+---
+import type { PreviewEvent } from '../lib/types';
+import { eventAbsoluteUrl } from '../lib/events';
+
+interface Props {
+  event: PreviewEvent;
+}
+
+const { event } = Astro.props;
+const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const sourceUrls = Array.isArray(event.source_urls) && event.source_urls.length > 0
+  ? event.source_urls
+  : (event.source_url ? [event.source_url] : []);
+const snapshotRaw = {
+  event_id: event.source_prod_id || event.id,
+  static_event_id: event.id,
+  event_slug: event.slug,
+  event_title: event.title,
+  event_url: eventAbsoluteUrl(event),
+  source_url: event.source_url,
+  source_urls: sourceUrls,
+  telegraph_url: event.telegraph_url,
+  event_date: event.start_date,
+  event_time: event.display_time || event.start_time,
+  venue_name: event.venue_name,
+  address: event.address,
+  city: event.city,
+  updated_at: event.updated_at,
+};
+const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value]) => value !== null && value !== undefined && value !== '')); 
+---
+<section
+  class="event-issue-report"
+  data-event-issue-report
+  data-supabase-url={supabaseUrl}
+  data-supabase-key={supabaseKey}
+  data-event-snapshot={JSON.stringify(snapshot)}
+  hidden
+>
+  <div class="event-issue-report__inner">
+    <p class="event-issue-report__eyebrow">Админ</p>
+    <a href="#" class="event-issue-report__toggle" data-event-issue-toggle>Исправить ошибку</a>
+    <form class="event-issue-report__form" data-event-issue-form hidden>
+      <label>
+        <span>Что не так с событием?</span>
+        <textarea data-event-issue-text rows="4" maxlength="2000" placeholder="Например: неверная дата, описание не подтверждается источником, событие нужно удалить…" required></textarea>
+      </label>
+      <div class="event-issue-report__actions">
+        <button type="submit" class="event-issue-report__submit">Отправить в ArtKodex</button>
+        <span class="event-issue-report__status" data-event-issue-status aria-live="polite"></span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<style>
+  .event-issue-report {
+    margin-top: 1rem;
+    border: 1px dashed rgba(30, 64, 175, 0.38);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(239,246,255,0.9), rgba(219,234,254,0.58));
+    color: #172554;
+    box-shadow: none;
+  }
+  .event-issue-report__inner { padding: 0.75rem 0.85rem; }
+  .event-issue-report__eyebrow {
+    margin: 0 0 0.15rem;
+    color: rgba(30, 64, 175, 0.72);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .event-issue-report__toggle {
+    color: #1d4ed8;
+    font-size: 0.9rem;
+    font-weight: 850;
+    text-decoration-style: dotted;
+  }
+  .event-issue-report__form { display: grid; gap: 0.62rem; margin-top: 0.72rem; }
+  .event-issue-report__form label { display: grid; gap: 0.35rem; font-size: 0.86rem; font-weight: 820; }
+  .event-issue-report__form textarea {
+    width: 100%;
+    min-height: 7rem;
+    resize: vertical;
+    border: 1px solid rgba(30, 64, 175, 0.32);
+    border-radius: 14px;
+    padding: 0.65rem 0.72rem;
+    background: rgba(255,255,255,0.92);
+    color: #172554;
+    font: inherit;
+  }
+  .event-issue-report__actions { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; }
+  .event-issue-report__submit {
+    min-height: 38px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.45rem 0.82rem;
+    background: #1d4ed8;
+    color: #fff;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 850;
+    cursor: pointer;
+  }
+  .event-issue-report__submit:disabled { cursor: wait; opacity: 0.7; }
+  .event-issue-report__status { color: rgba(23, 37, 84, 0.78); font-size: 0.84rem; font-weight: 760; }
+</style>
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+
+  const roots = document.querySelectorAll('[data-event-issue-report]');
+  roots.forEach((root) => {
+    const supabaseUrl = String(root.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+    const supabaseKey = String(root.dataset.supabaseKey || '');
+    if (!supabaseUrl || !supabaseKey) return;
+    const statusNode = root.querySelector('[data-event-issue-status]');
+    const form = root.querySelector('[data-event-issue-form]');
+    const toggle = root.querySelector('[data-event-issue-toggle]');
+    const textarea = root.querySelector('[data-event-issue-text]');
+    const submit = root.querySelector('.event-issue-report__submit');
+    let session = null;
+    let snapshot = {};
+    try { snapshot = JSON.parse(root.dataset.eventSnapshot || '{}'); } catch (_) { snapshot = {}; }
+    const setStatus = (text, tone = '') => {
+      if (!statusNode) return;
+      statusNode.textContent = text || '';
+      statusNode.dataset.tone = tone;
+    };
+    const client = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    });
+    async function checkAdmin() {
+      const { data } = await client.auth.getSession();
+      session = data?.session || null;
+      if (!session?.access_token) return;
+      const response = await fetch(`${supabaseUrl}/functions/v1/event-issue-report`, {
+        method: 'GET',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' },
+      });
+      if (!response.ok) return;
+      const payload = await response.json().catch(() => ({}));
+      if (payload?.admin === true) root.hidden = false;
+    }
+    toggle?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (form) form.hidden = !form.hidden;
+      if (!form?.hidden) textarea?.focus();
+    });
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const reportText = String(textarea?.value || '').trim();
+      if (reportText.length < 12) {
+        setStatus('Опишите проблему подробнее.', 'error');
+        return;
+      }
+      if (!session?.access_token) {
+        setStatus('Сессия администратора не найдена. Войдите через Яндекс на /poisk/.', 'error');
+        return;
+      }
+      submit.disabled = true;
+      setStatus('Отправляю…');
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/event-issue-report`, {
+          method: 'POST',
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ ...snapshot, report_text: reportText }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.error) throw new Error(payload?.error || `HTTP ${response.status}`);
+        setStatus(`Передал в ArtKodex: ${payload.id || 'репорт принят'}.`, 'ok');
+        textarea.value = '';
+        form.hidden = true;
+      } catch (error) {
+        setStatus('Не удалось отправить. Попробуйте ещё раз.', 'error');
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    checkAdmin().catch(() => {});
+  });
+</script>

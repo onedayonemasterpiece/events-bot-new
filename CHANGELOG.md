@@ -5,6 +5,7 @@
 
 ### Added
 
+- **Static event issue reporting**: added an admin-only event-page report link and Supabase/ArtKodex handoff so a Yandex-authenticated admin can launch an events-bot incident repair task from a static event page.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.

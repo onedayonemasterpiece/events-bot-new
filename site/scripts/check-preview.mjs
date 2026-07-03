@@ -186,6 +186,7 @@ if (!controlVisibleHtml.includes('Все источники, упоминани�
 if (!controlVisibleHtml.includes('event-info-block') || !controlVisibleHtml.includes('event-info-item__icon')) throw new Error('Compact facts must render icon-based event info block');
 if (!controlVisibleHtml.includes('event-source-gate--section') || !/<div class="event-info-block"[\s\S]*?<\/dl>\s*<\/div>\s*(?:<p class="event-description-meta"[^>]*>[\s\S]*?<\/p>\s*)?<\/div>\s*<p class="event-source-gate event-source-gate--section"/u.test(controlVisibleHtml)) throw new Error('Source/mentions auth gate must belong to the parent details section, not to the compact facts block');
 if (controlVisibleHtml.includes('event-hero__facts')) throw new Error('Hero must not duplicate the compact facts block as a second info block');
+if (!controlHtml.includes('data-event-issue-report') || !controlHtml.includes('Исправить ошибку') || !controlHtml.includes('event-issue-report')) throw new Error('Event page must include hidden admin-only static issue report handoff UI');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
@@ -280,6 +281,7 @@ const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
 const searchVisibleHtml = stripGeneratedCode(searchHtml);
 if (!searchHtml.includes('data-authorized-search') || !searchHtml.includes('data-search-login') || !searchHtml.includes('custom:yandex') || !searchHtml.includes('data-supabase-url')) throw new Error('Authorized search page must render Yandex/Supabase search UI when public env is provided');
 const bundledJs = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.js')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
+if (!bundledJs.includes('functions/v1/event-issue-report') || !bundledJs.includes('admin') || !bundledJs.includes('report_text')) throw new Error('Bundled JS must include authenticated admin event issue report submission wiring');
 if (!bundledJs.includes('flowType:"pkce"') || !bundledJs.includes('detectSessionInUrl:!1') || !bundledJs.includes('exchangeCodeForSession') || !bundledJs.includes('error_description') || !/searchParams\.delete\([^)]*\)/u.test(bundledJs) || !bundledJs.includes('hash=""')) throw new Error('Authorized search must use PKCE OAuth and clean same-page redirect URLs before Yandex login');
 const bundledCss = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (!/\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/iu.test(bundledCss)) throw new Error('Authorized search build must include a strong hidden rule so unauthenticated form/results/buttons stay hidden');
