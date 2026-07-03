@@ -9,6 +9,7 @@
 
 - **Static event issue reporting**: added an admin-only event-page report link and Supabase/ArtKodex handoff so a Yandex-authenticated admin can launch an events-bot incident repair task from a static event page.
 - **Static event issue reporting history**: admin event pages now fetch existing report statuses and ArtKodex thread links dynamically while still allowing new reports.
+- **Static event medallion workflow and festival badges**: codified medallion git-archaeology/source/vector QA as a project skill, consolidated the recovered festival-medallion set including source-grounded `Бахослужение`, rendered festival medallions on event pages, and strengthened event hero date/week/time scanning.
 - **Smart Update eventness review**: route ungrounded-date Telegram/VK candidates without a source schedule to LLM-first review and classify menu/product editorial posts without a concrete programme as non-events.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.

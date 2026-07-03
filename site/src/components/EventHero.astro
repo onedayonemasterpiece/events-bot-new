@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
+import { displayDate, displayDateTime, displayWeekdayLong, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
@@ -43,6 +43,8 @@ const derivedComposition: HeroComposition = heroMode === 'fallback-art'
     : 'poster-billboard';
 const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
+const heroDateLabel = displayDate(event);
+const heroWeekdayLabel = displayWeekdayLong(event);
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
@@ -169,6 +171,11 @@ const showTicketCta = Boolean(ctaHref);
   <div class="event-hero__decision">
     {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
+    <div class="event-hero__date-card" aria-label={[heroWeekdayLabel, heroDateLabel, event.display_time].filter(Boolean).join(', ')}>
+      {heroWeekdayLabel && <span class="event-hero__date-weekday">{heroWeekdayLabel}</span>}
+      <strong class="event-hero__date-day">{heroDateLabel}</strong>
+      {event.display_time && <span class="event-hero__date-time">{event.display_time}</span>}
+    </div>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
       {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
@@ -184,7 +191,7 @@ const showTicketCta = Boolean(ctaHref);
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
-    <p class="event-hero__meta-line">{[dateTimeLabel, placeLabel].filter(Boolean).join(' · ')}</p>
+    <p class="event-hero__meta-line">{placeLabel}</p>
     {event.summary && <p class="event-hero__summary">{event.summary}</p>}
   </div>
 </section>

@@ -1,6 +1,7 @@
 # Event token medallions / quick-read badges
 
 > **Status:** design + runtime medallion assets; organizer and Pushkin-card medallions are rendered on event detail pages in the static preview. As of 2026-07-02, SVG is the primary runtime format for organizer medallions where an SVG source exists or the mark is safely geometric-vectorized; raster-only sources must be WebP-first with PNG fallback/QA. `dom-kitoboya`, `konb` and `kantata-festival` are WebP-first raster items until source SVGs are found; `act-opus` is a self-contained SVG medallion assembled from the official raster wordmark.
+> **Workflow skill:** project-specific medallion archaeology/sourcing/rendering workflow is codified in `.codex/skills/static-event-medallions/SKILL.md`.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
@@ -102,6 +103,7 @@ Overflow:
 | --- | --- | --- | --- |
 | Organizer avatar | normalized organizer/venue mapping | official avatar/logo in circle | `Организатор: …` in aria/tooltip; no visible long label on cards |
 | Пушкинская карта | existing `pushkin_card=true` plus source evidence | special Pushkin-card medallion | `Пушкинская карта` |
+| Бахослужение | `event.festival=Бахослужение` or narrow Bach+organ/Cathedral fallback | source-faithful official festival medallion | `Бахослужение` |
 | Благотворительность | LLM-first classification with evidence | heart/hand SVG pill | `Благотворительность` |
 | Детям / семейное | age/audience fields + LLM-first classification | child/star/kite SVG pill | `Детям` or `Семейное` |
 | Видеозапись | source-grounded video/stream/recording status | play/video SVG pill/circle | `Будет запись`, `Есть видео`, `Онлайн` |
@@ -128,7 +130,7 @@ Asset inventory:
 
 - runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
-- browser-facing manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`.
+- browser-facing organizer manifest for the future `EventTokenRow`: `site/src/data/organizerMedallions.json`; festival/venue-brand logo manifest: `site/src/data/festivalMedallions.json` with runtime assets in `site/public/assets/festivals/`.
 
 2026-07-02 SVG pass:
 
@@ -142,6 +144,38 @@ Asset inventory:
 - `kgd80` is added as an SVG festival medallion from the «80 историй о главном» hero logo, using a tighter lockup viewBox plus a small downward optical nudge for fuller circular occupancy;
 - `kantata-festival` remains a WebP-first raster medallion because the available official source is PNG;
 - `znanie-russia` is detected when the event explicitly names «Знание» as organizer/partner/supporter or links to `znanierussia.ru`, and is also forced by curated policy for `event.festival=80 историй о главном`.
+
+2026-07-03 festival/Bahosluzhenie pass:
+
+- the medallion workflow is now captured as the project skill `.codex/skills/static-event-medallions/SKILL.md`; this skill must be read before new static-site medallion work;
+- recent parallel/dirty festival assets were consolidated into `site/src/data/festivalMedallions.json`, `site/public/assets/festivals/` and `site/src/assets/festivals/source/`;
+- `bahosluzhenie` is source-first, using the official festival logo from the Kaliningrad Philharmonic page (`/assets/festivals/bahosluzhenie.png`), not an invented organizer mark;
+- it renders for `event.festival=Бахослужение`; if a future Bach/organ event lacks the festival field, a narrow fallback may show the same official asset only when the text contains Bach evidence plus organ/Cathedral context;
+- broader composer/program classification remains an LLM-first future enrichment path, not a regex-only semantic classifier.
+
+### Festival logo medallions
+
+The static-site medallions lab shows festival-logo medallions when a clean official logo/wordmark exists. Event detail pages also render these source-grounded festival/venue-brand medallions when `event.festival`, title, venue or a narrow fallback maps to a manifest item; unmatched festivals still fall back to the existing text pill.
+
+Initial 2026 festival set added on 2026-07-03 and expanded after official-site/social-avatar review:
+
+| Slug | Type | Festival/source | Runtime asset | Source |
+| --- | --- | --- | --- | --- |
+| `kgd80-80-stories` | festival | 80 историй о главном | `/assets/festivals/kgd80-80-stories.svg` | https://kgd80.ru/shared-assets/logo-80-istorii-hero.svg |
+| `kaliningrad-city-jazz` | festival | Kaliningrad City Jazz | `/assets/festivals/kaliningrad-city-jazz.jpg` | https://t.me/jazzfestivalru (public Telegram avatar, retrieved 2026-07-03) |
+| `kaliningrad-street-food` | festival | Городской пикник Kaliningrad Street Food | `/assets/festivals/kaliningrad-street-food.svg` | https://static.tildacdn.com/tild6634-6663-4633-b138-333363653339/LOGO_black_main.svg |
+| `grozd-festival` | festival | Гроздь | `/assets/festivals/grozd-festival.svg` | https://static.tildacdn.com/tild3438-3966-4661-b131-613566643434/Layer_13.svg |
+| `koroche` | festival | Короче | `/assets/festivals/koroche.png` | https://static.tildacdn.com/tild3861-3461-4363-b136-666532343734/__2023-07-19__012939.png |
+| `ostrova` | festival | Семейно-музейный фестиваль «Острова» | `/assets/festivals/ostrova.png` | https://static.tildacdn.com/tild6330-6433-4135-b532-343738366262/__2.png |
+| `more-vnutri` | festival | Море внутри | `/assets/festivals/more-vnutri.svg` | https://sea-inside.ru/assets/logo.svg |
+| `simfoniya-vetra` | festival | Симфония ветра | `/assets/festivals/simfoniya-vetra.png` | https://xn--80awafglm0a6dza.xn--p1ai/bitrix/templates/yh/assets/images/bkf.svg |
+| `bahosluzhenie` | festival | Бахослужение | `/assets/festivals/bahosluzhenie.png` | https://filarmonia39.ru/upload/iblock/aae/6dk15dbws94827t8588xmjl2jnvmkd42.png |
+| `tolkin-fest` | festival | Толкин Фест | `/assets/festivals/tolkin-fest.png` | https://static.tildacdn.com/tild3132-6135-4666-a466-613662666530/photo.png |
+| `kaup` | venue_brand | Кауп | `/assets/festivals/kaup.svg` | https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg |
+
+Kaup is intentionally classified as `venue_brand`: the system treats it as the location/brand `Поселение викингов Кауп`, not as a festival-only entity. Its asset is available for Kaup-hosted festival events that do not have a separate clean festival logo.
+
+Source originals and provenance live in `site/src/assets/festivals/source/`; browser-facing manifest is `site/src/data/festivalMedallions.json`. Covers/posters are intentionally excluded unless a clean logo/cutout or a clean public social avatar can be extracted with separate visual QA. Telegram avatars were checked for City Jazz, Короче, Острова and Море внутри; VK public/mobile pages often did not expose usable festival-specific avatars.
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 

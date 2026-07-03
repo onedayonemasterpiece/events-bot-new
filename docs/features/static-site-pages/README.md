@@ -90,7 +90,9 @@ Admin backlog: add a one-click “prepare detailed event post” function that c
 
 ## Event-page medallions
 
-Event detail pages render large quick-read **medallions** after the hero/title area on `/sobytiya/<slug>/`. These are medallions of the concrete event, not a card-list badge row. The current slice renders curated organizer avatars plus safe facts such as `Пушкинская карта`, free/price, family/charity/festival hints; speaker/celebrity avatar medallions are a P1 extension gated by source-grounded identity and cached avatars. Listing/search cards keep only the metadata formatting change: show a short weekday and render event type as plain text without `#`. Canonical contract: `docs/features/static-site-pages/event-token-medallions.md`.
+Event detail pages render large quick-read **medallions** after the hero/title area on `/sobytiya/<slug>/`. These are medallions of the concrete event, not a card-list badge row. The current slice renders curated organizer avatars, source-grounded festival/venue-brand logo medallions, plus safe facts such as `Пушкинская карта`, free/price, family/charity/festival hints; speaker/celebrity avatar medallions are a P1 extension gated by source-grounded identity and cached avatars. Listing/search cards keep only the metadata formatting change: show a short weekday and render event type as plain text without `#`. Canonical contract: `docs/features/static-site-pages/event-token-medallions.md`.
+
+The event hero must expose a strong first-screen date block: long weekday, human date and time are grouped in `event-hero__date-card` before the CTA row, with the venue/place rendered as a separate meta line. This is intentionally more prominent than ordinary metadata so the user can scan “when” before reading the description.
 
 ## Listing personalization on static lists
 

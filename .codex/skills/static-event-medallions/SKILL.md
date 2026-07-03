@@ -47,13 +47,15 @@ Recently relevant branch names:
 - `origin/recovery/static-site-smart-search-full-20260701`
 - `origin/main`
 
-Record which branch/commit supplied every imported asset.
+Recovered 2026-07-03 festival medallion set (originally observed as uncommitted work in the dirty main checkout, not as a reachable committed branch) lives under `site/public/assets/festivals/`, `site/src/assets/festivals/source/`, and `site/src/data/festivalMedallions.json`. It includes `bahosluzhenie`, `simfoniya-vetra`, `kaliningrad-city-jazz`, `kaliningrad-street-food`, `grozd-festival`, `koroche`, `ostrova`, `more-vnutri`, `tolkin-fest`, `kaup`, and `kgd80-80-stories`. Treat these as source-first recovered assets; keep provenance in the source README and docs.
+
+Record which branch/commit or dirty-worktree source supplied every imported asset.
 
 ## Current asset/data contract
 
-- Runtime assets: `site/public/assets/organizers/` and `site/public/assets/badges/`.
-- Source/provenance originals: `site/src/assets/organizers/source/` and `site/src/assets/badges/source/`.
-- Manifest: `site/src/data/organizerMedallions.json`.
+- Runtime assets: `site/public/assets/organizers/`, `site/public/assets/festivals/`, and `site/public/assets/badges/`.
+- Source/provenance originals: `site/src/assets/organizers/source/`, `site/src/assets/festivals/source/`, and `site/src/assets/badges/source/`.
+- Manifests: `site/src/data/organizerMedallions.json` and `site/src/data/festivalMedallions.json`.
 - Renderer: `site/src/components/EventTokenMedallions.astro`.
 - Visual lab: `site/src/pages/lab/medallions/index.astro`.
 - Canonical docs: `docs/features/static-site-pages/event-token-medallions.md`.
@@ -84,7 +86,7 @@ Manifest items should include at least: `slug`, `name`, `shortName`, `aliases`, 
 
 ## Bach / organ / “Бахослужение” style medallions
 
-Treat composer/program medallions as **event-program badges**, not organizer logos.
+Treat composer/program medallions as **event-program badges**, not organizer logos. If an official festival/series asset exists (for example `bahosluzhenie` in `festivalMedallions.json`), prefer that source-grounded festival medallion over a newly invented generic program SVG.
 
 - Do not use Bach’s portrait/signature unless a public-domain/source and design fit are documented.
 - Prefer a neutral deterministic vector: monogram `BACH`, organ pipes, music staff, or church/organ silhouette adapted from a permissive SVG icon.
