@@ -1,6 +1,6 @@
 {
   "schemaVersion": "organizer_medallion_assets_v1",
-  "generatedAt": "2026-07-02T00:00:00Z",
+  "generatedAt": "2026-07-03T00:00:00Z",
   "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
   "items": [
     {
@@ -321,6 +321,378 @@
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "webp-source-only"
+    },
+    {
+      "slug": "yantar-hall",
+      "name": "Янтарь холл",
+      "shortName": "Янтарь холл",
+      "aliases": [
+        "Янтарь холл",
+        "Янтарь-холл",
+        "Янтарь Холл",
+        "Янтарь холл, Ленина 11, Светлогорск",
+        "yantarholl",
+        "yantarhall",
+        "янтарьхолл.рф"
+      ],
+      "sourcePage": "https://янтарьхолл.рф/",
+      "sourceUrl": "https://янтарьхолл.рф/bitrix/templates/yh/yh_ya_logo.svg",
+      "sourceFile": "yantar-hall.yh_ya_logo.svg",
+      "background": "#062F4F",
+      "ring": "#FECC00",
+      "logoCrop": "official-square-yh-symbol",
+      "fitBox": [
+        308,
+        308
+      ],
+      "ariaLabel": "Площадка: Янтарь холл",
+      "renderNote": "Официальный квадратный SVG-знак YH с сайта Янтарь холла встроен в круглый SVG-медальон; выбран вместо горизонтального wordmark для читаемости на 90–112px.",
+      "avatarUrl": "/assets/organizers/yantar-hall.svg",
+      "sourcePath": "site/src/assets/organizers/source/yantar-hall.yh_ya_logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-svg"
+    },
+    {
+      "slug": "dramteatr39",
+      "name": "Калининградский драматический театр",
+      "shortName": "Драмтеатр",
+      "aliases": [
+        "Драматический театр",
+        "Драмтеатр",
+        "Калининградский драматический театр",
+        "Калининградский областной драматический театр",
+        "dramteatr39",
+        "dramteatr39.ru"
+      ],
+      "sourcePage": "https://dramteatr39.ru/",
+      "sourceUrl": "https://dramteatr39.ru/img/logo.svg?v=2",
+      "sourceFile": "dramteatr39.logo.svg",
+      "background": "#8F151B",
+      "ring": "#F4EEE4",
+      "logoCrop": "left-emblem-from-official-horizontal-svg",
+      "fitBox": [
+        370,
+        370
+      ],
+      "ariaLabel": "Площадка: Калининградский драматический театр",
+      "renderNote": "Официальный горизонтальный SVG-логотип масштабирован и кругом обрезан до левого театрального знака, чтобы медальон был читаемым на мобильном размере; текстовая часть намеренно выведена за круг.",
+      "avatarUrl": "/assets/organizers/dramteatr39.svg",
+      "sourcePath": "site/src/assets/organizers/source/dramteatr39.logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-svg-cropped"
+    },
+    {
+      "slug": "muzteatr39",
+      "name": "Калининградский музыкальный театр",
+      "shortName": "Музыкальный театр",
+      "aliases": [
+        "Музыкальный театр",
+        "Калининградский музыкальный театр",
+        "Калининградский областной музыкальный театр",
+        "muzteatr39",
+        "muztear39"
+      ],
+      "sourcePage": "https://muzteatr39.ru/",
+      "sourceUrl": "https://muzteatr39.ru/wp-content/uploads/image_theme/logo2.png",
+      "sourceFile": "muzteatr39.logo2.png",
+      "background": "#5B4427",
+      "ring": "#D8B982",
+      "logoCrop": "official-square-logo",
+      "fitBox": [
+        336,
+        336
+      ],
+      "ariaLabel": "Площадка: Калининградский музыкальный театр",
+      "renderNote": "Официальный квадратный PNG-логотип встроен в SVG-контейнер с круглым фоном; это честный embedded-raster runtime без попытки трассировки.",
+      "avatarUrl": "/assets/organizers/muzteatr39.svg",
+      "sourcePath": "site/src/assets/organizers/source/muzteatr39.logo2.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-png"
+    },
+    {
+      "slug": "dom-iskusstv",
+      "name": "Калининградский театр эстрады / Дом искусств",
+      "shortName": "Дом искусств",
+      "aliases": [
+        "Калининградский театр эстрады (Дом искусств)",
+        "Калининградский театр эстрады",
+        "Театр эстрады",
+        "Дом искусств",
+        "teatrestrady39",
+        "domiskusstv",
+        "домискусств39.рф"
+      ],
+      "sourcePage": "https://домискусств39.рф/",
+      "sourceUrl": "https://static.tildacdn.com/tild3965-6438-4135-a233-383865633034/svg.svg",
+      "sourceFile": "dom-iskusstv.teatr-estrady.svg",
+      "background": "#F6F2EA",
+      "ring": "#37556F",
+      "logoCrop": "official-horizontal-svg-wordmark",
+      "fitBox": [
+        384,
+        152
+      ],
+      "ariaLabel": "Площадка: Калининградский театр эстрады / Дом искусств",
+      "renderNote": "Официальный Tilda SVG-логотип Театра эстрады/Дома искусств встроен в круглый светлый медальон без растрирования исходника.",
+      "avatarUrl": "/assets/organizers/dom-iskusstv.svg",
+      "sourcePath": "site/src/assets/organizers/source/dom-iskusstv.teatr-estrady.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-svg"
+    },
+    {
+      "slug": "city-jazz-club",
+      "name": "Калининград Сити Джаз Клуб",
+      "shortName": "City Jazz Club",
+      "aliases": [
+        "Калининград Сити Джаз Клуб",
+        "Сити Джаз клуб",
+        "Клуб Калининград Сити Джаз",
+        "Лондон. Калининград Сити Джаз",
+        "Паб Лондон",
+        "londonpub.ru/cityjazz",
+        "jazzpub"
+      ],
+      "sourcePage": "https://londonpub.ru/cityjazz/events",
+      "sourceUrl": "https://static.tildacdn.com/tild6331-6539-4430-a531-343262333939/logojazz.png",
+      "sourceFile": "city-jazz-club.logojazz.png",
+      "background": "#101113",
+      "ring": "#D7B56D",
+      "logoCrop": "official-city-jazz-club-logo",
+      "fitBox": [
+        380,
+        212
+      ],
+      "ariaLabel": "Площадка: Калининград Сити Джаз Клуб",
+      "renderNote": "Использован логотип с официальной страницы londonpub.ru/cityjazz; это медальон клубной площадки, отдельный от фестивального Kaliningrad City Jazz.",
+      "avatarUrl": "/assets/organizers/city-jazz-club.svg",
+      "sourcePath": "site/src/assets/organizers/source/city-jazz-club.logojazz.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-png"
+    },
+    {
+      "slug": "rostec-arena",
+      "name": "Ростех Арена",
+      "shortName": "Ростех Арена",
+      "aliases": [
+        "Ростех Арена",
+        "Rostec Arena",
+        "rostec_arena",
+        "rostec-arena.ru"
+      ],
+      "sourcePage": "https://t.me/rostec_arena",
+      "sourceUrl": "https://t.me/rostec_arena public Telegram profile avatar",
+      "sourceFile": "rostec-arena.telegram-avatar-20260703.jpg",
+      "background": "#161616",
+      "ring": "#D8B15E",
+      "logoCrop": "public-telegram-avatar-centered",
+      "fitBox": [
+        424,
+        424
+      ],
+      "ariaLabel": "Площадка: Ростех Арена",
+      "renderNote": "Чистый статический логотип на сайте не найден; использован публичный Telegram-аватар официального канала Ростех Арены, встроенный в круглый SVG-медальон.",
+      "avatarUrl": "/assets/organizers/rostec-arena.svg",
+      "sourcePath": "site/src/assets/organizers/source/rostec-arena.telegram-avatar-20260703.jpg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-jpg"
+    },
+    {
+      "slug": "bar-bastion",
+      "name": "Бар Бастион",
+      "shortName": "Бастион",
+      "aliases": [
+        "Бар Бастион",
+        "БАСТИОН. Калининград",
+        "Бастион",
+        "Паб Бастион",
+        "bar_bastion",
+        "bastion_kld"
+      ],
+      "sourcePage": "https://vk.com/bar_bastion",
+      "sourceUrl": "https://vk.com/bar_bastion",
+      "sourceFile": null,
+      "background": "#202020",
+      "ring": "#D03435",
+      "logoCrop": "neutral-initials-no-logo",
+      "fitBox": [
+        512,
+        512
+      ],
+      "ariaLabel": "Площадка: Бар Бастион",
+      "renderNote": "Публичная VK-страница подтверждает площадку, но чистый официальный логотип/аватар без авторизованного VK API не извлечён; поэтому добавлен нейтральный буквенный медальон «Б», а не угаданный логотип.",
+      "avatarUrl": "/assets/organizers/bar-bastion.svg",
+      "sourcePath": null,
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "neutral-initials-svg"
+    },
+    {
+      "slug": "signal",
+      "name": "Сигнал",
+      "shortName": "Сигнал",
+      "aliases": [
+        "Сигнал",
+        "Signal",
+        "signalkld",
+        "signalcommunity.timepad.ru",
+        "signalcommunity"
+      ],
+      "sourcePage": "https://signalcommunity.timepad.ru/",
+      "sourceUrl": "https://ucare.timepad.ru/6b9fd14f-f908-441e-8c7b-f290d4e39e7f/-/preview/308x600/-/format/jpeg/-/preview/308x600/-/format/jpeg/logo_org_265887.jpg",
+      "sourceFile": "signal.timepad-logo.jpg",
+      "background": "#171717",
+      "ring": "#F1C84C",
+      "logoCrop": "timepad-organization-logo",
+      "fitBox": [
+        368,
+        288
+      ],
+      "ariaLabel": "Площадка: Сигнал",
+      "renderNote": "Использован логотип организатора с Timepad-страницы Signal Community, встроенный в SVG-медальон; это raster-in-SVG runtime.",
+      "avatarUrl": "/assets/organizers/signal.svg",
+      "sourcePath": "site/src/assets/organizers/source/signal.timepad-logo.jpg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-jpg"
+    },
+    {
+      "slug": "mumod",
+      "name": "Музей курортной моды",
+      "shortName": "Музей моды",
+      "aliases": [
+        "Музей курортной моды",
+        "Музей Курортной Моды",
+        "mumod",
+        "muzeymod",
+        "mumod.ru"
+      ],
+      "sourcePage": "https://mumod.ru/",
+      "sourceUrl": "https://mumod.ru/wp-content/themes/mumod/images/logo.svg",
+      "sourceFile": "mumod.logo.svg",
+      "background": "#FCF9ED",
+      "ring": "#D7282F",
+      "logoCrop": "official-horizontal-svg-wordmark",
+      "fitBox": [
+        340,
+        106
+      ],
+      "ariaLabel": "Площадка: Музей курортной моды",
+      "renderNote": "Официальный SVG-логотип с сайта mumod.ru встроен в светлый круглый медальон.",
+      "avatarUrl": "/assets/organizers/mumod.svg",
+      "sourcePath": "site/src/assets/organizers/source/mumod.logo.svg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-svg"
+    },
+    {
+      "slug": "kldzoo",
+      "name": "Калининградский зоопарк",
+      "shortName": "Зоопарк",
+      "aliases": [
+        "Калининградский зоопарк",
+        "Зоопарк",
+        "kldzoo",
+        "Калининградский зоопарк, проспект Мира"
+      ],
+      "sourcePage": "https://kldzoo.ru/",
+      "sourceUrl": "https://kldzoo.ru/local/templates/s1/img/logo.png",
+      "sourceFile": "kldzoo.logo.png",
+      "background": "#F3F7EA",
+      "ring": "#5D8A33",
+      "logoCrop": "official-square-logo",
+      "fitBox": [
+        348,
+        348
+      ],
+      "ariaLabel": "Площадка: Калининградский зоопарк",
+      "renderNote": "Официальный квадратный PNG-логотип с сайта зоопарка встроен в SVG-медальон без локальной векторизации.",
+      "avatarUrl": "/assets/organizers/kldzoo.svg",
+      "sourcePath": "site/src/assets/organizers/source/kldzoo.logo.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-png"
+    },
+    {
+      "slug": "locostandup",
+      "name": "Стендап-клуб «Локация»",
+      "shortName": "Локация",
+      "aliases": [
+        "Стендап клуб Локация",
+        "Стендап-клуб Локация",
+        "Стендап-клуб «Локация»",
+        "Локация",
+        "locostandup",
+        "locostandup.ru"
+      ],
+      "sourcePage": "https://t.me/locostandup",
+      "sourceUrl": "https://t.me/locostandup public Telegram profile avatar",
+      "sourceFile": "locostandup.telegram-avatar-20260703.jpg",
+      "background": "#111111",
+      "ring": "#F2D55E",
+      "logoCrop": "public-telegram-avatar-centered",
+      "fitBox": [
+        424,
+        424
+      ],
+      "ariaLabel": "Площадка: стендап-клуб «Локация»",
+      "renderNote": "Использован публичный Telegram-аватар официального канала locostandup; официальный сайт не дал более чистого статического logo.svg.",
+      "avatarUrl": "/assets/organizers/locostandup.svg",
+      "sourcePath": "site/src/assets/organizers/source/locostandup.telegram-avatar-20260703.jpg",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-jpg"
+    },
+    {
+      "slug": "kaliningrad-art-museum",
+      "name": "Калининградский музей изобразительных искусств",
+      "shortName": "Музей ИЗО",
+      "aliases": [
+        "Музей Изобразительных искусств",
+        "Калининградский музей изобразительных искусств",
+        "Музей ИЗО",
+        "kaliningradartmuseum",
+        "kaliningradartmuseum.ru"
+      ],
+      "sourcePage": "https://kaliningradartmuseum.ru/",
+      "sourceUrl": "https://kaliningradartmuseum.ru/local/templates/museum2023/images/logo-footer.png",
+      "sourceFile": "kaliningrad-art-museum.logo-footer.png",
+      "background": "#1F1F1F",
+      "ring": "#F4EFE4",
+      "logoCrop": "official-footer-wordmark",
+      "fitBox": [
+        424,
+        82
+      ],
+      "ariaLabel": "Площадка: Калининградский музей изобразительных искусств",
+      "renderNote": "Официальный footer PNG-логотип сайта встроен в SVG-медальон; исходник горизонтальный, поэтому вписан как wordmark на светлый фон.",
+      "avatarUrl": "/assets/organizers/kaliningrad-art-museum.svg",
+      "sourcePath": "site/src/assets/organizers/source/kaliningrad-art-museum.logo-footer.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-png"
+    },
+    {
+      "slug": "brachert",
+      "name": "Дом-музей Германа Брахерта",
+      "shortName": "Брахерт",
+      "aliases": [
+        "Дом-музей Германа Брахерта",
+        "Дом-музей Брахерта",
+        "Брахерт",
+        "hbrachert",
+        "hbrachert.ru",
+        "Музей Брахерта"
+      ],
+      "sourcePage": "https://hbrachert.ru/",
+      "sourceUrl": "https://hbrachert.ru/bitrix/templates/brachert/images/logo-br.png",
+      "sourceFile": "brachert.logo-br.png",
+      "background": "#8A5E38",
+      "ring": "#EFE5D5",
+      "logoCrop": "official-site-logo",
+      "fitBox": [
+        284,
+        236
+      ],
+      "ariaLabel": "Площадка: Дом-музей Германа Брахерта",
+      "renderNote": "Официальный PNG-логотип с hbrachert.ru встроен в круглый SVG-медальон.",
+      "avatarUrl": "/assets/organizers/brachert.svg",
+      "sourcePath": "site/src/assets/organizers/source/brachert.logo-br.png",
+      "retrievedAt": "2026-07-03",
+      "assetFormat": "svg-embedded-source-png"
     }
   ]
 }

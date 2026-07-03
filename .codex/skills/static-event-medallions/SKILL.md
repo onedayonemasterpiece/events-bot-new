@@ -1,21 +1,36 @@
 ---
 name: static-event-medallions
-description: Research, source, render, merge, and verify KenigEvents static-site event medallions/badges. Use in events-bot-new when adding or changing organizer/source/festival/program medallions, Bach/organ/Bahosluzhenie-style medallions, Pushkin-card badges, vector/SVG medallions, or when asked to inspect git history/parallel branches for medallion work before static generation.
+description: Use in events-bot-new when adding, auditing, sourcing, repairing, or prioritizing KenigEvents static-site event/venue/organizer/source/festival/program medallions; triggers include medallion/медальон badges, organizerMedallions.json, festivalMedallions.json, EventTokenMedallions.astro, Pushkin-card badges, venue-logo gap analysis, SVG/WebP medallion rendering, visual QA, or git-history archaeology for previous medallion work.
 ---
 
 # Static Event Medallions
 
-Use this skill for KenigEvents static event-page medallions in `events-bot-new`.
+Use this skill only in `/home/dev/projects/events-bot-new` for static-site medallions/badges.
 
-## Non-negotiable workflow
+## Start
 
-1. **Start with git archaeology.** Before creating or redrawing a medallion, search current branch, `origin/main`, recently active branches, and local worktrees for prior medallion assets/commits.
-2. **Prefer existing accepted assets.** If a medallion already exists in another branch, merge/cherry-pick/copy it with provenance rather than recreating it.
-3. **Source-first, SVG-first.** Use official/local source assets. Prefer SVG/vector runtime when source is SVG or the mark is simple/geometric and can be faithfully reconstructed. Use WebP-first raster only when no trustworthy vector path exists.
-4. **Do not guess logos.** Unknown organizers can get neutral initials only after the normalized organizer/venue is known. Do not invent institutional marks.
-5. **No paid image generation by default.** Do not use OpenAI image generation/editing unless the user explicitly consents in the current thread. Use official SVG, SVG Repo/local icon library, local vectorization, Inkscape/rsvg/sharp/Pillow, or deterministic SVG.
-6. **Visual QA is required.** Render the final page/medallion, inspect it at desktop and mobile sizes, and update `site/scripts/check-preview.mjs` when the contract changes.
-7. **Keep docs and changelog synced.** Update `docs/features/static-site-pages/event-token-medallions.md` and `CHANGELOG.md` for code/asset behavior changes.
+1. Open the canonical docs before changing behavior:
+   - `docs/features/static-site-pages/event-token-medallions.md`
+   - `docs/features/static-site-pages/astro-preview.md` when building/checking previews.
+2. Check current files, not memory:
+   - `site/src/data/organizerMedallions.json`
+   - `site/src/data/festivalMedallions.json`
+   - `site/src/components/EventTokenMedallions.astro`
+   - `site/src/pages/lab/medallions/index.astro`
+   - source READMEs under `site/src/assets/{organizers,festivals}/source/`; for badge/source medallions, create the matching provenance folder/README if it does not already exist.
+3. If prioritizing gaps from production events, use the `fly-prod-db-access` skill and read-only SQLite probes against `/data/db.sqlite`.
+4. Read `references/history-and-methods.md` when you need archaeology, known SHAs/branches, or method selection details.
+
+## Non-negotiable rules
+
+- **Git archaeology first.** Search current branch, `origin/main`, active feature/recovery branches, and local worktrees before redrawing any medallion.
+- **Prefer accepted assets.** If an asset exists on a previous branch/commit, reuse/cherry-pick/copy it with provenance instead of recreating it.
+- **Source-first, SVG-first.** Official/local logo SVG is preferred. Use WebP-first raster only when vector output would distort a complex mark or no trustworthy vector exists.
+- **Do not guess logos.** Unknown organizers may get neutral initials only after the normalized organizer/venue is known; never invent institutional marks.
+- **No paid OpenAI image generation/editing** without explicit consent in the current thread. Use official SVG/raster, social avatars, SVG Repo/local icons, deterministic SVG, Inkscape/rsvg/sharp/Pillow/OpenCV, or manual source-faithful cropping.
+- **Do not use `contour_svg`/`countur_svg` as a shortcut for logos.** It is a separate photo-to-contour system and was not the medallion SVG-upgrade path. Historical medallion SVGs used direct official SVG path extraction/wrapping, hand-rebuilt simple SVG primitives, local raster-to-path vectorization for a geometric mark, or an SVG container embedding a trusted raster source. Use those patterns deliberately; never raw-vectorize a logo from edges and present it as official.
+- **Visual QA is required** for new/changed artwork: inspect mobile (~90px circle) and desktop (~112px circle), check optical centering, contrast, and no horizontal token overflow.
+- **Keep docs/provenance synced.** For code/asset behavior changes update `docs/features/static-site-pages/event-token-medallions.md`, relevant source README, and `CHANGELOG.md`.
 
 ## Git archaeology commands
 
@@ -23,83 +38,84 @@ Run targeted searches before editing:
 
 ```bash
 git fetch origin --prune
-git log --all --decorate --oneline --grep='medallion\|badge\|бах\|bach\|организ' -i --max-count=120
-git branch -a --list '*medall*' '*badge*' '*static*'
-git ls-tree -r --name-only HEAD | grep -Ei 'medallion|badge|organizer|festival|token'
-git grep -n -i -E 'бахослуж|бах|bachos|bach|орган|organ|svg|vector' \
+git log --all --decorate --oneline --grep='medallion\|badge\|медаль\|бах\|bach\|организ' -i --max-count=160
+git branch -a --list '*medall*' '*badge*' '*static*' '*event-issue*'
+git log --all --oneline -- site/src/data/organizerMedallions.json site/src/data/festivalMedallions.json site/src/components/EventTokenMedallions.astro site/src/assets/organizers site/src/assets/festivals site/public/assets/organizers site/public/assets/festivals docs/features/static-site-pages/event-token-medallions.md
+git grep -n -i -E 'medallion|медаль|organizerMedallions|festivalMedallions|бахослуж|bach|contour_svg|countur_svg|counter_svg' \
   $(git for-each-ref --format='%(refname)' refs/heads refs/remotes/origin) -- \
-  site/src/data site/public site/src/assets docs/features/static-site-pages 2>/dev/null
+  site/src/data site/src/components site/src/assets site/public docs/features/static-site-pages .codex/skills 2>/dev/null
 ```
 
-Known medallion commits to inspect when present:
+Record the supplying SHA/branch for every reused asset.
 
-- `8404c3b2` — first organizer raster/WebP medallion avatars.
-- `1d5a82cc` — organizer medallions served as SVG where possible.
-- `fb2570dc` — partner/festival medallions and logo grid.
-- `01a85a35` — KGD80/Act Opus/Znanie corrections.
-- `aeb5f0d0` — organizer visual tuning.
-- `1959dad5` — recenter brand medallion artwork.
+## Production venue gap analysis
 
-Recently relevant branch names:
+When asked “where are medallions missing?”:
 
-- `origin/agent/static-medallions-visual-tune-20260702`
-- `origin/feature/static-medallion-svg-upgrade`
-- `origin/recovery/static-site-smart-search-full-20260701`
-- `origin/main`
+1. Query production SQLite read-only by `location_name`, using current date as an explicit absolute date.
+2. Count at least: `total`, `future_or_current`, `recent_90`, `first_date`, `last_date`, top `city`, `festival`, `event_type`, `source_post_url`/`source_chat_id`, `source_vk_post_url`, and ticket domains.
+3. Compare venue names against `aliases` in `organizerMedallions.json`; compare event `festival` values against `festivalMedallions.json` separately so venue gaps are not hidden by festival badges.
+4. Prioritize venues with multiple future/current events and recurring history. Treat duplicate venue spellings like `Янтарь холл, Ленина 11, Светлогорск` as alias candidates for the same medallion.
+5. For each candidate, classify source quality:
+   - **Strong:** official site exposes SVG/clean PNG/logo and our events point to the same official domain/social account.
+   - **Medium:** official Telegram/VK avatar or clean ticket/vendor image exists.
+   - **Low:** only aggregator/repost/shortlink sources; use neutral initials or defer unless product value is high.
 
-Recovered 2026-07-03 festival medallion set (originally observed as uncommitted work in the dirty main checkout, not as a reachable committed branch) lives under `site/public/assets/festivals/`, `site/src/assets/festivals/source/`, and `site/src/data/festivalMedallions.json`. It includes `bahosluzhenie`, `simfoniya-vetra`, `kaliningrad-city-jazz`, `kaliningrad-street-food`, `grozd-festival`, `koroche`, `ostrova`, `more-vnutri`, `tolkin-fest`, `kaup`, and `kgd80-80-stories`. Treat these as source-first recovered assets; keep provenance in the source README and docs.
+## Source and rendering decision tree
 
-Record which branch/commit or dirty-worktree source supplied every imported asset.
+1. Search existing repo/branches first.
+2. Search official site/press kit/page assets (`logo.svg`, `favicon`, header logo, OG image), then official Telegram/VK public avatar, then ticket/vendor pages.
+3. If the mark is official SVG, wrap/crop it into a deterministic circle medallion; do not rewrite paths unless necessary for centering/contrast.
+4. If the source is a simple geometric raster, recreate as self-contained SVG primitives only when source-faithful and visually verified.
+5. If a geometric raster must become SVG and no official SVG exists, use local trace/vectorization only as a controlled source-faithful conversion; document that it is locally vectorized and keep PNG/WebP fallback.
+6. If a source PNG must be carried inside SVG for layout/round framing, mark it honestly as `svg-embedded-source-png`, not as a true vector logo.
+7. If the source is complex raster or hand-lettered, crop/recompose locally and export WebP primary + PNG fallback.
+6. Pick background/ring from brand source or sampled social/avatar colors; document sampling evidence.
+7. For program/category badges, use deterministic icons/monograms and keep them distinct from organizer logos.
 
-## Current asset/data contract
+## Manifest and file contract
 
-- Runtime assets: `site/public/assets/organizers/`, `site/public/assets/festivals/`, and `site/public/assets/badges/`.
-- Source/provenance originals: `site/src/assets/organizers/source/`, `site/src/assets/festivals/source/`, and `site/src/assets/badges/source/`.
-- Manifests: `site/src/data/organizerMedallions.json` and `site/src/data/festivalMedallions.json`.
-- Renderer: `site/src/components/EventTokenMedallions.astro`.
-- Visual lab: `site/src/pages/lab/medallions/index.astro`.
-- Canonical docs: `docs/features/static-site-pages/event-token-medallions.md`.
+Organizer/venue assets:
 
-Manifest items should include at least: `slug`, `name`, `shortName`, `aliases`, `sourcePage/sourceUrl/sourceFile`, `background`, `ring`, `ariaLabel`, `renderNote`, `avatarUrl`, `fallbackPngUrl` when applicable, `sourcePath`, `retrievedAt`, and `assetFormat`.
+- runtime: `site/public/assets/organizers/`
+- source originals: `site/src/assets/organizers/source/`
+- manifest: `site/src/data/organizerMedallions.json`
 
-## Sourcing and vector decision tree
+Festival/program assets:
 
-1. Search official site/source first (`logo.svg`, page assets, press kit, social profile OG image, existing local references).
-2. Search current repo and branches before the web.
-3. If a generic symbol is needed (e.g. program/category icon, not an organizer logo), use the `svgrepo-svg-finder` workflow: local library first, then SVG Repo with license/provenance and visual inspection.
-4. Use runtime SVG when:
-   - official SVG exists;
-   - a simple geometric mark can be faithfully reconstructed from a trusted raster;
-   - a self-contained SVG medallion can be assembled from source shapes/text without pretending it is the original logo.
-5. Use WebP-first raster when:
-   - only raster source exists;
-   - vectorization would distort a complex/logo-like mark;
-   - license/provenance allows local runtime use but not derivative vector reconstruction.
+- runtime: `site/public/assets/festivals/`
+- source originals: `site/src/assets/festivals/source/`
+- manifest: `site/src/data/festivalMedallions.json`
 
-## Rendering pattern
+Manifest items should include:
 
-- Keep circle diameter visually aligned with organizer medallions.
-- Use a filled background + ring; avoid transparent marks that disappear on cream/white.
-- Center optically, not mathematically: check mobile 90px and desktop ~112px.
-- For very vertical marks, use an explicit medallion viewBox/crop and document the optical shift.
-- Avoid overlays over poster/OCR text unless separately QA-approved.
+```text
+slug, name, shortName, aliases, sourcePage, sourceUrl, sourceFile,
+background, ring, logoCrop/fitBox when useful, ariaLabel, renderNote,
+avatarUrl, fallbackPngUrl for raster/WebP, sourcePath, retrievedAt, category/assetFormat when useful
+```
 
-## Bach / organ / “Бахослужение” style medallions
+## Runtime rendering contract
 
-Treat composer/program medallions as **event-program badges**, not organizer logos. If an official festival/series asset exists (for example `bahosluzhenie` in `festivalMedallions.json`), prefer that source-grounded festival medallion over a newly invented generic program SVG.
-
-- Do not use Bach’s portrait/signature unless a public-domain/source and design fit are documented.
-- Prefer a neutral deterministic vector: monogram `BACH`, organ pipes, music staff, or church/organ silhouette adapted from a permissive SVG icon.
-- Detection must be source-grounded/LLM-first for broad semantics. Deterministic checks may only support narrow evidence such as exact event title/program mentioning `И.С. Бах`, `Bach`, `орган`, `Кафедральный собор`.
-- The visible label should be short; use full explanation in `ariaLabel`/tooltip and docs.
+- Event detail page is the primary medallion surface; list/search cards need separate product approval.
+- Use `<picture>` for WebP primary + PNG fallback.
+- Keep full `aria-label` semantics for icon-only medallions.
+- Avoid duplicated festival/organizer identity tokens when a curated organizer token already carries the same brand.
+- Keep festival/program tokens source-grounded; do not infer broad semantics with regex-only rules.
 
 ## Verification checklist
 
-Before final handoff:
+Before final handoff for code/asset changes:
 
 ```bash
 npm --prefix site run build:preview
 npm --prefix site run check:preview
 ```
 
-Then verify public/local HTML contains the medallion block and expected asset references. Use Playwright or screenshots for visual QA when possible. If deploying a preview, verify HTTP 200 for `__preview/` and at least one event page that should show the new medallion.
+Then inspect generated HTML or screenshots for:
+
+- expected medallion block and asset URLs;
+- expected `aria-label`s;
+- no broken images;
+- acceptable mobile/desktop optical centering;
+- source README + manifest + docs + changelog consistency.

@@ -7,6 +7,7 @@
 
 ### Added
 
+- **Static site pages / venue medallions**: added source-grounded venue medallions for Янтарь холл, Драмтеатр, Музыкальный театр, Дом искусств/Театр эстрады, Kaliningrad City Jazz Club, Ростех Арена, Бар Бастион, Сигнал, Музей курортной моды, Калининградский зоопарк, Локация, Музей ИЗО and Дом-музей Брахерта, with official SVG/PNG/social-avatar provenance in the organizer manifest.
 - **Static event issue reporting**: added an admin-only event-page report link and Supabase/ArtKodex handoff so a Yandex-authenticated admin can launch an events-bot incident repair task from a static event page.
 - **Static event issue reporting history**: admin event pages now fetch existing report statuses and ArtKodex thread links dynamically while still allowing new reports.
 - **Static event medallion workflow and festival badges**: codified medallion git-archaeology/source/vector QA as a project skill, consolidated the recovered festival-medallion set including source-grounded `Бахослужение`, rendered festival medallions on event pages, and strengthened event hero date/week/time scanning.
@@ -43,6 +44,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Static site pages / Tretyakovka medallion**: rebuilt the gold `Т` as a clean non-overlapping SVG path so the previous stair-step defect in the stem is no longer visible.
 - **Incident / event 6045 static defect (INC-2026-07-03)**:
   Telegram Monitoring no longer treats vinyl/record metadata such as
   `LP 33 1/3 RPM` as an OCR event date, and Smart Update now routes
