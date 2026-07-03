@@ -21,6 +21,11 @@
   `acq_*` surface/opportunity graph, while organizer clarification, generic
   replies, partner submission, sticker strategy and future publication are
   action-specific eligibility/status states rather than separate databases.
+- Clarified Subscriber Acquisition organizer-question operations: Gemini Lite
+  (`gemini-3.1-flash-lite`) writes the draft question, an independent Gemma 4
+  reviewer gates it, VK uses the currently configured token/account, Telegram
+  uses the currently configured session lane, and operator formatting notes are
+  captured before writing.
 - Subscriber Acquisition Telegram discovery is now resolver-first: channel rows
   are queued as `needs_comment_resolve`, live Kaggle runs get a separate channel
   linked-discussion budget, channels without comments become

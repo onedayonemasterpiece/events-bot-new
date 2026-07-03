@@ -339,29 +339,41 @@ allowed for `draft_question` / `published_question`.
 
 These organizer-specific stages should use the shared `GoogleAIClient` /
 LLM-gateway path instead of direct `google.genai` calls, so quota reservations,
-key-lane logging, provider retries, structured-output handling and Gemma
-thought-part filtering stay consistent with the rest of the repo. Keep the
-schemas provider-simple: no `anyOf`, no nullable unions, no
+key-lane logging, provider retries, structured-output handling and
+model-specific response cleanup stay consistent with the rest of the repo. Keep
+the schemas provider-simple: no `anyOf`, no nullable unions, no
 `additionalProperties`; represent absence as empty strings/arrays and still
-prompt for strict JSON. The reviewer model may be a Gemma 4 26B-class lane only
-after a compact-schema smoke/contract test; otherwise keep the proven 31B lane
-and still record it as an independent stage/version.
+prompt for strict JSON.
+
+The public-question writer is **Gemini Lite**: pin
+`organizer_question.draft.v1` to `gemini-3.1-flash-lite` rather than a moving
+`*-latest` alias. The high-confidence accept/reject decision stays independent:
+the reviewer model may be a Gemma 4 26B-class lane only after a compact-schema
+smoke/contract test; otherwise keep the proven 31B lane and still record it as a
+separate reviewer stage/version. The reviewer must not reuse the writer response
+as approval and must not publish its own wording.
 
 Recommended generation chain and ownership:
 
 | Stage | What it does | Owner/model | Public wording allowed? |
 | --- | --- | --- | --- |
 | `organizer_context.classify.v1` | Confirms organizer-owned concrete-event context and selects one useful gap/type or `do_not_ask` from the evidence pack. | LLM, default `models/gemma-4-31b-it` through `GoogleAIClient`; deterministic code only prepares facts and cheap gates. | No |
-| `organizer_question.draft.v1` | Writes exactly one natural Russian public comment question. | LLM writer, default `models/gemma-4-31b-it`; this is the **only** stage allowed to create `draft_question`. | Yes |
+| Operator formatting notes | Captures platform/account-specific style additions before drafting: greeting/no-greeting preference, emoji policy, first-person stance, maximum length, whether links are forbidden/allowed by explicit flag, and any current operator wording constraints. | Human/operator config stored as structured constraints; deterministic code only passes it through. | No |
+| `organizer_question.draft.v1` | Writes exactly one natural Russian public comment question from evidence, selected gap and operator formatting notes. | LLM writer, pinned `gemini-3.1-flash-lite` through `GoogleAIClient`; this is the **only** stage allowed to create `draft_question`. | Yes |
 | `organizer_question.prepublish_review.v1` | Reviews the draft against source evidence, thread context and duplicate evidence. | Independent LLM reviewer. Prefer a different Gemma 4 lane/model such as `models/gemma-4-26b-a4b-it` after compact-schema smoke; otherwise use a separate `models/gemma-4-31b-it` call/stage with reviewer prompt/version. | No; pass/fail or revision guidance only |
 | Human review card | Shows evidence, matched event, gaps, draft, model ids and reviewer verdict to the operator. | Human operator. | Human may approve/reject; any human edit must go back through LLM review before publication |
 | `organizer_question.postpublish_review.v1` | After post-MVP publication, reviews the exact visible posted text and surrounding thread URL/evidence. | Independent LLM reviewer, same independence rule as prepublish review. | No |
 
 The writer returns strict JSON with `draft_question`, `question_type`,
-`grounded_gap`, `tone`, and `why_this_is_natural`; no link by default, no
-mention of internal systems, no “we are updating a database” framing and no
-hidden advertising. The reviewer sees the source evidence and draft/published
-text, not the writer's private rationale, and grades naturalness,
+`grounded_gap`, `tone`, `applied_formatting_notes`, `link_intent` and
+`why_this_is_natural`; no link by default, no mention of internal systems, no
+“we are updating a database” framing and no hidden advertising. For the first
+live-publication slice, treat organizer clarification questions as **linkless by
+default**; allow a link only when the operator formatting profile explicitly
+enables it for that candidate and the reviewer accepts it as natural and
+non-promotional. The reviewer sees the source evidence, operator formatting
+constraints and draft/published text, not the writer's private rationale, and
+grades naturalness,
 appropriateness, clarity, answerability, context fit, duplicate risk,
 spam/self-promo risk, factual grounding, and whether a normal participant could
 plausibly ask it.
@@ -391,6 +403,43 @@ Fail closed unless all critical scores are high (start with `>=0.85`) and
 semantic constraints back to the writer LLM; do not let reviewer text become the
 public question without a fresh writer + reviewer pass.
 
+#### Publication identity, approval and rate defaults
+
+MVP remains shadow/review-only, so publication identity does not block discovery
+launch. For the later live slice, the identity defaults are already decided:
+
+- VK organizer-clarification questions use the currently configured VK
+  token/account lane already present in the project.
+- Telegram organizer-clarification questions use the currently configured
+  Telegram session lane. Keep existing session-boundary rules: do not borrow the
+  local E2E session for remote/Kaggle publication and do not run the same session
+  concurrently in two places.
+- The operator can add or update platform-specific formatting notes before the
+  Gemini Lite writer call. If the operator edits the generated text after the
+  writer, that exact edited text must run through
+  `organizer_question.prepublish_review.v1` again before any send.
+- Approve/reject ownership for MVP and the first live trial is the existing
+  superadmin/operator review card flow. Automation may queue a candidate, but it
+  cannot publish unless the card has an explicit human approval and a passing
+  independent reviewer verdict.
+
+Conservative first-live defaults if no stricter config is provided:
+
+- global cap: `3` organizer clarification questions per calendar day;
+- per platform cap: `2` per day for Telegram and `2` per day for VK;
+- per surface/community cap: `1` question per `14` days;
+- per source post/thread cap: at most one accepted question ever, unless a human
+  explicitly resets the thread after new organizer context appears;
+- per matched event cap: `1` organizer-clarification question per platform per
+  `7` days;
+- quiet hours: do not send automatically outside the configured local daytime
+  window; manual approvals outside the window are queued unless the operator
+  explicitly overrides.
+
+These are safety defaults, not product targets: after the first calibrated live
+batch, tune them from reviewer rejects, organizer replies, complaints/deletes
+and surface-level mute/ban signals.
+
 #### Opportunity/report fields
 
 Organizer clarification candidates should be distinguishable from generic
@@ -407,8 +456,10 @@ recommendation opportunities, for example:
   "ideal_card_gaps": ["age_limit", "duration"],
   "selected_question_type": "duration",
   "same_thread_dedupe": {"status": "clear|duplicate|ambiguous", "checked_messages": 0, "nearest_existing_question": "short snippet"},
-  "question_generation": {"writer_model": "model id", "draft_question": "LLM-written text only"},
+  "operator_formatting": {"profile_id": "default|platform-specific id", "notes": ["short structured note"], "links_allowed": false},
+  "question_generation": {"writer_model": "gemini-3.1-flash-lite", "draft_question": "LLM-written text only", "link_intent": "none|operator_allowed"},
   "question_review": {"reviewer_model": "model id", "approve": true, "scores": {}},
+  "publication_identity": {"platform_account": "current configured VK token or Telegram session lane", "human_approved_by": "operator id or empty"},
   "published_question_review": null
 }
 ```
@@ -655,10 +706,13 @@ output should be strict JSON:
 }
 ```
 
-Gemma 4 is required for high-confidence review decisions. 26B-class variants can
-be configured for this bounded short-comment task, but Lite/Flash/Lite-class
-models are acceptable only as supplementary probes and must be marked as
-lower-confidence in stored metadata.
+Gemma 4 is required for high-confidence review/gating decisions. 26B-class
+variants can be configured for this bounded short-comment task after smoke
+coverage, but Lite/Flash/Lite-class models are not enough for final acceptance
+gates. The explicit exception is the organizer-clarification **writer** stage:
+it uses pinned `gemini-3.1-flash-lite` to write candidate public wording, and
+that wording remains unpublishable until an independent Gemma 4 reviewer accepts
+it.
 
 ### Phase 4 — opportunity triage
 

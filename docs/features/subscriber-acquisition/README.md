@@ -171,7 +171,12 @@ The discovery flow should be:
    missing-information gap; the LLM owns final suitability and **all public
    wording**. Deterministic code may prepare facts/constraints, but not compose
    `draft_question` or `published_question`.
-8. Run an independent reviewer model/stage (for example a separate Gemma 4 lane)
+8. Write the public question through the dedicated Gemini Lite writer
+   (`organizer_question.draft.v1`, pinned `gemini-3.1-flash-lite` through the
+   shared Google AI gateway). The prompt receives grounded facts plus the
+   operator's platform/account formatting notes; deterministic code must not
+   assemble the visible question text.
+9. Run an independent reviewer model/stage (Gemma 4 reviewer lane by default)
    before any review card/publication and again after post-MVP publication
    evidence exists, checking naturalness, appropriateness, clarity,
    answerability, grounding, duplicate safety and spam/self-promo risk.
@@ -182,6 +187,12 @@ information is visible; only in clearly appropriate cases should the eventual
 reply include a link to the enriched event page. Detailed taxonomy, LLM-only
 writer/reviewer contract, report fields and pitfalls are in
 [`mvp-discovery.md#organizer-clarification-acquisition`](mvp-discovery.md#organizer-clarification-acquisition).
+For the later live-publication slice, the publication identity is already
+resolved: VK questions use the currently configured VK token/account, and
+Telegram questions use the currently configured Telegram session lane. The
+operator may add platform-specific formatting/style instructions before the
+Gemini Lite writer call; any manual edit after drafting must go back through
+the independent review gate.
 
 ## Operator map
 

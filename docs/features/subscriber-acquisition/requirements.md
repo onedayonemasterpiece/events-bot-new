@@ -68,11 +68,22 @@ Status: reconciled draft; Discovery MVP addendum 2026-06-29
   grounded facts and constraints. Deterministic code may prepare JSON facts,
   labels and safety gates, but must not concatenate templates, fixed prefixes or
   regex/synonym rewrites into `draft_question` or `published_question`.
+- The clarification-question writer is Gemini Lite, pinned to
+  `gemini-3.1-flash-lite` through the shared Google AI quota/rate-limit layer.
+  The writer receives grounded evidence, selected gap/question class and
+  operator-provided formatting/style notes; it is the only stage allowed to
+  create visible public wording.
 - A separate reviewer model/stage must validate every generated and every
   actually published clarification question for naturalness, appropriateness,
   clarity, answerability, grounding, duplicate risk and spam/self-promo risk. A
-  failed review drops the candidate or sends it back to the writer LLM; reviewer
-  text is not published directly.
+  failed review drops the candidate or sends it back to the Gemini Lite writer
+  LLM; reviewer text is not published directly. The reviewer must be independent
+  from the writer response; use a Gemma 4 reviewer lane by default.
+- Publication identity for the later live slice is not a discovery blocker: VK
+  uses the currently configured VK token/account, and Telegram uses the
+  currently configured Telegram session lane. Platform-specific formatting
+  additions are captured before the writer call; any human edit after the draft
+  must be reviewed again before publication.
 
 
 ### Link targets and platform routing
@@ -200,9 +211,10 @@ Sticker strategy requirement:
 LLM requirement:
 
 - Semantic classification of surfaces and recommendation opportunities remains
-  LLM-first. Use Google/Gemma through the existing quota/rate-limit layer; Lite
-  models can be a lower-confidence fallback/probe but not a replacement for
-  high-confidence review decisions.
+  LLM-first. Use the shared Google AI quota/rate-limit layer. Gemma 4 remains
+  the default high-confidence reviewer/gate for semantic acceptance, while the
+  organizer-clarification public question writer is explicitly Gemini Lite
+  (`gemini-3.1-flash-lite`) and must still pass an independent reviewer stage.
 - Discovery regex/keywords may only extract links, apply hard safety/region
   gates, dedupe, and build cheap prefilter hints for LLM budget control. They
   must not be the owner of semantic suitability. In particular, post-event
@@ -211,7 +223,10 @@ LLM requirement:
 
 ## Open questions
 
-- What exact rate limits and cooldown windows should apply per community, per thread, and globally after the first live discovery calibration?
+- What exact rate limits and cooldown windows should apply per community, per
+  thread, and globally after the first live discovery calibration? This does not
+  block discovery or the first reviewed live trial because
+  `mvp-discovery.md` defines conservative safety defaults.
 - Who is the long-term owner for approving newly discovered acquisition surfaces after MVP shadow mode?
 - Which event-link surface is canonical when multiple links exist for the same event and platform context?
 - What safety policy should govern sticker generation before it becomes an implementation task?
@@ -234,6 +249,11 @@ LLM requirement:
   subfeature: match organizer posts to known events through vector search,
   compare against an ideal event-card checklist, dedupe existing questions in
   the thread, and use LLM only for final validation/wording.
+- 2026-07-03: Resolved organizer-question operations: Gemini Lite
+  (`gemini-3.1-flash-lite`) writes public wording, Gemma 4 independently
+  reviews it, VK uses the existing configured token/account, Telegram uses the
+  existing configured session lane, and operator formatting notes are collected
+  before drafting.
 
 ## Archived intake 2026-06-27T20:27:51+00:00
 
