@@ -150,10 +150,14 @@ Storage/runtime decision for MVP:
 
 - The current code uses core Fly SQLite as an MVP compatibility layer because it
   is already wired to the bot review UI and Kaggle status/runtime tables.
-- This is not a final storage requirement. The accepted analysis in
-  [`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) recommends a
-  migration path to a separate Yandex Managed PostgreSQL discovery store once the
-  frontier graph/report workload grows beyond prototype size.
+- Discovery state is a common logical base for all acquisition actions. Do not
+  create separate databases/source lists for organizer clarification versus
+  generic recommendation replies; store per-action eligibility/status on the same
+  surface/opportunity graph.
+- This is not a final physical-storage requirement. The accepted analysis in
+  [`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) allows migrating
+  the common discovery store to Yandex Managed PostgreSQL once the frontier
+  graph/report workload grows beyond prototype size.
 - Do not use the personalization Supabase/Postgres DB for this surface; that DB
   owns anonymous site telemetry/profiles/recommendation caches.
 - Do not create a separate bot for MVP; revisit only if volume/policy boundaries

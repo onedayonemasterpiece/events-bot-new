@@ -194,22 +194,20 @@ Manual approval/rejection is reserved for concrete reply/post opportunities.
 
 ## Storage ownership note
 
-Discovery statistics/state target is Yandex Managed Service for YDB in serverless
-mode, because this workload is small append/upsert stats and YDB has a monthly
-free tier for the first 1,000,000 request units and 1 GB storage. Managed
-PostgreSQL remains better for heavy ad-hoc relational joins, but would require
-paid cluster resources for this MVP. The created target database is
-`events-bot-acq-discovery` (`/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9`).
-When `ACQ_YDB_STATS_ENABLED=1` and `ACQ_YDB_ENDPOINT`/`ACQ_YDB_DATABASE` plus
-YDB credentials are configured, imports upsert run/surface/opportunity stats into
-YDB tables `acq_discovery_runs`, `acq_discovery_surfaces`, and
-`acq_discovery_opportunities`.
+Discovery uses one common logical `acq_*` base for all acquisition subfeatures:
+surfaces, edges, runs, opportunities and feedback are shared. Organizer
+clarification, generic recommendation replies, partner-submission replies,
+sticker strategy and future publication are represented as action-specific
+eligibility/status values on the same surface/opportunity graph, not as separate
+databases or parallel source lists. A surface may therefore be `ineligible` for a
+generic event-recommendation reply but `eligible` for organizer clarification.
 
 The current `acq_*` tables in core Fly SQLite are an MVP compatibility layer, not
-a final storage requirement. The storage analysis in
-[`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) recommends keeping
-SQLite only while the discovery graph is small and moving discovery-state to a
-separate Yandex Managed PostgreSQL store behind a storage abstraction if frontier
-growth, report/XLSX exports, or concurrent Kaggle imports make the crawler graph
-larger than core bot operational state. Supabase personalization storage remains
-out of scope for acquisition crawling/review queues.
+a final storage requirement. Optional YDB export (`ACQ_YDB_STATS_ENABLED=1`,
+`ACQ_YDB_ENDPOINT`, `ACQ_YDB_DATABASE`) is a stats/mirror sink for the same common
+discovery graph, not a separate product database. The storage analysis in
+[`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) still allows a
+future move of the common discovery store to Yandex Managed PostgreSQL if
+frontier growth, report/XLSX exports, or concurrent Kaggle imports make the
+crawler graph larger than core bot operational state. Supabase personalization
+storage remains out of scope for acquisition crawling/review queues.

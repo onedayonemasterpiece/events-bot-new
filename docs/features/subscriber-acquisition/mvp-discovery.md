@@ -347,30 +347,24 @@ prompt for strict JSON. The reviewer model may be a Gemma 4 26B-class lane only
 after a compact-schema smoke/contract test; otherwise keep the proven 31B lane
 and still record it as an independent stage/version.
 
-Recommended generation chain:
+Recommended generation chain and ownership:
 
-1. **Planner/classifier LLM:** receives organizer post text, matched event card,
-   ideal-card gaps, same-thread mined questions and dedupe evidence; chooses
-   `question_type`, explains why one gap is worth asking, and may return
-   `do_not_ask`.
-2. **Writer LLM:** writes exactly one natural Russian public comment question,
-   no link by default, no mention of internal systems, no claim that “we are
-   updating a database”, and no hidden advertising. It returns strict JSON with
-   `draft_question`, `question_type`, `grounded_gap`, `tone`, and
-   `why_this_is_natural`.
-3. **Independent reviewer model:** run a different model/lane from the writer,
-   for example Gemma 4 26B/31B with `response_mime_type=application/json` and a
-   bounded schema. The reviewer must grade naturalness, appropriateness, clarity,
-   answerability, context fit, duplicate risk, spam/self-promo risk, factual
-   grounding, and whether a normal participant could plausibly ask it.
-4. **Human review card:** show the post, linked discussion/comment proof, matched
-   event, ideal-card gaps, generated question, reviewer verdict and model ids.
-   MVP must still not publish externally.
-5. **Post-publication verifier (post-MVP):** after an approved public question is
-   actually posted, fetch the visible comment URL/text and run the independent
-   reviewer again on the exact published text plus surrounding thread context.
-   Store `published_question_review` with verdict, model id, timestamp and any
-   mismatch between approved and visible text.
+| Stage | What it does | Owner/model | Public wording allowed? |
+| --- | --- | --- | --- |
+| `organizer_context.classify.v1` | Confirms organizer-owned concrete-event context and selects one useful gap/type or `do_not_ask` from the evidence pack. | LLM, default `models/gemma-4-31b-it` through `GoogleAIClient`; deterministic code only prepares facts and cheap gates. | No |
+| `organizer_question.draft.v1` | Writes exactly one natural Russian public comment question. | LLM writer, default `models/gemma-4-31b-it`; this is the **only** stage allowed to create `draft_question`. | Yes |
+| `organizer_question.prepublish_review.v1` | Reviews the draft against source evidence, thread context and duplicate evidence. | Independent LLM reviewer. Prefer a different Gemma 4 lane/model such as `models/gemma-4-26b-a4b-it` after compact-schema smoke; otherwise use a separate `models/gemma-4-31b-it` call/stage with reviewer prompt/version. | No; pass/fail or revision guidance only |
+| Human review card | Shows evidence, matched event, gaps, draft, model ids and reviewer verdict to the operator. | Human operator. | Human may approve/reject; any human edit must go back through LLM review before publication |
+| `organizer_question.postpublish_review.v1` | After post-MVP publication, reviews the exact visible posted text and surrounding thread URL/evidence. | Independent LLM reviewer, same independence rule as prepublish review. | No |
+
+The writer returns strict JSON with `draft_question`, `question_type`,
+`grounded_gap`, `tone`, and `why_this_is_natural`; no link by default, no
+mention of internal systems, no “we are updating a database” framing and no
+hidden advertising. The reviewer sees the source evidence and draft/published
+text, not the writer's private rationale, and grades naturalness,
+appropriateness, clarity, answerability, context fit, duplicate risk,
+spam/self-promo risk, factual grounding, and whether a normal participant could
+plausibly ask it.
 
 Suggested reviewer schema:
 
@@ -467,6 +461,18 @@ Managed PostgreSQL if/when frontier growth, report generation, or concurrent
 Kaggle imports outgrow local SQLite. Do not silently declare this as a hard
 requirement until a separate migration task is accepted.
 
+The discovery base is **one common logical store** for all acquisition
+subfeatures. Do not create a separate organizer-clarification database or a
+parallel surface graph. The same `acq_surface` / `acq_opportunity` rows should
+carry action-specific eligibility and status, for example
+`event_recommendation_reply`, `organizer_clarification`, `partner_submission`,
+`sticker_strategy`, and later `publication`. A surface can be ineligible for a
+generic recommendation reply but eligible for organizer clarification; this is a
+per-action eligibility/status distinction, not a separate base. In the MVP this
+can live in JSON fields; if it becomes too large, add a normalized
+`acq_surface_action_eligibility` / `acq_opportunity_action_state` table behind
+the same storage interface.
+
 Do **not** create a separate bot for the MVP. Revisit a separate worker/bot only
 if discovery volume or policy boundaries grow enough to need independent
 deployment, credentials and operator workflows.
@@ -476,7 +482,8 @@ Suggested MVP tables in core SQLite:
 - `acquisition_surface`
   - `platform`, `surface_type`, `username_or_id`, `url`, `title`, `about`,
     `linked_surface_id`, `status` (`seed`, `candidate`, `approved`, `rejected`,
-    `paused`, `inaccessible`), `priority`, `risk_level`, `last_scanned_at`,
+    `paused`, `inaccessible`), `priority`, `risk_level`, action eligibility
+    (`eligibility_json` or equivalent per-action table), `last_scanned_at`,
     `next_scan_after`, `scan_cursor_json`, `stats_json`, `reach_estimate_json`,
     `created_by_run_id`.
 - `acquisition_surface_edge`
@@ -485,9 +492,10 @@ Suggested MVP tables in core SQLite:
     `first_seen_at`, `last_seen_at`, `seen_count`.
 - `acquisition_opportunity`
   - `surface_id`, `source_url`, `post_id`, `comment_id`, `message_date`,
-    `context_text`, `intent_label`, `confidence`, `score`, `rationale`,
-    `potential_views_low`, `potential_views_reason`, `matched_event_ids_json`,
-    `suggested_reply_draft`, `status`
+    `context_text`, `opportunity_type` / `action_type`, `intent_label`,
+    `confidence`, `score`, `rationale`, `potential_views_low`,
+    `potential_views_reason`, `matched_event_ids_json`, action-specific
+    eligibility/status, optional LLM draft/review evidence JSON, `status`
     (`new`, `reviewed`, `accepted`, `rejected`, `expired`), `dedupe_key`,
     `run_id`.
 - `acquisition_discovery_run`

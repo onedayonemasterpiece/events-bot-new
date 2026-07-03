@@ -17,6 +17,10 @@
   routes, semantic question-library taxonomy, LLM-only question drafting, and an
   independent model review contract for generated and post-publication
   clarification questions.
+- Clarified Subscriber Acquisition storage ownership: discovery uses one common
+  `acq_*` surface/opportunity graph, while organizer clarification, generic
+  replies, partner submission, sticker strategy and future publication are
+  action-specific eligibility/status states rather than separate databases.
 - Subscriber Acquisition Telegram discovery is now resolver-first: channel rows
   are queued as `needs_comment_resolve`, live Kaggle runs get a separate channel
   linked-discussion budget, channels without comments become
