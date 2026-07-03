@@ -153,6 +153,29 @@ Asset inventory:
 - it renders for `event.festival=Бахослужение`; if a future Bach/organ event lacks the festival field, a narrow fallback may show the same official asset only when the text contains Bach evidence plus organ/Cathedral context;
 - broader composer/program classification remains an LLM-first future enrichment path, not a regex-only semantic classifier.
 
+
+2026-07-03 venue gap pass:
+
+- production venue-gap analysis on 2026-07-03 found recurring/future-heavy venues without organizer medallions; the first venue batch adds 13 source-grounded venue medallions plus a geometry repair for `tretyakovka-kaliningrad`;
+- source choice followed the medallion workflow: official SVG/PNG first, public Telegram avatar when the official site did not expose a clean static logo, and a neutral initials badge only for `bar-bastion` because a clean public logo was not extractable without authenticated VK access;
+- `tretyakovka-kaliningrad` now uses one clean non-overlapping SVG path for the gold `Т`, removing the visible stepped/stair artifact from the previous overlapping-rect reconstruction.
+
+| Slug | Venue/source | Runtime asset | Source / method |
+| --- | --- | --- | --- |
+| `yantar-hall` | Янтарь холл | `/assets/organizers/yantar-hall.svg` | official square YH SVG from `янтарьхолл.рф`; alias includes `Янтарь холл, Ленина 11, Светлогорск` |
+| `dramteatr39` | Калининградский драматический театр | `/assets/organizers/dramteatr39.svg` | official `dramteatr39.ru/img/logo.svg`, scaled/cropped to the left emblem |
+| `muzteatr39` | Калининградский музыкальный театр | `/assets/organizers/muzteatr39.svg` | official square PNG embedded in SVG, no tracing |
+| `dom-iskusstv` | Театр эстрады / Дом искусств | `/assets/organizers/dom-iskusstv.svg` | official Tilda SVG wordmark from `домискусств39.рф` |
+| `city-jazz-club` | Калининград Сити Джаз Клуб | `/assets/organizers/city-jazz-club.svg` | club logo from `londonpub.ru/cityjazz/events`, separate from festival medallion |
+| `rostec-arena` | Ростех Арена | `/assets/organizers/rostec-arena.svg` | public Telegram avatar `@rostec_arena` embedded in SVG |
+| `bar-bastion` | Бар Бастион | `/assets/organizers/bar-bastion.svg` | neutral initials SVG; VK page confirms venue, but no clean public logo was extracted |
+| `signal` | Сигнал | `/assets/organizers/signal.svg` | Timepad organization logo embedded in SVG |
+| `mumod` | Музей курортной моды | `/assets/organizers/mumod.svg` | official SVG from `mumod.ru` |
+| `kldzoo` | Калининградский зоопарк | `/assets/organizers/kldzoo.svg` | official square PNG from `kldzoo.ru` embedded in SVG |
+| `locostandup` | Стендап-клуб «Локация» | `/assets/organizers/locostandup.svg` | public Telegram avatar `@locostandup` embedded in SVG |
+| `kaliningrad-art-museum` | Калининградский музей изобразительных искусств | `/assets/organizers/kaliningrad-art-museum.svg` | official footer PNG logo embedded on dark circle |
+| `brachert` | Дом-музей Германа Брахерта | `/assets/organizers/brachert.svg` | official PNG from `hbrachert.ru` embedded in SVG |
+
 ### Festival logo medallions
 
 The static-site medallions lab shows festival-logo medallions when a clean official logo/wordmark exists. Event detail pages also render these source-grounded festival/venue-brand medallions when `event.festival`, title, venue or a narrow fallback maps to a manifest item; unmatched festivals still fall back to the existing text pill.
