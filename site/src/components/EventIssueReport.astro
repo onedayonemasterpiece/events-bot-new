@@ -41,6 +41,10 @@ const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value
   <div class="event-issue-report__inner">
     <p class="event-issue-report__eyebrow">Админ</p>
     <a href="#" class="event-issue-report__toggle" data-event-issue-toggle>Исправить ошибку</a>
+    <div class="event-issue-report__history" data-event-issue-history hidden>
+      <p class="event-issue-report__history-title">Репорты по этому событию</p>
+      <ul data-event-issue-list></ul>
+    </div>
     <form class="event-issue-report__form" data-event-issue-form hidden>
       <label>
         <span>Что не так с событием?</span>
@@ -77,6 +81,36 @@ const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value
     font-size: 0.9rem;
     font-weight: 850;
     text-decoration-style: dotted;
+  }
+  .event-issue-report__history {
+    margin-top: 0.62rem;
+    border-top: 1px solid rgba(30, 64, 175, 0.18);
+    padding-top: 0.55rem;
+  }
+  .event-issue-report__history-title {
+    margin: 0 0 0.32rem;
+    color: rgba(23, 37, 84, 0.78);
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+  .event-issue-report__history ul {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding-left: 1rem;
+  }
+  .event-issue-report__history li {
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .event-issue-report__history a {
+    color: #1d4ed8;
+    font-weight: 850;
+  }
+  .event-issue-report__history small {
+    display: block;
+    color: rgba(23, 37, 84, 0.62);
+    font-weight: 650;
   }
   .event-issue-report__form { display: grid; gap: 0.62rem; margin-top: 0.72rem; }
   .event-issue-report__form label { display: grid; gap: 0.35rem; font-size: 0.86rem; font-weight: 820; }
@@ -119,6 +153,8 @@ const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value
     const statusNode = root.querySelector('[data-event-issue-status]');
     const form = root.querySelector('[data-event-issue-form]');
     const toggle = root.querySelector('[data-event-issue-toggle]');
+    const history = root.querySelector('[data-event-issue-history]');
+    const list = root.querySelector('[data-event-issue-list]');
     const textarea = root.querySelector('[data-event-issue-text]');
     const submit = root.querySelector('.event-issue-report__submit');
     let session = null;
@@ -132,17 +168,77 @@ const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value
     const client = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
     });
-    async function checkAdmin() {
-      const { data } = await client.auth.getSession();
-      session = data?.session || null;
+    const statusLabel = (value) => ({
+      submitted: 'ожидает ArtKodex',
+      processing: 'обрабатывается',
+      queued: 'задача создана',
+      done: 'готово',
+      failed: 'ошибка',
+      ignored: 'пропущено',
+    })[String(value || '').toLowerCase()] || String(value || 'новый');
+    const formatDate = (value) => {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+    function renderReports(reports) {
+      if (!history || !list) return;
+      const rows = Array.isArray(reports) ? reports.filter(Boolean) : [];
+      list.textContent = '';
+      if (!rows.length) {
+        history.hidden = true;
+        return;
+      }
+      for (const report of rows.slice(0, 20)) {
+        const item = document.createElement('li');
+        item.dataset.reportId = String(report.id || '');
+        const threadUrl = String(report.artkodex_thread_url || '');
+        const taskId = String(report.artkodex_task_id || '');
+        const head = document.createElement(threadUrl ? 'a' : 'span');
+        head.textContent = threadUrl ? `Тред ${taskId || report.id || ''}` : `Репорт ${report.id || ''}`;
+        if (threadUrl) {
+          head.href = threadUrl;
+          head.target = '_blank';
+          head.rel = 'noopener noreferrer';
+        }
+        item.append(head);
+        const meta = document.createElement('small');
+        const bits = [statusLabel(report.status), formatDate(report.created_at)].filter(Boolean);
+        const text = String(report.report_text || '').trim();
+        meta.textContent = `${bits.join(' · ')}${text ? ` — ${text.slice(0, 120)}` : ''}`;
+        item.append(meta);
+        list.append(item);
+      }
+      history.hidden = false;
+    }
+    async function refreshReports() {
       if (!session?.access_token) return;
-      const response = await fetch(`${supabaseUrl}/functions/v1/event-issue-report`, {
+      const eventId = encodeURIComponent(String(snapshot.event_id || snapshot.static_event_id || ''));
+      if (!eventId) return;
+      const response = await fetch(`${supabaseUrl}/functions/v1/event-issue-report?event_id=${eventId}`, {
         method: 'GET',
         headers: { apikey: supabaseKey, Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' },
       });
       if (!response.ok) return;
       const payload = await response.json().catch(() => ({}));
-      if (payload?.admin === true) root.hidden = false;
+      renderReports(payload?.reports || []);
+    }
+    async function checkAdmin() {
+      const { data } = await client.auth.getSession();
+      session = data?.session || null;
+      if (!session?.access_token) return;
+      const eventId = encodeURIComponent(String(snapshot.event_id || snapshot.static_event_id || ''));
+      const response = await fetch(`${supabaseUrl}/functions/v1/event-issue-report${eventId ? `?event_id=${eventId}` : ''}`, {
+        method: 'GET',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' },
+      });
+      if (!response.ok) return;
+      const payload = await response.json().catch(() => ({}));
+      if (payload?.admin === true) {
+        root.hidden = false;
+        renderReports(payload?.reports || []);
+      }
     }
     toggle?.addEventListener('click', (event) => {
       event.preventDefault();
@@ -176,6 +272,7 @@ const snapshot = Object.fromEntries(Object.entries(snapshotRaw).filter(([, value
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload?.error) throw new Error(payload?.error || `HTTP ${response.status}`);
         setStatus(`Передал в ArtKodex: ${payload.id || 'репорт принят'}.`, 'ok');
+        await refreshReports();
         textarea.value = '';
         form.hidden = true;
       } catch (error) {

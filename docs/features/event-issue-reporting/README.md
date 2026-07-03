@@ -60,3 +60,8 @@ ArtKodex env:
   - admin `POST` with valid event snapshot → `event_issue_reports` row with `status='submitted'`.
 - ArtKodex poller should move the row to `queued`, set `artkodex_task_id`, create a forum topic when configured, and launch the task.
 - Final closure must include DB/content repair evidence and branch/SHA.
+
+
+## Thread/status history
+
+The admin block dynamically fetches recent `event_issue_reports` rows for the current `event_id` from the same authenticated Edge Function. For admins it shows previous report statuses and `artkodex_thread_url` links, while still allowing a new report to be submitted. This data is not embedded in static HTML and is not visible to anonymous visitors.

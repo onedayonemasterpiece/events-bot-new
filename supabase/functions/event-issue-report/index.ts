@@ -85,6 +85,29 @@ function serviceClient() {
   });
 }
 
+function cleanEventIdParam(url: URL): number | null {
+  const value = Number(url.searchParams.get("event_id") || url.searchParams.get("static_event_id") || "");
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.trunc(value);
+}
+
+function reportPublicFields(row: JsonRecord): JsonRecord {
+  return {
+    id: row.id,
+    status: row.status,
+    event_id: row.event_id,
+    static_event_id: row.static_event_id,
+    event_slug: row.event_slug,
+    report_text: row.report_text,
+    artkodex_task_id: row.artkodex_task_id,
+    artkodex_thread_url: row.artkodex_thread_url,
+    processing_error: row.processing_error,
+    created_at: row.created_at,
+    processed_at: row.processed_at,
+    updated_at: row.updated_at,
+  };
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (!["GET", "POST"].includes(request.method)) return json({ error: "method_not_allowed" }, 405);
@@ -93,7 +116,24 @@ Deno.serve(async (request: Request) => {
   if (auth.error) return auth.error;
   const user = auth.user!;
   if (!isAdmin(user)) return json({ error: "admin_required" }, 403);
-  if (request.method === "GET") return json({ admin: true });
+  if (request.method === "GET") {
+    const eventId = cleanEventIdParam(new URL(request.url));
+    if (!eventId) return json({ admin: true, reports: [] });
+    const service = serviceClient();
+    if (!service) return json({ error: "service_env_missing" }, 500);
+    const table = env("EVENT_ISSUE_REPORTS_TABLE", "event_issue_reports");
+    const { data, error } = await service
+      .from(table)
+      .select("id,status,event_id,static_event_id,event_slug,report_text,artkodex_task_id,artkodex_thread_url,processing_error,created_at,processed_at,updated_at")
+      .or(`event_id.eq.${eventId},static_event_id.eq.${eventId}`)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) {
+      console.error(JSON.stringify({ event: "event_issue_report_select_failed", message: error.message }));
+      return json({ error: "select_failed" }, 500);
+    }
+    return json({ admin: true, reports: (data || []).map((row) => reportPublicFields(row as JsonRecord)) });
+  }
 
   let body: JsonRecord = {};
   try {
@@ -139,5 +179,5 @@ Deno.serve(async (request: Request) => {
     console.error(JSON.stringify({ event: "event_issue_report_insert_failed", message: error.message }));
     return json({ error: "insert_failed" }, 500);
   }
-  return json({ ok: true, id: data.id, status: data.status, created_at: data.created_at });
+  return json({ ok: true, report: reportPublicFields(data as JsonRecord), id: data.id, status: data.status, created_at: data.created_at });
 });
