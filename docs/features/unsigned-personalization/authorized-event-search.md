@@ -319,7 +319,7 @@ Incident `INC-2026-07-02-static-search-92-percent-no-cards` showed that the prev
 
 The accepted public contract is therefore not “disable LLM”, but “stream vector first and cap the verifier”. The frontend uses NDJSON streaming and requests `limit=8`, `candidate_window=10`, `use_llm_verifier=true`, `allow_llm_fallback=false`. The Edge Function emits `vector_results` immediately after the pgvector RPC, then tries Gemini Lite with compact facts and no-recursion shrink `10→5→3` inside the 4.3s Lite budget. If the verifier succeeds, final cards are the LLM-confirmed `exact_event_ids`; if it fails or times out, final cards remain the bounded vector candidates rather than an empty answer.
 
-The client-side SLA is a product promise, not a hard “drop the answer” timer: after `6.5s` the UI may show a soft slow-notice (“results are already available / still searching”), but it must keep already streamed vector cards visible and continue waiting for the terminal result. It must not replace available results with “search took too long”. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback is optimistic: the click immediately records a local queue item and shows a visible “saving” state; the Supabase RPC then confirms it as saved or leaves a clear local-only state if the server is slow.
+The client-side SLA is a product promise, not a hard “drop the answer” timer: after `6.5s` the UI may show a soft slow-notice (“results are already available / still searching”), but it must keep already streamed vector cards visible and continue waiting for the terminal result. It must not replace available results with “search took too long”. If no NDJSON event reaches the browser at all by `7.2s` (observed on a real mobile Chrome capture stuck at `92%` with no cards), the UI cancels the stream and reissues a JSON `stream_rescue` request with the LLM verifier disabled; this can spend one extra vector quota unit in the broken-stream path, but it preserves the product contract that the user sees event cards. “Показать ещё” stays visible as a disabled `Загружаю ещё…` control during the next batch instead of disappearing silently. Search feedback is optimistic: the click immediately records a local queue item and shows a visible “saving” state; the Supabase RPC then confirms it as saved or leaves a clear local-only state if the server is slow.
 
 
 ### Query embedding cache
@@ -807,7 +807,8 @@ Search progress contract:
 - the static page no longer treats the button progress as decorative; it calls `event-search` directly with `Accept: application/x-ndjson`;
 - the Edge Function streams compact NDJSON events with real backend stages: `accepted`, `auth`, `validate`, `quota`, `embedding`, `vector_search`, `llm_verify`, `fallback`, `finalize`, then either `result` or `error`;
 - the UI updates the button progress/status only from those streamed backend events, then renders the final result payload through the same split-action event cards;
-- if streaming is unavailable, the UI falls back to a normal JSON response, so older/non-stream responses fail gracefully instead of leaving a dead button.
+- if streaming is unavailable, the UI falls back to a normal JSON response, so older/non-stream responses fail gracefully instead of leaving a dead button;
+- if a mobile browser/proxy accepts the NDJSON response but does not deliver the first chunk to JavaScript, the Edge Function sends an ignored first-frame `flush_pad` and the browser rescues after `7.2s` with a normal JSON request (`stream_rescue`, verifier disabled) so the user gets fast vector cards instead of staying at the synthetic `92%` state.
 
 Validation and error handling:
 

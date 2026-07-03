@@ -674,6 +674,26 @@ const HeadingTag = headingLevel;
       return { itemCount: items.length, fallbackCount: fallbackItems.length };
     }
 
+    async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback') {
+      const fallbackBody = reason === 'stream_stalled'
+        ? { ...body, use_llm_verifier: false, stream_rescue: true }
+        : body;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          apikey: root.dataset.supabaseKey,
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(fallbackBody),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
+      setSearchProgress(100, reason === 'stream_stalled' ? 'Показал быстрые карточки' : 'Готово');
+      return { data: payload, error: null, rescued: reason === 'stream_stalled' };
+    }
+
     async function invokeEventSearch(body, session, options = {}) {
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
       const response = await fetch(endpoint, {
@@ -694,11 +714,21 @@ const HeadingTag = headingLevel;
         return { data: payload, error: null };
       }
       const reader = response.body?.getReader();
-      if (!reader) return { data: null, error: { error: 'stream_unavailable' } };
+      if (!reader) return invokeEventSearchJson(endpoint, body, session, 'stream_unavailable');
       const decoder = new TextDecoder();
       let buffer = '';
       let finalData = null;
       let finalError = null;
+      let receivedStreamEvent = false;
+      const firstChunkTimeoutMs = 7200;
+      const readWithFirstChunkTimeout = () => {
+        if (receivedStreamEvent) return reader.read();
+        let timeoutId;
+        const timeout = new Promise((resolve) => {
+          timeoutId = window.setTimeout(() => resolve({ streamTimedOut: true }), firstChunkTimeoutMs);
+        });
+        return Promise.race([reader.read(), timeout]).finally(() => window.clearTimeout(timeoutId));
+      };
       async function finishWithResult(event) {
         finalData = event.data;
         setSearchProgress(100, event.label || 'Готово');
@@ -711,6 +741,7 @@ const HeadingTag = headingLevel;
         return { data: finalData, error: null };
       }
       function handleStreamEvent(event) {
+        receivedStreamEvent = true;
         if (event.type === 'progress') {
           setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
           if (event.stage === 'vector_results' && event.data) {
@@ -721,7 +752,13 @@ const HeadingTag = headingLevel;
         }
       }
       while (true) {
-        const { value, done } = await reader.read();
+        const readResult = await readWithFirstChunkTimeout();
+        if (readResult?.streamTimedOut) {
+          try { await reader.cancel(); } catch (_error) {}
+          setStatus('Поток прогресса не дошёл до браузера. Переключаюсь на быстрые карточки…');
+          return invokeEventSearchJson(endpoint, body, session, 'stream_stalled');
+        }
+        const { value, done } = readResult;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -749,6 +786,9 @@ const HeadingTag = headingLevel;
         } catch (_error) {
           // Ignore malformed trailing stream fragments.
         }
+      }
+      if (!finalData && !finalError && !receivedStreamEvent) {
+        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled');
       }
       return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
     }

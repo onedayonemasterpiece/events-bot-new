@@ -38,6 +38,7 @@
 
 ### Fixed
 
+- **Static smart search mobile stall recovery**: added a mobile-safe NDJSON first-frame flush and browser JSON rescue fallback so `/poisk/` no longer stays at the synthetic 92% progress state when a phone/proxy delays streamed chunks.
 - Fixed blank Edge Function integer env fallback so smart-search result cache uses the intended 3-hour default TTL instead of the 60-second minimum when no TTL override is set.
 - **Static smart search vector-stage UX**: changed streamed vector candidates from normal final event cards into graphite shimmering preview cards without like/calendar/share actions, so candidates that LLM later rejects no longer look like disappearing final results.
 - **Static smart search slow-result UX**: changed `/poisk/` search timeout handling from a hard 6.5s failure into a soft slow-notice state; vector cards remain visible and the browser waits for the terminal result instead of replacing an available result with “search took too long”.

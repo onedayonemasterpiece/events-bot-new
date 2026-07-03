@@ -2046,6 +2046,10 @@ function progressStreamResponse(
           stage: "accepted",
           progress: 2,
           label: "Запрос принят",
+          // Some mobile browser/proxy combinations delay tiny streaming chunks.
+          // A one-time ignored padding field makes the first NDJSON frame large
+          // enough to flush without changing the event contract.
+          flush_pad: " ".repeat(2048),
         });
         const result = await runEventSearch(
           request,
