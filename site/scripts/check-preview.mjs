@@ -13,6 +13,7 @@ const required = [
   'segodnya/index.html',
   'zavtra/index.html',
   'vyhodnye/index.html',
+  'partnerstvo/index.html',
   'sitemap.xml',
   'robots.txt',
   'favicon.svg',
@@ -228,10 +229,17 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/zavtra/`)) throw new Error('Sitemap misses tomorrow listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/partnerstvo/`)) throw new Error('Sitemap misses partnership URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) throw new Error('Sitemap misses hero viewport review URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
+
+
+const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
+if (!partnershipHtml.includes('Информационные партнёры') || !partnershipHtml.includes('info-partner-grid')) throw new Error('Partnership page misses compact info-partner grid');
+if (!partnershipHtml.includes('info-partner-card--span-2') || !partnershipHtml.includes('городское медиа') || !partnershipHtml.includes('радио')) throw new Error('Info-partner grid must include wide-card and short-label examples');
+if (!partnershipHtml.includes('Демо-набор ниже не заявляет реальных партнёров')) throw new Error('Info-partner MVP must disclose that demo logos are not real partners');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

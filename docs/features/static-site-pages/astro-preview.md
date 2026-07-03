@@ -14,6 +14,7 @@ Required openable URLs for the current preview:
 - Today listing: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/segodnya/>
 - Tomorrow listing: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/zavtra/>
 - Weekend listing: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/vyhodnye/>
+- Information partnership MVP: <https://kenigevents.ru/preview-20260703-infopartners-mvp-grid/partnerstvo/>
 - OCR/parallax control event: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/sobytiya/pesni-sssr-svetlogorsk-5878/>
 - Sold-out CTA regression event: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/sobytiya/operomaniya-kaliningrad-5237/>
 - Gallery regression event: <https://kenigevents.ru/preview-20260628-event-pages-v47-sparse-fixes/sobytiya/drevnie-voiny-yantarnogo-kraya-kaliningrad-698/>
@@ -43,6 +44,7 @@ site/
   src/pages/segodnya/index.astro
   src/pages/zavtra/index.astro
   src/pages/vyhodnye/index.astro
+  src/pages/partnerstvo/index.astro    # information partnership MVP / compact logo grid
   src/pages/sobytiya/[slug].astro
   src/pages/sobytiya/[slug]/event.ics.ts
   src/pages/data/discovery/[eventId].json.ts
@@ -63,6 +65,7 @@ site/
   public/favicon.svg
   src/data/preview-events.json
   src/data/preview-related.json
+  src/data/infoPartners.json           # demo information-partner groups for the MVP page
 ```
 
 
@@ -116,6 +119,21 @@ CDN/ICS verification for v47:
 - `npm run check:preview` and public Playwright regression passed (`artifacts/codex/static-site-builder/playwright-v47-public-check.cjs`).
 
 Production caveat: Smart Update currently schedules/runs the Kaggle static-site builder artifact path. Automatic promotion of a checked Kaggle artifact to CDN/Object Storage is still a separate production gate; manual preview deploy verifies the bucket/CDN path but does not close the full Smart Update → CDN publication loop.
+
+
+## Information partnership MVP
+
+The preview includes `/partnerstvo/` as a small static MVP for future information partners. The current data in `site/src/data/infoPartners.json` is deliberately marked as a demo set: it tests layout behavior for square marks, normal wordmarks and very wide media logos without claiming real partnerships.
+
+Design contract:
+
+- render logos/text marks inside lightweight badges/cards, not as a loose press-wall;
+- use a dense responsive CSS Grid with normal one-column cells and `span 2` cells for very wide wordmarks;
+- keep a fixed visual card height and `object-fit: contain` for future real logo assets;
+- show a short `shortLabel` such as `радио`, `афиша`, `городское медиа` when the logo alone is not self-explanatory;
+- replace demo text marks with official SVG/PNG/WebP assets only after partner approval and source/provenance documentation.
+
+`npm run check:preview` verifies that `/partnerstvo/` is emitted, included in the sitemap, contains the compact grid, includes wide-card examples and keeps the demo-disclosure copy until real partners are provided.
 
 ## Fixture coverage
 

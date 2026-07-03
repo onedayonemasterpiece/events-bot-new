@@ -1,0 +1,82 @@
+[
+  {
+    "id": "lead",
+    "title": "Генеральный информационный партнёр",
+    "note": "Одна заметная, но не гигантская позиция для партнёра с особым статусом.",
+    "partners": [
+      {
+        "id": "demo-wide-media",
+        "name": "Широкий медиа-логотип",
+        "mark": "MEDIA LINE",
+        "shortLabel": "городское медиа",
+        "shape": "wide",
+        "span": 2,
+        "tone": "blue",
+        "description": "Демо-ячейка для широкого wordmark 4:1–5:1"
+      }
+    ]
+  },
+  {
+    "id": "main",
+    "title": "Информационные партнёры",
+    "note": "Компактная сетка показывает, как будут уживаться квадратные знаки, длинные wordmark и логотипы, которым нужна короткая подпись.",
+    "partners": [
+      {
+        "id": "demo-square-tv",
+        "name": "Квадратный ТВ-знак",
+        "mark": "TV",
+        "shortLabel": "телеканал",
+        "shape": "square",
+        "tone": "violet",
+        "description": "Квадратный знак занимает одну компактную ячейку"
+      },
+      {
+        "id": "demo-radio",
+        "name": "Радио-партнёр",
+        "mark": "FM 87.5",
+        "shortLabel": "радио",
+        "shape": "wide",
+        "span": 2,
+        "tone": "ink",
+        "description": "Радио/частотные логотипы обычно вытянуты и требуют span-2"
+      },
+      {
+        "id": "demo-afisha",
+        "name": "Афиша-партнёр",
+        "mark": "АФИША",
+        "shortLabel": "афиша",
+        "shape": "normal",
+        "tone": "teal",
+        "description": "Обычный wordmark без лишнего свободного поля"
+      },
+      {
+        "id": "demo-magazine",
+        "name": "Городской журнал",
+        "mark": "ЖУРНАЛ",
+        "shortLabel": "журнал",
+        "shape": "normal",
+        "tone": "sand",
+        "description": "Подпись помогает, если один логотип не объясняет тип партнёра"
+      },
+      {
+        "id": "demo-portal",
+        "name": "Новостной портал",
+        "mark": "portal.ru",
+        "shortLabel": "новости",
+        "shape": "wide",
+        "span": 2,
+        "tone": "red",
+        "description": "Сверхширокий wordmark получает две колонки, но ту же высоту"
+      },
+      {
+        "id": "demo-community",
+        "name": "Сообщество",
+        "mark": "39",
+        "shortLabel": "сообщество",
+        "shape": "square",
+        "tone": "green",
+        "description": "Короткие знаки не раздуваются до размера широких логотипов"
+      }
+    ]
+  }
+]
