@@ -6,6 +6,7 @@
 
 ### Added
 
+- **VK Dynamic Cover / mobile cover video**: documented the planned daily Kaggle-generated lightweight VK mobile live-cover video, including VK format research, CherryFlash reuse boundaries, storytelling storyboard, LLM-first narration contract, scheduler/profile proposal and verification gates.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.

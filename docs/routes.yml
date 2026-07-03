@@ -414,6 +414,16 @@ features:
       - main_part2.py
       - video_announce/story_publish.py
       - kaggle/CrumpleVideo/story_publish.py
+  vk_dynamic_cover:
+    status: mvp
+    docs: docs/features/vk-dynamic-cover/README.md
+    backlog_requirements: docs/backlog/features/vk-dynamic-cover/requirements.md
+    mobile_cover_video_status: design
+    entrypoints:
+      - vk_dynamic_cover.py
+      - handlers/vk_cover_cmd.py
+      - scheduling.py
+      - tests/test_vk_dynamic_cover.py
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md

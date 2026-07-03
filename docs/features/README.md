@@ -16,7 +16,7 @@
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
 - `docs/features/vk-location-marker/README.md` — безопасная VK location marker-метка для событийных wall-постов
-- `docs/features/vk-dynamic-cover/README.md` — динамическая обложка VK-сообщества: генерация wide/mobile assets и `/cover`
+- `docs/features/vk-dynamic-cover/README.md` — динамическая обложка VK-сообщества: wide/mobile assets, `/cover` и дизайн daily mobile cover video
 - `docs/features/tg-publishing/README.md` — исходящие Telegram-публикации отдельных событий после Smart Update
 - `docs/features/tg-premium-emojis-update/README.md` — Telethon-редактор premium/custom emoji для ежедневных Telegram-анонсов
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
