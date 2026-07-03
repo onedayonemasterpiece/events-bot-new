@@ -37,6 +37,7 @@
 
 ### Fixed
 
+- **Static smart search slow-result UX**: changed `/poisk/` search timeout handling from a hard 6.5s failure into a soft slow-notice state; vector cards remain visible and the browser waits for the terminal result instead of replacing an available result with “search took too long”.
 - **Incident / kldevents/1778 VK OCR location-time regression (INC-2026-07-02)**:
   VK parsing now keeps compact poster OCR logistics under long-caption token
   budgets, and Smart Update location reference matching no longer fuzzy-binds

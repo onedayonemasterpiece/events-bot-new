@@ -97,7 +97,7 @@ const HeadingTag = headingLevel;
     let lastResultEventIds = [];
     let authCallbackHadError = false;
     let progressValue = 0;
-    const searchTimeoutMs = 6500;
+    const searchSlowNoticeMs = 6500;
     const authSessionTimeoutMs = 8000;
     const authCallbackTimeoutMs = 20000;
     const maxQueryLength = 180;
@@ -737,6 +737,14 @@ const HeadingTag = headingLevel;
         window.setTimeout(() => { if (loading) setSearchProgress(55, 'Ищу события'); }, 1200),
         window.setTimeout(() => { if (loading) setSearchProgress(74, 'Проверяю, что подходит лучше'); }, 1800),
         window.setTimeout(() => { if (loading) setSearchProgress(92, 'Собираю карточки'); }, 3200),
+        window.setTimeout(() => {
+          if (!loading) return;
+          if (vectorRendered) {
+            setStatus('Результаты уже есть ниже. Финальная ИИ-проверка идёт дольше ожидаемого; карточки можно смотреть, а список обновится сам.', 'info');
+          } else {
+            setStatus('Ищу дольше обычного. Не останавливаю поиск: как только появятся первые карточки, покажу их здесь.', 'info');
+          }
+        }, searchSlowNoticeMs),
       ];
       if (more && !append) more.hidden = true;
       try {
@@ -752,19 +760,15 @@ const HeadingTag = headingLevel;
           }
         }
         const pageOffset = offset;
-        const { data, error } = await withTimeout(
-          invokeEventSearch(
-            { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
-            session,
-            {
-              onVectorResult: (vectorData) => {
-                vectorRendered = true;
-                renderSearchPayload(vectorData, { append, phase: 'vector', pageOffset });
-              },
+        const { data, error } = await invokeEventSearch(
+          { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
+          session,
+          {
+            onVectorResult: (vectorData) => {
+              vectorRendered = true;
+              renderSearchPayload(vectorData, { append, phase: 'vector', pageOffset });
             },
-          ),
-          searchTimeoutMs,
-          'search_timeout',
+          },
         );
         if (error) {
           const statusCode = Number(error?.status || error?.context?.status || 0);
@@ -777,7 +781,11 @@ const HeadingTag = headingLevel;
           return;
         }
         if (!data) {
-          setStatus('Поиск не вернул ответ. Попробуйте ещё раз.', 'error');
+          if (vectorRendered && results?.children.length) {
+            setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
+          } else {
+            setStatus('Поиск не вернул ответ. Попробуйте ещё раз.', 'error');
+          }
           return;
         }
         const items = Array.isArray(data?.items) ? data.items : [];
@@ -794,8 +802,7 @@ const HeadingTag = headingLevel;
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
         const message = String(error?.message || error);
-        if (message === 'search_timeout' && vectorRendered) setStatus('Показал быстрые результаты по смыслу. Финальная ИИ-проверка не ответила вовремя, можно смотреть эти карточки или повторить запрос.', 'error');
-        else if (message === 'search_timeout') setStatus('Поиск занял слишком много времени. Попробуйте ещё раз — кнопка снова активна.', 'error');
+        if (vectorRendered && results?.children.length) setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
         else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
       } finally {
         for (const timer of progressTimers) window.clearTimeout(timer);
