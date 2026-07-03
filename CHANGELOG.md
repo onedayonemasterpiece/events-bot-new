@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site / info partners density**: tightened the existing `/partners/` information-partner page on the smart-search branch into a denser logo-first board, preserving the real partner manifest while reducing card height, keeping short role labels, and retaining aspect-aware wide/tall spans plus the current `/poisk/` navigation.
 
 
 ### Added

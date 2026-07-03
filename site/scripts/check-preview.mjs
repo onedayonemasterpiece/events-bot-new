@@ -296,9 +296,13 @@ const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
 for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
-for (const url of ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays']) {
+const expectedPartnerUrls = ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays'];
+for (const url of expectedPartnerUrls) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }
+const renderedPartnerUrls = [...partnersHtml.matchAll(/<a class="partner-tile[^"]*"[^>]+href="(https?:\/\/[^"]+)"/giu)].map((match) => match[1]).sort();
+const expectedSortedPartnerUrls = [...expectedPartnerUrls].sort();
+if (JSON.stringify(renderedPartnerUrls) !== JSON.stringify(expectedSortedPartnerUrls)) throw new Error(`Info partners page must render exactly the approved partner URL set, got ${JSON.stringify(renderedPartnerUrls)}`);
 if (!/rel="nofollow noopener noreferrer"/u.test(partnersHtml)) throw new Error('Info partners external links must be nofollow/noopener/noreferrer');
 if (!partnersHtml.includes('class="partner-tile ') || !partnersHtml.includes('partner-tile__logo') || !partnersHtml.includes('partner-tile__meta')) throw new Error('Info partners page must render compact full-tile partner links');
 if (partnersHtml.includes('partner-card') || partnersVisibleHtml.includes('Сайт партнёра')) throw new Error('Info partners page must not render oversized partner cards or separate site CTA copy');
