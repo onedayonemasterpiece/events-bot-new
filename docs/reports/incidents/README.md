@@ -20,6 +20,9 @@
 
 - `INC-2026-07-02-static-search-92-percent-no-cards.md`
   - Scope: Static site authorized smart search `/poisk/`, personalization Supabase Edge Function `event-search`, frontend progress/rendering, card-shaped shimmer/halo loading state, LLM/vector sequencing, and production root/preview entrypoint promotion. Must not regress: reported natural-language searches must not stay stuck at 92% without cards when backend has returned or can return vector candidates; `/poisk/`/root CTA must point to the current searchable build; backend stage timings and client render evidence must be available for closure.
+- `INC-2026-07-02-boyko-exhibition-smart-update-glue.md`
+  - Scope: Smart Update merge-path side-effect identity for exhibition/festival sibling contexts, especially long-running exhibition candidates being glued into single-slot lecture/talk events.
+  - Must not regress: after final match selection and before event/source/poster/fact/job side effects, `SMART_UPDATE_MERGE_IDENTITY_GATE` must be able to LLM-classify related-but-distinct/festival-sibling candidates and, in enforce mode, return `skipped_identity_gate` without mutating the matched event; valid same-event source updates must still merge.
 - `INC-2026-07-02-kldevents-1778-vk-ocr-location-time.md`
   - Scope: VK auto-import poster OCR handoff under long-caption token budgets, Smart Update/location_reference generic venue fuzzy matching, and public `@kldevents`/`klgdevents`/Telegraph repair for source `https://vk.com/wall-169817694_32270`.
   - Must not regress: poster OCR logistics lines with date/time/venue/free-entry evidence must remain available to the LLM parse even when full OCR is trimmed for budget; `Городской парк, Пионерский` must not fuzzy-bind to a Зеленоградск culture-center venue through generic tokens; sibling events for `05/19 июля 14:00` must publish with `Городской парк, #Пионерский`.

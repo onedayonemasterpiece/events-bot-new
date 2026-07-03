@@ -1,9 +1,9 @@
-"""Identity gate helpers for Smart Update create-path safety.
+"""Identity gate helpers for Smart Update create/merge-path safety.
 
 The helpers in this module are intentionally small and dependency-light so they can
-be unit-tested without the Smart Update DB/LLM stack.  They never decide to merge;
-they can only allow create or veto create when another identity signal is strong
-enough that creating a new row would be unsafe.
+be unit-tested without the Smart Update DB/LLM stack.  The create-path gate never
+decides to merge; it can only allow create or veto create when another identity
+signal is strong enough that creating a new row would be unsafe.
 """
 
 from __future__ import annotations
@@ -24,6 +24,31 @@ class IdentityGateMode(str, Enum):
 class IdentityGateAction(str, Enum):
     ALLOW_CREATE = "allow_create"
     VETO_CREATE = "veto_create"
+
+
+class MergeIdentityAction(str, Enum):
+    """Decision shape for the merge-path identity gate.
+
+    ``SKIP_MERGE_SIDE_EFFECTS`` is the safe action for suspected identity glue:
+    Smart Update must not mutate the matched row, sources, posters, or scheduled
+    jobs.  ``ALLOW_SAFE_METADATA_ONLY`` is reserved for future narrow cases where
+    telemetry could be persisted without semantic row changes; current
+    orchestration treats it as an allow.
+    """
+
+    ALLOW_MERGE = "allow_merge"
+    ALLOW_SAFE_METADATA_ONLY = "allow_safe_metadata_only"
+    SKIP_MERGE_SIDE_EFFECTS = "skip_merge_side_effects"
+    REVIEW_REQUIRED = "review_required"
+
+
+class MergeIdentityRelation(str, Enum):
+    SAME_EVENT = "same_event"
+    SOURCE_UPDATE = "source_update"
+    RELATED_BUT_DISTINCT = "related_but_distinct"
+    FESTIVAL_CONTEXT_SIBLING = "festival_context_sibling"
+    UNSAFE_TO_MERGE = "unsafe_to_merge"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +122,45 @@ class IdentityGateVerdict:
     @property
     def would_veto_create(self) -> bool:
         return self.action is IdentityGateAction.VETO_CREATE
+
+
+@dataclass(frozen=True, slots=True)
+class MergeIdentityGateVerdict:
+    """Structured merge-path identity verdict.
+
+    The verdict does not try to repair matching itself.  It gates side effects
+    after a candidate has been matched to an existing row and before that row is
+    mutated.  In shadow mode it records what would have happened; only enforce
+    mode blocks.
+    """
+
+    mode: IdentityGateMode
+    action: MergeIdentityAction
+    relation: MergeIdentityRelation
+    reason_code: str
+    reasons: tuple[str, ...] = ()
+    candidate: IdentitySubject | None = None
+    existing_event_id: int | None = None
+    confidence: float = 0.0
+    blocking_conflicts: tuple[str, ...] = ()
+    allowed_fields: tuple[str, ...] = ()
+    deterministic: bool = False
+    llm: Mapping[str, Any] | None = None
+    fail_safe: bool = False
+
+    @property
+    def should_skip_side_effects(self) -> bool:
+        return self.mode is IdentityGateMode.ENFORCE and self.action in {
+            MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
+            MergeIdentityAction.REVIEW_REQUIRED,
+        }
+
+    @property
+    def would_skip_side_effects(self) -> bool:
+        return self.action in {
+            MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
+            MergeIdentityAction.REVIEW_REQUIRED,
+        }
 
 
 _TOKEN_RE = re.compile(r"[\wа-яё]+", re.IGNORECASE)
@@ -349,6 +413,141 @@ def identity_gate_fail_safe_verdict(
     )
 
 
+def build_merge_identity_gate_verdict(
+    candidate: Any,
+    existing_event: Any,
+    *,
+    mode: IdentityGateMode | str = IdentityGateMode.OFF,
+    llm_data: Mapping[str, Any] | None = None,
+    blocking_conflicts: Sequence[str] | None = None,
+) -> MergeIdentityGateVerdict:
+    """Build a merge-path identity verdict from LLM output plus narrow rails.
+
+    This is intentionally LLM-first: ``llm_data`` carries the semantic identity
+    classification.  Deterministic rails only fail-closed for structural
+    contradictions that are strong enough to be unsafe regardless of wording
+    (for example: a single-slot lecture row being about to absorb a long-running
+    exhibition source).
+    """
+
+    resolved_mode = mode if isinstance(mode, IdentityGateMode) else parse_identity_gate_mode(str(mode))
+    candidate_subject = identity_subject_from(candidate, role="candidate")
+    existing_subject = identity_subject_from(existing_event, role="event")
+    if resolved_mode is IdentityGateMode.OFF:
+        return MergeIdentityGateVerdict(
+            mode=resolved_mode,
+            action=MergeIdentityAction.ALLOW_MERGE,
+            relation=MergeIdentityRelation.UNKNOWN,
+            reason_code="merge_identity_gate_off",
+            reasons=("SMART_UPDATE_MERGE_IDENTITY_GATE=off",),
+            candidate=candidate_subject,
+            existing_event_id=existing_subject.event_id,
+        )
+
+    llm = dict(llm_data or {})
+    action = _coerce_merge_action(llm.get("action"))
+    relation = _coerce_merge_relation(llm.get("relation"))
+    confidence = _coerce_float(llm.get("confidence")) or 0.0
+    reason_code = _clean_str(llm.get("reason_code")) or "merge_identity_llm_unavailable"
+    raw_reasons = llm.get("reasons")
+    reason_items = raw_reasons if isinstance(raw_reasons, Sequence) and not isinstance(raw_reasons, (str, bytes)) else []
+    reasons = tuple(s for s in (_clean_str(llm.get("reason")), *[_clean_str(v) for v in reason_items]) if s)
+    raw_llm_conflicts = llm.get("blocking_conflicts")
+    llm_conflict_items = (
+        raw_llm_conflicts
+        if isinstance(raw_llm_conflicts, Sequence) and not isinstance(raw_llm_conflicts, (str, bytes))
+        else []
+    )
+    conflicts = tuple(
+        dict.fromkeys(
+            [
+                str(v).strip()
+                for v in [
+                    *(blocking_conflicts or []),
+                    *llm_conflict_items,
+                ]
+                if str(v or "").strip()
+            ]
+        )
+    )
+    raw_allowed_fields = llm.get("allowed_fields")
+    allowed_field_items = (
+        raw_allowed_fields
+        if isinstance(raw_allowed_fields, Sequence) and not isinstance(raw_allowed_fields, (str, bytes))
+        else []
+    )
+    allowed_fields = tuple(
+        dict.fromkeys(str(v).strip() for v in allowed_field_items if str(v or "").strip())
+    )
+
+    if relation in {
+        MergeIdentityRelation.RELATED_BUT_DISTINCT,
+        MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
+        MergeIdentityRelation.UNSAFE_TO_MERGE,
+    }:
+        action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
+    elif action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
+        relation = relation if relation is not MergeIdentityRelation.UNKNOWN else MergeIdentityRelation.UNSAFE_TO_MERGE
+    elif relation in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE}:
+        action = MergeIdentityAction.ALLOW_MERGE
+    else:
+        # LLM unavailable/invalid: allow unless a deterministic rail below proves the merge unsafe.
+        action = MergeIdentityAction.ALLOW_MERGE
+
+    deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
+    deterministic = False
+    if deterministic_code and not _strong_shared_anchor(candidate_subject, existing_subject):
+        # A high-confidence LLM can still allow genuinely same long-running events,
+        # but not when it already says uncertainty/distinctness or has low confidence.
+        if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
+            conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
+        elif relation not in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE} or confidence < 0.9:
+            action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
+            relation = MergeIdentityRelation.UNSAFE_TO_MERGE
+            reason_code = deterministic_code
+            deterministic = True
+            conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
+            reasons = tuple(dict.fromkeys((*reasons, "structural identity conflict between matched event and candidate")))
+
+    return MergeIdentityGateVerdict(
+        mode=resolved_mode,
+        action=action,
+        relation=relation,
+        reason_code=reason_code,
+        reasons=reasons or (reason_code,),
+        candidate=candidate_subject,
+        existing_event_id=existing_subject.event_id,
+        confidence=confidence,
+        blocking_conflicts=conflicts,
+        allowed_fields=allowed_fields,
+        deterministic=deterministic,
+        llm=llm or None,
+    )
+
+
+def merge_identity_gate_fail_safe_verdict(
+    *,
+    mode: IdentityGateMode | str,
+    candidate: Any | None = None,
+    existing_event: Any | None = None,
+    reason: str = "merge identity gate error",
+) -> MergeIdentityGateVerdict:
+    resolved_mode = mode if isinstance(mode, IdentityGateMode) else parse_identity_gate_mode(str(mode))
+    subject = identity_subject_from(candidate, role="candidate") if candidate is not None else None
+    existing_subject = identity_subject_from(existing_event, role="event") if existing_event is not None else None
+    return MergeIdentityGateVerdict(
+        mode=resolved_mode,
+        action=MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
+        relation=MergeIdentityRelation.UNSAFE_TO_MERGE,
+        reason_code="merge_identity_gate_error",
+        reasons=(reason,),
+        candidate=subject,
+        existing_event_id=existing_subject.event_id if existing_subject else None,
+        confidence=0.0,
+        fail_safe=True,
+    )
+
+
 def _veto(code: str, candidate: IdentitySubject, ev: IdentitySubject, confidence: float, reason: str) -> IdentityGateVerdict:
     return IdentityGateVerdict(
         mode=IdentityGateMode.ENFORCE,
@@ -405,6 +604,77 @@ def _is_long_running(subject: IdentitySubject) -> bool:
     if any(word in event_type for word in ("выстав", "ярмарк", "exhibition", "fair")):
         return True
     return bool(subject.end_date and subject.date and subject.end_date != subject.date)
+
+
+def _deterministic_merge_identity_veto_reason(
+    candidate: IdentitySubject,
+    existing: IdentitySubject,
+) -> str | None:
+    candidate_long = _is_long_running(candidate)
+    existing_long = _is_long_running(existing)
+    title_related = _titles_related(candidate.title, existing.title)
+    location_related = _locations_related(candidate, existing)
+    same_time = _same_known_time(candidate, existing)
+    type_conflict = _event_types_conflict(candidate.event_type, existing.event_type)
+
+    if (
+        candidate_long != existing_long
+        and type_conflict
+        and not title_related
+        and not same_time
+        and _date_overlaps(candidate, existing)
+    ):
+        return "single_slot_vs_long_running_type_conflict"
+
+    if (
+        type_conflict
+        and not title_related
+        and not same_time
+        and location_related
+        and _date_overlaps(candidate, existing)
+    ):
+        return "same_place_date_unrelated_type_conflict"
+
+    return None
+
+
+def _event_types_conflict(left: str | None, right: str | None) -> bool:
+    left_type = _coarse_event_type(left)
+    right_type = _coarse_event_type(right)
+    return bool(left_type and right_type and left_type != right_type)
+
+
+def _coarse_event_type(value: str | None) -> str | None:
+    text = _normalize_text(value)
+    if not text:
+        return None
+    groups = {
+        "exhibition": ("выстав", "экспозиц", "ярмарк", "exhibition", "fair"),
+        "lecture": ("лекц", "встреч", "разговор", "дискус", "бесед", "lecture", "talk"),
+        "concert": ("концерт", "музык", "music", "concert"),
+        "performance": ("спектак", "театр", "показ", "performance", "show"),
+        "tour": ("экскурс", "прогул", "tour"),
+        "workshop": ("мастер", "воркш", "workshop"),
+        "festival": ("фестив", "festival"),
+    }
+    for name, needles in groups.items():
+        if any(needle in text for needle in needles):
+            return name
+    return None
+
+
+def _coerce_merge_action(value: Any) -> MergeIdentityAction:
+    try:
+        return MergeIdentityAction(str(value or "").strip().lower())
+    except Exception:
+        return MergeIdentityAction.ALLOW_MERGE
+
+
+def _coerce_merge_relation(value: Any) -> MergeIdentityRelation:
+    try:
+        return MergeIdentityRelation(str(value or "").strip().lower())
+    except Exception:
+        return MergeIdentityRelation.UNKNOWN
 
 
 def _coerce_int(value: Any) -> int | None:
