@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- **Incident / Boyko exhibition Smart Update glue (INC-2026-07-02)**:
+  added a separate LLM-first merge identity gate behind
+  `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` so related-but-distinct
+  exhibition/festival sibling sources can be skipped before mutating matched
+  event fields, sources, posters, facts, or jobs.
 - **Incident / kldevents/1778 VK OCR location-time regression (INC-2026-07-02)**:
   VK parsing now keeps compact poster OCR logistics under long-caption token
   budgets, and Smart Update location reference matching no longer fuzzy-binds

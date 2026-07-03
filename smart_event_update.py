@@ -36,8 +36,10 @@ from sections import MONTHS_RU
 from smart_update_identity import (
     IdentityGateMode,
     IdentityVectorEvidence,
+    build_merge_identity_gate_verdict,
     build_identity_gate_verdict,
     identity_gate_fail_safe_verdict,
+    merge_identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
 )
 
@@ -178,6 +180,9 @@ if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
     SMART_UPDATE_MODEL = "gemma-4-31b-it"
 SMART_UPDATE_IDENTITY_GATE_MODE = parse_identity_gate_mode(
     os.getenv("SMART_UPDATE_IDENTITY_GATE", "off")
+)
+SMART_UPDATE_MERGE_IDENTITY_GATE_MODE = parse_identity_gate_mode(
+    os.getenv("SMART_UPDATE_MERGE_IDENTITY_GATE", "off")
 )
 SMART_UPDATE_IDENTITY_VECTOR_RECALL = os.getenv(
     "SMART_UPDATE_IDENTITY_VECTOR_RECALL", "1"
@@ -588,6 +593,54 @@ MERGE_RESPONSE_FORMAT = {
 
 MATCH_SCHEMA = MATCH_RESPONSE_FORMAT["json_schema"]["schema"]
 MERGE_SCHEMA = MERGE_RESPONSE_FORMAT["json_schema"]["schema"]
+
+MERGE_IDENTITY_GATE_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "MergeIdentityGate",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "allow_merge",
+                        "allow_safe_metadata_only",
+                        "skip_merge_side_effects",
+                        "review_required",
+                    ],
+                },
+                "relation": {
+                    "type": "string",
+                    "enum": [
+                        "same_event",
+                        "source_update",
+                        "related_but_distinct",
+                        "festival_context_sibling",
+                        "unsafe_to_merge",
+                        "unknown",
+                    ],
+                },
+                "confidence": {"type": "number"},
+                "reason_code": {"type": "string"},
+                "reason": {"type": "string"},
+                "blocking_conflicts": {"type": "array", "items": {"type": "string"}},
+                "allowed_fields": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": [
+                "action",
+                "relation",
+                "confidence",
+                "reason_code",
+                "reason",
+                "blocking_conflicts",
+                "allowed_fields",
+            ],
+            "additionalProperties": False,
+        },
+    },
+}
+MERGE_IDENTITY_GATE_SCHEMA = MERGE_IDENTITY_GATE_RESPONSE_FORMAT["json_schema"]["schema"]
 
 EVENTNESS_REVIEW_SCHEMA = {
     "type": "object",
@@ -10091,6 +10144,104 @@ async def _llm_merge_event(
     return data
 
 
+async def _llm_merge_identity_gate(
+    candidate: EventCandidate,
+    event: Event,
+    *,
+    conflicting_anchor_fields: dict[str, Any] | None,
+    poster_texts: Sequence[str] | None = None,
+) -> dict[str, Any] | None:
+    """LLM-first same-identity gate for the merge path.
+
+    This stage answers only whether it is safe to let a matched candidate mutate
+    the existing event.  It must not rewrite titles/descriptions and must prefer a
+    safe skip over gluing related-but-distinct events.
+    """
+
+    if SMART_UPDATE_LLM_DISABLED:
+        return None
+    source_texts = []
+    for item in (getattr(event, "source_texts", None) or [])[:3]:
+        if isinstance(item, str) and item.strip():
+            source_texts.append(_clip(item, 800))
+    payload = {
+        "event_before": {
+            "id": event.id,
+            "title": event.title,
+            "date": event.date,
+            "time": event.time,
+            "time_is_default": bool(getattr(event, "time_is_default", False)),
+            "end_date": event.end_date,
+            "location_name": event.location_name,
+            "location_address": event.location_address,
+            "city": event.city,
+            "event_type": event.event_type,
+            "ticket_link": event.ticket_link,
+            "source_post_url": getattr(event, "source_post_url", None),
+            "source_vk_post_url": getattr(event, "source_vk_post_url", None),
+            "description": _clip(event.description, 1200),
+            "source_text": _clip(event.source_text, 1000),
+            "source_texts": source_texts,
+            "poster_texts": [_clip(t, 500) for t in (poster_texts or [])[:3] if t],
+        },
+        "candidate": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "time_is_default": bool(getattr(candidate, "time_is_default", False)),
+            "end_date": candidate.end_date,
+            "end_date_is_inferred": bool(getattr(candidate, "end_date_is_inferred", False)),
+            "location_name": candidate.location_name,
+            "location_address": candidate.location_address,
+            "city": candidate.city,
+            "event_type": candidate.event_type,
+            "festival": candidate.festival,
+            "ticket_link": candidate.ticket_link,
+            "source_type": candidate.source_type,
+            "source_url": candidate.source_url,
+            "raw_excerpt": _clip(candidate.raw_excerpt, 1200),
+            "source_text": _clip(candidate.source_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
+            "poster_texts": [_clip(p.ocr_text, 500) for p in candidate.posters if p.ocr_text][:3],
+            "poster_titles": [_clip(p.ocr_title, 160) for p in candidate.posters if (p.ocr_title or "").strip()][:3],
+        },
+        "conflicting_anchor_fields": conflicting_anchor_fields or {},
+    }
+    prompt = (
+        "Ты — LLM-first identity gate для Smart Update. Уже выбран `event_before` как возможный match "
+        "для `candidate`. Реши только одно: можно ли безопасно применять merge side effects к существующему "
+        "event_before (менять поля, добавлять source/poster/facts, ставить jobs), или candidate — другое "
+        "событие/родственный контекст и merge надо остановить. Верни JSON строго по схеме.\n\n"
+        "Главный принцип: общая площадка, близкая дата, общий фестиваль, одна промо-кампания или похожая тема "
+        "НЕ доказывают same_event. Нужен конкретный общий identity anchor: тот же показ/лекция/выставка, "
+        "та же программа/название/персона в той же роли, та же билетная ссылка, та же афиша или явный текст "
+        "источника, что это обновление уже существующего события.\n\n"
+        "Когда выбрать skip_merge_side_effects/review_required:\n"
+        "- candidate описывает выставку/длинный диапазон, а event_before — отдельную лекцию/встречу/показ, "
+        "даже если дата открытия и музей совпадают;\n"
+        "- candidate и event_before — события одной выставки/фестиваля/площадки, но разные сущности "
+        "(например выставка и лекция её куратора/участника);\n"
+        "- источник добавляет новую афишу/текст, но они относятся к соседнему событию;\n"
+        "- есть конфликт типа события, названия или роли персоны, который нельзя объяснить как обычное уточнение.\n\n"
+        "Когда выбрать allow_merge/source_update:\n"
+        "- это явно тот же реальный слот или та же long-running карточка с уточнением дат/описания/афиши;\n"
+        "- новая ссылка/афиша/текст прямо относятся к тому же title/programme и не добавляют другую сущность.\n\n"
+        "Если сомневаешься — выбирай skip_merge_side_effects или review_required. Лучше не добавить источник, "
+        "чем склеить разные события и испортить публичную карточку. Не придумывай фактов, опирайся только на данные.\n\n"
+        "Коды reason_code делай короткими snake_case, например: same_event_update, same_ticket_source_update, "
+        "festival_sibling_not_same_event, long_running_vs_single_slot, unrelated_title_type_conflict, "
+        "insufficient_identity_evidence.\n\n"
+        f"{SMART_UPDATE_YO_RULE}\n\n"
+        f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        MERGE_IDENTITY_GATE_SCHEMA,
+        max_tokens=500,
+        label="merge_identity_gate",
+    )
+    return data if isinstance(data, dict) else None
+
+
 def _apply_ticket_fields(
     event: Event,
     *,
@@ -15498,6 +15649,87 @@ async def _smart_event_update_impl(
         or needs_schedule_cleanup
         or ticket_changes_needed
     )
+
+    if SMART_UPDATE_MERGE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
+        merge_identity_verdict = None
+        gate_error: Exception | None = None
+        existing_poster_texts = [
+            p.ocr_text for p in posters_map.get(existing.id or 0, []) if getattr(p, "ocr_text", None)
+        ]
+        blocking_conflicts = [f"{key}: {value}" for key, value in (conflicting or {}).items()]
+        try:
+            llm_gate_data = await _llm_merge_identity_gate(
+                candidate,
+                existing,
+                conflicting_anchor_fields=conflicting,
+                poster_texts=existing_poster_texts,
+            )
+            merge_identity_verdict = build_merge_identity_gate_verdict(
+                candidate,
+                existing,
+                mode=SMART_UPDATE_MERGE_IDENTITY_GATE_MODE,
+                llm_data=llm_gate_data,
+                blocking_conflicts=blocking_conflicts,
+            )
+        except Exception as exc:
+            gate_error = exc
+            logger.warning(
+                "smart_update.merge_identity_gate error event_id=%s source_type=%s source_url=%s",
+                getattr(existing, "id", None),
+                candidate.source_type,
+                candidate.source_url,
+                exc_info=True,
+            )
+            merge_identity_verdict = merge_identity_gate_fail_safe_verdict(
+                mode=SMART_UPDATE_MERGE_IDENTITY_GATE_MODE,
+                candidate=candidate,
+                existing_event=existing,
+                reason=str(exc) or "merge identity gate error",
+            )
+
+        logger.info(
+            "smart_update.merge_identity_gate mode=%s action=%s relation=%s event_id=%s confidence=%.3f reason=%s enforce_skip=%s source_type=%s source_url=%s",
+            merge_identity_verdict.mode.value,
+            merge_identity_verdict.action.value,
+            merge_identity_verdict.relation.value,
+            getattr(existing, "id", None),
+            float(merge_identity_verdict.confidence or 0.0),
+            merge_identity_verdict.reason_code,
+            int(merge_identity_verdict.should_skip_side_effects),
+            candidate.source_type,
+            candidate.source_url,
+        )
+        await _record_identity_gate_decision(
+            db,
+            candidate,
+            decision=merge_identity_verdict.action.value,
+            reason=merge_identity_verdict.reason_code,
+            confidence=merge_identity_verdict.confidence,
+            event_id=int(existing.id) if getattr(existing, "id", None) else None,
+            payload={
+                "stage": "merge_identity_gate",
+                "mode": merge_identity_verdict.mode.value,
+                "relation": merge_identity_verdict.relation.value,
+                "reasons": list(merge_identity_verdict.reasons),
+                "blocking_conflicts": list(merge_identity_verdict.blocking_conflicts),
+                "allowed_fields": list(merge_identity_verdict.allowed_fields),
+                "deterministic": bool(merge_identity_verdict.deterministic),
+                "fail_safe": bool(merge_identity_verdict.fail_safe),
+                "would_skip_side_effects": bool(merge_identity_verdict.would_skip_side_effects),
+                "match_reason": match_reason if "match_reason" in locals() else None,
+                "llm": dict(merge_identity_verdict.llm or {}),
+                "error": str(gate_error) if gate_error else None,
+            },
+        )
+        if merge_identity_verdict.should_skip_side_effects:
+            return SmartUpdateResult(
+                status="skipped_identity_gate",
+                event_id=existing.id,
+                created=False,
+                merged=False,
+                reason=merge_identity_verdict.reason_code,
+                queue_notes=list(queue_notes or []),
+            )
 
     added_facts: list[str] = []
     duplicate_facts: list[str] = []
