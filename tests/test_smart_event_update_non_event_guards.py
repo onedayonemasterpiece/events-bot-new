@@ -574,6 +574,117 @@ async def test_concise_real_invite_survives_eventness_review(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_ungrounded_social_date_routes_to_llm_eventness_and_skips(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Кофе и Музыка" in prompt
+        assert "2027-03-01" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.94,
+            "reason_short": "coffee/music promo has no source-grounded event date",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["source-grounded date"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Кофе и Музыка: Эспрессо из зёрен Кооператива Чёрный и вдохновение Charlie Mingus\n\n"
+            "Друзья, сегодня мы приготовили для вас яркий дуэт — насыщенный эспрессо "
+            "из отборных зёрен Кооператива Чёрный, из Эфиопии.\n\n"
+            "Приходите в Сигнал за вдохновением и отличным настроением!"
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/signalkld/11052",
+            source_text=source_text,
+            title="Кофе и Музыка: Эспрессо из зёрен Кооператива Чёрный и вдохновение Charlie Mingus",
+            date="2027-03-01",
+            time="",
+            location_name="Сигнал",
+            location_address="Леонова 22",
+            city="Калининград",
+            event_type="встреча",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls == ["eventness_review"]
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_ungrounded_relative_date_can_survive_llm_eventness_review(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Сегодня" in prompt
+        return {
+            "decision": "event",
+            "confidence": 0.88,
+            "reason_short": "relative date anchor plus concrete venue/program",
+            "grounded_title": "Джазовый вечер",
+            "has_single_concrete_event": True,
+            "missing_anchors": [],
+        }
+
+    async def fake_create_bundle(*args, **kwargs):
+        return {
+            "description": "Джазовый вечер в Сигнале с конкретным приглашением на сегодня.",
+            "facts": ["Источник содержит относительный якорь: сегодня"],
+            "search_digest": "джазовый вечер в Сигнале",
+            "short_description": "Джазовый вечер в Сигнале для любителей живой музыки.",
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setattr(su, "_llm_create_description_facts_and_digest", fake_create_bundle)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/signalkld/relative",
+            source_text="Сегодня в 19:00 в Сигнале пройдёт джазовый вечер. Приходите!",
+            title="Джазовый вечер",
+            date="2026-07-03",
+            time="19:00",
+            location_name="Сигнал",
+            location_address="Леонова 22",
+            city="Калининград",
+            event_type="концерт",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        assert calls == ["eventness_review"]
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_dated_exhibition_with_curator_excursions_is_not_course_promo(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

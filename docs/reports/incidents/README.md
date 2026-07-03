@@ -18,10 +18,14 @@
 
 ## Активные regression contracts
 
-- `INC-2026-07-03-signal-coffee-non-event-static.md`
-  - Scope: Smart Update eventness routing for Telegram/VK candidates with ungrounded dates/no source schedule, generic unsupported writer copy, and static event page report intake for event `6045`. Must not regress: product/menu/editorial posts with music/art associations and no concrete date/time/programme must route to LLM-first eventness review and fail closed; canonical repair must remove/correct the static page on next generation.
+- `INC-2026-07-03-event-6045-static-defect.md`
+  - Scope: Telegram Monitoring OCR date extraction/merge, Smart Update social-candidate date provenance/eventness routing, writer grounding, and public/static repair for event `6045` from `@signalkld/11052`.
+  - Must not regress: record/vinyl metadata such as `LP 33 1/3 RPM` must not become an event date; social candidates with dates ungrounded in source text or poster OCR must route through LLM-first eventness review before create; non-event coffee/music promo sources must not publish active future static/Telegraph/Telegram/VK event surfaces.
 - `INC-2026-07-02-static-search-92-percent-no-cards.md`
   - Scope: Static site authorized smart search `/poisk/`, personalization Supabase Edge Function `event-search`, frontend progress/rendering, card-shaped shimmer/halo loading state, LLM/vector sequencing, and production root/preview entrypoint promotion. Must not regress: reported natural-language searches must not stay stuck at 92% without cards when backend has returned or can return vector candidates; `/poisk/`/root CTA must point to the current searchable build; backend stage timings and client render evidence must be available for closure.
+- `INC-2026-07-02-boyko-exhibition-smart-update-glue.md`
+  - Scope: Smart Update merge-path side-effect identity for exhibition/festival sibling contexts, especially long-running exhibition candidates being glued into single-slot lecture/talk events.
+  - Must not regress: after final match selection and before event/source/poster/fact/job side effects, `SMART_UPDATE_MERGE_IDENTITY_GATE` must be able to LLM-classify related-but-distinct/festival-sibling candidates and, in enforce mode, return `skipped_identity_gate` without mutating the matched event; valid same-event source updates must still merge.
 - `INC-2026-07-02-kldevents-1778-vk-ocr-location-time.md`
   - Scope: VK auto-import poster OCR handoff under long-caption token budgets, Smart Update/location_reference generic venue fuzzy matching, and public `@kldevents`/`klgdevents`/Telegraph repair for source `https://vk.com/wall-169817694_32270`.
   - Must not regress: poster OCR logistics lines with date/time/venue/free-entry evidence must remain available to the LLM parse even when full OCR is trimmed for budget; `Городской парк, Пионерский` must not fuzzy-bind to a Зеленоградск culture-center venue through generic tokens; sibling events for `05/19 июля 14:00` must publish with `Городской парк, #Пионерский`.

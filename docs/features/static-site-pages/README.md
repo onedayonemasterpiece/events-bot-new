@@ -19,7 +19,7 @@ The live static announcement site root (`https://static.kenigevents.ru/`, bucket
 
 ### Информационные партнёры
 
-Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для статуса «информационный партнёр». Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro`, попадает в `sitemap.xml` и доступен из footer-навигации как `Инфопартнёры`. Страница должна оставаться компактным logo-first grid: на mobile — две плотные колонки без больших prose-карточек, на tablet/desktop — aspect-aware spans для широких и вертикальных логотипов. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
+Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для статуса «информационный партнёр». Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro`, попадает в `sitemap.xml` и доступен из footer-навигации как `Инфопартнёры`. Страница должна оставаться компактной logo-first доской: на mobile — две плотные колонки без больших prose-карточек, на tablet/desktop — aspect-aware spans для широких и вертикальных логотипов; подпись под логотипом остаётся одной короткой строкой роли/типа, а не отдельным текстовым блоком. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
 
 
 ### Kaggle CPU build handoff

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site / info partners density**: tightened the existing `/partners/` information-partner page on the smart-search branch into a denser logo-first board, preserving the real partner manifest while reducing card height, keeping short role labels, and retaining aspect-aware wide/tall spans plus the current `/poisk/` navigation.
 
 
 ### Added
@@ -39,7 +40,16 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
-
+- **Incident / event 6045 static defect (INC-2026-07-03)**:
+  Telegram Monitoring no longer treats vinyl/record metadata such as
+  `LP 33 1/3 RPM` as an OCR event date, and Smart Update now routes
+  Telegram/VK candidates with source-ungrounded dates through LLM-first
+  eventness review before creating public event rows.
+- **Incident / Boyko exhibition Smart Update glue (INC-2026-07-02)**:
+  added a separate LLM-first merge identity gate behind
+  `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` so related-but-distinct
+  exhibition/festival sibling sources can be skipped before mutating matched
+  event fields, sources, posters, facts, or jobs.
 - **Static smart search mobile stall recovery**: added a mobile-safe NDJSON first-frame flush and browser JSON rescue fallback so `/poisk/` no longer stays at the synthetic 92% progress state when a phone/proxy delays streamed chunks.
 - Fixed blank Edge Function integer env fallback so smart-search result cache uses the intended 3-hour default TTL instead of the 60-second minimum when no TTL override is set.
 - **Static smart search vector-stage UX**: changed streamed vector candidates from normal final event cards into graphite shimmering preview cards without like/calendar/share actions, so candidates that LLM later rejects no longer look like disappearing final results.

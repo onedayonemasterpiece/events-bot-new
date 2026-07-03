@@ -1844,6 +1844,11 @@ DATE_TEXT_RE = re.compile(
     re.IGNORECASE,
 )
 DATE_NUM_RE = re.compile(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b")
+OCR_RECORD_SPEED_NOISE_RE = re.compile(
+    r"\b(?:lp|rpm|об/мин|винил\w*|пластинк\w*)\b|"
+    r"\b(?:33\s*(?:1/3|⅓)|45|78)\s*(?:rpm|об/мин)\b",
+    re.IGNORECASE,
+)
 TIME_RE = re.compile(r"\b([01]?\d|2[0-3])[:.](\d{2})\b")
 TIME_RANGE_RE = re.compile(
     r"\b([01]?\d|2[0-3])[:.](\d{2})\s*(?:-|–|—|…|\.{2,}|до)\s*([01]?\d|2[0-3])[:.](\d{2})\b",
@@ -1908,6 +1913,28 @@ def _infer_ocr_date(day: int, month: int, year: int | None, msg_date):
         return None
 
 
+def _ocr_numeric_date_match_is_metadata_noise(text: str, match: re.Match) -> bool:
+    """Return True for record/music metadata that looks like a date token.
+
+    This is a narrow deterministic guardrail: it only suppresses numeric
+    DD/MM-looking tokens when the local OCR context identifies vinyl speed or
+    record metadata (for example ``LP 33 1/3 RPM``). Real compact dates such as
+    ``10.05`` or ``#21_июня`` remain handled by the normal date path.
+    """
+    if not text or match is None:
+        return False
+    token = match.group(0)
+    start, end = match.span()
+    context = text[max(0, start - 24) : min(len(text), end + 24)]
+    if not OCR_RECORD_SPEED_NOISE_RE.search(context):
+        return False
+    if re.search(r"\b(?:33\s*(?:1/3|⅓)|45|78)\s*(?:rpm|об/мин)\b", context, re.IGNORECASE):
+        return True
+    if token in {"1/3", "1.3"} and re.search(r"\b(?:lp|rpm|винил\w*|пластинк\w*)\b", context, re.IGNORECASE):
+        return True
+    return False
+
+
 def _extract_ocr_datetime(ocr_text: str | None, message_date: str | None = None):
     if not ocr_text:
         return None, None
@@ -1923,7 +1950,10 @@ def _extract_ocr_datetime(ocr_text: str | None, message_date: str | None = None)
         if candidate:
             date_vals.append(candidate.isoformat())
 
-    for day_str, month_str, year_str in DATE_NUM_RE.findall(text):
+    for match in DATE_NUM_RE.finditer(text):
+        if _ocr_numeric_date_match_is_metadata_noise(text, match):
+            continue
+        day_str, month_str, year_str = match.groups()
         try:
             day = int(day_str)
             month = int(month_str)
@@ -3130,6 +3160,8 @@ async def extract_events(
         '"#13_июня", and "#21_июня" are authoritative and must not be changed to the current/message month. '
         'Never use nearby address/venue numbers, gates/floors ("гейт 2.6", "2 этаж"), prices, coordinates, '
         'phone numbers, or building numbers as date/time anchors. '
+        'Record/vinyl metadata such as "LP 33 1/3 RPM", "33⅓ RPM", "45 RPM", album catalogue numbers, '
+        'and musical-work catalogue numbers are not event dates or times. '
         'A date marker like "12.06" or "13.06" is not an event time unless the source also writes the same value as HH:MM. '
         'If a post is in-character promo copy but a ticket URL/page or clear program title gives the canonical event name, '
         'use the canonical attendee-facing title rather than the in-character/plot phrase. '
