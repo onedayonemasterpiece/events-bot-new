@@ -189,7 +189,8 @@ function envInt(
   min: number,
   max: number,
 ): number {
-  return clampInt(env(name), fallback, min, max);
+  const raw = env(name).trim();
+  return clampInt(raw === "" ? fallback : raw, fallback, min, max);
 }
 
 type GoogleApiKeyCandidate = {
