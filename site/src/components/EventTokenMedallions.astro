@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import organizerMedallions from '../data/organizerMedallions.json';
+import festivalMedallions from '../data/festivalMedallions.json';
 import type { PreviewEvent } from '../lib/types';
 import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
 
@@ -20,8 +21,21 @@ type OrganizerMedallion = {
   ariaLabel?: string;
 };
 
+type FestivalMedallion = {
+  slug: string;
+  name: string;
+  shortName?: string;
+  aliases?: string[];
+  category?: 'festival' | 'venue_brand' | string;
+  avatarUrl: string;
+  fallbackPngUrl?: string;
+  background?: string;
+  ring?: string;
+  ariaLabel?: string;
+};
+
 type Token = {
-  kind: 'organizer' | 'source' | 'pushkin' | 'pill';
+  kind: 'organizer' | 'festival' | 'source' | 'program' | 'pushkin' | 'pill';
   key: string;
   label: string;
   shortLabel?: string;
@@ -76,7 +90,48 @@ function organizerPriority(item: OrganizerMedallion, festivalValue?: string | nu
   return 10;
 }
 
+
+function namesForFestival(item: FestivalMedallion): string[] {
+  return [item.name, item.shortName, ...(item.aliases || [])].filter(Boolean).map((value) => String(value));
+}
+
+function matchesFestival(item: FestivalMedallion, event: PreviewEvent): boolean {
+  const names = namesForFestival(item);
+  const festivalValue = normalize(event.festival);
+  const titleValue = normalize(event.title);
+  const venueValue = normalize(event.venue_name);
+  const typeValue = normalize(event.event_type);
+  const festivalExact = names.some((name) => {
+    const normalizedName = normalize(name);
+    return normalizedName && festivalValue.length > 2 && (festivalValue.includes(normalizedName) || normalizedName.includes(festivalValue));
+  });
+  if (item.category === 'venue_brand') {
+    const venueHaystack = normalize([event.festival, event.title, event.venue_name, event.summary].filter(Boolean).join(' '));
+    return names.some((name) => {
+      const normalizedName = normalize(name);
+      return normalizedName && venueHaystack.includes(normalizedName);
+    });
+  }
+  if (festivalExact) return true;
+  const eventClaimsFestival = typeValue.includes('фестиваль') || titleValue.includes('фестиваль');
+  if (!eventClaimsFestival) return false;
+  return names.some((name) => {
+    const normalizedName = normalize(name);
+    return normalizedName && (titleValue.includes(normalizedName) || venueValue.includes(normalizedName));
+  });
+}
+
+
+function festivalPriority(item: FestivalMedallion, festivalValue?: string | null): number {
+  const normalizedFestival = normalize(festivalValue);
+  const normalizedName = normalize(item.name);
+  if (normalizedFestival && normalizedName && (normalizedFestival.includes(normalizedName) || normalizedName.includes(normalizedFestival))) return 0;
+  if (item.category === 'venue_brand') return 8;
+  return 5;
+}
+
 const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
+const festivalManifest = festivalMedallions as { items?: FestivalMedallion[] };
 const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map((url) => String(url))));
 const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
 const organizerHaystack = normalize([
@@ -92,7 +147,15 @@ const organizers = (manifest.items || [])
   .filter((item) => matchesOrganizer(item, organizerHaystack, event.festival))
   .sort((left, right) => organizerPriority(left, event.festival) - organizerPriority(right, event.festival))
   .slice(0, 3);
+const festivalLogoBlockedByOrganizer = new Set(['kgd80-80-stories']);
+const festivalTokens = (festivalManifest.items || [])
+  .filter((item) => !festivalLogoBlockedByOrganizer.has(item.slug))
+  .filter((item) => matchesFestival(item, event))
+  .sort((left, right) => festivalPriority(left, event.festival) - festivalPriority(right, event.festival))
+  .slice(0, 2);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
+const hasBachEvidence = /(?:\bBach\b|(?:и\.?\s*с\.?\s*)?бах(?:а|у|ом|е)?|баховск)/iu.test(organizerHaystack);
+const hasOrganContext = /орган|органн|кафедральн(?:ый|ом|ого)?\s+собор|остров\s+канта|собор39|sobor39/u.test(organizerHaystack);
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
 const explicitText = normalize([event.title, event.event_type, event.summary, ...(event.topics || [])].join(' '));
@@ -115,6 +178,21 @@ organizers.forEach((organizer) => {
     slug: organizer.slug,
   });
 });
+festivalTokens.forEach((festival) => {
+  tokens.push({
+    kind: 'festival',
+    key: `festival:${festival.slug}`,
+    label: festival.shortName || festival.name,
+    shortLabel: festival.shortName || festival.name,
+    title: festival.name,
+    ariaLabel: festival.ariaLabel || `Фестиваль: ${festival.name}`,
+    imageUrl: festival.avatarUrl,
+    fallbackImageUrl: festival.fallbackPngUrl,
+    background: festival.background,
+    ring: festival.ring,
+    slug: festival.slug,
+  });
+});
 if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
   tokens.push({
     kind: 'source',
@@ -127,6 +205,20 @@ if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
     background: '#FFFFFF',
     ring: '#282828',
     slug: 'meow-afisha',
+  });
+}
+if (hasBachEvidence && hasOrganContext && !tokens.some((token) => token.key === 'festival:bahosluzhenie')) {
+  tokens.push({
+    kind: 'program',
+    key: 'program:bahosluzhenie',
+    label: 'Бахослужение',
+    shortLabel: 'BACH',
+    title: 'Бахослужение',
+    ariaLabel: 'Бахослужение: Бах или органная программа',
+    imageUrl: '/assets/festivals/bahosluzhenie.png',
+    background: '#FFFFFF',
+    ring: '#D1AD6A',
+    slug: 'bahosluzhenie',
   });
 }
 if (event.pushkin_card) {
@@ -190,7 +282,7 @@ if (hasCharity) {
     tone: 'green',
   });
 }
-const hasFestivalLogoToken = organizers.some((organizer) => organizer.slug === 'kgd80' || organizer.slug === 'kantata-festival');
+const hasFestivalLogoToken = organizers.some((organizer) => organizer.slug === 'kgd80' || organizer.slug === 'kantata-festival') || festivalTokens.length > 0 || tokens.some((token) => token.key === 'program:bahosluzhenie');
 if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
   tokens.push({
     kind: 'pill',
@@ -219,7 +311,7 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
     <ul class="event-token-row" role="list">
       {visibleTokens.map((token) => (
         <li class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`} style={tokenStyle(token)}>
-          {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
+          {(token.kind === 'organizer' || token.kind === 'festival' || token.kind === 'source' || token.kind === 'program') && token.imageUrl ? (
             <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
               <picture>
                 {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
