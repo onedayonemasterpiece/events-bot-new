@@ -1,6 +1,6 @@
 {
   "schemaVersion": "festival_medallion_assets_v1",
-  "generatedAt": "2026-07-03T09:30:00Z",
+  "generatedAt": "2026-07-04T00:00:00Z",
   "usage": "Festival logo medallions for static-site visual QA/lab. Uses official clean logos/wordmarks when available, with public social avatars only when they are the best verified clean source.",
   "items": [
     {
@@ -28,12 +28,14 @@
       "sourceFile": "kaliningrad-city-jazz.jpg",
       "background": "#F7F1E6",
       "ring": "#D7B56D",
-      "avatarUrl": "/assets/festivals/kaliningrad-city-jazz.jpg",
+      "avatarUrl": "/assets/festivals/kaliningrad-city-jazz.webp",
       "ariaLabel": "Фестиваль: Kaliningrad City Jazz",
-      "renderNote": "Заменён прежний полный SVG на публичный Telegram-аватар фестиваля: надпись City Jazz 2026 крупнее и читается лучше в круглом медальоне.",
+      "renderNote": "Заменён прежний полный SVG на публичный Telegram-аватар фестиваля: надпись City Jazz 2026 крупнее и читается лучше в круглом медальоне. Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/kaliningrad-city-jazz.jpg",
       "retrievedAt": "2026-07-03",
-      "category": "festival"
+      "category": "festival",
+      "fallbackPngUrl": "/assets/festivals/kaliningrad-city-jazz.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "kaliningrad-street-food",
@@ -77,11 +79,13 @@
       "sourceFile": "koroche-official.png",
       "background": "#FFFFFF",
       "ring": "#D1AD6A",
-      "avatarUrl": "/assets/festivals/koroche.png",
+      "avatarUrl": "/assets/festivals/koroche.webp",
       "ariaLabel": "Фестиваль: Короче",
-      "renderNote": "Официальный PNG-знак с сайта фестиваля; Telegram-аватар тоже проверен, но для медальона выбран более чистый site logo.",
+      "renderNote": "Официальный PNG-знак с сайта фестиваля; Telegram-аватар тоже проверен, но для медальона выбран более чистый site logo. Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/koroche-official.png",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "fallbackPngUrl": "/assets/festivals/koroche.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "ostrova",
@@ -93,11 +97,13 @@
       "sourceFile": "ostrova-logo-alt.png",
       "background": "#FFF8EF",
       "ring": "#B995D1",
-      "avatarUrl": "/assets/festivals/ostrova.png",
+      "avatarUrl": "/assets/festivals/ostrova.webp",
       "ariaLabel": "Фестиваль: Острова",
-      "renderNote": "Официальный логотип с сайта detivmuzee.ru; Telegram-аватар проверен, но site logo даёт читаемый полный wordmark с подписью «музейно-семейный фестиваль».",
+      "renderNote": "Официальный логотип с сайта detivmuzee.ru; Telegram-аватар проверен, но site logo даёт читаемый полный wordmark с подписью «музейно-семейный фестиваль». Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/ostrova-logo-alt.png",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "fallbackPngUrl": "/assets/festivals/ostrova.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "more-vnutri",
@@ -125,11 +131,13 @@
       "sourceFile": "simfoniya-vetra-bkf.svg",
       "background": "#F7EFE3",
       "ring": "#D1AD6A",
-      "avatarUrl": "/assets/festivals/simfoniya-vetra.png",
+      "avatarUrl": "/assets/festivals/simfoniya-vetra.webp",
       "ariaLabel": "Фестиваль: Симфония ветра",
-      "renderNote": "Официальный SVG-знак БКФ/«Симфония ветра» с сайта Янтарь-холла; афиша события проверена как подтверждение связки.",
+      "renderNote": "Официальный SVG-знак БКФ/«Симфония ветра» с сайта Янтарь-холла; афиша события проверена как подтверждение связки. Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/simfoniya-vetra-bkf.svg",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "fallbackPngUrl": "/assets/festivals/simfoniya-vetra.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "bahosluzhenie",
@@ -141,11 +149,13 @@
       "sourceFile": "bahosluzhenie-logo.png",
       "background": "#FFFFFF",
       "ring": "#D1AD6A",
-      "avatarUrl": "/assets/festivals/bahosluzhenie.png",
+      "avatarUrl": "/assets/festivals/bahosluzhenie.webp",
       "ariaLabel": "Фестиваль: Бахослужение",
-      "renderNote": "Официальный широкий логотип со страницы фестиваля филармонии; для читаемости в круге локально скомпонованы его Bach/organ icon и основной wordmark без AI-генерации.",
+      "renderNote": "Официальный широкий логотип со страницы фестиваля филармонии; для читаемости в круге локально скомпонованы его Bach/organ icon и основной wordmark без AI-генерации. Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/bahosluzhenie-logo.png",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "fallbackPngUrl": "/assets/festivals/bahosluzhenie.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "tolkin-fest",
@@ -157,11 +167,13 @@
       "sourceFile": "tolkin-fest-logo.png",
       "background": "#10234F",
       "ring": "#D1AD6A",
-      "avatarUrl": "/assets/festivals/tolkin-fest.png",
+      "avatarUrl": "/assets/festivals/tolkin-fest.webp",
       "ariaLabel": "Фестиваль: Толкин Фест",
-      "renderNote": "Официальный квадратный знак с архивной страницы Tolkin Fest; отдельный чистый логотип 2026 в открытых результатах не найден.",
+      "renderNote": "Официальный квадратный знак с архивной страницы Tolkin Fest; отдельный чистый логотип 2026 в открытых результатах не найден. Raster source is served WebP-primary with PNG fallback.",
       "sourcePath": "site/src/assets/festivals/source/tolkin-fest-logo.png",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "fallbackPngUrl": "/assets/festivals/tolkin-fest.png",
+      "assetFormat": "webp-raster-primary"
     },
     {
       "slug": "kaup",
