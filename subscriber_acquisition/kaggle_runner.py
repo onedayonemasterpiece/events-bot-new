@@ -40,6 +40,10 @@ TELEGA_IN_KALININGRAD_TG_SEEDS = [
     ("kaliningrad_now_ru", "Калининград Новостной", "https://telega.in/channels/kaliningrad_now_ru/card_max"),
 ]
 
+ROUTE_CALIBRATION_TG_SEEDS = [
+    ("vKalinigrad_recomendations", "Калининград рекомендации", "golden calibration: route/POI recommendation comments"),
+]
+
 SMARTIK_KALININGRAD_VK_SEEDS = [
     ("club42481124", "Подслушано в Калининграде (ПВК)", "https://smartik.ru/kaliningrad/group/42481124"),
     ("club31556867", "Типичный Калининград", "https://smartik.ru/kaliningrad/group/31556867"),
@@ -366,7 +370,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 surfaces.append(item)
             else:
                 pending_existing.append(item)
-        for handle, title, source_url in TELEGA_IN_KALININGRAD_TG_SEEDS:
+        for handle, title, source_url in [*ROUTE_CALIBRATION_TG_SEEDS, *TELEGA_IN_KALININGRAD_TG_SEEDS]:
             external_id = f"tg:{handle}"
             key = ("tg", external_id)
             if key in seen:
@@ -374,15 +378,15 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             seen.add(key)
             surfaces.append({
                 "platform": "tg",
-                "surface_type": "unknown_public",
+                "surface_type": "group" if handle == "vKalinigrad_recomendations" else "unknown_public",
                 "url": f"https://t.me/{handle}",
                 "title": title,
                 "handle": handle,
                 "external_id": external_id,
-                "status": "needs_comment_resolve",
-                "source": "telega_in",
-                "topic_hint": f"Telega.in Kaliningrad regional catalog seed: {source_url}",
-                "reach": {"confidence": "low", "basis": "telega_in_seed"},
+                "status": "candidate" if handle == "vKalinigrad_recomendations" else "needs_comment_resolve",
+                "source": "route_calibration" if handle == "vKalinigrad_recomendations" else "telega_in",
+                "topic_hint": f"Telegram route/POI calibration seed: {source_url}" if handle == "vKalinigrad_recomendations" else f"Telega.in Kaliningrad regional catalog seed: {source_url}",
+                "reach": {"confidence": "low", "basis": "route_calibration_seed" if handle == "vKalinigrad_recomendations" else "telega_in_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
         for handle, title, source_url in SMARTIK_KALININGRAD_VK_SEEDS:
@@ -501,6 +505,13 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_VK_SURFACES_PER_RUN": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", ""),
         "ACQ_MAX_VK_POSTS_PER_SURFACE": os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE", ""),
         "ACQ_MAX_VK_COMMENTS_PER_POST": os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST", ""),
+        "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL": os.getenv("ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL", "0"),
+        "ACQ_COMMENT_RETRIEVAL_MODELS_JSON": os.getenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", ""),
+        "ACQ_COMMENT_RETRIEVAL_GATE_MODEL": os.getenv("ACQ_COMMENT_RETRIEVAL_GATE_MODEL", ""),
+        "ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES": os.getenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", ""),
+        "ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS": os.getenv("ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS", ""),
+        "ACQ_COMMENT_RETRIEVAL_SCORING_METHOD": os.getenv("ACQ_COMMENT_RETRIEVAL_SCORING_METHOD", ""),
+        "ACQ_COMMENT_RETRIEVAL_DEVICE": os.getenv("ACQ_COMMENT_RETRIEVAL_DEVICE", ""),
     }
     seen_context_urls = [
         str(item.get("context_url") or "").strip()

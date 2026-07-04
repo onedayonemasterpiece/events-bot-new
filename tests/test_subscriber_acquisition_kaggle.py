@@ -16,6 +16,15 @@ def load_runtime():
     return module
 
 
+def load_retrieval():
+    path = Path("kaggle/SubscriberAcquisitionDiscovery/comment_semantic_retrieval.py")
+    spec = importlib.util.spec_from_file_location("comment_semantic_retrieval", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_extract_candidate_surfaces_from_public_links():
     runtime = load_runtime()
     surfaces = runtime.extract_candidate_surfaces("Вот t.me/some_kgd_chat и https://vk.com/wall-12345_9")
@@ -320,6 +329,208 @@ def test_shadow_payload_exposes_opportunity_screening_counters(monkeypatch):
     assert screening["no_intent"] == 0
 
 
+def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypatch, tmp_path):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", '["intfloat/multilingual-e5-base", "BAAI/bge-m3"]')
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", "6")
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS", "20")
+    records = [
+        {
+            "surface_key": "tg:vKalinigrad_recomendations",
+            "surface_external_id": "tg:vKalinigrad_recomendations",
+            "surface_url": "https://t.me/vKalinigrad_recomendations",
+            "platform": "tg",
+            "surface_type": "group",
+            "context_url": "https://t.me/vKalinigrad_recomendations/11",
+            "comment_id": "11",
+            "text": "Куда съездить из Калининграда на один день на электричке, Светлогорск или Зеленоградск?",
+        },
+        {
+            "surface_key": "vk:vagonka39",
+            "surface_external_id": "vk:vagonka39",
+            "surface_url": "https://vk.com/vagonka39",
+            "platform": "vk",
+            "surface_type": "community",
+            "context_url": "https://vk.com/wall-1_2?reply=3",
+            "comment_id": "3",
+            "text": "Будет ли мероприятие для детей, нужна регистрация и есть ли билеты?",
+        },
+    ]
+
+    result = retrieval.run_comment_semantic_retrieval(
+        records,
+        surfaces_by_external={
+            "tg:vKalinigrad_recomendations": {"title": "Калининград рекомендации", "url": "https://t.me/vKalinigrad_recomendations"},
+            "vk:vagonka39": {"title": "Вагонка", "url": "https://vk.com/vagonka39"},
+        },
+        output_dir=tmp_path,
+        backend=retrieval.HashingEmbeddingBackend(),
+    )
+
+    summary = result["summary"]
+    assert summary["stage"] == retrieval.STAGE_NAME
+    assert summary["comments_embedded"] == 2
+    assert summary["surface_profiles_count"] == 2
+    assert summary["candidate_count"] > 0
+    assert result["llm_gate_candidates"]
+    assert Path(summary["artifacts"]["manual_review_xlsx"]).exists()
+    assert Path(summary["artifacts"]["candidates_csv"]).exists()
+    route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
+    assert route_candidates
+    assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
+    assert {p["surface_key"] for p in result["surface_profiles"]} == {"tg:vKalinigrad_recomendations", "vk:vagonka39"}
+
+
+def test_shadow_payload_exposes_comment_semantic_retrieval_result(monkeypatch, tmp_path):
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/vKalinigrad_recomendations", platform="tg")
+    profile = {
+        "surface_key": surface["external_id"],
+        "monitoring_decision_hint": "monitor",
+        "monitoring_reason": "route questions",
+        "dominant_detected_interests": ["route_poi"],
+        "llm_budget_recommendation": {"send_top_comments_to_llm": 1},
+    }
+    result = {
+        "summary": {"stage": "acq_comment_semantic_retrieval.v1", "comments_embedded": 10},
+        "surface_profiles": [profile],
+        "llm_gate_candidates": [{"context_url": "https://t.me/vKalinigrad_recomendations/11"}],
+        "artifacts": {"manual_review_xlsx": str(tmp_path / "manual.xlsx")},
+    }
+
+    runtime._attach_comment_semantic_profiles([surface], result)
+    payload = runtime.build_shadow_payload(scanned_surfaces=[surface], scanned_opportunities=[], comment_retrieval_result=result)
+
+    by_external = {s["external_id"]: s for s in payload["surfaces"]}
+    enriched = by_external[surface["external_id"]]
+    assert enriched["monitoring_decision_hint"] == "monitor"
+    assert enriched["risk"]["comment_semantic_retrieval"]["dominant_detected_interests"] == ["route_poi"]
+    assert payload["comment_semantic_retrieval"]["artifacts"]["manual_review_xlsx"].endswith("manual.xlsx")
+    assert payload["stats"]["comment_semantic_retrieval"]["summary"]["comments_embedded"] == 10
+
+
+def test_runtime_builds_route_opportunity_from_retrieval_candidate():
+    runtime = load_runtime()
+    candidate = {
+        "platform": "tg",
+        "surface_key": "tg:vKalinigrad_recomendations",
+        "context_url": "https://t.me/vKalinigrad_recomendations/11",
+        "comment_id": "11",
+        "text_snapshot": "Куда съездить из Калининграда на один день?",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "score": 0.42,
+        "positive_score": 0.61,
+        "negative_score": 0.19,
+        "top_intent_phrase": "посоветуйте маршрут на один день из Калининграда",
+        "rank_global": 1,
+        "rank_within_surface": 1,
+        "target_hint": {"route_target_status": "route_needed", "destination_hint": "", "event_ids": []},
+    }
+
+    opp = runtime._build_opportunity_from_retrieval_candidate(candidate, default_target_url="https://t.me/kenigevents")
+
+    assert opp["action_type"] == "trip_route_poi_recommendation"
+    assert opp["target_hint"]["route_target_status"] == "route_needed"
+    assert opp["link_target"]["kind"] == "route_needed"
+    assert opp["evidence"]["semantic_retrieval"]["rank_global"] == 1
+    assert opp["scores"]["source"] == "comment_semantic_retrieval"
+
+
+def test_comment_retrieval_llm_gate_reviews_only_retrieved_candidates(monkeypatch):
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/vKalinigrad_recomendations", platform="tg")
+    calls = []
+
+    def fake_review(opp, _surface, _diagnostics):
+        calls.append(opp["context_url"])
+        return opp
+
+    monkeypatch.setattr(runtime, "_llm_review_opportunity_sync", fake_review)
+    scanned_opportunities = []
+    result = {
+        "llm_gate_candidates": [
+            {
+                "platform": "tg",
+                "surface_key": surface["external_id"],
+                "context_url": "https://t.me/vKalinigrad_recomendations/11",
+                "comment_id": "11",
+                "text_snapshot": "Куда съездить за день?",
+                "candidate_action_type": "trip_route_poi_recommendation",
+                "intent_set": "route_poi_close_actionable",
+                "score": 0.7,
+                "target_hint": {"route_target_status": "route_needed"},
+            },
+            {
+                # Same context must be skipped before spending a second LLM call.
+                "platform": "tg",
+                "surface_key": surface["external_id"],
+                "context_url": "https://t.me/vKalinigrad_recomendations/11",
+                "comment_id": "11",
+                "text_snapshot": "Куда съездить за день?",
+                "candidate_action_type": "event_recommendation_reply",
+                "intent_set": "event_far_context",
+                "score": 0.6,
+            },
+        ],
+    }
+
+    runtime._run_comment_retrieval_llm_gate(
+        result,
+        surfaces_by_external={surface["external_id"]: surface},
+        scanned_opportunities=scanned_opportunities,
+        diagnostics=[],
+    )
+
+    assert calls == ["https://t.me/vKalinigrad_recomendations/11"]
+    assert len(scanned_opportunities) == 1
+
+
+def test_vk_scan_with_semantic_retrieval_collects_comments_without_per_comment_llm(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL", "1")
+    monkeypatch.setattr(runtime, "_semantic_retrieval_enabled_from_module", lambda: True)
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", "0")
+
+    def fake_vk(method, *, token_lanes, params):
+        if method == "wall.get":
+            return {
+                "items": [
+                    {
+                        "owner_id": -42481124,
+                        "id": 5,
+                        "date": 1782900000,
+                        "text": "Подскажите, куда съездить из Калининграда на день?",
+                        "comments": {"count": 1},
+                    }
+                ]
+            }, "TEST_TOKEN"
+        if method == "wall.getComments":
+            return {
+                "items": [
+                    {"id": 9, "date": 1782900000, "text": "Куда поехать на электричке в область?"}
+                ]
+            }, "TEST_TOKEN"
+        raise AssertionError(method)
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+    monkeypatch.setattr(runtime, "_llm_review_opportunity_sync", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("per-comment LLM must be skipped")))
+    records = []
+
+    surfaces, opportunities, _diagnostics = runtime.scan_vk_shadow_surfaces(
+        ["https://vk.com/club42481124"],
+        ["https://vk.com/club42481124"],
+        comment_records=records,
+    )
+
+    assert opportunities == []
+    assert surfaces[0]["status"] == "comments_available"
+    assert len(records) == 2
+    assert {r["relation"] for r in records} == {"vk_social_wall_post", "vk_comment"}
+
+
 def test_build_vk_opportunity_is_read_only_review_payload():
     runtime = load_runtime()
     surface = runtime._seed_surface("https://vk.com/test_public", platform="vk")
@@ -568,6 +779,7 @@ def test_kaggle_config_overrides_stale_acq_env(monkeypatch, tmp_path):
 def test_telega_in_kaliningrad_seeds_are_tagged():
     runtime = load_runtime()
     assert "https://t.me/anons39" in runtime.DEFAULT_TG_SEEDS
+    assert "https://t.me/vKalinigrad_recomendations" in runtime.DEFAULT_TG_SEEDS
     surface = runtime._seed_surface("https://t.me/anons39", platform="tg")
     assert surface["source"] == "telega_in"
     assert surface["status"] == "needs_comment_resolve"
@@ -737,6 +949,8 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert "ACQ_MAX_VK_SURFACES_PER_RUN" in env
     assert "ACQ_MAX_VK_POSTS_PER_SURFACE" in env
     assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
+    assert "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL" in env
+    assert "ACQ_COMMENT_RETRIEVAL_MODELS_JSON" in env
 
 
 def test_runtime_env_passes_tg_channel_resolve_budget():

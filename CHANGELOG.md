@@ -4,6 +4,7 @@
 
 ### Added
 
+- Implemented the optional Subscriber Acquisition `acq_comment_semantic_retrieval.v1` Kaggle stage: collected TG/VK comments are embedded locally, benchmarked across e5-base/bge-m3, exported to clickable XLSX/CSV artifacts, profiled per surface, and only top retrieval candidates are passed to the Gemma gate.
 - Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
 - Documented Subscriber Acquisition `organizer_clarification` as a separate shadow subfeature: organizer-owned event publics can produce review-only clarification-question candidates after vector matching to known events, ideal event-card gap analysis, same-thread dedupe, and LLM final wording validation.
 - Added `/acq_map` and the `🗺 Карта групп XLSX` acquisition menu action: operators can download a clickable spreadsheet of all discovered groups/communities with scan state, pending/approved/rejected reply policy, source, next scan time, and opportunity counts.

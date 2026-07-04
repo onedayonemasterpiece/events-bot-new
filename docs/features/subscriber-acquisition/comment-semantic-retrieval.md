@@ -259,16 +259,21 @@ names/URLs, or use OCR in this stage.
 
 ## Kaggle integration
 
-Preferred implementation is a sibling module called from the current runtime
-after comment collection, for example:
+Current MVP implementation is a sibling module called from the current runtime
+after read-only TG/VK comment collection:
 
 ```text
 kaggle/SubscriberAcquisitionDiscovery/comment_semantic_retrieval.py
 ```
 
-It should reuse the existing encrypted config/secrets, Kaggle status dataset,
+It is enabled by `ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL=1`, reuses the existing
+encrypted config/secrets, Kaggle status dataset,
 `kaggle_status_client.py`, `kaggle_registry`, remote Telegram session guard,
-`ACQ_*` config style and no-send/shadow constraints.
+`ACQ_*` config style and no-send/shadow constraints. When enabled, the scanner
+collects comment records, skips the old per-comment deterministic/Gemma path,
+embeds the collected comments locally, attaches a `comment_semantic_profile` to
+each scanned surface that had comments, and sends only top retrieval candidates
+to the existing Gemma gate.
 
 Suggested progress payload phase names:
 
@@ -295,10 +300,10 @@ small surface profile snippets, artifact pointers and import counters.
 Research-stage bulk output is artifact-first:
 
 - `acq_comment_retrieval_run_summary.json`
-- `comment_retrieval_candidates.parquet`
-- `comment_retrieval_surface_profiles.parquet`
-- `comment_retrieval_score_distributions.parquet`
-- `comment_retrieval_manual_review_sample.csv`
+- `comment_retrieval_candidates.csv`
+- `comment_retrieval_surface_profiles.csv`
+- `comment_retrieval_score_distributions.csv`
+- `comment_retrieval_manual_review_sample.xlsx`
 - `comment_retrieval_speed_metrics.csv`
 - `comment_retrieval_report.md`
 

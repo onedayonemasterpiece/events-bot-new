@@ -44,6 +44,21 @@ def ensure_libs() -> None:
 
 ensure_libs()
 
+try:
+    from comment_semantic_retrieval import (
+        STAGE_NAME as COMMENT_RETRIEVAL_STAGE_NAME,
+        run_comment_semantic_retrieval,
+        semantic_retrieval_enabled as _semantic_retrieval_enabled_from_module,
+    )
+except Exception as exc:  # pragma: no cover - defensive Kaggle import guard
+    COMMENT_RETRIEVAL_STAGE_NAME = "acq_comment_semantic_retrieval.v1"
+    run_comment_semantic_retrieval = None  # type: ignore[assignment]
+
+    def _semantic_retrieval_enabled_from_module() -> bool:
+        return False
+
+    logger.warning("comment semantic retrieval module unavailable: %s", exc)
+
 TELEGA_IN_KALININGRAD_TG_SEEDS = [
     # Public handles discovered from Telega.in regional/Kaliningrad cards.
     "https://t.me/Kaliningrad_jenskiy",
@@ -66,6 +81,8 @@ DEFAULT_TG_SEEDS = [
     "https://t.me/kenig01chat",
     "https://t.me/zhest_kaliningrada",
     "https://t.me/pereezd_v_kaliningrad_legko",
+    # Golden calibration group for route/POI recommendation discovery.
+    "https://t.me/vKalinigrad_recomendations",
     *TELEGA_IN_KALININGRAD_TG_SEEDS,
 ]
 
@@ -234,6 +251,16 @@ TG_SCAN_STATS: dict[str, int] = {
     "replyable_messages_seen": 0,
     "replyable_surfaces_scanned": 0,
     "frontier_links_queued": 0,
+}
+COMMENT_RETRIEVAL_STATS: dict[str, int] = {
+    "records_collected": 0,
+    "records_after_filter": 0,
+    "surface_profiles": 0,
+    "candidate_rows": 0,
+    "llm_gate_candidates": 0,
+    "llm_gate_candidates_reviewed": 0,
+    "llm_gate_candidates_accepted": 0,
+    "errors": 0,
 }
 
 LLM_GATE_SCHEMA = {
@@ -534,6 +561,8 @@ def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
         "prefilter_intent": opp.get("matched_intent"),
         "prefilter_topic_cluster": opp.get("topic_cluster"),
         "prefilter_target": opp.get("link_target"),
+        "target_hint": opp.get("target_hint"),
+        "semantic_retrieval": (opp.get("evidence") or {}).get("semantic_retrieval") or opp.get("retrieval_evidence"),
         "checklist_questions": checklist_questions,
     }
     return (
@@ -972,6 +1001,286 @@ def _should_skip_opportunity_before_llm(
     return False
 
 
+def _comment_retrieval_enabled() -> bool:
+    return bool(_semantic_retrieval_enabled_from_module())
+
+
+def _tg_context_url(surface: dict[str, Any], message_id: int) -> str:
+    url = str(surface.get("url") or "")
+    handle = str(surface.get("handle") or _handle_from_url(url) or "").strip()
+    if handle and message_id:
+        return f"https://t.me/c/{handle}/{message_id}" if handle.isdigit() else f"https://t.me/{handle}/{message_id}"
+    return url
+
+
+def _collect_tg_comment_record(
+    records: list[dict[str, Any]],
+    surface: dict[str, Any],
+    message: Any,
+    *,
+    relation: str | None,
+    retrieval: str,
+    search_query: str | None = None,
+) -> None:
+    text = " ".join(str(getattr(message, "message", None) or getattr(message, "text", None) or "").split())
+    if not text:
+        return
+    msg_id = int(getattr(message, "id", 0) or 0)
+    date = getattr(message, "date", None)
+    records.append({
+        "run_id": os.getenv("KAGGLE_RUN_ID") or "",
+        "surface_key": str(surface.get("external_id") or surface.get("url") or ""),
+        "surface_external_id": surface.get("external_id"),
+        "surface_url": surface.get("url"),
+        "platform": "tg",
+        "surface_type": surface.get("surface_type"),
+        "context_url": _tg_context_url(surface, msg_id),
+        "comment_id": str(msg_id) if msg_id else "",
+        "post_id": "",
+        "topic_id": "",
+        "thread_id": str(getattr(getattr(message, "reply_to", None), "reply_to_msg_id", "") or ""),
+        "created_at": date.astimezone(timezone.utc).isoformat() if hasattr(date, "astimezone") else None,
+        "text": text,
+        "text_snapshot": text[:500],
+        "relation": relation or "surface",
+        "retrieval": retrieval,
+        "search_query": search_query,
+    })
+    COMMENT_RETRIEVAL_STATS["records_collected"] += 1
+
+
+def _collect_vk_comment_record(
+    records: list[dict[str, Any]],
+    surface: dict[str, Any],
+    *,
+    context_url: str,
+    text: str,
+    comment_id: str | int | None = None,
+    post_id: str | int | None = None,
+    topic_id: str | int | None = None,
+    thread_id: str | int | None = None,
+    created_at: str | None = None,
+    relation: str,
+) -> None:
+    compact = " ".join(str(text or "").split())
+    if not compact:
+        return
+    records.append({
+        "run_id": os.getenv("KAGGLE_RUN_ID") or "",
+        "surface_key": str(surface.get("external_id") or surface.get("url") or ""),
+        "surface_external_id": surface.get("external_id"),
+        "surface_url": surface.get("url"),
+        "platform": "vk",
+        "surface_type": surface.get("surface_type"),
+        "context_url": context_url,
+        "comment_id": str(comment_id or ""),
+        "post_id": str(post_id or ""),
+        "topic_id": str(topic_id or ""),
+        "thread_id": str(thread_id or ""),
+        "created_at": created_at,
+        "text": compact,
+        "text_snapshot": compact[:500],
+        "relation": relation,
+    })
+    COMMENT_RETRIEVAL_STATS["records_collected"] += 1
+
+
+def _retrieval_link_target_for_candidate(candidate: dict[str, Any], *, default_target_url: str) -> dict[str, Any]:
+    action = str(candidate.get("candidate_action_type") or "")
+    if action == "trip_route_poi_recommendation":
+        return {
+            "kind": "route_needed",
+            "url": None,
+            "label": "Маршрут/POI рекомендация (маршруты ещё не опубликованы)",
+            "reason": "semantic retrieval found route/POI intent; current MVP discovers surfaces for future route replies",
+        }
+    base = _static_site_base_url()
+    if action == "event_site_search_or_listing":
+        return {"kind": "topic_landing", "url": os.getenv("ACQ_SEARCH_PAGE_URL") or f"{base}/poisk/", "label": "Поиск событий KenigEvents", "reason": "semantic retrieval found site/search/listing need"}
+    if action == "organizer_submission_or_partnership":
+        return {"kind": "topic_landing", "url": os.getenv("ACQ_PARTNER_PAGE_URL") or f"{base}/partnerstvo/", "label": "Добавить событие / инфопартнёрство", "reason": "semantic retrieval found organizer submission/partnership need"}
+    if action == "badge_filter_need":
+        return {"kind": "topic_landing", "url": os.getenv("ACQ_SEARCH_PAGE_URL") or f"{base}/poisk/", "label": "Поиск событий с быстрыми признаками", "reason": "semantic retrieval found event badge/filter need"}
+    return {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы", "reason": "semantic retrieval found event recommendation need"}
+
+
+def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, default_target_url: str) -> dict[str, Any] | None:
+    context_url = str(candidate.get("context_url") or "")
+    text = " ".join(str(candidate.get("text_snapshot") or candidate.get("text") or "").split())
+    if not context_url or not text:
+        return None
+    action = str(candidate.get("candidate_action_type") or "event_recommendation_reply")
+    target_hint = candidate.get("target_hint") if isinstance(candidate.get("target_hint"), dict) else {}
+    link_target = _retrieval_link_target_for_candidate(candidate, default_target_url=default_target_url)
+    scores = {
+        "relevance": max(0.0, min(1.0, float(candidate.get("score") or 0.0))),
+        "retrieval_score": float(candidate.get("score") or 0.0),
+        "positive_score": float(candidate.get("positive_score") or 0.0),
+        "negative_score": float(candidate.get("negative_score") or 0.0),
+        "spam_risk": "low",
+        "safety_risk": "low",
+        "source": "comment_semantic_retrieval",
+    }
+    return {
+        "platform": candidate.get("platform") or "tg",
+        "surface_external_id": candidate.get("surface_key") or candidate.get("surface_external_id"),
+        "context_url": context_url,
+        "context_external_id": str(candidate.get("comment_id") or candidate.get("post_id") or ""),
+        "context_created_at": candidate.get("created_at"),
+        "context_text_snippet": text[:500],
+        "matched_intent": action,
+        "topic_cluster": str(candidate.get("intent_set") or action),
+        "action_type": action,
+        "event_ids": list((target_hint or {}).get("event_ids") or []),
+        "candidate_events": [],
+        "target_hint": target_hint,
+        "link_target": link_target,
+        "fallback_link_target": {"kind": "pka_channel", "url": default_target_url, "label": "Полюбить Калининград Анонсы"},
+        "reach": {"low": 3 if candidate.get("platform") == "vk" else 5, "confidence": "low", "formula": "semantic_retrieval_candidate_low"},
+        "scores": scores,
+        "sticker_observation": {"fit": "weak", "stickers_seen": 0, "reason": "semantic retrieval only; needs LLM review before any reply"},
+        "retrieval_evidence": {
+            "stage": COMMENT_RETRIEVAL_STAGE_NAME,
+            "model_name": candidate.get("model_name"),
+            "intent_set": candidate.get("intent_set"),
+            "scoring_method": os.getenv("ACQ_COMMENT_RETRIEVAL_SCORING_METHOD") or "positive_negative_margin",
+            "score": candidate.get("score"),
+            "positive_score": candidate.get("positive_score"),
+            "negative_score": candidate.get("negative_score"),
+            "top_intent_phrase": candidate.get("top_intent_phrase"),
+            "rank_global": candidate.get("rank_global"),
+            "rank_within_surface": candidate.get("rank_within_surface"),
+            "funnel_bucket": candidate.get("funnel_bucket"),
+            "model_disagreement_bucket": candidate.get("model_disagreement_bucket"),
+        },
+        "evidence": {
+            "relation": candidate.get("relation"),
+            "scanner": "comment_semantic_retrieval",
+            "semantic_retrieval": {
+                "stage": COMMENT_RETRIEVAL_STAGE_NAME,
+                "model_name": candidate.get("model_name"),
+                "intent_set": candidate.get("intent_set"),
+                "score": candidate.get("score"),
+                "top_intent_phrase": candidate.get("top_intent_phrase"),
+                "rank_global": candidate.get("rank_global"),
+                "rank_within_surface": candidate.get("rank_within_surface"),
+                "funnel_bucket": candidate.get("funnel_bucket"),
+            },
+        },
+    }
+
+
+def _run_comment_semantic_retrieval_stage(
+    comment_records: list[dict[str, Any]],
+    *,
+    surfaces_by_external: dict[str, dict[str, Any]],
+    diagnostics: list[str],
+) -> dict[str, Any] | None:
+    if not _comment_retrieval_enabled():
+        return None
+    if run_comment_semantic_retrieval is None:
+        COMMENT_RETRIEVAL_STATS["errors"] += 1
+        diagnostics.append("comment semantic retrieval requested but module is unavailable")
+        return None
+
+    def progress(phase: str, payload: dict[str, Any]) -> None:
+        _status_event(
+            "acq_comment_retrieval_progress",
+            phase=phase,
+            status="running" if phase != "complete" else "done",
+            progress={**payload, "phase": phase, "progress_label": f"semantic retrieval: {phase}"},
+        )
+
+    try:
+        result = run_comment_semantic_retrieval(
+            comment_records,
+            surfaces_by_external=surfaces_by_external,
+            output_dir=os.getenv("ACQ_OUTPUT_DIR") or "/kaggle/working",
+            progress_callback=progress,
+        )
+    except Exception as exc:
+        COMMENT_RETRIEVAL_STATS["errors"] += 1
+        diagnostics.append(f"comment semantic retrieval failed: {type(exc).__name__}: {str(exc)[:300]}")
+        logger.warning("comment semantic retrieval failed", exc_info=True)
+        return None
+    summary = result.get("summary") or {}
+    COMMENT_RETRIEVAL_STATS["records_after_filter"] = int(summary.get("comments_after_filter") or 0)
+    COMMENT_RETRIEVAL_STATS["surface_profiles"] = int(summary.get("surface_profiles_count") or 0)
+    COMMENT_RETRIEVAL_STATS["candidate_rows"] = int(summary.get("candidate_count") or 0)
+    COMMENT_RETRIEVAL_STATS["llm_gate_candidates"] = int(summary.get("llm_gate_candidate_count") or 0)
+    diagnostics.append(
+        "comment semantic retrieval complete: "
+        f"comments={summary.get('comments_embedded', 0)} profiles={summary.get('surface_profiles_count', 0)} "
+        f"candidates={summary.get('candidate_count', 0)} gate_candidates={summary.get('llm_gate_candidate_count', 0)}"
+    )
+    return result
+
+
+def _attach_comment_semantic_profiles(scanned_surfaces: list[dict[str, Any]], result: dict[str, Any] | None) -> None:
+    if not result:
+        return
+    profiles = [p for p in list(result.get("surface_profiles") or []) if isinstance(p, dict)]
+    profiles_by_key = {str(p.get("surface_key") or ""): p for p in profiles if str(p.get("surface_key") or "")}
+    for surface in scanned_surfaces:
+        key = str(surface.get("external_id") or surface.get("url") or "")
+        profile = profiles_by_key.get(key)
+        if not profile:
+            continue
+        surface["comment_semantic_profile"] = profile
+        surface["monitoring_decision_hint"] = profile.get("monitoring_decision_hint")
+        surface["monitoring_reason"] = profile.get("monitoring_reason")
+        dominant = profile.get("dominant_detected_interests") or []
+        if dominant:
+            surface["topic_cluster"] = ",".join(str(x) for x in dominant if str(x))
+        risk = dict(surface.get("risk") or {})
+        risk["comment_semantic_retrieval"] = {
+            "stage": COMMENT_RETRIEVAL_STAGE_NAME,
+            "monitoring_decision_hint": profile.get("monitoring_decision_hint"),
+            "monitoring_reason": profile.get("monitoring_reason"),
+            "dominant_detected_interests": dominant,
+            "llm_budget_recommendation": profile.get("llm_budget_recommendation"),
+        }
+        surface["risk"] = risk
+
+
+def _run_comment_retrieval_llm_gate(
+    result: dict[str, Any] | None,
+    *,
+    surfaces_by_external: dict[str, dict[str, Any]],
+    scanned_opportunities: list[dict[str, Any]],
+    diagnostics: list[str],
+) -> None:
+    if not result:
+        return
+    default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
+    seen_contexts = _seen_context_urls()
+    opportunity_keys: set[str] = set()
+    for candidate in list(result.get("llm_gate_candidates") or []):
+        if not isinstance(candidate, dict):
+            continue
+        opp = _build_opportunity_from_retrieval_candidate(candidate, default_target_url=default_target_url)
+        if not opp:
+            continue
+        if _should_skip_opportunity_before_llm(
+            opp,
+            seen_contexts=seen_contexts,
+            opportunity_keys=opportunity_keys,
+            diagnostics=diagnostics,
+        ):
+            continue
+        surface_key = str(candidate.get("surface_key") or candidate.get("surface_external_id") or "")
+        surface = surfaces_by_external.get(surface_key) or {
+            "platform": opp.get("platform"),
+            "external_id": surface_key,
+            "url": candidate.get("surface_url"),
+            "surface_type": candidate.get("surface_type"),
+        }
+        reviewed = _llm_review_opportunity_sync(opp, surface, diagnostics)
+        COMMENT_RETRIEVAL_STATS["llm_gate_candidates_reviewed"] += 1
+        if reviewed:
+            COMMENT_RETRIEVAL_STATS["llm_gate_candidates_accepted"] += 1
+            scanned_opportunities.append(reviewed)
+
 
 VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "board.getTopics", "board.getComments"}
 
@@ -1211,6 +1520,7 @@ def _scan_vk_board_discussions(
     diagnostics: list[str],
     opportunities: list[dict[str, Any]],
     deadline: float | None,
+    comment_records: list[dict[str, Any]] | None = None,
 ) -> bool:
     max_topics = _int_env("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", 3, min_value=0)
     max_comments = _int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 20, min_value=1)
@@ -1261,6 +1571,22 @@ def _scan_vk_board_discussions(
             if not isinstance(comment, dict):
                 continue
             VK_SCAN_STATS["board_comments_seen"] += 1
+            topic_id = int(topic.get("id") or 0)
+            comment_id = int(comment.get("id") or 0)
+            if comment_records is not None and topic_id and comment_id:
+                _collect_vk_comment_record(
+                    comment_records,
+                    surface,
+                    context_url=_vk_topic_context_url(group_id, topic_id, comment_id),
+                    text=str(comment.get("text") or ""),
+                    comment_id=comment_id,
+                    topic_id=topic_id,
+                    thread_id=topic_id,
+                    created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
+                    relation="vk_board_comment",
+                )
+            if _comment_retrieval_enabled():
+                continue
             opp = build_vk_board_opportunity(surface, group_id=group_id, topic=topic, comment=comment, default_target_url=default_target_url)
             if not opp:
                 continue
@@ -1323,7 +1649,7 @@ def _mark_vk_surface_comments_available(surface: dict[str, Any], *, wall_comment
     return surface
 
 
-def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comment_records: list[dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only VK discovery for explicitly allowlisted communities.
 
     Uses only `wall.get` and `wall.getComments`; no VK wall/comment/message
@@ -1384,6 +1710,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 diagnostics=diagnostics,
                 opportunities=opportunities,
                 deadline=deadline,
+                comment_records=comment_records,
             ):
                 _mark_vk_surface_comments_available(
                     surface,
@@ -1418,7 +1745,17 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 if _is_out_of_region_surface(discovered):
                     discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK post")
                 surfaces.setdefault(discovered["external_id"], discovered)
-            post_opp = build_vk_wall_post_opportunity(surface, post=post, default_target_url=default_target_url)
+            if comment_records is not None and _is_vk_social_discovery_surface(surface):
+                _collect_vk_comment_record(
+                    comment_records,
+                    surface,
+                    context_url=f"https://vk.com/wall{owner_id}_{post_id}" if owner_id and post_id else str(surface.get("url") or ""),
+                    text=post_text,
+                    post_id=post_id,
+                    created_at=datetime.fromtimestamp(int(post.get("date") or 0), tz=timezone.utc).isoformat() if post.get("date") else None,
+                    relation="vk_social_wall_post",
+                )
+            post_opp = None if _comment_retrieval_enabled() else build_vk_wall_post_opportunity(surface, post=post, default_target_url=default_target_url)
             if post_opp:
                 VK_SCAN_STATS["comment_prefilter_candidates"] += 1
                 if not _should_skip_opportunity_before_llm(
@@ -1454,12 +1791,25 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
                 if not isinstance(comment, dict):
                     continue
                 VK_SCAN_STATS["comments_seen"] += 1
+                comment_id = int(comment.get("id") or 0)
+                if comment_records is not None:
+                    _collect_vk_comment_record(
+                        comment_records,
+                        surface,
+                        context_url=(f"https://vk.com/wall{owner_id}_{post_id}?reply={comment_id}" if comment_id else f"https://vk.com/wall{owner_id}_{post_id}"),
+                        text=str(comment.get("text") or ""),
+                        comment_id=comment_id,
+                        post_id=post_id,
+                        thread_id=post_id,
+                        created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
+                        relation="vk_comment",
+                    )
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
                     if _is_out_of_region_surface(discovered):
                         discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK comments")
                     surfaces.setdefault(discovered["external_id"], discovered)
-                opp = build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
+                opp = None if _comment_retrieval_enabled() else build_vk_opportunity(surface, owner_id=owner_id, post_id=post_id, comment=comment, default_target_url=default_target_url)
                 if opp:
                     VK_SCAN_STATS["comment_prefilter_candidates"] += 1
                     opp["evidence"] = {**(opp.get("evidence") or {}), "relation": "vk_comment", "scanner": "vk_shadow"}
@@ -1486,6 +1836,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str]) -> tuple
             diagnostics=diagnostics,
             opportunities=opportunities,
             deadline=deadline,
+            comment_records=comment_records,
         ):
             _mark_vk_surface_comments_available(
                 surface,
@@ -1605,7 +1956,7 @@ def _enqueue_tg_url(
     return True
 
 
-async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records: list[dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Read-only Telegram discovery with bounded frontier walk.
 
     The function never sends messages, never joins private chats, and only calls
@@ -1820,6 +2171,10 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str]) -> tuple[list[dict
                     relation=relation,
                 ):
                     return False
+                if comment_records is not None:
+                    _collect_tg_comment_record(comment_records, scan_surface, message, relation=relation, retrieval=retrieval, search_query=search_query)
+                if _comment_retrieval_enabled():
+                    return False
                 opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
                 if not opp:
                     return False
@@ -1965,7 +2320,13 @@ def _telegram_entity_ref_from_seed(
     return handle
 
 
-def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None, scanned_opportunities: list[dict[str, Any]] | None = None, diagnostics: list[str] | None = None) -> dict[str, Any]:
+def build_shadow_payload(
+    *,
+    scanned_surfaces: list[dict[str, Any]] | None = None,
+    scanned_opportunities: list[dict[str, Any]] | None = None,
+    diagnostics: list[str] | None = None,
+    comment_retrieval_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     tg_seeds = _json_env("ACQ_TG_SEEDS_JSON", DEFAULT_TG_SEEDS)
     vk_seeds = _json_env("ACQ_VK_SEEDS_JSON", [])
     vk_allowlist = _json_env("ACQ_VK_ALLOWLIST_JSON", [])
@@ -2010,7 +2371,8 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
     scanned_list = list(scanned_surfaces or [])
     scanned_tg = [s for s in scanned_list if s.get("platform") == "tg"]
     scanned_vk = [s for s in scanned_list if s.get("platform") == "vk"]
-    return {
+    comment_retrieval_summary = dict((comment_retrieval_result or {}).get("summary") or {})
+    payload = {
         "run_id": os.getenv("KAGGLE_RUN_ID") or f"acq-shadow-{int(time.time())}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "surfaces": list(surfaces_by_external.values()),
@@ -2032,6 +2394,12 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "opportunity_screening": dict(OPPORTUNITY_SCREENING_STATS),
             "tg_scan": dict(TG_SCAN_STATS),
             "vk_scan": dict(VK_SCAN_STATS),
+            "comment_semantic_retrieval": {
+                **dict(COMMENT_RETRIEVAL_STATS),
+                "enabled": _comment_retrieval_enabled(),
+                "stage": COMMENT_RETRIEVAL_STAGE_NAME,
+                "summary": comment_retrieval_summary,
+            },
             "external_sends": 0,
             "comments_posted": 0,
             "stickers_sent": 0,
@@ -2040,6 +2408,14 @@ def build_shadow_payload(*, scanned_surfaces: list[dict[str, Any]] | None = None
             "Runtime is safe/read-only: no Telegram/VK send/comment/post/join methods are called."
         ],
     }
+    if comment_retrieval_result:
+        payload["comment_semantic_retrieval"] = {
+            "summary": comment_retrieval_summary,
+            "artifacts": dict((comment_retrieval_result or {}).get("artifacts") or {}),
+            "surface_profiles_count": len(list((comment_retrieval_result or {}).get("surface_profiles") or [])),
+            "llm_gate_candidates_count": len(list((comment_retrieval_result or {}).get("llm_gate_candidates") or [])),
+        }
+    return payload
 
 
 def main() -> None:
@@ -2048,10 +2424,14 @@ def main() -> None:
     scanned_surfaces: list[dict[str, Any]] = []
     scanned_opportunities: list[dict[str, Any]] = []
     diagnostics: list[str] = []
+    comment_records: list[dict[str, Any]] = []
+    collect_comment_records = comment_records if _comment_retrieval_enabled() else None
     if _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False):
         try:
             tg_seeds = [str(x) for x in list(_json_env("ACQ_TG_SEEDS_JSON", DEFAULT_TG_SEEDS) or [])]
-            tg_surfaces, tg_opportunities, tg_diagnostics = asyncio.run(scan_telegram_shadow_surfaces(tg_seeds))
+            tg_surfaces, tg_opportunities, tg_diagnostics = asyncio.run(
+                scan_telegram_shadow_surfaces(tg_seeds, comment_records=collect_comment_records)
+            )
             scanned_surfaces.extend(tg_surfaces)
             scanned_opportunities.extend(tg_opportunities)
             diagnostics.extend(tg_diagnostics)
@@ -2062,14 +2442,36 @@ def main() -> None:
     vk_allowlist = [str(x) for x in list(_json_env("ACQ_VK_ALLOWLIST_JSON", []) or [])]
     if vk_allowlist:
         try:
-            vk_surfaces, vk_opportunities, vk_diagnostics = scan_vk_shadow_surfaces(vk_seeds, vk_allowlist)
+            vk_surfaces, vk_opportunities, vk_diagnostics = scan_vk_shadow_surfaces(
+                vk_seeds,
+                vk_allowlist,
+                comment_records=collect_comment_records,
+            )
             scanned_surfaces.extend(vk_surfaces)
             scanned_opportunities.extend(vk_opportunities)
             diagnostics.extend(vk_diagnostics)
         except Exception as exc:
             diagnostics.append(f"vk shadow scan failed: {exc}")
             logger.exception("vk shadow scan failed")
-    payload = build_shadow_payload(scanned_surfaces=scanned_surfaces, scanned_opportunities=scanned_opportunities, diagnostics=diagnostics)
+    surfaces_by_external = {str(s.get("external_id") or s.get("url") or ""): s for s in scanned_surfaces if s.get("external_id") or s.get("url")}
+    comment_retrieval_result = _run_comment_semantic_retrieval_stage(
+        comment_records,
+        surfaces_by_external=surfaces_by_external,
+        diagnostics=diagnostics,
+    )
+    _attach_comment_semantic_profiles(scanned_surfaces, comment_retrieval_result)
+    _run_comment_retrieval_llm_gate(
+        comment_retrieval_result,
+        surfaces_by_external=surfaces_by_external,
+        scanned_opportunities=scanned_opportunities,
+        diagnostics=diagnostics,
+    )
+    payload = build_shadow_payload(
+        scanned_surfaces=scanned_surfaces,
+        scanned_opportunities=scanned_opportunities,
+        diagnostics=diagnostics,
+        comment_retrieval_result=comment_retrieval_result,
+    )
     _status_event(
         "preflight_ok",
         phase="preflight",
