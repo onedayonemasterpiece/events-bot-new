@@ -14,6 +14,12 @@
 
 ### Changed
 
+- Subscriber Acquisition semantic retrieval now separates the default vector
+  LLM-gate from human-facing report evidence: top-N semantic rows still reach
+  Gemma without deterministic/regex prefiltering, while `eligible_*`,
+  `surface_summary`, `question_patterns`, and `canonical_questions` require
+  stricter post-vector report-quality checks so ads, unsupported intents,
+  source-post contexts and other noise cannot become canonical examples.
 - Subscriber Acquisition Discovery live Telegram scans now prefer the dedicated
   `TELEGRAM_AUTH_BUNDLE_DISCOVERY` bundle, send only the selected auth secret to
   Kaggle, derive the status/resource lease from the actual auth env scope, and

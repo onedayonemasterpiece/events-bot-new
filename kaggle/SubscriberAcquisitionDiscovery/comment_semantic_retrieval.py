@@ -129,6 +129,14 @@ INTENT_SETS: dict[str, list[str]] = {
         "вопрос про врача, клинику, лечение, анализы или запись к врачу без связи с событием или маршрутом",
         "обсуждение транспорта без связи с поездкой к месту",
         "обсуждение погоды без связи с поездкой или мероприятием",
+        "объявление о потерянном телефоне, найденных вещах или пропаже без связи с событием",
+        "обсуждение цены бензина, дизеля, топлива или заправок без маршрута поездки",
+        "обсуждение выборов, политики или чиновников без вопроса о событии",
+        "реклама товаров с маркетплейса, артикулом, wildberries или ссылкой на товар",
+        "реклама помощи студентам, учебных работ, экзаменов, зачётов или услуг",
+        "реклама психологических, эзотерических или системных расстановок без события",
+        "жалоба на ремонт дороги, трамвай, остановку или городское благоустройство без события",
+        "новостной пост о погоде, температуре моря или происшествии без вопроса пользователя",
         "вопрос не связан с местом, маршрутом, достопримечательностью или мероприятием",
     ],
 }
@@ -211,6 +219,16 @@ def _int_env(name: str, default: int, *, min_value: int | None = None) -> int:
         value = int(os.getenv(name) or default)
     except Exception:
         value = int(default)
+    if min_value is not None:
+        value = max(min_value, value)
+    return value
+
+
+def _float_env(name: str, default: float, *, min_value: float | None = None) -> float:
+    try:
+        value = float(os.getenv(name) or default)
+    except Exception:
+        value = float(default)
     if min_value is not None:
         value = max(min_value, value)
     return value
@@ -740,6 +758,91 @@ def _is_actual_question_text(text: str) -> bool:
     ))
 
 
+_REPORT_REJECT_NOISE_TYPES = {
+    "explicit_offer_or_ad",
+    "link_or_crosspost_without_question",
+    "too_short_non_question",
+    "intent_without_text_support",
+    "source_post_not_comment",
+}
+
+
+def _is_source_post_context(row: dict[str, Any]) -> bool:
+    relation = str(row.get("relation") or "")
+    return relation in {"vk_social_wall_post", "tg_channel_post_context"} or _truthy_value(row.get("is_post"))
+
+
+def _row_score(row: dict[str, Any]) -> float:
+    for key in ["score", "score_for_rank", "positive_negative_margin"]:
+        try:
+            return float(row.get(key))
+        except Exception:
+            continue
+    return 0.0
+
+
+def _report_min_comment_score() -> float:
+    return _float_env("ACQ_COMMENT_RETRIEVAL_REPORT_MIN_COMMENT_SCORE", 0.01)
+
+
+def _report_min_source_post_score() -> float:
+    return _float_env("ACQ_COMMENT_RETRIEVAL_REPORT_MIN_SOURCE_POST_SCORE", 0.01)
+
+
+def _report_noise_rejected(row: dict[str, Any]) -> bool:
+    noise = str(row.get("candidate_noise_type") or "").strip()
+    return bool(noise in _REPORT_REJECT_NOISE_TYPES or noise.startswith("out_of_scope"))
+
+
+def _report_candidate_eligible(row: dict[str, Any], *, allow_source_posts: bool = True, allow_historical: bool = False) -> bool:
+    """Rows suitable for human-facing summaries/examples.
+
+    This is intentionally *not* the LLM-gate selector.  The default discovery
+    gate still receives top-N vector rows without a deterministic prefilter.
+    The report/catalog path is stricter so garbage rows do not become
+    “canonical questions” or selected-surface evidence.
+    """
+    scope = str(row.get("candidate_usage_scope") or "")
+    if scope == "historical_calibration" and not allow_historical:
+        return False
+    if scope not in {"", "monitoring_candidate", "historical_calibration"}:
+        return False
+    text = str(row.get("text_snapshot") or row.get("text") or "")
+    features = _text_quality_features(text)
+    intent = str(row.get("intent_set") or "")
+    action = str(row.get("candidate_action_type") or "")
+    intent_supported = bool(_truthy_value(row.get("intent_text_supported")) and _intent_has_text_support(text, intent))
+    if _is_source_post_context(row):
+        if not allow_source_posts:
+            return False
+        if intent not in {"organizer_comment_fit", "event_close_question"}:
+            return False
+        if not intent_supported:
+            return False
+        return _row_score(row) >= _report_min_source_post_score()
+    if _report_noise_rejected(row):
+        return False
+    if features["hard_noise"] or _out_of_scope_noise_type(text):
+        return False
+    if not (_truthy_value(row.get("question_signal")) and features["question_signal"]):
+        return False
+    if not intent_supported:
+        return False
+    if not _is_actual_question_text(text):
+        return False
+    if action == "organizer_visibility_clarification" and intent not in {"organizer_comment_fit", "event_close_question"}:
+        return False
+    return _row_score(row) >= _report_min_comment_score()
+
+
+def _report_real_question_row(row: dict[str, Any], *, allow_historical: bool = True) -> bool:
+    return (
+        not _is_source_post_context(row)
+        and _report_candidate_eligible(row, allow_source_posts=False, allow_historical=allow_historical)
+        and _is_actual_question_text(str(row.get("text_snapshot") or row.get("text") or ""))
+    )
+
+
 def _surface_key(record: dict[str, Any]) -> str:
     return str(record.get("surface_key") or record.get("surface_external_id") or record.get("surface_url") or "unknown")
 
@@ -998,18 +1101,19 @@ def _surface_decision_summaries(
         surface_key = str(profile.get("surface_key") or "")
         eligible = _best_context_rows(eligible_rows_by_surface.get(surface_key, []))
         all_rows = _best_context_rows(all_gate_rows_by_surface.get(surface_key, []))
-        route_rows = [r for r in eligible if r.get("candidate_action_type") == "trip_route_poi_recommendation"]
-        event_rows = [r for r in eligible if r.get("candidate_action_type") == "event_recommendation_reply"]
-        organizer_submit_rows = [r for r in eligible if r.get("candidate_action_type") == "organizer_submission_or_partnership"]
-        badge_rows = [r for r in eligible if r.get("candidate_action_type") == "badge_filter_need"]
-        site_rows = [r for r in eligible if r.get("candidate_action_type") == "event_site_search_or_listing"]
+        comment_eligible = [r for r in eligible if not _is_source_post_context(r)]
+        route_rows = [r for r in comment_eligible if r.get("candidate_action_type") == "trip_route_poi_recommendation"]
+        event_rows = [r for r in comment_eligible if r.get("candidate_action_type") == "event_recommendation_reply"]
+        organizer_submit_rows = [r for r in comment_eligible if r.get("candidate_action_type") == "organizer_submission_or_partnership"]
+        badge_rows = [r for r in comment_eligible if r.get("candidate_action_type") == "badge_filter_need"]
+        site_rows = [r for r in comment_eligible if r.get("candidate_action_type") == "event_site_search_or_listing"]
         event_question_rows = [*event_rows, *site_rows, *badge_rows]
         ask_context_rows = [
             r for r in eligible
             if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit"}
         ]
-        comment_rows = [r for r in eligible if str(r.get("relation") or "") != "vk_social_wall_post" and not _truthy_value(r.get("is_post"))]
-        source_post_rows = [r for r in all_rows if str(r.get("relation") or "") == "vk_social_wall_post" or _truthy_value(r.get("is_post"))]
+        comment_rows = comment_eligible
+        source_post_rows = [r for r in all_rows if _is_source_post_context(r)]
         noise_rows = [r for r in all_rows if str(r.get("candidate_noise_type") or "")]
         answerable_count = len(route_rows) + len(event_rows) + len(site_rows) + len(organizer_submit_rows) + len(badge_rows)
         ask_count = len(ask_context_rows)
@@ -1040,7 +1144,12 @@ def _surface_decision_summaries(
         if badge_rows:
             parts.append(f"badge/filter вопросов: {len(badge_rows)}")
         if ask_context_rows:
-            parts.append(f"паттернов для уточняющих вопросов организаторам: {len(ask_context_rows)}")
+            own_post_count = len([r for r in ask_context_rows if _is_source_post_context(r)])
+            if own_post_count:
+                parts.append(f"контекстов постов для уточняющих вопросов организаторам: {own_post_count}")
+            comment_ask_count = len(ask_context_rows) - own_post_count
+            if comment_ask_count:
+                parts.append(f"вопросов/комментариев для organizer-уточнений: {comment_ask_count}")
         if noise_rows:
             if _deterministic_prefilter_enabled():
                 parts.append(f"отфильтровано рекламных/не-вопросных сигналов: {len(noise_rows)}")
@@ -1128,10 +1237,8 @@ def _surface_decision_summaries(
 
 def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int = 3) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for row in _best_context_rows([r for r in rows if r.get("pre_llm_candidate_eligible")]):
+    for row in _best_context_rows([r for r in rows if _report_real_question_row(r)]):
         text = str(row.get("text_snapshot") or row.get("text") or "")
-        if not _is_actual_question_text(text):
-            continue
         pattern = _question_pattern_label(
             text,
             action_type=str(row.get("candidate_action_type") or ""),
@@ -1176,10 +1283,8 @@ def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int 
 
 def _canonical_question_catalog_rows(rows: list[dict[str, Any]], *, limit_examples: int = 5) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in _best_context_rows([r for r in rows if r.get("pre_llm_candidate_eligible")]):
+    for row in _best_context_rows([r for r in rows if _report_real_question_row(r)]):
         text = str(row.get("text_snapshot") or row.get("text") or "")
-        if not _is_actual_question_text(text):
-            continue
         action = str(row.get("candidate_action_type") or "")
         pattern = _question_pattern_label(text, action_type=action, intent_set=str(row.get("intent_set") or ""))
         key = (pattern, action)
@@ -1219,7 +1324,7 @@ def _canonical_question_catalog_rows(rows: list[dict[str, Any]], *, limit_exampl
 
 
 def _model_example_rows(candidates: list[dict[str, Any]], model_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
-    rows = [r for r in candidates if str(r.get("model_name") or "") == model_name and r.get("pre_llm_candidate_eligible")]
+    rows = [r for r in candidates if str(r.get("model_name") or "") == model_name and _report_candidate_eligible(r)]
     return _best_context_rows(rows)[:limit]
 
 
@@ -1852,7 +1957,7 @@ def _write_xlsx(
         for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
             ex.column_dimensions[get_column_letter(idx)].width = width
 
-    if question_patterns:
+    if question_patterns is not None:
         qp = wb.create_sheet("question_patterns")
         qp_headers = [
             "surface_key", "platform", "surface_type", "pattern", "candidate_action_type",
@@ -1865,7 +1970,7 @@ def _write_xlsx(
         for idx, width in enumerate([30, 10, 18, 28, 34, 70, 10, 45, 45, 90, 70], start=1):
             qp.column_dimensions[get_column_letter(idx)].width = width
 
-    if canonical_questions:
+    if canonical_questions is not None:
         cq = wb.create_sheet("canonical_questions")
         cq_headers = [
             "pattern", "candidate_action_type", "canonical_question_ru", "real_question_examples_total",
@@ -2110,7 +2215,7 @@ def run_comment_semantic_retrieval(
         # Profiles are based on selected gate model to avoid double-counting two benchmark models.
         if row.get("model_name") == gate_model:
             all_gate_rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
-            if row.get("candidate_usage_scope") == "monitoring_candidate":
+            if row.get("candidate_usage_scope") == "monitoring_candidate" and _report_candidate_eligible(row):
                 rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
     for rec in records:
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
@@ -2142,9 +2247,11 @@ def run_comment_semantic_retrieval(
         eligible_rows_by_surface=rows_by_surface,
         all_gate_rows_by_surface=all_gate_rows_by_surface,
     )
-    all_eligible_rows = [c for c in all_candidates if c.get("pre_llm_candidate_eligible")]
-    question_patterns = _build_question_patterns(all_eligible_rows)
-    canonical_questions = _canonical_question_catalog_rows(all_eligible_rows)
+    # Canonical question/pattern catalogs may use historical calibration rows
+    # after the strict report-quality gate, but monitoring/surface decisions
+    # above stay limited to fresh monitoring candidates.
+    question_patterns = _build_question_patterns(all_candidates)
+    canonical_questions = _canonical_question_catalog_rows(all_candidates)
     model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
     surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
     summary_counts = _summary_count_rows(surface_inventory)

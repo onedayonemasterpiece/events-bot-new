@@ -663,6 +663,11 @@ def test_question_pattern_label_covers_route_event_and_badges():
             "context_url": "https://t.me/test/1",
             "model_name": "intfloat/multilingual-e5-base",
             "pre_llm_candidate_eligible": True,
+            "candidate_usage_scope": "monitoring_candidate",
+            "question_signal": True,
+            "intent_text_supported": True,
+            "candidate_noise_type": "",
+            "score": 0.05,
         },
         {
             "surface_key": "tg:test",
@@ -674,11 +679,96 @@ def test_question_pattern_label_covers_route_event_and_badges():
             "context_url": "https://t.me/test/2",
             "model_name": "intfloat/multilingual-e5-base",
             "pre_llm_candidate_eligible": True,
+            "candidate_usage_scope": "monitoring_candidate",
+            "question_signal": False,
+            "intent_text_supported": True,
+            "candidate_noise_type": "non_question_statement",
+            "score": 0.05,
         },
     ])
     assert rows[0]["pattern"] == "route_with_children"
     assert rows[0]["canonical_question_ru"].endswith("?")
     assert "Ездили" not in rows[0]["example_questions"]
+
+
+def test_report_quality_filter_does_not_promote_vector_noise_to_canonical_questions():
+    retrieval = load_retrieval()
+    garbage = {
+        "surface_key": "vk:club42481124",
+        "platform": "vk",
+        "surface_type": "community",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "text_snapshot": "Че там по роснефти за 159 дизель?",
+        "context_url": "https://vk.com/wall-42481124_1?reply=2",
+        "model_name": "intfloat/multilingual-e5-base",
+        "candidate_usage_scope": "monitoring_candidate",
+        "question_signal": True,
+        "intent_text_supported": False,
+        "candidate_noise_type": "intent_without_text_support",
+        "score": 0.044,
+        # Important regression contract: default vector/LLM gate still sees top
+        # semantic rows; only report/canonical evidence is stricter.
+        "pre_llm_candidate_eligible": True,
+    }
+
+    assert garbage["pre_llm_candidate_eligible"] is True
+    assert retrieval._report_candidate_eligible(garbage) is False
+    assert retrieval._build_question_patterns([garbage]) == []
+    assert retrieval._canonical_question_catalog_rows([garbage]) == []
+
+
+def test_report_quality_keeps_source_posts_as_ask_context_but_not_question_catalog():
+    retrieval = load_retrieval()
+    source_post = {
+        "surface_key": "vk:organizer",
+        "platform": "vk",
+        "surface_type": "community",
+        "candidate_action_type": "organizer_visibility_clarification",
+        "intent_set": "organizer_comment_fit",
+        "text_snapshot": "Приходите на открытие выставки 10 июля, начало в 18:00.",
+        "context_url": "https://vk.com/wall-1_2",
+        "model_name": "intfloat/multilingual-e5-base",
+        "candidate_usage_scope": "monitoring_candidate",
+        "question_signal": False,
+        "intent_text_supported": True,
+        "candidate_noise_type": "source_post_context",
+        "score": 0.05,
+        "relation": "vk_social_wall_post",
+        "is_post": True,
+        "pre_llm_candidate_eligible": True,
+    }
+
+    assert retrieval._report_candidate_eligible(source_post) is True
+    assert retrieval._report_real_question_row(source_post) is False
+    assert retrieval._build_question_patterns([source_post]) == []
+    assert retrieval._canonical_question_catalog_rows([source_post]) == []
+
+
+def test_report_quality_allows_historical_real_questions_only_for_canonical_catalog():
+    retrieval = load_retrieval()
+    historical = {
+        "surface_key": "tg:golden",
+        "platform": "tg",
+        "surface_type": "group",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "text_snapshot": "Куда съездить из Калининграда на один день с детьми?",
+        "context_url": "https://t.me/golden/1",
+        "model_name": "intfloat/multilingual-e5-base",
+        "candidate_usage_scope": "historical_calibration",
+        "question_signal": True,
+        "intent_text_supported": True,
+        "candidate_noise_type": "",
+        "score": 0.05,
+        "pre_llm_candidate_eligible": True,
+    }
+
+    assert retrieval._report_candidate_eligible(historical) is False
+    assert retrieval._report_candidate_eligible(historical, allow_historical=True) is True
+    catalog = retrieval._canonical_question_catalog_rows([historical])
+    assert catalog
+    assert catalog[0]["historical_calibration_examples"] == 1
 
 
 def test_freshness_policy_keeps_old_records_for_calibration_but_rejects_stale_surfaces(monkeypatch):

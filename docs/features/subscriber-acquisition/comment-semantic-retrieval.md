@@ -27,6 +27,21 @@ It does **not** replace the existing LLM-first acceptance policy. Embeddings own
 recall, ranking, monitoring prioritization and LLM-budget reduction. Gemma/LLM
 still owns final semantic acceptance and any public wording.
 
+Important separation for reports:
+
+- the default LLM gate receives top-N vector semantic rows **without**
+  deterministic/regex prefiltering;
+- human-facing evidence (`eligible_*`, `surface_summary`, `question_patterns`,
+  `canonical_questions`) uses a stricter post-vector report-quality gate so a
+  noisy vector match is not promoted into an “эталонный вопрос”.
+
+The report-quality gate requires a real question for reply examples, supported
+intent in the current text, no explicit offer/ad/cross-post/out-of-scope
+diagnostic, and a minimal score floor. Source posts may still appear as
+`organizer_visibility_clarification` context for “ask the organizer” analysis,
+but they must not be shown as user reply questions or canonical question
+examples.
+
 ## Sources and scope
 
 Use only current Subscriber Acquisition Discovery sources:
@@ -140,6 +155,12 @@ Run exactly the same comment dataset and preprocessing through both models:
 
 Do not choose thresholds from absolute cosine values before analyzing score
 distributions. Ranking and percentiles are primary.
+
+Bounded live smoke runs with a hard wall-clock target (for example the current
+≤10 minute Kaggle discovery check) may explicitly run only one model via
+`ACQ_COMMENT_RETRIEVAL_MODELS_JSON` to leave time for TG/VK scan and Gemma gate.
+Such files must be labelled as smoke reports, not as the e5-base vs BGE-M3
+benchmark.
 
 ### Scoring methods
 
