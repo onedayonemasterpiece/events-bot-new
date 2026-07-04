@@ -571,6 +571,25 @@ def _days_since(value: Any, *, now: datetime | None = None) -> float | None:
     return max(0.0, (now - dt).total_seconds() / 86400.0)
 
 
+def _latest_created_at(rows: Iterable[dict[str, Any]]) -> str | None:
+    dates = [dt for dt in (_parse_created_at(row.get("created_at")) for row in rows) if dt is not None]
+    if not dates:
+        return None
+    return max(dates).isoformat()
+
+
+def _source_run_id_from_env() -> str:
+    return (os.getenv("KAGGLE_RUN_ID") or os.getenv("ACQ_SOURCE_RUN_ID") or "").strip()
+
+
+def _source_run_provenance() -> str:
+    if (os.getenv("KAGGLE_RUN_ID") or "").strip():
+        return "kaggle_run_id"
+    if (os.getenv("ACQ_SOURCE_RUN_ID") or "").strip():
+        return "explicit_source_run_id"
+    return "missing_run_id_no_increment_claim"
+
+
 def _record_within_analysis_window(record: dict[str, Any], *, now: datetime | None = None) -> bool:
     dt = _parse_created_at(record.get("created_at"))
     if dt is None:
@@ -957,6 +976,8 @@ def _surface_decision_summaries(
         event_rows = [r for r in eligible if r.get("candidate_action_type") == "event_recommendation_reply"]
         organizer_submit_rows = [r for r in eligible if r.get("candidate_action_type") == "organizer_submission_or_partnership"]
         badge_rows = [r for r in eligible if r.get("candidate_action_type") == "badge_filter_need"]
+        site_rows = [r for r in eligible if r.get("candidate_action_type") == "event_site_search_or_listing"]
+        event_question_rows = [*event_rows, *site_rows, *badge_rows]
         ask_context_rows = [
             r for r in eligible
             if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit"}
@@ -964,7 +985,7 @@ def _surface_decision_summaries(
         comment_rows = [r for r in eligible if str(r.get("relation") or "") != "vk_social_wall_post" and not _truthy_value(r.get("is_post"))]
         source_post_rows = [r for r in all_rows if str(r.get("relation") or "") == "vk_social_wall_post" or _truthy_value(r.get("is_post"))]
         noise_rows = [r for r in all_rows if str(r.get("candidate_noise_type") or "")]
-        answerable_count = len(route_rows) + len(event_rows) + len(organizer_submit_rows) + len(badge_rows)
+        answerable_count = len(route_rows) + len(event_rows) + len(site_rows) + len(organizer_submit_rows) + len(badge_rows)
         ask_count = len(ask_context_rows)
         if answerable_count >= 3 and ask_count >= 2:
             recommendation = "both_monitor_replies_and_ask_clarifications"
@@ -988,6 +1009,8 @@ def _surface_decision_summaries(
             parts.append(f"event-вопросов: {len(event_rows)}")
         if organizer_submit_rows:
             parts.append(f"organizer submission вопросов: {len(organizer_submit_rows)}")
+        if site_rows:
+            parts.append(f"поиск/афиша вопросов: {len(site_rows)}")
         if badge_rows:
             parts.append(f"badge/filter вопросов: {len(badge_rows)}")
         if ask_context_rows:
@@ -1002,6 +1025,9 @@ def _surface_decision_summaries(
             )
         elif surface_scope_noise:
             summary_ru = f"поверхность не по теме acquisition ({surface_scope_noise}); не выбирать для ответов/маршрутов/событий"
+        increment_status = _surface_increment_status(profile, {
+            "comments_embedded": profile.get("comments_embedded"),
+        })
         out.append({
             "surface_key": surface_key,
             "platform": profile.get("platform"),
@@ -1014,6 +1040,14 @@ def _surface_decision_summaries(
             "period_days": profile.get("period_days"),
             "period_label": profile.get("period_label"),
             "latest_comment_at": profile.get("latest_comment_at"),
+            "latest_event_question_at": _latest_created_at(event_question_rows),
+            "latest_route_recommendation_at": _latest_created_at(route_rows),
+            "increment_status": increment_status,
+            "is_incremental_last_run": _is_counted_increment_status(increment_status),
+            "last_analyzed_run_id": profile.get("last_analyzed_run_id"),
+            "discovered_at": profile.get("discovered_at"),
+            "discovered_in_run_id": profile.get("discovered_in_run_id"),
+            "discovery_source_context": profile.get("discovery_source_context"),
             "days_since_latest_activity": profile.get("days_since_latest_activity"),
             "freshness_status": profile.get("freshness_status"),
             "analysis_max_comment_age_days": profile.get("analysis_max_comment_age_days"),
@@ -1040,6 +1074,7 @@ def _surface_decision_summaries(
             "source_post_contexts": len(source_post_rows),
             "route_poi_questions": len(route_rows),
             "event_questions": len(event_rows),
+            "event_site_search_questions": len(site_rows),
             "organizer_submission_questions": len(organizer_submit_rows),
             "badge_filter_questions": len(badge_rows),
             "answerable_questions_per_30d": _rate(answerable_count, profile.get("period_days"), 30),
@@ -1051,7 +1086,7 @@ def _surface_decision_summaries(
             "dominant_detected_interests": ",".join(profile.get("dominant_detected_interests") or []),
             "monitoring_decision_hint": profile.get("monitoring_decision_hint"),
             "monitoring_reason": profile.get("monitoring_reason"),
-            "answerable_examples": _examples_text([*route_rows[:2], *event_rows[:2], *organizer_submit_rows[:1], *badge_rows[:1]], limit=4),
+            "answerable_examples": _examples_text([*route_rows[:2], *event_rows[:2], *site_rows[:1], *organizer_submit_rows[:1], *badge_rows[:1]], limit=4),
             "ask_question_examples": _examples_text(ask_context_rows, limit=3),
         })
     return sorted(out, key=lambda r: (
@@ -1110,6 +1145,50 @@ def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int 
     return sorted(out, key=lambda r: (-int(r.get("count") or 0), str(r.get("surface_key") or ""), str(r.get("pattern") or "")))
 
 
+def _canonical_question_catalog_rows(rows: list[dict[str, Any]], *, limit_examples: int = 5) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in _best_context_rows([r for r in rows if r.get("pre_llm_candidate_eligible")]):
+        text = str(row.get("text_snapshot") or row.get("text") or "")
+        if not _is_actual_question_text(text):
+            continue
+        action = str(row.get("candidate_action_type") or "")
+        pattern = _question_pattern_label(text, action_type=action, intent_set=str(row.get("intent_set") or ""))
+        key = (pattern, action)
+        item = grouped.setdefault(key, {
+            "pattern": pattern,
+            "candidate_action_type": action,
+            "canonical_question_ru": _canonical_question_for_pattern(pattern),
+            "real_question_examples_total": 0,
+            "monitoring_candidate_examples": 0,
+            "historical_calibration_examples": 0,
+            "surfaces_count": set(),
+            "example_questions": [],
+            "example_urls": [],
+            "source_note_ru": "Эталон собран из реальных вопросительных комментариев; historical используется для шаблонов/QA, fresh — для мониторинга.",
+        })
+        item["real_question_examples_total"] += 1
+        scope = str(row.get("candidate_usage_scope") or "")
+        if scope == "monitoring_candidate":
+            item["monitoring_candidate_examples"] += 1
+        elif scope == "historical_calibration":
+            item["historical_calibration_examples"] += 1
+        if row.get("surface_key"):
+            item["surfaces_count"].add(str(row.get("surface_key")))
+        if len(item["example_questions"]) < limit_examples:
+            item["example_questions"].append(text[:220])
+        if len(item["example_urls"]) < limit_examples and row.get("context_url"):
+            item["example_urls"].append(str(row.get("context_url")))
+    out: list[dict[str, Any]] = []
+    for item in grouped.values():
+        out.append({
+            **{k: v for k, v in item.items() if k not in {"surfaces_count", "example_questions", "example_urls"}},
+            "surfaces_count": len(item["surfaces_count"]),
+            "example_questions": "\n".join(item["example_questions"]),
+            "example_urls": "\n".join(item["example_urls"]),
+        })
+    return sorted(out, key=lambda r: (-int(r.get("monitoring_candidate_examples") or 0), -int(r.get("real_question_examples_total") or 0), str(r.get("pattern") or "")))
+
+
 def _model_example_rows(candidates: list[dict[str, Any]], model_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
     rows = [r for r in candidates if str(r.get("model_name") or "") == model_name and r.get("pre_llm_candidate_eligible")]
     return _best_context_rows(rows)[:limit]
@@ -1132,6 +1211,10 @@ def _scope_rows(
     usage_scopes = Counter(str(r.get("candidate_usage_scope") or _record_usage_scope(r)) for r in records)
     return [
         {"metric": "run_id", "value": run_id},
+        {"metric": "report_generated_at", "value": datetime.now(timezone.utc).isoformat()},
+        {"metric": "KAGGLE_RUN_ID", "value": os.getenv("KAGGLE_RUN_ID", "")},
+        {"metric": "ACQ_SOURCE_RUN_ID", "value": os.getenv("ACQ_SOURCE_RUN_ID", "")},
+        {"metric": "source_run_provenance", "value": _source_run_provenance()},
         {"metric": "stage", "value": STAGE_NAME},
         {"metric": "scope_note", "value": summary_note or "Limited to the Kaggle seed payload and configured per-run budgets; not a full historical DB scan unless the payload/budgets covered it."},
         {"metric": "models", "value": ", ".join(models)},
@@ -1153,6 +1236,10 @@ def _scope_rows(
         {"metric": "ACQ_MAX_VK_SURFACES_PER_RUN", "value": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", "")},
         {"metric": "ACQ_MAX_VK_POSTS_PER_SURFACE", "value": os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE", "")},
         {"metric": "ACQ_MAX_VK_COMMENTS_PER_POST", "value": os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST", "")},
+        {"metric": "ACQ_RUNTIME_DEADLINE_SECONDS", "value": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "")},
+        {"metric": "ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", "value": os.getenv("ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", "")},
+        {"metric": "ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", "value": os.getenv("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", "")},
+        {"metric": "ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", "value": os.getenv("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", "")},
     ]
 
 
@@ -1187,6 +1274,58 @@ _INTENT_SET_LABELS_RU = {
 }
 
 
+_SCAN_STATES_TOUCHED = {
+    "scanned",
+    "scanned_this_run",
+    "comments_available",
+    "commentability_resolved",
+    "resolved_commentability",
+    "resolved_no_comments",
+    "rejected_after_resolve",
+    "checked_inaccessible",
+}
+
+
+_COUNTED_INCREMENT_STATUSES = {
+    "newly_discovered_this_run",
+    "newly_discovered_and_analyzed_this_run",
+    "analyzed_comments_this_run",
+    "touched_no_eligible_comments_this_run",
+}
+
+
+def _is_counted_increment_status(status: Any) -> bool:
+    return str(status or "") in _COUNTED_INCREMENT_STATUSES
+
+
+def _surface_increment_status(surface: dict[str, Any], summary: dict[str, Any]) -> str:
+    source_run_id = _source_run_id_from_env()
+    if not source_run_id:
+        return "no_verified_run_id"
+    discovered_run = str(surface.get("discovered_in_run_id") or "").strip()
+    discovered_this_run = bool(discovered_run and discovered_run == source_run_id)
+    touched_run = (
+        surface.get("last_analyzed_run_id")
+        or summary.get("last_analyzed_run_id")
+        or surface.get("scan_run_id")
+        or surface.get("run_id")
+        or ""
+    )
+    touched_this_run = str(touched_run).strip() == source_run_id
+    if int(summary.get("comments_embedded") or 0) > 0:
+        if discovered_this_run:
+            return "newly_discovered_and_analyzed_this_run"
+        if touched_this_run:
+            return "analyzed_comments_this_run"
+        return "analyzed_comments_unverified_run"
+    if discovered_this_run:
+        return "newly_discovered_this_run"
+    scan_state = str(surface.get("scan_state") or "").strip().lower()
+    if touched_this_run and scan_state in _SCAN_STATES_TOUCHED:
+        return "touched_no_eligible_comments_this_run"
+    return "queued_or_existing"
+
+
 def _surface_inventory_rows(
     surfaces_by_external: dict[str, dict[str, Any]] | None,
     surface_summaries: list[dict[str, Any]],
@@ -1206,6 +1345,7 @@ def _surface_inventory_rows(
             surface_status=str(surface.get("status") or ""),
             scan_state=str(surface.get("scan_state") or ""),
         )
+        increment_status = _surface_increment_status(surface, summary)
         rows.append({
             "surface_key": key,
             "platform": surface.get("platform") or summary.get("platform"),
@@ -1218,13 +1358,21 @@ def _surface_inventory_rows(
             "members_or_subscribers": reach.get("members") or reach.get("members_count") or summary.get("members_or_subscribers"),
             "recommendation": recommendation,
             "selection_status": selection_status,
+            "increment_status": increment_status,
+            "is_incremental_last_run": _is_counted_increment_status(increment_status),
+            "discovered_at": surface.get("discovered_at"),
+            "discovered_in_run_id": surface.get("discovered_in_run_id"),
+            "discovery_source_context": surface.get("discovery_source_context"),
             "latest_comment_at": summary.get("latest_comment_at"),
+            "latest_event_question_at": summary.get("latest_event_question_at"),
+            "latest_route_recommendation_at": summary.get("latest_route_recommendation_at"),
             "days_since_latest_activity": summary.get("days_since_latest_activity"),
             "freshness_status": summary.get("freshness_status") or ("unknown_no_profile" if not summary else ""),
             "comments_embedded": summary.get("comments_embedded") or 0,
             "answerable_question_candidates": summary.get("answerable_question_candidates") or 0,
             "route_poi_questions": summary.get("route_poi_questions") or 0,
             "event_questions": summary.get("event_questions") or 0,
+            "event_site_search_questions": summary.get("event_site_search_questions") or 0,
             "ask_clarification_contexts": summary.get("ask_clarification_contexts") or 0,
             "summary_ru": summary.get("summary_ru") or "В этом прогоне полезных сигналов не найдено или поверхность не попала в comment retrieval.",
         })
@@ -1243,6 +1391,12 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
         status = str(row.get("selection_status") or "candidate")
         grouped[key]["total"] += 1
         grouped[key][status] += 1
+        if str(row.get("increment_status") or "") in {"newly_discovered_this_run", "newly_discovered_and_analyzed_this_run"}:
+            grouped[key]["newly_discovered_this_run"] += 1
+        if _is_counted_increment_status(row.get("increment_status")):
+            grouped[key]["increment_touched_this_run"] += 1
+        if str(row.get("increment_status") or "") in {"analyzed_comments_this_run", "newly_discovered_and_analyzed_this_run"}:
+            grouped[key]["analyzed_comments_this_run"] += 1
     rows: list[dict[str, Any]] = []
     total_counter: Counter[str] = Counter()
     for (platform, surface_type), counter in sorted(grouped.items()):
@@ -1254,6 +1408,9 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
             "selected_surfaces": counter.get("selected", 0),
             "candidate_surfaces": counter.get("candidate", 0),
             "rejected_surfaces": counter.get("rejected", 0),
+            "newly_discovered_this_run": counter.get("newly_discovered_this_run", 0),
+            "increment_touched_this_run": counter.get("increment_touched_this_run", 0),
+            "analyzed_comments_this_run": counter.get("analyzed_comments_this_run", 0),
         })
     rows.insert(0, {
         "platform": "ALL",
@@ -1262,8 +1419,15 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
         "selected_surfaces": total_counter.get("selected", 0),
         "candidate_surfaces": total_counter.get("candidate", 0),
         "rejected_surfaces": total_counter.get("rejected", 0),
+        "newly_discovered_this_run": total_counter.get("newly_discovered_this_run", 0),
+        "increment_touched_this_run": total_counter.get("increment_touched_this_run", 0),
+        "analyzed_comments_this_run": total_counter.get("analyzed_comments_this_run", 0),
     })
     return rows
+
+
+def _has_verified_increment_source(scope: dict[str, Any]) -> bool:
+    return str(scope.get("source_run_provenance") or "") in {"kaggle_run_id", "explicit_source_run_id"}
 
 
 def _dashboard_summary_rows(
@@ -1279,6 +1443,11 @@ def _dashboard_summary_rows(
     no_signal = [r for r in (surface_inventory or []) if int(float(r.get("answerable_question_candidates") or 0)) <= 0]
     counts = _summary_count_rows(surface_inventory or [])
     total = counts[0] if counts else {}
+    verified_increment_source = _has_verified_increment_source(scope)
+    run_status_ru = (
+        "да, источник запуска подтверждён" if verified_increment_source
+        else "нет доказанного нового запуска: KAGGLE_RUN_ID/ACQ_SOURCE_RUN_ID отсутствует, инкремент не засчитывается"
+    )
     return [
         {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
         {"section": "Охват", "metric": "Комментариев обработано", "value": summary.get("comments_embedded") or scope.get("comments_after_filter")},
@@ -1289,6 +1458,10 @@ def _dashboard_summary_rows(
         {"section": "Итог", "metric": "Выбрано", "value": total.get("selected_surfaces", 0)},
         {"section": "Итог", "metric": "Кандидаты", "value": total.get("candidate_surfaces", 0)},
         {"section": "Итог", "metric": "Отклонено", "value": total.get("rejected_surfaces", 0)},
+        {"section": "Инкремент последнего запуска", "metric": "Был ли новый запуск", "value": run_status_ru},
+        {"section": "Инкремент последнего запуска", "metric": "Новых ссылок/стен найдено", "value": total.get("newly_discovered_this_run", 0)},
+        {"section": "Инкремент последнего запуска", "metric": "Поверхностей затронуто/проанализировано", "value": total.get("increment_touched_this_run", 0)},
+        {"section": "Инкремент последнего запуска", "metric": "С комментариями в анализе", "value": total.get("analyzed_comments_this_run", 0)},
         {"section": "Период", "metric": "С даты", "value": scope.get("period_min_created_at")},
         {"section": "Период", "metric": "По дату", "value": scope.get("period_max_created_at")},
         {"section": "Модели", "metric": "Модели смысла", "value": summary.get("models") or scope.get("models")},
@@ -1339,6 +1512,11 @@ _RU_HEADERS = {
     "selection_status": "Итоговый статус",
     "scan_state": "Сканирование",
     "source": "Источник",
+    "increment_status": "Инкремент",
+    "is_incremental_last_run": "Инкремент последнего запуска?",
+    "discovered_at": "Добавлено/найдено",
+    "discovered_in_run_id": "Найдено в run_id",
+    "discovery_source_context": "Где найдено",
     "relation": "Тип контекста",
     "is_post": "Это пост?",
     "author_id": "Автор",
@@ -1369,6 +1547,8 @@ _RU_HEADERS = {
     "period_days": "Дней",
     "period_label": "Период",
     "latest_comment_at": "Последний комментарий",
+    "latest_event_question_at": "Последний event-вопрос",
+    "latest_route_recommendation_at": "Последняя route-рекомендация",
     "days_since_latest_activity": "Дней без активности",
     "freshness_status": "Свежесть",
     "analysis_max_comment_age_days": "Окно анализа, дней",
@@ -1397,6 +1577,7 @@ _RU_HEADERS = {
     "source_post_contexts": "Контексты-посты",
     "route_poi_questions": "Маршруты",
     "event_questions": "События",
+    "event_site_search_questions": "Поиск/афиша",
     "organizer_submission_questions": "Организаторам",
     "badge_filter_questions": "Фильтры",
     "filtered_noise_contexts": "Шум",
@@ -1420,6 +1601,14 @@ _RU_HEADERS = {
     "selected_surfaces": "Выбрано",
     "candidate_surfaces": "Кандидаты",
     "rejected_surfaces": "Отклонено",
+    "newly_discovered_this_run": "Новых в запуске",
+    "increment_touched_this_run": "Затронуто в запуске",
+    "analyzed_comments_this_run": "С анализом комм.",
+    "real_question_examples_total": "Реальных вопросов",
+    "monitoring_candidate_examples": "Свежих примеров",
+    "historical_calibration_examples": "Исторических примеров",
+    "surfaces_count": "Поверхностей",
+    "source_note_ru": "Пояснение",
 }
 
 
@@ -1430,12 +1619,21 @@ def _format_date_ru(value: Any) -> Any:
     return dt.strftime("%d.%m.%Y")
 
 
+def _format_datetime_ru(value: Any) -> Any:
+    dt = _parse_created_at(value)
+    if dt is None:
+        return value
+    return dt.strftime("%d.%m.%Y %H:%M")
+
+
 def _xlsx_value(header: str, value: Any) -> Any:
     if value is None:
         return ""
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
-    if header.endswith("_created_at") or header == "created_at" or header in {"period_min_created_at", "period_max_created_at"}:
+    if header in {"discovered_at", "report_generated_at", "generated_at"}:
+        return _format_datetime_ru(value)
+    if header.endswith("_created_at") or header == "created_at" or header.endswith("_at") or header in {"period_min_created_at", "period_max_created_at"}:
         return _format_date_ru(value)
     if isinstance(value, float):
         return round(value, 1)
@@ -1472,9 +1670,34 @@ def _append_grouped_header(ws: Any, headers: list[str], groups: dict[str, str] |
         start = end + 1
 
 
-def _append_data_rows(ws: Any, rows: list[dict[str, Any]], headers: list[str], *, hyperlink_field: str | None = None) -> None:
+def _append_data_rows(
+    ws: Any,
+    rows: list[dict[str, Any]],
+    headers: list[str],
+    *,
+    hyperlink_field: str | None = None,
+    style: str | None = None,
+) -> None:
+    from openpyxl.styles import PatternFill
+
+    selected_fill = PatternFill("solid", fgColor="C6EFCE")
+    increment_fill = PatternFill("solid", fgColor="FFF2CC")
     for row in rows:
         ws.append([_xlsx_value(h, row.get(h)) for h in headers])
+        if style == "surface":
+            fill = None
+            if str(row.get("selection_status") or "") == "selected":
+                fill = selected_fill
+            elif _is_counted_increment_status(row.get("increment_status")):
+                fill = increment_fill
+            if fill is not None:
+                for cell in ws[ws.max_row]:
+                    cell.fill = fill
+        elif style == "summary_counts":
+            if any(int(float(row.get(h) or 0)) > 0 for h in ["newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"] if h in headers):
+                for header in ["newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"]:
+                    if header in headers:
+                        ws.cell(ws.max_row, headers.index(header) + 1).fill = increment_fill
         if hyperlink_field and row.get(hyperlink_field):
             url_cell = ws.cell(ws.max_row, headers.index(hyperlink_field) + 1)
             url_cell.hyperlink = str(row.get(hyperlink_field))
@@ -1488,6 +1711,7 @@ def _write_xlsx(
     surface_summaries: list[dict[str, Any]] | None = None,
     model_examples: dict[str, list[dict[str, Any]]] | None = None,
     question_patterns: list[dict[str, Any]] | None = None,
+    canonical_questions: list[dict[str, Any]] | None = None,
     scope_rows: list[dict[str, Any]] | None = None,
     surface_inventory: list[dict[str, Any]] | None = None,
     summary_counts: list[dict[str, Any]] | None = None,
@@ -1530,12 +1754,13 @@ def _write_xlsx(
         surf_headers = [
             "recommendation", "selection_status", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
             "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days",
-            "latest_comment_at", "days_since_latest_activity", "freshness_status", "unique_commenters",
+            "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status", "unique_commenters",
             "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
             "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days",
+            "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id", "discovery_source_context",
             "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d", "answerable_questions_per_90d",
             "answerable_questions_per_100_comments", "ask_clarification_contexts", "ask_contexts_per_30d", "eligible_comment_contexts", "source_post_contexts",
-            "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
+            "route_poi_questions", "event_questions", "event_site_search_questions", "organizer_submission_questions", "badge_filter_questions",
             "filtered_noise_contexts", "relation_counts_json", "unique_commenters_note", "answerable_examples", "ask_question_examples",
         ]
         surf_groups = {
@@ -1545,7 +1770,7 @@ def _write_xlsx(
             **{h: "Пояснения" for h in surf_headers[35:]},
         }
         _append_grouped_header(surf, surf_headers, surf_groups)
-        _append_data_rows(surf, surface_summaries, surf_headers, hyperlink_field="surface_url")
+        _append_data_rows(surf, surface_summaries, surf_headers, hyperlink_field="surface_url", style="surface")
         surf.freeze_panes = "A3"
         for idx, width in enumerate([34, 30, 10, 18, 30, 42, 16, 22, 22, 12, 18, 14, 14, 14, 14, 14, 14, 14, 22, 22, 14, 70, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 60, 24, 90, 90], start=1):
             surf.column_dimensions[get_column_letter(idx)].width = width
@@ -1554,23 +1779,24 @@ def _write_xlsx(
         inv = wb.create_sheet("full_surface_list")
         inv_headers = [
             "surface_key", "platform", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
-            "members_or_subscribers", "recommendation", "selection_status", "latest_comment_at", "days_since_latest_activity", "freshness_status",
+            "members_or_subscribers", "recommendation", "selection_status", "increment_status", "is_incremental_last_run",
+            "discovered_at", "discovered_in_run_id", "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status",
             "comments_embedded", "answerable_question_candidates",
-            "route_poi_questions", "event_questions", "ask_clarification_contexts", "summary_ru",
+            "route_poi_questions", "event_questions", "event_site_search_questions", "ask_clarification_contexts", "summary_ru",
         ]
         inv_groups = {h: "Поверхность" for h in inv_headers[:9]} | {h: "Результат анализа" for h in inv_headers[9:]}
         _append_grouped_header(inv, inv_headers, inv_groups)
-        _append_data_rows(inv, surface_inventory, inv_headers, hyperlink_field="surface_url")
+        _append_data_rows(inv, surface_inventory, inv_headers, hyperlink_field="surface_url", style="surface")
         inv.freeze_panes = "A3"
         for idx, width in enumerate([30, 10, 18, 34, 44, 20, 24, 22, 14, 36, 16, 16, 14, 14, 14, 14, 14, 14, 14, 90], start=1):
             inv.column_dimensions[get_column_letter(idx)].width = width
 
     if summary_counts:
         counts = wb.create_sheet("summary_counts")
-        count_headers = ["platform", "surface_type", "total_surfaces", "selected_surfaces", "candidate_surfaces", "rejected_surfaces"]
+        count_headers = ["platform", "surface_type", "total_surfaces", "selected_surfaces", "candidate_surfaces", "rejected_surfaces", "newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"]
         count_groups = {h: "Тип поверхности" for h in count_headers[:2]} | {h: "Итог" for h in count_headers[2:]}
         _append_grouped_header(counts, count_headers, count_groups)
-        _append_data_rows(counts, summary_counts, count_headers)
+        _append_data_rows(counts, summary_counts, count_headers, style="summary_counts")
         counts.freeze_panes = "A3"
         for idx, width in enumerate([14, 24, 12, 12, 12, 12], start=1):
             counts.column_dimensions[get_column_letter(idx)].width = width
@@ -1608,6 +1834,20 @@ def _write_xlsx(
         qp.freeze_panes = "A3"
         for idx, width in enumerate([30, 10, 18, 28, 34, 70, 10, 45, 45, 90, 70], start=1):
             qp.column_dimensions[get_column_letter(idx)].width = width
+
+    if canonical_questions:
+        cq = wb.create_sheet("canonical_questions")
+        cq_headers = [
+            "pattern", "candidate_action_type", "canonical_question_ru", "real_question_examples_total",
+            "monitoring_candidate_examples", "historical_calibration_examples", "surfaces_count",
+            "example_questions", "example_urls", "source_note_ru",
+        ]
+        cq_groups = {h: "Эталон вопроса" for h in cq_headers[:7]} | {h: "Реальные примеры" for h in cq_headers[7:9]} | {"source_note_ru": "Пояснение"}
+        _append_grouped_header(cq, cq_headers, cq_groups)
+        _append_data_rows(cq, canonical_questions, cq_headers)
+        cq.freeze_panes = "A3"
+        for idx, width in enumerate([28, 34, 76, 14, 14, 14, 14, 100, 80, 100], start=1):
+            cq.column_dimensions[get_column_letter(idx)].width = width
 
     if intent_catalog_rows:
         cat = wb.create_sheet("intent_catalog")
@@ -1726,6 +1966,7 @@ def run_comment_semantic_retrieval(
     max_llm_candidates = _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", _int_env("ACQ_MAX_LLM_CALLS_PER_RUN", 80, min_value=1), min_value=1)
     max_manual_rows = _int_env("ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS", 800, min_value=20)
     models = _load_models_from_env()
+    source_run_id = _source_run_id_from_env()
     records = _dedupe_records(comment_records)
     backend = backend or SentenceTransformerBackend()
     progress_callback = progress_callback or (lambda _phase, _payload: None)
@@ -1846,10 +2087,18 @@ def run_comment_semantic_retrieval(
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
     for surface_key, surface_records in records_by_surface.items():
         profile = _surface_profile(surface_key, surface_records, rows_by_surface.get(surface_key, []), scoring_method=scoring_method)
+        if source_run_id:
+            profile["last_analyzed_run_id"] = source_run_id
         if surfaces_by_external and surface_key in surfaces_by_external:
             s = surfaces_by_external[surface_key]
             profile["surface_title"] = s.get("title")
             profile["surface_url"] = s.get("url")
+            profile["status"] = s.get("status")
+            profile["scan_state"] = s.get("scan_state")
+            profile["source"] = s.get("source")
+            profile["discovered_at"] = s.get("discovered_at")
+            profile["discovered_in_run_id"] = s.get("discovered_in_run_id")
+            profile["discovery_source_context"] = s.get("discovery_source_context")
             reach = s.get("reach") if isinstance(s.get("reach"), dict) else {}
             profile["members_or_subscribers"] = (
                 reach.get("members")
@@ -1866,11 +2115,12 @@ def run_comment_semantic_retrieval(
     )
     all_eligible_rows = [c for c in all_candidates if c.get("pre_llm_candidate_eligible")]
     question_patterns = _build_question_patterns(all_eligible_rows)
+    canonical_questions = _canonical_question_catalog_rows(all_eligible_rows)
     model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
     surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
     summary_counts = _summary_count_rows(surface_inventory)
     intent_catalog = _intent_catalog_rows()
-    run_id = os.getenv("KAGGLE_RUN_ID") or f"acq-comment-retrieval-{int(time.time())}"
+    run_id = source_run_id or "unknown_source_run"
     scope_rows = _scope_rows(
         run_id=run_id,
         records=records,
@@ -1896,6 +2146,7 @@ def run_comment_semantic_retrieval(
     profiles_csv = output_path / f"{artifact_prefix}_surface_profiles.csv"
     surface_summary_csv = output_path / f"{artifact_prefix}_surface_decision_summary.csv"
     question_patterns_csv = output_path / f"{artifact_prefix}_question_patterns.csv"
+    canonical_questions_csv = output_path / f"{artifact_prefix}_canonical_questions.csv"
     distributions_csv = output_path / f"{artifact_prefix}_score_distributions.csv"
     speed_csv = output_path / f"{artifact_prefix}_speed_metrics.csv"
     manual_xlsx = output_path / f"{artifact_prefix}_manual_review_sample.xlsx"
@@ -1916,6 +2167,7 @@ def run_comment_semantic_retrieval(
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
         "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers",
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "latest_comment_at",
+        "latest_event_question_at", "latest_route_recommendation_at", "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id",
         "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days", "unique_commenters",
         "comments_total", "comments_embedded", "comment_records", "source_post_records",
         "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
@@ -1925,18 +2177,24 @@ def run_comment_semantic_retrieval(
     _write_csv(surface_summary_csv, surface_summaries, [
         "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers", "selection_status",
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters", "unique_commenters_note",
-        "latest_comment_at", "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days",
+        "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id",
+        "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days",
         "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
         "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
         "recommendation", "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d",
         "answerable_questions_per_90d", "answerable_questions_per_100_comments", "ask_clarification_contexts",
         "ask_contexts_per_30d", "eligible_comment_contexts", "source_post_contexts",
-        "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
+        "route_poi_questions", "event_questions", "event_site_search_questions", "organizer_submission_questions", "badge_filter_questions",
         "filtered_noise_contexts", "relation_counts_json", "dominant_detected_interests",
         "monitoring_decision_hint", "monitoring_reason", "answerable_examples", "ask_question_examples",
     ])
     _write_csv(question_patterns_csv, question_patterns, [
         "surface_key", "platform", "surface_type", "pattern", "candidate_action_type", "canonical_question_ru", "count", "intent_sets", "models", "example_questions", "example_urls",
+    ])
+    _write_csv(canonical_questions_csv, canonical_questions, [
+        "pattern", "candidate_action_type", "canonical_question_ru", "real_question_examples_total",
+        "monitoring_candidate_examples", "historical_calibration_examples", "surfaces_count",
+        "example_questions", "example_urls", "source_note_ru",
     ])
     _write_csv(distributions_csv, distributions, ["model_name", "scoring_method", "count", "p50", "p90", "p95", "p99", "max"])
     _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
@@ -1947,6 +2205,7 @@ def run_comment_semantic_retrieval(
         surface_summaries=surface_summaries,
         model_examples=model_examples,
         question_patterns=question_patterns,
+        canonical_questions=canonical_questions,
         scope_rows=scope_rows,
         surface_inventory=surface_inventory,
         summary_counts=summary_counts,
@@ -1976,6 +2235,7 @@ def run_comment_semantic_retrieval(
             "surface_profiles_csv": str(profiles_csv),
             "surface_decision_summary_csv": str(surface_summary_csv),
             "question_patterns_csv": str(question_patterns_csv),
+            "canonical_questions_csv": str(canonical_questions_csv),
             "score_distributions_csv": str(distributions_csv),
             "speed_metrics_csv": str(speed_csv),
             "manual_review_xlsx": str(manual_xlsx),
@@ -1990,6 +2250,7 @@ def run_comment_semantic_retrieval(
         "summary": summary,
         "surface_profiles": profiles,
         "surface_decision_summaries": surface_summaries,
+        "canonical_questions": canonical_questions,
         "candidates": all_candidates,
         "llm_gate_candidates": gate_candidates,
         "artifacts": summary["artifacts"],

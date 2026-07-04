@@ -267,6 +267,8 @@ VK_SCAN_STATS: dict[str, int] = {
     "surfaces_with_comments_or_boards": 0,
     "surfaces_rejected_no_comments": 0,
     "surfaces_rejected_inaccessible": 0,
+    "profile_surfaces_discovered_from_authors": 0,
+    "profile_surfaces_discovered_from_members": 0,
 }
 TG_SCAN_STATS: dict[str, int] = {
     "surfaces_attempted": 0,
@@ -943,13 +945,18 @@ def extract_candidate_surfaces(text: str) -> list[dict[str, Any]]:
             handle = tg.group("handle")
             if _is_tg_discovery_bot_or_service_handle(handle):
                 continue
-            surface = _seed_surface(f"https://t.me/{handle}", platform="tg") | {"source": "discovered"}
+            surface = _discovery_stamp(
+                _seed_surface(f"https://t.me/{handle}", platform="tg"),
+                source="discovered",
+                context="public link in scanned text",
+            )
             if _is_out_of_region_surface(surface):
                 surface = _mark_out_of_region_surface(surface, reason="out-of-region Telegram handle discovered in scanned text")
             out[f"tg:{handle}"] = surface
         elif vk:
             surface = _vk_surface_from_handle(vk.group("handle"))
             if surface:
+                surface = _discovery_stamp(surface, source=str(surface.get("source") or "discovered"), context="public link in scanned text")
                 if _is_out_of_region_surface(surface):
                     surface = _mark_out_of_region_surface(surface, reason="out-of-region VK handle discovered in scanned text")
                 out[str(surface["external_id"])] = surface
@@ -1345,7 +1352,7 @@ def _run_comment_retrieval_llm_gate(
             scanned_opportunities.append(reviewed)
 
 
-VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "users.get", "board.getTopics", "board.getComments"}
+VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "groups.getMembers", "users.get", "board.getTopics", "board.getComments"}
 
 
 class VKApiError(RuntimeError):
@@ -1404,6 +1411,66 @@ def _vk_api_with_fallback(method: str, *, token_lanes: list[tuple[str, str]], pa
                     exc = retry_exc
             errors.append(f"{lane_name}: {exc}")
     raise RuntimeError("; ".join(errors) if errors else "no VK token lanes configured")
+
+
+_CURRENT_RUN_ID_CACHE: str | None = None
+
+
+def _current_run_id() -> str:
+    global _CURRENT_RUN_ID_CACHE
+    if _CURRENT_RUN_ID_CACHE is None:
+        _CURRENT_RUN_ID_CACHE = os.getenv("KAGGLE_RUN_ID") or f"acq-shadow-{int(time.time())}"
+    return _CURRENT_RUN_ID_CACHE
+
+
+def _discovery_stamp(surface: dict[str, Any], *, source: str, context: str | None = None) -> dict[str, Any]:
+    stamped = dict(surface)
+    stamped["source"] = source
+    stamped.setdefault("status", "candidate")
+    stamped["discovered_at"] = datetime.now(timezone.utc).isoformat()
+    stamped["discovered_in_run_id"] = _current_run_id()
+    if context:
+        stamped["discovery_source_context"] = context
+    return stamped
+
+
+def _profile_surface_from_user_id(user_id: Any, *, source: str, context: str | None = None) -> dict[str, Any] | None:
+    try:
+        uid = int(user_id or 0)
+    except Exception:
+        return None
+    if uid <= 0:
+        return None
+    surface = _seed_surface(f"https://vk.com/id{uid}", platform="vk")
+    surface.update({
+        "surface_type": "profile",
+        "topic_hint": context or "VK personal wall discovered for future bounded scan",
+        "reach": {"confidence": "low", "basis": source},
+        "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only discovered public VK profile wall candidate"},
+    })
+    return _discovery_stamp(surface, source=source, context=context)
+
+
+def _add_vk_profile_surface(
+    surfaces: dict[str, dict[str, Any]],
+    user_id: Any,
+    *,
+    source: str,
+    context: str,
+    counter: str,
+    cap: int,
+) -> None:
+    if cap <= 0:
+        return
+    if int(VK_SCAN_STATS.get(counter, 0) or 0) >= cap:
+        return
+    surface = _profile_surface_from_user_id(user_id, source=source, context=context)
+    if not surface:
+        return
+    if str(surface.get("external_id") or "") in surfaces:
+        return
+    surfaces[str(surface["external_id"])] = surface
+    VK_SCAN_STATS[counter] = int(VK_SCAN_STATS.get(counter, 0) or 0) + 1
 
 
 def build_vk_opportunity(surface: dict[str, Any], *, owner_id: int, post_id: int, comment: dict[str, Any], default_target_url: str) -> dict[str, Any] | None:
@@ -1471,6 +1538,50 @@ def _vk_group_id_from_domain(domain: str, token_lanes: list[tuple[str, str]], di
     except Exception as exc:
         diagnostics.append(f"vk {clean}: groups.getById failed: {exc}")
     return None
+
+
+def _discover_vk_member_profile_surfaces(
+    surfaces: dict[str, dict[str, Any]],
+    *,
+    domain: str,
+    token_lanes: list[tuple[str, str]],
+    diagnostics: list[str],
+) -> None:
+    if not _truthy_env("ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", False):
+        return
+    cap = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", 5, min_value=0)
+    if cap <= 0 or int(VK_SCAN_STATS.get("profile_surfaces_discovered_from_members", 0) or 0) >= cap:
+        return
+    clean = str(domain or "").strip().strip("/").rstrip(".,)")
+    if not clean or _is_vk_profile_domain(clean):
+        return
+    per_group = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", min(3, cap), min_value=0)
+    if per_group <= 0:
+        return
+    try:
+        response, lane = _vk_api_with_fallback(
+            "groups.getMembers",
+            token_lanes=token_lanes,
+            params={"group_id": clean, "count": per_group, "offset": 0, "fields": "screen_name"},
+        )
+    except Exception as exc:
+        diagnostics.append(f"vk {clean}: groups.getMembers member-profile discovery failed: {exc}")
+        return
+    items = response.get("items") if isinstance(response, dict) else []
+    added_before = int(VK_SCAN_STATS.get("profile_surfaces_discovered_from_members", 0) or 0)
+    for item in list(items or []):
+        user_id = item.get("id") if isinstance(item, dict) else item
+        _add_vk_profile_surface(
+            surfaces,
+            user_id,
+            source="discovered_vk_member",
+            context=f"member list sample of vk:{clean}",
+            counter="profile_surfaces_discovered_from_members",
+            cap=cap,
+        )
+    added = int(VK_SCAN_STATS.get("profile_surfaces_discovered_from_members", 0) or 0) - added_before
+    if added:
+        diagnostics.append(f"vk {clean}: discovered {added} member profile-wall candidates via groups.getMembers/{lane}")
 
 
 def _vk_groups_from_response(response: Any) -> list[dict[str, Any]]:
@@ -1814,6 +1925,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
     max_surfaces = _int_env("ACQ_MAX_VK_SURFACES_PER_RUN", _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1), min_value=1)
     max_posts = _int_env("ACQ_MAX_VK_POSTS_PER_SURFACE", _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 10, min_value=1), min_value=1)
     max_comments = _int_env("ACQ_MAX_VK_COMMENTS_PER_POST", _int_env("ACQ_MAX_THREADS_PER_SURFACE", 15, min_value=1), min_value=1)
+    max_author_profiles = _int_env("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", 8, min_value=0)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
@@ -1839,6 +1951,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             "surface_type": "profile" if is_profile_surface else "community",
             "status": "candidate",
             "source": "allowlist",
+            "scan_run_id": _current_run_id(),
             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only VK wall/comment scan"},
             "reach": {"confidence": "low", "basis": "vk_wall"},
         })
@@ -1864,6 +1977,13 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
         else:
             _enrich_vk_surface_group_metadata(surface, domain=domain, token_lanes=token_lanes)
         surfaces[surface["external_id"]] = surface
+        if not is_profile_surface:
+            _discover_vk_member_profile_surfaces(
+                surfaces,
+                domain=domain,
+                token_lanes=token_lanes,
+                diagnostics=diagnostics,
+            )
         wall_comments_before = int(VK_SCAN_STATS.get("comments_seen", 0))
         board_comments_before = int(VK_SCAN_STATS.get("board_comments_seen", 0))
         board_topics_before = int(VK_SCAN_STATS.get("board_topics_seen", 0))
@@ -1912,6 +2032,14 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             post_id = int(post.get("id") or 0)
             post_text = str(post.get("text") or "")
             VK_SCAN_STATS["wall_posts_seen"] += 1
+            _add_vk_profile_surface(
+                surfaces,
+                post.get("from_id"),
+                source="discovered_vk_author",
+                context=f"wall post author in vk:{domain}",
+                counter="profile_surfaces_discovered_from_authors",
+                cap=max_author_profiles,
+            )
             for discovered in extract_candidate_surfaces(post_text):
                 discovered["topic_hint"] = f"discovered in vk:{domain}"
                 if _is_out_of_region_surface(discovered):
@@ -1967,6 +2095,14 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     continue
                 VK_SCAN_STATS["comments_seen"] += 1
                 comment_id = int(comment.get("id") or 0)
+                _add_vk_profile_surface(
+                    surfaces,
+                    comment.get("from_id"),
+                    source="discovered_vk_author",
+                    context=f"wall comment author in vk:{domain}",
+                    counter="profile_surfaces_discovered_from_authors",
+                    cap=max_author_profiles,
+                )
                 if comment_records is not None:
                     _collect_vk_comment_record(
                         comment_records,
@@ -2242,6 +2378,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                 "title": getattr(entity, "title", None),
                 "status": "needs_comment_resolve" if surface_type == "channel" else "candidate",
                 "scan_state": "pending_comment_resolve" if surface_type == "channel" else "queued_waiting_replyable_budget",
+                "scan_run_id": _current_run_id(),
                 "reach": {"members": getattr(entity, "participants_count", None), "confidence": "low", "basis": "telegram_entity"},
                 "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only public scan"},
             })
@@ -2280,6 +2417,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                             "title": getattr(linked, "title", None),
                             "status": "candidate",
                             "scan_state": "queued_waiting_replyable_budget",
+                            "scan_run_id": _current_run_id(),
                             "source": "linked_discussion",
                             "topic_hint": f"linked discussion for {handle}",
                             "reach": {"members": getattr(linked, "participants_count", None), "confidence": "low", "basis": "telegram_linked_discussion"},
@@ -2632,7 +2770,7 @@ def build_shadow_payload(
     scanned_vk = [s for s in scanned_list if s.get("platform") == "vk"]
     comment_retrieval_summary = dict((comment_retrieval_result or {}).get("summary") or {})
     payload = {
-        "run_id": os.getenv("KAGGLE_RUN_ID") or f"acq-shadow-{int(time.time())}",
+        "run_id": _current_run_id(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "surfaces": list(surfaces_by_external.values()),
         "opportunities": list(scanned_opportunities or []),

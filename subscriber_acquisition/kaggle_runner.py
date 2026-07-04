@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AcqConfig
-from .surface_filters import is_tg_bot_or_service_surface, is_vk_community_surface, tg_handle_from_surface, vk_handle_from_surface
+from .surface_filters import is_tg_bot_or_service_surface, is_vk_discovery_surface, tg_handle_from_surface, vk_handle_from_surface
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "kaggle" / "SubscriberAcquisitionDiscovery"
@@ -210,7 +210,7 @@ def _approved_seed_urls_from_payload(payload: dict[str, Any]) -> tuple[list[str]
             continue
         if platform == "tg" and is_tg_bot_or_service_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
             continue
-        if platform == "vk" and not is_vk_community_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
+        if platform == "vk" and not is_vk_discovery_surface(url=url, handle=item.get("handle"), external_id=item.get("external_id")):
             continue
         if platform == "vk":
             vk_items.append((index, url, item))
@@ -325,9 +325,9 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 row.review_note = "Telegram bot/service links are not monitoring surfaces for acquisition discovery."
                 session.add(row)
                 continue
-            if platform == "vk" and not is_vk_community_surface(url=row.url, handle=row.handle, external_id=row.external_id):
+            if platform == "vk" and not is_vk_discovery_surface(url=row.url, handle=row.handle, external_id=row.external_id):
                 row.status = "rejected_non_community"
-                row.review_note = "VK album/app/market/away/personal links are not monitoring communities for acquisition discovery."
+                row.review_note = "VK album/app/market/away links are not monitoring surfaces for acquisition discovery; explicit id* profile walls are allowed."
                 session.add(row)
                 continue
             if platform == "vk":
@@ -496,7 +496,7 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_ALLOW_GOOGLE_KEY_FALLBACKS": os.getenv("ACQ_ALLOW_GOOGLE_KEY_FALLBACKS", "0"),
         "ACQ_LLM_GATE_MIN_RELEVANCE": os.getenv("ACQ_LLM_GATE_MIN_RELEVANCE", "0.85"),
         "ACQ_MAX_LLM_CALLS_PER_RUN": os.getenv("ACQ_MAX_LLM_CALLS_PER_RUN", "80"),
-        "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "1200"),
+        "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "540"),
         "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
         "ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN": os.getenv("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", ""),
         "ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS": os.getenv("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", "5"),
@@ -505,6 +505,10 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_VK_SURFACES_PER_RUN": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", ""),
         "ACQ_MAX_VK_POSTS_PER_SURFACE": os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE", ""),
         "ACQ_MAX_VK_COMMENTS_PER_POST": os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST", ""),
+        "ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY": os.getenv("ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", "1"),
+        "ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN": os.getenv("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", "5"),
+        "ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP": os.getenv("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", "3"),
+        "ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN": os.getenv("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", "8"),
         "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL": os.getenv("ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL", "0"),
         "ACQ_COMMENT_RETRIEVAL_MODELS_JSON": os.getenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", ""),
         "ACQ_COMMENT_RETRIEVAL_GATE_MODEL": os.getenv("ACQ_COMMENT_RETRIEVAL_GATE_MODEL", ""),
@@ -823,6 +827,7 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
     seed_payload = seed_payload or {}
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     config_payload = _runtime_env_from_config(config, seed_payload)
+    config_payload["KAGGLE_RUN_ID"] = run_id
     secrets_payload = _build_secrets_payload()
     client = KaggleClient()
     dataset_cipher = dataset_key = kernel_ref = ""
@@ -849,7 +854,7 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
         status, status_payload = await _poll_kaggle_kernel(
             client,
             kernel_ref,
-            timeout_seconds=int(os.getenv("ACQ_KAGGLE_TIMEOUT_SECONDS") or "1800"),
+            timeout_seconds=int(os.getenv("ACQ_KAGGLE_TIMEOUT_SECONDS") or "900"),
             poll_interval_seconds=int(os.getenv("ACQ_KAGGLE_POLL_INTERVAL_SECONDS") or "30"),
         )
         await update_job_meta("subscriber_acquisition_discovery", kernel_ref, meta_updates={"last_status": status, "last_status_at": datetime.now(timezone.utc).isoformat()})

@@ -14,6 +14,21 @@
 
 ### Changed
 
+- Subscriber Acquisition Discovery now defaults to a small incremental Kaggle
+  scope (4 surfaces, 40 messages, 8 threads, 20 opportunities, 540s runtime
+  deadline / 900s launcher timeout), passes `KAGGLE_RUN_ID` into the runtime,
+  and reports last-run increment counts in semantic XLSX summaries only when
+  the source run id is verified, so local rebuilds of old artifacts cannot look
+  like fresh monitoring.
+- Subscriber Acquisition VK discovery now treats explicit `vk:id...` and
+  positive-owner `wall123_...` links as profile-wall candidates end-to-end,
+  discovers capped profile candidates from public VK comment/post authors and
+  optional community member samples, and scans those profile walls in later
+  bounded runs instead of rejecting them as non-community links.
+- Subscriber Acquisition semantic retrieval reports now show last event-question
+  and route-recommendation dates per surface, green-highlight selected surfaces,
+  yellow-highlight last-run increments, and export a `canonical_questions`
+  catalog separating real fresh question examples from historical calibration.
 - Subscriber Acquisition semantic retrieval now uses a question-first quality layer that penalizes non-question statements, excludes explicit offers/ads/cross-posts from LLM gate budget, and exports a `surface_summary` / `comment_retrieval_surface_decision_summary.csv` map with per-group recommendations and examples.
 - Subscriber Acquisition semantic retrieval reports now include VK community titles/seed metadata, best-effort member counts and commenter ids, observed period/depth plus latest-100 windows with normalized comment/question rates, VK post-vs-comment relation splits, both-model eligible examples, a `scope` sheet, and grouped `question_patterns`; source posts are excluded from reply examples by default.
 - Subscriber Acquisition semantic retrieval reports now embed bounded source-post/parent-comment context for future runs, add a full `full_surface_list`, `intent_catalog`, and Russian `summary_ru` dashboard sheets, use human-readable grouped XLSX headers/date formatting, filter out real-estate-only/medicine-only questions, and keep question-pattern rows limited to actual questions with canonical Russian templates.

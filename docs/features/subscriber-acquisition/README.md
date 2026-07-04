@@ -75,7 +75,7 @@ channel becomes `resolved_has_linked_discussion` with `linked_discussion_url` /
 `linked_discussion_external_id` in the map, and only the linked discussion
 surface is queued/scanned for reply opportunities. Review opportunities and
 frontier summaries are built only from confirmed replyable surfaces:
-Telegram groups/chats/linked discussions and VK communities/discussion threads.
+Telegram groups/chats/linked discussions and VK communities/profile walls/discussion threads.
 Channel posts may be sampled only for new-link discovery, never as reply
 candidates.
 Seed rotation treats resolved/rejected Telegram catalog channels as already seen when building the next Kaggle payload, so subsequent runs do not re-add the same `rejected_no_comments` or `resolved_has_linked_discussion` channels from static Telega.in seeds.; the same terminal handles are passed as `ACQ_KNOWN_TERMINAL_TG_HANDLES_JSON`, so links rediscovered inside later scanned messages are skipped instead of being queued again.
@@ -84,15 +84,24 @@ The Kaggle config also passes compact Telegram seed metadata (`ACQ_TG_SEED_SURFA
 VK discovery is also comment-first: the runtime reads only public wall/comment
 methods, requests `filter=all` wall posts, skips posts with zero comments, reads
 comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`
-errors, skips non-community links such as albums/apps/market/away/personal `id*`
-surfaces, and reports `vk_scan` counters in the payload. VK write methods remain
+errors, skips non-discovery links such as albums/apps/market/away, but keeps
+explicit personal profile walls (`vk:id...` and positive-owner `wall123_...`)
+as bounded profile candidates when they were discovered from public comments,
+post/comment authors, or an optional tiny member-list sample. The next run scans
+those profile walls like any other VK surface and marks them
+`comments_available`, `rejected_no_comments` or `rejected_inaccessible`.
+Profile discovery is capped by `ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN`,
+`ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN` and
+`ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP`; vanity personal names are not
+auto-classified as profiles. The runtime reports these counters in `vk_scan`.
+VK write methods remain
 blocked by the static no-send guard. To get beyond official event-source
 comments, the server seed payload also includes a small Smartik Kaliningrad
 public-catalog set of VK communities (`Подслушано`, `Типичный Калининград`,
 `Попутчики`, `ЧС`, `KADAUTO`) as `source=smartik_kaliningrad_catalog`.
 Smartik community seeds are prioritized ahead of noisy discovered VK links, and
-existing VK album/app/market/away/personal rows are marked
-`rejected_non_community` before the next Kaggle seed payload/import.
+existing VK album/app/market/away rows are marked `rejected_non_community`
+before the next Kaggle seed payload/import.
 For these social/community VK surfaces only, a wall post that is itself a human
 question/request may be treated as a reply opportunity because the acquisition
 action is a public comment under that post; official event-source wall posts are
@@ -144,6 +153,16 @@ intentionally includes loose phrasing such as “что посмотреть з�
 coast hints so route opportunities are not missed before Gemma does the semantic
 gate. These remain shadow opportunities for review only after Gemma 4 accepts
 the checklist; broad semantic acceptance is never owned by regex/keywords.
+
+For the current MVP, discovery runs intentionally use a small incremental scope
+by default: `ACQ_MAX_SURFACES_PER_RUN=4`,
+`ACQ_MAX_MESSAGES_PER_SURFACE=40`, `ACQ_MAX_THREADS_PER_SURFACE=8`,
+`ACQ_MAX_OPPORTUNITIES_PER_RUN=20`, and the Kaggle runtime deadline defaults to
+`ACQ_RUNTIME_DEADLINE_SECONDS=540` with a 900s launcher timeout. This keeps a
+normal run under roughly ten minutes while still touching a few Telegram
+replyable surfaces, VK communities/profile walls and newly discovered links.
+Increase these budgets only after the operator has seen visible map growth and
+quality in the XLSX/Telegraph reports.
 
 
 ### Organizer clarification acquisition

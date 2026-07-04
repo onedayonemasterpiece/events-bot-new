@@ -123,8 +123,10 @@ on Kaggle through the existing Telegram Monitoring-style infrastructure, scan
 public Telegram chats/channel comment threads and VK community comment threads,
 discover additional public surfaces, and put both surface candidates and
 reply-opportunity candidates into manual review. Automatic replies, DMs, personal
-user harvesting, VK personal-wall crawling, and sticker generation are outside
-the first MVP.
+bulk user harvesting, broad VK personal-wall monitoring, and sticker generation
+are outside the first MVP. Explicit public VK profile-wall candidates may still
+be queued and checked read-only when they were discovered from public comments,
+positive-owner wall links or the capped member-list sample.
 
 Initial Telegram seeds for MVP discovery:
 

@@ -46,19 +46,21 @@ contract:
   store the linked chat URL/external id for XLSX/report navigation; channels
   without linked comments become `rejected_no_comments`. Candidate/review
   opportunities and frontier-summary cards are restricted to replyable
-  surfaces: groups, chats, linked discussions, VK community comments and VK
-  discussion-board topics.
+  surfaces: groups, chats, linked discussions, VK community/profile-wall
+  comments and VK discussion-board topics.
 - live Telegram runs use the standard `remote_telegram_session` registry guard
   plus an acquisition-specific local marker/cooldown and direct kernel-ref check
   before reusing S22, so a just-deleted/timeout Kaggle kernel cannot immediately
   start a second Telethon client on the same auth key;
 - VK read-only scans prefer surfaces that are still `seed_only`, pass explicit
   VK budgets into Kaggle config, skip wall posts with no comments, fetch newest
-  comments first (`sort=desc`), skip non-community VK links
-  (`album*`/`app*`/`market*`/`away.php`/personal `id*`), and expose `vk_scan`
-  counters for posts/comments inspected and VK rate-limit backoffs; existing
-  non-community VK rows are marked `rejected_non_community`, and Smartik
-  Kaliningrad community seeds are prioritized before noisy discovered links;
+  comments first (`sort=desc`), skip non-discovery VK links
+  (`album*`/`app*`/`market*`/`away.php`) but allow explicit profile walls
+  (`id*`, positive-owner `wall123_...`) as profile candidates, and expose
+  `vk_scan` counters for posts/comments inspected, discovered profile-wall
+  candidates and VK rate-limit backoffs; existing non-discovery VK rows are
+  marked `rejected_non_community`, and Smartik Kaliningrad community seeds are
+  prioritized before noisy discovered links;
 - on social/community VK surfaces only, a wall post that is itself a human
   question/request may be passed to Gemma as a reply opportunity because the
   reply action would be a public comment under that post; official event-source
@@ -142,10 +144,10 @@ For each Telegram seed:
 4. Record failures as reviewable diagnostics, not as silent skips.
 
 For VK surfaces, once seeds are provided or discovered and approved, scan public
-community wall posts and comments through the existing VK API/token patterns.
-VK personal walls are a post-MVP expansion unless explicitly allowlisted: the
-MVP should model them as a possible `surface_type`, but not crawl them by
-default.
+community/profile wall posts and comments through the existing VK API/token
+patterns. Personal walls enter only as explicit `id*`/positive-wall profile
+candidates discovered from public comments/post authors or optional tiny
+member-list samples; vanity personal names are not auto-classified as profiles.
 
 
 ### Region gate
@@ -259,9 +261,10 @@ stop there:
   organizer-owned event channel.
 - **VK:** start from existing `vk_source` community rows and the acquisition VK
   social/catalog seeds, then expand through group links found in TG about text,
-  VK post text, source event URLs and organizer profile cross-links. Keep
-  `owner_type='user'` personal walls out of the MVP unless a separate policy task
-  explicitly allows them.
+  VK post text, source event URLs and organizer profile cross-links. Explicit
+  public profile-wall candidates (`id*`/positive wall links) may be scanned
+  read-only under the current bounded profile policy; broad user/follower
+  harvesting is still out of scope.
 - **Event corpus backfill:** when an event has a source URL or known organizer
   channel/community that is not yet an acquisition surface, enqueue that
   organizer surface for commentability scanning. If the surface cannot be matched
@@ -536,8 +539,10 @@ The first production rollout writes **review data only**:
 - conservative potential-reach estimates for each opportunity and surface;
 - a human-readable Telegraph report URL for convenient link-heavy review.
 
-Posting, reply drafting for publication, VK personal-wall monitoring, sticker
-packs, and unattended approval are explicitly post-MVP.
+Posting, reply drafting for publication, broad VK personal-wall/follower
+monitoring, sticker packs, and unattended approval are explicitly post-MVP.
+Bounded read-only checks of explicitly discovered VK profile walls are part of
+the current discovery frontier.
 
 ## Data ownership analysis
 

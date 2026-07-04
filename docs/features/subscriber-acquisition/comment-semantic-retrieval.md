@@ -41,15 +41,19 @@ Use only current Subscriber Acquisition Discovery sources:
   exported separately as `relation=vk_social_wall_post` and do not spend reply
   budget unless `ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES=1` is explicitly set;
 - existing `acq_surface`, manual `/acq_surface_add`, Telegram Monitoring/VK
-  monitoring seed payloads, documented Telega.in/Smartik/search seeds, and newly
-  discovered public community links.
+  monitoring seed payloads, documented Telega.in/Smartik/search seeds, newly
+  discovered public community links, and explicitly discovered VK profile-wall
+  links (`vk:id...` / positive-owner `wall123_...`) when they pass the bounded
+  read-only scan.
 
 Do not treat top-level broadcast channel/community posts as reply candidates.
 They may provide container metadata: post URL/id, title/snippet, comment count,
 linked discussion target and thread context.
 
-No external sends, joins, comments, reactions or personal-wall crawling are part
-of this stage.
+No external sends, joins, comments or reactions are part of this stage. VK
+personal-wall scanning is allowed only for explicit profile candidates found in
+public evidence or optional capped member samples; it remains read-only and
+bounded by the same run budgets.
 
 ## Action classes
 
@@ -377,6 +381,7 @@ Research-stage bulk output is artifact-first:
 - `comment_retrieval_surface_profiles.csv`
 - `comment_retrieval_surface_decision_summary.csv`
 - `comment_retrieval_question_patterns.csv`
+- `comment_retrieval_canonical_questions.csv`
 - `comment_retrieval_score_distributions.csv`
 - `comment_retrieval_manual_review_sample.xlsx`
 - `comment_retrieval_speed_metrics.csv`
@@ -387,7 +392,9 @@ The XLSX must include these operator-facing sheets:
 - `summary_ru`: dashboard-style Russian explanation of what the file means,
   how to read it and what the important limitations are.
 - `summary_counts`: counts by platform/surface type and final status:
-  total/selected/candidate/rejected.
+  total/selected/candidate/rejected, plus the last-run increment:
+  `newly_discovered_this_run`, `increment_touched_this_run` and
+  `analyzed_comments_this_run`.
 - `scope`: run id, stage, model list/gate model, actual comment period,
   platform/surface/relation counts and the configured scan budgets; this answers
   whether the file came from all stored surfaces or from a bounded Kaggle sample.
@@ -400,8 +407,12 @@ The XLSX must include these operator-facing sheets:
   latest-100 comment window dates/duration for low-volume or old surfaces,
   answerable questions per 30d/90d/per 100 comments, source-post vs comment
   context counts, freshness status (`latest_comment_at`,
-  `days_since_latest_activity`, `freshness_status`), filtered noise count and
-  clickable examples.
+  `latest_event_question_at`, `latest_route_recommendation_at`,
+  `days_since_latest_activity`, `freshness_status`), last-run increment status
+  (`increment_status`, `discovered_at`, `discovered_in_run_id`), filtered noise
+  count and clickable examples. Rows with final `selection_status=selected` are
+  filled light green; rows newly discovered/touched in the last run are filled
+  light yellow when they are not already selected.
 - one `eligible_<model>` sheet per embedding model, so e5-base and bge-m3 can be
   inspected independently instead of only seeing the recommended gate model.
 - `question_patterns`: grouped question patterns with counts and examples,
@@ -411,6 +422,11 @@ The XLSX must include these operator-facing sheets:
   `canonical_question_ru` template, not generic statements. Historical rows are
   allowed here because their purpose is to build future template questions and
   verify the semantic-control process, not to trigger immediate monitoring.
+- `canonical_questions`: global catalog of canonical question templates derived
+  from real question-like comments across surfaces. It separates fresh
+  monitoring examples from historical calibration examples so the operator can
+  see whether the template library is growing from current monitoring data or
+  only from old QA/calibration material.
 - `intent_catalog`: the complete catalog of model phrases/senses embedded as
   retrieval queries. The per-candidate `top_intent_phrase` is the closest phrase
   from this catalog for the candidate’s `intent_set`.
@@ -418,6 +434,20 @@ The XLSX must include these operator-facing sheets:
 
 Human-facing XLSX formatting should use Russian column labels, grouped header
 bands, `dd.mm.yyyy` date strings and one-decimal normalized rates where possible.
+`discovered_at`/report generation timestamps may include `dd.mm.yyyy HH:MM`
+because they are used to see the latest run increment quickly.
+
+Important provenance rule: rebuilding a report from an old Kaggle output may
+improve formatting and interpretation, but it does not prove new monitoring.
+The `scope` and `summary_ru` sheets must show the source `run_id`,
+`KAGGLE_RUN_ID`/`ACQ_SOURCE_RUN_ID`, `source_run_provenance`, report generation
+timestamp and configured budgets. Last-run increment counts and yellow
+highlighting are allowed only when the source run id is verified. If neither
+`KAGGLE_RUN_ID` nor `ACQ_SOURCE_RUN_ID` is present, the report must show
+`source_run_provenance=missing_run_id_no_increment_claim`, mark rows as
+`no_verified_run_id` / `analyzed_comments_unverified_run`, and keep increment
+counters at zero. New VK profile-wall support affects only future scans unless
+those profile surfaces already existed in the source Kaggle output.
 
 YDB serverless is the preferred project-owned store for sanitized retrieval
 summaries once the dry run proves value, because the repo already has an optional

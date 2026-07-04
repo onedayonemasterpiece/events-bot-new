@@ -443,6 +443,7 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert "intent_catalog" in workbook.sheetnames
     assert "full_surface_list" in workbook.sheetnames
     assert "question_patterns" in workbook.sheetnames
+    assert "canonical_questions" in workbook.sheetnames
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
     assert route_candidates
     assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
@@ -454,8 +455,122 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert vk_profile["period_days"] is not None
     assert Path(summary["artifacts"]["surface_decision_summary_csv"]).exists()
     assert result["surface_decision_summaries"]
+    assert "latest_route_recommendation_at" in result["surface_decision_summaries"][0]
     assert result["surface_decision_summaries"][0].get("comments_per_30d") is not None
     assert result["summary"]["artifacts"]["question_patterns_csv"].endswith("comment_retrieval_question_patterns.csv")
+    assert result["summary"]["artifacts"]["canonical_questions_csv"].endswith("comment_retrieval_canonical_questions.csv")
+    assert result["canonical_questions"]
+
+
+def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
+    retrieval = load_retrieval()
+    path = tmp_path / "review.xlsx"
+
+    retrieval._write_xlsx(
+        path,
+        [],
+        surface_summaries=[
+            {
+                "recommendation": "monitor_for_reply_opportunities",
+                "selection_status": "selected",
+                "surface_key": "tg:selected",
+                "surface_url": "https://t.me/selected",
+                "increment_status": "analyzed_comments_this_run",
+            }
+        ],
+        surface_inventory=[
+            {
+                "surface_key": "vk:id123",
+                "platform": "vk",
+                "surface_type": "profile",
+                "surface_url": "https://vk.com/id123",
+                "selection_status": "candidate",
+                "increment_status": "newly_discovered_this_run",
+            }
+        ],
+        summary_counts=[
+            {
+                "platform": "ALL",
+                "surface_type": "ALL",
+                "total_surfaces": 1,
+                "selected_surfaces": 1,
+                "candidate_surfaces": 0,
+                "rejected_surfaces": 0,
+                "newly_discovered_this_run": 1,
+                "increment_touched_this_run": 1,
+                "analyzed_comments_this_run": 1,
+            }
+        ],
+    )
+
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path)
+    assert workbook["surface_summary"]["A3"].fill.fgColor.rgb == "00C6EFCE"
+    assert workbook["full_surface_list"]["A3"].fill.fgColor.rgb == "00FFF2CC"
+    assert workbook["summary_counts"]["G3"].fill.fgColor.rgb == "00FFF2CC"
+
+
+def test_comment_retrieval_increment_requires_verified_run_id(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.delenv("KAGGLE_RUN_ID", raising=False)
+    monkeypatch.delenv("ACQ_SOURCE_RUN_ID", raising=False)
+
+    inventory = retrieval._surface_inventory_rows(
+        {
+            "tg:test": {
+                "platform": "tg",
+                "surface_type": "group",
+                "url": "https://t.me/test",
+                "external_id": "tg:test",
+                "scan_state": "scanned",
+                "scan_run_id": "old-run",
+            }
+        },
+        [
+            {
+                "surface_key": "tg:test",
+                "platform": "tg",
+                "surface_type": "group",
+                "comments_embedded": 3,
+                "selection_status": "candidate",
+            }
+        ],
+    )
+
+    assert inventory[0]["increment_status"] == "no_verified_run_id"
+    counts = retrieval._summary_count_rows(inventory)
+    assert counts[0]["increment_touched_this_run"] == 0
+    assert counts[0]["analyzed_comments_this_run"] == 0
+
+    monkeypatch.setenv("KAGGLE_RUN_ID", "run-1")
+    inventory = retrieval._surface_inventory_rows(
+        {
+            "tg:test": {
+                "platform": "tg",
+                "surface_type": "group",
+                "url": "https://t.me/test",
+                "external_id": "tg:test",
+                "scan_state": "scanned",
+                "scan_run_id": "run-1",
+            }
+        },
+        [
+            {
+                "surface_key": "tg:test",
+                "platform": "tg",
+                "surface_type": "group",
+                "comments_embedded": 3,
+                "selection_status": "candidate",
+                "last_analyzed_run_id": "run-1",
+            }
+        ],
+    )
+
+    assert inventory[0]["increment_status"] == "analyzed_comments_this_run"
+    counts = retrieval._summary_count_rows(inventory)
+    assert counts[0]["increment_touched_this_run"] == 1
+    assert counts[0]["analyzed_comments_this_run"] == 1
 
 
 def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
@@ -1295,6 +1410,52 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
     assert "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL" in env
     assert "ACQ_COMMENT_RETRIEVAL_MODELS_JSON" in env
+    assert env["ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY"] == "1"
+
+
+def test_kaggle_runtime_env_allows_explicit_vk_profile_wall_seed():
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    payload = {"surfaces": [
+        {"platform": "vk", "url": "https://vk.com/id123", "external_id": "vk:id123", "surface_type": "profile", "status": "candidate", "source": "discovered_vk_author"},
+    ]}
+
+    env = _runtime_env_from_config(AcqConfig(), payload)
+
+    assert json.loads(env["ACQ_VK_SEEDS_JSON"]) == ["https://vk.com/id123"]
+    assert json.loads(env["ACQ_VK_ALLOWLIST_JSON"]) == ["https://vk.com/id123"]
+
+
+def test_vk_member_profile_discovery_adds_bounded_profile_candidates(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("KAGGLE_RUN_ID", "member-run")
+    monkeypatch.setenv("ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", "1")
+    monkeypatch.setenv("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", "2")
+    monkeypatch.setenv("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", "3")
+    runtime.VK_SCAN_STATS["profile_surfaces_discovered_from_members"] = 0
+
+    def fake_vk(method, *, token_lanes, params):
+        assert method == "groups.getMembers"
+        assert params["group_id"] == "club123"
+        return {"items": [{"id": 10}, {"id": 11}, {"id": 12}]}, "TEST_TOKEN"
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+    surfaces = {}
+    diagnostics = []
+
+    runtime._discover_vk_member_profile_surfaces(
+        surfaces,
+        domain="club123",
+        token_lanes=[("TEST_TOKEN", "token")],
+        diagnostics=diagnostics,
+    )
+
+    assert list(surfaces) == ["vk:id10", "vk:id11"]
+    assert surfaces["vk:id10"]["surface_type"] == "profile"
+    assert surfaces["vk:id10"]["discovered_in_run_id"] == "member-run"
+    assert runtime.VK_SCAN_STATS["profile_surfaces_discovered_from_members"] == 2
+    assert "discovered 2 member profile-wall candidates" in diagnostics[0]
 
 
 def test_runtime_env_passes_tg_channel_resolve_budget():

@@ -145,7 +145,7 @@ def _surface_reply_policy(surface: AcqSurface) -> str:
         return "channel_metadata_only_use_linked_discussion"
     if status == "needs_comment_resolve" or surface_type in {"channel", "unknown_public"}:
         return "needs_commentability_resolve"
-    if surface_type in {"group", "chat", "megagroup", "linked_discussion", "community"}:
+    if surface_type in {"group", "chat", "megagroup", "linked_discussion", "community", "profile"}:
         return "replyable_pending_analysis"
     return "pending_discovery_analysis"
 
