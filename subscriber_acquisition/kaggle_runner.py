@@ -710,6 +710,9 @@ async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict
     def write_cipher(path: Path) -> None:
         (path / "config.json").write_text(json.dumps(config_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         (path / "secrets.enc").write_bytes(encrypted)
+        retrieval_module = RUNTIME_DIR / "comment_semantic_retrieval.py"
+        if retrieval_module.exists():
+            (path / "comment_semantic_retrieval.py").write_text(retrieval_module.read_text(encoding="utf-8"), encoding="utf-8")
         write_kaggle_status_files(path, kaggle_run_config)
 
     def write_key(path: Path) -> None:
@@ -718,6 +721,8 @@ async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict
     slug_cipher = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_CIPHER, run_id), f"Acq Discovery Cipher {slug_suffix}", write_cipher)
     slug_key = _create_dataset(client, username, _build_dataset_slug(CONFIG_DATASET_KEY, run_id), f"Acq Discovery Key {slug_suffix}", write_key)
     expected_cipher_files = ["config.json", "secrets.enc"]
+    if (RUNTIME_DIR / "comment_semantic_retrieval.py").exists():
+        expected_cipher_files.append("comment_semantic_retrieval.py")
     if kaggle_run_config:
         expected_cipher_files.extend(["kaggle_run.json", "kaggle_status_client.py"])
     await await_dataset_ready(client, slug_cipher, expected_files=expected_cipher_files)

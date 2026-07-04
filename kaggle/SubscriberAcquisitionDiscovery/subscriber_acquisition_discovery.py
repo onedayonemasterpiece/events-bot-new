@@ -44,12 +44,40 @@ def ensure_libs() -> None:
 
 ensure_libs()
 
+def _load_comment_semantic_retrieval_module() -> Any:
+    try:
+        return importlib.import_module("comment_semantic_retrieval")
+    except Exception as first_exc:
+        last_exc: Exception = first_exc
+    for root in [SCRIPT_DIR, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "comment_semantic_retrieval.py"]
+        try:
+            candidates.extend(sorted(root.rglob("comment_semantic_retrieval.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("comment_semantic_retrieval", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    logger.info("loaded comment semantic retrieval module from %s", candidate)
+                    return module
+            except Exception as exc:
+                last_exc = exc
+                logger.warning("comment semantic retrieval load failed from %s: %s", candidate, exc)
+    raise last_exc
+
+
 try:
-    from comment_semantic_retrieval import (
-        STAGE_NAME as COMMENT_RETRIEVAL_STAGE_NAME,
-        run_comment_semantic_retrieval,
-        semantic_retrieval_enabled as _semantic_retrieval_enabled_from_module,
-    )
+    _comment_retrieval_module = _load_comment_semantic_retrieval_module()
+    COMMENT_RETRIEVAL_STAGE_NAME = _comment_retrieval_module.STAGE_NAME
+    run_comment_semantic_retrieval = _comment_retrieval_module.run_comment_semantic_retrieval
+    _semantic_retrieval_enabled_from_module = _comment_retrieval_module.semantic_retrieval_enabled
 except Exception as exc:  # pragma: no cover - defensive Kaggle import guard
     COMMENT_RETRIEVAL_STAGE_NAME = "acq_comment_semantic_retrieval.v1"
     run_comment_semantic_retrieval = None  # type: ignore[assignment]
