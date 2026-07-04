@@ -30,6 +30,7 @@ const required = [
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
   'lab/medallions/index.html',
   'lab/date-block/index.html',
+  'lab/event-decision-block/index.html',
   ...((festivalMedallions.items || []).map((item) => item.avatarUrl).filter(Boolean).map((url) => String(url).replace(/^\//u, ''))),
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
@@ -62,6 +63,21 @@ for (const marker of [
 ]) {
   if (!dateBlockLabHtml.includes(marker)) throw new Error(`Date-block lab misses marker: ${marker}`);
 }
+const eventDecisionLabHtml = readFileSync(join(root, 'lab/event-decision-block/index.html'), 'utf8');
+for (const marker of [
+  'event-decision-lab',
+  'decision-variant-p03',
+  'decision-variant-p01',
+  'decision-variant-p04',
+  'decision-variant-baseline',
+  'decision-variant-p03-zero-medallions',
+  'decision-variant-utility-stack',
+  'A/B review',
+  'baseline preserved',
+]) {
+  if (!eventDecisionLabHtml.includes(marker)) throw new Error(`Event decision-block lab misses marker: ${marker}`);
+}
+
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
   if (!eventsData.events.length) throw new Error('Preview fixture must contain at least one event');

@@ -1,0 +1,422 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import MedallionStrip from '../../../components/lab/DecisionMedallionStrip.astro';
+import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
+
+const canonicalUrl = absoluteUrl('/lab/event-decision-block/');
+const title = `A/B лаборатория decision-блока события | ${SITE_NAME}`;
+const description = 'Mobile-first варианты пространства под hero-картинкой события: дата, время, CTA, площадка и медальоны без потери текущего baseline.';
+const baselineCommit = 'f8aa6bd44e6e2bc475b868f1187bde707cb6fd2d';
+const previewLinks = [
+  { label: 'Сохранённый блок даты', href: withBase('/lab/date-block/') },
+  { label: 'Медальоны', href: withBase('/lab/medallions/') },
+  { label: 'Hero review', href: withBase('/lab/hero/review/') },
+];
+const sample = {
+  title: 'Органный вечер при свечах',
+  type: 'концерт',
+  summary: 'Музыка Баха и барочная программа в соборе. Главная задача первого экрана — мгновенно ответить когда, где и что нажать дальше.',
+  day: '05',
+  month: 'июля',
+  weekday: 'суббота',
+  weekdayShort: 'сб',
+  time: '19:00',
+  duration: '2 часа',
+  venue: 'Кафедральный собор',
+  city: 'Калининград',
+  admission: 'по билетам',
+  primaryCta: 'Купить билет',
+  secondaryCta: 'В календарь',
+  tertiaryCta: 'Поделиться',
+  datetime: '2026-07-05T19:00:00+02:00',
+};
+const medallions = [
+  { label: 'Бахослужение', short: 'BACH', image: '/assets/festivals/bahosluzhenie.png', tone: 'gold' },
+  { label: 'Пушкинская карта', short: 'ПК', image: '/assets/badges/pushkin-card-medallion.webp', tone: 'green' },
+  { label: 'Остров Канта', short: 'OK', image: '/assets/organizers/kant-island.webp', tone: 'blue' },
+  { label: 'Источник проверен', short: 'SRC', image: '', tone: 'neutral' },
+];
+const criteria = [
+  ['Scan order', 'Дата → время → место → главный CTA → доверительные токены.'],
+  ['Noise budget', 'Не больше двух равносильных визуальных акцентов в первом экране.'],
+  ['CTA hierarchy', 'Одна основная кнопка, календарь/поделиться ниже или тише.'],
+  ['Medallion state', 'Проверяем 0, 1 и 4+ токена: медальоны усиливают доверие, но не соревнуются с датой.'],
+  ['Mobile fit', '390px и 320px без горизонтального скролла, тап-таргеты от 44px.'],
+];
+const variants = [
+  {
+    key: 'A',
+    id: 'decision-variant-p03',
+    title: 'P03 editorial date first',
+    thesis: 'Крупная дата как графический якорь, справа/ниже — день, время, место и один главный CTA.',
+    risk: 'Если цифра слишком декоративна, время может стать вторым чтением.',
+    bestFor: 'Сильные афиши, культурные события, когда нужно снизить шум CTA.',
+  },
+  {
+    key: 'B',
+    id: 'decision-variant-p01',
+    title: 'P01 compact date + venue card',
+    thesis: 'Календарная плитка и площадка объединены в один понятный decision-card.',
+    risk: 'Может стать слишком приложенческим, если убрать теплоту и типографику.',
+    bestFor: 'Универсальный fallback, события без медальонов, плотная мобильная выдача.',
+  },
+  {
+    key: 'C',
+    id: 'decision-variant-p04',
+    title: 'P04 vertical rail',
+    thesis: 'Дата слева узкой стойкой, справа — контекст и CTA; хорошо использует прямоугольное пространство.',
+    risk: 'Вертикальный месяц/день недели нельзя делать мелким или декоративным.',
+    bestFor: 'Длинные заголовки и страницы, где справа нужен быстрый контекст.',
+  },
+  {
+    key: 'D',
+    id: 'decision-variant-baseline',
+    title: 'Current baseline preserved',
+    thesis: 'Текущий split-badge остаётся контрольным вариантом, чтобы не потерять уже рабочую продуктовую ясность.',
+    risk: 'Дизайнерски менее сильный, дата не всегда побеждает CTA и заголовок.',
+    bestFor: 'Регрессионный контроль и быстрый rollback.',
+  },
+  {
+    key: 'E',
+    id: 'decision-variant-p03-zero-medallions',
+    title: 'P03 without medallions',
+    thesis: 'Та же логика, но доверительный ряд исчезает: место занимают компактные факты и описание.',
+    risk: 'Пустота после CTA должна выглядеть намеренно, а не как недогруз.',
+    bestFor: 'Новые/малые источники без известных медальонов.',
+  },
+  {
+    key: 'F',
+    id: 'decision-variant-utility-stack',
+    title: 'Primary CTA + quiet utilities',
+    thesis: 'Дата сильная, но календарь/поделиться/лайк собраны в тихую utility-строку под главным CTA.',
+    risk: 'Вторичные действия могут быть менее заметны, зато первый экран чище.',
+    bestFor: 'Мобильный production-кандидат, если несколько CTA создают шум.',
+  },
+];
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" class="decision-lab" data-event-decision-lab>
+    <div class="page-shell decision-lab__shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <a href={withBase('/lab/date-block/')}>Блок даты</a>
+        <span aria-hidden="true">/</span>
+        <span>Decision-блок</span>
+      </nav>
+
+      <section class="section-card decision-lab__intro">
+        <div class="section-card__inner decision-lab__intro-inner">
+          <p class="eyebrow">A/B review · mobile first · baseline preserved</p>
+          <h1>Пространство под hero: дата, CTA и медальоны нужно тестировать вместе</h1>
+          <p class="lead">Текущий вариант не перезаписываем: он сохранён как контроль и rollback-точка. Эта лаборатория показывает несколько целостных компоновок первого decision-блока страницы события, где дата/время/день недели конкурируют не только между собой, но и с кнопками, площадкой и медальонами.</p>
+          <div class="decision-lab__meta-grid" aria-label="Контекст исследования">
+            <div>
+              <span>baseline commit</span>
+              <code>{baselineCommit}</code>
+            </div>
+            <div>
+              <span>главный экран</span>
+              <strong>390×844 → 320×640</strong>
+            </div>
+            <div>
+              <span>основной риск</span>
+              <strong>шум от CTA + медальонов</strong>
+            </div>
+          </div>
+          <div class="decision-lab__links" aria-label="Связанные лаборатории">
+            {previewLinks.map((item) => <a href={item.href}>{item.label}</a>)}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card decision-lab__principles">
+        <div class="section-card__inner">
+          <div class="decision-lab__section-head">
+            <p class="eyebrow">Как отсматривать</p>
+            <h2>Критерии A/B review</h2>
+          </div>
+          <div class="decision-lab__criteria-grid">
+            {criteria.map(([title, text]) => (
+              <article>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="decision-lab__variants" aria-label="Варианты decision-блока события">
+        {variants.map((variant) => (
+          <article class={`section-card decision-lab__variant ${variant.id}`} data-variant={variant.id}>
+            <div class="section-card__inner">
+              <div class="decision-lab__variant-head">
+                <p class="eyebrow">Variant {variant.key}</p>
+                <h2>{variant.title}</h2>
+                <p>{variant.thesis}</p>
+              </div>
+
+              {variant.key === 'A' && (
+                <div class="decision-mock decision-mock--p03">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="decision-mock__body">
+                    <time class="p03-date" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.day} ${sample.month}, ${sample.time}`}>
+                      <span class="p03-date__day">{sample.day}</span>
+                      <span class="p03-date__side"><strong>{sample.month}</strong><em>{sample.weekday}</em><b>{sample.time}</b></span>
+                    </time>
+                    <div class="decision-mock__content">
+                      <p class="decision-mock__title">{sample.title}</p>
+                      <p class="decision-mock__place">{sample.venue} · {sample.city}</p>
+                      <a class="decision-mock__primary" href="#ab-review">{sample.primaryCta}</a>
+                      <MedallionStrip items={medallions} mode="normal" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {variant.key === 'B' && (
+                <div class="decision-mock decision-mock--p01">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="p01-card">
+                    <time class="p01-card__date" datetime={sample.datetime}>
+                      <span>{sample.weekdayShort}</span><strong>{sample.day}</strong><em>{sample.month}</em>
+                    </time>
+                    <div class="p01-card__facts">
+                      <p class="decision-mock__title">{sample.title}</p>
+                      <dl>
+                        <div><dt>Начало</dt><dd>{sample.time}</dd></div>
+                        <div><dt>Где</dt><dd>{sample.venue}</dd></div>
+                        <div><dt>Вход</dt><dd>{sample.admission}</dd></div>
+                      </dl>
+                      <div class="decision-mock__actions"><a class="decision-mock__primary" href="#ab-review">{sample.primaryCta}</a><a class="decision-mock__secondary" href="#ab-review">{sample.secondaryCta}</a></div>
+                    </div>
+                  </div>
+                  <MedallionStrip items={medallions.slice(0, 2)} mode="compact" />
+                </div>
+              )}
+
+              {variant.key === 'C' && (
+                <div class="decision-mock decision-mock--p04">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="p04-card">
+                    <time class="p04-card__rail" datetime={sample.datetime}>
+                      <span>{sample.weekday}</span><strong>{sample.day}</strong><em>{sample.month}</em>
+                    </time>
+                    <div class="p04-card__main">
+                      <p class="decision-mock__time">{sample.time} · {sample.duration}</p>
+                      <p class="decision-mock__title">{sample.title}</p>
+                      <p class="decision-mock__place">{sample.venue} · {sample.city}</p>
+                      <div class="decision-mock__actions"><a class="decision-mock__primary" href="#ab-review">{sample.primaryCta}</a><a class="decision-mock__utility" href="#ab-review">{sample.tertiaryCta}</a></div>
+                      <MedallionStrip items={medallions} mode="rail" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {variant.key === 'D' && (
+                <div class="decision-mock decision-mock--baseline">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="baseline-card">
+                    <p class="eyebrow">концерт · {sample.admission}</p>
+                    <p class="decision-mock__title">{sample.title}</p>
+                    <time class="baseline-date" datetime={sample.datetime}>
+                      <strong>{sample.day} {sample.month}</strong>
+                      <span>{sample.weekday} · {sample.time}</span>
+                    </time>
+                    <div class="decision-mock__actions"><a class="decision-mock__primary" href="#ab-review">{sample.primaryCta}</a><a class="decision-mock__secondary" href="#ab-review">{sample.secondaryCta}</a><a class="decision-mock__utility" href="#ab-review">{sample.tertiaryCta}</a></div>
+                    <p class="decision-mock__place">{sample.venue} · {sample.city}</p>
+                    <p class="decision-mock__summary">{sample.summary}</p>
+                  </div>
+                </div>
+              )}
+
+              {variant.key === 'E' && (
+                <div class="decision-mock decision-mock--p03 decision-mock--zero">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="decision-mock__body">
+                    <time class="p03-date" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.day} ${sample.month}, ${sample.time}`}>
+                      <span class="p03-date__day">{sample.day}</span>
+                      <span class="p03-date__side"><strong>{sample.month}</strong><em>{sample.weekday}</em><b>{sample.time}</b></span>
+                    </time>
+                    <div class="decision-mock__content">
+                      <p class="decision-mock__title">{sample.title}</p>
+                      <p class="decision-mock__place">{sample.venue} · {sample.city}</p>
+                      <a class="decision-mock__primary" href="#ab-review">{sample.primaryCta}</a>
+                      <div class="zero-medallions" aria-label="Медальоны отсутствуют"><span>Медальонов нет</span><strong>{sample.admission} · {sample.duration}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {variant.key === 'F' && (
+                <div class="decision-mock decision-mock--utility">
+                  <div class="decision-mock__poster" aria-hidden="true"><span>{sample.type}</span><strong>{sample.title}</strong></div>
+                  <div class="utility-card">
+                    <time class="utility-date" datetime={sample.datetime}>
+                      <span>{sample.weekday}</span><strong>{sample.day} {sample.month}</strong><em>{sample.time}</em>
+                    </time>
+                    <p class="decision-mock__title">{sample.title}</p>
+                    <p class="decision-mock__place">{sample.venue} · {sample.city}</p>
+                    <a class="decision-mock__primary decision-mock__primary--wide" href="#ab-review">{sample.primaryCta}</a>
+                    <div class="utility-actions"><a href="#ab-review">{sample.secondaryCta}</a><a href="#ab-review">{sample.tertiaryCta}</a><button type="button">Нравится</button></div>
+                    <MedallionStrip items={medallions} mode="quiet" />
+                  </div>
+                </div>
+              )}
+
+              <div class="decision-lab__variant-notes">
+                <p><strong>Лучше для:</strong> {variant.bestFor}</p>
+                <p><strong>Риск:</strong> {variant.risk}</p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </section>
+
+
+      <section class="section-card decision-lab__consultants">
+        <div class="section-card__inner">
+          <div class="decision-lab__section-head">
+            <p class="eyebrow">Gemini Pro + a-opus critical review</p>
+            <h2>Модели сошлись на гибриде, но спорят о лидере</h2>
+            <p>Gemini Pro поставил на первое место F из-за чистой иерархии действий; a-opus поставил на первое место A/P03 из-за самой сильной даты. Общая точка согласия: production-кандидат — не baseline и не чистый P13, а гибрид P03-даты с F-иерархией CTA.</p>
+          </div>
+          <div class="decision-lab__consultant-grid">
+            <article>
+              <h3>Gemini Pro</h3>
+              <p><strong>Ranking:</strong> F → A → E → B → D → C.</p>
+              <p><strong>Суть:</strong> один широкий primary CTA, utility-строка тише, медальоны ниже и приглушённее.</p>
+            </article>
+            <article>
+              <h3>a-opus</h3>
+              <p><strong>Ranking:</strong> A → F → B → E → C → D.</p>
+              <p><strong>Суть:</strong> P03 — лучший visual anchor; F нужен как лекарство от CTA-шума; B — safety fallback для 320px.</p>
+            </article>
+            <article class="decision-lab__hybrid-card">
+              <h3>Recommended hybrid</h3>
+              <p><strong>P03-F:</strong> крупная editorial-дата → title/place → один широкий primary CTA → тихая utility-строка → медальоны ниже, muted/scroll-safe; zero-medallions использует fact-zone из E.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="ab-review" class="section-card decision-lab__review">
+        <div class="section-card__inner">
+          <div class="decision-lab__section-head">
+            <p class="eyebrow">Consultants + product gate</p>
+            <h2>Что просим оценить у Gemini Pro и a-opus</h2>
+          </div>
+          <ol>
+            <li>Ранжировать A–F по скорости считывания даты/времени/дня недели на 390px и 320px.</li>
+            <li>Отдельно дать veto, если медальоны или utility-actions начинают спорить с главным CTA.</li>
+            <li>Предложить production-гибрид, если лучший вариант требует взять элементы из нескольких паттернов.</li>
+            <li>Проверить empty/zero-medallion state: страница не должна выглядеть незаполненной.</li>
+          </ol>
+          <p class="decision-lab__source-note">Внешние гайды использованы как guardrails: visual hierarchy, grouping/proximity, single-primary action и mobile touch/readability. Итоговый production-кандидат выбирается только после визуального отсмотра вариантов, а не автоматически по голосованию моделей.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style is:global>
+  .decision-lab { --dl-ink: #262321; --dl-muted: #6f6259; --dl-surface: #fffaf4; --dl-paper: #fffdf8; --dl-line: rgba(95, 68, 50, .16); --dl-accent: #af481f; --dl-deep: #2f2b28; --dl-gold: #d6ad58; --dl-green: #2f7a4f; color: var(--dl-ink); }
+  .decision-lab__shell { max-width: 1180px; }
+  .decision-lab .section-card { overflow: hidden; }
+  .decision-lab__intro { background: radial-gradient(circle at 14% 12%, rgba(214, 173, 88, .28), transparent 28%), linear-gradient(145deg, #fff7eb, #fffdf8 58%, #f5e7d5); }
+  .decision-lab__intro-inner { display: grid; gap: 18px; }
+  .decision-lab h1 { max-width: 880px; font-size: clamp(2.15rem, 7vw, 5rem); line-height: .94; letter-spacing: -.06em; }
+  .decision-lab h2 { font-size: clamp(1.45rem, 4vw, 2.25rem); letter-spacing: -.035em; }
+  .decision-lab .lead { max-width: 760px; color: var(--dl-muted); font-size: clamp(1.02rem, 2.2vw, 1.26rem); line-height: 1.55; }
+  .decision-lab__meta-grid { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .decision-lab__meta-grid > div { border: 1px solid var(--dl-line); border-radius: 22px; background: rgba(255,255,255,.64); padding: 14px; min-width: 0; }
+  .decision-lab__meta-grid span { display: block; color: var(--dl-muted); font-size: .73rem; text-transform: uppercase; letter-spacing: .14em; }
+  .decision-lab__meta-grid code, .decision-lab__meta-grid strong { display: block; margin-top: 7px; font-size: .86rem; overflow-wrap: anywhere; }
+  .decision-lab__links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .decision-lab__links a { min-height: 44px; display: inline-flex; align-items: center; border: 1px solid rgba(175,72,31,.24); color: var(--dl-accent); border-radius: 999px; padding: 10px 14px; text-decoration: none; font-weight: 760; background: rgba(255,255,255,.66); }
+  .decision-lab__section-head { max-width: 720px; margin-bottom: 18px; }
+  .decision-lab__criteria-grid { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .decision-lab__criteria-grid article { border: 1px solid var(--dl-line); border-radius: 22px; padding: 16px; background: var(--dl-paper); }
+  .decision-lab__criteria-grid h3 { margin: 0 0 8px; font-size: .98rem; }
+  .decision-lab__criteria-grid p { margin: 0; color: var(--dl-muted); line-height: 1.45; }
+  .decision-lab__variants { display: grid; gap: 22px; margin: 22px 0; }
+  .decision-lab__variant-head { display: grid; gap: 8px; margin-bottom: 16px; max-width: 760px; }
+  .decision-lab__variant-head p:last-child { color: var(--dl-muted); line-height: 1.5; margin: 0; }
+  .decision-lab__variant-notes { display: grid; gap: 8px; margin-top: 16px; border-top: 1px solid var(--dl-line); padding-top: 14px; color: var(--dl-muted); }
+  .decision-lab__variant-notes p { margin: 0; }
+  .decision-mock { inline-size: min(100%, 430px); margin-inline: auto; border: 1px solid rgba(38,35,33,.12); border-radius: 34px; background: #faf2e8; box-shadow: 0 28px 70px rgba(63,42,28,.14); overflow: hidden; }
+  .decision-mock__poster { min-height: 240px; display: grid; align-content: end; gap: 8px; padding: 22px; color: #fff8ef; background: linear-gradient(145deg, rgba(47,43,40,.12), rgba(47,43,40,.64)), radial-gradient(circle at 25% 20%, #d8b065, transparent 35%), linear-gradient(135deg, #4d3a31, #1f1c1a); }
+  .decision-mock__poster span { text-transform: uppercase; letter-spacing: .18em; font-size: .72rem; opacity: .82; }
+  .decision-mock__poster strong { max-width: 13ch; font-size: 2rem; line-height: .96; letter-spacing: -.05em; }
+  .decision-mock__body, .p01-card, .p04-card, .baseline-card, .utility-card { background: linear-gradient(180deg, #fffdf8, #fff6ea); }
+  .decision-mock__body { display: grid; gap: 14px; padding: 18px; }
+  .decision-mock__content { display: grid; gap: 10px; }
+  .decision-mock__title { margin: 0; font-weight: 860; font-size: clamp(1.18rem, 5vw, 1.56rem); line-height: 1.03; letter-spacing: -.04em; }
+  .decision-mock__place, .decision-mock__summary, .decision-mock__time { margin: 0; color: var(--dl-muted); line-height: 1.42; }
+  .decision-mock__time { font-weight: 820; color: var(--dl-accent); text-transform: uppercase; letter-spacing: .1em; font-size: .76rem; }
+  .decision-mock__primary, .decision-mock__secondary, .decision-mock__utility, .utility-actions a, .utility-actions button { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 12px 16px; text-decoration: none; font-weight: 820; border: 1px solid transparent; font: inherit; }
+  .decision-mock__primary { background: var(--dl-accent); color: #fffaf4; box-shadow: 0 16px 26px rgba(175,72,31,.22); }
+  .decision-mock__primary--wide { width: 100%; }
+  .decision-mock__secondary { color: var(--dl-accent); border-color: rgba(175,72,31,.24); background: rgba(175,72,31,.06); }
+  .decision-mock__utility { color: var(--dl-muted); background: transparent; border-color: rgba(95,68,50,.16); }
+  .decision-mock__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .p03-date { display: grid; grid-template-columns: minmax(110px, .88fr) minmax(0, 1fr); gap: 12px; align-items: stretch; color: inherit; text-decoration: none; }
+  .p03-date__day { min-height: 126px; border-radius: 28px; display: grid; place-items: center; background: var(--dl-deep); color: #fff8ef; font-size: clamp(4.9rem, 24vw, 7rem); line-height: .78; letter-spacing: -.11em; font-weight: 920; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  .p03-date__side { min-width: 0; border-radius: 28px; padding: 16px; background: #f3e5d2; display: grid; align-content: center; gap: 5px; }
+  .p03-date__side strong { font-size: 1.35rem; letter-spacing: -.035em; }
+  .p03-date__side em { font-style: normal; color: var(--dl-muted); }
+  .p03-date__side b { margin-top: 6px; color: var(--dl-accent); font-size: 1.45rem; }
+  .p01-card { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 14px; padding: 16px; align-items: start; }
+  .p01-card__date { border-radius: 26px; background: #2f2b28; color: #fff7ec; padding: 12px; min-height: 128px; display: grid; place-items: center; text-align: center; }
+  .p01-card__date span { text-transform: uppercase; letter-spacing: .14em; color: #e7c77c; }
+  .p01-card__date strong { font-size: 3.5rem; line-height: .82; letter-spacing: -.09em; }
+  .p01-card__date em { font-style: normal; }
+  .p01-card__facts { display: grid; gap: 10px; min-width: 0; }
+  .p01-card__facts dl { margin: 0; display: grid; gap: 7px; }
+  .p01-card__facts div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; }
+  .p01-card__facts dt { color: var(--dl-muted); font-size: .78rem; }
+  .p01-card__facts dd { margin: 0; font-weight: 780; min-width: 0; }
+  .p04-card { display: grid; grid-template-columns: 96px minmax(0, 1fr); }
+  .p04-card__rail { background: #2f2b28; color: #fff8ef; padding: 16px 10px; text-align: center; display: grid; gap: 8px; align-content: center; }
+  .p04-card__rail span { font-size: .78rem; text-transform: uppercase; letter-spacing: .13em; color: #e3c06c; }
+  .p04-card__rail strong { font-size: 3.8rem; line-height: .78; letter-spacing: -.08em; }
+  .p04-card__rail em { font-style: normal; }
+  .p04-card__main { padding: 18px; display: grid; gap: 10px; min-width: 0; }
+  .baseline-card, .utility-card { padding: 18px; display: grid; gap: 12px; }
+  .baseline-date { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 20px; padding: 14px 16px; background: #f3e5d2; }
+  .baseline-date strong { font-size: 1.22rem; }
+  .baseline-date span { color: var(--dl-muted); text-align: right; }
+  .utility-date { border: 1px solid rgba(175,72,31,.22); border-radius: 26px; background: #fff8ee; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: end; }
+  .utility-date span { grid-column: 1 / -1; color: var(--dl-muted); text-transform: uppercase; letter-spacing: .13em; font-size: .75rem; }
+  .utility-date strong { font-size: 2rem; line-height: .9; letter-spacing: -.05em; }
+  .utility-date em { font-style: normal; color: var(--dl-accent); font-weight: 860; font-size: 1.42rem; }
+  .utility-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .utility-actions a, .utility-actions button { background: #f3e5d2; color: #4b4038; border-color: rgba(95,68,50,.12); min-width: 0; padding-inline: 8px; }
+  .medallion-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .medallion-strip--quiet { opacity: .82; }
+  .medallion { inline-size: 50px; block-size: 50px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; border: 2px solid rgba(47,43,40,.12); background: #fff; overflow: hidden; box-shadow: 0 8px 18px rgba(54,38,26,.12); }
+  .medallion img { width: 100%; height: 100%; object-fit: cover; }
+  .medallion span { font-size: .7rem; font-weight: 900; color: var(--dl-accent); }
+  .zero-medallions { border: 1px dashed rgba(95,68,50,.28); border-radius: 22px; padding: 13px; display: grid; gap: 3px; color: var(--dl-muted); background: rgba(255,255,255,.42); }
+  .zero-medallions strong { color: var(--dl-ink); }
+
+  .decision-lab__consultants { background: linear-gradient(145deg, #2f2b28, #44372e); color: #fff8ef; }
+  .decision-lab__consultants .eyebrow, .decision-lab__consultants p { color: rgba(255,248,239,.72); }
+  .decision-lab__consultant-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .decision-lab__consultant-grid article { border: 1px solid rgba(255,248,239,.16); border-radius: 24px; padding: 16px; background: rgba(255,255,255,.06); }
+  .decision-lab__consultant-grid h3 { margin: 0 0 10px; color: #fff8ef; }
+  .decision-lab__consultant-grid p { margin: 0 0 8px; line-height: 1.5; }
+  .decision-lab__hybrid-card { background: linear-gradient(145deg, rgba(175,72,31,.42), rgba(214,173,88,.18)) !important; }
+  .decision-lab__review ol { display: grid; gap: 10px; padding-left: 1.2rem; color: var(--dl-muted); line-height: 1.55; }
+  .decision-lab__source-note { max-width: 780px; color: var(--dl-muted); line-height: 1.55; }
+  @media (min-width: 760px) { .decision-lab__variants { grid-template-columns: repeat(2, minmax(0, 1fr)); } .decision-lab__variant { min-width: 0; } }
+  @media (max-width: 920px) { .decision-lab__criteria-grid, .decision-lab__consultant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px) { .decision-lab__meta-grid, .decision-lab__criteria-grid, .decision-lab__consultant-grid { grid-template-columns: 1fr; } .decision-lab__variant .section-card__inner { padding-inline: 12px; } .decision-mock { border-radius: 28px; } .decision-mock__poster { min-height: 208px; } .p01-card { grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 12px; } .p01-card__date { min-height: 118px; border-radius: 22px; } .p01-card__date strong { font-size: 3.05rem; } .p04-card { grid-template-columns: 82px minmax(0, 1fr); } .p04-card__rail strong { font-size: 3.2rem; } .utility-actions { grid-template-columns: 1fr; } }
+  @media (max-width: 360px) { .decision-lab h1 { font-size: 2rem; } .p03-date { grid-template-columns: 1fr; } .p03-date__day { min-height: 108px; font-size: 5.2rem; } .p03-date__side { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; padding: 12px; } .p03-date__side strong, .p03-date__side b { font-size: 1.05rem; margin: 0; } .p01-card, .p04-card { grid-template-columns: 1fr; } .p04-card__rail { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; } .p04-card__rail strong { font-size: 2.8rem; } .decision-mock__actions { flex-direction: column; } }
+</style>
+
+<script>
+  // no-op marker for static preview checks: event-decision-lab
+</script>
+

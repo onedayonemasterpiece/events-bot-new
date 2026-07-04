@@ -1,0 +1,22 @@
+---
+import { withBase } from '../../lib/events';
+
+interface Item {
+  label: string;
+  short: string;
+  image?: string;
+  tone?: string;
+}
+interface Props {
+  items: Item[];
+  mode?: string;
+}
+const { items, mode = 'normal' } = Astro.props;
+---
+<div class={`medallion-strip medallion-strip--${mode}`} aria-label="Медальоны события">
+  {items.map((item) => (
+    <span class={`medallion medallion--${item.tone || 'neutral'}`} title={item.label} aria-label={item.label}>
+      {item.image ? <img src={withBase(item.image)} alt="" loading="lazy" decoding="async" /> : <span>{item.short}</span>}
+    </span>
+  ))}
+</div>

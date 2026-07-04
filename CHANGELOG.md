@@ -6,6 +6,7 @@
 
 
 ### Added
+- **Static site pages / event decision-block lab**: added a preserved-baseline A/B lab for the whole below-hero mobile decision space (`/lab/event-decision-block/`), comparing P03/P01/P04/baseline/zero-medallion/utility-stack layouts with Gemini Pro and a-opus critical review summaries.
 
 - **Static site pages / date-block Pinterest lab**: expanded `/lab/date-block/` with a 130-reference Pinterest research funnel, a 14-pattern comparison table, Gemini Pro/a-opus critical votes, and HTML candidates for the P13 date-square facts-rail direction plus alternatives.
 - **Static site pages / date-block lab**: added `/lab/date-block/` to show the separate Gemini Pro split-badge and a-opus one-line-strip designs for the event hero date/time/weekday block.
