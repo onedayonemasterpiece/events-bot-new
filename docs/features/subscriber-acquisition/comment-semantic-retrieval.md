@@ -55,8 +55,11 @@ The retrieval stage must score more than generic “куда сходить” i
    Queries include where to go from Kaliningrad for one day/weekend, what to see
    in towns of the oblast, what to combine in one route, train/bus/car hints,
    castles/forts/kirks/coast/museums/parks/viewpoints and “is this place worth
-   visiting?”. Correct target is a route card/post, POI explainer or
-   `route_needed`.
+   visiting?”. Routes are not implemented yet, so the current MVP target is
+   surface discovery: identify publics/chats where route comments happen and mark
+   candidates as `route_needed` / `unknown` instead of trying to match a missing
+   route corpus. Later, when route cards/posts exist, the same action class can
+   resolve to a concrete route card/post or POI explainer.
 2. `event_recommendation_reply` — user asks which event/venue/activity to choose.
 3. `event_site_search_or_listing` — user asks for afisha/search/calendar/list of
    exhibitions/popular events.
@@ -150,7 +153,10 @@ Dry run:
 - up to 5,000 comments;
 - include TG and VK if available;
 - include social/community surfaces, route/tourism communities, TG chats/linked
-  discussions and organizer/event-owned surfaces if commentable.
+  discussions and organizer/event-owned surfaces if commentable;
+- include `https://t.me/vKalinigrad_recomendations` as a golden calibration
+  Telegram group for route/POI interest extraction, because it is known to have
+  real questions suitable for semantic retrieval calibration.
 
 Main run only after dry-run review:
 
@@ -299,7 +305,9 @@ Research-stage bulk output is artifact-first:
 YDB serverless is the preferred project-owned store for sanitized retrieval
 summaries once the dry run proves value, because the repo already has an optional
 YDB acquisition sink and this workload is append/upsert run/profile/candidate
-state rather than critical bot operations. Suggested later tables:
+state rather than critical bot operations. Creating the following YDB summary
+tables is an implementation detail of this accepted storage direction and does
+not require a separate user approval question:
 
 - `acq_comment_retrieval_runs`
 - `acq_comment_retrieval_surface_profiles`

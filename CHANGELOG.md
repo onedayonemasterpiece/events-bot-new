@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Clarified Subscriber Acquisition semantic-retrieval research: route/POI matching is surface-discovery-only until route cards exist, `vKalinigrad_recomendations` is a golden calibration group, and YDB summary tables are an implementation detail of the accepted storage direction.
 - Expanded the Subscriber Acquisition `organizer_clarification` design with
   Telegram channel/commentability proof, additional organizer-surface discovery
   routes, semantic question-library taxonomy, LLM-only question drafting, and an

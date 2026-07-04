@@ -203,11 +203,15 @@ replyable TG/VK comments/messages
   -> accepted candidates become normal `acq_opportunity` rows
 ```
 
-The stage must make route/POI discovery first-class. Route recommendation
+The stage must make route/POI discovery first-class. Routes are not implemented
+yet, so the current MVP goal is to find where route/POI questions happen and
+which surfaces should be monitored later for route replies. Route recommendation
 contexts from `docs/features/trip-recomendation/requirements.md` map to
-`trip_route_poi_recommendation` and should carry `route_target_status` hints such
-as `matched_existing`, `published_post_found`, `route_needed` or `unknown`.
-They should not silently fall back to the generic events announcement channel.
+`trip_route_poi_recommendation` and should currently carry `route_target_status`
+as `route_needed` or `unknown`; once route cards/posts exist, this can expand to
+`matched_existing` or `published_post_found`. They should not silently fall back
+to the generic events announcement channel. `https://t.me/vKalinigrad_recomendations`
+is a golden calibration group for this lane.
 
 Benchmark scope:
 
