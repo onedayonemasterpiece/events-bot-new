@@ -120,7 +120,7 @@ _TELEGA_IN_TG_HANDLES = {url.rstrip("/").rsplit("/", 1)[-1].lower() for url in T
 _LINK_RE = re.compile(r"(?i)\b(?:https?://)?(?:t\.me|telegram\.me|vk\.com)/[A-Za-z0-9_./?=&-]+")
 _TG_HOST_RE = re.compile(r"(?i)(?:https?://)?(?:t\.me|telegram\.me)/(?P<handle>[A-Za-z0-9_]{4,})")
 _VK_HOST_RE = re.compile(r"(?i)(?:https?://)?vk\.com/(?P<handle>[A-Za-z0-9_.-]{3,})")
-_VK_WALL_RE = re.compile(r"(?i)^wall-(?P<group_id>\d+)_\d+$")
+_VK_WALL_RE = re.compile(r"(?i)^wall(?P<owner_id>-?\d+)_\d+$")
 _EVENT_INTENT_RE = re.compile(
     r"(?i)\b("
     r"что\s+(?:посетить|посмотреть|выбрать)|"
@@ -902,15 +902,26 @@ def _vk_surface_from_handle(handle: str) -> dict[str, Any] | None:
         return None
     wall = _VK_WALL_RE.match(clean)
     if wall:
-        clean = f"club{wall.group('group_id')}"
+        owner_id = int(wall.group("owner_id"))
+        clean = f"club{abs(owner_id)}" if owner_id < 0 else f"id{owner_id}"
     lowered = clean.lower()
-    if lowered.startswith(("wall", "photo", "video", "topic", "im", "album", "app", "market", "away.php", "id")):
+    if lowered.startswith(("wall", "photo", "video", "topic", "im", "album", "app", "market", "away.php")):
         return None
-    return _seed_surface(f"https://vk.com/{clean}", platform="vk") | {"source": "discovered"}
+    surface = _seed_surface(f"https://vk.com/{clean}", platform="vk") | {"source": "discovered"}
+    if _is_vk_profile_domain(clean):
+        surface["surface_type"] = "profile"
+    return surface
 
 
 def _is_vk_scan_domain_candidate(domain: str) -> bool:
     return _vk_surface_from_handle(domain) is not None
+
+
+def _is_vk_profile_domain(domain: str) -> bool:
+    clean = str(domain or "").strip().strip("/").rstrip(".,)")
+    if re.match(r"(?i)^id\d+$", clean):
+        return True
+    return False
 
 
 def _is_tg_discovery_bot_or_service_handle(handle: str) -> bool:
@@ -1334,7 +1345,7 @@ def _run_comment_retrieval_llm_gate(
             scanned_opportunities.append(reviewed)
 
 
-VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "board.getTopics", "board.getComments"}
+VK_READ_METHODS = {"wall.get", "wall.getComments", "wall.search", "groups.getById", "users.get", "board.getTopics", "board.getComments"}
 
 
 class VKApiError(RuntimeError):
@@ -1502,6 +1513,42 @@ def _enrich_vk_surface_group_metadata(surface: dict[str, Any], *, domain: str, t
         try:
             reach["members"] = int(group.get("members_count") or 0)
             reach["basis"] = "vk_group_metadata"
+            reach["confidence"] = "medium"
+            surface["reach"] = reach
+        except Exception:
+            pass
+
+
+def _enrich_vk_surface_profile_metadata(surface: dict[str, Any], *, domain: str, token_lanes: list[tuple[str, str]]) -> None:
+    """Best-effort personal-profile metadata; failure must not block scanning."""
+    clean = str(domain or "").strip().strip("/").rstrip(".,)")
+    if not clean:
+        return
+    try:
+        response, _lane = _vk_api_with_fallback(
+            "users.get",
+            token_lanes=token_lanes,
+            params={"user_ids": clean, "fields": "screen_name,followers_count"},
+        )
+    except Exception:
+        return
+    users = response if isinstance(response, list) else []
+    if not users or not isinstance(users[0], dict):
+        return
+    user = users[0]
+    first = str(user.get("first_name") or "").strip()
+    last = str(user.get("last_name") or "").strip()
+    title = " ".join(x for x in [first, last] if x).strip()
+    if title and not surface.get("title"):
+        surface["title"] = title
+    screen_name = str(user.get("screen_name") or "").strip()
+    if screen_name and not str(surface.get("handle") or "").strip():
+        surface["handle"] = screen_name
+    reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
+    if user.get("followers_count") is not None:
+        try:
+            reach["followers"] = int(user.get("followers_count") or 0)
+            reach["basis"] = "vk_profile_metadata"
             reach["confidence"] = "medium"
             surface["reach"] = reach
         except Exception:
@@ -1787,8 +1834,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             diagnostics.append(f"vk {domain}: skipped non-community surface")
             continue
         surface = _seed_surface(f"https://vk.com/{domain}", platform="vk")
+        is_profile_surface = _is_vk_profile_domain(domain)
         surface.update({
-            "surface_type": "community",
+            "surface_type": "profile" if is_profile_surface else "community",
             "status": "candidate",
             "source": "allowlist",
             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only VK wall/comment scan"},
@@ -1811,7 +1859,10 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             reach_meta = seed_meta.get("reach") if isinstance(seed_meta.get("reach"), dict) else None
             if reach_meta:
                 surface["reach"] = {**surface.get("reach", {}), **reach_meta}
-        _enrich_vk_surface_group_metadata(surface, domain=domain, token_lanes=token_lanes)
+        if is_profile_surface:
+            _enrich_vk_surface_profile_metadata(surface, domain=domain, token_lanes=token_lanes)
+        else:
+            _enrich_vk_surface_group_metadata(surface, domain=domain, token_lanes=token_lanes)
         surfaces[surface["external_id"]] = surface
         wall_comments_before = int(VK_SCAN_STATS.get("comments_seen", 0))
         board_comments_before = int(VK_SCAN_STATS.get("board_comments_seen", 0))
@@ -1821,7 +1872,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             diagnostics.append(f"vk {domain}: wall.get ok via {wall_lane}")
         except Exception as exc:
             diagnostics.append(f"vk {domain}: wall.get failed: {exc}")
-            if _scan_vk_board_discussions(
+            if not is_profile_surface and _scan_vk_board_discussions(
                 surface=surface,
                 domain=domain,
                 token_lanes=token_lanes,
@@ -1952,7 +2003,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     opportunities.append(opp)
                 if len(opportunities) >= int(os.getenv("ACQ_MAX_OPPORTUNITIES_PER_RUN") or "30"):
                     break
-        if _scan_vk_board_discussions(
+        if not is_profile_surface and _scan_vk_board_discussions(
             surface=surface,
             domain=domain,
             token_lanes=token_lanes,

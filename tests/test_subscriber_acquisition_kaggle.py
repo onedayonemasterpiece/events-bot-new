@@ -27,11 +27,12 @@ def load_retrieval():
 
 def test_extract_candidate_surfaces_from_public_links():
     runtime = load_runtime()
-    surfaces = runtime.extract_candidate_surfaces("Вот t.me/some_kgd_chat и https://vk.com/wall-12345_9")
+    surfaces = runtime.extract_candidate_surfaces("Вот t.me/some_kgd_chat, https://vk.com/wall-12345_9 и https://vk.com/wall12345_9")
     by_external = {s["external_id"]: s for s in surfaces}
     assert by_external["tg:some_kgd_chat"]["source"] == "discovered"
     assert by_external["vk:club12345"]["platform"] == "vk"
     assert by_external["vk:club12345"]["url"] == "https://vk.com/club12345"
+    assert by_external["vk:id12345"]["surface_type"] == "profile"
 
 
 def test_extract_candidate_surfaces_skips_telegram_bots_and_service_links():
@@ -47,7 +48,7 @@ def test_extract_candidate_surfaces_skips_telegram_bots_and_service_links():
     assert runtime._is_tg_discovery_bot_or_service_handle("real_kgd_chat") is False
 
 
-def test_vk_surface_extractor_skips_non_community_links():
+def test_vk_surface_extractor_skips_non_wall_links_and_keeps_profiles():
     runtime = load_runtime()
 
     surfaces = runtime.extract_candidate_surfaces(
@@ -55,9 +56,11 @@ def test_vk_surface_extractor_skips_non_community_links():
         "https://vk.com/away.php https://vk.com/id6786438 https://vk.com/club123"
     )
 
-    assert [surface["external_id"] for surface in surfaces] == ["vk:club123"]
+    assert [surface["external_id"] for surface in surfaces] == ["vk:id6786438", "vk:club123"]
+    assert surfaces[0]["surface_type"] == "profile"
     assert runtime._is_vk_scan_domain_candidate("album-123_456") is False
     assert runtime._is_vk_scan_domain_candidate("club123") is True
+    assert runtime._is_vk_scan_domain_candidate("id6786438") is True
 
 
 
@@ -542,7 +545,7 @@ def test_question_pattern_label_covers_route_event_and_badges():
     assert "Ездили" not in rows[0]["example_questions"]
 
 
-def test_freshness_policy_filters_old_records_and_rejects_stale_surfaces(monkeypatch):
+def test_freshness_policy_keeps_old_records_for_calibration_but_rejects_stale_surfaces(monkeypatch):
     retrieval = load_retrieval()
     monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS", "365")
     monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_STALE_ACTIVITY_DAYS", "92")
@@ -559,7 +562,9 @@ def test_freshness_policy_filters_old_records_and_rejects_stale_surfaces(monkeyp
 
     deduped = retrieval._dedupe_records([old, fresh_but_stale_surface])
 
-    assert [r["surface_key"] for r in deduped] == ["tg:stale"]
+    assert [r["surface_key"] for r in deduped] == ["tg:old", "tg:stale"]
+    assert deduped[0]["candidate_usage_scope"] == "historical_calibration"
+    assert deduped[1]["candidate_usage_scope"] == "monitoring_candidate"
     profile = retrieval._surface_profile(
         "tg:stale",
         [fresh_but_stale_surface],
@@ -814,6 +819,60 @@ def test_vk_scan_with_semantic_retrieval_collects_comments_without_per_comment_l
     assert {r["author_id"] for r in records} == {"-42481124", "101"}
     assert surfaces[0]["title"] == "Подслушано"
     assert surfaces[0]["reach"]["members"] == 999
+
+
+def test_vk_scan_can_read_active_personal_profile_wall(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL", "1")
+    monkeypatch.setattr(runtime, "_semantic_retrieval_enabled_from_module", lambda: True)
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", "1")
+
+    calls = []
+
+    def fake_vk(method, *, token_lanes, params):
+        calls.append(method)
+        if method == "users.get":
+            return [{"id": 6786438, "first_name": "Иван", "last_name": "Иванов", "followers_count": 321}], "TEST_TOKEN"
+        if method == "wall.get":
+            return {
+                "items": [
+                    {
+                        "owner_id": 6786438,
+                        "from_id": 6786438,
+                        "id": 5,
+                        "date": 1782900000,
+                        "text": "Пост про выходные",
+                        "comments": {"count": 1},
+                    }
+                ]
+            }, "TEST_TOKEN"
+        if method == "wall.getComments":
+            return {
+                "items": [
+                    {"id": 9, "from_id": 101, "date": 1782900000, "text": "Куда сходить рядом?"}
+                ]
+            }, "TEST_TOKEN"
+        raise AssertionError(method)
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+    records = []
+
+    surfaces, opportunities, diagnostics = runtime.scan_vk_shadow_surfaces(
+        ["https://vk.com/id6786438"],
+        ["https://vk.com/id6786438"],
+        comment_records=records,
+    )
+
+    assert opportunities == []
+    assert surfaces[0]["surface_type"] == "profile"
+    assert surfaces[0]["title"] == "Иван Иванов"
+    assert surfaces[0]["reach"]["followers"] == 321
+    assert surfaces[0]["status"] == "comments_available"
+    assert {r["relation"] for r in records} == {"vk_comment"}
+    assert "board.getTopics" not in calls
+    assert any("vk id6786438: wall.get ok" in item for item in diagnostics)
 
 
 def test_build_vk_opportunity_is_read_only_review_payload():

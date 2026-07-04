@@ -581,6 +581,12 @@ def _record_within_analysis_window(record: dict[str, Any], *, now: datetime | No
     return days is None or days <= _max_comment_age_days()
 
 
+def _record_usage_scope(record: dict[str, Any], *, now: datetime | None = None) -> str:
+    if _record_within_analysis_window(record, now=now):
+        return "monitoring_candidate"
+    return "historical_calibration"
+
+
 def _rate(count: int | float, period_days: Any, multiplier: float) -> float | None:
     try:
         days = float(period_days)
@@ -698,8 +704,6 @@ def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     now = datetime.now(timezone.utc)
     for rec in records:
-        if not _record_within_analysis_window(rec, now=now):
-            continue
         text = normalize_comment_text(str(rec.get("text") or rec.get("text_snapshot") or ""))
         if not text:
             continue
@@ -710,6 +714,11 @@ def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item = dict(rec)
         item["text"] = text
         item["text_snapshot"] = text[:500]
+        age_days = _days_since(item.get("created_at"), now=now)
+        usage_scope = _record_usage_scope(item, now=now)
+        item["comment_age_days"] = round(age_days, 1) if age_days is not None else None
+        item["is_within_monitoring_window"] = usage_scope == "monitoring_candidate"
+        item["candidate_usage_scope"] = usage_scope
         analysis_text = _record_analysis_text(item)
         item["analysis_text"] = analysis_text
         item["analysis_context_snapshot"] = "\n".join(
@@ -1120,6 +1129,7 @@ def _scope_rows(
     platforms = Counter(str(r.get("platform") or "unknown") for r in records)
     surface_types = Counter(str(r.get("surface_type") or "unknown") for r in records)
     relations = Counter(str(r.get("relation") or "unknown") for r in records)
+    usage_scopes = Counter(str(r.get("candidate_usage_scope") or _record_usage_scope(r)) for r in records)
     return [
         {"metric": "run_id", "value": run_id},
         {"metric": "stage", "value": STAGE_NAME},
@@ -1128,6 +1138,8 @@ def _scope_rows(
         {"metric": "gate_model_for_llm_budget", "value": gate_model},
         {"metric": "scoring_method", "value": scoring_method},
         {"metric": "comments_after_filter", "value": len(records)},
+        {"metric": "monitoring_window_comments", "value": usage_scopes.get("monitoring_candidate", 0)},
+        {"metric": "historical_calibration_comments", "value": usage_scopes.get("historical_calibration", 0)},
         {"metric": "surfaces_profiled", "value": len(profiles)},
         {"metric": "period_min_created_at", "value": period["period_min_created_at"]},
         {"metric": "period_max_created_at", "value": period["period_max_created_at"]},
@@ -1270,6 +1282,8 @@ def _dashboard_summary_rows(
     return [
         {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
         {"section": "Охват", "metric": "Комментариев обработано", "value": summary.get("comments_embedded") or scope.get("comments_after_filter")},
+        {"section": "Охват", "metric": "Свежих для мониторинга", "value": scope.get("monitoring_window_comments")},
+        {"section": "Охват", "metric": "Исторических для эталонов/контроля", "value": scope.get("historical_calibration_comments")},
         {"section": "Охват", "metric": "Поверхностей с профилем", "value": summary.get("surface_profiles_count") or scope.get("surfaces_profiled")},
         {"section": "Охват", "metric": "Все поверхности в списке", "value": len(surface_inventory or [])},
         {"section": "Итог", "metric": "Выбрано", "value": total.get("selected_surfaces", 0)},
@@ -1287,7 +1301,7 @@ def _dashboard_summary_rows(
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
         {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
         {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
-        {"section": "Freshness", "metric": "Активность", "value": f"Выборка анализирует комментарии не старше {_max_comment_age_days()} дней; поверхности без активности больше {_stale_activity_days()} дней отклоняются сейчас, но могут вернуться при новом свежем комментарии."},
+        {"section": "Freshness", "metric": "Активность", "value": f"Для включения в мониторинг учитываются свежие комментарии до {_max_comment_age_days()} дней; поверхности без активности больше {_stale_activity_days()} дней отклоняются сейчас, но исторические строки остаются для эталонных вопросов и контроля смыслов."},
     ]
 
 
@@ -1329,6 +1343,9 @@ _RU_HEADERS = {
     "is_post": "Это пост?",
     "author_id": "Автор",
     "created_at": "Дата",
+    "comment_age_days": "Возраст, дней",
+    "candidate_usage_scope": "Роль строки",
+    "is_within_monitoring_window": "В окне мониторинга?",
     "context_url": "Ссылка на контекст",
     "text_snapshot": "Комментарий",
     "analysis_context_snapshot": "Контекст поста/родителя",
@@ -1489,7 +1506,7 @@ def _write_xlsx(
     headers = [
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-        "relation", "is_post", "author_id", "created_at", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
+        "relation", "is_post", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
         "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible",
     ]
     manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Поверхность" for h in headers[10:17]} | {h: "Текст и контекст" for h in headers[17:22]} | {h: "Решение" for h in headers[22:]}
@@ -1569,7 +1586,7 @@ def _write_xlsx(
         ex = wb.create_sheet(sheet_name)
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-            "relation", "is_post", "created_at", "intent_set", "candidate_action_type", "candidate_noise_type",
+            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
             "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
         ]
         ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Поверхность" for h in ex_headers[4:13]} | {h: "Комментарий и контекст" for h in ex_headers[13:17]} | {h: "Действие" for h in ex_headers[17:]}
@@ -1806,7 +1823,12 @@ def run_comment_semantic_retrieval(
         c["model_disagreement_bucket"] = bucket
 
     gate_model = os.getenv("ACQ_COMMENT_RETRIEVAL_GATE_MODEL") or (DEFAULT_GATE_MODEL if DEFAULT_GATE_MODEL in models else models[0])
-    gate_candidates = [c for c in all_candidates if c.get("model_name") == gate_model and c.get("pre_llm_candidate_eligible")]
+    gate_candidates = [
+        c for c in all_candidates
+        if c.get("model_name") == gate_model
+        and c.get("pre_llm_candidate_eligible")
+        and c.get("candidate_usage_scope") == "monitoring_candidate"
+    ]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
 
     progress_callback("surface_profile", {"surfaces": len({r.get('surface_key') for r in records}), "progress_percent": 78})
@@ -1818,7 +1840,7 @@ def run_comment_semantic_retrieval(
         # Profiles are based on selected gate model to avoid double-counting two benchmark models.
         if row.get("model_name") == gate_model:
             all_gate_rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
-            if row.get("pre_llm_candidate_eligible"):
+            if row.get("pre_llm_candidate_eligible") and row.get("candidate_usage_scope") == "monitoring_candidate":
                 rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
     for rec in records:
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
@@ -1883,7 +1905,8 @@ def run_comment_semantic_retrieval(
     candidate_fields = [
         "run_id", "surface_key", "platform", "surface_type", "relation", "is_post", "author_id", "retrieval", "search_query",
         "context_url", "comment_id", "post_id", "topic_id", "thread_id",
-        "created_at", "text_snapshot", "analysis_context_snapshot", "source_post_text_snapshot", "reply_parent_text_snapshot",
+        "created_at", "comment_age_days", "candidate_usage_scope", "is_within_monitoring_window",
+        "text_snapshot", "analysis_context_snapshot", "source_post_text_snapshot", "reply_parent_text_snapshot",
         "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",

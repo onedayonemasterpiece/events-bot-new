@@ -34,6 +34,8 @@ Use only current Subscriber Acquisition Discovery sources:
 - Telegram groups/chats/supergroups;
 - Telegram linked discussions resolved from channels;
 - VK community wall comments;
+- VK personal profile wall comments when the profile wall is explicitly
+  discovered/seeded, publicly readable, actively maintained and has comments;
 - VK discussion-board topics/comments;
 - VK wall posts only as context/noise/source-post evidence by default; they are
   exported separately as `relation=vk_social_wall_post` and do not spend reply
@@ -164,13 +166,14 @@ Dry run:
   discussion, `vk_comment`, `vk_board_comment`, `vk_social_wall_post`), and the
   observed `created_at` period. It must not imply “all DB/all history” unless
   the payload and budgets really covered that.
-- freshness policy: by default retrieval embeds/analyzes only comments not older
-  than `ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS=365`; a surface whose latest
-  observed comment is older than
+- freshness policy: historical comments are retained for canonical question
+  extraction and semantic-control QA, but only comments within
+  `ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS=365` may become monitoring/LLM
+  candidates. A surface whose latest observed comment is older than
   `ACQ_COMMENT_RETRIEVAL_STALE_ACTIVITY_DAYS=92` is marked
   `reject_stale_inactive` for the current acquisition plan. This is not a
-  permanent ban: if the public/chat revives and fresh comments appear, a later
-  run can move it back into `candidate`/`selected`.
+  permanent ban: if the public/chat/profile revives and fresh comments appear, a
+  later run can move it back into `candidate`/`selected`.
 
 Main run only after dry-run review:
 
@@ -405,7 +408,9 @@ The XLSX must include these operator-facing sheets:
   e.g. route with children, route transport, ticket/price, registration/seats,
   age/children, location/entry, Pushkin/free/accessibility and organizer
   submission. This sheet must contain actual question examples and a
-  `canonical_question_ru` template, not generic statements.
+  `canonical_question_ru` template, not generic statements. Historical rows are
+  allowed here because their purpose is to build future template questions and
+  verify the semantic-control process, not to trigger immediate monitoring.
 - `intent_catalog`: the complete catalog of model phrases/senses embedded as
   retrieval queries. The per-candidate `top_intent_phrase` is the closest phrase
   from this catalog for the candidate’s `intent_set`.
