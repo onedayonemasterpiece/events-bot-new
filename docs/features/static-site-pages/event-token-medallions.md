@@ -166,22 +166,23 @@ Asset inventory:
 | `dramteatr39` | Калининградский драматический театр | `/assets/organizers/dramteatr39.svg` | official `dramteatr39.ru/img/logo.svg`, scaled/cropped to the left emblem |
 | `muzteatr39` | Калининградский музыкальный театр | `/assets/organizers/muzteatr39.webp` (`.png` fallback) | official square PNG, WebP-primary raster medallion, no tracing |
 | `dom-iskusstv` | Театр эстрады / Дом искусств | `/assets/organizers/dom-iskusstv.svg` | official Tilda SVG wordmark from `домискусств39.рф` |
-| `city-jazz-club` | Калининград Сити Джаз Клуб | `/assets/organizers/city-jazz-club.webp` (`.png` fallback) | club logo from `londonpub.ru/cityjazz/events`, trimmed/recentered, separate from festival medallion |
-| `rostec-arena` | Ростех Арена | `/assets/organizers/rostec-arena.svg` | manual-vector SVG rebuilt from the public Telegram avatar `@rostec_arena` |
-| `bar-bastion` | Бар Бастион | `/assets/organizers/bar-bastion.webp` (`.png` fallback) | public VK avatar extracted on 2026-07-04; replaces the temporary neutral initials badge |
-| `signal` | Сигнал | `/assets/organizers/signal.webp` (`.png` fallback) | Timepad organization logo, WebP-primary raster medallion |
+| `city-jazz-club` | Калининград Сити Джаз Клуб | `/assets/organizers/city-jazz-club.svg` | club logo from `londonpub.ru/cityjazz/events`, manually rebuilt as crisp vector with large readable CITY JAZZ lettering, separate from festival medallion |
+| `rostec-arena` | Ростех Арена | `/assets/organizers/rostec-arena.svg` | official site SVG `/theme/src/logo.svg` wrapped into the medallion; no Telegram-avatar redraw |
+| `bar-bastion` | Бар Бастион | `/assets/organizers/bar-bastion.webp` (`.png` fallback) | public VK avatar extracted on 2026-07-04; inner avatar mask and ring-on-top repair remove broken-circle artifacts |
+| `signal` | Сигнал | `/assets/organizers/signal.svg` | clean SVG reconstruction from the official Signal oval logo; internal oval strokes were removed so nothing crosses the wordmark |
 | `mumod` | Музей курортной моды | `/assets/organizers/mumod.svg` | official SVG from `mumod.ru` |
 | `kldzoo` | Калининградский зоопарк | `/assets/organizers/kldzoo.webp` (`.png` fallback) | official square PNG from `kldzoo.ru`, enlarged and WebP-primary |
-| `locostandup` | Стендап-клуб «Локация» | `/assets/organizers/locostandup.webp` (`.png` fallback) | public Telegram avatar `@locostandup`, WebP-primary raster medallion |
-| `kaliningrad-art-museum` | Калининградский музей изобразительных искусств | `/assets/organizers/kaliningrad-art-museum.webp` (`.png` fallback) | official footer PNG logo split into mark-above/wordmark-below composition |
+| `locostandup` | Стендап-клуб «Локация» | `/assets/organizers/locostandup.svg` | official vector wordmark from `locostandup.ru`, replacing the unfinished Telegram-avatar crop |
+| `kaliningrad-art-museum` | Калининградский музей изобразительных искусств | `/assets/organizers/kaliningrad-art-museum.svg` | official inline SVG mark on brand burgundy `#871B30`, with readable short label `МУЗЕЙ ИЗО` |
 | `brachert` | Дом-музей Германа Брахерта | `/assets/organizers/brachert.webp` (`.png` fallback) | official PNG from `hbrachert.ru`, WebP-primary raster medallion |
-| `ruin-keepers` | Хранители руин | `/assets/organizers/ruin-keepers.svg` | official site PNG logo mark from `ruin-keepers.ru`, manually reconstructed as source-faithful vector SVG |
+| `ruin-keepers` | Хранители руин | `/assets/organizers/ruin-keepers.svg` | clean manual SVG reconstruction from the official `ruin-keepers.ru` tower/heart motif after traced SVG QA was rejected |
 
 2026-07-04 venue visual tuning pass:
 
-- `rostec-arena`, `city-jazz-club`, `bar-bastion`, `mumod`, `kldzoo` and `kaliningrad-art-museum` were visually retuned after desktop/mobile QA feedback;
-- `bar-bastion` now uses the public VK avatar instead of the temporary neutral initials badge;
-- `ruin-keepers` was added as a vector organizer medallion from the official site logo mark;
+- `rostec-arena` was switched from a Telegram-avatar approximation to the official site SVG lockup;
+- `signal`, `locostandup`, `city-jazz-club`, `kaliningrad-art-museum` and `ruin-keepers` were reworked after critical QA/Gemini feedback: Signal loses the rectangular card, Location uses the official vector wordmark, City Jazz becomes vector, the Art Museum uses official burgundy `#871B30`, and Ruin Keepers uses a clean manual SVG reconstruction after the traced PNG vectorization was rejected on QA;
+- `bar-bastion` keeps the public VK avatar but masks the image before drawing the gold ring, so the circle no longer breaks;
+- `mumod`, `kldzoo` and earlier `kaliningrad-art-museum` sizing fixes remain from the preceding visual tuning pass;
 - runtime contract was tightened: raster/non-vector medallions in organizer/festival manifests are served as WebP primary with PNG fallback, while SVG runtime is reserved for true vector/manual-vector/official-SVG marks.
 
 ### Festival logo medallions
