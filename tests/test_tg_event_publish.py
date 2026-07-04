@@ -2117,6 +2117,42 @@ def _medallion_test_config():
     }
 
 
+
+def test_tg_event_announcement_places_medallions_before_details_footer(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Калининградский морской торговый порт",
+            festival="80 историй о главном",
+            location_name="Историко-художественный музей",
+        )
+        html_text = main.build_tg_event_announcement(event, "Описание.")
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert html_text.count('<tg-emoji emoji-id=') == 48
+    medallion_pos = html_text.index('<tg-emoji emoji-id=')
+    details_pos = html_text.index("🔎 Подробнее")
+    assert medallion_pos < details_pos
+
+
+def test_tg_event_album_footer_uses_compact_social_gap():
+    event = _event()
+
+    text = main.build_tg_event_announcement(
+        event,
+        "Описание.",
+        include_calendar_link=True,
+    )
+
+    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>        <a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' in text
+    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>            <a href="https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA">Max</a>' not in text
+
+
 def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
     import json
     import tg_medallions

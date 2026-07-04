@@ -5724,9 +5724,11 @@ def build_tg_event_announcement(
     if hashtag_line:
         lines.extend(["", html.escape(hashtag_line)])
 
-    lines.append(
-        ""
-    )
+    medallion_block = event_medallion_html_block(event)
+    if medallion_block:
+        lines.extend(["", medallion_block])
+
+    lines.append("")
     footer_links: list[str] = []
     details_url = _tg_event_details_url(event)
     if details_url and not details_button_highlight:
@@ -5743,7 +5745,8 @@ def build_tg_event_announcement(
     if footer_links:
         footer_line = " · ".join(footer_links)
         if social_links and details_url and not details_button_highlight:
-            footer_line += " " * 12 + social_links
+            social_gap_spaces = 8 if include_calendar_link else 12
+            footer_line += " " * social_gap_spaces + social_links
         elif social_links:
             footer_line += " · " + social_links
         lines.append(footer_line)
@@ -5960,7 +5963,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_button_social_v6",
+                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_button_social_medallions_v7",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
@@ -5981,6 +5984,7 @@ def build_tg_event_source_hash(
                 str(getattr(event, "telegraph_url", "") or ""),
                 str(getattr(event, "telegraph_path", "") or ""),
                 media_signature,
+                event_medallion_html_block(event),
                 text or "",
             ]
         )
