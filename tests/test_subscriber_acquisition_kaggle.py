@@ -1575,7 +1575,7 @@ def test_runtime_decode_tg_auth_prefers_discovery_bundle(monkeypatch):
 
     assert session == "discovery-session"
     assert device["device_model"] == "Discovery phone"
-    assert device["auth_bundle_env"] == "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+    assert "auth_bundle_env" not in device
 
 
 def test_runtime_env_passes_seen_context_urls():

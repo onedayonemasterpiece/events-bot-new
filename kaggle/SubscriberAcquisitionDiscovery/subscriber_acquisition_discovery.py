@@ -470,7 +470,6 @@ def _decode_tg_auth() -> tuple[str, dict[str, Any]]:
         for key in ["device_model", "system_version", "app_version", "lang_code", "system_lang_code"]:
             if bundle.get(key):
                 device_config[key] = bundle[key]
-        device_config["auth_bundle_env"] = bundle_env
         return session, device_config
     return (os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip(), device_config
 
