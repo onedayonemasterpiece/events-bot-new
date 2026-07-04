@@ -15,6 +15,7 @@
 ### Changed
 
 - Subscriber Acquisition semantic retrieval now uses a question-first quality layer that penalizes non-question statements, excludes explicit offers/ads/cross-posts from LLM gate budget, and exports a `surface_summary` / `comment_retrieval_surface_decision_summary.csv` map with per-group recommendations and examples.
+- Subscriber Acquisition semantic retrieval reports now include VK community titles/seed metadata, best-effort member counts and commenter ids, observed period/depth plus latest-100 windows with normalized comment/question rates, VK post-vs-comment relation splits, both-model eligible examples, a `scope` sheet, and grouped `question_patterns`; source posts are excluded from reply examples by default.
 - Clarified Subscriber Acquisition semantic-retrieval dry-run delivery: the manual review sample must be an operator-facing XLSX table and be sent to Telegram Saved Messages via the local E2E/human session, not the S22 Kaggle monitoring session.
 - Clarified Subscriber Acquisition semantic-retrieval research: route/POI matching is surface-discovery-only until route cards exist, `vKalinigrad_recomendations` is a golden calibration group, and YDB summary tables are an implementation detail of the accepted storage direction.
 - Expanded the Subscriber Acquisition `organizer_clarification` design with

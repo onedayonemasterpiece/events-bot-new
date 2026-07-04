@@ -1055,6 +1055,14 @@ def _collect_tg_comment_record(
         return
     msg_id = int(getattr(message, "id", 0) or 0)
     date = getattr(message, "date", None)
+    author_id = getattr(message, "sender_id", None)
+    if author_id is None:
+        from_id = getattr(message, "from_id", None)
+        for attr in ["user_id", "channel_id", "chat_id"]:
+            value = getattr(from_id, attr, None)
+            if value is not None:
+                author_id = value
+                break
     records.append({
         "run_id": os.getenv("KAGGLE_RUN_ID") or "",
         "surface_key": str(surface.get("external_id") or surface.get("url") or ""),
@@ -1068,6 +1076,8 @@ def _collect_tg_comment_record(
         "topic_id": "",
         "thread_id": str(getattr(getattr(message, "reply_to", None), "reply_to_msg_id", "") or ""),
         "created_at": date.astimezone(timezone.utc).isoformat() if hasattr(date, "astimezone") else None,
+        "author_id": str(author_id or ""),
+        "is_post": bool(getattr(message, "post", False)),
         "text": text,
         "text_snapshot": text[:500],
         "relation": relation or "surface",
@@ -1089,6 +1099,8 @@ def _collect_vk_comment_record(
     thread_id: str | int | None = None,
     created_at: str | None = None,
     relation: str,
+    author_id: str | int | None = None,
+    is_post: bool = False,
 ) -> None:
     compact = " ".join(str(text or "").split())
     if not compact:
@@ -1106,6 +1118,8 @@ def _collect_vk_comment_record(
         "topic_id": str(topic_id or ""),
         "thread_id": str(thread_id or ""),
         "created_at": created_at,
+        "author_id": str(author_id or ""),
+        "is_post": bool(is_post),
         "text": compact,
         "text_snapshot": compact[:500],
         "relation": relation,
@@ -1438,6 +1452,52 @@ def _vk_group_id_from_domain(domain: str, token_lanes: list[tuple[str, str]], di
     return None
 
 
+def _vk_groups_from_response(response: Any) -> list[dict[str, Any]]:
+    if isinstance(response, list):
+        return [item for item in response if isinstance(item, dict)]
+    if isinstance(response, dict):
+        for key in ["groups", "items"]:
+            value = response.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        if response.get("id") or response.get("name"):
+            return [response]
+    return []
+
+
+def _enrich_vk_surface_group_metadata(surface: dict[str, Any], *, domain: str, token_lanes: list[tuple[str, str]]) -> None:
+    """Best-effort title/member count enrichment; failure must not block scanning."""
+    clean = str(domain or "").strip().strip("/").rstrip(".,)")
+    if not clean:
+        return
+    try:
+        response, _lane = _vk_api_with_fallback(
+            "groups.getById",
+            token_lanes=token_lanes,
+            params={"group_ids": clean, "fields": "members_count"},
+        )
+    except Exception:
+        return
+    groups = _vk_groups_from_response(response)
+    if not groups:
+        return
+    group = groups[0]
+    if group.get("name") and not surface.get("title"):
+        surface["title"] = str(group.get("name"))
+    screen_name = str(group.get("screen_name") or "").strip()
+    if screen_name and not str(surface.get("handle") or "").strip():
+        surface["handle"] = screen_name
+    reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
+    if group.get("members_count") is not None:
+        try:
+            reach["members"] = int(group.get("members_count") or 0)
+            reach["basis"] = "vk_group_metadata"
+            reach["confidence"] = "medium"
+            surface["reach"] = reach
+        except Exception:
+            pass
+
+
 def _vk_topic_context_url(group_id: int, topic_id: int, comment_id: int | None = None) -> str:
     url = f"https://vk.com/topic-{group_id}_{topic_id}"
     if comment_id:
@@ -1612,6 +1672,7 @@ def _scan_vk_board_discussions(
                     thread_id=topic_id,
                     created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
                     relation="vk_board_comment",
+                    author_id=comment.get("from_id"),
                 )
             if _comment_retrieval_enabled():
                 continue
@@ -1660,12 +1721,14 @@ def _mark_vk_surface_no_comments(surface: dict[str, Any]) -> dict[str, Any]:
 def _mark_vk_surface_comments_available(surface: dict[str, Any], *, wall_comments: int, board_comments: int) -> dict[str, Any]:
     surface["status"] = "comments_available"
     surface["scan_state"] = "comments_available"
-    surface["reach"] = {
+    reach = dict(surface.get("reach") or {})
+    reach.update({
         "confidence": "low",
         "basis": "vk_comments_or_boards",
         "wall_comments_seen": wall_comments,
         "board_comments_seen": board_comments,
-    }
+    })
+    surface["reach"] = reach
     risk = dict(surface.get("risk") or {})
     risk.update({
         "spam_risk": "unknown",
@@ -1699,6 +1762,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
     seen_contexts = _seen_context_urls()
     opportunity_keys: set[str] = set()
     deadline = _deadline_after_seconds()
+    vk_seed_meta = _vk_seed_metadata()
     for raw_url in seed_urls[:max_surfaces]:
         if _deadline_reached(deadline):
             diagnostics.append("vk scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
@@ -1719,6 +1783,24 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
             "risk": {"spam_risk": "unknown", "safety_risk": "low", "reason": "read-only VK wall/comment scan"},
             "reach": {"confidence": "low", "basis": "vk_wall"},
         })
+        seed_meta = _metadata_for_vk_seed(normalized, str(surface.get("handle") or domain), vk_seed_meta)
+        if seed_meta:
+            if seed_meta.get("external_id"):
+                surface["external_id"] = str(seed_meta["external_id"])
+            if seed_meta.get("handle"):
+                surface["handle"] = str(seed_meta["handle"])
+            if seed_meta.get("title"):
+                surface["title"] = str(seed_meta["title"])
+            if seed_meta.get("surface_type"):
+                surface["surface_type"] = str(seed_meta["surface_type"])
+            if seed_meta.get("source"):
+                surface["source"] = str(seed_meta["source"])
+            if seed_meta.get("topic_hint"):
+                surface["topic_hint"] = str(seed_meta["topic_hint"])
+            reach_meta = seed_meta.get("reach") if isinstance(seed_meta.get("reach"), dict) else None
+            if reach_meta:
+                surface["reach"] = {**surface.get("reach", {}), **reach_meta}
+        _enrich_vk_surface_group_metadata(surface, domain=domain, token_lanes=token_lanes)
         surfaces[surface["external_id"]] = surface
         wall_comments_before = int(VK_SCAN_STATS.get("comments_seen", 0))
         board_comments_before = int(VK_SCAN_STATS.get("board_comments_seen", 0))
@@ -1782,6 +1864,8 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     post_id=post_id,
                     created_at=datetime.fromtimestamp(int(post.get("date") or 0), tz=timezone.utc).isoformat() if post.get("date") else None,
                     relation="vk_social_wall_post",
+                    author_id=post.get("from_id") or owner_id,
+                    is_post=True,
                 )
             post_opp = None if _comment_retrieval_enabled() else build_vk_wall_post_opportunity(surface, post=post, default_target_url=default_target_url)
             if post_opp:
@@ -1831,6 +1915,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                         thread_id=post_id,
                         created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
                         relation="vk_comment",
+                        author_id=comment.get("from_id"),
                     )
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
@@ -2327,6 +2412,28 @@ def _metadata_for_tg_seed(raw_url: str, handle: str, metadata: dict[str, dict[st
     return {}
 
 
+def _vk_seed_metadata() -> dict[str, dict[str, Any]]:
+    raw = _json_env("ACQ_VK_SEED_SURFACES_JSON", [])
+    out: dict[str, dict[str, Any]] = {}
+    for item in list(raw or []):
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        handle = str(item.get("handle") or _handle_from_url(url, platform="vk")).strip().strip("/")
+        external_id = str(item.get("external_id") or "").strip()
+        for key in {handle.casefold(), url.rstrip("/").casefold(), external_id.casefold()}:
+            if key:
+                out[key] = item
+    return out
+
+
+def _metadata_for_vk_seed(raw_url: str, handle: str, metadata: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    for key in [str(handle or "").casefold(), str(raw_url or "").rstrip("/").casefold(), f"vk:{handle}".casefold() if handle else ""]:
+        if key and key in metadata:
+            return metadata[key]
+    return {}
+
+
 def _telegram_entity_ref_from_seed(
     handle: str,
     seed_meta: dict[str, Any],
@@ -2359,6 +2466,7 @@ def build_shadow_payload(
     vk_seeds = _json_env("ACQ_VK_SEEDS_JSON", [])
     vk_allowlist = _json_env("ACQ_VK_ALLOWLIST_JSON", [])
     tg_seed_meta = _tg_seed_metadata()
+    vk_seed_meta = _vk_seed_metadata()
     surfaces_by_external: dict[str, dict[str, Any]] = {}
     for url in list(tg_seeds or []):
         seed_url = str(url)
@@ -2389,9 +2497,41 @@ def build_shadow_payload(
             continue
         if normalized.lower() not in allowed_vk:
             seed = {**_seed_surface(normalized, platform="vk"), "status": "candidate"}
+            seed_meta = _metadata_for_vk_seed(normalized, str(seed.get("handle") or ""), vk_seed_meta)
+            if seed_meta:
+                if seed_meta.get("external_id"):
+                    seed["external_id"] = str(seed_meta["external_id"])
+                if seed_meta.get("handle"):
+                    seed["handle"] = str(seed_meta["handle"])
+                if seed_meta.get("title"):
+                    seed["title"] = str(seed_meta["title"])
+                if seed_meta.get("surface_type"):
+                    seed["surface_type"] = str(seed_meta["surface_type"])
+                if seed_meta.get("source"):
+                    seed["source"] = str(seed_meta["source"])
+                if seed_meta.get("topic_hint"):
+                    seed["topic_hint"] = str(seed_meta["topic_hint"])
+                if isinstance(seed_meta.get("reach"), dict):
+                    seed["reach"] = {**seed.get("reach", {}), **seed_meta["reach"]}
             surfaces_by_external[seed["external_id"]] = seed
             continue
         seed = {**_seed_surface(normalized, platform="vk"), "status": "candidate", "source": "allowlist"}
+        seed_meta = _metadata_for_vk_seed(normalized, str(seed.get("handle") or ""), vk_seed_meta)
+        if seed_meta:
+            if seed_meta.get("external_id"):
+                seed["external_id"] = str(seed_meta["external_id"])
+            if seed_meta.get("handle"):
+                seed["handle"] = str(seed_meta["handle"])
+            if seed_meta.get("title"):
+                seed["title"] = str(seed_meta["title"])
+            if seed_meta.get("surface_type"):
+                seed["surface_type"] = str(seed_meta["surface_type"])
+            if seed_meta.get("source"):
+                seed["source"] = str(seed_meta["source"])
+            if seed_meta.get("topic_hint"):
+                seed["topic_hint"] = str(seed_meta["topic_hint"])
+            if isinstance(seed_meta.get("reach"), dict):
+                seed["reach"] = {**seed.get("reach", {}), **seed_meta["reach"]}
         surfaces_by_external[seed["external_id"]] = seed
     for scanned in scanned_surfaces or []:
         if scanned.get("external_id"):

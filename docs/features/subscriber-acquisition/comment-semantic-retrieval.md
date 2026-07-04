@@ -35,7 +35,9 @@ Use only current Subscriber Acquisition Discovery sources:
 - Telegram linked discussions resolved from channels;
 - VK community wall comments;
 - VK discussion-board topics/comments;
-- social VK wall posts only when the post itself is a human question/request;
+- VK wall posts only as context/noise/source-post evidence by default; they are
+  exported separately as `relation=vk_social_wall_post` and do not spend reply
+  budget unless `ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES=1` is explicitly set;
 - existing `acq_surface`, manual `/acq_surface_add`, Telegram Monitoring/VK
   monitoring seed payloads, documented Telega.in/Smartik/search seeds, and newly
   discovered public community links.
@@ -157,6 +159,11 @@ Dry run:
 - include `https://t.me/vKalinigrad_recomendations` as a golden calibration
   Telegram group for route/POI interest extraction, because it is known to have
   real questions suitable for semantic retrieval calibration.
+- every report must state the actual scope/depth: seed payload count, scanned
+  surface count, scan budgets, source relations (`tg` group/comment, linked
+  discussion, `vk_comment`, `vk_board_comment`, `vk_social_wall_post`), and the
+  observed `created_at` period. It must not imply “all DB/all history” unless
+  the payload and budgets really covered that.
 
 Main run only after dry-run review:
 
@@ -171,9 +178,21 @@ Every scanned surface should receive a `comment_semantic_profile` summary:
   "surface_key": "platform:external_id",
   "platform": "tg|vk",
   "surface_type": "group|linked_discussion|community|...",
+  "surface_title": "...",
+  "surface_url": "https://...",
+  "members_or_subscribers": 0,
   "comments_total": 1234,
   "comments_embedded": 1200,
   "period": {"min_created_at": "...", "max_created_at": "..."},
+  "period_days": 30.0,
+  "comments_per_day": 0.0,
+  "comments_per_week": 0.0,
+  "comments_per_30d": 0.0,
+  "comments_per_90d": 0.0,
+  "latest_100_comments": 100,
+  "latest_100_period_days": 7.0,
+  "unique_commenters": 0,
+  "relation_counts": {"vk_comment": 100, "vk_board_comment": 10, "vk_social_wall_post": 5},
   "semantic_presence": {
     "route_poi_far_context": {
       "present": true,
@@ -216,6 +235,9 @@ Candidate rows must include at least:
   "surface_key": "...",
   "platform": "tg|vk",
   "surface_type": "...",
+  "relation": "group_message|linked_discussion|telegram_search|vk_comment|vk_board_comment|vk_social_wall_post",
+  "author_id": "best-effort public platform id, empty if not collected",
+  "is_post": false,
   "context_url": "...",
   "comment_id": "...",
   "post_id": "...",
@@ -266,6 +288,10 @@ Before LLM gate, apply a conservative **question-first quality layer**:
   contain cues such as “сохраняйте”, “записывайтесь”, “приглашаем”,
   “бронируйте”, price/discount language, contact/DM calls, or URL/mention
   cross-posts without a question.
+- mark source posts (`vk_social_wall_post` / Telegram post rows) as
+  `source_post_not_comment` and exclude them from reply examples/LLM budget by
+  default, because the current MVP is comment-reply acquisition. They remain in
+  artifacts for surface context and future organizer-question strategies.
 
 This deterministic layer is a narrow budget/noise guardrail, not the semantic
 acceptance decision. It should keep rows visible in artifacts with
@@ -318,15 +344,30 @@ Research-stage bulk output is artifact-first:
 - `comment_retrieval_candidates.csv`
 - `comment_retrieval_surface_profiles.csv`
 - `comment_retrieval_surface_decision_summary.csv`
+- `comment_retrieval_question_patterns.csv`
 - `comment_retrieval_score_distributions.csv`
 - `comment_retrieval_manual_review_sample.xlsx`
 - `comment_retrieval_speed_metrics.csv`
 - `comment_retrieval_report.md`
 
-The XLSX must include a `surface_summary` sheet. It is the operator-facing map
-for “where to work next”: per channel/group/community recommendation, counts of
-answerable question candidates, counts of contexts useful for asking organizer
-clarification questions, filtered noise count, and clickable examples.
+The XLSX must include these operator-facing sheets:
+
+- `scope`: run id, stage, model list/gate model, actual comment period,
+  platform/surface/relation counts and the configured scan budgets; this answers
+  whether the file came from all stored surfaces or from a bounded Kaggle sample.
+- `surface_summary`: map for “where to work next” with community/group names,
+  live links, member/subscriber count if collected, observed period, unique
+  commenters if collected, total comments, normalized comments/day/week/30d/90d,
+  latest-100 comment window dates/duration for low-volume or old surfaces,
+  answerable questions per 30d/90d/per 100 comments, source-post vs comment
+  context counts, filtered noise count and clickable examples.
+- one `eligible_<model>` sheet per embedding model, so e5-base and bge-m3 can be
+  inspected independently instead of only seeing the recommended gate model.
+- `question_patterns`: grouped question patterns with counts and examples,
+  e.g. route with children, route transport, ticket/price, registration/seats,
+  age/children, location/entry, Pushkin/free/accessibility and organizer
+  submission.
+- `manual_review`: mixed calibration sample with empty human-label columns.
 
 YDB serverless is the preferred project-owned store for sanitized retrieval
 summaries once the dry run proves value, because the repo already has an optional
@@ -394,12 +435,15 @@ The Russian benchmark report must include:
 
 1. executive summary and selected first-layer model/config;
 2. scanned TG/VK surfaces, comment source types and time period;
-3. surface semantic profiles and monitoring recommendations;
+3. surface semantic profiles and monitoring recommendations, including
+   normalized depth/rates and whether counts were collected from comments,
+   board comments or source posts;
 4. speed table by model/batch/max_length/device;
 5. funnel table by model/intent/scoring policy;
 6. quality/manual review sample or explicit “unlabeled sample only” note;
-7. best route/POI, event and organizer examples plus false positives and model
-   disagreement examples;
+7. best route/POI, event and organizer examples for **both** embedding models,
+   false positives, model disagreement examples and collected question-pattern
+   groups;
 8. production recommendation: model, max_length, batch size, scoring method,
    thresholds, negative margin use, comments/hour, LLM calls after funnel and
    storage/artifact plan;

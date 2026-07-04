@@ -302,6 +302,17 @@ def test_shadow_payload_preserves_scanned_vk_surface_metadata(monkeypatch):
     runtime = load_runtime()
     monkeypatch.setenv("ACQ_VK_SEEDS_JSON", '["https://vk.com/vagonka39"]')
     monkeypatch.setenv("ACQ_VK_ALLOWLIST_JSON", '["https://vk.com/vagonka39"]')
+    monkeypatch.setenv("ACQ_VK_SEED_SURFACES_JSON", json.dumps([
+        {
+            "url": "https://vk.com/vagonka39",
+            "handle": "vagonka39",
+            "external_id": "vk:vagonka39",
+            "title": "Вагонка",
+            "source": "vk_source",
+            "topic_hint": "existing VK monitoring source",
+            "reach": {"members": 1234, "basis": "vk_source_seed"},
+        }
+    ], ensure_ascii=False))
 
     scanned = runtime._seed_surface("https://vk.com/vagonka39", platform="vk")
     scanned.update({"source": "allowlist", "status": "approved", "reach": {"basis": "vk_wall", "confidence": "low"}})
@@ -310,6 +321,30 @@ def test_shadow_payload_preserves_scanned_vk_surface_metadata(monkeypatch):
     by_external = {s["external_id"]: s for s in payload["surfaces"]}
     assert by_external["vk:vagonka39"]["source"] == "allowlist"
     assert by_external["vk:vagonka39"]["reach"]["basis"] == "vk_wall"
+
+
+def test_shadow_payload_applies_vk_seed_metadata_without_scan(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_VK_SEEDS_JSON", '["https://vk.com/vagonka39"]')
+    monkeypatch.delenv("ACQ_VK_ALLOWLIST_JSON", raising=False)
+    monkeypatch.setenv("ACQ_VK_SEED_SURFACES_JSON", json.dumps([
+        {
+            "url": "https://vk.com/vagonka39",
+            "handle": "vagonka39",
+            "external_id": "vk:vagonka39",
+            "title": "Вагонка",
+            "source": "vk_source",
+            "topic_hint": "existing VK monitoring source",
+            "reach": {"members": 4321, "basis": "vk_source_seed"},
+        }
+    ], ensure_ascii=False))
+
+    payload = runtime.build_shadow_payload()
+
+    by_external = {s["external_id"]: s for s in payload["surfaces"]}
+    assert by_external["vk:vagonka39"]["title"] == "Вагонка"
+    assert by_external["vk:vagonka39"]["source"] == "vk_source"
+    assert by_external["vk:vagonka39"]["reach"]["members"] == 4321
 
 
 def test_shadow_payload_exposes_opportunity_screening_counters(monkeypatch):
@@ -343,6 +378,9 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
             "surface_type": "group",
             "context_url": "https://t.me/vKalinigrad_recomendations/11",
             "comment_id": "11",
+            "created_at": "2026-07-01T10:00:00+00:00",
+            "author_id": "101",
+            "relation": "group_message",
             "text": "Куда съездить из Калининграда на один день на электричке, Светлогорск или Зеленоградск?",
         },
         {
@@ -353,7 +391,25 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
             "surface_type": "community",
             "context_url": "https://vk.com/wall-1_2?reply=3",
             "comment_id": "3",
+            "created_at": "2026-07-02T10:00:00+00:00",
+            "author_id": "202",
+            "relation": "vk_comment",
             "text": "Будет ли мероприятие для детей, нужна регистрация и есть ли билеты?",
+        },
+        {
+            "surface_key": "vk:vagonka39",
+            "surface_external_id": "vk:vagonka39",
+            "surface_url": "https://vk.com/vagonka39",
+            "platform": "vk",
+            "surface_type": "community",
+            "context_url": "https://vk.com/wall-1_2",
+            "comment_id": "",
+            "post_id": "2",
+            "created_at": "2026-07-02T09:00:00+00:00",
+            "author_id": "-1",
+            "relation": "vk_social_wall_post",
+            "is_post": True,
+            "text": "Подскажите, куда сходить на выходных?",
         },
     ]
 
@@ -361,7 +417,7 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
         records,
         surfaces_by_external={
             "tg:vKalinigrad_recomendations": {"title": "Калининград рекомендации", "url": "https://t.me/vKalinigrad_recomendations"},
-            "vk:vagonka39": {"title": "Вагонка", "url": "https://vk.com/vagonka39"},
+            "vk:vagonka39": {"title": "Вагонка", "url": "https://vk.com/vagonka39", "reach": {"members": 1234}},
         },
         output_dir=tmp_path,
         backend=retrieval.HashingEmbeddingBackend(),
@@ -369,18 +425,26 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
 
     summary = result["summary"]
     assert summary["stage"] == retrieval.STAGE_NAME
-    assert summary["comments_embedded"] == 2
+    assert summary["comments_embedded"] == 3
     assert summary["surface_profiles_count"] == 2
     assert summary["candidate_count"] > 0
     assert result["llm_gate_candidates"]
     assert Path(summary["artifacts"]["manual_review_xlsx"]).exists()
     assert Path(summary["artifacts"]["candidates_csv"]).exists()
+    assert Path(summary["artifacts"]["question_patterns_csv"]).exists()
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
     assert route_candidates
     assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
     assert {p["surface_key"] for p in result["surface_profiles"]} == {"tg:vKalinigrad_recomendations", "vk:vagonka39"}
+    vk_profile = next(p for p in result["surface_profiles"] if p["surface_key"] == "vk:vagonka39")
+    assert vk_profile["members_or_subscribers"] == 1234
+    assert vk_profile["unique_commenters"] == 2
+    assert vk_profile["source_post_records"] == 1
+    assert vk_profile["period_days"] is not None
     assert Path(summary["artifacts"]["surface_decision_summary_csv"]).exists()
     assert result["surface_decision_summaries"]
+    assert result["surface_decision_summaries"][0].get("comments_per_30d") is not None
+    assert result["summary"]["artifacts"]["question_patterns_csv"].endswith("comment_retrieval_question_patterns.csv")
 
 
 def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
@@ -410,6 +474,24 @@ def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
     assert row2["pre_llm_candidate_eligible"] is True
     assert row2["score_for_rank"] > 0.5
 
+    source_post = {
+        "text_snapshot": "Куда съездить из Калининграда на один день?",
+        "positive_negative_margin": 0.5,
+        "intent_set": "route_poi_close_actionable",
+        "relation": "vk_social_wall_post",
+    }
+    retrieval._apply_text_quality_to_candidate(source_post, scoring_method="positive_negative_margin")
+    assert source_post["pre_llm_candidate_eligible"] is False
+    assert source_post["candidate_noise_type"] == "source_post_not_comment"
+
+
+def test_question_pattern_label_covers_route_event_and_badges():
+    retrieval = load_retrieval()
+
+    assert retrieval._question_pattern_label("Куда съездить с детьми на один день?", action_type="trip_route_poi_recommendation") == "route_with_children"
+    assert retrieval._question_pattern_label("Сколько стоит билет и нужен ли вход?", action_type="event_recommendation_reply") == "event_ticket_or_price"
+    assert retrieval._question_pattern_label("Есть по Пушкинской карте?", action_type="badge_filter_need") == "event_badge_pushkin_card"
+
 
 def test_surface_decision_summary_separates_reply_and_question_asking_modes():
     retrieval = load_retrieval()
@@ -430,6 +512,7 @@ def test_surface_decision_summary_separates_reply_and_question_asking_modes():
             "intent_set": "route_poi_close_actionable",
             "text_snapshot": "Куда съездить?",
             "pre_llm_candidate_eligible": True,
+            "relation": "group_message",
         },
         {
             "context_url": "https://t.me/example/2",
@@ -438,6 +521,7 @@ def test_surface_decision_summary_separates_reply_and_question_asking_modes():
             "intent_set": "event_close_question",
             "text_snapshot": "А где купить билеты?",
             "pre_llm_candidate_eligible": True,
+            "relation": "group_message",
         },
         {
             "context_url": "https://t.me/example/3",
@@ -446,19 +530,31 @@ def test_surface_decision_summary_separates_reply_and_question_asking_modes():
             "intent_set": "event_close_question",
             "text_snapshot": "Будет ли регистрация?",
             "pre_llm_candidate_eligible": True,
+            "relation": "group_message",
+        },
+        {
+            "context_url": "https://t.me/example/source",
+            "rank_global": 4,
+            "candidate_action_type": "trip_route_poi_recommendation",
+            "intent_set": "route_poi_close_actionable",
+            "text_snapshot": "Куда съездить?",
+            "pre_llm_candidate_eligible": False,
+            "relation": "vk_social_wall_post",
+            "candidate_noise_type": "source_post_not_comment",
         },
     ]
 
     summaries = retrieval._surface_decision_summaries(
         [profile],
-        eligible_rows_by_surface={"tg:example": rows},
+        eligible_rows_by_surface={"tg:example": rows[:3]},
         all_gate_rows_by_surface={"tg:example": [*rows, {"context_url": "x", "candidate_noise_type": "explicit_offer_or_ad"}]},
     )
 
     assert summaries[0]["recommendation"] in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities"}
     assert summaries[0]["answerable_question_candidates"] == 3
     assert summaries[0]["ask_clarification_contexts"] == 2
-    assert summaries[0]["filtered_noise_contexts"] == 1
+    assert summaries[0]["source_post_contexts"] == 1
+    assert summaries[0]["filtered_noise_contexts"] == 2
 
 
 def test_shadow_payload_exposes_comment_semantic_retrieval_result(monkeypatch, tmp_path):
@@ -590,9 +686,11 @@ def test_vk_scan_with_semantic_retrieval_collects_comments_without_per_comment_l
         if method == "wall.getComments":
             return {
                 "items": [
-                    {"id": 9, "date": 1782900000, "text": "Куда поехать на электричке в область?"}
+                    {"id": 9, "from_id": 101, "date": 1782900000, "text": "Куда поехать на электричке в область?"}
                 ]
             }, "TEST_TOKEN"
+        if method == "groups.getById":
+            return {"groups": [{"id": 42481124, "name": "Подслушано", "screen_name": "club42481124", "members_count": 999}]}, "TEST_TOKEN"
         raise AssertionError(method)
 
     monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
@@ -609,6 +707,9 @@ def test_vk_scan_with_semantic_retrieval_collects_comments_without_per_comment_l
     assert surfaces[0]["status"] == "comments_available"
     assert len(records) == 2
     assert {r["relation"] for r in records} == {"vk_social_wall_post", "vk_comment"}
+    assert {r["author_id"] for r in records} == {"-42481124", "101"}
+    assert surfaces[0]["title"] == "Подслушано"
+    assert surfaces[0]["reach"]["members"] == 999
 
 
 def test_build_vk_opportunity_is_read_only_review_payload():

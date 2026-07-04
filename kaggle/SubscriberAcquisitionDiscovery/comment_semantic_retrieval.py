@@ -8,11 +8,10 @@ import os
 import platform
 import random
 import re
-import statistics
 import subprocess
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -404,8 +403,13 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
     features = _text_quality_features(str(row.get("text") or row.get("text_snapshot") or ""))
     intent_supported = _intent_has_text_support(str(row.get("text") or row.get("text_snapshot") or ""), str(row.get("intent_set") or ""))
     raw_score = float(row.get(scoring_method) or row.get("score") or 0.0)
+    relation = str(row.get("relation") or "").strip()
+    source_post_relation = relation in {"vk_social_wall_post"} or bool(row.get("is_post"))
+    source_post_allowed = truthy(os.getenv("ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES"))
     if features["hard_noise"]:
         penalty = 0.35
+    elif source_post_relation and not source_post_allowed:
+        penalty = 0.28
     elif not intent_supported:
         penalty = 0.18
     elif not features["question_signal"]:
@@ -420,10 +424,137 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
     row["score_for_rank"] = score_for_rank
     row["question_signal"] = bool(features["question_signal"])
     row["candidate_noise_type"] = features["noise_type"]
-    if not intent_supported:
+    if source_post_relation and not source_post_allowed:
+        row["candidate_noise_type"] = "source_post_not_comment"
+    elif not intent_supported:
         row["candidate_noise_type"] = "intent_without_text_support"
     row["intent_text_supported"] = bool(intent_supported)
-    row["pre_llm_candidate_eligible"] = bool(features["question_signal"] and not features["hard_noise"] and intent_supported)
+    row["pre_llm_candidate_eligible"] = bool(
+        features["question_signal"]
+        and not features["hard_noise"]
+        and intent_supported
+        and (not source_post_relation or source_post_allowed)
+    )
+
+
+def _parse_created_at(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _period_stats(records: list[dict[str, Any]]) -> dict[str, Any]:
+    dates = [dt for dt in (_parse_created_at(r.get("created_at")) for r in records) if dt is not None]
+    if not dates:
+        return {
+            "period_min_created_at": None,
+            "period_max_created_at": None,
+            "period_days": None,
+            "period_label": "unknown_period",
+        }
+    start = min(dates)
+    end = max(dates)
+    seconds = max(0.0, (end - start).total_seconds())
+    # A single-day/newest-N sample is still a sample period, not infinite rate.
+    days = max(1.0, seconds / 86400.0)
+    return {
+        "period_min_created_at": start.isoformat(),
+        "period_max_created_at": end.isoformat(),
+        "period_days": round(days, 3),
+        "period_label": f"{start.date().isoformat()}..{end.date().isoformat()} ({round(days, 1)}d)",
+    }
+
+
+def _latest_n_records(records: list[dict[str, Any]], *, limit: int = 100) -> list[dict[str, Any]]:
+    dated: list[tuple[datetime, dict[str, Any]]] = []
+    undated: list[dict[str, Any]] = []
+    for record in records:
+        dt = _parse_created_at(record.get("created_at"))
+        if dt is None:
+            undated.append(record)
+        else:
+            dated.append((dt, record))
+    dated.sort(key=lambda item: item[0], reverse=True)
+    ordered = [record for _dt, record in dated] + undated
+    return ordered[: max(1, int(limit))]
+
+
+def _rate(count: int | float, period_days: Any, multiplier: float) -> float | None:
+    try:
+        days = float(period_days)
+    except Exception:
+        return None
+    if days <= 0:
+        return None
+    return round(float(count) / days * multiplier, 3)
+
+
+def _per_100(count: int | float, total: int | float) -> float | None:
+    try:
+        denominator = float(total)
+    except Exception:
+        return None
+    if denominator <= 0:
+        return None
+    return round(float(count) / denominator * 100.0, 3)
+
+
+def _truthy_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _question_pattern_label(text: str, *, action_type: str = "", intent_set: str = "") -> str:
+    compact = normalize_comment_text(text).casefold()
+    if not compact:
+        return "other_question"
+    if "пушкин" in compact:
+        return "event_badge_pushkin_card"
+    if re.search(r"\b(бесплатн|свободн|льгот|инвалид|доступн)\w*", compact):
+        return "event_badge_access_or_free"
+    if re.search(r"\b(куда\s+(?:съездить|поехать)|что\s+посмотреть|маршрут|на\s+один\s+день|выходн)", compact):
+        if re.search(r"\b(дет|реб[её]н|семь|семейн)\w*", compact):
+            return "route_with_children"
+        if re.search(r"\b(электрич|поезд|автобус|без\s+машин|машин)\w*", compact):
+            return "route_transport_or_car"
+        return "route_where_to_go"
+    if re.search(r"\b(как\s+добраться|доехать|ехать|транспорт)\b", compact):
+        return "route_transport_or_car"
+    if re.search(r"\b(куда|где).{0,20}(афиш|событ|мероприят|выставк|концерт)", compact):
+        return "event_site_search"
+    if re.search(r"\b(добавить|прислать|опубликовать|партн[её]рств)\w*.*\b(афиш|анонс|событ|мероприят)", compact):
+        return "organizer_submission"
+    if re.search(r"\b(билет|стоимост|цена|сколько\s+стоит|вход)\w*", compact):
+        return "event_ticket_or_price"
+    if re.search(r"\b(регистрац|запис|мест[ао]|остал)\w*", compact):
+        return "event_registration_or_seats"
+    if re.search(r"\b(возраст|лет|дет|реб[её]н)\w*", compact):
+        return "event_age_or_children"
+    if re.search(r"\b(во\s+сколько|когда|начал|длит|программ|расписан)\w*", compact):
+        return "event_time_schedule_program"
+    if re.search(r"\b(где|адрес|локац|место|вход|встреч)\w*", compact):
+        return "event_location_or_entry"
+    if re.search(r"\b(запись|трансляц|онлайн|стрим)\w*", compact):
+        return "event_recording_or_stream"
+    if action_type == "trip_route_poi_recommendation" or intent_set.startswith("route_poi"):
+        return "route_other"
+    if action_type == "organizer_submission_or_partnership":
+        return "organizer_submission"
+    if action_type == "badge_filter_need":
+        return "event_badge_other"
+    if action_type == "event_site_search_or_listing":
+        return "event_site_search"
+    if str(intent_set) in {"event_close_question", "organizer_comment_fit"}:
+        return "event_logistics_other"
+    return "other_question"
 
 
 def _surface_key(record: dict[str, Any]) -> str:
@@ -556,7 +687,15 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
     else:
         decision = "reject"
         reason = "no acquisition-relevant semantic signal in embedded comments"
-    dates = [str(r.get("created_at") or "") for r in surface_records if r.get("created_at")]
+    period = _period_stats(surface_records)
+    latest_100_records = _latest_n_records(surface_records, limit=100)
+    latest_100_period = _period_stats(latest_100_records)
+    relation_counts = Counter(str(r.get("relation") or "unknown") for r in surface_records)
+    author_ids = {
+        str(r.get("author_id") or "").strip()
+        for r in surface_records
+        if str(r.get("author_id") or "").strip()
+    }
     return {
         "surface_key": surface_key,
         "platform": surface_records[0].get("platform") if surface_records else None,
@@ -564,7 +703,28 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         "comments_total": comments_total,
         "comments_embedded": comments_total,
         "eligible_question_candidates": eligible_questions,
-        "period": {"min_created_at": min(dates) if dates else None, "max_created_at": max(dates) if dates else None},
+        "period": {
+            "min_created_at": period["period_min_created_at"],
+            "max_created_at": period["period_max_created_at"],
+        },
+        "period_min_created_at": period["period_min_created_at"],
+        "period_max_created_at": period["period_max_created_at"],
+        "period_days": period["period_days"],
+        "period_label": period["period_label"],
+        "comments_per_day": _rate(comments_total, period["period_days"], 1),
+        "comments_per_week": _rate(comments_total, period["period_days"], 7),
+        "comments_per_30d": _rate(comments_total, period["period_days"], 30),
+        "comments_per_90d": _rate(comments_total, period["period_days"], 90),
+        "latest_100_comments": len(latest_100_records),
+        "latest_100_min_created_at": latest_100_period["period_min_created_at"],
+        "latest_100_max_created_at": latest_100_period["period_max_created_at"],
+        "latest_100_period_days": latest_100_period["period_days"],
+        "latest_100_period_label": latest_100_period["period_label"],
+        "unique_commenters": len(author_ids) if author_ids else None,
+        "unique_commenters_observed": bool(author_ids),
+        "relation_counts": dict(relation_counts),
+        "comment_records": sum(count for rel, count in relation_counts.items() if rel != "vk_social_wall_post"),
+        "source_post_records": int(relation_counts.get("vk_social_wall_post") or 0),
         "semantic_presence": semantic_presence,
         "dominant_detected_interests": dominant,
         "monitoring_decision_hint": decision,
@@ -618,6 +778,8 @@ def _surface_decision_summaries(
             r for r in eligible
             if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit"}
         ]
+        comment_rows = [r for r in eligible if str(r.get("relation") or "") != "vk_social_wall_post" and not _truthy_value(r.get("is_post"))]
+        source_post_rows = [r for r in all_rows if str(r.get("relation") or "") == "vk_social_wall_post" or _truthy_value(r.get("is_post"))]
         noise_rows = [r for r in all_rows if str(r.get("candidate_noise_type") or "")]
         answerable_count = len(route_rows) + len(event_rows) + len(organizer_submit_rows) + len(badge_rows)
         ask_count = len(ask_context_rows)
@@ -651,15 +813,39 @@ def _surface_decision_summaries(
             "surface_type": profile.get("surface_type"),
             "surface_title": profile.get("surface_title"),
             "surface_url": profile.get("surface_url"),
+            "members_or_subscribers": profile.get("members_or_subscribers"),
+            "period_min_created_at": profile.get("period_min_created_at"),
+            "period_max_created_at": profile.get("period_max_created_at"),
+            "period_days": profile.get("period_days"),
+            "period_label": profile.get("period_label"),
+            "unique_commenters": profile.get("unique_commenters"),
+            "unique_commenters_note": "" if profile.get("unique_commenters_observed") else "not_collected_in_this_run",
+            "comments_total": profile.get("comments_total"),
             "comments_embedded": profile.get("comments_embedded"),
+            "comments_per_day": profile.get("comments_per_day"),
+            "comments_per_week": profile.get("comments_per_week"),
+            "comments_per_30d": profile.get("comments_per_30d"),
+            "comments_per_90d": profile.get("comments_per_90d"),
+            "latest_100_comments": profile.get("latest_100_comments"),
+            "latest_100_min_created_at": profile.get("latest_100_min_created_at"),
+            "latest_100_max_created_at": profile.get("latest_100_max_created_at"),
+            "latest_100_period_days": profile.get("latest_100_period_days"),
+            "latest_100_period_label": profile.get("latest_100_period_label"),
             "recommendation": recommendation,
             "summary_ru": summary_ru,
             "answerable_question_candidates": answerable_count,
             "ask_clarification_contexts": ask_count,
+            "eligible_comment_contexts": len(comment_rows),
+            "source_post_contexts": len(source_post_rows),
             "route_poi_questions": len(route_rows),
             "event_questions": len(event_rows),
             "organizer_submission_questions": len(organizer_submit_rows),
             "badge_filter_questions": len(badge_rows),
+            "answerable_questions_per_30d": _rate(answerable_count, profile.get("period_days"), 30),
+            "answerable_questions_per_90d": _rate(answerable_count, profile.get("period_days"), 90),
+            "answerable_questions_per_100_comments": _per_100(answerable_count, profile.get("comments_embedded") or 0),
+            "ask_contexts_per_30d": _rate(ask_count, profile.get("period_days"), 30),
+            "relation_counts_json": json.dumps(profile.get("relation_counts") or {}, ensure_ascii=False),
             "filtered_noise_contexts": len(noise_rows),
             "dominant_detected_interests": ",".join(profile.get("dominant_detected_interests") or []),
             "monitoring_decision_hint": profile.get("monitoring_decision_hint"),
@@ -675,6 +861,94 @@ def _surface_decision_summaries(
     ))
 
 
+def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int = 3) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in _best_context_rows([r for r in rows if r.get("pre_llm_candidate_eligible")]):
+        text = str(row.get("text_snapshot") or row.get("text") or "")
+        pattern = _question_pattern_label(
+            text,
+            action_type=str(row.get("candidate_action_type") or ""),
+            intent_set=str(row.get("intent_set") or ""),
+        )
+        surface_key = str(row.get("surface_key") or "")
+        action = str(row.get("candidate_action_type") or "")
+        key = (surface_key, pattern, action)
+        item = grouped.setdefault(key, {
+            "surface_key": surface_key,
+            "platform": row.get("platform"),
+            "surface_type": row.get("surface_type"),
+            "pattern": pattern,
+            "candidate_action_type": action,
+            "intent_sets": set(),
+            "models": set(),
+            "count": 0,
+            "example_texts": [],
+            "example_urls": [],
+        })
+        item["count"] += 1
+        if row.get("intent_set"):
+            item["intent_sets"].add(str(row.get("intent_set")))
+        if row.get("model_name"):
+            item["models"].add(str(row.get("model_name")))
+        if len(item["example_texts"]) < limit_examples and text:
+            item["example_texts"].append(text[:220])
+        if len(item["example_urls"]) < limit_examples and row.get("context_url"):
+            item["example_urls"].append(str(row.get("context_url")))
+    out: list[dict[str, Any]] = []
+    for item in grouped.values():
+        out.append({
+            **{k: v for k, v in item.items() if k not in {"intent_sets", "models", "example_texts", "example_urls"}},
+            "intent_sets": ",".join(sorted(item["intent_sets"])),
+            "models": ",".join(sorted(item["models"])),
+            "example_texts": "\n".join(item["example_texts"]),
+            "example_urls": "\n".join(item["example_urls"]),
+        })
+    return sorted(out, key=lambda r: (-int(r.get("count") or 0), str(r.get("surface_key") or ""), str(r.get("pattern") or "")))
+
+
+def _model_example_rows(candidates: list[dict[str, Any]], model_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
+    rows = [r for r in candidates if str(r.get("model_name") or "") == model_name and r.get("pre_llm_candidate_eligible")]
+    return _best_context_rows(rows)[:limit]
+
+
+def _scope_rows(
+    *,
+    run_id: str,
+    records: list[dict[str, Any]],
+    profiles: list[dict[str, Any]],
+    models: list[str],
+    gate_model: str,
+    scoring_method: str,
+    summary_note: str | None = None,
+) -> list[dict[str, Any]]:
+    period = _period_stats(records)
+    platforms = Counter(str(r.get("platform") or "unknown") for r in records)
+    surface_types = Counter(str(r.get("surface_type") or "unknown") for r in records)
+    relations = Counter(str(r.get("relation") or "unknown") for r in records)
+    return [
+        {"metric": "run_id", "value": run_id},
+        {"metric": "stage", "value": STAGE_NAME},
+        {"metric": "scope_note", "value": summary_note or "Limited to the Kaggle seed payload and configured per-run budgets; not a full historical DB scan unless the payload/budgets covered it."},
+        {"metric": "models", "value": ", ".join(models)},
+        {"metric": "gate_model_for_llm_budget", "value": gate_model},
+        {"metric": "scoring_method", "value": scoring_method},
+        {"metric": "comments_after_filter", "value": len(records)},
+        {"metric": "surfaces_profiled", "value": len(profiles)},
+        {"metric": "period_min_created_at", "value": period["period_min_created_at"]},
+        {"metric": "period_max_created_at", "value": period["period_max_created_at"]},
+        {"metric": "period_days", "value": period["period_days"]},
+        {"metric": "platform_comment_records_json", "value": json.dumps(dict(platforms), ensure_ascii=False)},
+        {"metric": "surface_type_records_json", "value": json.dumps(dict(surface_types), ensure_ascii=False)},
+        {"metric": "relation_records_json", "value": json.dumps(dict(relations), ensure_ascii=False)},
+        {"metric": "ACQ_MAX_SURFACES_PER_RUN", "value": os.getenv("ACQ_MAX_SURFACES_PER_RUN", "")},
+        {"metric": "ACQ_MAX_MESSAGES_PER_SURFACE", "value": os.getenv("ACQ_MAX_MESSAGES_PER_SURFACE", "")},
+        {"metric": "ACQ_MAX_THREADS_PER_SURFACE", "value": os.getenv("ACQ_MAX_THREADS_PER_SURFACE", "")},
+        {"metric": "ACQ_MAX_VK_SURFACES_PER_RUN", "value": os.getenv("ACQ_MAX_VK_SURFACES_PER_RUN", "")},
+        {"metric": "ACQ_MAX_VK_POSTS_PER_SURFACE", "value": os.getenv("ACQ_MAX_VK_POSTS_PER_SURFACE", "")},
+        {"metric": "ACQ_MAX_VK_COMMENTS_PER_POST", "value": os.getenv("ACQ_MAX_VK_COMMENTS_PER_POST", "")},
+    ]
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -684,10 +958,19 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> Non
             writer.writerow(row)
 
 
-def _write_xlsx(path: Path, rows: list[dict[str, Any]], *, surface_summaries: list[dict[str, Any]] | None = None) -> None:
+def _write_xlsx(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    surface_summaries: list[dict[str, Any]] | None = None,
+    model_examples: dict[str, list[dict[str, Any]]] | None = None,
+    question_patterns: list[dict[str, Any]] | None = None,
+    scope_rows: list[dict[str, Any]] | None = None,
+) -> None:
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill
+        from openpyxl.utils import get_column_letter
     except Exception:
         return
     wb = Workbook()
@@ -696,7 +979,7 @@ def _write_xlsx(path: Path, rows: list[dict[str, Any]], *, surface_summaries: li
     headers = [
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-        "context_url", "text_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
+        "relation", "is_post", "author_id", "created_at", "context_url", "text_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
         "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible",
     ]
     ws.append(headers)
@@ -709,17 +992,21 @@ def _write_xlsx(path: Path, rows: list[dict[str, Any]], *, surface_summaries: li
         if row.get("context_url"):
             url_cell.hyperlink = str(row.get("context_url"))
             url_cell.style = "Hyperlink"
-    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 45, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
-        ws.column_dimensions[chr(64 + idx) if idx <= 26 else "Z"].width = width
+    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 16, 22, 45, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = width
     ws.freeze_panes = "A2"
 
     if surface_summaries:
         surf = wb.create_sheet("surface_summary")
         surf_headers = [
             "recommendation", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
-            "comments_embedded", "summary_ru", "answerable_question_candidates", "ask_clarification_contexts",
+            "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days", "unique_commenters",
+            "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
+            "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days",
+            "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d", "answerable_questions_per_90d",
+            "answerable_questions_per_100_comments", "ask_clarification_contexts", "ask_contexts_per_30d", "eligible_comment_contexts", "source_post_contexts",
             "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
-            "filtered_noise_contexts", "answerable_examples", "ask_question_examples",
+            "filtered_noise_contexts", "relation_counts_json", "unique_commenters_note", "answerable_examples", "ask_question_examples",
         ]
         surf.append(surf_headers)
         for cell in surf[1]:
@@ -732,8 +1019,64 @@ def _write_xlsx(path: Path, rows: list[dict[str, Any]], *, surface_summaries: li
                 url_cell.hyperlink = str(row.get("surface_url"))
                 url_cell.style = "Hyperlink"
         surf.freeze_panes = "A2"
-        for idx, width in enumerate([34, 30, 10, 18, 30, 42, 14, 70, 14, 14, 14, 14, 14, 14, 14, 90, 90], start=1):
-            surf.column_dimensions[chr(64 + idx) if idx <= 26 else "Z"].width = width
+        for idx, width in enumerate([34, 30, 10, 18, 30, 42, 16, 22, 22, 12, 18, 14, 14, 14, 14, 14, 14, 14, 22, 22, 14, 70, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 60, 24, 90, 90], start=1):
+            surf.column_dimensions[get_column_letter(idx)].width = width
+
+    for model_name, example_rows in (model_examples or {}).items():
+        model_key = str(model_name).lower()
+        if "multilingual-e5" in model_key:
+            sheet_name = "eligible_e5_base"
+        elif "bge-m3" in model_key:
+            sheet_name = "eligible_bge_m3"
+        else:
+            sheet_name = ("eligible_" + re.sub(r"[^A-Za-z0-9]+", "_", model_name).strip("_"))[:31] or "eligible_model"
+        ex = wb.create_sheet(sheet_name)
+        ex_headers = [
+            "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
+            "relation", "is_post", "created_at", "intent_set", "candidate_action_type", "candidate_noise_type",
+            "context_url", "text_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+        ]
+        ex.append(ex_headers)
+        for cell in ex[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        for row in example_rows:
+            ex.append([row.get(h) for h in ex_headers])
+            url_cell = ex.cell(ex.max_row, ex_headers.index("context_url") + 1)
+            if row.get("context_url"):
+                url_cell.hyperlink = str(row.get("context_url"))
+                url_cell.style = "Hyperlink"
+        ex.freeze_panes = "A2"
+        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 22, 28, 30, 24, 45, 80, 55, 22, 18], start=1):
+            ex.column_dimensions[get_column_letter(idx)].width = width
+
+    if question_patterns:
+        qp = wb.create_sheet("question_patterns")
+        qp_headers = [
+            "surface_key", "platform", "surface_type", "pattern", "candidate_action_type",
+            "count", "intent_sets", "models", "example_texts", "example_urls",
+        ]
+        qp.append(qp_headers)
+        for cell in qp[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        for row in question_patterns:
+            qp.append([row.get(h) for h in qp_headers])
+        qp.freeze_panes = "A2"
+        for idx, width in enumerate([30, 10, 18, 28, 34, 10, 45, 45, 90, 70], start=1):
+            qp.column_dimensions[get_column_letter(idx)].width = width
+
+    if scope_rows:
+        scope = wb.create_sheet("scope")
+        scope.append(["metric", "value"])
+        for cell in scope[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        for row in scope_rows:
+            scope.append([row.get("metric"), row.get("value")])
+        scope.freeze_panes = "A2"
+        scope.column_dimensions["A"].width = 36
+        scope.column_dimensions["B"].width = 120
 
     summary = wb.create_sheet("summary")
     summary.append(["metric", "value"])
@@ -875,6 +1218,7 @@ def run_comment_semantic_retrieval(
                 enriched["model_name"] = model_name
                 enriched["max_length"] = max_length
                 enriched["batch_size"] = batch_size
+                enriched["scoring_method"] = scoring_method
                 enriched["candidate_action_type"] = _action_for_intent(str(row.get("intent_set")))
                 enriched["target_hint"] = _route_target_hint(str(rec.get("text") or ""), str(row.get("intent_set")))
                 enriched["destination_hint"] = enriched["target_hint"].get("destination_hint")
@@ -952,17 +1296,38 @@ def run_comment_semantic_retrieval(
             s = surfaces_by_external[surface_key]
             profile["surface_title"] = s.get("title")
             profile["surface_url"] = s.get("url")
+            reach = s.get("reach") if isinstance(s.get("reach"), dict) else {}
+            profile["members_or_subscribers"] = (
+                reach.get("members")
+                or reach.get("members_count")
+                or reach.get("subscribers")
+                or reach.get("participants")
+                or None
+            )
         profiles.append(profile)
     surface_summaries = _surface_decision_summaries(
         profiles,
         eligible_rows_by_surface=rows_by_surface,
         all_gate_rows_by_surface=all_gate_rows_by_surface,
     )
+    all_eligible_rows = [c for c in all_candidates if c.get("pre_llm_candidate_eligible")]
+    question_patterns = _build_question_patterns(all_eligible_rows)
+    model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
+    run_id = os.getenv("KAGGLE_RUN_ID") or f"acq-comment-retrieval-{int(time.time())}"
+    scope_rows = _scope_rows(
+        run_id=run_id,
+        records=records,
+        profiles=profiles,
+        models=models,
+        gate_model=gate_model,
+        scoring_method=scoring_method,
+    )
 
     artifact_prefix = os.getenv("ACQ_COMMENT_RETRIEVAL_ARTIFACT_PREFIX") or "comment_retrieval"
     candidates_csv = output_path / f"{artifact_prefix}_candidates.csv"
     profiles_csv = output_path / f"{artifact_prefix}_surface_profiles.csv"
     surface_summary_csv = output_path / f"{artifact_prefix}_surface_decision_summary.csv"
+    question_patterns_csv = output_path / f"{artifact_prefix}_question_patterns.csv"
     distributions_csv = output_path / f"{artifact_prefix}_score_distributions.csv"
     speed_csv = output_path / f"{artifact_prefix}_speed_metrics.csv"
     manual_xlsx = output_path / f"{artifact_prefix}_manual_review_sample.xlsx"
@@ -970,30 +1335,52 @@ def run_comment_semantic_retrieval(
     summary_json = output_path / "acq_comment_retrieval_run_summary.json"
 
     candidate_fields = [
-        "run_id", "surface_key", "platform", "surface_type", "context_url", "comment_id", "post_id", "topic_id", "thread_id",
+        "run_id", "surface_key", "platform", "surface_type", "relation", "is_post", "author_id", "retrieval", "search_query",
+        "context_url", "comment_id", "post_id", "topic_id", "thread_id",
         "created_at", "text_snapshot", "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
-        "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
+        "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
         "intent_text_supported", "pre_llm_candidate_eligible", "model_disagreement_bucket",
     ]
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
-        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "comments_total", "comments_embedded", "eligible_question_candidates", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
+        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers",
+        "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters",
+        "comments_total", "comments_embedded", "comment_records", "source_post_records",
+        "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
+        "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
+        "eligible_question_candidates", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
     ])
     _write_csv(surface_summary_csv, surface_summaries, [
-        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "comments_embedded", "recommendation", "summary_ru",
-        "answerable_question_candidates", "ask_clarification_contexts", "route_poi_questions", "event_questions",
-        "organizer_submission_questions", "badge_filter_questions", "filtered_noise_contexts", "dominant_detected_interests",
+        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers",
+        "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters", "unique_commenters_note",
+        "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
+        "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
+        "recommendation", "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d",
+        "answerable_questions_per_90d", "answerable_questions_per_100_comments", "ask_clarification_contexts",
+        "ask_contexts_per_30d", "eligible_comment_contexts", "source_post_contexts",
+        "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
+        "filtered_noise_contexts", "relation_counts_json", "dominant_detected_interests",
         "monitoring_decision_hint", "monitoring_reason", "answerable_examples", "ask_question_examples",
+    ])
+    _write_csv(question_patterns_csv, question_patterns, [
+        "surface_key", "platform", "surface_type", "pattern", "candidate_action_type", "count", "intent_sets", "models", "example_texts", "example_urls",
     ])
     _write_csv(distributions_csv, distributions, ["model_name", "scoring_method", "count", "p50", "p90", "p95", "p99", "max"])
     _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
     manual_rows = _select_manual_rows(all_candidates, max_rows=max_manual_rows)
-    _write_xlsx(manual_xlsx, manual_rows, surface_summaries=surface_summaries)
+    _write_xlsx(
+        manual_xlsx,
+        manual_rows,
+        surface_summaries=surface_summaries,
+        model_examples=model_examples,
+        question_patterns=question_patterns,
+        scope_rows=scope_rows,
+    )
 
     summary = {
         "stage": STAGE_NAME,
-        "run_id": os.getenv("KAGGLE_RUN_ID") or f"acq-comment-retrieval-{int(time.time())}",
+        "run_id": run_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "models": models,
         "recommended_model": gate_model,
@@ -1012,6 +1399,7 @@ def run_comment_semantic_retrieval(
             "candidates_csv": str(candidates_csv),
             "surface_profiles_csv": str(profiles_csv),
             "surface_decision_summary_csv": str(surface_summary_csv),
+            "question_patterns_csv": str(question_patterns_csv),
             "score_distributions_csv": str(distributions_csv),
             "speed_metrics_csv": str(speed_csv),
             "manual_review_xlsx": str(manual_xlsx),

@@ -552,6 +552,28 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
             env["ACQ_TG_SEED_SURFACES_JSON"] = _json_env_value(tg_seed_meta[:1000])
     if vk_seeds:
         env["ACQ_VK_SEEDS_JSON"] = _json_env_value(vk_seeds)
+        vk_seed_meta = []
+        for item in seed_payload.get("surfaces") or []:
+            if not isinstance(item, dict) or str(item.get("platform") or "").strip().lower() != "vk":
+                continue
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            meta = {
+                "url": url,
+                "handle": item.get("handle"),
+                "external_id": item.get("external_id"),
+                "surface_type": item.get("surface_type"),
+                "source": item.get("source"),
+                "title": item.get("title"),
+                "topic_hint": item.get("topic_hint"),
+            }
+            reach = item.get("reach") or item.get("reach_json")
+            if isinstance(reach, dict):
+                meta["reach"] = reach
+            vk_seed_meta.append(meta)
+        if vk_seed_meta:
+            env["ACQ_VK_SEED_SURFACES_JSON"] = _json_env_value(vk_seed_meta[:1000])
         # Product request: start VK discovery from all existing monitored VK groups.
         # The runtime still applies per-run budgets and uses read-only methods only.
         env["ACQ_VK_ALLOWLIST_JSON"] = os.getenv("ACQ_VK_ALLOWLIST_JSON") or _json_env_value(vk_seeds)
