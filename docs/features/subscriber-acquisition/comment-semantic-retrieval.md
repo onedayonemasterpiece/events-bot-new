@@ -352,8 +352,15 @@ Quality sample:
 - route_poi_actionable_rate, event_actionable_rate, organizer_fit_rate;
 - false-positive types, duplicate/noise rate, model disagreement examples.
 
-If labels do not exist, create a manual review CSV and clearly call it a visual
-sample, not recall.
+If labels do not exist, create a manual review table and clearly call it a
+visual/manual sample, not recall. The first dry-run deliverable must include a
+clickable XLSX table for the operator, with direct TG/VK context links, surface,
+action class, score/rank fields, model-disagreement bucket and empty columns for
+manual labels. CSV may be produced as a secondary artifact, but XLSX is the
+operator-facing file. After the dry-run, send the XLSX artifact to Telegram
+Saved Messages/«Избранное» through the approved local human Telegram session
+(`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`), never through the S22 Kaggle
+monitoring session.
 
 ## Report requirements
 
@@ -379,13 +386,15 @@ The research stage is complete only when:
 
 1. both models run on the exact same comment dataset;
 2. a dry-run report is produced;
-3. every scanned surface has `comment_semantic_profile`;
-4. every candidate has action type, context URL, text snapshot, model, intent
+3. the operator-facing manual review XLSX is produced and delivered to Telegram
+   Saved Messages/«Избранное»;
+4. every scanned surface has `comment_semantic_profile`;
+5. every candidate has action type, context URL, text snapshot, model, intent
    set, scoring method, score, top intent phrase, global rank and surface rank;
-5. route/POI candidates include destination/POI/transport hints and
+6. route/POI candidates include destination/POI/transport hints and
    `route_target_status`;
-6. the report compares speed and candidate quality of e5-base vs bge-m3;
-7. the report recommends one model/config for the next MVP run;
-8. no full-comment LLM processing is used;
-9. no production table is mutated without explicit approval;
-10. no external Telegram/VK posting happens.
+7. the report compares speed and candidate quality of e5-base vs bge-m3;
+8. the report recommends one model/config for the next MVP run;
+9. no full-comment LLM processing is used;
+10. no production table is mutated without explicit approval;
+11. no external Telegram/VK posting happens.

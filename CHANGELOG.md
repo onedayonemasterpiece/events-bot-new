@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Clarified Subscriber Acquisition semantic-retrieval dry-run delivery: the manual review sample must be an operator-facing XLSX table and be sent to Telegram Saved Messages via the local E2E/human session, not the S22 Kaggle monitoring session.
 - Clarified Subscriber Acquisition semantic-retrieval research: route/POI matching is surface-discovery-only until route cards exist, `vKalinigrad_recomendations` is a golden calibration group, and YDB summary tables are an implementation detail of the accepted storage direction.
 - Expanded the Subscriber Acquisition `organizer_clarification` design with
   Telegram channel/commentability proof, additional organizer-surface discovery
