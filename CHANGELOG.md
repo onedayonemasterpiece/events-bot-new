@@ -1717,7 +1717,6 @@
 
 ### Added
 
-- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
 - **Развернуть всех кандидатов**: в UI выбора событий появилась кнопка «+ Все кандидаты», разворачивающая полный список событий в 5-колоночный формат для ручного добавления.
 - **Экран сортировки**: кнопка «🔀 Сортировка» открывает экран с выбранными событиями и кнопками ⬆️/⬇️ для изменения порядка показа в видео.
 - **Текущие выходные**: если сегодня суббота или воскресенье, в периодах появляются две кнопки — «Эти выходные (дата)» и «Выходные (следующая дата)».
@@ -1730,7 +1729,6 @@
 
 ### Added
 
-- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
 - Исправили падение при запуске: добавили импорт `dataclass` для работы альбомов в видео-анонсах и других обработчиках.
 - Видео-анонсы перестали искажать LLM-описания: строки `about` теперь лишь очищаются от лишних пробелов/эмодзи, а усечение и дедупликация слов остаются только для резервного текста.
 - Перевели справочник сезонных праздников на локализованный формат дат `DD.MM` и текстовые диапазоны, сохранили столбец `tolerance_days` и обновили парсер импорта под новый формат.
