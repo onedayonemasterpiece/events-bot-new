@@ -7,6 +7,7 @@
 
 ### Added
 
+- **Static site pages / date-block Pinterest lab**: expanded `/lab/date-block/` with a 130-reference Pinterest research funnel, a 14-pattern comparison table, Gemini Pro/a-opus critical votes, and HTML candidates for the P13 date-square facts-rail direction plus alternatives.
 - **Static site pages / date-block lab**: added `/lab/date-block/` to show the separate Gemini Pro split-badge and a-opus one-line-strip designs for the event hero date/time/weekday block.
 - **Static site pages / venue medallions**: added source-grounded venue medallions for Янтарь холл, Драмтеатр, Музыкальный театр, Дом искусств/Театр эстрады, Kaliningrad City Jazz Club, Ростех Арена, Бар Бастион, Сигнал, Музей курортной моды, Калининградский зоопарк, Локация, Музей ИЗО and Дом-музей Брахерта, with official SVG/PNG/social-avatar provenance in the organizer manifest.
 - **Static event issue reporting**: added an admin-only event-page report link and Supabase/ArtKodex handoff so a Yandex-authenticated admin can launch an events-bot incident repair task from a static event page.

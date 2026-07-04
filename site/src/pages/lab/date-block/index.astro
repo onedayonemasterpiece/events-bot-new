@@ -4,17 +4,184 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/date-block/');
 const title = `Лаборатория блока даты | ${SITE_NAME}`;
-const description = 'Сравнение двух внешних дизайн-вариантов блока даты, времени и дня недели для статических страниц KenigEvents.';
+const description = 'Pinterest-исследование, внешнее голосование Gemini/a-opus и HTML-варианты сильного блока даты, времени и дня недели для KenigEvents.';
 const sample = {
   weekday: 'суббота',
+  weekdayShort: 'сб',
   date: '5 июля',
+  day: '05',
+  month: 'июля',
+  year: '2026',
   time: '19:00',
+  venue: 'Кафедральный собор',
+  admission: 'Вход свободный',
+  format: 'Концерт · 2 ч',
   datetime: '2026-07-05T19:00:00+02:00',
 };
+const patterns = [
+  {
+    id: 'P13',
+    title: 'Date square + facts rail',
+    verdict: 'Winner Gemini + a-opus',
+    self: 1,
+    gemini: 1,
+    opus: 1,
+    keep: 'Главный кандидат: квадрат даты слева, справа время/место/вход. Лучше всего отвечает будущей компоновке.',
+    risk: 'Нужны правила для длинной площадки и пустого времени.',
+    refs: ['https://www.pinterest.com/pin/7248049396580140/', 'https://www.pinterest.com/pin/7529524373050554/'],
+  },
+  {
+    id: 'P14',
+    title: 'Vertical month tab + time pill',
+    verdict: 'Both-model shortlist',
+    self: 2,
+    gemini: 2,
+    opus: 3,
+    keep: 'Более дизайнерский прямоугольник: вертикальная вкладка даёт характер, time-pill быстро цепляет взгляд.',
+    risk: 'Чуть сложнее responsive, нельзя скатиться в fake-ticket.',
+    refs: ['https://www.pinterest.com/pin/591449363611065328/', 'https://www.pinterest.com/pin/40602834138245357/'],
+  },
+  {
+    id: 'P01',
+    title: 'Square calendar tile + context',
+    verdict: 'Both-model shortlist',
+    self: 5,
+    gemini: 3,
+    opus: 2,
+    keep: 'Самый понятный календарный архетип. Хорош как fallback, если P13 покажется тяжёлым.',
+    risk: 'Может выглядеть как date-picker из приложения, если оставить слишком стерильным.',
+    refs: ['https://www.pinterest.com/pin/7248049396580140/', 'https://www.pinterest.com/pin/77476056087548934/'],
+  },
+  {
+    id: 'P03',
+    title: 'Editorial oversized numerals',
+    verdict: 'Gemini lab pick',
+    self: 3,
+    gemini: 4,
+    opus: 6,
+    keep: 'Самый сильный дизайнерский жест: крупная цифра становится графическим объектом, не просто метаданными.',
+    risk: 'Высокий риск на 320px: нужно не потерять время и день недели.',
+    refs: ['https://www.pinterest.com/pin/299982025200536108/', 'https://www.pinterest.com/pin/10414642883844824/'],
+  },
+  {
+    id: 'P04',
+    title: 'Vertical date rail',
+    verdict: 'a-opus lab pick',
+    self: 4,
+    gemini: 8,
+    opus: 4,
+    keep: 'Консервативный rail: дата якорит блок, справа остаётся место под контекст.',
+    risk: 'Gemini критикует риск мелкого/вертикального weekday; в HTML weekday оставлен горизонтальным.',
+    refs: ['https://www.pinterest.com/pin/591449363611065328/', 'https://www.pinterest.com/pin/40602834138245357/'],
+  },
+  {
+    id: 'P09',
+    title: 'Current split-badge baseline',
+    verdict: 'Control',
+    self: 9,
+    gemini: 5,
+    opus: 5,
+    keep: 'Нужен как контроль: продуктово ясно, но дизайнерски плосковато.',
+    risk: 'Недостаточно сильный визуальный якорь для первого экрана.',
+    refs: [],
+  },
+  {
+    id: 'P11',
+    title: 'Layered paper / pinned note',
+    verdict: 'Research only',
+    self: 7,
+    gemini: 6,
+    opus: 8,
+    keep: 'Музейная бумажная теплота; можно заимствовать мягкую тень/слойность, не сам skeuomorphism.',
+    risk: 'Быстро стареет и может выглядеть декоративной наклейкой.',
+    refs: ['https://www.pinterest.com/pin/3025924740525878/', 'https://www.pinterest.com/pin/7248049396776345/'],
+  },
+  {
+    id: 'P10',
+    title: 'One-line strip baseline',
+    verdict: 'Too weak',
+    self: 10,
+    gemini: 7,
+    opus: 9,
+    keep: 'Экономит место в плотных списках или вторичных блоках.',
+    risk: 'Для hero не даёт достаточно визуальной власти дате и времени.',
+    refs: [],
+  },
+  {
+    id: 'P02',
+    title: 'Ticket stub / perforated strip',
+    verdict: 'Veto: false ticket semantics',
+    self: 8,
+    gemini: 9,
+    opus: 7,
+    keep: 'Форма хорошо делит дату и детали; можно заимствовать только сетку.',
+    risk: 'Похоже на платный билет даже для бесплатных событий.',
+    refs: ['https://www.pinterest.com/pin/155303888072368548/', 'https://www.pinterest.com/pin/6685099439897171/'],
+  },
+  {
+    id: 'P12',
+    title: 'Brutalist black-white type block',
+    verdict: 'Soft/hard veto for global UI',
+    self: 6,
+    gemini: 11,
+    opus: 12,
+    keep: 'Сильная типографика как редкий art-direction приём.',
+    risk: 'Слишком агрессивно и не попадает в тёплый бренд KenigEvents.',
+    refs: ['https://www.pinterest.com/pin/319263061107161880/', 'https://www.pinterest.com/pin/492649954513520/'],
+  },
+  {
+    id: 'P08',
+    title: 'Schedule list block',
+    verdict: 'Festival-only',
+    self: 12,
+    gemini: 12,
+    opus: 11,
+    keep: 'Подходит для программы фестиваля или нескольких слотов.',
+    risk: 'Слишком тяжело для одного события и замедляет scan-speed.',
+    refs: ['https://www.pinterest.com/pin/3870349673456072/', 'https://www.pinterest.com/pin/12314598978124241/'],
+  },
+  {
+    id: 'P05',
+    title: 'Floating sticker/badge',
+    verdict: 'Veto: decorative',
+    self: 13,
+    gemini: 10,
+    opus: 10,
+    keep: 'Может дать charm в промо-карточке, но не как системный hero-компонент.',
+    risk: 'Декор, z-index и тени вместо информационной архитектуры.',
+    refs: ['https://www.pinterest.com/pin/722335227785790469/', 'https://www.pinterest.com/pin/4925880839305989/'],
+  },
+  {
+    id: 'P07',
+    title: 'Dark glass / nightlife card',
+    verdict: 'Hard veto: brand mismatch',
+    self: 11,
+    gemini: 13,
+    opus: 14,
+    keep: 'Только как отдельная nightlife-подтема, которой сейчас нет.',
+    risk: 'Неон/стекло конфликтуют с тёплой культурной палитрой.',
+    refs: ['https://www.pinterest.com/pin/653233120999117191/', 'https://www.pinterest.com/pin/52565520645889572/'],
+  },
+  {
+    id: 'P06',
+    title: 'Calendar grid highlight',
+    verdict: 'Hard veto: slow scan',
+    self: 14,
+    gemini: 14,
+    opus: 13,
+    keep: 'Показывает контекст месяца, но это не главная задача event hero.',
+    risk: 'Пользователь вынужден читать мини-календарь вместо мгновенного ответа “когда”.',
+    refs: ['https://www.pinterest.com/pin/95279348361520168/', 'https://www.pinterest.com/pin/77476056087548934/'],
+  },
+];
+const pinterestCollections = [
+  '/home/dev/projects/pinterest-idea-library/collections/20260704-kenigevents-strong-date-block-ui-batch1-20260704',
+  '/home/dev/projects/pinterest-idea-library/collections/20260704-kenigevents-strong-date-block-ui-batch2-20260704',
+];
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <main id="main">
-    <div class="page-shell date-block-lab">
+    <div class="page-shell date-block-lab date-block-lab--research">
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={withBase('/__preview/')}>Афиша</a>
         <span aria-hidden="true">/</span>
@@ -23,19 +190,142 @@ const sample = {
         <span>Блок даты</span>
       </nav>
 
-      <section class="section-card">
+      <section class="section-card date-block-lab__hero-card">
         <div class="section-card__inner">
-          <p class="eyebrow">Внешний дизайн</p>
-          <h1>Два варианта блока даты</h1>
-          <p class="lead">Gemini Pro и a-opus отдельно спроектировали компактный, контрастный блок, где дата, время и день недели считываются быстро даже на маленьком экране. Ниже — оба варианта на одном примере.</p>
+          <p class="eyebrow">Pinterest → self-review → Gemini/a-opus vote</p>
+          <h1>Сильный блок даты: shortlist после 130 референсов</h1>
+          <p class="lead">Текущий split-badge оставлен как контроль. Новый фаворит Gemini Pro и a-opus — квадрат даты с companion facts rail: слева сильный календарный якорь, справа время, площадка, вход и формат.</p>
+          <div class="date-block-lab__paths" aria-label="Pinterest collections">
+            {pinterestCollections.map((path) => <code>{path}</code>)}
+          </div>
         </div>
       </section>
 
-      <section class="date-block-lab__grid" aria-label="Варианты блока даты">
+      <section class="section-card">
+        <div class="section-card__inner">
+          <h2>Сравнительная таблица 14 паттернов</h2>
+          <div class="date-block-lab__table-wrap">
+            <table class="date-block-lab__table">
+              <thead>
+                <tr>
+                  <th>Паттерн</th>
+                  <th>Self</th>
+                  <th>Gemini</th>
+                  <th>a-opus</th>
+                  <th>Вердикт</th>
+                  <th>Зачем адаптировать</th>
+                  <th>Риск</th>
+                  <th>Refs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patterns.map((item) => (
+                  <tr>
+                    <th scope="row"><span>{item.id}</span> {item.title}</th>
+                    <td>#{item.self}</td>
+                    <td>#{item.gemini}</td>
+                    <td>#{item.opus}</td>
+                    <td>{item.verdict}</td>
+                    <td>{item.keep}</td>
+                    <td>{item.risk}</td>
+                    <td>
+                      {item.refs.length ? item.refs.map((url, index) => (
+                        <a href={url} rel="nofollow noopener noreferrer" target="_blank">#{index + 1}</a>
+                      )) : <span class="date-block-lab__control-ref">контроль</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="date-block-lab__grid" aria-label="Отобранные Gemini Pro и a-opus HTML-варианты блока даты">
+        <article class="section-card date-block-lab__panel date-block-lab__panel--winner">
+          <div class="section-card__inner">
+            <p class="eyebrow">P13 · winner</p>
+            <h2>Date square + facts rail</h2>
+            <div class="date-block-lab__mock-surface date-block-lab__mock-surface--wide">
+              <time class="date-lab-p13" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}, ${sample.venue}`}>
+                <span class="date-lab-p13__tile" aria-hidden="true">
+                  <span class="date-lab-p13__weekday">{sample.weekdayShort}</span>
+                  <strong>{sample.day}</strong>
+                  <span>{sample.month}</span>
+                </span>
+                <span class="date-lab-p13__rail">
+                  <span><b>{sample.time}</b><small>начало</small></span>
+                  <span><b>{sample.venue}</b><small>площадка</small></span>
+                  <span><b>{sample.admission}</b><small>вход</small></span>
+                  <span><b>{sample.format}</b><small>формат</small></span>
+                </span>
+              </time>
+            </div>
+            <p class="muted-note">Если блок квадратный/прямоугольный, справа логично ставить time → venue → admission → format. На мобильном rail может уходить вниз или сжиматься до 2–3 строк.</p>
+          </div>
+        </article>
+
         <article class="section-card date-block-lab__panel">
           <div class="section-card__inner">
-            <p class="eyebrow">Gemini Pro</p>
-            <h2>Split-badge: дата как главный якорь</h2>
+            <p class="eyebrow">P14</p>
+            <h2>Vertical month tab + time pill</h2>
+            <div class="date-block-lab__mock-surface">
+              <time class="date-lab-p14" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
+                <span class="date-lab-p14__tab"><span>{sample.weekdayShort}</span><b>{sample.month}</b></span>
+                <span class="date-lab-p14__main"><strong>{sample.day}</strong><span>{sample.year}</span></span>
+                <span class="date-lab-p14__time">{sample.time}</span>
+              </time>
+            </div>
+            <p class="muted-note">Более характерный, но всё ещё системный вариант; хорош для прямоугольной компоновки.</p>
+          </div>
+        </article>
+
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">P01</p>
+            <h2>Square calendar tile + context</h2>
+            <div class="date-block-lab__mock-surface">
+              <time class="date-lab-p01" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
+                <span class="date-lab-p01__tile"><span>{sample.weekdayShort}</span><strong>{sample.day}</strong><span>{sample.month}</span></span>
+                <span class="date-lab-p01__context"><b>{sample.time}</b><span>{sample.venue}</span></span>
+              </time>
+            </div>
+            <p class="muted-note">Самый безопасный календарный архетип; важно добавить брендовый характер, чтобы не стать date-picker.</p>
+          </div>
+        </article>
+
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">P03</p>
+            <h2>Editorial oversized numerals</h2>
+            <div class="date-block-lab__mock-surface">
+              <time class="date-lab-p03" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
+                <span class="date-lab-p03__ghost">{sample.day}</span>
+                <span class="date-lab-p03__copy"><b>{sample.weekday}</b><strong>{sample.date}</strong><span>{sample.time}</span></span>
+              </time>
+            </div>
+            <p class="muted-note">Самый дизайнерский, но самый рискованный: надо проверять 320px, long weekday и отсутствие времени.</p>
+          </div>
+        </article>
+
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">P04</p>
+            <h2>Vertical date rail</h2>
+            <div class="date-block-lab__mock-surface">
+              <time class="date-lab-p04" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
+                <span class="date-lab-p04__rail"><span>{sample.weekdayShort}</span><strong>{sample.day}</strong><span>{sample.month}</span></span>
+                <span class="date-lab-p04__body"><b>{sample.time}</b><span>{sample.venue}</span><small>{sample.admission}</small></span>
+              </time>
+            </div>
+            <p class="muted-note">a-opus считает безопасным workhorse; Gemini ругает за риск мелкого weekday, поэтому всё оставлено горизонтально читаемым.</p>
+          </div>
+        </article>
+
+        <article class="section-card date-block-lab__panel">
+          <div class="section-card__inner">
+            <p class="eyebrow">P09 · control</p>
+            <h2>Current split-badge baseline</h2>
             <div class="date-block-lab__mock-surface">
               <time class="date-lab-gemini" datetime={sample.datetime} aria-label={`${sample.weekday}, ${sample.date}, начало в ${sample.time}`}>
                 <span class="date-lab-gemini__primary">{sample.date}</span>
@@ -45,24 +335,16 @@ const sample = {
                 </span>
               </time>
             </div>
-            <p class="muted-note">Дата крупнее всего и выделена терракотой; день недели и время собраны вторым столбцом за вертикальным разделителем. Этот подход выбран для production-блока события.</p>
+            <p class="muted-note">Оставлен как контроль: решает продуктовую задачу, но проигрывает P13/P14 по визуальной силе и будущей компоновке.</p>
           </div>
         </article>
+      </section>
 
-        <article class="section-card date-block-lab__panel">
-          <div class="section-card__inner">
-            <p class="eyebrow">a-opus</p>
-            <h2>One-line strip: быстрое чтение строкой</h2>
-            <div class="date-block-lab__mock-surface">
-              <div class="date-lab-opus" role="group" aria-label={`${sample.weekday}, ${sample.date}, ${sample.time}`}>
-                <span class="date-lab-opus__weekday">{sample.weekday}</span>
-                <span class="date-lab-opus__day">{sample.date}</span>
-                <span class="date-lab-opus__time">{sample.time}</span>
-              </div>
-            </div>
-            <p class="muted-note">Одна строка с 4px терракотовым якорем слева, точечными разделителями и минимальной высотой. Хорошо экономит место, но слабее акцентирует время.</p>
-          </div>
-        </article>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <h2>Что Gemini Pro и a-opus отвергли</h2>
+          <p class="muted-note">Обе модели резко против mini calendar grid, dark glass/nightlife и floating sticker как глобального паттерна: слишком много когнитивной нагрузки, чужой брендовый тон или декоративность без пользы.</p>
+        </div>
       </section>
     </div>
   </main>
@@ -70,10 +352,17 @@ const sample = {
 
 <style is:global>
   .date-block-lab { display: grid; gap: 1rem; }
-  .date-block-lab__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
+  .date-block-lab .section-card,
+  .date-block-lab__panel,
+  .date-block-lab__table-wrap { min-width: 0; }
+  .date-block-lab__hero-card h1 { max-width: 15ch; }
+  .date-block-lab__paths { display: grid; gap: 0.35rem; margin-top: 1rem; }
+  .date-block-lab__paths code { display: block; padding: 0.45rem 0.6rem; border-radius: 10px; background: #2a2724; color: #fff4e6; font-size: 0.78rem; overflow-wrap: anywhere; }
+  .date-block-lab__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 1rem; }
+  .date-block-lab__panel--winner { border-color: rgba(121,48,20,0.32); box-shadow: 0 24px 58px rgba(121,48,20,0.16); }
   .date-block-lab__panel h2 { margin-bottom: 0.85rem; }
   .date-block-lab__mock-surface {
-    min-height: 8.5rem;
+    min-height: 9.5rem;
     display: grid;
     align-items: center;
     justify-items: start;
@@ -82,76 +371,96 @@ const sample = {
     border-radius: 24px;
     background: linear-gradient(180deg, #fffdf8, #fff8ef);
   }
+  .date-block-lab__mock-surface--wide { min-height: 11rem; }
+  .date-block-lab__table-wrap { display: block; max-width: 100%; overflow: auto hidden; }
+  .date-block-lab__table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 0.92rem; }
+  .date-block-lab__table th, .date-block-lab__table td { padding: 0.72rem 0.65rem; border-bottom: 1px solid rgba(121,48,20,0.13); vertical-align: top; text-align: left; }
+  .date-block-lab__table th { color: #2a2019; }
+  .date-block-lab__table th span { display: inline-flex; min-width: 2.7rem; color: #793014; font-weight: 950; }
+  .date-block-lab__table a { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; min-height: 2rem; margin: 0 0.18rem 0.18rem 0; border-radius: 999px; background: #fff1df; color: #793014; font-weight: 950; text-decoration: none; }
+  .date-block-lab__control-ref { color: #6d5b4c; font-weight: 760; }
 
-  .date-lab-gemini {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.875rem;
-    padding: 0.75rem 1.25rem;
-    background-color: #ffffff;
-    border: 1px solid rgba(121, 48, 20, 0.12);
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 16px rgba(38, 40, 45, 0.04);
-    color: #26282d;
-    font-family: inherit;
-  }
-  .date-lab-gemini__primary {
-    color: #793014;
-    font-size: 1.5rem;
-    font-weight: 800;
-    line-height: 1;
-    white-space: nowrap;
-    letter-spacing: -0.02em;
-  }
-  .date-lab-gemini__secondary {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border-left: 2px solid rgba(121, 48, 20, 0.2);
-    padding-left: 0.875rem;
-  }
+  .date-lab-p13 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.82rem; align-items: stretch; width: min(100%, 29rem); color: #211914; text-decoration: none; }
+  .date-lab-p13__tile { width: clamp(6.6rem, 24vw, 8rem); min-height: clamp(6.6rem, 24vw, 8rem); display: grid; grid-template-rows: auto 1fr auto; place-items: center; padding: 0.72rem 0.6rem; border-radius: 24px; background: linear-gradient(160deg, #8a3516, #b95122); color: #fff8ea; box-shadow: 0 18px 38px rgba(121,48,20,0.25); text-transform: uppercase; }
+  .date-lab-p13__tile strong { font-size: clamp(2.55rem, 11vw, 3.45rem); font-weight: 1000; line-height: 0.9; letter-spacing: -0.07em; }
+  .date-lab-p13__tile span { font-size: 0.86rem; font-weight: 950; letter-spacing: 0.08em; }
+  .date-lab-p13__weekday { justify-self: start; }
+  .date-lab-p13__rail { min-width: 0; display: grid; gap: 0.35rem; padding: 0.72rem 0; }
+  .date-lab-p13__rail span { min-width: 0; display: grid; gap: 0.02rem; padding: 0 0 0.35rem; border-bottom: 1px solid rgba(121,48,20,0.13); }
+  .date-lab-p13__rail b { overflow: hidden; color: #261d16; font-size: clamp(1rem, 3.3vw, 1.2rem); font-weight: 900; line-height: 1.12; text-overflow: ellipsis; white-space: nowrap; }
+  .date-lab-p13__rail small { color: #6d5b4c; font-size: 0.74rem; font-weight: 760; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .date-lab-p14 { display: inline-grid; grid-template-columns: auto auto; grid-template-rows: auto auto; align-items: stretch; border: 1px solid rgba(121,48,20,0.16); border-radius: 22px; overflow: hidden; background: #fff; color: #211914; box-shadow: 0 12px 26px rgba(72,45,25,0.11); }
+  .date-lab-p14__tab { grid-row: 1 / span 2; display: grid; place-items: center; gap: 0.25rem; min-width: 3.3rem; padding: 0.72rem 0.45rem; background: #2d3035; color: #fff8ea; text-transform: uppercase; }
+  .date-lab-p14__tab span { font-weight: 1000; font-size: 0.9rem; }
+  .date-lab-p14__tab b { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 0.1em; font-size: 0.74rem; }
+  .date-lab-p14__main { display: grid; place-items: center; min-width: 7rem; padding: 0.72rem 1rem 0.25rem; }
+  .date-lab-p14__main strong { color: #793014; font-size: clamp(3rem, 13vw, 4rem); font-weight: 1000; line-height: 0.82; letter-spacing: -0.08em; }
+  .date-lab-p14__main span { color: #6d5b4c; font-weight: 900; letter-spacing: 0.14em; }
+  .date-lab-p14__time { justify-self: stretch; margin: 0 0.65rem 0.65rem; padding: 0.42rem 0.8rem; border-radius: 999px; background: #fff1df; color: #793014; text-align: center; font-size: 1.18rem; font-weight: 950; font-variant-numeric: tabular-nums; }
+
+  .date-lab-p01 { display: inline-flex; align-items: center; gap: 0.8rem; padding: 0.68rem; border-radius: 26px; background: #fff; border: 1px solid rgba(121,48,20,0.14); box-shadow: 0 12px 30px rgba(72,45,25,0.1); color: #211914; }
+  .date-lab-p01__tile { width: 6.2rem; min-height: 6.2rem; display: grid; place-items: center; padding: 0.58rem; border-radius: 20px; background: #fff3e8; box-shadow: inset 0 0 0 1px rgba(121,48,20,0.16); text-transform: uppercase; }
+  .date-lab-p01__tile strong { color: #793014; font-size: 2.85rem; font-weight: 1000; line-height: 0.9; letter-spacing: -0.08em; }
+  .date-lab-p01__tile span { color: #5b493e; font-size: 0.8rem; font-weight: 950; letter-spacing: 0.08em; }
+  .date-lab-p01__context { display: grid; gap: 0.2rem; min-width: 7.5rem; }
+  .date-lab-p01__context b { font-size: 1.45rem; color: #2d3035; font-weight: 950; font-variant-numeric: tabular-nums; }
+  .date-lab-p01__context span { color: #5b493e; font-weight: 760; line-height: 1.18; }
+
+  .date-lab-p03 { position: relative; isolation: isolate; min-width: min(100%, 18rem); min-height: 8.2rem; display: grid; align-items: center; padding: 1.1rem 1.2rem; border-radius: 28px; overflow: hidden; background: linear-gradient(135deg, #2d3035, #5b2b1d); color: #fff8ea; box-shadow: 0 20px 42px rgba(38,40,45,0.22); }
+  .date-lab-p03__ghost { position: absolute; right: -0.05em; bottom: -0.18em; z-index: -1; color: rgba(255,248,234,0.13); font-size: 8.4rem; font-weight: 1000; letter-spacing: -0.12em; line-height: 1; }
+  .date-lab-p03__copy { display: grid; gap: 0.16rem; }
+  .date-lab-p03__copy b { color: #f5d49b; font-size: 0.96rem; font-weight: 950; letter-spacing: 0.1em; text-transform: uppercase; }
+  .date-lab-p03__copy strong { font-size: clamp(1.8rem, 8vw, 2.6rem); line-height: 0.95; font-weight: 1000; letter-spacing: -0.06em; }
+  .date-lab-p03__copy span { width: fit-content; margin-top: 0.25rem; padding: 0.36rem 0.68rem; border-radius: 999px; background: #fff8ea; color: #793014; font-size: 1.16rem; font-weight: 950; }
+
+  .date-lab-p04 { display: inline-flex; align-items: stretch; min-width: min(100%, 20rem); border-radius: 22px; overflow: hidden; border: 1px solid rgba(121,48,20,0.14); background: #fff; color: #211914; box-shadow: 0 14px 32px rgba(72,45,25,0.1); }
+  .date-lab-p04__rail { width: 5.4rem; display: grid; place-items: center; padding: 0.58rem 0.45rem; background: #793014; color: #fff8ea; text-transform: uppercase; }
+  .date-lab-p04__rail strong { font-size: 2.6rem; line-height: 0.9; font-weight: 1000; letter-spacing: -0.07em; }
+  .date-lab-p04__rail span { font-size: 0.76rem; line-height: 1.1; font-weight: 950; letter-spacing: 0.08em; }
+  .date-lab-p04__body { min-width: 0; display: grid; gap: 0.18rem; padding: 0.78rem 1rem; }
+  .date-lab-p04__body b { font-size: 1.42rem; line-height: 1; font-weight: 950; font-variant-numeric: tabular-nums; color: #2d3035; }
+  .date-lab-p04__body span { color: #3e3129; font-size: 1rem; font-weight: 820; line-height: 1.18; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .date-lab-p04__body small { color: #793014; font-weight: 900; }
+
+  .date-lab-gemini { display: inline-flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1.25rem; background-color: #ffffff; border: 1px solid rgba(121, 48, 20, 0.12); border-radius: 0.75rem; box-shadow: 0 4px 16px rgba(38, 40, 45, 0.04); color: #26282d; font-family: inherit; }
+  .date-lab-gemini__primary { color: #793014; font-size: 1.5rem; font-weight: 800; line-height: 1; white-space: nowrap; letter-spacing: -0.02em; }
+  .date-lab-gemini__secondary { display: flex; flex-direction: column; justify-content: center; border-left: 2px solid rgba(121, 48, 20, 0.2); padding-left: 0.875rem; }
   .date-lab-gemini__weekday { font-size: 1rem; font-weight: 500; line-height: 1.2; text-transform: lowercase; }
   .date-lab-gemini__time { margin-top: 0.125rem; color: #26282d; font-size: 1.125rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
 
-  .date-lab-opus {
-    --ev-accent: #793014;
-    --ev-bg: #fff3e8;
-    --ev-text: #26282d;
-    --ev-muted: #5a4a3f;
-    --ev-divider: #c9a68a;
-    --ev-gap: 0.75rem;
-    display: flex;
-    align-items: baseline;
-    gap: var(--ev-gap);
-    max-width: max-content;
-    padding: 0.625rem 1rem;
-    border-left: 4px solid var(--ev-accent);
-    border-radius: 6px;
-    background: var(--ev-bg);
-    color: var(--ev-text);
-    line-height: 1.3;
+  @media (max-width: 430px) {
+    .date-lab-p13 { grid-template-columns: 1fr; width: 100%; }
+    .date-lab-p13__tile { width: 100%; min-height: 6rem; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; gap: 0.6rem; }
+    .date-lab-p13__tile strong { font-size: 3.2rem; }
+    .date-lab-p13__rail { padding: 0; }
+    .date-lab-p01 { align-items: stretch; width: 100%; }
+    .date-lab-p01__context { min-width: 0; }
   }
-  .date-lab-opus > span + span::before {
-    content: "·";
-    margin-right: var(--ev-gap);
-    color: var(--ev-divider);
-    font-weight: 700;
-    font-size: 1.25rem;
-    vertical-align: baseline;
-    pointer-events: none;
-  }
-  .date-lab-opus__weekday { color: var(--ev-muted); font-size: 1rem; font-weight: 500; letter-spacing: 0.01em; text-transform: lowercase; }
-  .date-lab-opus__day { color: var(--ev-text); font-size: 1.375rem; font-weight: 700; white-space: nowrap; }
-  .date-lab-opus__time { color: var(--ev-accent); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
 
-  @media (max-width: 374px) {
-    .date-lab-opus { --ev-gap: 0.5rem; padding: 0.5rem 0.75rem; }
-    .date-lab-opus__day { font-size: 1.25rem; }
-  }
-  @media (min-width: 768px) {
-    .date-lab-gemini { padding: 1rem 1.5rem; gap: 1.25rem; border-radius: 1rem; }
-    .date-lab-gemini__primary { font-size: 2rem; }
-    .date-lab-gemini__weekday { font-size: 1.125rem; }
-    .date-lab-gemini__time { font-size: 1.25rem; }
+  @media (max-width: 700px) {
+    .date-block-lab__table-wrap { overflow: visible; }
+    .date-block-lab__table,
+    .date-block-lab__table thead,
+    .date-block-lab__table tbody,
+    .date-block-lab__table tr,
+    .date-block-lab__table th,
+    .date-block-lab__table td { display: block; min-width: 0; width: 100%; }
+    .date-block-lab__table { font-size: 0.9rem; }
+    .date-block-lab__table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .date-block-lab__table tbody { display: grid; gap: 0.7rem; }
+    .date-block-lab__table tbody tr { padding: 0.75rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 18px; background: #fffdf8; }
+    .date-block-lab__table tbody th,
+    .date-block-lab__table tbody td { display: grid; grid-template-columns: minmax(4.6rem, 32%) minmax(0, 1fr); gap: 0.6rem; padding: 0.18rem 0; border-bottom: 0; }
+    .date-block-lab__table tbody th::before,
+    .date-block-lab__table tbody td::before { color: #6d5b4c; font-size: 0.72rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+    .date-block-lab__table tbody th::before { content: 'Паттерн'; }
+    .date-block-lab__table tbody td:nth-of-type(1)::before { content: 'Self'; }
+    .date-block-lab__table tbody td:nth-of-type(2)::before { content: 'Gemini'; }
+    .date-block-lab__table tbody td:nth-of-type(3)::before { content: 'a-opus'; }
+    .date-block-lab__table tbody td:nth-of-type(4)::before { content: 'Вердикт'; }
+    .date-block-lab__table tbody td:nth-of-type(5)::before { content: 'Адаптировать'; }
+    .date-block-lab__table tbody td:nth-of-type(6)::before { content: 'Риск'; }
+    .date-block-lab__table tbody td:nth-of-type(7)::before { content: 'Refs'; }
   }
 </style>

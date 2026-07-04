@@ -48,8 +48,19 @@ for (const event of kgd80Events) {
   if (!html.includes('event-token--znanie-russia')) throw new Error(`80 Stories event ${event.id} misses curated Znanie organizer medallion`);
 }
 const dateBlockLabHtml = readFileSync(join(root, 'lab/date-block/index.html'), 'utf8');
-if (!dateBlockLabHtml.includes('date-lab-gemini') || !dateBlockLabHtml.includes('date-lab-opus') || !dateBlockLabHtml.includes('Gemini Pro') || !dateBlockLabHtml.includes('a-opus')) {
-  throw new Error('Date-block lab must show both Gemini Pro and a-opus variants');
+for (const marker of [
+  'Сравнительная таблица 14 паттернов',
+  'date-lab-p13',
+  'date-lab-p14',
+  'date-lab-p01',
+  'date-lab-p03',
+  'date-lab-p04',
+  'date-lab-gemini',
+  'Gemini Pro',
+  'a-opus',
+  'Pinterest',
+]) {
+  if (!dateBlockLabHtml.includes(marker)) throw new Error(`Date-block lab misses marker: ${marker}`);
 }
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
