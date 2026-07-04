@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 from datetime import datetime, timezone
@@ -23,6 +24,12 @@ def load_retrieval():
     assert spec and spec.loader
     spec.loader.exec_module(module)
     return module
+
+
+def _auth_bundle(session: str, **extra):
+    payload = {"session": session, **extra}
+    raw = json.dumps(payload).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
 
 
 def test_extract_candidate_surfaces_from_public_links():
@@ -573,8 +580,9 @@ def test_comment_retrieval_increment_requires_verified_run_id(monkeypatch):
     assert counts[0]["analyzed_comments_this_run"] == 1
 
 
-def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
+def test_comment_semantic_retrieval_vector_scan_does_not_prefilter_before_llm(monkeypatch):
     retrieval = load_retrieval()
+    monkeypatch.delenv("ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER", raising=False)
 
     question = retrieval._text_quality_features("Подскажите, куда сходить в Светлогорске с детьми?")
     offer = retrieval._text_quality_features("Маршрут одного дня в Калининграде. Сохраняйте и записывайтесь на экскурсию по ссылке https://example.com")
@@ -587,18 +595,19 @@ def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
 
     row = {"text_snapshot": "Сохраняйте подборку и бронируйте тур", "positive_negative_margin": 0.5}
     retrieval._apply_text_quality_to_candidate(row, scoring_method="positive_negative_margin")
-    assert row["pre_llm_candidate_eligible"] is False
-    assert row["score_for_rank"] < 0.5
+    assert row["pre_llm_candidate_eligible"] is True
+    assert row["score_for_rank"] == 0.5
+    assert row["llm_gate_selection_basis"] == "semantic_top_n_no_deterministic_prefilter"
 
     unsupported = {"text_snapshot": "Как зовут детишек?", "positive_negative_margin": 0.5, "intent_set": "organizer_comment_fit"}
     retrieval._apply_text_quality_to_candidate(unsupported, scoring_method="positive_negative_margin")
-    assert unsupported["pre_llm_candidate_eligible"] is False
+    assert unsupported["pre_llm_candidate_eligible"] is True
     assert unsupported["candidate_noise_type"] == "intent_without_text_support"
 
     row2 = {"text_snapshot": "Куда съездить из Калининграда на один день?", "positive_negative_margin": 0.5, "intent_set": "route_poi_close_actionable"}
     retrieval._apply_text_quality_to_candidate(row2, scoring_method="positive_negative_margin")
     assert row2["pre_llm_candidate_eligible"] is True
-    assert row2["score_for_rank"] > 0.5
+    assert row2["score_for_rank"] == 0.5
 
     source_post = {
         "text_snapshot": "Куда съездить из Калининграда на один день?",
@@ -607,22 +616,34 @@ def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
         "relation": "vk_social_wall_post",
     }
     retrieval._apply_text_quality_to_candidate(source_post, scoring_method="positive_negative_margin")
-    assert source_post["pre_llm_candidate_eligible"] is False
-    assert source_post["candidate_noise_type"] == "source_post_not_comment"
+    assert source_post["pre_llm_candidate_eligible"] is True
+    assert source_post["candidate_noise_type"] == "source_post_context"
 
     real_estate = {"text_snapshot": "Где снять квартиру на длительный срок?", "positive_negative_margin": 0.5, "intent_set": "event_site_search_or_listing"}
     retrieval._apply_text_quality_to_candidate(real_estate, scoring_method="positive_negative_margin")
-    assert real_estate["pre_llm_candidate_eligible"] is False
+    assert real_estate["pre_llm_candidate_eligible"] is True
     assert real_estate["candidate_noise_type"] == "out_of_scope_real_estate"
 
     medicine = {"text_snapshot": "Посоветуйте стоматолога и клинику", "positive_negative_margin": 0.5, "intent_set": "badge_filter_need"}
     retrieval._apply_text_quality_to_candidate(medicine, scoring_method="positive_negative_margin")
-    assert medicine["pre_llm_candidate_eligible"] is False
+    assert medicine["pre_llm_candidate_eligible"] is True
     assert medicine["candidate_noise_type"] == "out_of_scope_medicine"
 
     route_with_flat_context = {"text_snapshot": "Снимаем квартиру в Калининграде, куда съездить на один день?", "positive_negative_margin": 0.5, "intent_set": "route_poi_close_actionable"}
     retrieval._apply_text_quality_to_candidate(route_with_flat_context, scoring_method="positive_negative_margin")
     assert route_with_flat_context["pre_llm_candidate_eligible"] is True
+
+
+def test_comment_semantic_legacy_deterministic_prefilter_is_explicit_opt_in(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER", "1")
+
+    row = {"text_snapshot": "Сохраняйте подборку и бронируйте тур", "positive_negative_margin": 0.5}
+    retrieval._apply_text_quality_to_candidate(row, scoring_method="positive_negative_margin")
+
+    assert row["pre_llm_candidate_eligible"] is False
+    assert row["score_for_rank"] < 0.5
+    assert row["llm_gate_selection_basis"] == "legacy_deterministic_prefilter"
 
 
 def test_question_pattern_label_covers_route_event_and_badges():
@@ -985,7 +1006,8 @@ def test_vk_scan_can_read_active_personal_profile_wall(monkeypatch):
     assert surfaces[0]["title"] == "Иван Иванов"
     assert surfaces[0]["reach"]["followers"] == 321
     assert surfaces[0]["status"] == "comments_available"
-    assert {r["relation"] for r in records} == {"vk_comment"}
+    assert {r["relation"] for r in records} == {"vk_comment", "vk_social_wall_post"}
+    assert any(r["is_post"] for r in records)
     assert "board.getTopics" not in calls
     assert any("vk id6786438: wall.get ok" in item for item in diagnostics)
 
@@ -1526,6 +1548,36 @@ def test_kaggle_secrets_use_isolated_gemma_key_lane(monkeypatch):
     assert "GOOGLE_API_KEY" not in payload
 
 
+def test_acquisition_discovery_auth_bundle_is_preferred_over_s22(monkeypatch):
+    from subscriber_acquisition import kaggle_runner
+
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "1")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY", "discovery-bundle")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_S22", "s22-bundle")
+    monkeypatch.setenv("TG_API_ID", "1")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+
+    payload = json.loads(kaggle_runner._build_secrets_payload())
+
+    assert kaggle_runner.discovery_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+    assert kaggle_runner._discovery_resource_lease_key() == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+    assert payload["TELEGRAM_AUTH_BUNDLE_DISCOVERY"] == "discovery-bundle"
+    assert "TELEGRAM_AUTH_BUNDLE_S22" not in payload
+
+
+def test_runtime_decode_tg_auth_prefers_discovery_bundle(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_TELEGRAM_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY", _auth_bundle("discovery-session", device_model="Discovery phone"))
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_S22", _auth_bundle("s22-session", device_model="S22"))
+
+    session, device = runtime._decode_tg_auth()
+
+    assert session == "discovery-session"
+    assert device["device_model"] == "Discovery phone"
+    assert device["auth_bundle_env"] == "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+
+
 def test_runtime_env_passes_seen_context_urls():
     from subscriber_acquisition.config import AcqConfig
     from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
@@ -1609,6 +1661,40 @@ def test_telegram_entity_ref_from_seed_uses_injected_input_peer_class():
     assert isinstance(ref, DummyInputPeerChannel)
     assert ref.channel_id == 1481648829
     assert ref.access_hash == 5526881181816195856
+
+
+def test_tg_comment_record_and_llm_prompt_preserve_context_chain():
+    runtime = load_runtime()
+    surface = runtime._seed_surface("https://t.me/example_chat", platform="tg")
+    surface["surface_type"] = "linked_discussion"
+    records = []
+
+    runtime._collect_tg_comment_record(
+        records,
+        surface,
+        SimpleNamespace(id=42, message="А детям можно?", date=datetime(2026, 7, 1, tzinfo=timezone.utc), reply_to=SimpleNamespace(reply_to_msg_id=10)),
+        relation="linked_discussion",
+        retrieval="latest",
+        reply_parent_text="Можно ли с коляской?",
+        source_post_text="Концерт в парке, начало в 18:00",
+        source_post_id=7,
+    )
+    candidate = {
+        **records[0],
+        "model_name": "intfloat/multilingual-e5-base",
+        "intent_set": "event_close_question",
+        "score": 0.9,
+        "candidate_action_type": "event_recommendation_reply",
+    }
+    opp = runtime._build_opportunity_from_retrieval_candidate(candidate, default_target_url="https://t.me/kenigevents")
+    prompt = runtime._llm_gate_prompt(opp, surface)
+
+    assert records[0]["source_post_text_snapshot"].startswith("Концерт в парке")
+    assert records[0]["reply_parent_text_snapshot"].startswith("Можно ли")
+    assert opp["context_chain"]["source_post_text"].startswith("Концерт в парке")
+    assert "source_post_text" in prompt
+    assert "parent_comment_text" in prompt
+    assert "current_comment_text" in prompt
 
 
 def test_shadow_payload_applies_tg_seed_metadata_to_linked_discussion_rows(monkeypatch):

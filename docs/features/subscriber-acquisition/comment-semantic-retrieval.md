@@ -318,21 +318,25 @@ For semantic scoring the embedded text is the comment plus bounded context when
 available:
 
 ```text
-<comment text>
+Текущий комментарий/пост: <comment text>
 
 Контекст для понимания:
-Родительский комментарий: ...
 Исходный пост/тема: ...
+Родительский комментарий: ...
 ```
 
 This is required because many comments only make sense relative to the source
 post or reply parent. The original comment remains separately visible in
 `text_snapshot`.
 
-This deterministic layer is a narrow budget/noise guardrail, not the semantic
-acceptance decision. It should keep rows visible in artifacts with
-`candidate_noise_type`, `question_signal` and `pre_llm_candidate_eligible`, but
-only eligible question-like rows should spend Gemma/reply review budget.
+The vector-scan funnel must not run deterministic/regex prefilters before LLM
+candidate selection. Every collected row is embedded; `candidate_noise_type`,
+`question_signal` and `intent_text_supported` are diagnostic columns only and do
+not alter `score_for_rank` or `pre_llm_candidate_eligible` in the default path.
+`llm_gate_candidates` are the top semantic rows for the gate model within the
+monitoring freshness window. The old deterministic shortlist exists only behind
+explicit debug flag `ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER=1` and must
+not be used for real discovery runs.
 
 ## Kaggle integration
 
@@ -348,9 +352,14 @@ encrypted config/secrets, Kaggle status dataset,
 `kaggle_status_client.py`, `kaggle_registry`, remote Telegram session guard,
 `ACQ_*` config style and no-send/shadow constraints. When enabled, the scanner
 collects comment records, skips the old per-comment deterministic/Gemma path,
-embeds the collected comments locally, attaches a `comment_semantic_profile` to
-each scanned surface that had comments, and sends only top retrieval candidates
-to the existing Gemma gate.
+embeds the collected comments/post contexts locally, attaches a
+`comment_semantic_profile` to each scanned surface that had records, and sends
+only top vector-retrieval candidates to the existing Gemma gate. TG linked
+discussion comments preserve source post and immediate parent comment when
+available; VK wall comments preserve source wall post and same-batch parent
+comment when available. Source wall/channel posts are also collected as
+`is_post=true` context records so organizer clarification opportunities can be
+reviewed with full context.
 
 Suggested progress payload phase names:
 

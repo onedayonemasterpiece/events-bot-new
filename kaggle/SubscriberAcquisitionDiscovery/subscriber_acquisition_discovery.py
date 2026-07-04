@@ -441,22 +441,38 @@ def _load_kaggle_env() -> dict[str, Any]:
     return loaded
 
 
+def _tg_auth_bundle_env_candidates() -> list[str]:
+    out: list[str] = []
+    for name in [
+        os.getenv("ACQ_TELEGRAM_AUTH_BUNDLE_ENV"),
+        "TELEGRAM_AUTH_BUNDLE_DISCOVERY",
+        "TELEGRAM_AUTH_BUNDLE_S22",
+    ]:
+        clean = str(name or "").strip()
+        if clean and clean not in out:
+            out.append(clean)
+    return out
+
+
 def _decode_tg_auth() -> tuple[str, dict[str, Any]]:
-    bundle_b64 = (os.getenv("TELEGRAM_AUTH_BUNDLE_S22") or "").strip()
     device_config = {
-        "device_model": "Samsung S22 Ultra",
+        "device_model": "Subscriber Acquisition Discovery",
         "system_version": "13.0",
         "app_version": "9.6.6",
     }
-    if bundle_b64:
+    for bundle_env in _tg_auth_bundle_env_candidates():
+        bundle_b64 = (os.getenv(bundle_env) or "").strip()
+        if not bundle_b64:
+            continue
         raw = base64.urlsafe_b64decode(bundle_b64.encode("ascii")).decode("utf-8")
         bundle = json.loads(raw)
         session = str(bundle.get("session") or "")
         for key in ["device_model", "system_version", "app_version", "lang_code", "system_lang_code"]:
             if bundle.get(key):
                 device_config[key] = bundle[key]
+        device_config["auth_bundle_env"] = bundle_env
         return session, device_config
-    return (os.getenv("TG_SESSION") or "").strip(), device_config
+    return (os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip(), device_config
 
 
 def _handle_from_url(url: str, platform: str = "tg") -> str:
@@ -579,6 +595,10 @@ def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
         "Ответ может быть коротким, нативным и не выглядеть рекламой?",
         "Риск спама низкий при единичном аккуратном reply?",
     ]
+    context_chain = opp.get("context_chain") if isinstance(opp.get("context_chain"), dict) else {}
+    current_text = str(context_chain.get("current_comment_text") or opp.get("context_text_snippet") or "")
+    source_post_text = str(context_chain.get("source_post_text") or "")
+    parent_comment_text = str(context_chain.get("parent_comment_text") or "")
     payload = {
         "platform": opp.get("platform"),
         "surface": {
@@ -587,10 +607,18 @@ def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
             "url": surface.get("url"),
             "surface_type": surface.get("surface_type"),
         },
-        "comment_text": opp.get("context_text_snippet"),
-        "prefilter_intent": opp.get("matched_intent"),
-        "prefilter_topic_cluster": opp.get("topic_cluster"),
-        "prefilter_target": opp.get("link_target"),
+        "context_chain": {
+            "source_post_text": source_post_text,
+            "parent_comment_text": parent_comment_text,
+            "current_comment_text": current_text,
+            "analysis_context": context_chain.get("analysis_context") or "",
+            "relation": context_chain.get("relation") or (opp.get("evidence") or {}).get("relation"),
+            "is_source_post_record": bool(context_chain.get("is_source_post_record")),
+        },
+        "comment_text": current_text,
+        "semantic_intent": opp.get("matched_intent"),
+        "semantic_topic_cluster": opp.get("topic_cluster"),
+        "proposed_target": opp.get("link_target"),
         "target_hint": opp.get("target_hint"),
         "semantic_retrieval": (opp.get("evidence") or {}).get("semantic_retrieval") or opp.get("retrieval_evidence"),
         "checklist_questions": checklist_questions,
@@ -598,13 +626,14 @@ def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
     return (
         "Ты оцениваешь кандидата для Subscriber Acquisition в Калининградской области. "
         "Нужно решить, стоит ли показывать оператору карточку потенциального аккуратного reply. "
+        "Оценивай не голый комментарий, а цепочку source_post_text -> parent_comment_text -> current_comment_text; если current_comment_text является самим постом, можно рассматривать только безопасный сценарий уточняющего вопроса организатору под этим постом. "
         "Не создавай кандидат, если комментарий — просто благодарность, отзыв, похвала организаторам, отчёт о прошедшем событии, эмоция без вопроса, логистический вопрос внутри уже известного события без полезного acquisition-ответа, или если непонятно что полезно сообщить. "
         "Особенно консервативно отклоняй вопросы вида 'где афиша/программа/расписание 1 дня', 'до скольки', 'где вход/адрес' — это обычно локальная логистика текущего события/поста, а не повод вести в общий канал, если у нас нет точной страницы/ссылки именно с этим расписанием. "
         "Отклоняй вопросы к конкретному месту/организатору вида 'у вас есть льготы/скидки/билеты/условия/доступность/пандус/можно с коляской/для инвалидов': это venue policy, а не acquisition-кандидат, если человек не спрашивает именно где найти городскую подборку/поиск доступных или бесплатных событий. "
         "Если все ключевые вопросы checklist дают нет, верни is_candidate=false. "
         "Для маршрутов: кандидат только если пользователь спрашивает куда съездить/поехать, что посмотреть за день/на выходных, маршрут по области или конкретный Калининградский пригород; ответ должен вести к конкретному маршруту/подборке маршрутов, не к общему паблику. "
         "Для обычных событий: кандидат только если человеку реально нужна афиша/рекомендация/подборка. "
-        "Для организаторов: кандидат только если человек спрашивает как добавить/разместить/прислать событие или про инфопартнёрство. "
+        "Для организаторов: кандидат если человек спрашивает как добавить/разместить/прислать событие или про инфопартнёрство; отдельно допустим review-only кандидат 'organizer_visibility_clarification', когда source_post_text — пост организатора о событии, в нём не хватает важной информации, и можно задать короткий естественный уточняющий вопрос без ссылки и без рекламы. "
         "Верни строго JSON по схеме, без markdown. target_url может быть пустой строкой, если нужен будущий конкретный маршрут без готовой ссылки.\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
@@ -1068,6 +1097,8 @@ def _collect_tg_comment_record(
     retrieval: str,
     search_query: str | None = None,
     reply_parent_text: str | None = None,
+    source_post_text: str | None = None,
+    source_post_id: int | str | None = None,
 ) -> None:
     text = " ".join(str(getattr(message, "message", None) or getattr(message, "text", None) or "").split())
     if not text:
@@ -1091,14 +1122,14 @@ def _collect_tg_comment_record(
         "surface_type": surface.get("surface_type"),
         "context_url": _tg_context_url(surface, msg_id),
         "comment_id": str(msg_id) if msg_id else "",
-        "post_id": "",
+        "post_id": str(source_post_id or ""),
         "topic_id": "",
         "thread_id": str(getattr(getattr(message, "reply_to", None), "reply_to_msg_id", "") or ""),
         "created_at": date.astimezone(timezone.utc).isoformat() if hasattr(date, "astimezone") else None,
         "author_id": str(author_id or ""),
         "is_post": bool(getattr(message, "post", False)),
         "reply_parent_text_snapshot": " ".join(str(reply_parent_text or "").split())[:500],
-        "source_post_text_snapshot": "",
+        "source_post_text_snapshot": " ".join(str(source_post_text or "").split())[:700],
         "source_context_title": str(surface.get("title") or "")[:300],
         "text": text,
         "text_snapshot": text[:500],
@@ -1182,6 +1213,14 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
     action = str(candidate.get("candidate_action_type") or "event_recommendation_reply")
     target_hint = candidate.get("target_hint") if isinstance(candidate.get("target_hint"), dict) else {}
     link_target = _retrieval_link_target_for_candidate(candidate, default_target_url=default_target_url)
+    context_chain = {
+        "source_post_text": str(candidate.get("source_post_text_snapshot") or candidate.get("source_post_text") or "")[:700],
+        "parent_comment_text": str(candidate.get("reply_parent_text_snapshot") or candidate.get("reply_parent_text") or "")[:500],
+        "current_comment_text": text[:700],
+        "analysis_context": str(candidate.get("analysis_context_snapshot") or "")[:1000],
+        "relation": candidate.get("relation"),
+        "is_source_post_record": bool(candidate.get("is_post")),
+    }
     scores = {
         "relevance": max(0.0, min(1.0, float(candidate.get("score") or 0.0))),
         "retrieval_score": float(candidate.get("score") or 0.0),
@@ -1198,6 +1237,7 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
         "context_external_id": str(candidate.get("comment_id") or candidate.get("post_id") or ""),
         "context_created_at": candidate.get("created_at"),
         "context_text_snippet": text[:500],
+        "context_chain": context_chain,
         "matched_intent": action,
         "topic_cluster": str(candidate.get("intent_set") or action),
         "action_type": action,
@@ -1235,6 +1275,7 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
                 "rank_global": candidate.get("rank_global"),
                 "rank_within_surface": candidate.get("rank_within_surface"),
                 "funnel_bucket": candidate.get("funnel_bucket"),
+                "selection_basis": candidate.get("llm_gate_selection_basis"),
             },
         },
     }
@@ -1820,7 +1861,9 @@ def _scan_vk_board_discussions(
             diagnostics.append(f"vk {domain}: board.getComments {topic_id} failed: {exc}")
             continue
         _human_pause_sync(multiplier=0.25)
-        for comment in comments.get("items") or []:
+        board_comment_items = [item for item in (comments.get("items") or []) if isinstance(item, dict)]
+        board_comment_text_by_id = {int(item.get("id") or 0): str(item.get("text") or "") for item in board_comment_items if int(item.get("id") or 0)}
+        for comment in board_comment_items:
             if _deadline_reached(deadline):
                 diagnostics.append("vk board comment scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                 break
@@ -1829,6 +1872,7 @@ def _scan_vk_board_discussions(
             VK_SCAN_STATS["board_comments_seen"] += 1
             topic_id = int(topic.get("id") or 0)
             comment_id = int(comment.get("id") or 0)
+            reply_parent_id = int(comment.get("reply_to_comment") or 0)
             if comment_records is not None and topic_id and comment_id:
                 _collect_vk_comment_record(
                     comment_records,
@@ -1841,6 +1885,7 @@ def _scan_vk_board_discussions(
                     created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
                     relation="vk_board_comment",
                     author_id=comment.get("from_id"),
+                    reply_parent_text=board_comment_text_by_id.get(reply_parent_id, ""),
                     source_context_title=str(topic.get("title") or ""),
                 )
             if _comment_retrieval_enabled():
@@ -2045,7 +2090,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                 if _is_out_of_region_surface(discovered):
                     discovered = _mark_out_of_region_surface(discovered, reason="out-of-region surface discovered in VK post")
                 surfaces.setdefault(discovered["external_id"], discovered)
-            if comment_records is not None and _is_vk_social_discovery_surface(surface):
+            if comment_records is not None:
                 _collect_vk_comment_record(
                     comment_records,
                     surface,
@@ -2087,7 +2132,9 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                 diagnostics.append(f"vk {domain}: wall.getComments {post_id} failed: {exc}")
                 continue
             _human_pause_sync(multiplier=0.35)
-            for comment in comments.get("items") or []:
+            wall_comment_items = [item for item in (comments.get("items") or []) if isinstance(item, dict)]
+            wall_comment_text_by_id = {int(item.get("id") or 0): str(item.get("text") or "") for item in wall_comment_items if int(item.get("id") or 0)}
+            for comment in wall_comment_items:
                 if _deadline_reached(deadline):
                     diagnostics.append("vk comment scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                     break
@@ -2104,6 +2151,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     cap=max_author_profiles,
                 )
                 if comment_records is not None:
+                    reply_parent_id = int(comment.get("reply_to_comment") or 0)
                     _collect_vk_comment_record(
                         comment_records,
                         surface,
@@ -2116,6 +2164,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                         relation="vk_comment",
                         author_id=comment.get("from_id"),
                         source_post_text=post_text,
+                        reply_parent_text=wall_comment_text_by_id.get(reply_parent_id, ""),
                     )
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
@@ -2460,21 +2509,39 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
 
             tg_parent_text_cache: dict[tuple[str, int], str] = {}
 
-            async def _tg_reply_parent_text(message: Any, scan_entity: Any) -> str:
-                reply_id = int(getattr(getattr(message, "reply_to", None), "reply_to_msg_id", 0) or 0)
-                if not reply_id:
+            async def _tg_message_text_by_id(scan_entity: Any, message_id: int) -> str:
+                if not message_id:
                     return ""
                 entity_key = str(getattr(scan_entity, "id", "") or getattr(scan_entity, "username", "") or "")
-                cache_key = (entity_key, reply_id)
+                cache_key = (entity_key, int(message_id))
                 if cache_key in tg_parent_text_cache:
                     return tg_parent_text_cache[cache_key]
                 try:
-                    parent = await client.get_messages(scan_entity, ids=reply_id)
+                    parent = await client.get_messages(scan_entity, ids=int(message_id))
                     parent_text = " ".join(str(getattr(parent, "message", None) or getattr(parent, "text", None) or "").split())
                 except Exception:
                     parent_text = ""
-                tg_parent_text_cache[cache_key] = parent_text[:500]
+                tg_parent_text_cache[cache_key] = parent_text[:700]
                 return tg_parent_text_cache[cache_key]
+
+            async def _tg_reply_context(message: Any, scan_entity: Any, relation: str | None) -> dict[str, Any]:
+                reply = getattr(message, "reply_to", None)
+                parent_id = int(getattr(reply, "reply_to_msg_id", 0) or 0)
+                top_id = int(getattr(reply, "reply_to_top_id", 0) or 0)
+                parent_text = await _tg_message_text_by_id(scan_entity, parent_id) if parent_id else ""
+                source_post_id = top_id or (parent_id if relation == "linked_discussion" else 0)
+                source_post_text = ""
+                if top_id and top_id != parent_id:
+                    source_post_text = await _tg_message_text_by_id(scan_entity, top_id)
+                elif relation == "linked_discussion" and parent_text:
+                    # Direct comments in linked discussions usually reply to the
+                    # discussion root copied from the source channel post.
+                    source_post_text = parent_text
+                return {
+                    "reply_parent_text": parent_text,
+                    "source_post_text": source_post_text,
+                    "source_post_id": source_post_id,
+                }
 
             async def process_tg_message(message: Any, scan_surface: dict[str, Any], relation: str | None, *, retrieval: str, search_query: str | None = None, scan_entity: Any | None = None) -> bool:
                 nonlocal discovered_queued
@@ -2498,6 +2565,17 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                     ):
                         discovered_queued += 1
                         TG_SCAN_STATS["frontier_links_queued"] += 1
+                if comment_records is not None and relation == "channel_link_discovery" and getattr(message, "post", False):
+                    _collect_tg_comment_record(
+                        comment_records,
+                        scan_surface,
+                        message,
+                        relation="tg_channel_post_context",
+                        retrieval=retrieval,
+                        search_query=search_query,
+                        source_post_text=text,
+                        source_post_id=int(getattr(message, "id", 0) or 0),
+                    )
                 if not is_comment_opportunity_message(
                     message,
                     surface_type=str(scan_surface.get("surface_type") or ""),
@@ -2505,7 +2583,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                 ):
                     return False
                 if comment_records is not None:
-                    reply_parent_text = await _tg_reply_parent_text(message, scan_entity) if scan_entity is not None else ""
+                    reply_context = await _tg_reply_context(message, scan_entity, relation) if scan_entity is not None else {}
                     _collect_tg_comment_record(
                         comment_records,
                         scan_surface,
@@ -2513,7 +2591,9 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                         relation=relation,
                         retrieval=retrieval,
                         search_query=search_query,
-                        reply_parent_text=reply_parent_text,
+                        reply_parent_text=str(reply_context.get("reply_parent_text") or ""),
+                        source_post_text=str(reply_context.get("source_post_text") or ""),
+                        source_post_id=reply_context.get("source_post_id"),
                     )
                 if _comment_retrieval_enabled():
                     return False

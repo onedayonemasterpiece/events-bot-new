@@ -200,9 +200,13 @@ Storage/runtime decision for MVP:
 - Do not create a separate bot for MVP; revisit only if volume/policy boundaries
   require separate credentials and deployment.
 - Reuse the existing Kaggle encrypted-dataset, `kaggle_status`,
-  `kaggle_registry`, `remote_telegram_session`, and `telegram_session:s22` lease
-  contracts. The job must run only in idle/free time relative to heavy Kaggle/LLM
-  runs and skip cleanly when the shared remote Telegram session is busy.
+  `kaggle_registry`, `remote_telegram_session`, and Telegram session lease
+  contracts. Acquisition discovery should use the dedicated
+  `TELEGRAM_AUTH_BUNDLE_DISCOVERY` scope and matching
+  `telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY` lease when available,
+  so it does not contend with Telegram Monitoring S22. The job must run only in
+  idle/free time relative to heavy Kaggle/LLM runs and skip cleanly when its
+  selected remote Telegram session is busy.
 
 Review UI requirement:
 
@@ -244,10 +248,11 @@ LLM requirement:
 - Embedding retrieval may rank, profile and reduce candidate volume, but it is
   not the owner of final suitability and must not produce public wording.
 - Discovery regex/keywords may only extract links, apply hard safety/region
-  gates, dedupe, and build cheap prefilter hints for LLM budget control. They
-  must not be the owner of semantic suitability. In particular, post-event
-  thanks/reports/praise must be rejected by the Gemma checklist gate unless there
-  is a separate explicit current/future need and a clear native reply target.
+  gates and dedupe. In the vector-scan funnel they must not build a semantic
+  shortlist or remove comments before embedding/LLM; noisy/offer/question flags
+  are diagnostic columns only. In particular, post-event thanks/reports/praise
+  must be rejected by the Gemma checklist gate unless there is a separate
+  explicit current/future need and a clear native reply target.
 
 ## Open questions
 

@@ -89,17 +89,19 @@ contract:
 - conservative reach scoring, link-target selection, sticker-fit observation,
   and no-send/VK-read-only guard helpers;
 - `subscriber_acquisition_discovery` is registered as a heavy Kaggle job type and
-  as an S22 remote Telegram session consumer; `/acq_run` checks the remote
-  Telegram session-busy guard before any live Telegram scan can start.
+  as a scoped remote Telegram session consumer; `/acq_run` checks the remote
+  Telegram session-busy guard for the selected acquisition discovery auth bundle
+  before any live Telegram scan can start.
 
 Live Telegram/VK scanning remains constrained to the Kaggle runtime path and must
 run in shadow mode first. The initial `kaggle/SubscriberAcquisitionDiscovery/`
 runtime writes an importable `acq_discovery_result.json` with seed surfaces and
-zero outbound sends. When `ACQ_ENABLE_LIVE_TG_SCAN=1` and the existing S22
-Telegram credentials are mounted, it also performs a bounded read-only Telegram
-shadow scan of public seed surfaces, linked discussion chats where resolvable,
-public links discovered in messages, deterministic opportunity prefiltering, and
-sticker-fit observations. `/acq_run` also seeds the runtime from existing
+zero outbound sends. When `ACQ_ENABLE_LIVE_TG_SCAN=1` and
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY` is mounted, it performs a bounded read-only
+Telegram shadow scan of public seed surfaces, linked discussion chats where
+resolvable, public links discovered in messages, context-chain comment/post
+collection, vector retrieval and sticker-fit observations. `/acq_run` also
+seeds the runtime from existing
 `vk_source` monitoring groups. VK is schema/config/report-ready and has a
 bounded read-only `wall.get`/`wall.getComments` scanner path, but comment scans
 are active only when explicit allowlisted VK communities are provided; no VK
@@ -185,8 +187,9 @@ Specific-place policy questions are not acquisition candidates. For example,
 rejected unless the person explicitly asks for a city-wide search, filter or
 selection of accessible/free events.
 
-These deterministic matches are low-cost shadow prefilters. Final classification
-and reply wording remain LLM-first before any public response.
+These phrases are intent catalog examples for vector retrieval, not regex
+prefilters. Final classification and reply wording remain LLM-first before any
+public response.
 
 
 ### Comment semantic retrieval funnel
@@ -325,12 +328,13 @@ discussion/comment surface before surfacing a public-question candidate.
    timely, and suitable for a normal human public question. It should reject
    questions that exist only to manufacture engagement.
 
-Important routing pitfall: the generic acquisition prefilter currently rejects
-venue-policy/local logistics questions before LLM, which is correct for
-third-party recommendation replies. Organizer clarification needs its own route
-**before** that generic rejection. A local question such as age limit, rain plan,
-entry rules or accessibility can be eligible only when all organizer-mode gates
-above pass; the same text in a generic community remains a rejection.
+Important routing pitfall: generic third-party recommendation replies and
+organizer clarification are different LLM-gated routes. Do not use a
+deterministic local-logistics rejection as a prefilter before vector retrieval.
+A local question such as age limit, rain plan, entry rules or accessibility can
+be eligible only when the context chain shows an organizer-owned event post and
+the organizer-mode LLM gate accepts it; the same text in a generic community
+remains a rejection.
 
 #### Question library and classification
 
@@ -643,13 +647,14 @@ new infrastructure:
 - VK scanner path in the same Kaggle runtime/config, enabled only when VK token
   credentials and approved VK seeds/candidates are present;
 - encrypted config/key datasets via the existing split dataset pattern;
-- secrets: `TELEGRAM_AUTH_BUNDLE_S22`, `TG_API_ID`, `TG_API_HASH`, a scoped
-  Google key lane such as `GOOGLE_API_KEY3` or a new acquisition lane if quota
-  needs isolation;
+- secrets: `TELEGRAM_AUTH_BUNDLE_DISCOVERY`, `TG_API_ID`, `TG_API_HASH`, a
+  scoped Google key lane such as `GOOGLE_API_KEY3` or a new acquisition lane if
+  quota needs isolation. `TELEGRAM_AUTH_BUNDLE_S22` is a legacy fallback only
+  when the dedicated discovery bundle is absent;
 - status dataset with `create_kaggle_run_config(..., kind="subscriber_acquisition_discovery",
-  notebook="SubscriberAcquisitionDiscovery", resource_leases=["telegram_session:s22"])`
-  whenever Telegram scanning is selected; VK-only future runs may omit the
-  Telegram lease;
+  notebook="SubscriberAcquisitionDiscovery", resource_leases=["telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY"])`
+  whenever Telegram scanning selects that bundle; derive the lease from the
+  actual auth env scope. VK-only future runs may omit the Telegram lease;
 - `kaggle_status_client.py` progress events with business counters:
   `surfaces_done/surfaces_total`, `telegram_posts_scanned`,
   `vk_posts_scanned`, `comments_scanned`, `candidate_surfaces_found`,

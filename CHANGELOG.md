@@ -14,6 +14,17 @@
 
 ### Changed
 
+- Subscriber Acquisition Discovery live Telegram scans now prefer the dedicated
+  `TELEGRAM_AUTH_BUNDLE_DISCOVERY` bundle, send only the selected auth secret to
+  Kaggle, derive the status/resource lease from the actual auth env scope, and
+  keep S22 only as an absent-discovery fallback.
+- Subscriber Acquisition comment semantic retrieval no longer applies
+  deterministic/regex prefilters before LLM selection in the default vector
+  scan: all collected comments/post contexts are embedded, top semantic rows go
+  to Gemma, and deterministic question/noise fields are diagnostics only. TG/VK
+  records now preserve the context chain (source post, parent comment, current
+  comment/post), and VK/TG source posts are collected as organizer
+  clarification context records.
 - Subscriber Acquisition Discovery now defaults to a small incremental Kaggle
   scope (4 surfaces, 40 messages, 8 threads, 20 opportunities, 540s runtime
   deadline / 900s launcher timeout), passes `KAGGLE_RUN_ID` into the runtime,

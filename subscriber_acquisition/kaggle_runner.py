@@ -24,6 +24,8 @@ CONFIG_DATASET_KEY = os.getenv("ACQ_DISCOVERY_CONFIG_KEY", "subscriber-acquisiti
 TERMINAL_COMPLETE = {"COMPLETE", "SUCCEEDED", "SUCCESS"}
 TERMINAL_FAILED = {"ERROR", "FAILED", "CANCELED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}
 REMOTE_SESSION_COOLDOWN_SECONDS_DEFAULT = 600
+DISCOVERY_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+LEGACY_S22_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_S22"
 
 TELEGA_IN_KALININGRAD_TG_SEEDS = [
     ("Kaliningrad_jenskiy", "Женский чат Калининград", "https://telega.in/channels/Kaliningrad_jenskiy/card"),
@@ -73,14 +75,38 @@ def live_telegram_scan_enabled() -> bool:
     return (os.getenv("ACQ_ENABLE_LIVE_TG_SCAN") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _configured_discovery_auth_bundle_env() -> str:
+    configured = (os.getenv("ACQ_TELEGRAM_AUTH_BUNDLE_ENV") or "").strip()
+    return configured or DISCOVERY_AUTH_BUNDLE_ENV
+
+
+def _telegram_auth_bundle_env_candidates() -> list[str]:
+    out: list[str] = []
+    for name in [_configured_discovery_auth_bundle_env(), DISCOVERY_AUTH_BUNDLE_ENV, LEGACY_S22_AUTH_BUNDLE_ENV]:
+        clean = str(name or "").strip()
+        if clean and clean not in out:
+            out.append(clean)
+    return out
+
+
 def discovery_remote_auth_scope() -> str:
     if not live_telegram_scan_enabled():
         return "none"
-    if (os.getenv("TELEGRAM_AUTH_BUNDLE_S22") or "").strip():
-        return "TELEGRAM_AUTH_BUNDLE_S22"
+    for env_name in _telegram_auth_bundle_env_candidates():
+        if (os.getenv(env_name) or "").strip():
+            return env_name
     if (os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip():
         return "TG_SESSION"
-    return "TELEGRAM_AUTH_BUNDLE_S22"
+    return _configured_discovery_auth_bundle_env()
+
+
+def _discovery_resource_lease_key() -> str | None:
+    scope = discovery_remote_auth_scope()
+    if scope == "none":
+        return None
+    if scope == "TG_SESSION":
+        return "telegram_session:tg_session"
+    return f"telegram_session:env:{scope}"
 
 
 async def ensure_remote_telegram_session_available_for_discovery() -> None:
@@ -540,6 +566,7 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_THREADS_PER_SURFACE": str(config.max_threads_per_surface),
         "ACQ_MAX_OPPORTUNITIES_PER_RUN": str(config.max_opportunities_per_run),
         "ACQ_ENABLE_LIVE_TG_SCAN": os.getenv("ACQ_ENABLE_LIVE_TG_SCAN", "0"),
+        "ACQ_TELEGRAM_AUTH_BUNDLE_ENV": discovery_remote_auth_scope() if live_telegram_scan_enabled() and discovery_remote_auth_scope() != "TG_SESSION" else _configured_discovery_auth_bundle_env(),
         "ACQ_ENABLE_LLM_GATE": os.getenv("ACQ_ENABLE_LLM_GATE", "1"),
         "ACQ_LLM_MODEL": os.getenv("ACQ_LLM_MODEL", "models/gemma-4-31b-it"),
         "ACQ_GOOGLE_KEY_ENV": os.getenv("ACQ_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3"),
@@ -723,7 +750,6 @@ def _kernel_ref_from_meta() -> str:
 
 def _build_secrets_payload() -> str:
     keys = [
-        "TELEGRAM_AUTH_BUNDLE_S22",
         "TG_API_ID",
         "TG_API_HASH",
         "VK_ACCESS_TOKEN",
@@ -739,11 +765,25 @@ def _build_secrets_payload() -> str:
         for key in ["GOOGLE_API_KEY", "GOOGLE_API_KEY4", "GOOGLE_API_KEY_4"]:
             if key not in keys:
                 keys.append(key)
+    if live_telegram_scan_enabled():
+        auth_scope = discovery_remote_auth_scope()
+        if auth_scope == "TG_SESSION":
+            for key in ["TG_SESSION", "TELEGRAM_SESSION"]:
+                if key not in keys:
+                    keys.append(key)
+        elif auth_scope != "none" and auth_scope not in keys:
+            keys.append(auth_scope)
     payload = {key: os.getenv(key) for key in keys if (os.getenv(key) or "").strip()}
     if live_telegram_scan_enabled():
-        missing = [key for key in ["TELEGRAM_AUTH_BUNDLE_S22", "TG_API_ID", "TG_API_HASH"] if not payload.get(key)]
+        auth_scope = discovery_remote_auth_scope()
+        required_auth: list[str]
+        if auth_scope == "TG_SESSION":
+            required_auth = ["TG_SESSION"] if payload.get("TG_SESSION") else ["TELEGRAM_SESSION"]
+        else:
+            required_auth = [auth_scope]
+        missing = [key for key in [*required_auth, "TG_API_ID", "TG_API_HASH"] if not payload.get(key)]
         if missing:
-            raise RuntimeError(f"missing Telegram S22 credentials for acquisition Kaggle run: {', '.join(missing)}")
+            raise RuntimeError(f"missing Telegram credentials for acquisition Kaggle run ({auth_scope}): {', '.join(missing)}")
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -779,13 +819,14 @@ async def _prepare_kaggle_datasets(db: Any, client: Any, *, config_payload: dict
     encrypted, fernet_key = encrypt_secret(secrets_payload)
     username = _require_kaggle_username()
     slug_suffix = _slugify(run_id, max_len=18)
+    lease_key = _discovery_resource_lease_key()
     kaggle_run_config = await create_kaggle_run_config(
         db,
         run_id=f"acq_discovery:{run_id}",
         session_id=None,
         kind="subscriber_acquisition_discovery",
         notebook="SubscriberAcquisitionDiscovery",
-        resource_leases=["telegram_session:s22"] if live_telegram_scan_enabled() else [],
+        resource_leases=[lease_key] if live_telegram_scan_enabled() and lease_key else [],
     )
 
     def write_cipher(path: Path) -> None:

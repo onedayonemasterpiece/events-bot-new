@@ -131,17 +131,24 @@ server marks it `rejected_bot_or_service` before building the next Kaggle seed
 payload and on result import.
 
 Discovery opportunity topics are broader than direct event recommendations. The
-MVP cheap prefilter only proposes possible comments for the expensive semantic
-gate; it must not be treated as the final candidate decision. The next Discovery
-stage adds `acq_comment_semantic_retrieval.v1`: comments/messages are embedded
-locally on Kaggle, scored against acquisition intent sets, aggregated into
-surface-level semantic profiles, and only the highest-ranked candidates are sent
-to Gemma. Kaggle opportunity acceptance remains LLM-first **after retrieval**
+current vector-scan path must not use deterministic/regex prefilters before LLM
+selection: collected comments, reply parents and source-post contexts are
+embedded first, ranked by semantic similarity, and the top semantic rows go to
+Gemma. Deterministic fields such as `candidate_noise_type` or `question_signal`
+are diagnostics in the XLSX only; they must not remove rows or change vector
+ranking unless an explicit legacy debug flag
+`ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER=1` is set outside production
+discovery. `acq_comment_semantic_retrieval.v1` embeds comments/messages locally
+on Kaggle, scores them against acquisition intent sets, aggregates
+surface-level semantic profiles, and sends the highest-ranked semantic rows to
+Gemma. Kaggle opportunity acceptance remains LLM-first **after retrieval**
 through the Gemma 4 acquisition gate (`ACQ_ENABLE_LLM_GATE=1`, `ACQ_LLM_MODEL`,
 default `models/gemma-4-31b-it`, Google key lane `GOOGLE_API_KEY3`). This means
 LLM owns final semantic acceptance and public-safety judgment, but it does not
-need to read every comment in a large surface. Gemma calls are also protected by
-a visible per-run budget gate (`ACQ_MAX_LLM_CALLS_PER_RUN`, default `80`) and the
+need to read every comment in a large surface. Gemma receives the context chain
+`source_post_text -> parent_comment_text -> current_comment_text`; a bare
+comment is not enough for acceptance. Gemma calls are also protected by a
+visible per-run budget gate (`ACQ_MAX_LLM_CALLS_PER_RUN`, default `80`) and the
 runtime reports `llm_gate` / `llm_gate_limits` counters in the Kaggle payload,
 including calls used/reserved, blocked limit attempts and estimated input
 tokens. If the configured Google key is absent, the runtime fails closed for
@@ -151,10 +158,10 @@ current/future need and not just a post-event thank-you/report or local logistic
 for the currently discussed event/post (schedule/programme of one day, exact
 time/address/entrance). Venue-policy questions addressed to a specific
 organizer/community (`у вас есть льготы/скидки/билеты/доступность/пандус/можно с
-коляской/для инвалидов`) are rejected as local policy unless the user explicitly
-asks for a city-wide search/picker of accessible/free events.
+коляской/для инвалидов`) are rejected by Gemma as local policy unless the user
+explicitly asks for a city-wide search/picker of accessible/free events.
 
-The cheap prefilter also routes recent static-site product hooks from the
+The semantic intent catalog also covers recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
 (`/partnerstvo/`), site search/listing questions (`/poisk/`, `/vystavki/`,
 `/populyarnoe/`), event badge/filter questions around Pushkin card,
@@ -165,6 +172,12 @@ intentionally includes loose phrasing such as “что посмотреть з�
 coast hints so route opportunities are not missed before Gemma does the semantic
 gate. These remain shadow opportunities for review only after Gemma 4 accepts
 the checklist; broad semantic acceptance is never owned by regex/keywords.
+
+Telegram live discovery uses the dedicated acquisition human session
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY` by default. S22 remains only a legacy fallback
+when the discovery bundle is absent; session guards and Kaggle status leases use
+the actual selected env scope, so discovery can run independently from Telegram
+Monitoring.
 
 For the current MVP, discovery runs intentionally use a small incremental scope
 by default: `ACQ_MAX_SURFACES_PER_RUN=4`,

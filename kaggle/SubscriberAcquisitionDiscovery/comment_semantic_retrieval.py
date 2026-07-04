@@ -452,14 +452,39 @@ def _intent_has_text_support(text: str, intent_set: str) -> bool:
     return True
 
 
+def _deterministic_prefilter_enabled() -> bool:
+    # Default is deliberately false. In the vector-scan funnel every collected
+    # comment/post context must be embedded and the LLM gate must receive the
+    # top semantic rows, not a regex/question-signal shortlist.
+    return truthy(os.getenv("ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER"))
+
+
 def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str) -> None:
     features = _text_quality_features(str(row.get("text") or row.get("text_snapshot") or ""))
     intent_supported = _intent_has_text_support(str(row.get("text") or row.get("text_snapshot") or ""), str(row.get("intent_set") or ""))
     out_of_scope = _out_of_scope_noise_type(str(row.get("text") or row.get("text_snapshot") or ""))
     raw_score = float(row.get(scoring_method) or row.get("score") or 0.0)
     relation = str(row.get("relation") or "").strip()
-    source_post_relation = relation in {"vk_social_wall_post"} or bool(row.get("is_post"))
+    source_post_relation = relation in {"vk_social_wall_post", "tg_channel_post_context"} or bool(row.get("is_post"))
     source_post_allowed = truthy(os.getenv("ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES"))
+    diagnostic_noise_type = features["noise_type"]
+    if source_post_relation and not source_post_allowed:
+        diagnostic_noise_type = "source_post_context"
+    elif out_of_scope:
+        diagnostic_noise_type = out_of_scope
+    elif not intent_supported:
+        diagnostic_noise_type = "intent_without_text_support"
+    if not _deterministic_prefilter_enabled():
+        row["raw_score"] = raw_score
+        row["question_boost"] = 0.0
+        row["noise_penalty"] = 0.0
+        row["score_for_rank"] = raw_score
+        row["question_signal"] = bool(features["question_signal"])
+        row["candidate_noise_type"] = diagnostic_noise_type
+        row["intent_text_supported"] = bool(intent_supported)
+        row["pre_llm_candidate_eligible"] = True
+        row["llm_gate_selection_basis"] = "semantic_top_n_no_deterministic_prefilter"
+        return
     if features["hard_noise"]:
         penalty = 0.35
     elif out_of_scope:
@@ -494,24 +519,25 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
         and intent_supported
         and (not source_post_relation or source_post_allowed)
     )
+    row["llm_gate_selection_basis"] = "legacy_deterministic_prefilter"
 
 
 def _record_analysis_text(record: dict[str, Any]) -> str:
     """Text embedded for retrieval: comment plus bounded parent/source context."""
     text = normalize_comment_text(str(record.get("text") or record.get("text_snapshot") or ""))
-    context_parts: list[str] = []
     parent = normalize_comment_text(str(record.get("reply_parent_text_snapshot") or record.get("reply_parent_text") or ""))
     source_post = normalize_comment_text(str(record.get("source_post_text_snapshot") or record.get("source_post_text") or ""))
     source_title = normalize_comment_text(str(record.get("source_context_title") or ""))
-    if parent:
-        context_parts.append(f"Родительский комментарий: {parent[:500]}")
+    context_parts: list[str] = []
     if source_post and source_post != text:
         context_parts.append(f"Исходный пост/тема: {source_post[:700]}")
     elif source_title:
         context_parts.append(f"Тема/контекст: {source_title[:300]}")
+    if parent:
+        context_parts.append(f"Родительский комментарий: {parent[:500]}")
     if not context_parts:
         return text
-    return (text + "\n\nКонтекст для понимания:\n" + "\n".join(context_parts))[:1800]
+    return ("Текущий комментарий/пост: " + text + "\n\nКонтекст для понимания:\n" + "\n".join(context_parts))[:1800]
 
 
 def _parse_created_at(value: Any) -> datetime | None:
@@ -742,8 +768,8 @@ def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item["analysis_text"] = analysis_text
         item["analysis_context_snapshot"] = "\n".join(
             part for part in [
-                normalize_comment_text(str(item.get("reply_parent_text_snapshot") or item.get("reply_parent_text") or ""))[:500],
                 normalize_comment_text(str(item.get("source_post_text_snapshot") or item.get("source_post_text") or item.get("source_context_title") or ""))[:700],
+                normalize_comment_text(str(item.get("reply_parent_text_snapshot") or item.get("reply_parent_text") or ""))[:500],
             ]
             if part
         )[:1000]
@@ -1540,6 +1566,7 @@ _RU_HEADERS = {
     "candidate_noise_type": "Причина фильтра",
     "intent_text_supported": "Смысл подтверждён текстом",
     "pre_llm_candidate_eligible": "В LLM-gate?",
+    "llm_gate_selection_basis": "Основа отбора в LLM",
     "recommendation": "Рекомендация",
     "members_or_subscribers": "Участники",
     "period_min_created_at": "Период с",
@@ -1731,7 +1758,7 @@ def _write_xlsx(
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
         "relation", "is_post", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
-        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible",
+        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible", "llm_gate_selection_basis",
     ]
     manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Поверхность" for h in headers[10:17]} | {h: "Текст и контекст" for h in headers[17:22]} | {h: "Решение" for h in headers[22:]}
     _append_grouped_header(ws, headers, manual_groups)
@@ -1813,7 +1840,7 @@ def _write_xlsx(
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+            "llm_gate_selection_basis", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
         ]
         ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Поверхность" for h in ex_headers[4:13]} | {h: "Комментарий и контекст" for h in ex_headers[13:17]} | {h: "Действие" for h in ex_headers[17:]}
         _append_grouped_header(ex, ex_headers, ex_groups)
@@ -2067,7 +2094,6 @@ def run_comment_semantic_retrieval(
     gate_candidates = [
         c for c in all_candidates
         if c.get("model_name") == gate_model
-        and c.get("pre_llm_candidate_eligible")
         and c.get("candidate_usage_scope") == "monitoring_candidate"
     ]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
@@ -2081,7 +2107,7 @@ def run_comment_semantic_retrieval(
         # Profiles are based on selected gate model to avoid double-counting two benchmark models.
         if row.get("model_name") == gate_model:
             all_gate_rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
-            if row.get("pre_llm_candidate_eligible") and row.get("candidate_usage_scope") == "monitoring_candidate":
+            if row.get("candidate_usage_scope") == "monitoring_candidate":
                 rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
     for rec in records:
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
@@ -2161,7 +2187,7 @@ def run_comment_semantic_retrieval(
         "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
-        "intent_text_supported", "pre_llm_candidate_eligible", "model_disagreement_bucket",
+        "intent_text_supported", "pre_llm_candidate_eligible", "llm_gate_selection_basis", "model_disagreement_bucket",
     ]
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
