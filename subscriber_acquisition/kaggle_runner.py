@@ -598,7 +598,12 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
                 "external_id": item.get("external_id"),
                 "surface_type": item.get("surface_type"),
                 "source": item.get("source"),
+                "title": item.get("title"),
+                "topic_hint": item.get("topic_hint"),
             }
+            reach = item.get("reach") or item.get("reach_json")
+            if isinstance(reach, dict):
+                meta["reach"] = reach
             if telegram_access:
                 meta["telegram_access"] = telegram_access
             tg_seed_meta.append(meta)

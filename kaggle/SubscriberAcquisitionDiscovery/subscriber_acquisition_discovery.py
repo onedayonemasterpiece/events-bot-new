@@ -2712,6 +2712,8 @@ def build_shadow_payload(
                 seed["topic_hint"] = str(seed_meta["topic_hint"])
             if seed_meta.get("title"):
                 seed["title"] = str(seed_meta["title"])
+            if isinstance(seed_meta.get("reach"), dict):
+                seed["reach"] = {**seed.get("reach", {}), **seed_meta["reach"]}
             if seed["surface_type"] == "linked_discussion":
                 seed["status"] = "candidate"
                 seed["scan_state"] = "queued_waiting_replyable_budget"

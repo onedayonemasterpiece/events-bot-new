@@ -27,6 +27,9 @@
 - Subscriber Acquisition import now keeps unscanned VK monitoring/catalog seeds
   and discovered profile-wall candidates pending instead of marking them scanned
   merely because their reach basis is not `seed_only`.
+- Subscriber Acquisition Telegram seed metadata now carries monitoring-source
+  titles/topic hints/reach into Kaggle output, preserving readable names for
+  unscanned backlog channels in reports.
 - Subscriber Acquisition VK discovery now treats explicit `vk:id...` and
   positive-owner `wall123_...` links as profile-wall candidates end-to-end,
   discovers capped profile candidates from public VK comment/post authors and

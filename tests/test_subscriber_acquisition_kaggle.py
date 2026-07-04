@@ -1630,6 +1630,33 @@ def test_shadow_payload_applies_tg_seed_metadata_to_linked_discussion_rows(monke
     assert surface["title"] == "КП Chat"
 
 
+def test_shadow_payload_applies_tg_seed_title_and_reach_without_scan(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_TG_SEEDS_JSON", '["https://t.me/monitoring_public"]')
+    monkeypatch.setenv(
+        "ACQ_TG_SEED_SURFACES_JSON",
+        json.dumps([
+            {
+                "url": "https://t.me/monitoring_public",
+                "handle": "monitoring_public",
+                "external_id": "tg:monitoring_public",
+                "surface_type": "unknown_public",
+                "source": "tg_monitoring",
+                "title": "Городские анонсы",
+                "topic_hint": "existing Telegram monitoring source",
+                "reach": {"basis": "telegram_monitoring_source", "confidence": "low"},
+            }
+        ], ensure_ascii=False),
+    )
+
+    payload = runtime.build_shadow_payload(scanned_surfaces=[], scanned_opportunities=[])
+
+    surface = payload["surfaces"][0]
+    assert surface["title"] == "Городские анонсы"
+    assert surface["source"] == "tg_monitoring"
+    assert surface["reach"]["basis"] == "telegram_monitoring_source"
+
+
 def test_tg_seed_metadata_is_initialized_inside_telegram_scan():
     source = Path("kaggle/SubscriberAcquisitionDiscovery/subscriber_acquisition_discovery.py").read_text(encoding="utf-8")
     telegram_body = source.split("async def scan_telegram_shadow_surfaces", 1)[1].split("def _seen_context_urls", 1)[0]

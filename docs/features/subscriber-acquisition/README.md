@@ -86,7 +86,9 @@ Monitoring source table (`telegram_source`) as `source=tg_monitoring` /
 `needs_comment_resolve`. These are mostly announcement channels/publics, so the
 discovery runtime must first prove linked discussion/comment availability; raw
 channel posts remain link-discovery context only and never become reply
-candidates.
+candidates. Seed metadata carries Telegram Monitoring titles/topic hints/reach
+into the Kaggle payload, so unscanned backlog rows in reports still have human
+readable public names instead of only handles.
 VK discovery is also comment-first: the runtime reads only public wall/comment
 methods, requests `filter=all` wall posts, skips posts with zero comments, reads
 comments in fresh-first order (`sort=desc`), backs off on VK `too many requests`

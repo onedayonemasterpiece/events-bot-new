@@ -840,10 +840,13 @@ async def test_runtime_seed_payload_includes_existing_telegram_monitoring_source
     by_external = {item["external_id"]: item for item in payload["surfaces"]}
     env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=4), payload)
     tg_seeds = json.loads(env["ACQ_TG_SEEDS_JSON"])
+    tg_meta = {item["external_id"]: item for item in json.loads(env["ACQ_TG_SEED_SURFACES_JSON"])}
 
     assert by_external["tg:city_events_public"]["source"] == "tg_monitoring"
     assert by_external["tg:city_events_public"]["status"] == "needs_comment_resolve"
     assert by_external["tg:city_events_public"]["reach"]["basis"] == "telegram_monitoring_source"
+    assert tg_meta["tg:city_events_public"]["title"] == "Городские анонсы"
+    assert tg_meta["tg:city_events_public"]["reach"]["basis"] == "telegram_monitoring_source"
     assert "https://t.me/city_events_public" in tg_seeds
     assert "tg:disabled_public" not in by_external
     assert "tg:terminal_public" not in by_external
