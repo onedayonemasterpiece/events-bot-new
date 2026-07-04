@@ -1,6 +1,6 @@
 {
   "schemaVersion": "organizer_medallion_assets_v1",
-  "generatedAt": "2026-07-03T00:00:00Z",
+  "generatedAt": "2026-07-04T00:00:00Z",
   "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
   "items": [
     {
@@ -225,12 +225,12 @@
         512
       ],
       "ariaLabel": "Организатор: театр «Акт Опус»",
-      "renderNote": "Медальон заменён с осьминога на надпись из официального логотипа: блок «АКТ» и слово «ОПУС» сохранены из source PNG и размещены друг над другом, как стековый знак внутри круга; блок «АКТ» оптически уменьшен и опущен, чтобы не выходить за круг. Runtime SVG self-contained; PNG fallback сохранён для QA/старых клиентов.",
-      "avatarUrl": "/assets/organizers/act-opus.svg",
+      "renderNote": "Официальный raster wordmark остаётся источником; runtime переключён на WebP-primary с PNG fallback, чтобы raster-медальоны не отдавались как SVG-контейнеры.",
+      "avatarUrl": "/assets/organizers/act-opus.webp",
       "fallbackPngUrl": "/assets/organizers/act-opus.png",
       "sourcePath": "site/src/assets/organizers/source/act-opus.logo_new_black.png",
       "retrievedAt": "2026-07-02",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-from-embedded-source-png"
     },
     {
       "slug": "znanie-russia",
@@ -403,11 +403,12 @@
         336
       ],
       "ariaLabel": "Площадка: Калининградский музыкальный театр",
-      "renderNote": "Официальный квадратный PNG-логотип встроен в SVG-контейнер с круглым фоном; это честный embedded-raster runtime без попытки трассировки.",
-      "avatarUrl": "/assets/organizers/muzteatr39.svg",
+      "renderNote": "Официальный квадратный PNG-логотип пересобран как WebP-primary медальон с PNG fallback; трассировка не используется.",
+      "avatarUrl": "/assets/organizers/muzteatr39.webp",
       "sourcePath": "site/src/assets/organizers/source/muzteatr39.logo2.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/muzteatr39.png"
     },
     {
       "slug": "dom-iskusstv",
@@ -457,17 +458,18 @@
       "sourceFile": "city-jazz-club.logojazz.png",
       "background": "#101113",
       "ring": "#D7B56D",
-      "logoCrop": "official-city-jazz-club-logo",
+      "logoCrop": "official-city-jazz-club-round-emblem",
       "fitBox": [
-        380,
-        212
+        360,
+        360
       ],
       "ariaLabel": "Площадка: Калининград Сити Джаз Клуб",
-      "renderNote": "Использован логотип с официальной страницы londonpub.ru/cityjazz; это медальон клубной площадки, отдельный от фестивального Kaliningrad City Jazz.",
-      "avatarUrl": "/assets/organizers/city-jazz-club.svg",
+      "renderNote": "Из официального lockup с londonpub.ru/cityjazz для круглого медальона взят левый круглый знак клуба: он отцентрирован, увеличен и отдан WebP-primary с PNG fallback; это отдельный venue-medallion, не фестивальный Kaliningrad City Jazz.",
+      "avatarUrl": "/assets/organizers/city-jazz-club.webp",
       "sourcePath": "site/src/assets/organizers/source/city-jazz-club.logojazz.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/city-jazz-club.png"
     },
     {
       "slug": "rostec-arena",
@@ -482,19 +484,19 @@
       "sourcePage": "https://t.me/rostec_arena",
       "sourceUrl": "https://t.me/rostec_arena public Telegram profile avatar",
       "sourceFile": "rostec-arena.telegram-avatar-20260703.jpg",
-      "background": "#161616",
-      "ring": "#D8B15E",
-      "logoCrop": "public-telegram-avatar-centered",
+      "background": "#0B57B7",
+      "ring": "#DCEBFF",
+      "logoCrop": "manual-vector-bars-from-public-telegram-avatar",
       "fitBox": [
-        424,
-        424
+        390,
+        280
       ],
       "ariaLabel": "Площадка: Ростех Арена",
-      "renderNote": "Чистый статический логотип на сайте не найден; использован публичный Telegram-аватар официального канала Ростех Арены, встроенный в круглый SVG-медальон.",
+      "renderNote": "Публичный Telegram-аватар использован как источник формы; runtime заменён на чистый SVG: синий фон заполняет весь круг, обводка стала светло-синей и не спорит с фоном, белый знак увеличен.",
       "avatarUrl": "/assets/organizers/rostec-arena.svg",
       "sourcePath": "site/src/assets/organizers/source/rostec-arena.telegram-avatar-20260703.jpg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-jpg"
+      "assetFormat": "svg-reconstructed-from-social-avatar"
     },
     {
       "slug": "bar-bastion",
@@ -509,21 +511,22 @@
         "bastion_kld"
       ],
       "sourcePage": "https://vk.com/bar_bastion",
-      "sourceUrl": "https://vk.com/bar_bastion",
-      "sourceFile": null,
-      "background": "#202020",
-      "ring": "#D03435",
-      "logoCrop": "neutral-initials-no-logo",
+      "sourceUrl": "https://sun9-10.userapi.com/s/v1/ig2/S-X-dYFbBe1CvkEhtbf6ykc5pZessFPqVOyJZQIUavWXFEVszgi_m83MwRSIshqb3ldhDkXlgQ0ICGxtJCZGoibr.jpg?quality=95&crop=146,181,452,452&as=32x32,48x48,72x72,108x108,160x160,240x240,360x360&ava=1&u=VGFGH8SPGTtDSXUrD6HHR2MuiM_oHfifmRGJnRF4_qw&cs=200x200",
+      "sourceFile": "bar-bastion.vk-avatar-20260704.jpg",
+      "background": "#0C0B0A",
+      "ring": "#B79356",
+      "logoCrop": "public-vk-avatar-centered",
       "fitBox": [
-        512,
-        512
+        430,
+        430
       ],
       "ariaLabel": "Площадка: Бар Бастион",
-      "renderNote": "Публичная VK-страница подтверждает площадку, но чистый официальный логотип/аватар без авторизованного VK API не извлечён; поэтому добавлен нейтральный буквенный медальон «Б», а не угаданный логотип.",
-      "avatarUrl": "/assets/organizers/bar-bastion.svg",
-      "sourcePath": null,
+      "renderNote": "Вместо нейтральной буквы использован публично извлечённый VK-аватар Бар Бастион с фирменным знаком и надписью; runtime WebP-primary с PNG fallback.",
+      "avatarUrl": "/assets/organizers/bar-bastion.webp",
+      "sourcePath": "site/src/assets/organizers/source/bar-bastion.vk-avatar-20260704.jpg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "neutral-initials-svg"
+      "assetFormat": "webp-source-vk-avatar",
+      "fallbackPngUrl": "/assets/organizers/bar-bastion.png"
     },
     {
       "slug": "signal",
@@ -547,11 +550,12 @@
         288
       ],
       "ariaLabel": "Площадка: Сигнал",
-      "renderNote": "Использован логотип организатора с Timepad-страницы Signal Community, встроенный в SVG-медальон; это raster-in-SVG runtime.",
-      "avatarUrl": "/assets/organizers/signal.svg",
+      "renderNote": "Логотип организатора с Timepad пересобран как WebP-primary медальон с PNG fallback; это raster runtime без SVG-обёртки.",
+      "avatarUrl": "/assets/organizers/signal.webp",
       "sourcePath": "site/src/assets/organizers/source/signal.timepad-logo.jpg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-jpg"
+      "assetFormat": "webp-source-jpg",
+      "fallbackPngUrl": "/assets/organizers/signal.png"
     },
     {
       "slug": "mumod",
@@ -571,11 +575,11 @@
       "ring": "#D7282F",
       "logoCrop": "official-horizontal-svg-wordmark",
       "fitBox": [
-        340,
-        106
+        374,
+        116
       ],
       "ariaLabel": "Площадка: Музей курортной моды",
-      "renderNote": "Официальный SVG-логотип с сайта mumod.ru встроен в светлый круглый медальон.",
+      "renderNote": "Официальный SVG-логотип с сайта mumod.ru встроен в светлый круглый медальон и увеличен более чем на 10% относительно первой версии.",
       "avatarUrl": "/assets/organizers/mumod.svg",
       "sourcePath": "site/src/assets/organizers/source/mumod.logo.svg",
       "retrievedAt": "2026-07-03",
@@ -594,19 +598,20 @@
       "sourcePage": "https://kldzoo.ru/",
       "sourceUrl": "https://kldzoo.ru/local/templates/s1/img/logo.png",
       "sourceFile": "kldzoo.logo.png",
-      "background": "#F3F7EA",
-      "ring": "#5D8A33",
+      "background": "#F7F5E9",
+      "ring": "#D8D1BE",
       "logoCrop": "official-square-logo",
       "fitBox": [
-        348,
-        348
+        452,
+        452
       ],
       "ariaLabel": "Площадка: Калининградский зоопарк",
-      "renderNote": "Официальный квадратный PNG-логотип с сайта зоопарка встроен в SVG-медальон без локальной векторизации.",
-      "avatarUrl": "/assets/organizers/kldzoo.svg",
+      "renderNote": "Официальный квадратный PNG-логотип зоопарка увеличен примерно на 30% относительно первой версии; конкурирующая салатовая внешняя обводка убрана, потому что у исходного знака есть собственная круговая рамка.",
+      "avatarUrl": "/assets/organizers/kldzoo.webp",
       "sourcePath": "site/src/assets/organizers/source/kldzoo.logo.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/kldzoo.png"
     },
     {
       "slug": "locostandup",
@@ -631,11 +636,12 @@
         424
       ],
       "ariaLabel": "Площадка: стендап-клуб «Локация»",
-      "renderNote": "Использован публичный Telegram-аватар официального канала locostandup; официальный сайт не дал более чистого статического logo.svg.",
-      "avatarUrl": "/assets/organizers/locostandup.svg",
+      "renderNote": "Публичный Telegram-аватар официального канала locostandup пересобран как WebP-primary медальон с PNG fallback.",
+      "avatarUrl": "/assets/organizers/locostandup.webp",
       "sourcePath": "site/src/assets/organizers/source/locostandup.telegram-avatar-20260703.jpg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-jpg"
+      "assetFormat": "webp-source-jpg",
+      "fallbackPngUrl": "/assets/organizers/locostandup.png"
     },
     {
       "slug": "kaliningrad-art-museum",
@@ -653,17 +659,18 @@
       "sourceFile": "kaliningrad-art-museum.logo-footer.png",
       "background": "#1F1F1F",
       "ring": "#F4EFE4",
-      "logoCrop": "official-footer-wordmark",
+      "logoCrop": "official-footer-logo-split-mark-over-wordmark",
       "fitBox": [
-        424,
-        82
+        365,
+        300
       ],
       "ariaLabel": "Площадка: Калининградский музей изобразительных искусств",
-      "renderNote": "Официальный footer PNG-логотип сайта встроен в SVG-медальон; исходник горизонтальный, поэтому вписан как wordmark на светлый фон.",
-      "avatarUrl": "/assets/organizers/kaliningrad-art-museum.svg",
+      "renderNote": "Официальный footer PNG-логотип разложен внутри медальона: знак вынесен вверх и увеличен, подпись размещена под логотипом; runtime WebP-primary с PNG fallback.",
+      "avatarUrl": "/assets/organizers/kaliningrad-art-museum.webp",
       "sourcePath": "site/src/assets/organizers/source/kaliningrad-art-museum.logo-footer.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/kaliningrad-art-museum.png"
     },
     {
       "slug": "brachert",
@@ -684,15 +691,45 @@
       "ring": "#EFE5D5",
       "logoCrop": "official-site-logo",
       "fitBox": [
-        284,
-        236
+        318,
+        264
       ],
       "ariaLabel": "Площадка: Дом-музей Германа Брахерта",
-      "renderNote": "Официальный PNG-логотип с hbrachert.ru встроен в круглый SVG-медальон.",
-      "avatarUrl": "/assets/organizers/brachert.svg",
+      "renderNote": "Официальный PNG-логотип hbrachert.ru пересобран как WebP-primary круглый медальон с PNG fallback.",
+      "avatarUrl": "/assets/organizers/brachert.webp",
       "sourcePath": "site/src/assets/organizers/source/brachert.logo-br.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-embedded-source-png"
+      "assetFormat": "webp-source-png",
+      "fallbackPngUrl": "/assets/organizers/brachert.png"
+    },
+    {
+      "slug": "ruin-keepers",
+      "name": "Хранители руин",
+      "shortName": "Хранители руин",
+      "aliases": [
+        "Хранители руин",
+        "Ruin Keepers",
+        "ruin_keepers",
+        "ruin.keepers",
+        "ruin-keepers.ru",
+        "Железнодорожные ворота"
+      ],
+      "sourcePage": "https://ruin-keepers.ru/",
+      "sourceUrl": "https://static.tildacdn.one/tild6664-6533-4665-a166-356135616237/tild3638-3334-4965-a.png",
+      "sourceFile": "ruin-keepers.logo.png",
+      "background": "#F8F4EA",
+      "ring": "#111111",
+      "logoCrop": "official-site-logo-mark-manual-vector-reconstruction",
+      "fitBox": [
+        330,
+        330
+      ],
+      "ariaLabel": "Организатор: Хранители руин",
+      "renderNote": "Официальный сайт даёт raster PNG-логотип с башней и сердцем; для медальона знак вручную реконструирован как простой source-faithful SVG с безопасными круглыми отступами. Социальные SVG на сайте являются иконками VK/Telegram, не логотипом движения.",
+      "avatarUrl": "/assets/organizers/ruin-keepers.svg",
+      "sourcePath": "site/src/assets/organizers/source/ruin-keepers.logo.png",
+      "retrievedAt": "2026-07-04",
+      "assetFormat": "svg-manual-reconstruction-from-official-png"
     }
   ]
 }

@@ -12,6 +12,7 @@ const festivalItems = (festivalMedallions as { items: Array<{ slug: string; name
 const festivals = festivalItems.filter((item) => item.category !== 'venue_brand');
 const venueBrands = festivalItems.filter((item) => item.category === 'venue_brand');
 const webpSource = (url: string) => url.endsWith('.webp');
+const imageFallbackSrc = (avatarUrl: string, fallbackPngUrl?: string) => avatarUrl.endsWith('.webp') ? (fallbackPngUrl || avatarUrl) : avatarUrl;
 const sourceTokens = [
   {
     slug: 'meow-afisha',
@@ -57,7 +58,7 @@ const pushkin = {
                 <span class="event-token__circle" aria-hidden="true">
                   <picture>
                     {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
-                    <img src={withBase(item.fallbackPngUrl || item.avatarUrl)} alt="" loading="lazy" decoding="async" />
+                    <img src={withBase(imageFallbackSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
                   </picture>
                 </span>
               </li>
