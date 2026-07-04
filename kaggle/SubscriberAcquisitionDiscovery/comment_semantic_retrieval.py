@@ -144,6 +144,35 @@ _ROUTE_DEST_RE = re.compile(
     r"(?i)\b(светлогорск\w*|зеленоградск\w*|балтийск\w*|янтарн\w*|черняховск\w*|советск\w*|гусев\w*|куршск\w*\s+кос\w*|зам\w+|форт\w*|кирх\w*|побереж\w+)\b"
 )
 _TRANSPORT_RE = re.compile(r"(?i)\b(электричк\w*|поезд\w*|автобус\w*|машин\w*|без\s+машин\w*)\b")
+_QUESTION_SIGNAL_RE = re.compile(
+    r"(?i)(\?|"
+    r"\b(?:куда|где|когда|как|что|сколько|какой|какая|какие|какое|зачем|почему)\b|"
+    r"\b(?:подскажите|посоветуйте|посоветуй|ищу|ищем|интересует|нужен|нужна|нужно)\b|"
+    r"\b(?:есть\s+ли|будет\s+ли|можно\s+ли|нужна\s+ли|нужно\s+ли|кто\s+знает)\b)"
+)
+_OFFER_NOISE_RE = re.compile(
+    r"(?i)\b("
+    r"сохраняйте|записывайтесь|приглашаем|предлагаем|предлагаю|приходите|жд[её]м\s+вас|"
+    r"бронируйте|бронь|забронировать|купить\s+билет|стоимость|цена|скидк\w*|акци\w*|"
+    r"в\s+наличии|прода[её]тся|продам|сдам|аренда|работа|ваканси\w*|резюме|"
+    r"экскурси\w*\s+(?:по|на|в)|тур(?:ы|ов|ом)?|заезды|каждую\s+неделю|"
+    r"пишите\s+(?:в\s+)?(?:лс|личку|директ)|whatsapp|ватсап|тел\.|телефон|подробности\s+по\s+ссылке"
+    r")\b"
+)
+_URL_OR_MENTION_RE = re.compile(r"(?i)(https?://|t\.me/|vk\.com/|@[A-Za-z0-9_]{4,})")
+_ROUTE_CONTEXT_RE = re.compile(
+    r"(?i)\b(куда\s+(?:съездить|поехать|сходить)|что\s+посмотреть|маршрут|достопримечательн\w*|"
+    r"посетить|светлогорск\w*|зеленоградск\w*|балтийск\w*|янтарн\w*|черняховск\w*|"
+    r"куршск\w*\s+кос\w*|зам\w+|форт\w*|кирх\w*|электричк\w*|автобус\w*)\b"
+)
+_EVENT_CONTEXT_RE = re.compile(
+    r"(?i)\b(мероприяти\w*|событи\w*|афиш\w*|концерт\w*|выставк\w*|спектакл\w*|"
+    r"фестивал\w*|лекци\w*|мастер[- ]?класс\w*|билет\w*|регистрац\w*|начина\w*|"
+    r"начало|длится|возрастн\w*|вход|программ\w*|запись|трансляц\w*|"
+    r"куда\s+сходить|выходн\w*)\b"
+)
+_ORGANIZER_SUBMIT_CONTEXT_RE = re.compile(r"(?i)\b(афиш\w*|анонс\w*|мероприяти\w*|событи\w*|добавить|прислать|опубликовать|партн[её]рств\w*)\b")
+_BADGE_CONTEXT_RE = re.compile(r"(?i)\b(пушкинск\w*|бесплатн\w*|дет\w*|семейн\w*|льгот\w*|инвалид\w*|доступн\w*|запись|трансляц\w*)\b")
 
 
 def truthy(value: Any) -> bool:
@@ -323,6 +352,80 @@ def _route_target_hint(text: str, intent_set: str) -> dict[str, Any]:
     }
 
 
+def _text_quality_features(text: str) -> dict[str, Any]:
+    compact = normalize_comment_text(text)
+    tokens = _TOKEN_RE.findall(compact)
+    question_signal = bool(_QUESTION_SIGNAL_RE.search(compact))
+    offer_signal = bool(_OFFER_NOISE_RE.search(compact))
+    link_signal = bool(_URL_OR_MENTION_RE.search(compact))
+    # URLs/mentions without a question are commonly ads, cross-posts or source
+    # announcements. Keep them in artifacts, but do not spend LLM/reply budget.
+    link_offer_signal = link_signal and not question_signal and len(tokens) >= 6
+    too_short_statement = len(tokens) <= 2 and not question_signal
+    if offer_signal:
+        noise_type = "explicit_offer_or_ad"
+    elif link_offer_signal:
+        noise_type = "link_or_crosspost_without_question"
+    elif too_short_statement:
+        noise_type = "too_short_non_question"
+    elif not question_signal:
+        noise_type = "non_question_statement"
+    else:
+        noise_type = ""
+    hard_noise = noise_type in {"explicit_offer_or_ad", "link_or_crosspost_without_question", "too_short_non_question"}
+    return {
+        "question_signal": question_signal,
+        "offer_signal": offer_signal,
+        "link_signal": link_signal,
+        "noise_type": noise_type,
+        "hard_noise": hard_noise,
+        "token_count": len(tokens),
+    }
+
+
+def _intent_has_text_support(text: str, intent_set: str) -> bool:
+    compact = normalize_comment_text(text)
+    if intent_set in ROUTE_INTENT_SETS:
+        return bool(_ROUTE_CONTEXT_RE.search(compact))
+    if intent_set in {"event_far_context", "event_close_question", "event_site_search_or_listing"}:
+        return bool(_EVENT_CONTEXT_RE.search(compact))
+    if intent_set == "organizer_comment_fit":
+        # Generic questions like “как зовут детей?” must not become organizer
+        # clarification candidates without event/logistics context.
+        return bool(_EVENT_CONTEXT_RE.search(compact))
+    if intent_set == "organizer_submission_or_partnership":
+        return bool(_ORGANIZER_SUBMIT_CONTEXT_RE.search(compact))
+    if intent_set == "badge_filter_need":
+        return bool(_BADGE_CONTEXT_RE.search(compact))
+    return True
+
+
+def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str) -> None:
+    features = _text_quality_features(str(row.get("text") or row.get("text_snapshot") or ""))
+    intent_supported = _intent_has_text_support(str(row.get("text") or row.get("text_snapshot") or ""), str(row.get("intent_set") or ""))
+    raw_score = float(row.get(scoring_method) or row.get("score") or 0.0)
+    if features["hard_noise"]:
+        penalty = 0.35
+    elif not intent_supported:
+        penalty = 0.18
+    elif not features["question_signal"]:
+        penalty = 0.08
+    else:
+        penalty = 0.0
+    boost = 0.04 if features["question_signal"] else 0.0
+    score_for_rank = raw_score + boost - penalty
+    row["raw_score"] = raw_score
+    row["question_boost"] = boost
+    row["noise_penalty"] = penalty
+    row["score_for_rank"] = score_for_rank
+    row["question_signal"] = bool(features["question_signal"])
+    row["candidate_noise_type"] = features["noise_type"]
+    if not intent_supported:
+        row["candidate_noise_type"] = "intent_without_text_support"
+    row["intent_text_supported"] = bool(intent_supported)
+    row["pre_llm_candidate_eligible"] = bool(features["question_signal"] and not features["hard_noise"] and intent_supported)
+
+
 def _surface_key(record: dict[str, Any]) -> str:
     return str(record.get("surface_key") or record.get("surface_external_id") or record.get("surface_url") or "unknown")
 
@@ -379,10 +482,10 @@ def _score_comment(
 
 def _rank_candidates(rows: list[dict[str, Any]], *, scoring_method: str) -> list[dict[str, Any]]:
     rows = [r for r in rows if r.get("intent_set") != "negative_intents"]
-    rows.sort(key=lambda r: float(r.get(scoring_method) or r.get("score") or 0.0), reverse=True)
+    rows.sort(key=lambda r: float(r.get("score_for_rank") if r.get("score_for_rank") is not None else (r.get(scoring_method) or r.get("score") or 0.0)), reverse=True)
     for idx, row in enumerate(rows, start=1):
         row["rank_global"] = idx
-        row["score"] = float(row.get(scoring_method) or 0.0)
+        row["score"] = float(row.get("score_for_rank") if row.get("score_for_rank") is not None else (row.get(scoring_method) or 0.0))
     per_surface: dict[str, int] = defaultdict(int)
     for row in rows:
         key = str(row.get("surface_key") or "unknown")
@@ -412,7 +515,7 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
     dominant: list[str] = []
     for intent_set in POSITIVE_INTENT_SETS:
         intent_rows = by_intent.get(intent_set, [])
-        scores = [float(r.get(scoring_method) or r.get("score") or 0.0) for r in intent_rows]
+        scores = [float(r.get("score") if r.get("score") is not None else (r.get(scoring_method) or 0.0)) for r in intent_rows]
         p95 = _percentile(scores, 0.95)
         candidate_count_top3pct = sum(1 for r in intent_rows if str(r.get("funnel_bucket")) in {"top_0_5pct", "top_1pct", "top_3pct"})
         if candidate_count_top3pct >= 5 or p95 >= 0.18:
@@ -430,7 +533,7 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
                 dominant.append("event_questions")
             elif intent_set in ORGANIZER_INTENT_SETS and "organizer_fit" not in dominant:
                 dominant.append("organizer_fit")
-        examples = [r.get("comment_id") for r in sorted(intent_rows, key=lambda r: float(r.get(scoring_method) or 0.0), reverse=True)[:3]]
+        examples = [r.get("comment_id") for r in sorted(intent_rows, key=lambda r: float(r.get("score") if r.get("score") is not None else (r.get(scoring_method) or 0.0)), reverse=True)[:3]]
         semantic_presence[intent_set] = {
             "present": level != "none",
             "level": level,
@@ -440,9 +543,10 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         }
     comments_total = len(surface_records)
     actionable = sum(1 for r in rows if str(r.get("funnel_bucket")) in {"top_0_5pct", "top_1pct", "top_3pct"})
+    eligible_questions = sum(1 for r in rows if r.get("pre_llm_candidate_eligible"))
     if actionable >= 3 and dominant:
         decision = "monitor"
-        reason = f"{actionable} top semantic candidates; interests={', '.join(dominant)}"
+        reason = f"{actionable} top question-like semantic candidates; interests={', '.join(dominant)}"
     elif dominant and comments_total >= 5:
         decision = "sample_more"
         reason = f"semantic signal present but only {actionable} top candidates"
@@ -459,6 +563,7 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         "surface_type": surface_records[0].get("surface_type") if surface_records else None,
         "comments_total": comments_total,
         "comments_embedded": comments_total,
+        "eligible_question_candidates": eligible_questions,
         "period": {"min_created_at": min(dates) if dates else None, "max_created_at": max(dates) if dates else None},
         "semantic_presence": semantic_presence,
         "dominant_detected_interests": dominant,
@@ -471,6 +576,105 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
     }
 
 
+def _best_context_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    best: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = str(row.get("context_url") or row.get("comment_id") or row.get("text_snapshot") or "")
+        if not key:
+            continue
+        if key not in best or float(row.get("rank_global") or 999999) < float(best[key].get("rank_global") or 999999):
+            best[key] = row
+    return sorted(best.values(), key=lambda r: float(r.get("rank_global") or 999999))
+
+
+def _examples_text(rows: list[dict[str, Any]], *, limit: int = 3) -> str:
+    examples: list[str] = []
+    for row in _best_context_rows(rows)[:limit]:
+        text = str(row.get("text_snapshot") or "").replace("\n", " ")[:140]
+        url = str(row.get("context_url") or "")
+        if url:
+            examples.append(f"{text} — {url}")
+        else:
+            examples.append(text)
+    return "\n".join(examples)
+
+
+def _surface_decision_summaries(
+    profiles: list[dict[str, Any]],
+    *,
+    eligible_rows_by_surface: dict[str, list[dict[str, Any]]],
+    all_gate_rows_by_surface: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for profile in profiles:
+        surface_key = str(profile.get("surface_key") or "")
+        eligible = _best_context_rows(eligible_rows_by_surface.get(surface_key, []))
+        all_rows = _best_context_rows(all_gate_rows_by_surface.get(surface_key, []))
+        route_rows = [r for r in eligible if r.get("candidate_action_type") == "trip_route_poi_recommendation"]
+        event_rows = [r for r in eligible if r.get("candidate_action_type") == "event_recommendation_reply"]
+        organizer_submit_rows = [r for r in eligible if r.get("candidate_action_type") == "organizer_submission_or_partnership"]
+        badge_rows = [r for r in eligible if r.get("candidate_action_type") == "badge_filter_need"]
+        ask_context_rows = [
+            r for r in eligible
+            if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit"}
+        ]
+        noise_rows = [r for r in all_rows if str(r.get("candidate_noise_type") or "")]
+        answerable_count = len(route_rows) + len(event_rows) + len(organizer_submit_rows) + len(badge_rows)
+        ask_count = len(ask_context_rows)
+        if answerable_count >= 3 and ask_count >= 2:
+            recommendation = "both_monitor_replies_and_ask_clarifications"
+        elif answerable_count >= 3:
+            recommendation = "monitor_for_reply_opportunities"
+        elif ask_count >= 2:
+            recommendation = "ask_organizer_clarification_questions"
+        elif answerable_count or ask_count:
+            recommendation = "sample_more"
+        else:
+            recommendation = "reject_or_low_priority"
+        parts: list[str] = []
+        if route_rows:
+            parts.append(f"route/POI вопросов: {len(route_rows)}")
+        if event_rows:
+            parts.append(f"event-вопросов: {len(event_rows)}")
+        if organizer_submit_rows:
+            parts.append(f"organizer submission вопросов: {len(organizer_submit_rows)}")
+        if badge_rows:
+            parts.append(f"badge/filter вопросов: {len(badge_rows)}")
+        if ask_context_rows:
+            parts.append(f"паттернов для уточняющих вопросов организаторам: {len(ask_context_rows)}")
+        if noise_rows:
+            parts.append(f"отфильтровано рекламных/не-вопросных сигналов: {len(noise_rows)}")
+        summary_ru = "; ".join(parts) if parts else "полезных вопросных сигналов не найдено"
+        out.append({
+            "surface_key": surface_key,
+            "platform": profile.get("platform"),
+            "surface_type": profile.get("surface_type"),
+            "surface_title": profile.get("surface_title"),
+            "surface_url": profile.get("surface_url"),
+            "comments_embedded": profile.get("comments_embedded"),
+            "recommendation": recommendation,
+            "summary_ru": summary_ru,
+            "answerable_question_candidates": answerable_count,
+            "ask_clarification_contexts": ask_count,
+            "route_poi_questions": len(route_rows),
+            "event_questions": len(event_rows),
+            "organizer_submission_questions": len(organizer_submit_rows),
+            "badge_filter_questions": len(badge_rows),
+            "filtered_noise_contexts": len(noise_rows),
+            "dominant_detected_interests": ",".join(profile.get("dominant_detected_interests") or []),
+            "monitoring_decision_hint": profile.get("monitoring_decision_hint"),
+            "monitoring_reason": profile.get("monitoring_reason"),
+            "answerable_examples": _examples_text([*route_rows[:2], *event_rows[:2], *organizer_submit_rows[:1], *badge_rows[:1]], limit=4),
+            "ask_question_examples": _examples_text(ask_context_rows, limit=3),
+        })
+    return sorted(out, key=lambda r: (
+        str(r.get("recommendation")) not in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities", "ask_organizer_clarification_questions"},
+        -int(r.get("answerable_question_candidates") or 0),
+        -int(r.get("ask_clarification_contexts") or 0),
+        str(r.get("surface_key") or ""),
+    ))
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -480,7 +684,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> Non
             writer.writerow(row)
 
 
-def _write_xlsx(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_xlsx(path: Path, rows: list[dict[str, Any]], *, surface_summaries: list[dict[str, Any]] | None = None) -> None:
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill
@@ -493,7 +697,7 @@ def _write_xlsx(path: Path, rows: list[dict[str, Any]]) -> None:
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
         "context_url", "text_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
-        "destination_hint", "transport_hint",
+        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible",
     ]
     ws.append(headers)
     for cell in ws[1]:
@@ -505,9 +709,31 @@ def _write_xlsx(path: Path, rows: list[dict[str, Any]]) -> None:
         if row.get("context_url"):
             url_cell.hyperlink = str(row.get("context_url"))
             url_cell.style = "Hyperlink"
-    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 45, 70, 55, 14, 14, 14, 22, 16], start=1):
+    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 45, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
         ws.column_dimensions[chr(64 + idx) if idx <= 26 else "Z"].width = width
     ws.freeze_panes = "A2"
+
+    if surface_summaries:
+        surf = wb.create_sheet("surface_summary")
+        surf_headers = [
+            "recommendation", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
+            "comments_embedded", "summary_ru", "answerable_question_candidates", "ask_clarification_contexts",
+            "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
+            "filtered_noise_contexts", "answerable_examples", "ask_question_examples",
+        ]
+        surf.append(surf_headers)
+        for cell in surf[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        for row in surface_summaries:
+            surf.append([row.get(h) for h in surf_headers])
+            url_cell = surf.cell(surf.max_row, surf_headers.index("surface_url") + 1)
+            if row.get("surface_url"):
+                url_cell.hyperlink = str(row.get("surface_url"))
+                url_cell.style = "Hyperlink"
+        surf.freeze_panes = "A2"
+        for idx, width in enumerate([34, 30, 10, 18, 30, 42, 14, 70, 14, 14, 14, 14, 14, 14, 14, 90, 90], start=1):
+            surf.column_dimensions[chr(64 + idx) if idx <= 26 else "Z"].width = width
 
     summary = wb.create_sheet("summary")
     summary.append(["metric", "value"])
@@ -539,7 +765,13 @@ def _select_manual_rows(candidates: list[dict[str, Any]], *, max_rows: int) -> l
     return out
 
 
-def _report_md(summary: dict[str, Any], profiles: list[dict[str, Any]], candidates: list[dict[str, Any]], speed_rows: list[dict[str, Any]]) -> str:
+def _report_md(
+    summary: dict[str, Any],
+    profiles: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    speed_rows: list[dict[str, Any]],
+    surface_summaries: list[dict[str, Any]] | None = None,
+) -> str:
     top_route = [c for c in candidates if c.get("candidate_action_type") == "trip_route_poi_recommendation"][:10]
     lines = [
         "# Subscriber Acquisition Comment Semantic Retrieval Dry Run",
@@ -561,6 +793,10 @@ def _report_md(summary: dict[str, Any], profiles: list[dict[str, Any]], candidat
     lines.extend(["", "## Top monitoring surfaces", "| decision | surface | comments | interests | reason |", "| --- | --- | ---: | --- | --- |"])
     for profile in sorted(profiles, key=lambda p: (p.get("monitoring_decision_hint") != "monitor", -(p.get("comments_embedded") or 0)))[:20]:
         lines.append(f"| {profile.get('monitoring_decision_hint')} | {profile.get('surface_key')} | {profile.get('comments_embedded')} | {', '.join(profile.get('dominant_detected_interests') or [])} | {profile.get('monitoring_reason')} |")
+    if surface_summaries:
+        lines.extend(["", "## Surface decision summary", "| recommendation | surface | comments | summary |", "| --- | --- | ---: | --- |"])
+        for row in surface_summaries[:20]:
+            lines.append(f"| {row.get('recommendation')} | {row.get('surface_key')} | {row.get('comments_embedded')} | {str(row.get('summary_ru') or '').replace('|', ' ')} |")
     lines.extend(["", "## Best route/POI examples", "| score | surface | url | text |", "| ---: | --- | --- | --- |"])
     for row in top_route:
         text = str(row.get("text_snapshot") or "").replace("|", " ")[:160]
@@ -643,6 +879,7 @@ def run_comment_semantic_retrieval(
                 enriched["target_hint"] = _route_target_hint(str(rec.get("text") or ""), str(row.get("intent_set")))
                 enriched["destination_hint"] = enriched["target_hint"].get("destination_hint")
                 enriched["transport_hint"] = enriched["target_hint"].get("transport_hint")
+                _apply_text_quality_to_candidate(enriched, scoring_method=scoring_method)
                 model_rows.append(enriched)
         model_rows = _rank_candidates(model_rows, scoring_method=scoring_method)
         scoring_sec = time.perf_counter() - t0
@@ -693,17 +930,20 @@ def run_comment_semantic_retrieval(
         c["model_disagreement_bucket"] = bucket
 
     gate_model = os.getenv("ACQ_COMMENT_RETRIEVAL_GATE_MODEL") or (DEFAULT_GATE_MODEL if DEFAULT_GATE_MODEL in models else models[0])
-    gate_candidates = [c for c in all_candidates if c.get("model_name") == gate_model]
+    gate_candidates = [c for c in all_candidates if c.get("model_name") == gate_model and c.get("pre_llm_candidate_eligible")]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
 
     progress_callback("surface_profile", {"surfaces": len({r.get('surface_key') for r in records}), "progress_percent": 78})
     profiles: list[dict[str, Any]] = []
     rows_by_surface: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    all_gate_rows_by_surface: dict[str, list[dict[str, Any]]] = defaultdict(list)
     records_by_surface: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in all_candidates:
         # Profiles are based on selected gate model to avoid double-counting two benchmark models.
         if row.get("model_name") == gate_model:
-            rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
+            all_gate_rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
+            if row.get("pre_llm_candidate_eligible"):
+                rows_by_surface[str(row.get("surface_key") or "unknown")].append(row)
     for rec in records:
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
     for surface_key, surface_records in records_by_surface.items():
@@ -713,10 +953,16 @@ def run_comment_semantic_retrieval(
             profile["surface_title"] = s.get("title")
             profile["surface_url"] = s.get("url")
         profiles.append(profile)
+    surface_summaries = _surface_decision_summaries(
+        profiles,
+        eligible_rows_by_surface=rows_by_surface,
+        all_gate_rows_by_surface=all_gate_rows_by_surface,
+    )
 
     artifact_prefix = os.getenv("ACQ_COMMENT_RETRIEVAL_ARTIFACT_PREFIX") or "comment_retrieval"
     candidates_csv = output_path / f"{artifact_prefix}_candidates.csv"
     profiles_csv = output_path / f"{artifact_prefix}_surface_profiles.csv"
+    surface_summary_csv = output_path / f"{artifact_prefix}_surface_decision_summary.csv"
     distributions_csv = output_path / f"{artifact_prefix}_score_distributions.csv"
     speed_csv = output_path / f"{artifact_prefix}_speed_metrics.csv"
     manual_xlsx = output_path / f"{artifact_prefix}_manual_review_sample.xlsx"
@@ -726,17 +972,24 @@ def run_comment_semantic_retrieval(
     candidate_fields = [
         "run_id", "surface_key", "platform", "surface_type", "context_url", "comment_id", "post_id", "topic_id", "thread_id",
         "created_at", "text_snapshot", "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
-        "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface", "funnel_bucket", "candidate_action_type",
-        "destination_hint", "transport_hint", "model_disagreement_bucket",
+        "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
+        "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
+        "intent_text_supported", "pre_llm_candidate_eligible", "model_disagreement_bucket",
     ]
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
-        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "comments_total", "comments_embedded", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
+        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "comments_total", "comments_embedded", "eligible_question_candidates", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
+    ])
+    _write_csv(surface_summary_csv, surface_summaries, [
+        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "comments_embedded", "recommendation", "summary_ru",
+        "answerable_question_candidates", "ask_clarification_contexts", "route_poi_questions", "event_questions",
+        "organizer_submission_questions", "badge_filter_questions", "filtered_noise_contexts", "dominant_detected_interests",
+        "monitoring_decision_hint", "monitoring_reason", "answerable_examples", "ask_question_examples",
     ])
     _write_csv(distributions_csv, distributions, ["model_name", "scoring_method", "count", "p50", "p90", "p95", "p99", "max"])
     _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
     manual_rows = _select_manual_rows(all_candidates, max_rows=max_manual_rows)
-    _write_xlsx(manual_xlsx, manual_rows)
+    _write_xlsx(manual_xlsx, manual_rows, surface_summaries=surface_summaries)
 
     summary = {
         "stage": STAGE_NAME,
@@ -758,6 +1011,7 @@ def run_comment_semantic_retrieval(
             "summary_json": str(summary_json),
             "candidates_csv": str(candidates_csv),
             "surface_profiles_csv": str(profiles_csv),
+            "surface_decision_summary_csv": str(surface_summary_csv),
             "score_distributions_csv": str(distributions_csv),
             "speed_metrics_csv": str(speed_csv),
             "manual_review_xlsx": str(manual_xlsx),
@@ -765,12 +1019,13 @@ def run_comment_semantic_retrieval(
         },
         "total_sec": round(time.perf_counter() - started, 4),
     }
-    report_md.write_text(_report_md(summary, profiles, gate_candidates, speed_rows), encoding="utf-8")
+    report_md.write_text(_report_md(summary, profiles, gate_candidates, speed_rows, surface_summaries), encoding="utf-8")
     summary_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     progress_callback("complete", {"comments_embedded": len(records), "candidate_count": len(all_candidates), "progress_percent": 100})
     return {
         "summary": summary,
         "surface_profiles": profiles,
+        "surface_decision_summaries": surface_summaries,
         "candidates": all_candidates,
         "llm_gate_candidates": gate_candidates,
         "artifacts": summary["artifacts"],

@@ -379,6 +379,86 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert route_candidates
     assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
     assert {p["surface_key"] for p in result["surface_profiles"]} == {"tg:vKalinigrad_recomendations", "vk:vagonka39"}
+    assert Path(summary["artifacts"]["surface_decision_summary_csv"]).exists()
+    assert result["surface_decision_summaries"]
+
+
+def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
+    retrieval = load_retrieval()
+
+    question = retrieval._text_quality_features("Подскажите, куда сходить в Светлогорске с детьми?")
+    offer = retrieval._text_quality_features("Маршрут одного дня в Калининграде. Сохраняйте и записывайтесь на экскурсию по ссылке https://example.com")
+
+    assert question["question_signal"] is True
+    assert question["hard_noise"] is False
+    assert offer["question_signal"] is False
+    assert offer["hard_noise"] is True
+    assert offer["noise_type"] == "explicit_offer_or_ad"
+
+    row = {"text_snapshot": "Сохраняйте подборку и бронируйте тур", "positive_negative_margin": 0.5}
+    retrieval._apply_text_quality_to_candidate(row, scoring_method="positive_negative_margin")
+    assert row["pre_llm_candidate_eligible"] is False
+    assert row["score_for_rank"] < 0.5
+
+    unsupported = {"text_snapshot": "Как зовут детишек?", "positive_negative_margin": 0.5, "intent_set": "organizer_comment_fit"}
+    retrieval._apply_text_quality_to_candidate(unsupported, scoring_method="positive_negative_margin")
+    assert unsupported["pre_llm_candidate_eligible"] is False
+    assert unsupported["candidate_noise_type"] == "intent_without_text_support"
+
+    row2 = {"text_snapshot": "Куда съездить из Калининграда на один день?", "positive_negative_margin": 0.5, "intent_set": "route_poi_close_actionable"}
+    retrieval._apply_text_quality_to_candidate(row2, scoring_method="positive_negative_margin")
+    assert row2["pre_llm_candidate_eligible"] is True
+    assert row2["score_for_rank"] > 0.5
+
+
+def test_surface_decision_summary_separates_reply_and_question_asking_modes():
+    retrieval = load_retrieval()
+    profile = {
+        "surface_key": "tg:example",
+        "platform": "tg",
+        "surface_type": "group",
+        "comments_embedded": 10,
+        "dominant_detected_interests": ["route_poi", "event_questions"],
+        "monitoring_decision_hint": "monitor",
+        "monitoring_reason": "test",
+    }
+    rows = [
+        {
+            "context_url": "https://t.me/example/1",
+            "rank_global": 1,
+            "candidate_action_type": "trip_route_poi_recommendation",
+            "intent_set": "route_poi_close_actionable",
+            "text_snapshot": "Куда съездить?",
+            "pre_llm_candidate_eligible": True,
+        },
+        {
+            "context_url": "https://t.me/example/2",
+            "rank_global": 2,
+            "candidate_action_type": "event_recommendation_reply",
+            "intent_set": "event_close_question",
+            "text_snapshot": "А где купить билеты?",
+            "pre_llm_candidate_eligible": True,
+        },
+        {
+            "context_url": "https://t.me/example/3",
+            "rank_global": 3,
+            "candidate_action_type": "event_recommendation_reply",
+            "intent_set": "event_close_question",
+            "text_snapshot": "Будет ли регистрация?",
+            "pre_llm_candidate_eligible": True,
+        },
+    ]
+
+    summaries = retrieval._surface_decision_summaries(
+        [profile],
+        eligible_rows_by_surface={"tg:example": rows},
+        all_gate_rows_by_surface={"tg:example": [*rows, {"context_url": "x", "candidate_noise_type": "explicit_offer_or_ad"}]},
+    )
+
+    assert summaries[0]["recommendation"] in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities"}
+    assert summaries[0]["answerable_question_candidates"] == 3
+    assert summaries[0]["ask_clarification_contexts"] == 2
+    assert summaries[0]["filtered_noise_contexts"] == 1
 
 
 def test_shadow_payload_exposes_comment_semantic_retrieval_result(monkeypatch, tmp_path):

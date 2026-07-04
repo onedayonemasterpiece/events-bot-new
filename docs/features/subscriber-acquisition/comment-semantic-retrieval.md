@@ -257,6 +257,21 @@ preserving duplicate counts.
 Do not aggressively lemmatize, strip punctuation, lowercase in a way that breaks
 names/URLs, or use OCR in this stage.
 
+Before LLM gate, apply a conservative **question-first quality layer**:
+
+- boost comments with explicit question signal (`?`, “куда/где/как/когда/что”,
+  “подскажите/посоветуйте”, “есть ли/будет ли/можно ли”);
+- penalize non-question statements;
+- mark explicit offers/ads/cross-posts as not eligible for LLM gate when they
+  contain cues such as “сохраняйте”, “записывайтесь”, “приглашаем”,
+  “бронируйте”, price/discount language, contact/DM calls, or URL/mention
+  cross-posts without a question.
+
+This deterministic layer is a narrow budget/noise guardrail, not the semantic
+acceptance decision. It should keep rows visible in artifacts with
+`candidate_noise_type`, `question_signal` and `pre_llm_candidate_eligible`, but
+only eligible question-like rows should spend Gemma/reply review budget.
+
 ## Kaggle integration
 
 Current MVP implementation is a sibling module called from the current runtime
@@ -302,10 +317,16 @@ Research-stage bulk output is artifact-first:
 - `acq_comment_retrieval_run_summary.json`
 - `comment_retrieval_candidates.csv`
 - `comment_retrieval_surface_profiles.csv`
+- `comment_retrieval_surface_decision_summary.csv`
 - `comment_retrieval_score_distributions.csv`
 - `comment_retrieval_manual_review_sample.xlsx`
 - `comment_retrieval_speed_metrics.csv`
 - `comment_retrieval_report.md`
+
+The XLSX must include a `surface_summary` sheet. It is the operator-facing map
+for “where to work next”: per channel/group/community recommendation, counts of
+answerable question candidates, counts of contexts useful for asking organizer
+clarification questions, filtered noise count, and clickable examples.
 
 YDB serverless is the preferred project-owned store for sanitized retrieval
 summaries once the dry run proves value, because the repo already has an optional
