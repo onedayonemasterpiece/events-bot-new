@@ -164,6 +164,13 @@ Dry run:
   discussion, `vk_comment`, `vk_board_comment`, `vk_social_wall_post`), and the
   observed `created_at` period. It must not imply “all DB/all history” unless
   the payload and budgets really covered that.
+- freshness policy: by default retrieval embeds/analyzes only comments not older
+  than `ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS=365`; a surface whose latest
+  observed comment is older than
+  `ACQ_COMMENT_RETRIEVAL_STALE_ACTIVITY_DAYS=92` is marked
+  `reject_stale_inactive` for the current acquisition plan. This is not a
+  permanent ban: if the public/chat revives and fresh comments appear, a later
+  run can move it back into `candidate`/`selected`.
 
 Main run only after dry-run review:
 
@@ -376,6 +383,8 @@ The XLSX must include these operator-facing sheets:
 
 - `summary_ru`: dashboard-style Russian explanation of what the file means,
   how to read it and what the important limitations are.
+- `summary_counts`: counts by platform/surface type and final status:
+  total/selected/candidate/rejected.
 - `scope`: run id, stage, model list/gate model, actual comment period,
   platform/surface/relation counts and the configured scan budgets; this answers
   whether the file came from all stored surfaces or from a bounded Kaggle sample.
@@ -387,7 +396,9 @@ The XLSX must include these operator-facing sheets:
   commenters if collected, total comments, normalized comments/day/week/30d/90d,
   latest-100 comment window dates/duration for low-volume or old surfaces,
   answerable questions per 30d/90d/per 100 comments, source-post vs comment
-  context counts, filtered noise count and clickable examples.
+  context counts, freshness status (`latest_comment_at`,
+  `days_since_latest_activity`, `freshness_status`), filtered noise count and
+  clickable examples.
 - one `eligible_<model>` sheet per embedding model, so e5-base and bge-m3 can be
   inspected independently instead of only seeing the recommended gate model.
 - `question_patterns`: grouped question patterns with counts and examples,

@@ -182,6 +182,10 @@ _MEDICINE_SCOPE_RE = re.compile(
     r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|лор\b|педиатр\w*|терапевт\w*|поликлиник\w*|"
     r"больниц\w*|лечени\w*|анализ\w*|мрт\b|узи\b|при[её]м\s+врач\w*|запис\w*\s+к\s+врач)\b"
 )
+_SURFACE_MEDICINE_SCOPE_RE = re.compile(
+    r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|педиатр\w*|здоровь\w*|симптом\w*|"
+    r"грудн\w*\s+вскармливан\w*|гв\b|лечени\w*|психолог\w*|диет\w*|худе\w*)\b"
+)
 
 
 def truthy(value: Any) -> bool:
@@ -210,6 +214,14 @@ def _int_env(name: str, default: int, *, min_value: int | None = None) -> int:
     if min_value is not None:
         value = max(min_value, value)
     return value
+
+
+def _max_comment_age_days() -> int:
+    return _int_env("ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS", 365, min_value=1)
+
+
+def _stale_activity_days() -> int:
+    return _int_env("ACQ_COMMENT_RETRIEVAL_STALE_ACTIVITY_DAYS", 92, min_value=1)
 
 
 def normalize_comment_text(text: str) -> str:
@@ -409,6 +421,20 @@ def _out_of_scope_noise_type(text: str) -> str:
     return ""
 
 
+def _surface_out_of_scope_type(profile: dict[str, Any]) -> str:
+    text = " ".join(str(profile.get(key) or "") for key in ["surface_title", "surface_url", "surface_key", "surface_type"])
+    if not text:
+        return ""
+    has_our_context = bool(_ROUTE_CONTEXT_RE.search(text) or _EVENT_CONTEXT_RE.search(text) or _ORGANIZER_SUBMIT_CONTEXT_RE.search(text))
+    if has_our_context:
+        return ""
+    if _REAL_ESTATE_SCOPE_RE.search(text):
+        return "out_of_scope_real_estate_surface"
+    if _SURFACE_MEDICINE_SCOPE_RE.search(text):
+        return "out_of_scope_medicine_surface"
+    return ""
+
+
 def _intent_has_text_support(text: str, intent_set: str) -> bool:
     compact = normalize_comment_text(text)
     if intent_set in ROUTE_INTENT_SETS:
@@ -537,6 +563,24 @@ def _latest_n_records(records: list[dict[str, Any]], *, limit: int = 100) -> lis
     return ordered[: max(1, int(limit))]
 
 
+def _days_since(value: Any, *, now: datetime | None = None) -> float | None:
+    dt = _parse_created_at(value)
+    if dt is None:
+        return None
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return max(0.0, (now - dt).total_seconds() / 86400.0)
+
+
+def _record_within_analysis_window(record: dict[str, Any], *, now: datetime | None = None) -> bool:
+    dt = _parse_created_at(record.get("created_at"))
+    if dt is None:
+        # Keep undated rows visible rather than silently losing potentially
+        # current data; the report will show unknown dates.
+        return True
+    days = _days_since(dt, now=now)
+    return days is None or days <= _max_comment_age_days()
+
+
 def _rate(count: int | float, period_days: Any, multiplier: float) -> float | None:
     try:
         days = float(period_days)
@@ -652,7 +696,10 @@ def _surface_key(record: dict[str, Any]) -> str:
 def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
     for rec in records:
+        if not _record_within_analysis_window(rec, now=now):
+            continue
         text = normalize_comment_text(str(rec.get("text") or rec.get("text_snapshot") or ""))
         if not text:
             continue
@@ -785,6 +832,14 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         decision = "reject"
         reason = "no acquisition-relevant semantic signal in embedded comments"
     period = _period_stats(surface_records)
+    days_since_latest_activity = _days_since(period.get("period_max_created_at"))
+    if days_since_latest_activity is not None and days_since_latest_activity > _stale_activity_days():
+        decision = "reject_stale_inactive"
+        reason = (
+            f"latest observed comment is {days_since_latest_activity:.0f} days old; "
+            f"current acquisition requires activity within {_stale_activity_days()} days. "
+            "Keep only as low-frequency revival watch."
+        )
     latest_100_records = _latest_n_records(surface_records, limit=100)
     latest_100_period = _period_stats(latest_100_records)
     relation_counts = Counter(str(r.get("relation") or "unknown") for r in surface_records)
@@ -808,6 +863,11 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         "period_max_created_at": period["period_max_created_at"],
         "period_days": period["period_days"],
         "period_label": period["period_label"],
+        "latest_comment_at": period["period_max_created_at"],
+        "days_since_latest_activity": round(days_since_latest_activity, 1) if days_since_latest_activity is not None else None,
+        "stale_activity_days": _stale_activity_days(),
+        "analysis_max_comment_age_days": _max_comment_age_days(),
+        "freshness_status": "stale_inactive" if days_since_latest_activity is not None and days_since_latest_activity > _stale_activity_days() else "active_or_unknown",
         "comments_per_day": _rate(comments_total, period["period_days"], 1),
         "comments_per_week": _rate(comments_total, period["period_days"], 7),
         "comments_per_30d": _rate(comments_total, period["period_days"], 30),
@@ -856,6 +916,23 @@ def _examples_text(rows: list[dict[str, Any]], *, limit: int = 3) -> str:
     return "\n".join(examples)
 
 
+def _selection_status_from_recommendation(recommendation: str, *, surface_status: str = "", scan_state: str = "") -> str:
+    rec = str(recommendation or "").strip()
+    status = str(surface_status or "").strip()
+    state = str(scan_state or "").strip()
+    if rec in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities", "ask_organizer_clarification_questions"}:
+        return "selected"
+    if rec in {"sample_more", "low_priority"}:
+        return "candidate"
+    if rec in {"reject_stale_inactive", "reject_or_low_priority"} or rec.startswith("reject") or rec.startswith("out_of_scope"):
+        return "rejected"
+    if status.startswith("rejected") or state.startswith("checked_no") or state in {"resolved_no_comments", "checked_inaccessible"}:
+        return "rejected"
+    if rec == "not_profiled_or_no_comment_signal" and state in {"scanned", "comments_available", "resolved_no_comments", "checked_inaccessible"}:
+        return "rejected"
+    return "candidate"
+
+
 def _surface_decision_summaries(
     profiles: list[dict[str, Any]],
     *,
@@ -890,6 +967,11 @@ def _surface_decision_summaries(
             recommendation = "sample_more"
         else:
             recommendation = "reject_or_low_priority"
+        surface_scope_noise = _surface_out_of_scope_type(profile)
+        if profile.get("monitoring_decision_hint") == "reject_stale_inactive":
+            recommendation = "reject_stale_inactive"
+        elif surface_scope_noise:
+            recommendation = surface_scope_noise
         parts: list[str] = []
         if route_rows:
             parts.append(f"route/POI вопросов: {len(route_rows)}")
@@ -904,6 +986,13 @@ def _surface_decision_summaries(
         if noise_rows:
             parts.append(f"отфильтровано рекламных/не-вопросных сигналов: {len(noise_rows)}")
         summary_ru = "; ".join(parts) if parts else "полезных вопросных сигналов не найдено"
+        if recommendation == "reject_stale_inactive":
+            summary_ru = (
+                f"устаревшая активность: последний комментарий {profile.get('latest_comment_at') or 'неизвестно'}, "
+                f"{profile.get('days_since_latest_activity') or '?'} дней назад; не выбирать сейчас, только revival-watch"
+            )
+        elif surface_scope_noise:
+            summary_ru = f"поверхность не по теме acquisition ({surface_scope_noise}); не выбирать для ответов/маршрутов/событий"
         out.append({
             "surface_key": surface_key,
             "platform": profile.get("platform"),
@@ -915,6 +1004,11 @@ def _surface_decision_summaries(
             "period_max_created_at": profile.get("period_max_created_at"),
             "period_days": profile.get("period_days"),
             "period_label": profile.get("period_label"),
+            "latest_comment_at": profile.get("latest_comment_at"),
+            "days_since_latest_activity": profile.get("days_since_latest_activity"),
+            "freshness_status": profile.get("freshness_status"),
+            "analysis_max_comment_age_days": profile.get("analysis_max_comment_age_days"),
+            "stale_activity_days": profile.get("stale_activity_days"),
             "unique_commenters": profile.get("unique_commenters"),
             "unique_commenters_note": "" if profile.get("unique_commenters_observed") else "not_collected_in_this_run",
             "comments_total": profile.get("comments_total"),
@@ -929,6 +1023,7 @@ def _surface_decision_summaries(
             "latest_100_period_days": profile.get("latest_100_period_days"),
             "latest_100_period_label": profile.get("latest_100_period_label"),
             "recommendation": recommendation,
+            "selection_status": _selection_status_from_recommendation(recommendation),
             "summary_ru": summary_ru,
             "answerable_question_candidates": answerable_count,
             "ask_clarification_contexts": ask_count,
@@ -1093,6 +1188,12 @@ def _surface_inventory_rows(
         surface = (surfaces_by_external or {}).get(key) or {}
         summary = by_key.get(key) or {}
         reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
+        recommendation = summary.get("recommendation") or "not_profiled_or_no_comment_signal"
+        selection_status = summary.get("selection_status") or _selection_status_from_recommendation(
+            str(recommendation),
+            surface_status=str(surface.get("status") or ""),
+            scan_state=str(surface.get("scan_state") or ""),
+        )
         rows.append({
             "surface_key": key,
             "platform": surface.get("platform") or summary.get("platform"),
@@ -1103,7 +1204,11 @@ def _surface_inventory_rows(
             "scan_state": surface.get("scan_state"),
             "source": surface.get("source"),
             "members_or_subscribers": reach.get("members") or reach.get("members_count") or summary.get("members_or_subscribers"),
-            "recommendation": summary.get("recommendation") or "not_profiled_or_no_comment_signal",
+            "recommendation": recommendation,
+            "selection_status": selection_status,
+            "latest_comment_at": summary.get("latest_comment_at"),
+            "days_since_latest_activity": summary.get("days_since_latest_activity"),
+            "freshness_status": summary.get("freshness_status") or ("unknown_no_profile" if not summary else ""),
             "comments_embedded": summary.get("comments_embedded") or 0,
             "answerable_question_candidates": summary.get("answerable_question_candidates") or 0,
             "route_poi_questions": summary.get("route_poi_questions") or 0,
@@ -1112,11 +1217,41 @@ def _surface_inventory_rows(
             "summary_ru": summary.get("summary_ru") or "В этом прогоне полезных сигналов не найдено или поверхность не попала в comment retrieval.",
         })
     return sorted(rows, key=lambda r: (
-        str(r.get("recommendation")) == "not_profiled_or_no_comment_signal",
+        {"selected": 0, "candidate": 1, "rejected": 2}.get(str(r.get("selection_status")), 3),
         -int(float(r.get("answerable_question_candidates") or 0)),
         str(r.get("platform") or ""),
         str(r.get("surface_title") or r.get("surface_key") or ""),
     ))
+
+
+def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
+    for row in surface_inventory:
+        key = (str(row.get("platform") or "unknown"), str(row.get("surface_type") or "unknown"))
+        status = str(row.get("selection_status") or "candidate")
+        grouped[key]["total"] += 1
+        grouped[key][status] += 1
+    rows: list[dict[str, Any]] = []
+    total_counter: Counter[str] = Counter()
+    for (platform, surface_type), counter in sorted(grouped.items()):
+        total_counter.update(counter)
+        rows.append({
+            "platform": platform,
+            "surface_type": surface_type,
+            "total_surfaces": counter.get("total", 0),
+            "selected_surfaces": counter.get("selected", 0),
+            "candidate_surfaces": counter.get("candidate", 0),
+            "rejected_surfaces": counter.get("rejected", 0),
+        })
+    rows.insert(0, {
+        "platform": "ALL",
+        "surface_type": "ALL",
+        "total_surfaces": total_counter.get("total", 0),
+        "selected_surfaces": total_counter.get("selected", 0),
+        "candidate_surfaces": total_counter.get("candidate", 0),
+        "rejected_surfaces": total_counter.get("rejected", 0),
+    })
+    return rows
 
 
 def _dashboard_summary_rows(
@@ -1130,11 +1265,16 @@ def _dashboard_summary_rows(
     scope = {str(r.get("metric")): r.get("value") for r in scope_rows}
     monitored = [r for r in surface_summaries if str(r.get("recommendation")) in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities", "ask_organizer_clarification_questions", "sample_more"}]
     no_signal = [r for r in (surface_inventory or []) if int(float(r.get("answerable_question_candidates") or 0)) <= 0]
+    counts = _summary_count_rows(surface_inventory or [])
+    total = counts[0] if counts else {}
     return [
         {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
         {"section": "Охват", "metric": "Комментариев обработано", "value": summary.get("comments_embedded") or scope.get("comments_after_filter")},
         {"section": "Охват", "metric": "Поверхностей с профилем", "value": summary.get("surface_profiles_count") or scope.get("surfaces_profiled")},
         {"section": "Охват", "metric": "Все поверхности в списке", "value": len(surface_inventory or [])},
+        {"section": "Итог", "metric": "Выбрано", "value": total.get("selected_surfaces", 0)},
+        {"section": "Итог", "metric": "Кандидаты", "value": total.get("candidate_surfaces", 0)},
+        {"section": "Итог", "metric": "Отклонено", "value": total.get("rejected_surfaces", 0)},
         {"section": "Период", "metric": "С даты", "value": scope.get("period_min_created_at")},
         {"section": "Период", "metric": "По дату", "value": scope.get("period_max_created_at")},
         {"section": "Модели", "metric": "Модели смысла", "value": summary.get("models") or scope.get("models")},
@@ -1143,9 +1283,11 @@ def _dashboard_summary_rows(
         {"section": "Итог", "metric": "Где ничего не найдено/не попало", "value": len(no_signal)},
         {"section": "Как читать", "metric": "surface_summary", "value": "Главный лист: где мониторить, сколько вопросов и как часто они встречаются."},
         {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список поверхностей из payload/run: видно, где ничего не нашлось или поверхность не анализировалась."},
+        {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено."},
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
         {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
         {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
+        {"section": "Freshness", "metric": "Активность", "value": f"Выборка анализирует комментарии не старше {_max_comment_age_days()} дней; поверхности без активности больше {_stale_activity_days()} дней отклоняются сейчас, но могут вернуться при новом свежем комментарии."},
     ]
 
 
@@ -1180,6 +1322,7 @@ _RU_HEADERS = {
     "surface_title": "Название",
     "surface_url": "Ссылка",
     "status": "Статус",
+    "selection_status": "Итоговый статус",
     "scan_state": "Сканирование",
     "source": "Источник",
     "relation": "Тип контекста",
@@ -1208,6 +1351,11 @@ _RU_HEADERS = {
     "period_max_created_at": "Период по",
     "period_days": "Дней",
     "period_label": "Период",
+    "latest_comment_at": "Последний комментарий",
+    "days_since_latest_activity": "Дней без активности",
+    "freshness_status": "Свежесть",
+    "analysis_max_comment_age_days": "Окно анализа, дней",
+    "stale_activity_days": "Порог неактивности, дней",
     "unique_commenters": "Уникальные авторы",
     "unique_commenters_note": "Авторы: примечание",
     "comments_total": "Всего комментариев",
@@ -1251,6 +1399,10 @@ _RU_HEADERS = {
     "metric": "Показатель",
     "value": "Значение",
     "section": "Раздел",
+    "total_surfaces": "Всего",
+    "selected_surfaces": "Выбрано",
+    "candidate_surfaces": "Кандидаты",
+    "rejected_surfaces": "Отклонено",
 }
 
 
@@ -1321,6 +1473,7 @@ def _write_xlsx(
     question_patterns: list[dict[str, Any]] | None = None,
     scope_rows: list[dict[str, Any]] | None = None,
     surface_inventory: list[dict[str, Any]] | None = None,
+    summary_counts: list[dict[str, Any]] | None = None,
     dashboard_rows: list[dict[str, Any]] | None = None,
     intent_catalog_rows: list[dict[str, Any]] | None = None,
 ) -> None:
@@ -1358,8 +1511,9 @@ def _write_xlsx(
     if surface_summaries:
         surf = wb.create_sheet("surface_summary")
         surf_headers = [
-            "recommendation", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
-            "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days", "unique_commenters",
+            "recommendation", "selection_status", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
+            "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days",
+            "latest_comment_at", "days_since_latest_activity", "freshness_status", "unique_commenters",
             "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
             "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days",
             "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d", "answerable_questions_per_90d",
@@ -1368,9 +1522,9 @@ def _write_xlsx(
             "filtered_noise_contexts", "relation_counts_json", "unique_commenters_note", "answerable_examples", "ask_question_examples",
         ]
         surf_groups = {
-            **{h: "Поверхность" for h in surf_headers[:7]},
-            **{h: "Период и объём" for h in surf_headers[7:21]},
-            **{h: "Потенциал" for h in surf_headers[21:35]},
+            **{h: "Поверхность" for h in surf_headers[:8]},
+            **{h: "Период, свежесть и объём" for h in surf_headers[8:25]},
+            **{h: "Потенциал" for h in surf_headers[25:39]},
             **{h: "Пояснения" for h in surf_headers[35:]},
         }
         _append_grouped_header(surf, surf_headers, surf_groups)
@@ -1383,15 +1537,26 @@ def _write_xlsx(
         inv = wb.create_sheet("full_surface_list")
         inv_headers = [
             "surface_key", "platform", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
-            "members_or_subscribers", "recommendation", "comments_embedded", "answerable_question_candidates",
+            "members_or_subscribers", "recommendation", "selection_status", "latest_comment_at", "days_since_latest_activity", "freshness_status",
+            "comments_embedded", "answerable_question_candidates",
             "route_poi_questions", "event_questions", "ask_clarification_contexts", "summary_ru",
         ]
         inv_groups = {h: "Поверхность" for h in inv_headers[:9]} | {h: "Результат анализа" for h in inv_headers[9:]}
         _append_grouped_header(inv, inv_headers, inv_groups)
         _append_data_rows(inv, surface_inventory, inv_headers, hyperlink_field="surface_url")
         inv.freeze_panes = "A3"
-        for idx, width in enumerate([30, 10, 18, 34, 44, 20, 24, 22, 14, 36, 14, 14, 14, 14, 14, 90], start=1):
+        for idx, width in enumerate([30, 10, 18, 34, 44, 20, 24, 22, 14, 36, 16, 16, 14, 14, 14, 14, 14, 14, 14, 90], start=1):
             inv.column_dimensions[get_column_letter(idx)].width = width
+
+    if summary_counts:
+        counts = wb.create_sheet("summary_counts")
+        count_headers = ["platform", "surface_type", "total_surfaces", "selected_surfaces", "candidate_surfaces", "rejected_surfaces"]
+        count_groups = {h: "Тип поверхности" for h in count_headers[:2]} | {h: "Итог" for h in count_headers[2:]}
+        _append_grouped_header(counts, count_headers, count_groups)
+        _append_data_rows(counts, summary_counts, count_headers)
+        counts.freeze_panes = "A3"
+        for idx, width in enumerate([14, 24, 12, 12, 12, 12], start=1):
+            counts.column_dimensions[get_column_letter(idx)].width = width
 
     for model_name, example_rows in (model_examples or {}).items():
         model_key = str(model_name).lower()
@@ -1681,6 +1846,7 @@ def run_comment_semantic_retrieval(
     question_patterns = _build_question_patterns(all_eligible_rows)
     model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
     surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
+    summary_counts = _summary_count_rows(surface_inventory)
     intent_catalog = _intent_catalog_rows()
     run_id = os.getenv("KAGGLE_RUN_ID") or f"acq-comment-retrieval-{int(time.time())}"
     scope_rows = _scope_rows(
@@ -1726,15 +1892,17 @@ def run_comment_semantic_retrieval(
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
         "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers",
-        "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters",
+        "period_min_created_at", "period_max_created_at", "period_days", "period_label", "latest_comment_at",
+        "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days", "unique_commenters",
         "comments_total", "comments_embedded", "comment_records", "source_post_records",
         "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
         "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
         "eligible_question_candidates", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
     ])
     _write_csv(surface_summary_csv, surface_summaries, [
-        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers",
+        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers", "selection_status",
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters", "unique_commenters_note",
+        "latest_comment_at", "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days",
         "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
         "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
         "recommendation", "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d",
@@ -1758,6 +1926,7 @@ def run_comment_semantic_retrieval(
         question_patterns=question_patterns,
         scope_rows=scope_rows,
         surface_inventory=surface_inventory,
+        summary_counts=summary_counts,
         dashboard_rows=dashboard_rows,
         intent_catalog_rows=intent_catalog,
     )

@@ -436,6 +436,7 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
 
     workbook = load_workbook(summary["artifacts"]["manual_review_xlsx"], read_only=True)
     assert "summary_ru" in workbook.sheetnames
+    assert "summary_counts" in workbook.sheetnames
     assert "intent_catalog" in workbook.sheetnames
     assert "full_surface_list" in workbook.sheetnames
     assert "question_patterns" in workbook.sheetnames
@@ -539,6 +540,61 @@ def test_question_pattern_label_covers_route_event_and_badges():
     assert rows[0]["pattern"] == "route_with_children"
     assert rows[0]["canonical_question_ru"].endswith("?")
     assert "Ездили" not in rows[0]["example_questions"]
+
+
+def test_freshness_policy_filters_old_records_and_rejects_stale_surfaces(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MAX_COMMENT_AGE_DAYS", "365")
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_STALE_ACTIVITY_DAYS", "92")
+    old = {
+        "surface_key": "tg:old",
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "text": "Куда сходить?",
+    }
+    fresh_but_stale_surface = {
+        "surface_key": "tg:stale",
+        "created_at": "2026-02-01T00:00:00+00:00",
+        "text": "Куда сходить?",
+    }
+
+    deduped = retrieval._dedupe_records([old, fresh_but_stale_surface])
+
+    assert [r["surface_key"] for r in deduped] == ["tg:stale"]
+    profile = retrieval._surface_profile(
+        "tg:stale",
+        [fresh_but_stale_surface],
+        [
+            {
+                "intent_set": "event_close_question",
+                "score": 1.0,
+                "funnel_bucket": "top_1pct",
+                "pre_llm_candidate_eligible": True,
+            }
+        ],
+        scoring_method="positive_negative_margin",
+    )
+    assert profile["monitoring_decision_hint"] == "reject_stale_inactive"
+    summaries = retrieval._surface_decision_summaries(
+        [profile],
+        eligible_rows_by_surface={"tg:stale": []},
+        all_gate_rows_by_surface={"tg:stale": []},
+    )
+    assert summaries[0]["selection_status"] == "rejected"
+
+
+def test_summary_counts_groups_surface_inventory_statuses():
+    retrieval = load_retrieval()
+    rows = retrieval._summary_count_rows([
+        {"platform": "tg", "surface_type": "group", "selection_status": "selected"},
+        {"platform": "tg", "surface_type": "group", "selection_status": "candidate"},
+        {"platform": "vk", "surface_type": "community", "selection_status": "rejected"},
+    ])
+
+    assert rows[0]["platform"] == "ALL"
+    assert rows[0]["total_surfaces"] == 3
+    assert rows[0]["selected_surfaces"] == 1
+    assert rows[0]["candidate_surfaces"] == 1
+    assert rows[0]["rejected_surfaces"] == 1
 
 
 def test_surface_decision_summary_separates_reply_and_question_asking_modes():
