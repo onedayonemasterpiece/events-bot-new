@@ -1042,7 +1042,10 @@ def _surface_decision_summaries(
         if ask_context_rows:
             parts.append(f"паттернов для уточняющих вопросов организаторам: {len(ask_context_rows)}")
         if noise_rows:
-            parts.append(f"отфильтровано рекламных/не-вопросных сигналов: {len(noise_rows)}")
+            if _deterministic_prefilter_enabled():
+                parts.append(f"отфильтровано рекламных/не-вопросных сигналов: {len(noise_rows)}")
+            else:
+                parts.append(f"диагностических шумовых/не-вопросных сигналов без prefilter-отсечения: {len(noise_rows)}")
         summary_ru = "; ".join(parts) if parts else "полезных вопросных сигналов не найдено"
         if recommendation == "reject_stale_inactive":
             summary_ru = (
@@ -1563,7 +1566,7 @@ _RU_HEADERS = {
     "destination_hint": "Место/направление",
     "transport_hint": "Транспорт",
     "question_signal": "Есть вопрос?",
-    "candidate_noise_type": "Причина фильтра",
+    "candidate_noise_type": "Диагностика шума",
     "intent_text_supported": "Смысл подтверждён текстом",
     "pre_llm_candidate_eligible": "В LLM-gate?",
     "llm_gate_selection_basis": "Основа отбора в LLM",
@@ -1607,7 +1610,7 @@ _RU_HEADERS = {
     "event_site_search_questions": "Поиск/афиша",
     "organizer_submission_questions": "Организаторам",
     "badge_filter_questions": "Фильтры",
-    "filtered_noise_contexts": "Шум",
+    "filtered_noise_contexts": "Шум/диагн.",
     "relation_counts_json": "Типы контекстов",
     "dominant_detected_interests": "Темы",
     "monitoring_decision_hint": "Решение",
