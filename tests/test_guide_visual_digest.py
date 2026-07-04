@@ -73,6 +73,18 @@ async def test_visual_digest_telegram_text_uses_title_links_without_shortener():
     assert "vk.cc" not in text
     assert "#Калининград" in text
     assert "#Амалиенау" in text
+    assert '<a href="https://t.me/wheretogo39">Подписаться</a>' in text
+    assert '<a href="https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec">Max</a>' in text
+    assert '<a href="https://vk.ru/uhtykaliningrad">Вконтакте</a>' in text
+    assert '#Амалиенау\n\n<a href="https://t.me/wheretogo39">Подписаться</a>' in text
+
+
+@pytest.mark.asyncio
+async def test_visual_digest_telegram_footer_uses_target_channel_subscribe_link():
+    text = await build_visual_digest_telegram_text(SAMPLE_ROWS, issue_id=42, target_chat="@youwillsee39")
+
+    assert '<a href="https://t.me/youwillsee39">Подписаться</a>' in text
+    assert '<a href="https://vk.ru/uhtykaliningrad">Вконтакте</a>' in text
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- Visual guide digest Telegram captions now end with a blank-line social footer linking to the current Telegram target, Max and VK (`uhtykaliningrad`), matching the Afisha footer pattern.
 - **Incident / event 6045 static defect (INC-2026-07-03)**:
   Telegram Monitoring no longer treats vinyl/record metadata such as
   `LP 33 1/3 RPM` as an OCR event date, and Smart Update now routes

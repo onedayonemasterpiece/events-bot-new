@@ -49,6 +49,16 @@ VISUAL_DIGEST_WINDOW_DAYS = max(
     ),
 )
 VISUAL_DIGEST_VK_TARGET = collapse_ws(os.getenv("GUIDE_VISUAL_DIGEST_VK_TARGET") or os.getenv("GUIDE_DIGEST_VK_TARGET") or "uhtykaliningrad")
+VISUAL_DIGEST_TG_MAX_URL = collapse_ws(
+    os.getenv("GUIDE_VISUAL_DIGEST_MAX_URL")
+    or os.getenv("GUIDE_DIGEST_MAX_URL")
+    or "https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec"
+)
+VISUAL_DIGEST_TG_VK_URL = collapse_ws(
+    os.getenv("GUIDE_VISUAL_DIGEST_VK_URL")
+    or os.getenv("GUIDE_DIGEST_PUBLIC_VK_URL")
+    or "https://vk.ru/uhtykaliningrad"
+)
 VISUAL_DIGEST_VK_TARGET_GROUP_ID = collapse_ws(
     os.getenv("GUIDE_VISUAL_DIGEST_VK_TARGET_GROUP_ID") or os.getenv("GUIDE_DIGEST_VK_TARGET_GROUP_ID")
 )
@@ -1415,12 +1425,15 @@ async def publish_visual_digest_to_telegram(
         return {"published": False, "reason": "no_items", "issue_id": int(issue_id), "family": VISUAL_DIGEST_FAMILY}
 
     targets = list(_parse_target_chats(target_chats if target_chats is not None else VISUAL_DIGEST_TG_TARGET_CHATS))
-    caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id))
     card = render_visual_digest_cards(rows, issue_id=int(issue_id))[0]
     occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
     published_targets: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
+    primary_caption = ""
     for target in targets:
+        caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id), target_chat=target)
+        if not primary_caption:
+            primary_caption = caption
         try:
             upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
             msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
@@ -1443,7 +1456,7 @@ async def publish_visual_digest_to_telegram(
             db,
             issue_id=int(issue_id),
             target_chat=targets[0],
-            text=caption,
+            text=primary_caption,
             targets_update=published_targets,
             occurrence_ids=occurrence_ids,
             status="partial" if errors else "published",
@@ -1457,7 +1470,7 @@ async def publish_visual_digest_to_telegram(
         "published_targets": published_targets,
         "message_ids": [mid for payload in published_targets.values() for mid in (payload.get("message_ids") or [])],
         "errors": errors,
-        "text": caption,
+        "text": primary_caption,
         "occurrence_ids": occurrence_ids,
     }
 
@@ -1624,10 +1637,39 @@ def _tg_link(label: str, url: str) -> str:
     return f'<a href="{href}">{text}</a>'
 
 
+def _telegram_target_public_url(target_chat: str | int | None) -> str | None:
+    raw = collapse_ws("" if target_chat is None else str(target_chat)).rstrip("/")
+    if not raw:
+        return None
+    if raw.startswith("@") and len(raw) > 1:
+        return f"https://t.me/{raw[1:]}"
+    if re.fullmatch(r"[A-Za-z0-9_]{5,}", raw):
+        return f"https://t.me/{raw}"
+    if re.fullmatch(r"https?://t\.me/[A-Za-z0-9_]+", raw, flags=re.I):
+        return raw
+    return None
+
+
+def _visual_digest_telegram_footer(target_chat: str | int | None = None) -> str:
+    subscribe_url = (
+        _telegram_target_public_url(target_chat)
+        or _telegram_target_public_url(VISUAL_DIGEST_TG_TARGET_CHATS[0] if VISUAL_DIGEST_TG_TARGET_CHATS else None)
+        or "https://t.me/wheretogo39"
+    )
+    return " · ".join(
+        [
+            _tg_link("Подписаться", subscribe_url),
+            _tg_link("Max", VISUAL_DIGEST_TG_MAX_URL),
+            _tg_link("Вконтакте", VISUAL_DIGEST_TG_VK_URL),
+        ]
+    )
+
+
 async def build_visual_digest_telegram_text(
     rows: Sequence[Mapping[str, Any]],
     *,
     issue_id: int,
+    target_chat: str | int | None = None,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
@@ -1651,11 +1693,12 @@ async def build_visual_digest_telegram_text(
         else:
             line = f"{idx}. {html.escape(title, quote=False)}"
         lines.append(line)
-    lines.extend(["", " ".join(_digest_hashtags(items))])
+    footer_tail = ["", " ".join(_digest_hashtags(items)), "", _visual_digest_telegram_footer(target_chat)]
+    lines.extend(footer_tail)
     text = "\n".join(lines).strip()
     if len(text) <= 1024:
         return text
-    # Caption hard-limit guard: keep linked titles, shorten only intro/overflow.
+    # Caption hard-limit guard: keep linked titles, hashtags and the social footer; shorten only intro/overflow.
     compact_lines = [lines[0], ""]
     for idx, row in enumerate(items, start=1):
         title = _fit(_plain(row.get("canonical_title")) or "Экскурсия", 44)
@@ -1667,13 +1710,13 @@ async def build_visual_digest_telegram_text(
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}")
         else:
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)}")
-    compact_lines.extend(["", " ".join(_digest_hashtags(items))])
-    while len("\n".join(compact_lines).strip()) > 1024 and len(compact_lines) > 4:
-        # Drop the last excursion line first, keep valid HTML and the hashtag footer.
-        footer = compact_lines[-2:]
-        body = compact_lines[:-2]
+    compact_lines.extend(footer_tail)
+    footer_len = len(footer_tail)
+    while len("\n".join(compact_lines).strip()) > 1024 and len(compact_lines) > footer_len + 2:
+        tail = compact_lines[-footer_len:]
+        body = compact_lines[:-footer_len]
         body.pop()
-        compact_lines = body + footer
+        compact_lines = body + tail
     return "\n".join(compact_lines).strip()
 
 

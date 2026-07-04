@@ -366,6 +366,10 @@ Production contract:
   (`GUIDE_VISUAL_DIGEST_TARGET_CHATS` или fallback `GUIDE_DIGEST_TARGET_CHATS`):
   одна картинка + HTML-caption, где названия экскурсий являются ссылками
   (`<a href="...">название</a>`), без отдельных URL рядом и без VK shortener;
+  после хештегов caption добавляет пустую строку и социальный футер
+  `Подписаться · Max · Вконтакте`: `Подписаться` ведёт на текущий Telegram target,
+  Max — на `https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec`,
+  Вконтакте — на `https://vk.ru/uhtykaliningrad`;
 - VK-текст: первая строка `Дайджест экскурсий №…`, короткая вводная, затем строки
   `название — ссылка`. VK-ссылки оформляются кликабельным названием (`[vk-url|title]`),
   внешние URL сокращаются через `utils.getShortLink`, телефонные контакты не
