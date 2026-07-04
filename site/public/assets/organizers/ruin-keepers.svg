@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Хранители руин">
-  <circle cx="256" cy="256" r="248" fill="#F8F4EA"/>
-  <circle cx="256" cy="256" r="239" fill="none" stroke="#111111" stroke-width="8"/>
-  <path fill="#111111" d="M154 106h55v56h38v-56h62v56h38v-56h55v312H154V106Zm34 34v244h136l44-44V140h-21v56h-72v-56h-28v56h-72v-56h-21Z"/>
-  <text x="256" y="348" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="138" font-weight="700" fill="#F8F4EA">♥</text>
-</svg>
