@@ -741,6 +741,8 @@ def test_report_quality_keeps_source_posts_as_ask_context_but_not_question_catal
 
     assert retrieval._report_candidate_eligible(source_post) is True
     assert retrieval._report_real_question_row(source_post) is False
+    assert retrieval._model_example_rows([source_post], "intfloat/multilingual-e5-base") == []
+    assert retrieval._model_ask_context_rows([source_post], "intfloat/multilingual-e5-base") == [source_post]
     assert retrieval._build_question_patterns([source_post]) == []
     assert retrieval._canonical_question_catalog_rows([source_post]) == []
 
@@ -769,6 +771,40 @@ def test_report_quality_allows_historical_real_questions_only_for_canonical_cata
     catalog = retrieval._canonical_question_catalog_rows([historical])
     assert catalog
     assert catalog[0]["historical_calibration_examples"] == 1
+
+
+def test_model_answerable_examples_are_only_fresh_reply_questions():
+    retrieval = load_retrieval()
+    answerable = {
+        "surface_key": "tg:golden",
+        "platform": "tg",
+        "surface_type": "group",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "text_snapshot": "Куда съездить из Калининграда на один день с детьми?",
+        "context_url": "https://t.me/golden/1",
+        "model_name": "intfloat/multilingual-e5-base",
+        "candidate_usage_scope": "monitoring_candidate",
+        "question_signal": True,
+        "intent_text_supported": True,
+        "candidate_noise_type": "",
+        "score": 0.05,
+        "pre_llm_candidate_eligible": True,
+    }
+    source_post = {
+        **answerable,
+        "text_snapshot": "Приходите на выставку 10 июля, начало в 18:00.",
+        "context_url": "https://t.me/golden/2",
+        "relation": "tg_channel_post_context",
+        "is_post": True,
+        "intent_set": "organizer_event_post_context",
+        "candidate_action_type": "organizer_visibility_clarification",
+        "question_signal": False,
+        "candidate_noise_type": "source_post_context",
+    }
+
+    assert retrieval._model_example_rows([answerable, source_post], "intfloat/multilingual-e5-base") == [answerable]
+    assert retrieval._model_ask_context_rows([answerable, source_post], "intfloat/multilingual-e5-base") == [source_post]
 
 
 def test_freshness_policy_keeps_old_records_for_calibration_but_rejects_stale_surfaces(monkeypatch):

@@ -98,6 +98,13 @@ INTENT_SETS: dict[str, list[str]] = {
         "люди спрашивают, остались ли места",
         "люди спрашивают, будет ли запись или трансляция",
     ],
+    "organizer_event_post_context": [
+        "организаторский пост анонсирует событие и подходит для уточняющего вопроса",
+        "анонс события содержит дату, место или программу, но может не содержать важные детали",
+        "пост организатора про выставку, концерт, лекцию, фестиваль или встречу",
+        "можно спросить организатора о возрасте, длительности, регистрации, входе или программе",
+        "можно уточнить у организатора условия посещения события",
+    ],
     "event_site_search_or_listing": [
         "человек ищет сайт с афишей мероприятий",
         "человек спрашивает где посмотреть календарь событий",
@@ -144,7 +151,7 @@ INTENT_SETS: dict[str, list[str]] = {
 POSITIVE_INTENT_SETS = [name for name in INTENT_SETS if name != "negative_intents"]
 ROUTE_INTENT_SETS = {"route_poi_far_context", "route_poi_medium_interest", "route_poi_close_actionable"}
 EVENT_INTENT_SETS = {"event_far_context", "event_close_question", "event_site_search_or_listing", "badge_filter_need"}
-ORGANIZER_INTENT_SETS = {"organizer_comment_fit", "organizer_submission_or_partnership"}
+ORGANIZER_INTENT_SETS = {"organizer_comment_fit", "organizer_event_post_context", "organizer_submission_or_partnership"}
 
 _TOKEN_RE = re.compile(r"[\wА-Яа-яЁё]+", re.U)
 _HTML_RE = re.compile(r"<[^>]+>")
@@ -357,7 +364,7 @@ def _mean(values: list[float]) -> float:
 def _action_for_intent(intent_set: str) -> str:
     if intent_set in ROUTE_INTENT_SETS:
         return "trip_route_poi_recommendation"
-    if intent_set == "organizer_comment_fit":
+    if intent_set in {"organizer_comment_fit", "organizer_event_post_context"}:
         return "organizer_visibility_clarification"
     if intent_set == "organizer_submission_or_partnership":
         return "organizer_submission_or_partnership"
@@ -459,7 +466,7 @@ def _intent_has_text_support(text: str, intent_set: str) -> bool:
         return bool(_ROUTE_CONTEXT_RE.search(compact))
     if intent_set in {"event_far_context", "event_close_question", "event_site_search_or_listing"}:
         return bool(_EVENT_CONTEXT_RE.search(compact))
-    if intent_set == "organizer_comment_fit":
+    if intent_set in {"organizer_comment_fit", "organizer_event_post_context"}:
         # Generic questions like “как зовут детей?” must not become organizer
         # clarification candidates without event/logistics context.
         return bool(_EVENT_CONTEXT_RE.search(compact))
@@ -716,7 +723,7 @@ def _question_pattern_label(text: str, *, action_type: str = "", intent_set: str
         return "event_badge_other"
     if action_type == "event_site_search_or_listing":
         return "event_site_search"
-    if str(intent_set) in {"event_close_question", "organizer_comment_fit"}:
+    if str(intent_set) in {"event_close_question", "organizer_comment_fit", "organizer_event_post_context"}:
         return "event_logistics_other"
     return "other_question"
 
@@ -815,7 +822,7 @@ def _report_candidate_eligible(row: dict[str, Any], *, allow_source_posts: bool 
     if _is_source_post_context(row):
         if not allow_source_posts:
             return False
-        if intent not in {"organizer_comment_fit", "event_close_question"}:
+        if intent not in {"organizer_comment_fit", "organizer_event_post_context", "event_close_question"}:
             return False
         if not intent_supported:
             return False
@@ -830,7 +837,7 @@ def _report_candidate_eligible(row: dict[str, Any], *, allow_source_posts: bool 
         return False
     if not _is_actual_question_text(text):
         return False
-    if action == "organizer_visibility_clarification" and intent not in {"organizer_comment_fit", "event_close_question"}:
+    if action == "organizer_visibility_clarification" and intent not in {"organizer_comment_fit", "organizer_event_post_context", "event_close_question"}:
         return False
     return _row_score(row) >= _report_min_comment_score()
 
@@ -1110,7 +1117,7 @@ def _surface_decision_summaries(
         event_question_rows = [*event_rows, *site_rows, *badge_rows]
         ask_context_rows = [
             r for r in eligible
-            if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit"}
+            if str(r.get("intent_set")) in {"event_close_question", "organizer_comment_fit", "organizer_event_post_context"}
         ]
         comment_rows = comment_eligible
         source_post_rows = [r for r in all_rows if _is_source_post_context(r)]
@@ -1324,7 +1331,21 @@ def _canonical_question_catalog_rows(rows: list[dict[str, Any]], *, limit_exampl
 
 
 def _model_example_rows(candidates: list[dict[str, Any]], model_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
-    rows = [r for r in candidates if str(r.get("model_name") or "") == model_name and _report_candidate_eligible(r)]
+    rows = [
+        r for r in candidates
+        if str(r.get("model_name") or "") == model_name
+        and _report_real_question_row(r, allow_historical=False)
+    ]
+    return _best_context_rows(rows)[:limit]
+
+
+def _model_ask_context_rows(candidates: list[dict[str, Any]], model_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
+    rows = [
+        r for r in candidates
+        if str(r.get("model_name") or "") == model_name
+        and _is_source_post_context(r)
+        and _report_candidate_eligible(r)
+    ]
     return _best_context_rows(rows)[:limit]
 
 
@@ -1400,7 +1421,8 @@ _INTENT_SET_LABELS_RU = {
     "route_poi_close_actionable": "Маршруты/места: можно отвечать",
     "event_far_context": "События: широкий контекст",
     "event_close_question": "События: практический вопрос",
-    "organizer_comment_fit": "Организатор: можно задать уточняющий вопрос",
+    "organizer_comment_fit": "Организатор: вопросы в комментариях",
+    "organizer_event_post_context": "Организатор: пост как контекст для вопроса",
     "event_site_search_or_listing": "Сайт/афиша/подборки",
     "organizer_submission_or_partnership": "Организатор: добавить событие/партнёрство",
     "badge_filter_need": "Фильтры/признаки события",
@@ -1845,6 +1867,7 @@ def _write_xlsx(
     *,
     surface_summaries: list[dict[str, Any]] | None = None,
     model_examples: dict[str, list[dict[str, Any]]] | None = None,
+    model_ask_contexts: dict[str, list[dict[str, Any]]] | None = None,
     question_patterns: list[dict[str, Any]] | None = None,
     canonical_questions: list[dict[str, Any]] | None = None,
     scope_rows: list[dict[str, Any]] | None = None,
@@ -1939,11 +1962,11 @@ def _write_xlsx(
     for model_name, example_rows in (model_examples or {}).items():
         model_key = str(model_name).lower()
         if "multilingual-e5" in model_key:
-            sheet_name = "eligible_e5_base"
+            sheet_name = "answerable_e5_base"
         elif "bge-m3" in model_key:
-            sheet_name = "eligible_bge_m3"
+            sheet_name = "answerable_bge_m3"
         else:
-            sheet_name = ("eligible_" + re.sub(r"[^A-Za-z0-9]+", "_", model_name).strip("_"))[:31] or "eligible_model"
+            sheet_name = ("answerable_" + re.sub(r"[^A-Za-z0-9]+", "_", model_name).strip("_"))[:31] or "answerable_model"
         ex = wb.create_sheet(sheet_name)
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
@@ -1952,10 +1975,35 @@ def _write_xlsx(
         ]
         ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Поверхность" for h in ex_headers[4:13]} | {h: "Комментарий и контекст" for h in ex_headers[13:17]} | {h: "Действие" for h in ex_headers[17:]}
         _append_grouped_header(ex, ex_headers, ex_groups)
+        if not example_rows:
+            ex.append(["Нет успешных вопросов/сообщений, по которым можно доказать потенциальный ответ, в этом run."])
         _append_data_rows(ex, example_rows, ex_headers, hyperlink_field="context_url")
         ex.freeze_panes = "A3"
         for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
             ex.column_dimensions[get_column_letter(idx)].width = width
+
+    for model_name, context_rows in (model_ask_contexts or {}).items():
+        model_key = str(model_name).lower()
+        if "multilingual-e5" in model_key:
+            sheet_name = "ask_contexts_e5_base"
+        elif "bge-m3" in model_key:
+            sheet_name = "ask_contexts_bge_m3"
+        else:
+            sheet_name = ("ask_contexts_" + re.sub(r"[^A-Za-z0-9]+", "_", model_name).strip("_"))[:31] or "ask_contexts_model"
+        ctx = wb.create_sheet(sheet_name)
+        ctx_headers = [
+            "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
+            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
+            "llm_gate_selection_basis", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+        ]
+        ctx_groups = {h: "Скоринг" for h in ctx_headers[:4]} | {h: "Поверхность" for h in ctx_headers[4:13]} | {h: "Это пост/контекст для вопроса, не user-comment reply" for h in ctx_headers[13:18]} | {h: "Действие" for h in ctx_headers[18:]}
+        _append_grouped_header(ctx, ctx_headers, ctx_groups)
+        if not context_rows:
+            ctx.append(["Нет контекстов постов, по которым можно было бы самим задать уточняющий вопрос организатору, в этом run."])
+        _append_data_rows(ctx, context_rows, ctx_headers, hyperlink_field="context_url")
+        ctx.freeze_panes = "A3"
+        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
+            ctx.column_dimensions[get_column_letter(idx)].width = width
 
     if question_patterns is not None:
         qp = wb.create_sheet("question_patterns")
@@ -2253,6 +2301,7 @@ def run_comment_semantic_retrieval(
     question_patterns = _build_question_patterns(all_candidates)
     canonical_questions = _canonical_question_catalog_rows(all_candidates)
     model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
+    model_ask_contexts = {model_name: _model_ask_context_rows(all_candidates, model_name) for model_name in models}
     surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
     summary_counts = _summary_count_rows(surface_inventory)
     intent_catalog = _intent_catalog_rows()
@@ -2340,6 +2389,7 @@ def run_comment_semantic_retrieval(
         manual_rows,
         surface_summaries=surface_summaries,
         model_examples=model_examples,
+        model_ask_contexts=model_ask_contexts,
         question_patterns=question_patterns,
         canonical_questions=canonical_questions,
         scope_rows=scope_rows,

@@ -31,16 +31,19 @@ Important separation for reports:
 
 - the default LLM gate receives top-N vector semantic rows **without**
   deterministic/regex prefiltering;
-- human-facing evidence (`eligible_*`, `surface_summary`, `question_patterns`,
-  `canonical_questions`) uses a stricter post-vector report-quality gate so a
-  noisy vector match is not promoted into an “эталонный вопрос”.
+- human-facing evidence (`answerable_*`, `ask_contexts_*`, `surface_summary`,
+  `question_patterns`, `canonical_questions`) uses a stricter post-vector
+  report-quality gate so a noisy vector match is not promoted into an
+  “эталонный вопрос”.
 
 The report-quality gate requires a real question for reply examples, supported
 intent in the current text, no explicit offer/ad/cross-post/out-of-scope
 diagnostic, and a minimal score floor. Source posts may still appear as
 `organizer_visibility_clarification` context for “ask the organizer” analysis,
 but they must not be shown as user reply questions or canonical question
-examples.
+examples. Therefore `answerable_*` sheets contain only fresh replyable user
+questions/messages, while `ask_contexts_*` sheets contain organizer/source-post
+contexts where the product may later draft its own clarification question.
 
 ## Sources and scope
 
