@@ -1049,6 +1049,7 @@ def _collect_tg_comment_record(
     relation: str | None,
     retrieval: str,
     search_query: str | None = None,
+    reply_parent_text: str | None = None,
 ) -> None:
     text = " ".join(str(getattr(message, "message", None) or getattr(message, "text", None) or "").split())
     if not text:
@@ -1078,6 +1079,9 @@ def _collect_tg_comment_record(
         "created_at": date.astimezone(timezone.utc).isoformat() if hasattr(date, "astimezone") else None,
         "author_id": str(author_id or ""),
         "is_post": bool(getattr(message, "post", False)),
+        "reply_parent_text_snapshot": " ".join(str(reply_parent_text or "").split())[:500],
+        "source_post_text_snapshot": "",
+        "source_context_title": str(surface.get("title") or "")[:300],
         "text": text,
         "text_snapshot": text[:500],
         "relation": relation or "surface",
@@ -1101,6 +1105,9 @@ def _collect_vk_comment_record(
     relation: str,
     author_id: str | int | None = None,
     is_post: bool = False,
+    source_post_text: str | None = None,
+    reply_parent_text: str | None = None,
+    source_context_title: str | None = None,
 ) -> None:
     compact = " ".join(str(text or "").split())
     if not compact:
@@ -1120,6 +1127,9 @@ def _collect_vk_comment_record(
         "created_at": created_at,
         "author_id": str(author_id or ""),
         "is_post": bool(is_post),
+        "source_post_text_snapshot": " ".join(str(source_post_text or "").split())[:700],
+        "reply_parent_text_snapshot": " ".join(str(reply_parent_text or "").split())[:500],
+        "source_context_title": " ".join(str(source_context_title or surface.get("title") or "").split())[:300],
         "text": compact,
         "text_snapshot": compact[:500],
         "relation": relation,
@@ -1673,6 +1683,7 @@ def _scan_vk_board_discussions(
                     created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
                     relation="vk_board_comment",
                     author_id=comment.get("from_id"),
+                    source_context_title=str(topic.get("title") or ""),
                 )
             if _comment_retrieval_enabled():
                 continue
@@ -1866,6 +1877,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     relation="vk_social_wall_post",
                     author_id=post.get("from_id") or owner_id,
                     is_post=True,
+                    source_post_text=post_text,
                 )
             post_opp = None if _comment_retrieval_enabled() else build_vk_wall_post_opportunity(surface, post=post, default_target_url=default_target_url)
             if post_opp:
@@ -1916,6 +1928,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                         created_at=datetime.fromtimestamp(int(comment.get("date") or 0), tz=timezone.utc).isoformat() if comment.get("date") else None,
                         relation="vk_comment",
                         author_id=comment.get("from_id"),
+                        source_post_text=post_text,
                     )
                 for discovered in extract_candidate_surfaces(str(comment.get("text") or "")):
                     discovered["topic_hint"] = f"discovered in vk:{domain} comments"
@@ -2256,7 +2269,25 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
             else:
                 diagnostics.append(f"{handle}: queued for future scan; replyable budget exhausted")
 
-            async def process_tg_message(message: Any, scan_surface: dict[str, Any], relation: str | None, *, retrieval: str, search_query: str | None = None) -> bool:
+            tg_parent_text_cache: dict[tuple[str, int], str] = {}
+
+            async def _tg_reply_parent_text(message: Any, scan_entity: Any) -> str:
+                reply_id = int(getattr(getattr(message, "reply_to", None), "reply_to_msg_id", 0) or 0)
+                if not reply_id:
+                    return ""
+                entity_key = str(getattr(scan_entity, "id", "") or getattr(scan_entity, "username", "") or "")
+                cache_key = (entity_key, reply_id)
+                if cache_key in tg_parent_text_cache:
+                    return tg_parent_text_cache[cache_key]
+                try:
+                    parent = await client.get_messages(scan_entity, ids=reply_id)
+                    parent_text = " ".join(str(getattr(parent, "message", None) or getattr(parent, "text", None) or "").split())
+                except Exception:
+                    parent_text = ""
+                tg_parent_text_cache[cache_key] = parent_text[:500]
+                return tg_parent_text_cache[cache_key]
+
+            async def process_tg_message(message: Any, scan_surface: dict[str, Any], relation: str | None, *, retrieval: str, search_query: str | None = None, scan_entity: Any | None = None) -> bool:
                 nonlocal discovered_queued
                 text = str(getattr(message, "message", None) or "")
                 for discovered in extract_candidate_surfaces(text):
@@ -2285,7 +2316,16 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                 ):
                     return False
                 if comment_records is not None:
-                    _collect_tg_comment_record(comment_records, scan_surface, message, relation=relation, retrieval=retrieval, search_query=search_query)
+                    reply_parent_text = await _tg_reply_parent_text(message, scan_entity) if scan_entity is not None else ""
+                    _collect_tg_comment_record(
+                        comment_records,
+                        scan_surface,
+                        message,
+                        relation=relation,
+                        retrieval=retrieval,
+                        search_query=search_query,
+                        reply_parent_text=reply_parent_text,
+                    )
                 if _comment_retrieval_enabled():
                     return False
                 opp = build_opportunity_from_message(scan_surface, message, default_target_url=default_target_url)
@@ -2334,7 +2374,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                             TG_SCAN_STATS["channel_posts_seen_for_links"] += 1
                         else:
                             TG_SCAN_STATS["replyable_messages_seen"] += 1
-                        await process_tg_message(message, scan_surface, relation, retrieval="latest")
+                        await process_tg_message(message, scan_surface, relation, retrieval="latest", scan_entity=scan_entity)
                         if len(opportunities) >= max_opportunities:
                             break
                         if seen % 8 == 0:
@@ -2360,7 +2400,7 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
                                         diagnostics.append("telegram search message scan stopped by ACQ_RUNTIME_DEADLINE_SECONDS")
                                         break
                                     found += 1
-                                    await process_tg_message(message, scan_surface, relation, retrieval="telegram_search", search_query=query)
+                                    await process_tg_message(message, scan_surface, relation, retrieval="telegram_search", search_query=query, scan_entity=scan_entity)
                                     if len(opportunities) >= max_opportunities:
                                         break
                                     if found % 5 == 0:

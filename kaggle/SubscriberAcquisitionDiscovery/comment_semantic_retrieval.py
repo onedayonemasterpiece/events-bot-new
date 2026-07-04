@@ -125,6 +125,8 @@ INTENT_SETS: dict[str, list[str]] = {
         "комментарий не нравится без вопроса",
         "реклама без вопроса пользователя",
         "обсуждение бытовой темы без туристического или событийного смысла",
+        "вопрос про аренду квартиры, покупку жилья, ипотеку или риэлтора без связи с событием или маршрутом",
+        "вопрос про врача, клинику, лечение, анализы или запись к врачу без связи с событием или маршрутом",
         "обсуждение транспорта без связи с поездкой к месту",
         "обсуждение погоды без связи с поездкой или мероприятием",
         "вопрос не связан с местом, маршрутом, достопримечательностью или мероприятием",
@@ -172,6 +174,14 @@ _EVENT_CONTEXT_RE = re.compile(
 )
 _ORGANIZER_SUBMIT_CONTEXT_RE = re.compile(r"(?i)\b(афиш\w*|анонс\w*|мероприяти\w*|событи\w*|добавить|прислать|опубликовать|партн[её]рств\w*)\b")
 _BADGE_CONTEXT_RE = re.compile(r"(?i)\b(пушкинск\w*|бесплатн\w*|дет\w*|семейн\w*|льгот\w*|инвалид\w*|доступн\w*|запись|трансляц\w*)\b")
+_REAL_ESTATE_SCOPE_RE = re.compile(
+    r"(?i)\b(недвижимост\w*|квартир\w*|комнат\w*|аренд\w*|снять\s+жиль[её]|сниму|сда[её]тся|"
+    r"жк|ипотек\w*|риэлт\w*|новостройк\w*|застройщик\w*)\b"
+)
+_MEDICINE_SCOPE_RE = re.compile(
+    r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|лор\b|педиатр\w*|терапевт\w*|поликлиник\w*|"
+    r"больниц\w*|лечени\w*|анализ\w*|мрт\b|узи\b|при[её]м\s+врач\w*|запис\w*\s+к\s+врач)\b"
+)
 
 
 def truthy(value: Any) -> bool:
@@ -382,6 +392,23 @@ def _text_quality_features(text: str) -> dict[str, Any]:
     }
 
 
+def _out_of_scope_noise_type(text: str) -> str:
+    compact = normalize_comment_text(text)
+    if not compact:
+        return ""
+    # Keep mixed questions when they also contain explicit route/event context:
+    # "снимаем квартиру, куда съездить?" is a route question, but "где снять
+    # квартиру?" is out of acquisition scope.
+    has_our_context = bool(_ROUTE_CONTEXT_RE.search(compact) or _EVENT_CONTEXT_RE.search(compact) or _ORGANIZER_SUBMIT_CONTEXT_RE.search(compact))
+    if has_our_context:
+        return ""
+    if _REAL_ESTATE_SCOPE_RE.search(compact):
+        return "out_of_scope_real_estate"
+    if _MEDICINE_SCOPE_RE.search(compact):
+        return "out_of_scope_medicine"
+    return ""
+
+
 def _intent_has_text_support(text: str, intent_set: str) -> bool:
     compact = normalize_comment_text(text)
     if intent_set in ROUTE_INTENT_SETS:
@@ -402,12 +429,15 @@ def _intent_has_text_support(text: str, intent_set: str) -> bool:
 def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str) -> None:
     features = _text_quality_features(str(row.get("text") or row.get("text_snapshot") or ""))
     intent_supported = _intent_has_text_support(str(row.get("text") or row.get("text_snapshot") or ""), str(row.get("intent_set") or ""))
+    out_of_scope = _out_of_scope_noise_type(str(row.get("text") or row.get("text_snapshot") or ""))
     raw_score = float(row.get(scoring_method) or row.get("score") or 0.0)
     relation = str(row.get("relation") or "").strip()
     source_post_relation = relation in {"vk_social_wall_post"} or bool(row.get("is_post"))
     source_post_allowed = truthy(os.getenv("ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES"))
     if features["hard_noise"]:
         penalty = 0.35
+    elif out_of_scope:
+        penalty = 0.32
     elif source_post_relation and not source_post_allowed:
         penalty = 0.28
     elif not intent_supported:
@@ -426,15 +456,36 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
     row["candidate_noise_type"] = features["noise_type"]
     if source_post_relation and not source_post_allowed:
         row["candidate_noise_type"] = "source_post_not_comment"
+    elif out_of_scope:
+        row["candidate_noise_type"] = out_of_scope
     elif not intent_supported:
         row["candidate_noise_type"] = "intent_without_text_support"
     row["intent_text_supported"] = bool(intent_supported)
     row["pre_llm_candidate_eligible"] = bool(
         features["question_signal"]
         and not features["hard_noise"]
+        and not out_of_scope
         and intent_supported
         and (not source_post_relation or source_post_allowed)
     )
+
+
+def _record_analysis_text(record: dict[str, Any]) -> str:
+    """Text embedded for retrieval: comment plus bounded parent/source context."""
+    text = normalize_comment_text(str(record.get("text") or record.get("text_snapshot") or ""))
+    context_parts: list[str] = []
+    parent = normalize_comment_text(str(record.get("reply_parent_text_snapshot") or record.get("reply_parent_text") or ""))
+    source_post = normalize_comment_text(str(record.get("source_post_text_snapshot") or record.get("source_post_text") or ""))
+    source_title = normalize_comment_text(str(record.get("source_context_title") or ""))
+    if parent:
+        context_parts.append(f"Родительский комментарий: {parent[:500]}")
+    if source_post and source_post != text:
+        context_parts.append(f"Исходный пост/тема: {source_post[:700]}")
+    elif source_title:
+        context_parts.append(f"Тема/контекст: {source_title[:300]}")
+    if not context_parts:
+        return text
+    return (text + "\n\nКонтекст для понимания:\n" + "\n".join(context_parts))[:1800]
 
 
 def _parse_created_at(value: Any) -> datetime | None:
@@ -557,6 +608,43 @@ def _question_pattern_label(text: str, *, action_type: str = "", intent_set: str
     return "other_question"
 
 
+_CANONICAL_QUESTIONS_RU = {
+    "route_with_children": "Куда съездить с детьми на один день по Калининградской области?",
+    "route_transport_or_car": "Куда поехать из Калининграда на электричке/автобусе/машине и что посмотреть по пути?",
+    "route_where_to_go": "Куда съездить или что посмотреть в Калининградской области на один день/выходные?",
+    "route_other": "Какой маршрут или место в Калининградской области посоветуете под этот запрос?",
+    "event_site_search": "Где посмотреть актуальную афишу, выставки или календарь событий?",
+    "organizer_submission": "Куда прислать анонс события или как добавить мероприятие в афишу?",
+    "event_ticket_or_price": "Сколько стоит вход/билет и где его купить?",
+    "event_registration_or_seats": "Нужна ли регистрация и остались ли места?",
+    "event_age_or_children": "Есть ли возрастные ограничения и подходит ли событие детям?",
+    "event_time_schedule_program": "Когда начало, сколько длится событие и какая программа?",
+    "event_location_or_entry": "Где проходит событие, какой адрес/вход/место встречи?",
+    "event_recording_or_stream": "Будет ли запись, трансляция или онлайн-доступ?",
+    "event_badge_pushkin_card": "Можно ли посетить событие по Пушкинской карте?",
+    "event_badge_access_or_free": "Есть ли бесплатный вход, льготы или условия доступности?",
+    "event_badge_other": "Есть ли быстрые признаки события: бесплатно, детям, Пушкинская карта, доступность?",
+    "event_logistics_other": "Какой важной практической информации о событии не хватает?",
+    "other_question": "Какой полезный ответ можно дать на этот вопрос без рекламы?",
+}
+
+
+def _canonical_question_for_pattern(pattern: str) -> str:
+    return _CANONICAL_QUESTIONS_RU.get(str(pattern or ""), _CANONICAL_QUESTIONS_RU["other_question"])
+
+
+def _is_actual_question_text(text: str) -> bool:
+    compact = normalize_comment_text(text)
+    if not compact:
+        return False
+    if "?" in compact:
+        return True
+    return bool(re.match(
+        r"(?i)^(?:а\s+)?(?:подскажите|посоветуйте|скажите|кто\s+знает|где|куда|когда|как|что|сколько|какой|какая|какие|есть\s+ли|будет\s+ли|можно\s+ли|нужна\s+ли)\b",
+        compact,
+    ))
+
+
 def _surface_key(record: dict[str, Any]) -> str:
     return str(record.get("surface_key") or record.get("surface_external_id") or record.get("surface_url") or "unknown")
 
@@ -575,6 +663,15 @@ def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item = dict(rec)
         item["text"] = text
         item["text_snapshot"] = text[:500]
+        analysis_text = _record_analysis_text(item)
+        item["analysis_text"] = analysis_text
+        item["analysis_context_snapshot"] = "\n".join(
+            part for part in [
+                normalize_comment_text(str(item.get("reply_parent_text_snapshot") or item.get("reply_parent_text") or ""))[:500],
+                normalize_comment_text(str(item.get("source_post_text_snapshot") or item.get("source_post_text") or item.get("source_context_title") or ""))[:700],
+            ]
+            if part
+        )[:1000]
         item.setdefault("surface_key", _surface_key(item))
         out.append(item)
     return out
@@ -865,6 +962,8 @@ def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int 
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in _best_context_rows([r for r in rows if r.get("pre_llm_candidate_eligible")]):
         text = str(row.get("text_snapshot") or row.get("text") or "")
+        if not _is_actual_question_text(text):
+            continue
         pattern = _question_pattern_label(
             text,
             action_type=str(row.get("candidate_action_type") or ""),
@@ -882,7 +981,8 @@ def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int 
             "intent_sets": set(),
             "models": set(),
             "count": 0,
-            "example_texts": [],
+            "canonical_question_ru": _canonical_question_for_pattern(pattern),
+            "example_questions": [],
             "example_urls": [],
         })
         item["count"] += 1
@@ -890,17 +990,17 @@ def _build_question_patterns(rows: list[dict[str, Any]], *, limit_examples: int 
             item["intent_sets"].add(str(row.get("intent_set")))
         if row.get("model_name"):
             item["models"].add(str(row.get("model_name")))
-        if len(item["example_texts"]) < limit_examples and text:
-            item["example_texts"].append(text[:220])
+        if len(item["example_questions"]) < limit_examples and text:
+            item["example_questions"].append(text[:220])
         if len(item["example_urls"]) < limit_examples and row.get("context_url"):
             item["example_urls"].append(str(row.get("context_url")))
     out: list[dict[str, Any]] = []
     for item in grouped.values():
         out.append({
-            **{k: v for k, v in item.items() if k not in {"intent_sets", "models", "example_texts", "example_urls"}},
+            **{k: v for k, v in item.items() if k not in {"intent_sets", "models", "example_questions", "example_urls"}},
             "intent_sets": ",".join(sorted(item["intent_sets"])),
             "models": ",".join(sorted(item["models"])),
-            "example_texts": "\n".join(item["example_texts"]),
+            "example_questions": "\n".join(item["example_questions"]),
             "example_urls": "\n".join(item["example_urls"]),
         })
     return sorted(out, key=lambda r: (-int(r.get("count") or 0), str(r.get("surface_key") or ""), str(r.get("pattern") or "")))
@@ -949,6 +1049,106 @@ def _scope_rows(
     ]
 
 
+def _intent_catalog_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for intent_set, phrases in INTENT_SETS.items():
+        action = "negative_filter" if intent_set == "negative_intents" else _action_for_intent(intent_set)
+        for idx, phrase in enumerate(phrases, start=1):
+            rows.append({
+                "intent_set": intent_set,
+                "intent_set_ru": _INTENT_SET_LABELS_RU.get(intent_set, intent_set),
+                "phrase_order": idx,
+                "model_phrase": phrase,
+                "candidate_action_type": action,
+                "is_negative": intent_set == "negative_intents",
+                "note_ru": "Эта фраза эмбеддится как эталон смысла; top_intent_phrase — ближайшая такая фраза для строки-кандидата.",
+            })
+    return rows
+
+
+_INTENT_SET_LABELS_RU = {
+    "route_poi_far_context": "Маршруты/места: широкий контекст",
+    "route_poi_medium_interest": "Маршруты/места: интерес",
+    "route_poi_close_actionable": "Маршруты/места: можно отвечать",
+    "event_far_context": "События: широкий контекст",
+    "event_close_question": "События: практический вопрос",
+    "organizer_comment_fit": "Организатор: можно задать уточняющий вопрос",
+    "event_site_search_or_listing": "Сайт/афиша/подборки",
+    "organizer_submission_or_partnership": "Организатор: добавить событие/партнёрство",
+    "badge_filter_need": "Фильтры/признаки события",
+    "negative_intents": "Минус-смыслы/шум",
+}
+
+
+def _surface_inventory_rows(
+    surfaces_by_external: dict[str, dict[str, Any]] | None,
+    surface_summaries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_key = {str(row.get("surface_key") or ""): row for row in surface_summaries}
+    rows: list[dict[str, Any]] = []
+    keys = set(by_key)
+    if surfaces_by_external:
+        keys.update(str(k) for k in surfaces_by_external)
+    for key in sorted(k for k in keys if k):
+        surface = (surfaces_by_external or {}).get(key) or {}
+        summary = by_key.get(key) or {}
+        reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
+        rows.append({
+            "surface_key": key,
+            "platform": surface.get("platform") or summary.get("platform"),
+            "surface_type": surface.get("surface_type") or summary.get("surface_type"),
+            "surface_title": surface.get("title") or summary.get("surface_title"),
+            "surface_url": surface.get("url") or summary.get("surface_url"),
+            "status": surface.get("status"),
+            "scan_state": surface.get("scan_state"),
+            "source": surface.get("source"),
+            "members_or_subscribers": reach.get("members") or reach.get("members_count") or summary.get("members_or_subscribers"),
+            "recommendation": summary.get("recommendation") or "not_profiled_or_no_comment_signal",
+            "comments_embedded": summary.get("comments_embedded") or 0,
+            "answerable_question_candidates": summary.get("answerable_question_candidates") or 0,
+            "route_poi_questions": summary.get("route_poi_questions") or 0,
+            "event_questions": summary.get("event_questions") or 0,
+            "ask_clarification_contexts": summary.get("ask_clarification_contexts") or 0,
+            "summary_ru": summary.get("summary_ru") or "В этом прогоне полезных сигналов не найдено или поверхность не попала в comment retrieval.",
+        })
+    return sorted(rows, key=lambda r: (
+        str(r.get("recommendation")) == "not_profiled_or_no_comment_signal",
+        -int(float(r.get("answerable_question_candidates") or 0)),
+        str(r.get("platform") or ""),
+        str(r.get("surface_title") or r.get("surface_key") or ""),
+    ))
+
+
+def _dashboard_summary_rows(
+    *,
+    summary: dict[str, Any] | None,
+    surface_summaries: list[dict[str, Any]],
+    scope_rows: list[dict[str, Any]],
+    surface_inventory: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    summary = summary or {}
+    scope = {str(r.get("metric")): r.get("value") for r in scope_rows}
+    monitored = [r for r in surface_summaries if str(r.get("recommendation")) in {"both_monitor_replies_and_ask_clarifications", "monitor_for_reply_opportunities", "ask_organizer_clarification_questions", "sample_more"}]
+    no_signal = [r for r in (surface_inventory or []) if int(float(r.get("answerable_question_candidates") or 0)) <= 0]
+    return [
+        {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
+        {"section": "Охват", "metric": "Комментариев обработано", "value": summary.get("comments_embedded") or scope.get("comments_after_filter")},
+        {"section": "Охват", "metric": "Поверхностей с профилем", "value": summary.get("surface_profiles_count") or scope.get("surfaces_profiled")},
+        {"section": "Охват", "metric": "Все поверхности в списке", "value": len(surface_inventory or [])},
+        {"section": "Период", "metric": "С даты", "value": scope.get("period_min_created_at")},
+        {"section": "Период", "metric": "По дату", "value": scope.get("period_max_created_at")},
+        {"section": "Модели", "metric": "Модели смысла", "value": summary.get("models") or scope.get("models")},
+        {"section": "Модели", "metric": "Модель для LLM-gate", "value": summary.get("recommended_model") or scope.get("gate_model_for_llm_budget")},
+        {"section": "Итог", "metric": "Где есть хотя бы слабый смысл", "value": len(monitored)},
+        {"section": "Итог", "metric": "Где ничего не найдено/не попало", "value": len(no_signal)},
+        {"section": "Как читать", "metric": "surface_summary", "value": "Главный лист: где мониторить, сколько вопросов и как часто они встречаются."},
+        {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список поверхностей из payload/run: видно, где ничего не нашлось или поверхность не анализировалась."},
+        {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
+        {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
+        {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
+    ]
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
@@ -956,6 +1156,160 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> Non
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
+
+
+_RU_HEADERS = {
+    "label": "Метка",
+    "action_class": "Класс действия",
+    "is_actionable_reply_opportunity": "Можно отвечать?",
+    "false_positive_type": "Тип ошибки",
+    "model_disagreement_bucket": "Согласие моделей",
+    "model_name": "Модель",
+    "intent_set": "Группа смысла",
+    "intent_set_ru": "Смысл по-русски",
+    "model_phrase": "Модельная фраза",
+    "phrase_order": "№",
+    "is_negative": "Минус-смысл?",
+    "note_ru": "Пояснение",
+    "score": "Оценка",
+    "rank_global": "Ранг общий",
+    "rank_within_surface": "Ранг в группе",
+    "surface_key": "ID поверхности",
+    "platform": "Платформа",
+    "surface_type": "Тип",
+    "surface_title": "Название",
+    "surface_url": "Ссылка",
+    "status": "Статус",
+    "scan_state": "Сканирование",
+    "source": "Источник",
+    "relation": "Тип контекста",
+    "is_post": "Это пост?",
+    "author_id": "Автор",
+    "created_at": "Дата",
+    "context_url": "Ссылка на контекст",
+    "text_snapshot": "Комментарий",
+    "analysis_context_snapshot": "Контекст поста/родителя",
+    "source_post_text_snapshot": "Исходный пост",
+    "reply_parent_text_snapshot": "Родительский комментарий",
+    "top_intent_phrase": "Ближайшая модельная фраза",
+    "positive_score": "Похожесть +",
+    "negative_score": "Похожесть −",
+    "funnel_bucket": "Воронка",
+    "candidate_action_type": "Что можно делать",
+    "destination_hint": "Место/направление",
+    "transport_hint": "Транспорт",
+    "question_signal": "Есть вопрос?",
+    "candidate_noise_type": "Причина фильтра",
+    "intent_text_supported": "Смысл подтверждён текстом",
+    "pre_llm_candidate_eligible": "В LLM-gate?",
+    "recommendation": "Рекомендация",
+    "members_or_subscribers": "Участники",
+    "period_min_created_at": "Период с",
+    "period_max_created_at": "Период по",
+    "period_days": "Дней",
+    "period_label": "Период",
+    "unique_commenters": "Уникальные авторы",
+    "unique_commenters_note": "Авторы: примечание",
+    "comments_total": "Всего комментариев",
+    "comments_embedded": "В анализе",
+    "comments_per_day": "Комм./день",
+    "comments_per_week": "Комм./нед.",
+    "comments_per_30d": "Комм./30д",
+    "comments_per_90d": "Комм./90д",
+    "latest_100_comments": "Последние N",
+    "latest_100_min_created_at": "Latest-100 с",
+    "latest_100_max_created_at": "Latest-100 по",
+    "latest_100_period_days": "Latest-100 дней",
+    "latest_100_period_label": "Latest-100 период",
+    "summary_ru": "Вывод",
+    "answerable_question_candidates": "Вопросы для ответа",
+    "answerable_questions_per_30d": "Вопросы/30д",
+    "answerable_questions_per_90d": "Вопросы/90д",
+    "answerable_questions_per_100_comments": "Вопросы/100 комм.",
+    "ask_clarification_contexts": "Где спрашивать самим",
+    "ask_contexts_per_30d": "Уточнения/30д",
+    "eligible_comment_contexts": "Контексты-комментарии",
+    "source_post_contexts": "Контексты-посты",
+    "route_poi_questions": "Маршруты",
+    "event_questions": "События",
+    "organizer_submission_questions": "Организаторам",
+    "badge_filter_questions": "Фильтры",
+    "filtered_noise_contexts": "Шум",
+    "relation_counts_json": "Типы контекстов",
+    "dominant_detected_interests": "Темы",
+    "monitoring_decision_hint": "Решение",
+    "monitoring_reason": "Причина",
+    "answerable_examples": "Примеры ответов",
+    "ask_question_examples": "Примеры уточнений",
+    "pattern": "Паттерн",
+    "canonical_question_ru": "Эталонный вопрос",
+    "count": "Количество",
+    "intent_sets": "Группы смыслов",
+    "models": "Модели",
+    "example_questions": "Примеры вопросов",
+    "example_urls": "Ссылки примеров",
+    "metric": "Показатель",
+    "value": "Значение",
+    "section": "Раздел",
+}
+
+
+def _format_date_ru(value: Any) -> Any:
+    dt = _parse_created_at(value)
+    if dt is None:
+        return value
+    return dt.strftime("%d.%m.%Y")
+
+
+def _xlsx_value(header: str, value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    if header.endswith("_created_at") or header == "created_at" or header in {"period_min_created_at", "period_max_created_at"}:
+        return _format_date_ru(value)
+    if isinstance(value, float):
+        return round(value, 1)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if header.endswith("_days") or "_per_" in header or header.endswith("_score") or header == "score":
+            try:
+                return round(float(stripped), 1)
+            except Exception:
+                return value
+    return value
+
+
+def _append_grouped_header(ws: Any, headers: list[str], groups: dict[str, str] | None = None) -> None:
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    groups = groups or {}
+    group_values = [groups.get(h, "") for h in headers]
+    ws.append(group_values)
+    ws.append([_RU_HEADERS.get(h, h) for h in headers])
+    for row_idx, color in [(1, "B7DEE8"), (2, "D9EAF7")]:
+        for cell in ws[row_idx]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor=color)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    start = 1
+    while start <= len(headers):
+        group = group_values[start - 1]
+        end = start
+        while end < len(headers) and group_values[end] == group:
+            end += 1
+        if group and end > start:
+            ws.merge_cells(start_row=1, start_column=start, end_row=1, end_column=end)
+        start = end + 1
+
+
+def _append_data_rows(ws: Any, rows: list[dict[str, Any]], headers: list[str], *, hyperlink_field: str | None = None) -> None:
+    for row in rows:
+        ws.append([_xlsx_value(h, row.get(h)) for h in headers])
+        if hyperlink_field and row.get(hyperlink_field):
+            url_cell = ws.cell(ws.max_row, headers.index(hyperlink_field) + 1)
+            url_cell.hyperlink = str(row.get(hyperlink_field))
+            url_cell.style = "Hyperlink"
 
 
 def _write_xlsx(
@@ -966,6 +1320,9 @@ def _write_xlsx(
     model_examples: dict[str, list[dict[str, Any]]] | None = None,
     question_patterns: list[dict[str, Any]] | None = None,
     scope_rows: list[dict[str, Any]] | None = None,
+    surface_inventory: list[dict[str, Any]] | None = None,
+    dashboard_rows: list[dict[str, Any]] | None = None,
+    intent_catalog_rows: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         from openpyxl import Workbook
@@ -979,22 +1336,24 @@ def _write_xlsx(
     headers = [
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-        "relation", "is_post", "author_id", "created_at", "context_url", "text_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
+        "relation", "is_post", "author_id", "created_at", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
         "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible",
     ]
-    ws.append(headers)
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill("solid", fgColor="D9EAF7")
-    for row in rows:
-        ws.append([row.get(h) for h in headers])
-        url_cell = ws.cell(ws.max_row, headers.index("context_url") + 1)
-        if row.get("context_url"):
-            url_cell.hyperlink = str(row.get("context_url"))
-            url_cell.style = "Hyperlink"
-    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 16, 22, 45, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
+    manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Поверхность" for h in headers[10:17]} | {h: "Текст и контекст" for h in headers[17:22]} | {h: "Решение" for h in headers[22:]}
+    _append_grouped_header(ws, headers, manual_groups)
+    _append_data_rows(ws, rows, headers, hyperlink_field="context_url")
+    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 16, 12, 45, 70, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
         ws.column_dimensions[get_column_letter(idx)].width = width
-    ws.freeze_panes = "A2"
+    ws.freeze_panes = "A3"
+
+    if dashboard_rows:
+        dash = wb.create_sheet("summary_ru", 0)
+        dash_headers = ["section", "metric", "value"]
+        _append_grouped_header(dash, dash_headers, {h: "Краткое объяснение" for h in dash_headers})
+        _append_data_rows(dash, dashboard_rows, dash_headers)
+        dash.freeze_panes = "A3"
+        for idx, width in enumerate([18, 32, 120], start=1):
+            dash.column_dimensions[get_column_letter(idx)].width = width
 
     if surface_summaries:
         surf = wb.create_sheet("surface_summary")
@@ -1008,19 +1367,31 @@ def _write_xlsx(
             "route_poi_questions", "event_questions", "organizer_submission_questions", "badge_filter_questions",
             "filtered_noise_contexts", "relation_counts_json", "unique_commenters_note", "answerable_examples", "ask_question_examples",
         ]
-        surf.append(surf_headers)
-        for cell in surf[1]:
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill("solid", fgColor="D9EAF7")
-        for row in surface_summaries:
-            surf.append([row.get(h) for h in surf_headers])
-            url_cell = surf.cell(surf.max_row, surf_headers.index("surface_url") + 1)
-            if row.get("surface_url"):
-                url_cell.hyperlink = str(row.get("surface_url"))
-                url_cell.style = "Hyperlink"
-        surf.freeze_panes = "A2"
+        surf_groups = {
+            **{h: "Поверхность" for h in surf_headers[:7]},
+            **{h: "Период и объём" for h in surf_headers[7:21]},
+            **{h: "Потенциал" for h in surf_headers[21:35]},
+            **{h: "Пояснения" for h in surf_headers[35:]},
+        }
+        _append_grouped_header(surf, surf_headers, surf_groups)
+        _append_data_rows(surf, surface_summaries, surf_headers, hyperlink_field="surface_url")
+        surf.freeze_panes = "A3"
         for idx, width in enumerate([34, 30, 10, 18, 30, 42, 16, 22, 22, 12, 18, 14, 14, 14, 14, 14, 14, 14, 22, 22, 14, 70, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 60, 24, 90, 90], start=1):
             surf.column_dimensions[get_column_letter(idx)].width = width
+
+    if surface_inventory:
+        inv = wb.create_sheet("full_surface_list")
+        inv_headers = [
+            "surface_key", "platform", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
+            "members_or_subscribers", "recommendation", "comments_embedded", "answerable_question_candidates",
+            "route_poi_questions", "event_questions", "ask_clarification_contexts", "summary_ru",
+        ]
+        inv_groups = {h: "Поверхность" for h in inv_headers[:9]} | {h: "Результат анализа" for h in inv_headers[9:]}
+        _append_grouped_header(inv, inv_headers, inv_groups)
+        _append_data_rows(inv, surface_inventory, inv_headers, hyperlink_field="surface_url")
+        inv.freeze_panes = "A3"
+        for idx, width in enumerate([30, 10, 18, 34, 44, 20, 24, 22, 14, 36, 14, 14, 14, 14, 14, 90], start=1):
+            inv.column_dimensions[get_column_letter(idx)].width = width
 
     for model_name, example_rows in (model_examples or {}).items():
         model_key = str(model_name).lower()
@@ -1034,56 +1405,52 @@ def _write_xlsx(
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "context_url", "text_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+            "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
         ]
-        ex.append(ex_headers)
-        for cell in ex[1]:
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill("solid", fgColor="D9EAF7")
-        for row in example_rows:
-            ex.append([row.get(h) for h in ex_headers])
-            url_cell = ex.cell(ex.max_row, ex_headers.index("context_url") + 1)
-            if row.get("context_url"):
-                url_cell.hyperlink = str(row.get("context_url"))
-                url_cell.style = "Hyperlink"
-        ex.freeze_panes = "A2"
-        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 22, 28, 30, 24, 45, 80, 55, 22, 18], start=1):
+        ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Поверхность" for h in ex_headers[4:13]} | {h: "Комментарий и контекст" for h in ex_headers[13:17]} | {h: "Действие" for h in ex_headers[17:]}
+        _append_grouped_header(ex, ex_headers, ex_groups)
+        _append_data_rows(ex, example_rows, ex_headers, hyperlink_field="context_url")
+        ex.freeze_panes = "A3"
+        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
             ex.column_dimensions[get_column_letter(idx)].width = width
 
     if question_patterns:
         qp = wb.create_sheet("question_patterns")
         qp_headers = [
             "surface_key", "platform", "surface_type", "pattern", "candidate_action_type",
-            "count", "intent_sets", "models", "example_texts", "example_urls",
+            "canonical_question_ru", "count", "intent_sets", "models", "example_questions", "example_urls",
         ]
-        qp.append(qp_headers)
-        for cell in qp[1]:
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill("solid", fgColor="D9EAF7")
-        for row in question_patterns:
-            qp.append([row.get(h) for h in qp_headers])
-        qp.freeze_panes = "A2"
-        for idx, width in enumerate([30, 10, 18, 28, 34, 10, 45, 45, 90, 70], start=1):
+        qp_groups = {h: "Где найдено" for h in qp_headers[:3]} | {h: "Эталон вопроса" for h in qp_headers[3:7]} | {h: "Модели и примеры" for h in qp_headers[7:]}
+        _append_grouped_header(qp, qp_headers, qp_groups)
+        _append_data_rows(qp, question_patterns, qp_headers)
+        qp.freeze_panes = "A3"
+        for idx, width in enumerate([30, 10, 18, 28, 34, 70, 10, 45, 45, 90, 70], start=1):
             qp.column_dimensions[get_column_letter(idx)].width = width
+
+    if intent_catalog_rows:
+        cat = wb.create_sheet("intent_catalog")
+        cat_headers = ["intent_set", "intent_set_ru", "phrase_order", "model_phrase", "candidate_action_type", "is_negative", "note_ru"]
+        cat_groups = {h: "Группа смысла" for h in cat_headers[:3]} | {h: "Модельная фраза" for h in cat_headers[3:]} 
+        _append_grouped_header(cat, cat_headers, cat_groups)
+        _append_data_rows(cat, intent_catalog_rows, cat_headers)
+        cat.freeze_panes = "A3"
+        for idx, width in enumerate([32, 38, 8, 80, 34, 12, 90], start=1):
+            cat.column_dimensions[get_column_letter(idx)].width = width
 
     if scope_rows:
         scope = wb.create_sheet("scope")
-        scope.append(["metric", "value"])
-        for cell in scope[1]:
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill("solid", fgColor="D9EAF7")
-        for row in scope_rows:
-            scope.append([row.get("metric"), row.get("value")])
-        scope.freeze_panes = "A2"
+        _append_grouped_header(scope, ["metric", "value"], {"metric": "Охват запуска", "value": "Охват запуска"})
+        _append_data_rows(scope, scope_rows, ["metric", "value"])
+        scope.freeze_panes = "A3"
         scope.column_dimensions["A"].width = 36
         scope.column_dimensions["B"].width = 120
 
     summary = wb.create_sheet("summary")
-    summary.append(["metric", "value"])
-    summary.append(["rows", len(rows)])
-    summary.append(["generated_at", datetime.now(timezone.utc).isoformat()])
-    for cell in summary[1]:
-        cell.font = Font(bold=True)
+    _append_grouped_header(summary, ["metric", "value"], {"metric": "Файл", "value": "Файл"})
+    _append_data_rows(summary, [
+        {"metric": "rows", "value": len(rows)},
+        {"metric": "generated_at", "value": datetime.now(timezone.utc).isoformat()},
+    ], ["metric", "value"])
     wb.save(path)
 
 
@@ -1202,7 +1569,7 @@ def run_comment_semantic_retrieval(
         negative_vectors = _to_list_matrix(backend.encode(negative_phrases, model_name=model_name, is_query=True, batch_size=batch_size, max_length=max_length))
         intent_embed_sec += time.perf_counter() - t0
 
-        comments = [r["text"] for r in records]
+        comments = [str(r.get("analysis_text") or r.get("text") or "") for r in records]
         progress_callback("embedding_comments", {"model_name": model_name, "comments_total": len(comments), "comments_processed": 0, "progress_percent": 20})
         t0 = time.perf_counter()
         comment_vectors = _to_list_matrix(backend.encode(comments, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if comments else []
@@ -1220,7 +1587,7 @@ def run_comment_semantic_retrieval(
                 enriched["batch_size"] = batch_size
                 enriched["scoring_method"] = scoring_method
                 enriched["candidate_action_type"] = _action_for_intent(str(row.get("intent_set")))
-                enriched["target_hint"] = _route_target_hint(str(rec.get("text") or ""), str(row.get("intent_set")))
+                enriched["target_hint"] = _route_target_hint(str(rec.get("analysis_text") or rec.get("text") or ""), str(row.get("intent_set")))
                 enriched["destination_hint"] = enriched["target_hint"].get("destination_hint")
                 enriched["transport_hint"] = enriched["target_hint"].get("transport_hint")
                 _apply_text_quality_to_candidate(enriched, scoring_method=scoring_method)
@@ -1313,6 +1680,8 @@ def run_comment_semantic_retrieval(
     all_eligible_rows = [c for c in all_candidates if c.get("pre_llm_candidate_eligible")]
     question_patterns = _build_question_patterns(all_eligible_rows)
     model_examples = {model_name: _model_example_rows(all_candidates, model_name) for model_name in models}
+    surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
+    intent_catalog = _intent_catalog_rows()
     run_id = os.getenv("KAGGLE_RUN_ID") or f"acq-comment-retrieval-{int(time.time())}"
     scope_rows = _scope_rows(
         run_id=run_id,
@@ -1321,6 +1690,17 @@ def run_comment_semantic_retrieval(
         models=models,
         gate_model=gate_model,
         scoring_method=scoring_method,
+    )
+    dashboard_rows = _dashboard_summary_rows(
+        summary={
+            "comments_embedded": len(records),
+            "surface_profiles_count": len(profiles),
+            "models": ", ".join(models),
+            "recommended_model": gate_model,
+        },
+        surface_summaries=surface_summaries,
+        scope_rows=scope_rows,
+        surface_inventory=surface_inventory,
     )
 
     artifact_prefix = os.getenv("ACQ_COMMENT_RETRIEVAL_ARTIFACT_PREFIX") or "comment_retrieval"
@@ -1337,7 +1717,8 @@ def run_comment_semantic_retrieval(
     candidate_fields = [
         "run_id", "surface_key", "platform", "surface_type", "relation", "is_post", "author_id", "retrieval", "search_query",
         "context_url", "comment_id", "post_id", "topic_id", "thread_id",
-        "created_at", "text_snapshot", "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
+        "created_at", "text_snapshot", "analysis_context_snapshot", "source_post_text_snapshot", "reply_parent_text_snapshot",
+        "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
         "intent_text_supported", "pre_llm_candidate_eligible", "model_disagreement_bucket",
@@ -1364,7 +1745,7 @@ def run_comment_semantic_retrieval(
         "monitoring_decision_hint", "monitoring_reason", "answerable_examples", "ask_question_examples",
     ])
     _write_csv(question_patterns_csv, question_patterns, [
-        "surface_key", "platform", "surface_type", "pattern", "candidate_action_type", "count", "intent_sets", "models", "example_texts", "example_urls",
+        "surface_key", "platform", "surface_type", "pattern", "candidate_action_type", "canonical_question_ru", "count", "intent_sets", "models", "example_questions", "example_urls",
     ])
     _write_csv(distributions_csv, distributions, ["model_name", "scoring_method", "count", "p50", "p90", "p95", "p99", "max"])
     _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
@@ -1376,6 +1757,9 @@ def run_comment_semantic_retrieval(
         model_examples=model_examples,
         question_patterns=question_patterns,
         scope_rows=scope_rows,
+        surface_inventory=surface_inventory,
+        dashboard_rows=dashboard_rows,
+        intent_catalog_rows=intent_catalog,
     )
 
     summary = {

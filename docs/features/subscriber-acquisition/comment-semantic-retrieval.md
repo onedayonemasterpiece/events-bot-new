@@ -245,6 +245,9 @@ Candidate rows must include at least:
   "thread_id": "...",
   "created_at": "...",
   "text_snapshot": "short public snippet",
+  "analysis_context_snapshot": "source post / parent comment context used for interpretation",
+  "source_post_text_snapshot": "bounded source post or VK topic text/title",
+  "reply_parent_text_snapshot": "bounded parent comment text when the comment is a reply",
   "model_name": "intfloat/multilingual-e5-base|BAAI/bge-m3",
   "max_length": 128,
   "batch_size": 32,
@@ -292,6 +295,25 @@ Before LLM gate, apply a conservative **question-first quality layer**:
   `source_post_not_comment` and exclude them from reply examples/LLM budget by
   default, because the current MVP is comment-reply acquisition. They remain in
   artifacts for surface context and future organizer-question strategies.
+- mark real-estate-only and medicine-only questions as out of scope
+  (`out_of_scope_real_estate`, `out_of_scope_medicine`) unless the same text has
+  explicit route/event context. Example: “где снять квартиру?” is out of scope,
+  while “снимаем квартиру, куда съездить на один день?” remains a route query.
+
+For semantic scoring the embedded text is the comment plus bounded context when
+available:
+
+```text
+<comment text>
+
+Контекст для понимания:
+Родительский комментарий: ...
+Исходный пост/тема: ...
+```
+
+This is required because many comments only make sense relative to the source
+post or reply parent. The original comment remains separately visible in
+`text_snapshot`.
 
 This deterministic layer is a narrow budget/noise guardrail, not the semantic
 acceptance decision. It should keep rows visible in artifacts with
@@ -352,9 +374,14 @@ Research-stage bulk output is artifact-first:
 
 The XLSX must include these operator-facing sheets:
 
+- `summary_ru`: dashboard-style Russian explanation of what the file means,
+  how to read it and what the important limitations are.
 - `scope`: run id, stage, model list/gate model, actual comment period,
   platform/surface/relation counts and the configured scan budgets; this answers
   whether the file came from all stored surfaces or from a bounded Kaggle sample.
+- `full_surface_list`: full payload/run surface inventory, including surfaces
+  where nothing was found, no comments were available, or the surface did not
+  enter the retrieval stage.
 - `surface_summary`: map for “where to work next” with community/group names,
   live links, member/subscriber count if collected, observed period, unique
   commenters if collected, total comments, normalized comments/day/week/30d/90d,
@@ -366,8 +393,15 @@ The XLSX must include these operator-facing sheets:
 - `question_patterns`: grouped question patterns with counts and examples,
   e.g. route with children, route transport, ticket/price, registration/seats,
   age/children, location/entry, Pushkin/free/accessibility and organizer
-  submission.
+  submission. This sheet must contain actual question examples and a
+  `canonical_question_ru` template, not generic statements.
+- `intent_catalog`: the complete catalog of model phrases/senses embedded as
+  retrieval queries. The per-candidate `top_intent_phrase` is the closest phrase
+  from this catalog for the candidate’s `intent_set`.
 - `manual_review`: mixed calibration sample with empty human-label columns.
+
+Human-facing XLSX formatting should use Russian column labels, grouped header
+bands, `dd.mm.yyyy` date strings and one-decimal normalized rates where possible.
 
 YDB serverless is the preferred project-owned store for sanitized retrieval
 summaries once the dry run proves value, because the repo already has an optional

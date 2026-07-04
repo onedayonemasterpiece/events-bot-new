@@ -432,6 +432,13 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert Path(summary["artifacts"]["manual_review_xlsx"]).exists()
     assert Path(summary["artifacts"]["candidates_csv"]).exists()
     assert Path(summary["artifacts"]["question_patterns_csv"]).exists()
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(summary["artifacts"]["manual_review_xlsx"], read_only=True)
+    assert "summary_ru" in workbook.sheetnames
+    assert "intent_catalog" in workbook.sheetnames
+    assert "full_surface_list" in workbook.sheetnames
+    assert "question_patterns" in workbook.sheetnames
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
     assert route_candidates
     assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
@@ -484,6 +491,20 @@ def test_comment_semantic_retrieval_prefers_questions_and_filters_offer_noise():
     assert source_post["pre_llm_candidate_eligible"] is False
     assert source_post["candidate_noise_type"] == "source_post_not_comment"
 
+    real_estate = {"text_snapshot": "Где снять квартиру на длительный срок?", "positive_negative_margin": 0.5, "intent_set": "event_site_search_or_listing"}
+    retrieval._apply_text_quality_to_candidate(real_estate, scoring_method="positive_negative_margin")
+    assert real_estate["pre_llm_candidate_eligible"] is False
+    assert real_estate["candidate_noise_type"] == "out_of_scope_real_estate"
+
+    medicine = {"text_snapshot": "Посоветуйте стоматолога и клинику", "positive_negative_margin": 0.5, "intent_set": "badge_filter_need"}
+    retrieval._apply_text_quality_to_candidate(medicine, scoring_method="positive_negative_margin")
+    assert medicine["pre_llm_candidate_eligible"] is False
+    assert medicine["candidate_noise_type"] == "out_of_scope_medicine"
+
+    route_with_flat_context = {"text_snapshot": "Снимаем квартиру в Калининграде, куда съездить на один день?", "positive_negative_margin": 0.5, "intent_set": "route_poi_close_actionable"}
+    retrieval._apply_text_quality_to_candidate(route_with_flat_context, scoring_method="positive_negative_margin")
+    assert route_with_flat_context["pre_llm_candidate_eligible"] is True
+
 
 def test_question_pattern_label_covers_route_event_and_badges():
     retrieval = load_retrieval()
@@ -491,6 +512,33 @@ def test_question_pattern_label_covers_route_event_and_badges():
     assert retrieval._question_pattern_label("Куда съездить с детьми на один день?", action_type="trip_route_poi_recommendation") == "route_with_children"
     assert retrieval._question_pattern_label("Сколько стоит билет и нужен ли вход?", action_type="event_recommendation_reply") == "event_ticket_or_price"
     assert retrieval._question_pattern_label("Есть по Пушкинской карте?", action_type="badge_filter_need") == "event_badge_pushkin_card"
+    rows = retrieval._build_question_patterns([
+        {
+            "surface_key": "tg:test",
+            "platform": "tg",
+            "surface_type": "group",
+            "candidate_action_type": "trip_route_poi_recommendation",
+            "intent_set": "route_poi_close_actionable",
+            "text_snapshot": "Куда съездить с детьми на один день?",
+            "context_url": "https://t.me/test/1",
+            "model_name": "intfloat/multilingual-e5-base",
+            "pre_llm_candidate_eligible": True,
+        },
+        {
+            "surface_key": "tg:test",
+            "platform": "tg",
+            "surface_type": "group",
+            "candidate_action_type": "trip_route_poi_recommendation",
+            "intent_set": "route_poi_close_actionable",
+            "text_snapshot": "Ездили с детьми в парк",
+            "context_url": "https://t.me/test/2",
+            "model_name": "intfloat/multilingual-e5-base",
+            "pre_llm_candidate_eligible": True,
+        },
+    ])
+    assert rows[0]["pattern"] == "route_with_children"
+    assert rows[0]["canonical_question_ru"].endswith("?")
+    assert "Ездили" not in rows[0]["example_questions"]
 
 
 def test_surface_decision_summary_separates_reply_and_question_asking_modes():
