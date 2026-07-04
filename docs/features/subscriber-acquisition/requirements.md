@@ -147,6 +147,13 @@ posts. For groups/supergroups, discovery scans recent public chat messages
 directly. The detailed MVP design and work estimate are in
 [`mvp-discovery.md`](mvp-discovery.md).
 
+Automated Telegram discovery must also seed from enabled Telegram Monitoring
+sources (`telegram_source`) because those are the existing announcement/city
+publics already known to the event pipeline. They enter as channel/commentability
+resolve candidates, not as approved reply surfaces: if comments are closed or no
+linked discussion is accessible, the surface is rejected for acquisition
+monitoring.
+
 Additional discovery topics from the 2026-07-01 static-site documentation update:
 
 - event-site search/listing needs: people asking for a site, search, calendar, exhibitions list, popular events, or similar navigation help;

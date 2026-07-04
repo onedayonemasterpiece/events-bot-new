@@ -289,7 +289,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             is_smartik = vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE
             is_social_search = vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE
             is_curated_social = is_smartik or is_social_search
-            is_new_frontier = source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
+            is_new_frontier = source in {"discovered", "linked_discussion", "tg_monitoring", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
             is_discovered_replyable_tg = source in {"discovered", "linked_discussion"}
             is_replyable_tg = str(row.platform or "").lower() == "tg" and surface_type in {"group", "chat", "megagroup", "linked_discussion"}
             needs_tg_comment_resolve = str(row.platform or "").lower() == "tg" and (
@@ -366,10 +366,60 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             source = str(item.get("source") or "").strip().lower()
-            if source in {"discovered", "linked_discussion", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"}:
+            if source in {"discovered", "linked_discussion", "tg_monitoring", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"}:
                 surfaces.append(item)
             else:
                 pending_existing.append(item)
+        tg_source_table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='telegram_source'"))).scalar_one_or_none()
+        if tg_source_table_exists:
+            info = (await session.execute(text("PRAGMA table_info(telegram_source)"))).all()
+            columns = {str(row[1]) for row in info}
+            select_cols = ["username"]
+            for col in ["title", "enabled", "trust_level", "festival_source", "festival_series", "last_scan_at"]:
+                if col in columns:
+                    select_cols.append(col)
+            order_col = "last_scan_at" if "last_scan_at" in columns else "username"
+            result = await session.execute(text(
+                f"SELECT {', '.join(select_cols)} FROM telegram_source "
+                "WHERE COALESCE(enabled, 1)=1 "
+                f"ORDER BY {order_col} DESC, username ASC LIMIT 250"
+            ))
+            for row in result.mappings().all():
+                handle = str(row.get("username") or "").strip().strip("@").strip("/")
+                if not handle:
+                    continue
+                if handle.casefold() in terminal_tg_handles:
+                    continue
+                external_id = f"tg:{handle}"
+                key = ("tg", external_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                title = str(row.get("title") or "").strip() or None
+                festival_series = str(row.get("festival_series") or "").strip()
+                trust_level = str(row.get("trust_level") or "").strip()
+                reach: dict[str, Any] = {"confidence": "low", "basis": "telegram_monitoring_source"}
+                if row.get("last_scan_at"):
+                    reach["monitor_last_scan_at"] = str(row.get("last_scan_at"))
+                surfaces.append({
+                    "platform": "tg",
+                    "surface_type": "unknown_public",
+                    "url": f"https://t.me/{handle}",
+                    "title": title or handle,
+                    "handle": handle,
+                    "external_id": external_id,
+                    "status": "needs_comment_resolve",
+                    "source": "tg_monitoring",
+                    "topic_hint": "existing Telegram monitoring source; resolve linked discussion/comments before replyability review",
+                    "reach": reach,
+                    "risk": {
+                        "safety_risk": "low",
+                        "spam_risk": "unknown",
+                        "trust_level": trust_level or None,
+                        "festival_source": bool(row.get("festival_source") or festival_series),
+                        "festival_series": festival_series or None,
+                    },
+                })
         for handle, title, source_url in [*ROUTE_CALIBRATION_TG_SEEDS, *TELEGA_IN_KALININGRAD_TG_SEEDS]:
             external_id = f"tg:{handle}"
             key = ("tg", external_id)

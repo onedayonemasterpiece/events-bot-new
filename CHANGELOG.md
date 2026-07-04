@@ -20,6 +20,10 @@
   and reports last-run increment counts in semantic XLSX summaries only when
   the source run id is verified, so local rebuilds of old artifacts cannot look
   like fresh monitoring.
+- Subscriber Acquisition Kaggle seed collection now includes enabled Telegram
+  Monitoring `telegram_source` publics as commentability-resolve candidates, so
+  known event/city announcement channels are checked for linked discussion
+  chats instead of being missing from the discovery frontier.
 - Subscriber Acquisition VK discovery now treats explicit `vk:id...` and
   positive-owner `wall123_...` links as profile-wall candidates end-to-end,
   discovers capped profile candidates from public VK comment/post authors and

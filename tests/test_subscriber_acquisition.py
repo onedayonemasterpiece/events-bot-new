@@ -787,6 +787,43 @@ async def test_runtime_seed_payload_includes_telega_in_kaliningrad_seeds(db):
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_includes_existing_telegram_monitoring_sources(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _runtime_env_from_config
+
+    async with db.get_session() as session:
+        await session.execute(text(
+            "INSERT INTO telegram_source(username, title, enabled, trust_level, last_scan_at) "
+            "VALUES ('city_events_public', 'Городские анонсы', 1, 'trusted', '2026-07-04 10:00:00'), "
+            "('disabled_public', 'Отключено', 0, NULL, NULL)"
+        ))
+        session.add(AcqSurface(
+            platform="tg",
+            surface_type="channel",
+            url="https://t.me/terminal_public",
+            handle="terminal_public",
+            external_id="tg:terminal_public",
+            status="rejected_no_comments",
+            source="tg_monitoring",
+        ))
+        await session.execute(text(
+            "INSERT INTO telegram_source(username, title, enabled) VALUES ('terminal_public', 'Без комментариев', 1)"
+        ))
+        await session.commit()
+
+    payload = await collect_runtime_seed_payload(db)
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=4), payload)
+    tg_seeds = json.loads(env["ACQ_TG_SEEDS_JSON"])
+
+    assert by_external["tg:city_events_public"]["source"] == "tg_monitoring"
+    assert by_external["tg:city_events_public"]["status"] == "needs_comment_resolve"
+    assert by_external["tg:city_events_public"]["reach"]["basis"] == "telegram_monitoring_source"
+    assert "https://t.me/city_events_public" in tg_seeds
+    assert "tg:disabled_public" not in by_external
+    assert "tg:terminal_public" not in by_external
+
+
+@pytest.mark.asyncio
 async def test_runtime_seed_payload_does_not_reintroduce_resolved_or_rejected_telega_channels(db):
     from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _approved_seed_urls_from_payload
 

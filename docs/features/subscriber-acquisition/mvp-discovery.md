@@ -27,6 +27,10 @@ contract:
 - review-card display events (`shown`), button feedback, and reply comments are persisted to `acq_review_feedback`;
 - server import keeps seed-only and budget-queued surfaces separate from actually scanned surfaces, so `last_scan_at` / `next_scan_after` are updated only for touched surfaces; linked discussion groups found while resolving a channel but skipped by the replyable budget stay pending for the next Kaggle run instead of being delayed as already scanned;
 - seed collection prioritizes pending discovered/linked Telegram replyable surfaces before static catalog seed groups, so each follow-up Kaggle run spends its small replyable budget on newly found comment groups first;
+- seed collection includes enabled Telegram Monitoring `telegram_source` publics
+  as `source=tg_monitoring` / `needs_comment_resolve`, so existing event/city
+  announcement channels are checked for linked discussions instead of being
+  absent from the acquisition frontier;
 - importer merge policy treats the previous Kaggle resolver result as durable state: later seed-only placeholders for the same `external_id` must not overwrite `linked_discussion` type/source/title/topic metadata or the private Telegram access hash needed for numeric `t.me/c/<id>` rescans;
 - the Kaggle runtime resolves numeric linked discussions with stored access metadata via Telethon `InputPeerChannel`, and seed-only diagnostic rows apply the stored `linked_discussion` metadata instead of falling back to `unknown_public`;
 - VK allowlist means “safe to scan read-only”, not “human-approved to reply”: scanned VK communities are marked `comments_available` when wall comments or discussion-board comments are readable, `rejected_no_comments` when the bounded scan finds no replyable comments/boards, and `rejected_inaccessible` when the wall and boards are not readable with configured tokens;
