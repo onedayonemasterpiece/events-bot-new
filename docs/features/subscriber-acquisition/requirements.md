@@ -16,8 +16,17 @@ Status: reconciled draft; Discovery MVP addendum 2026-06-29
 
 - The system should support collecting or configuring candidate social spaces where subscriber acquisition can happen: Telegram chats, Telegram channel comment threads, VK communities, and similar discussion surfaces.
 - The system should analyze messages/comments in those candidate spaces to find moments where an event recommendation is contextually useful.
-- Detection should combine LLM analysis with narrower deterministic signals/keywords; broad semantic classification of “this person may want an event recommendation” must remain LLM-first.
-- Relevant signals include questions about upcoming events, requests for recommendations, discussions where a specific type of event would be useful, and similar intent-bearing comments.
+- Detection should combine cheap retrieval/preselection with LLM analysis; broad final semantic acceptance of “this person may want an event/route reply” must remain LLM-owned, but the LLM must not be asked to read every comment in large surfaces.
+- Relevant signals include questions about upcoming events, route/POI recommendations, requests for recommendations, discussions where a specific type of event or route would be useful, and similar intent-bearing comments.
+
+### Comment semantic retrieval funnel
+
+- Discovery should add a cheap local embedding stage, `acq_comment_semantic_retrieval.v1`, before the Gemma/LLM gate.
+- The stage should embed human comments/messages from replyable TG/VK surfaces on Kaggle and score them against documented acquisition intent sets. It must not call an external LLM for every comment.
+- The stage should produce both per-comment candidates and per-surface semantic profiles, so operators can see which publics/chats are worth continuous monitoring even when no immediate reply candidate is accepted.
+- `trip_route_poi_recommendation` is a first-class intent: route/POI comments such as “куда съездить из Калининграда на день”, “что посмотреть в городе области”, “куда поехать на электричке/машине” should map to route cards/posts/POI explainers or `route_needed`, not to the generic event-announcements public.
+- The two benchmark models for the first research run are `intfloat/multilingual-e5-base` and `BAAI/bge-m3`, run on the exact same comment dataset, preprocessing, intent sets and scoring policies.
+- Model choice should be based on top-candidate quality, surface-monitoring usefulness, throughput, Kaggle stability, memory fit, install/cache simplicity and estimated LLM-call reduction, not on higher absolute cosine scores.
 
 ### Event recommendation generation
 
@@ -165,10 +174,18 @@ Storage/runtime decision for MVP:
   create separate databases/source lists for organizer clarification versus
   generic recommendation replies; store per-action eligibility/status on the same
   surface/opportunity graph.
+- Bulk comment-retrieval analytics are different from operator review state:
+  full comments, full per-comment score tables and embeddings must not be stored
+  in core Fly SQLite.
+- Research-stage bulk outputs should be Kaggle artifacts first. Sanitized
+  run/surface/candidate summaries should use the existing YDB acquisition sink
+  once enabled/proven. A separate local SQLite file is allowed only as a dev or
+  Kaggle artifact cache, not as the production owner.
 - This is not a final physical-storage requirement. The accepted analysis in
-  [`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) allows migrating
-  the common discovery store to Yandex Managed PostgreSQL once the frontier
-  graph/report workload grows beyond prototype size.
+  [`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) now prefers
+  artifact/YDB ownership for retrieval summaries and keeps Yandex Managed
+  PostgreSQL as a later option only if reporting joins outgrow the YDB summary
+  model.
 - Do not use the personalization Supabase/Postgres DB for this surface; that DB
   owns anonymous site telemetry/profiles/recommendation caches.
 - Do not create a separate bot for MVP; revisit only if volume/policy boundaries
@@ -210,11 +227,13 @@ Sticker strategy requirement:
 
 LLM requirement:
 
-- Semantic classification of surfaces and recommendation opportunities remains
-  LLM-first. Use the shared Google AI quota/rate-limit layer. Gemma 4 remains
+- Semantic acceptance of surfaces and recommendation opportunities remains
+  LLM-first **after retrieval/preselection**. Use the shared Google AI quota/rate-limit layer. Gemma 4 remains
   the default high-confidence reviewer/gate for semantic acceptance, while the
   organizer-clarification public question writer is explicitly Gemini Lite
   (`gemini-3.1-flash-lite`) and must still pass an independent reviewer stage.
+- Embedding retrieval may rank, profile and reduce candidate volume, but it is
+  not the owner of final suitability and must not produce public wording.
 - Discovery regex/keywords may only extract links, apply hard safety/region
   gates, dedupe, and build cheap prefilter hints for LLM budget control. They
   must not be the owner of semantic suitability. In particular, post-event
@@ -249,6 +268,9 @@ LLM requirement:
   subfeature: match organizer posts to known events through vector search,
   compare against an ideal event-card checklist, dedupe existing questions in
   the thread, and use LLM only for final validation/wording.
+- 2026-07-04: Added `acq_comment_semantic_retrieval.v1` as the required
+  pre-LLM comment funnel and benchmark stage for route/POI, event, site-search,
+  partner, badge/filter and organizer-fit intents.
 - 2026-07-03: Resolved organizer-question operations: Gemini Lite
   (`gemini-3.1-flash-lite`) writes public wording, Gemma 4 independently
   reviews it, VK uses the existing configured token/account, Telegram uses the

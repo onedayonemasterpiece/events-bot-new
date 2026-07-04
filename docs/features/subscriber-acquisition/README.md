@@ -4,6 +4,8 @@ Canonical requirements: [requirements.md](requirements.md).
 
 Discovery MVP design: [mvp-discovery.md](mvp-discovery.md).
 
+Comment semantic retrieval/benchmark: [comment-semantic-retrieval.md](comment-semantic-retrieval.md).
+
 Source materials: [source/](source/).
 
 ## Implementation entrypoints
@@ -109,22 +111,27 @@ payload and on result import.
 
 Discovery opportunity topics are broader than direct event recommendations. The
 MVP cheap prefilter only proposes possible comments for the expensive semantic
-gate; it must not be treated as the final candidate decision. Kaggle opportunity
-acceptance is LLM-first through the Gemma 4 acquisition gate
-(`ACQ_ENABLE_LLM_GATE=1`, `ACQ_LLM_MODEL`, default `models/gemma-4-31b-it`,
-Google key lane `GOOGLE_API_KEY3`). Gemma calls are also protected by a visible
-per-run budget gate (`ACQ_MAX_LLM_CALLS_PER_RUN`, default `80`) and the runtime
-reports `llm_gate` / `llm_gate_limits` counters in the Kaggle payload, including
-calls used/reserved, blocked limit attempts and estimated input tokens. If the
-configured Google key is absent, the runtime fails closed for opportunities
-instead of showing regex-owned semantic cards. The review card stores and displays the Gemma checklist, including
-whether the comment is a real current/future need and not just a post-event
-thank-you/report or local logistics for the currently discussed event/post
-(schedule/programme of one day, exact time/address/entrance). Venue-policy
-questions addressed to a specific organizer/community (`у вас есть льготы/
-скидки/билеты/доступность/пандус/можно с коляской/для инвалидов`) are rejected
-as local policy unless the user explicitly asks for a city-wide search/picker of
-accessible/free events.
+gate; it must not be treated as the final candidate decision. The next Discovery
+stage adds `acq_comment_semantic_retrieval.v1`: comments/messages are embedded
+locally on Kaggle, scored against acquisition intent sets, aggregated into
+surface-level semantic profiles, and only the highest-ranked candidates are sent
+to Gemma. Kaggle opportunity acceptance remains LLM-first **after retrieval**
+through the Gemma 4 acquisition gate (`ACQ_ENABLE_LLM_GATE=1`, `ACQ_LLM_MODEL`,
+default `models/gemma-4-31b-it`, Google key lane `GOOGLE_API_KEY3`). This means
+LLM owns final semantic acceptance and public-safety judgment, but it does not
+need to read every comment in a large surface. Gemma calls are also protected by
+a visible per-run budget gate (`ACQ_MAX_LLM_CALLS_PER_RUN`, default `80`) and the
+runtime reports `llm_gate` / `llm_gate_limits` counters in the Kaggle payload,
+including calls used/reserved, blocked limit attempts and estimated input
+tokens. If the configured Google key is absent, the runtime fails closed for
+opportunities instead of showing regex-owned semantic cards. The review card
+stores and displays the Gemma checklist, including whether the comment is a real
+current/future need and not just a post-event thank-you/report or local logistics
+for the currently discussed event/post (schedule/programme of one day, exact
+time/address/entrance). Venue-policy questions addressed to a specific
+organizer/community (`у вас есть льготы/скидки/билеты/доступность/пандус/можно с
+коляской/для инвалидов`) are rejected as local policy unless the user explicitly
+asks for a city-wide search/picker of accessible/free events.
 
 The cheap prefilter also routes recent static-site product hooks from the
 2026-07-01 docs update: organizer submission/partnership questions
@@ -210,15 +217,17 @@ surfaces, edges, runs, opportunities and feedback are shared. Organizer
 clarification, generic recommendation replies, partner-submission replies,
 sticker strategy and future publication are represented as action-specific
 eligibility/status values on the same surface/opportunity graph, not as separate
-databases or parallel source lists. A surface may therefore be `ineligible` for a
-generic event-recommendation reply but `eligible` for organizer clarification.
+source lists. A surface may therefore be `ineligible` for a generic
+event-recommendation reply but `eligible` for organizer clarification.
 
-The current `acq_*` tables in core Fly SQLite are an MVP compatibility layer, not
-a final storage requirement. Optional YDB export (`ACQ_YDB_STATS_ENABLED=1`,
-`ACQ_YDB_ENDPOINT`, `ACQ_YDB_DATABASE`) is a stats/mirror sink for the same common
-discovery graph, not a separate product database. The storage analysis in
-[`mvp-discovery.md`](mvp-discovery.md#data-ownership-analysis) still allows a
-future move of the common discovery store to Yandex Managed PostgreSQL if
-frontier growth, report/XLSX exports, or concurrent Kaggle imports make the
-crawler graph larger than core bot operational state. Supabase personalization
-storage remains out of scope for acquisition crawling/review queues.
+The current `acq_*` tables in core Fly SQLite are an MVP compatibility layer for
+small operator-review state, not a home for bulk crawler analytics. In
+particular, `acq_comment_semantic_retrieval.v1` must not write full comments,
+full per-comment scores or embeddings into the operational Fly SQLite DB. Bulk
+retrieval outputs are artifact-first, and sanitized run/surface/candidate
+summaries should use the existing YDB acquisition sink when enabled. A separate
+local SQLite file is acceptable only as a dev/Kaggle artifact cache, not as the
+production state owner. Supabase personalization storage remains out of scope for
+acquisition crawling/review queues. See
+[`comment-semantic-retrieval.md#storage-decision`](comment-semantic-retrieval.md#storage-decision)
+and [`mvp-discovery.md#data-ownership-analysis`](mvp-discovery.md#data-ownership-analysis).

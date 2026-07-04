@@ -232,6 +232,7 @@ features:
     docs: docs/features/subscriber-acquisition/README.md
     requirements: docs/features/subscriber-acquisition/requirements.md
     mvp_discovery: docs/features/subscriber-acquisition/mvp-discovery.md
+    comment_semantic_retrieval: docs/features/subscriber-acquisition/comment-semantic-retrieval.md
     schema: docs/features/subscriber-acquisition/schemas/acq_discovery_result.schema.json
     source_materials: docs/features/subscriber-acquisition/source/
     entrypoints:

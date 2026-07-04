@@ -4,6 +4,7 @@
 
 ### Added
 
+- Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
 - Documented Subscriber Acquisition `organizer_clarification` as a separate shadow subfeature: organizer-owned event publics can produce review-only clarification-question candidates after vector matching to known events, ideal event-card gap analysis, same-thread dedupe, and LLM final wording validation.
 - Added `/acq_map` and the `🗺 Карта групп XLSX` acquisition menu action: operators can download a clickable spreadsheet of all discovered groups/communities with scan state, pending/approved/rejected reply policy, source, next scan time, and opportunity counts.
 - Added safe shadow-mode Subscriber Acquisition Discovery MVP scaffolding: core SQLite/SQLModel acquisition tables, JSON import contract, conservative reach scoring, link-target/sticker-fit helpers, Telegraph report rendering, `/acq*` superadmin commands, review-card publishing, feedback/reply capture, no-send safety guards, and a Kaggle shadow preflight runtime scaffold, and surface add/approve/reject/pause review actions, plus review-card shown feedback audit rows and read-only Telegram/VK shadow scanners in the Kaggle runtime, and a `/acq_run` local-shadow runtime import fallback with remote Telegram session-busy preflight and automatic VK seed collection from existing `vk_source` monitoring groups, and real Kaggle runner wiring for `/acq_run` with encrypted config/key datasets, status dataset, registry, polling, and output import.
@@ -2966,6 +2967,7 @@
 
 ### Added
 
+- Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
 - **Развернуть всех кандидатов**: в UI выбора событий появилась кнопка «+ Все кандидаты», разворачивающая полный список событий в 5-колоночный формат для ручного добавления.
 - **Экран сортировки**: кнопка «🔀 Сортировка» открывает экран с выбранными событиями и кнопками ⬆️/⬇️ для изменения порядка показа в видео.
 - **Текущие выходные**: если сегодня суббота или воскресенье, в периодах появляются две кнопки — «Эти выходные (дата)» и «Выходные (следующая дата)».
@@ -2978,6 +2980,7 @@
 
 ### Added
 
+- Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
 - Исправили падение при запуске: добавили импорт `dataclass` для работы альбомов в видео-анонсах и других обработчиках.
 - Видео-анонсы перестали искажать LLM-описания: строки `about` теперь лишь очищаются от лишних пробелов/эмодзи, а усечение и дедупликация слов остаются только для резервного текста.
 - Перевели справочник сезонных праздников на локализованный формат дат `DD.MM` и текстовые диапазоны, сохранили столбец `tolerance_days` и обновили парсер импорта под новый формат.

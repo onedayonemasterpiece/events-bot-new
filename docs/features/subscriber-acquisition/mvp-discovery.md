@@ -1,7 +1,7 @@
 # Subscriber Acquisition Discovery MVP
 
 Status: shadow-mode MVP scaffolding implemented; live scanner calibration pending
-Date: 2026-07-01
+Date: 2026-07-04
 
 ## Implemented shadow-mode slice
 
@@ -181,6 +181,49 @@ selection of accessible/free events.
 
 These deterministic matches are low-cost shadow prefilters. Final classification
 and reply wording remain LLM-first before any public response.
+
+
+### Comment semantic retrieval funnel
+
+`acq_comment_semantic_retrieval.v1` is the next Discovery stage. It is a cheap
+semantic-retrieval layer between comment collection and the Gemma gate, not a
+replacement for the gate. The detailed contract, benchmark matrix and report
+requirements are in
+[`comment-semantic-retrieval.md`](comment-semantic-retrieval.md).
+
+Required funnel:
+
+```text
+replyable TG/VK comments/messages
+  -> light preprocessing
+  -> local Kaggle embeddings
+  -> score against route/event/site/organizer/badge intent ladders
+  -> build surface semantic profiles and ranked comment candidates
+  -> send only top candidates to Gemma/LLM acceptance gate
+  -> accepted candidates become normal `acq_opportunity` rows
+```
+
+The stage must make route/POI discovery first-class. Route recommendation
+contexts from `docs/features/trip-recomendation/requirements.md` map to
+`trip_route_poi_recommendation` and should carry `route_target_status` hints such
+as `matched_existing`, `published_post_found`, `route_needed` or `unknown`.
+They should not silently fall back to the generic events announcement channel.
+
+Benchmark scope:
+
+- compare `intfloat/multilingual-e5-base` and `BAAI/bge-m3` on the exact same
+  comments, preprocessing, intent sets and scoring policies;
+- dry-run up to 20 surfaces / 5,000 comments before any larger run;
+- report speed, memory, score distributions, funnel reduction, candidate quality
+  sample and model disagreement examples;
+- do not use absolute cosine thresholds without first inspecting distributions;
+- do not call external LLM for all comments.
+
+Storage rule: bulk retrieval artifacts are written as Kaggle artifacts first;
+sanitized summaries may go to YDB when enabled; core Fly SQLite receives only
+small review-compatible summaries/top opportunities/pointers. Full comments,
+full per-comment score tables and embeddings must not be stored in the
+operational SQLite DB.
 
 
 ### Organizer clarification acquisition
@@ -478,9 +521,14 @@ The first production rollout writes **review data only**:
 - candidate surfaces discovered from links/forwards/mentions in scanned messages;
 - candidate conversation opportunities where a human recommendation could be
   useful;
+- `comment_semantic_profile` summaries for scanned surfaces;
+- top semantic-retrieval candidate comments with model/intent/scoring/rank
+  evidence;
+- route/POI target hints (`matched_existing`, `published_post_found`,
+  `route_needed`, `unknown`) for route acquisition candidates;
 - evidence snippets and direct links to source channel/post/comment/thread;
-- LLM score/rationale and deterministic counters;
-- run metrics and limit exhaustion reasons;
+- LLM score/rationale and deterministic/retrieval counters;
+- run metrics, benchmark metrics and limit exhaustion reasons;
 - conservative potential-reach estimates for each opportunity and surface;
 - a human-readable Telegraph report URL for convenient link-heavy review.
 
@@ -489,28 +537,39 @@ packs, and unattended approval are explicitly post-MVP.
 
 ## Data ownership analysis
 
-Current implementation keeps discovery/review state in the existing **core Fly
-SQLite DB** only as an MVP/prototype shortcut because it is already wired to the
-bot UI, `ops_run`, `kaggle_run_ledger`, `kaggle_registry`, review commands and
-remote Telegram session guard.
+Current implementation keeps small discovery/review state in the existing **core
+Fly SQLite DB** only as an MVP/prototype shortcut because it is already wired to
+the bot UI, `ops_run`, `kaggle_run_ledger`, `kaggle_registry`, review commands
+and remote Telegram session guard.
 
-This is not a final product decision. For a growing discovery graph the better
-long-term direction is a separate operational discovery store, preferably a
-managed relational database in Yandex Cloud, behind a repository/storage
-abstraction. The reasons are product/operational rather than ideological:
+This is not a final product decision and must not be extended to bulk comment
+analytics. `acq_comment_semantic_retrieval.v1` changes the storage pressure: per-
+comment scores, score distributions, benchmark samples and embeddings are
+research/crawler analytics, not operational bot state. They should be artifact-
+first and then, if persistence is needed, stored as sanitized summaries in the
+existing YDB acquisition sink. Core SQLite should keep only small reviewed/top
+opportunity rows, compact surface profile snippets, counters and artifact
+pointers.
+
+For a growing discovery graph the better long-term direction is a separate
+operational discovery store, behind a repository/storage abstraction. The reasons
+are product/operational rather than ideological:
 
 | Option | Strengths | Weaknesses for discovery | Fit |
 | --- | --- | --- | --- |
-| Core Fly SQLite | Zero new infrastructure; easiest review UI integration; good for first E2E/prototype | Single-volume operational DB becomes a crawler graph store; weak concurrent writes/report exports; harder retention/analytics; backup/restore couples acquisition experiments with event operations | Temporary MVP only |
+| Core Fly SQLite | Zero new infrastructure; easiest review UI integration; good for first E2E/prototype | Single-volume operational DB becomes a crawler graph store; weak concurrent writes/report exports; harder retention/analytics; backup/restore couples acquisition experiments with event operations; must not hold full comment retrieval tables or embeddings | Temporary compatibility layer for small review state only |
+| Separate local SQLite file | Easy offline/dev cache; can be produced by Kaggle/local runs without touching production DB | Still local file lifecycle/backup problem; not good as production source of truth; easy to lose/duplicate; no shared concurrent import/report story | OK only as artifact/dev cache |
 | Personalization Supabase/Postgres | Existing Postgres-like analytics surface | Wrong ownership boundary: that DB is for site users/profiles/recommendation caches, not Telegram/VK crawling/review queues | Avoid |
-| Yandex Managed PostgreSQL | Relational model fits surfaces/edges/runs/opportunities/feedback; SQL/XLSX/report queries stay simple; mature migrations/backups/monitoring; easy future read replicas/BI | New YC resource and secrets; cross-network access from Fly/Kaggle must be configured; costs scale with allocated cluster resources | Recommended target if we move beyond prototype |
-| YDB serverless/dedicated | Good for large sparse key-value/event workloads and serverless scaling; strict consistency/ACID available | More custom data-access code; graph/report joins and ad-hoc analytics are less convenient than PostgreSQL for this feature; less reuse of SQLModel/Postgres ecosystem | Consider only if discovery becomes high-volume event log first |
+| YDB serverless/dedicated | Existing optional acquisition sink; good fit for append/upsert run/profile/candidate summaries; cheap/free-tier-friendly for small MVP; separates crawler analytics from critical bot operations | More custom data-access code; graph/report joins and ad-hoc analytics are less convenient than PostgreSQL; should not store full embeddings without a retention/cost decision | Preferred for sanitized retrieval summaries after dry-run |
+| Yandex Managed PostgreSQL | Relational model fits complex surfaces/edges/runs/opportunities/feedback joins; SQL/XLSX/report queries stay simple; mature migrations/backups/monitoring; easy future read replicas/BI | New YC resource and secrets; cross-network access from Fly/Kaggle must be configured; costs scale with allocated cluster resources | Reconsider if YDB summary model becomes too awkward for reporting |
 
 Recommended decision: keep the current SQLite tables as an MVP compatibility
-layer, but treat `acq_*` as a storage interface that can migrate to Yandex
-Managed PostgreSQL if/when frontier growth, report generation, or concurrent
-Kaggle imports outgrow local SQLite. Do not silently declare this as a hard
-requirement until a separate migration task is accepted.
+layer for operator-visible review state, but treat bulk retrieval as artifact/YDB
+owned. Do not move full comment analytics into core SQLite. Do not create a new
+production local SQLite owner. Use YDB serverless for sanitized
+`acq_comment_retrieval_*` run/profile/candidate summaries after the dry-run
+proves value; revisit Yandex Managed PostgreSQL only if reporting joins become
+more important than append/upsert ingestion.
 
 The discovery base is **one common logical store** for all acquisition
 subfeatures. Do not create a separate organizer-clarification database or a
@@ -686,13 +745,21 @@ Use deterministic filters only as a narrow guardrail:
 - extract links/frontier candidates and apply hard safety/region gates;
 - never make the broad semantic decision with regex alone.
 
-### Phase 3 — LLM surface triage
+### Phase 3 — semantic retrieval and surface profiling
 
-Use Gemma through the configured Google key lane. The current Kaggle MVP uses the
-same isolated monitoring key convention (`GOOGLE_API_KEY3`, `ACQ_GOOGLE_KEY_ENV`)
-and native structured JSON output; the model is configurable through
-`ACQ_LLM_MODEL` and defaults to the repo-proven `models/gemma-4-31b-it`. Prompt
-output should be strict JSON:
+Before spending Gemma budget, run `acq_comment_semantic_retrieval.v1` on the
+collected human comments/messages. This phase embeds comments locally on Kaggle,
+scores intent ladders, writes artifact tables, and produces
+`comment_semantic_profile` for every scanned surface plus ranked candidate
+comments. It also emits benchmark metrics when model comparison mode is enabled.
+
+### Phase 4 — LLM surface/opportunity gate
+
+Use Gemma only on surface profiles and top retrieval candidates, not on every raw
+comment. The current Kaggle MVP uses the same isolated monitoring key convention
+(`GOOGLE_API_KEY3`, `ACQ_GOOGLE_KEY_ENV`) and native structured JSON output; the
+model is configurable through `ACQ_LLM_MODEL` and defaults to the repo-proven
+`models/gemma-4-31b-it`. Prompt output should be strict JSON:
 
 ```json
 {
@@ -714,10 +781,11 @@ it uses pinned `gemini-3.1-flash-lite` to write candidate public wording, and
 that wording remains unpublishable until an independent Gemma 4 reviewer accepts
 it.
 
-### Phase 4 — opportunity triage
+### Phase 5 — opportunity triage
 
-For public comments/messages, ask the LLM whether the message is a sparse,
-contextual chance to recommend an event. Output should include:
+For top retrieval candidates, ask the LLM whether the message is a sparse,
+contextual chance to recommend an event, route/POI target, site/search surface or
+organizer action. Output should include:
 
 - intent label (`asking_where_to_go`, `looking_for_children_event`,
   `tourist_question`, `relocation_local_tip`, `event_comparison`, `other`);
@@ -737,7 +805,7 @@ and is recorded in run diagnostics/stats.
 Reply text generation is optional in MVP and should remain `draft_only`; no
 publication action is available from the runtime.
 
-### Phase 5 — server import/review
+### Phase 6 — server import/review
 
 Server imports the Kaggle JSON into core SQLite and shows review UI:
 
@@ -758,10 +826,13 @@ Report structure:
 
 - run summary, budgets, scanned surfaces, skipped/busy diagnostics;
 - per-public monitoring potential: surface type, topic fit, recent activity,
-  conservative reach estimate, event-question likelihood, native-event-topic
-  opportunities, risks, recommended action;
+  conservative reach estimate, semantic profile, event/route/organizer signal,
+  native-event-topic opportunities, risks, recommended action;
+- semantic-retrieval benchmark summary when enabled: model, throughput, score
+  distributions, funnel reduction and selected threshold/top-percent policy;
 - candidate opportunities with direct Telegram/VK links to posts/comments,
-  evidence snippets, LLM rationale, potential views, and matched event ideas;
+  retrieval rank/evidence, LLM rationale, potential views, route target hints
+  and matched event ideas;
 - discovered surfaces with evidence links and why they should be reviewed or
   rejected;
 - sticker-strategy observations where available.

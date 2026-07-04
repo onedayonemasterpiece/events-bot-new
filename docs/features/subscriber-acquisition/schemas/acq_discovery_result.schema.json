@@ -2,27 +2,94 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Subscriber Acquisition Discovery Result",
   "type": "object",
-  "required": ["run_id", "generated_at", "surfaces", "opportunities"],
+  "required": [
+    "run_id",
+    "generated_at",
+    "surfaces",
+    "opportunities"
+  ],
   "properties": {
-    "run_id": {"type": "string"},
-    "generated_at": {"type": "string"},
+    "run_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
     "surfaces": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["platform", "surface_type", "url", "external_id"],
+        "required": [
+          "platform",
+          "surface_type",
+          "url",
+          "external_id"
+        ],
         "properties": {
-          "platform": {"enum": ["tg", "vk"]},
-          "surface_type": {"type": "string"},
-          "url": {"type": "string"},
-          "title": {"type": ["string", "null"]},
-          "handle": {"type": ["string", "null"]},
-          "external_id": {"type": "string"},
-          "source": {"enum": ["seed", "discovered", "manual"]},
-          "topic_hint": {"type": ["string", "null"]},
-          "topic_cluster": {"type": ["string", "null"]},
-          "reach": {"type": "object"},
-          "risk": {"type": "object"}
+          "platform": {
+            "enum": [
+              "tg",
+              "vk"
+            ]
+          },
+          "surface_type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "seed",
+              "discovered",
+              "manual"
+            ]
+          },
+          "topic_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic_cluster": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reach": {
+            "type": "object"
+          },
+          "risk": {
+            "type": "object"
+          },
+          "comment_semantic_profile": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "monitoring_decision_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
@@ -30,31 +97,171 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["platform", "surface_external_id", "context_url", "context_text_snippet", "link_target"],
+        "required": [
+          "platform",
+          "surface_external_id",
+          "context_url",
+          "context_text_snippet",
+          "link_target"
+        ],
         "properties": {
-          "platform": {"enum": ["tg", "vk"]},
-          "surface_external_id": {"type": "string"},
-          "context_url": {"type": "string"},
-          "context_created_at": {"type": ["string", "null"]},
-          "context_text_snippet": {"type": "string"},
-          "matched_intent": {"type": ["string", "null"]},
-          "topic_cluster": {"type": ["string", "null"]},
-          "event_ids": {"type": "array", "items": {"type": "integer"}},
-          "candidate_events": {"type": "array"},
-          "link_target": {
-            "type": "object",
-            "required": ["kind"],
-            "properties": {
-              "kind": {"enum": ["event_site", "pka_channel", "pka_afisha_event", "event_telegraph", "event_source", "topic_landing", "sticker_pack", "other", "none"]},
-              "url": {"type": ["string", "null"]},
-              "label": {"type": ["string", "null"]},
-              "reason": {"type": ["string", "null"]}
+          "platform": {
+            "enum": [
+              "tg",
+              "vk"
+            ]
+          },
+          "surface_external_id": {
+            "type": "string"
+          },
+          "context_url": {
+            "type": "string"
+          },
+          "context_created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context_text_snippet": {
+            "type": "string"
+          },
+          "matched_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic_cluster": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
             }
           },
-          "fallback_link_target": {"type": "object"},
-          "reach": {"type": "object"},
-          "scores": {"type": "object"},
-          "sticker_observation": {"type": "object"}
+          "candidate_events": {
+            "type": "array"
+          },
+          "link_target": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "event_site",
+                  "pka_channel",
+                  "pka_afisha_event",
+                  "event_telegraph",
+                  "event_source",
+                  "topic_landing",
+                  "sticker_pack",
+                  "other",
+                  "none",
+                  "route_card",
+                  "route_post",
+                  "poi_explainer",
+                  "route_needed"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "fallback_link_target": {
+            "type": "object"
+          },
+          "reach": {
+            "type": "object"
+          },
+          "scores": {
+            "type": "object"
+          },
+          "sticker_observation": {
+            "type": "object"
+          },
+          "action_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retrieval_evidence": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "target_hint": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "stats": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "object"
+    },
+    "comment_semantic_retrieval": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Optional run-level summary for acq_comment_semantic_retrieval.v1; bulk rows live in artifacts/YDB, not core SQLite.",
+      "properties": {
+        "stage": {
+          "const": "acq_comment_semantic_retrieval.v1"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "comments_total": {
+          "type": "integer"
+        },
+        "comments_embedded": {
+          "type": "integer"
+        },
+        "surface_profiles_count": {
+          "type": "integer"
+        },
+        "candidate_count": {
+          "type": "integer"
+        },
+        "benchmark_report_path": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }
