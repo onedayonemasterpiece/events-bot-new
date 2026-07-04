@@ -75,7 +75,18 @@ def _surface_was_scanned(item: dict[str, Any]) -> bool:
         return False
     reach = item.get("reach") if isinstance(item, dict) else None
     basis = str((reach or {}).get("basis") or "").strip().lower()
-    return bool(basis and basis != "seed_only")
+    seed_only_bases = {
+        "seed_only",
+        "route_calibration_seed",
+        "telega_in_seed",
+        "telegram_monitoring_source",
+        "vk_source_seed",
+        "smartik_catalog_seed",
+        "vk_social_search_seed",
+        "discovered_vk_author",
+        "discovered_vk_member",
+    }
+    return bool(basis and basis not in seed_only_bases)
 
 
 def _is_unscanned_seed_placeholder(item: dict[str, Any], *, scanned_this_run: bool) -> bool:

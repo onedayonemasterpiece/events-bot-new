@@ -99,7 +99,10 @@ those profile walls like any other VK surface and marks them
 Profile discovery is capped by `ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN`,
 `ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN` and
 `ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP`; vanity personal names are not
-auto-classified as profiles. The runtime reports these counters in `vk_scan`.
+auto-classified as profiles. Discovered profile-wall rows and unscanned
+monitoring/catalog seed rows stay pending for a later bounded scan; they must
+not be marked `last_scan_at` until the runtime actually checks their wall or
+comments. The runtime reports these counters in `vk_scan`.
 VK write methods remain
 blocked by the static no-send guard. To get beyond official event-source
 comments, the server seed payload also includes a small Smartik Kaliningrad

@@ -86,6 +86,28 @@ async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload)
             "reach": {"basis": "seed_only", "confidence": "low"},
             "risk": {},
         },
+        {
+            "platform": "vk",
+            "surface_type": "community",
+            "url": "https://vk.com/from_monitoring_seed",
+            "handle": "from_monitoring_seed",
+            "external_id": "vk:from_monitoring_seed",
+            "status": "candidate",
+            "source": "vk_source",
+            "reach": {"basis": "vk_source_seed", "confidence": "low"},
+            "risk": {"reason": "not scanned yet"},
+        },
+        {
+            "platform": "vk",
+            "surface_type": "profile",
+            "url": "https://vk.com/id123",
+            "handle": "id123",
+            "external_id": "vk:id123",
+            "status": "candidate",
+            "source": "discovered_vk_author",
+            "reach": {"basis": "discovered_vk_author", "confidence": "low"},
+            "risk": {"reason": "discovered profile candidate"},
+        },
     ]
     payload["opportunities"] = []
 
@@ -98,6 +120,10 @@ async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload)
     assert by_external["vk:scanned"].next_scan_after is not None
     assert by_external["vk:waiting"].last_scan_at is None
     assert by_external["vk:waiting"].next_scan_after is None
+    assert by_external["vk:from_monitoring_seed"].last_scan_at is None
+    assert by_external["vk:from_monitoring_seed"].next_scan_after is None
+    assert by_external["vk:id123"].last_scan_at is None
+    assert by_external["vk:id123"].next_scan_after is None
 
 
 @pytest.mark.asyncio
