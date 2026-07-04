@@ -104,7 +104,8 @@ Profile discovery is capped by `ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN`,
 auto-classified as profiles. Discovered profile-wall rows and unscanned
 monitoring/catalog seed rows stay pending for a later bounded scan; they must
 not be marked `last_scan_at` until the runtime actually checks their wall or
-comments. The runtime reports these counters in `vk_scan`.
+comments, and they must not inflate `surface_import_delta.newly_replyable`.
+The runtime reports these counters in `vk_scan`.
 VK write methods remain
 blocked by the static no-send guard. To get beyond official event-source
 comments, the server seed payload also includes a small Smartik Kaliningrad

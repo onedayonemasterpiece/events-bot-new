@@ -115,6 +115,7 @@ async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload)
 
     async with db.get_session() as session:
         rows = (await session.execute(select(AcqSurface))).scalars().all()
+        run = (await session.execute(select(AcqDiscoveryRun))).scalar_one()
     by_external = {row.external_id: row for row in rows}
     assert by_external["vk:scanned"].last_scan_at is not None
     assert by_external["vk:scanned"].next_scan_after is not None
@@ -124,6 +125,7 @@ async def test_import_marks_only_scanned_surfaces_as_scanned(db, sample_payload)
     assert by_external["vk:from_monitoring_seed"].next_scan_after is None
     assert by_external["vk:id123"].last_scan_at is None
     assert by_external["vk:id123"].next_scan_after is None
+    assert run.stats_json["surface_import_delta"]["newly_replyable"] == 1
 
 
 @pytest.mark.asyncio

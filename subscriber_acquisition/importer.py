@@ -105,6 +105,30 @@ def _is_unscanned_seed_placeholder(item: dict[str, Any], *, scanned_this_run: bo
     )
 
 
+def _counts_as_newly_replyable_surface(item: dict[str, Any], *, scanned_this_run: bool) -> bool:
+    """Whether a newly-created surface is confirmed enough for the delta counter.
+
+    The payload contains a large backlog of VK/TG seed rows. A VK community seed
+    is not yet a proven reply surface until the runtime has checked comments or
+    boards; otherwise one run can misleadingly report 100+ "newly replyable"
+    rows just because it carried the monitoring backlog.
+    """
+    platform = str((item or {}).get("platform") or "").strip().lower()
+    surface_type = str((item or {}).get("surface_type") or "").strip().lower()
+    status = str((item or {}).get("status") or "candidate").strip().lower()
+    source = str((item or {}).get("source") or "").strip().lower()
+    if status.startswith("rejected") or status in {"needs_comment_resolve", "resolved_has_linked_discussion"}:
+        return False
+    if platform == "vk":
+        return scanned_this_run and status in {"comments_available", "approved", "candidate"}
+    if platform == "tg":
+        if surface_type == "linked_discussion":
+            return True
+        if surface_type in {"group", "chat", "megagroup"}:
+            return source not in {"telega_in", "tg_monitoring"} or scanned_this_run
+    return scanned_this_run
+
+
 def _merge_risk_json(existing: Any, incoming: Any) -> Any:
     existing_dict = existing if isinstance(existing, dict) else {}
     incoming_dict = incoming if isinstance(incoming, dict) else {}
@@ -223,7 +247,7 @@ async def import_discovery_result(db, payload: dict[str, Any]) -> ImportResult:
             scanned_this_run = _surface_was_scanned(item)
             if existing is None:
                 surfaces_created += 1
-                if _is_replyable_surface(platform, str(item.get("surface_type") or "unknown")) and not incoming_status.startswith("rejected"):
+                if _is_replyable_surface(platform, str(item.get("surface_type") or "unknown")) and _counts_as_newly_replyable_surface(item, scanned_this_run=scanned_this_run):
                     newly_replyable_surfaces += 1
                 if incoming_status.startswith("rejected"):
                     newly_rejected_surfaces += 1

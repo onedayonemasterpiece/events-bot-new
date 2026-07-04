@@ -26,7 +26,8 @@
   chats instead of being missing from the discovery frontier.
 - Subscriber Acquisition import now keeps unscanned VK monitoring/catalog seeds
   and discovered profile-wall candidates pending instead of marking them scanned
-  merely because their reach basis is not `seed_only`.
+  merely because their reach basis is not `seed_only`, and excludes those
+  backlog placeholders from the `newly_replyable` delta counter.
 - Subscriber Acquisition Telegram seed metadata now carries monitoring-source
   titles/topic hints/reach into Kaggle output, preserving readable names for
   unscanned backlog channels in reports.
