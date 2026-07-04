@@ -159,6 +159,23 @@ Asset pipeline:
 4. Render the composite so the black circle is the **same visual diameter** as organizer medallion circles; do not enlarge the Pushkin circle relative to other circles. The original `Пушкинская карта` wordmark starts over the lower part of the circle and may protrude to the right. Do **not** add a separate pill/label with duplicated text.
 5. Provide a fallback `ПК` purple-ring medallion if the asset fails visual QA.
 
+## Telegram custom-emoji medallions
+
+The static-site medallion manifest is also used as the source semantics for Telegram custom-emoji medallions in `tg_event_publish` promo posts. Telegram rendering is deliberately configured separately from the static site because each visual medallion consumes a 4×4 grid of custom emoji documents.
+
+Runtime contract:
+
+- custom emoji pack capacity is 200 stickers; one 4×4 medallion consumes 16 stickers, so one pack fits 12 full medallions with 8 spare slots;
+- production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
+- `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
+- no more than three medallions are rendered for one event;
+- `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
+- events of «80 историй о главном» get the curated `kgd80` + `znanie-russia` pair when those documents are present, then the highest-priority matching venue/organizer if there is room;
+- disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
+
+The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.
+
+
 ## Static export data contract
 
 Future static export should project a compact token model next to existing event fields:

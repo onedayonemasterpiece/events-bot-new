@@ -8,6 +8,7 @@
 
 ### Added
 
+- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
@@ -1716,6 +1717,7 @@
 
 ### Added
 
+- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
 - **Развернуть всех кандидатов**: в UI выбора событий появилась кнопка «+ Все кандидаты», разворачивающая полный список событий в 5-колоночный формат для ручного добавления.
 - **Экран сортировки**: кнопка «🔀 Сортировка» открывает экран с выбранными событиями и кнопками ⬆️/⬇️ для изменения порядка показа в видео.
 - **Текущие выходные**: если сегодня суббота или воскресенье, в периодах появляются две кнопки — «Эти выходные (дата)» и «Выходные (следующая дата)».
@@ -1728,6 +1730,7 @@
 
 ### Added
 
+- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
 - Исправили падение при запуске: добавили импорт `dataclass` для работы альбомов в видео-анонсах и других обработчиках.
 - Видео-анонсы перестали искажать LLM-описания: строки `about` теперь лишь очищаются от лишних пробелов/эмодзи, а усечение и дедупликация слов остаются только для резервного текста.
 - Перевели справочник сезонных праздников на локализованный формат дат `DD.MM` и текстовые диапазоны, сохранили столбец `tolerance_days` и обновили парсер импорта под новый формат.

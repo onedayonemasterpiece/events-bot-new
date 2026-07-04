@@ -7,6 +7,8 @@ import json
 import time as _time
 import httpx
 from html.parser import HTMLParser
+
+from tg_medallions import event_medallion_html_block
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
@@ -4591,6 +4593,9 @@ def build_tg_promo_event_publication_message(event: Event) -> str:
         lines.extend(["", "\n".join(body_lines)])
     if hashtag_line:
         lines.extend(["", hashtag_line])
+    medallion_block = event_medallion_html_block(event)
+    if medallion_block:
+        lines.extend(["", medallion_block])
     return "\n".join(lines).strip()
 
 
@@ -4643,6 +4648,10 @@ def build_tg_promo_event_publication_media_caption(
         return "\n".join(candidate).strip()
 
     with_hashtags = [*lines, "", hashtag_line] if hashtag_line else lines
+    medallion_block = event_medallion_html_block(event)
+    with_medallions = [*with_hashtags, "", medallion_block] if medallion_block else with_hashtags
+    if len(joined(with_medallions)) <= limit:
+        return joined(with_medallions)
     if len(joined(with_hashtags)) <= limit:
         return joined(with_hashtags)
 
@@ -5233,6 +5242,16 @@ class _TelegramHtmlEntityParser(HTMLParser):
                 payload.update({"type": "text_link", "url": href})
                 self._stack.append(payload)
             return
+        if tag == "tg-emoji":
+            custom_emoji_id = ""
+            for key, value in attrs:
+                if str(key).lower() in {"emoji-id", "custom-emoji-id", "custom_emoji_id"}:
+                    custom_emoji_id = str(value or "").strip()
+                    break
+            if custom_emoji_id:
+                payload.update({"type": "custom_emoji", "custom_emoji_id": custom_emoji_id})
+                self._stack.append(payload)
+            return
         if entity_type:
             payload.update({"type": entity_type, "url": None})
             self._stack.append(payload)
@@ -5251,6 +5270,8 @@ class _TelegramHtmlEntityParser(HTMLParser):
                 kwargs = {"type": entity_type, "offset": start, "length": length}
                 if entity_type == "text_link" and item.get("url"):
                     kwargs["url"] = str(item["url"])
+                if entity_type == "custom_emoji" and item.get("custom_emoji_id"):
+                    kwargs["custom_emoji_id"] = str(item["custom_emoji_id"])
                 self.entities.append(types.MessageEntity(**kwargs))
             return
 

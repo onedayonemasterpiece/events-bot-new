@@ -2079,3 +2079,86 @@ async def test_schedule_event_update_tasks_allows_ticket_giveaway_without_altern
     assert main.JobTask.vk_sync in tasks
     assert main.JobTask.tg_event_publish in tasks
     await db.close()
+
+
+def _medallion_test_config():
+    def ids(prefix):
+        return [[f"{prefix}{r}{c}" for c in range(1, 5)] for r in range(1, 5)]
+    return {
+        "rows": 4,
+        "cols": 4,
+        "max_medallions": 3,
+        "items": {
+            "pushkin-card": {
+                "label": "Пушкинская карта",
+                "priority": 1,
+                "aliases": ["Пушкинская карта"],
+                "emoji_ids": ids("p"),
+            },
+            "kgd80": {
+                "label": "80 историй",
+                "priority": 10,
+                "aliases": ["80 историй о главном"],
+                "emoji_ids": ids("k"),
+            },
+            "znanie-russia": {
+                "label": "Знание",
+                "priority": 20,
+                "aliases": ["Знание"],
+                "emoji_ids": ids("z"),
+            },
+            "history-art-museum": {
+                "label": "КОИХМ",
+                "priority": 30,
+                "aliases": ["Историко-художественный музей"],
+                "emoji_ids": ids("h"),
+            },
+        },
+    }
+
+
+def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Калининград корабельный",
+            festival="80 историй о главном",
+            location_name="Историко-художественный музей",
+        )
+        html_text = main.build_tg_promo_event_publication_message(event)
+        text, entities = main.telegram_event_html_to_text_entities(html_text)
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
+    assert len(custom) == 48  # 3 medallions x 4 x 4
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"k", "z", "h"}
+    assert text.count("🟧") == 48
+
+
+def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Лекция по Пушкинской карте",
+            festival="80 историй о главном",
+            location_name="Историко-художественный музей",
+            pushkin_card=True,
+        )
+        html_text = main.build_tg_promo_event_publication_message(event)
+        _, entities = main.telegram_event_html_to_text_entities(html_text)
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
+    assert len(custom) == 48
+    # Pushkin is mandatory; max three means venue is dropped for this crowded case.
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k", "z"}
