@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+- Fixed source-faithfulness issues in venue medallions: City Jazz, Signal and Ruin Keepers now use WebP-first official-source crops, Locostandup no longer adds a non-logo subtitle, and the Art Museum medallion now uses readable `МУЗЕЙ ИСКУССТВ` instead of the rejected `ИЗО` abbreviation.
 - **Static site / info partners logo board**: replaced `/partners/` card-like category tiles with a flat logo+caption board, corrected КППК naming/display, and changed visible captions to partner-specific context labels including Кантата as `партнёр по образовательной программе`.
 - **Static site / info partners density**: tightened the existing `/partners/` information-partner page on the smart-search branch into a denser logo-first board, preserving the real partner manifest while reducing card height, keeping short role labels, and retaining aspect-aware wide/tall spans plus the current `/poisk/` navigation.
 

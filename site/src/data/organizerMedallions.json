@@ -455,20 +455,21 @@
       ],
       "sourcePage": "https://londonpub.ru/cityjazz/events",
       "sourceUrl": "https://static.tildacdn.com/tild6331-6539-4430-a531-343262333939/logojazz.png",
-      "sourceFile": "city-jazz-club.logojazz.png",
-      "background": "#101113",
+      "background": "#FFFFFF",
       "ring": "#D7B56D",
-      "logoCrop": "manual-vector-club-round-emblem-from-official-tilda-png",
+      "logoCrop": "source-faithful-official-png-on-medallion",
       "fitBox": [
-        360,
-        360
+        388,
+        235
       ],
       "ariaLabel": "Площадка: Калининград Сити Джаз Клуб",
-      "renderNote": "Низкое разрешение official Tilda PNG больше не масштабируется как браузер-primary: круглый знак клуба вручную пересобран в crisp SVG с золотым диском, центральным якорным знаком и крупной читаемой подписью CITY JAZZ; исходный PNG сохранён как provenance.",
-      "avatarUrl": "/assets/organizers/city-jazz-club.svg",
-      "sourcePath": "site/src/assets/organizers/source/city-jazz-club.logojazz.png",
+      "renderNote": "Ручная SVG-перерисовка была отклонена как исказившая реальный логотип клуба. Runtime теперь WebP-first: в круг помещён официальный Tilda PNG с круглым знаком и фирменной подписью без замены на invented CITY JAZZ CLUB lockup.",
+      "avatarUrl": "/assets/organizers/city-jazz-club.webp",
+      "sourcePath": "site/src/assets/organizers/source/recheck-20260704/city-jazz-club.official-logojazz.png",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "svg-manual-reconstruction-from-official-png"
+      "assetFormat": "webp-source-raster-official-png",
+      "fallbackPngUrl": "/assets/organizers/city-jazz-club.png",
+      "sourceFile": "recheck-20260704/city-jazz-club.official-logojazz.png"
     },
     {
       "slug": "rostec-arena",
@@ -540,20 +541,21 @@
       ],
       "sourcePage": "https://t.me/signalkld",
       "sourceUrl": "https://t.me/signalkld public Telegram profile avatar; Timepad organization page https://signalcommunity.timepad.ru/ exposes the same oval logo",
-      "sourceFile": "recheck-20260704/signal.telegram-avatar-20260704.jpg",
       "background": "#FFFFFF",
       "ring": "#111111",
-      "logoCrop": "manual-clean-svg-from-official-oval-logo",
+      "logoCrop": "source-faithful-official-social-avatar-oval",
       "fitBox": [
-        360,
-        230
+        438,
+        255
       ],
       "ariaLabel": "Площадка: Сигнал",
-      "renderNote": "Прежний белый прямоугольник внутри тёмного круга и незавершённые oval-strokes убраны. Медальон пересобран как чистый круглый SVG с wordmark «СИГНАЛ» и подписью без линий через текст.",
-      "avatarUrl": "/assets/organizers/signal.svg",
+      "renderNote": "SVG-наборный вариант был отклонён: он потерял фирменный овал и подменил шрифт. Runtime теперь WebP-first из официального Telegram/Timepad овального знака, с сохранёнными двойными oval-strokes и исходным положением подписи.",
+      "avatarUrl": "/assets/organizers/signal.webp",
       "sourcePath": "site/src/assets/organizers/source/recheck-20260704/signal.telegram-avatar-20260704.jpg",
       "retrievedAt": "2026-07-04",
-      "assetFormat": "svg-manual-reconstruction-from-official-social-avatar"
+      "assetFormat": "webp-source-raster-official-social-avatar",
+      "fallbackPngUrl": "/assets/organizers/signal.png",
+      "sourceFile": "recheck-20260704/signal.telegram-avatar-20260704.jpg"
     },
     {
       "slug": "mumod",
@@ -627,23 +629,23 @@
       "sourceUrl": "https://img3.creatium.ru/disk2/ee/53/e9/5338346aed3353ce0b7a71e35231aeda9e/lokaciya.svg",
       "sourceFile": "recheck-20260704/locostandup.official-logo.svg",
       "background": "#F4F1EC",
-      "ring": "#D60002",
+      "ring": "#595959",
       "logoCrop": "official-vector-wordmark-in-circle",
       "fitBox": [
         400,
         120
       ],
       "ariaLabel": "Площадка: стендап-клуб «Локация»",
-      "renderNote": "Вместо Telegram-аватара с микрофоном используется официальный векторный wordmark «ЛОКАЦИЯ» с locostandup.ru; круглый медальон получил светлый фон и красную бренд-обводку, без квадратных crop-следов.",
+      "renderNote": "Используется официальный векторный wordmark «ЛОКАЦИЯ» с locostandup.ru; добавленная ранее подпись «СТЕНДАП-КЛУБ» удалена, а кольцо сделано нейтрально-серым в тон исходного wordmark, чтобы не выдавать контекстный акцент за часть логотипа.",
       "avatarUrl": "/assets/organizers/locostandup.svg",
       "sourcePath": "site/src/assets/organizers/source/recheck-20260704/locostandup.official-logo.svg",
       "retrievedAt": "2026-07-04",
-      "assetFormat": "svg-official-source"
+      "assetFormat": "svg-official-source-medallion-wrap"
     },
     {
       "slug": "kaliningrad-art-museum",
       "name": "Калининградский музей изобразительных искусств",
-      "shortName": "Музей ИЗО",
+      "shortName": "Музей искусств",
       "aliases": [
         "Музей Изобразительных искусств",
         "Калининградский музей изобразительных искусств",
@@ -656,17 +658,17 @@
       "sourceFile": "recheck-20260704/kaliningrad-art-museum.official-inline-logo.svg",
       "background": "#871B30",
       "ring": "#F4EFE4",
-      "logoCrop": "official-inline-svg-mark-plus-short-label",
+      "logoCrop": "official-inline-svg-mark-plus-readable-museum-arts-label",
       "fitBox": [
         330,
-        330
+        360
       ],
       "ariaLabel": "Площадка: Калининградский музей изобразительных искусств",
-      "renderNote": "Фон заменён на официальный фирменный бордовый #871B30, найденный в SVG/CSS сайта музея. Медальон стал SVG: официальный знак вынесен вверх, а короткая подпись «МУЗЕЙ ИЗО» оставлена читаемой внутри круга.",
+      "renderNote": "Фон — официальный бордовый #871B30 из сайта музея. Аббревиатура «ИЗО» убрана: под официальным знаком стоит крупная читаемая подпись «МУЗЕЙ ИСКУССТВ», чтобы сохранить смысл без нечитаемого полного названия в 90–112px круге.",
       "avatarUrl": "/assets/organizers/kaliningrad-art-museum.svg",
       "sourcePath": "site/src/assets/organizers/source/recheck-20260704/kaliningrad-art-museum.official-inline-logo.svg",
       "retrievedAt": "2026-07-04",
-      "assetFormat": "svg-official-source-plus-short-label"
+      "assetFormat": "svg-official-source-plus-readable-label"
     },
     {
       "slug": "brachert",
@@ -712,20 +714,21 @@
       ],
       "sourcePage": "https://ruin-keepers.ru/",
       "sourceUrl": "https://static.tildacdn.one/tild6664-6533-4665-a166-356135616237/tild3638-3334-4965-a.png",
-      "sourceFile": "recheck-20260704/ruin-keepers.official-logo.png",
       "background": "#F8F4EA",
       "ring": "#111111",
-      "logoCrop": "manual-clean-filled-tower-heart-from-official-png-motif",
+      "logoCrop": "source-faithful-official-png-alpha-medallion",
       "fitBox": [
-        300,
-        360
+        350,
+        350
       ],
       "ariaLabel": "Организатор: Хранители руин",
-      "renderNote": "Недоделанный traced вариант отклонён на QA; знак пересобран как чистый SVG по официальному мотиву башни/сердца: замкнутая геометричная башня и сердце без грубых пересечений, wordmark не включён ради читаемости.",
-      "avatarUrl": "/assets/organizers/ruin-keepers.svg",
+      "renderNote": "Ручная SVG-силуэтная башня была отклонена как не похожая на знак. Runtime теперь WebP-first из официального 1-bit PNG: сохранены outline-башня, сердце/нижние кривые и wordmark «Хранители руин» без invented filled-tower redraw.",
+      "avatarUrl": "/assets/organizers/ruin-keepers.webp",
       "sourcePath": "site/src/assets/organizers/source/recheck-20260704/ruin-keepers.official-logo.png",
       "retrievedAt": "2026-07-04",
-      "assetFormat": "svg-manual-clean-reconstruction-from-official-png"
+      "assetFormat": "webp-source-raster-official-png",
+      "fallbackPngUrl": "/assets/organizers/ruin-keepers.png",
+      "sourceFile": "recheck-20260704/ruin-keepers.official-logo.png"
     }
   ]
 }
