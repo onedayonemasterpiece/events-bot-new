@@ -10,6 +10,7 @@ import logging
 import os
 import random
 import re
+from html.parser import HTMLParser
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -178,6 +179,147 @@ def telethon_client_from_config(cfg: PremiumEmojiTelethonConfig) -> TelegramClie
             kwargs[key] = value
     return TelegramClient(StringSession(cfg.session_string), cfg.api_id, cfg.api_hash, **kwargs)
 
+
+
+
+class _CustomEmojiHtmlBlockParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.text = ""
+        self.entities: list[MessageEntityCustomEmoji] = []
+        self._custom_emoji_id_stack: list[int | None] = []
+
+    def _offset(self) -> int:
+        return len(add_surrogate(self.text))
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        if tag.lower() != "tg-emoji":
+            return
+        custom_emoji_id: int | None = None
+        for key, value in attrs:
+            if str(key).lower() in {"emoji-id", "custom-emoji-id", "custom_emoji_id"}:
+                try:
+                    custom_emoji_id = int(str(value or "").strip())
+                except Exception:
+                    custom_emoji_id = None
+                break
+        self._custom_emoji_id_stack.append(custom_emoji_id)
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        if tag.lower() == "tg-emoji" and self._custom_emoji_id_stack:
+            self._custom_emoji_id_stack.pop()
+
+    def handle_data(self, data: str) -> None:  # type: ignore[override]
+        if not data:
+            return
+        start = self._offset()
+        self.text += data
+        custom_emoji_id = self._custom_emoji_id_stack[-1] if self._custom_emoji_id_stack else None
+        if custom_emoji_id:
+            self.entities.append(
+                MessageEntityCustomEmoji(
+                    offset=start,
+                    length=len(add_surrogate(data)),
+                    document_id=int(custom_emoji_id),
+                )
+            )
+
+
+def _parse_custom_emoji_html_block(html_block: str | None) -> tuple[str, list[MessageEntityCustomEmoji]]:
+    raw = str(html_block or "").strip()
+    if not raw:
+        return "", []
+    parser = _CustomEmojiHtmlBlockParser()
+    parser.feed(raw)
+    parser.close()
+    text = parser.text.strip()
+    if not text or not parser.entities:
+        return "", []
+    return text, parser.entities
+
+
+def _shift_entity_for_insertion(entity: Any, insert_at: int, delta: int) -> Any:
+    cloned = copy.copy(entity)
+    start = int(getattr(cloned, "offset", 0))
+    length = int(getattr(cloned, "length", 0))
+    end = start + length
+    if start >= insert_at:
+        cloned.offset = start + delta
+    elif start < insert_at < end:
+        cloned.length = length + delta
+    return cloned
+
+
+def _medallion_block_already_present(
+    entities: Sequence[Any] | None,
+    block_entities: Sequence[MessageEntityCustomEmoji],
+) -> bool:
+    needed = [int(getattr(entity, "document_id", 0)) for entity in block_entities]
+    if not needed:
+        return False
+    present = [
+        int(getattr(entity, "document_id", 0))
+        for entity in (entities or [])
+        if isinstance(entity, MessageEntityCustomEmoji)
+    ]
+    remaining = list(present)
+    for document_id in needed:
+        try:
+            remaining.remove(document_id)
+        except ValueError:
+            return False
+    return True
+
+
+def _find_medallion_insert_offset(text: str) -> int:
+    footer_markers = ("🔎 Подробнее", "✨ Подробнее", "📅 Добавить в календарь")
+    best = -1
+    for marker in footer_markers:
+        pos = text.rfind(marker)
+        if pos >= 0 and (best < 0 or pos < best):
+            best = pos
+    if best >= 0:
+        prefix = text[:best]
+        while prefix.endswith("\n"):
+            prefix = prefix[:-1]
+        return len(add_surrogate(prefix))
+    return len(add_surrogate(text.rstrip()))
+
+
+def _insert_medallion_html_block(
+    text: str,
+    entities: Sequence[Any] | None,
+    medallion_html_block: str | None,
+) -> tuple[str, list[Any], int]:
+    block_text, block_entities = _parse_custom_emoji_html_block(medallion_html_block)
+    if not block_text or not block_entities:
+        return text, list(entities or []), 0
+    if _medallion_block_already_present(entities, block_entities):
+        return text, list(entities or []), 0
+
+    sur_text = add_surrogate(text)
+    insert_at = _find_medallion_insert_offset(text)
+    prefix = "\n\n" if insert_at > 0 else ""
+    # When inserting before an existing footer, keep the original blank lines
+    # that already separate the footer from the body; otherwise duplicate
+    # spacing can push the CTA line down.
+    suffix = ""
+    insertion = prefix + block_text + suffix
+    insertion_sur = add_surrogate(insertion)
+    delta = len(insertion_sur)
+    new_sur_text = sur_text[:insert_at] + insertion_sur + sur_text[insert_at:]
+
+    shifted = [_shift_entity_for_insertion(entity, insert_at, delta) for entity in (entities or [])]
+    block_start = insert_at + len(add_surrogate(prefix))
+    inserted_entities = [
+        MessageEntityCustomEmoji(
+            offset=block_start + int(getattr(entity, "offset", 0)),
+            length=int(getattr(entity, "length", 0)),
+            document_id=int(getattr(entity, "document_id", 0)),
+        )
+        for entity in block_entities
+    ]
+    return del_surrogate(new_sur_text), sorted([*shifted, *inserted_entities], key=lambda entity: (entity.offset, entity.length)), 1
 
 def _clone_entity_with_offset(entity: Any, offset: int) -> Any:
     cloned = copy.copy(entity)
@@ -729,6 +871,7 @@ def apply_daily_free_premium_emojis(
     *,
     document_ids: Sequence[int] | None = None,
     single_emoji_document_ids: dict[str, int] | None = None,
+    medallion_html_block: str | None = None,
 ) -> tuple[str, list[Any], int]:
     """Replace daily free markers and configured daily emoji with premium custom emoji entities."""
     ids = tuple(document_ids or parse_document_ids())
@@ -751,7 +894,13 @@ def apply_daily_free_premium_emojis(
             {emoji: document_id for emoji, document_id in single_mapping.items() if emoji != "🎟"},
         ),
     ]
-    return _apply_substitution_ops(text, entities, ops)
+    after_text, after_entities, count = _apply_substitution_ops(text, entities, ops)
+    after_text, after_entities, medallion_count = _insert_medallion_html_block(
+        after_text,
+        after_entities,
+        medallion_html_block,
+    )
+    return after_text, after_entities, count + medallion_count
 
 
 async def raise_if_session_busy(auth_scope: str) -> None:
@@ -770,6 +919,7 @@ async def edit_message_daily_free_labels(
     *,
     document_ids: Sequence[int] | None = None,
     single_emoji_document_ids: dict[str, int] | None = None,
+    medallion_html_block: str | None = None,
     dry_run: bool = False,
 ) -> PremiumEmojiEditResult:
     entity = await client.get_entity(chat)
@@ -782,6 +932,7 @@ async def edit_message_daily_free_labels(
         getattr(message, "entities", None) or [],
         document_ids=document_ids,
         single_emoji_document_ids=single_emoji_document_ids,
+        medallion_html_block=medallion_html_block,
     )
     if count <= 0:
         return PremiumEmojiEditResult(chat, int(message_id), False, count, before, after)
@@ -859,6 +1010,7 @@ async def edit_messages_with_env(
     targets: Sequence[tuple[str | int, int]],
     *,
     delay_seconds: float = 0,
+    medallion_html_block: str | None = None,
     dry_run: bool = False,
 ) -> list[PremiumEmojiEditResult]:
     rng = random.SystemRandom()
@@ -882,6 +1034,7 @@ async def edit_messages_with_env(
                         int(message_id),
                         document_ids=ids,
                         single_emoji_document_ids=single_ids,
+                        medallion_html_block=medallion_html_block,
                         dry_run=dry_run,
                     )
                 )

@@ -4587,13 +4587,13 @@ def _tg_promo_message_sections(event: Event) -> tuple[list[str], list[str], str 
     return header, body_lines, html.escape(hashtag_line) if hashtag_line else None
 
 
-def build_tg_promo_event_publication_message(event: Event) -> str:
+def build_tg_promo_event_publication_message(event: Event, *, include_medallions: bool = True) -> str:
     lines, body_lines, hashtag_line = _tg_promo_message_sections(event)
     if body_lines:
         lines.extend(["", "\n".join(body_lines)])
     if hashtag_line:
         lines.extend(["", hashtag_line])
-    medallion_block = event_medallion_html_block(event)
+    medallion_block = event_medallion_html_block(event) if include_medallions else ""
     if medallion_block:
         lines.extend(["", medallion_block])
     return "\n".join(lines).strip()
@@ -4631,8 +4631,9 @@ def build_tg_promo_event_publication_media_caption(
     event: Event,
     *,
     limit: int = 1024,
+    include_medallions: bool = True,
 ) -> str:
-    full = build_tg_promo_event_publication_message(event)
+    full = build_tg_promo_event_publication_message(event, include_medallions=include_medallions)
     if len(full) <= limit:
         return full
 
@@ -4648,7 +4649,7 @@ def build_tg_promo_event_publication_media_caption(
         return "\n".join(candidate).strip()
 
     with_hashtags = [*lines, "", hashtag_line] if hashtag_line else lines
-    medallion_block = event_medallion_html_block(event)
+    medallion_block = event_medallion_html_block(event) if include_medallions else ""
     with_medallions = [*with_hashtags, "", medallion_block] if medallion_block else with_hashtags
     if len(joined(with_medallions)) <= limit:
         return joined(with_medallions)
@@ -4677,7 +4678,11 @@ async def publish_tg_promo_event_publication(
     target_chat = str(target_chat or "").strip()
     if not target_chat or not bot:
         return None
-    message = build_tg_promo_event_publication_message(event)
+    # Public channel bots can't use arbitrary custom emoji unless the bot has
+    # Fragment-purchased usernames. Send a clean message first; the Premium
+    # Telethon editor inserts medallions later without visible placeholders.
+    medallion_block = event_medallion_html_block(event)
+    message = build_tg_promo_event_publication_message(event, include_medallions=False)
     if len(message) > 4096:
         message = message[:4050].rstrip() + "\n\n..."
     markup = _tg_promo_event_keyboard(event)
@@ -4687,7 +4692,7 @@ async def publish_tg_promo_event_publication(
     sent_message_ids: list[int] = []
     async with TG_SEND_SEMAPHORE:
         if photo_urls:
-            caption = build_tg_promo_event_publication_media_caption(event)
+            caption = build_tg_promo_event_publication_media_caption(event, include_medallions=False)
             caption_text, caption_entities = telegram_event_html_to_text_entities(caption)
             if len(photo_urls) == 1:
                 sent = await bot.send_photo(
@@ -4729,6 +4734,7 @@ async def publish_tg_promo_event_publication(
         _schedule_tg_premium_emoji_editor(
             [(target_chat, message_id) for message_id in sent_message_ids],
             context="tg_promo_event_publish",
+            medallion_html_block=medallion_block or None,
         )
     return _tg_channel_message_link(target_chat, int(sent.message_id))
 
@@ -5673,6 +5679,7 @@ def build_tg_event_announcement(
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
     details_button_highlight: bool | None = None,
+    include_medallions: bool = True,
 ) -> str:
     if details_button_highlight is None:
         details_button_highlight = promo_highlight
@@ -5724,7 +5731,7 @@ def build_tg_event_announcement(
     if hashtag_line:
         lines.extend(["", html.escape(hashtag_line)])
 
-    medallion_block = event_medallion_html_block(event)
+    medallion_block = event_medallion_html_block(event) if include_medallions else ""
     if medallion_block:
         lines.extend(["", medallion_block])
 
@@ -5902,6 +5909,7 @@ async def build_tg_event_announcement_for_publish(
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
     details_button_highlight: bool | None = None,
+    include_medallions: bool = True,
 ) -> tuple[str, bool]:
     if details_button_highlight is None:
         details_button_highlight = promo_highlight
@@ -5917,6 +5925,7 @@ async def build_tg_event_announcement_for_publish(
         include_calendar_link=include_calendar_link,
         promo_highlight=promo_highlight,
         details_button_highlight=details_button_highlight,
+        include_medallions=include_medallions,
     )
     if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
         return message_html, hook_text != text
@@ -5930,6 +5939,7 @@ async def build_tg_event_announcement_for_publish(
         include_calendar_link=include_calendar_link,
         promo_highlight=promo_highlight,
         details_button_highlight=details_button_highlight,
+        include_medallions=include_medallions,
     )
     room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
     for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
@@ -5941,6 +5951,7 @@ async def build_tg_event_announcement_for_publish(
             include_calendar_link=include_calendar_link,
             promo_highlight=promo_highlight,
             details_button_highlight=details_button_highlight,
+            include_medallions=include_medallions,
         )
         if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
             return candidate, True
@@ -5963,7 +5974,7 @@ def build_tg_event_source_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
-                "tg_event_format=free_hashtag_premium_editor_hashtag_bounds_vk_channel_button_social_medallions_v7",
+                "tg_event_format=free_hashtag_premium_editor_channel_medallion_editor_v8",
                 f"promo_highlight={bool(promo_highlight)}",
                 f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
@@ -6158,6 +6169,7 @@ async def publish_tg_event_announcement(
             event.tg_event_post_mode,
             source_hash,
         )
+    medallion_block = event_medallion_html_block(event)
     message_html, _rewritten = await build_tg_event_announcement_for_publish(
         event,
         text,
@@ -6166,6 +6178,7 @@ async def publish_tg_event_announcement(
         include_calendar_link=desired_mode == "album_caption",
         promo_highlight=promo_highlight,
         details_button_highlight=details_button_highlight,
+        include_medallions=False,
     )
     reply_markup = build_tg_event_reply_markup(
         event,
@@ -6198,6 +6211,7 @@ async def publish_tg_event_announcement(
             _schedule_tg_premium_emoji_editor(
                 [(target, int(existing_id))],
                 context="tg_event_publish_edit",
+                medallion_html_block=medallion_block or None,
             )
             return (
                 (getattr(event, "tg_event_post_url", None) or "").strip() or None,
@@ -6299,6 +6313,7 @@ async def publish_tg_event_announcement(
         _schedule_tg_premium_emoji_editor(
             [(target, int(sent_id))],
             context="tg_event_publish_send",
+            medallion_html_block=medallion_block or None,
         )
 
     logging.info(
@@ -7389,6 +7404,7 @@ def _schedule_tg_premium_emoji_editor(
     targets: Sequence[tuple[str | int, int]],
     *,
     context: str,
+    medallion_html_block: str | None = None,
 ) -> None:
     if not targets:
         return
@@ -7408,6 +7424,7 @@ def _schedule_tg_premium_emoji_editor(
                 results = await edit_messages_with_env(
                     targets,
                     delay_seconds=delay_seconds,
+                    medallion_html_block=medallion_html_block,
                 )
                 logging.info(
                     "tg_premium_emoji.edit_done context=%s results=%s",

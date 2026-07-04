@@ -2198,3 +2198,28 @@ def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypat
     assert len(custom) == 48
     # Pushkin is mandatory; max three means venue is dropped for this crowded case.
     assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k", "z"}
+
+
+def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Калининградский морской торговый порт",
+            festival="80 историй о главном",
+            location_name="Историко-художественный музей",
+        )
+        html_text = main.build_tg_event_announcement(
+            event,
+            "Описание.",
+            include_medallions=False,
+        )
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert '<tg-emoji emoji-id=' not in html_text
+    assert "🟧" not in html_text
+    assert "🔎 Подробнее" in html_text

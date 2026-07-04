@@ -169,7 +169,8 @@ Runtime contract:
 - production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
 - `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
 - no more than three medallions are rendered for one event;
-- in channel event posts the medallion mosaic is placed after hashtags and before the text `Подробнее`/social footer, so the visual badge block stays attached to the event body rather than below the CTA;
+- in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
+- no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
 - `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
 - events of «80 историй о главном» get the curated `kgd80` + `znanie-russia` pair when those documents are present, then the highest-priority matching venue/organizer if there is room;

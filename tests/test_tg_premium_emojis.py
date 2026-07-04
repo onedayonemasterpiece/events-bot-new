@@ -378,3 +378,50 @@ def test_premium_editor_preserves_existing_medallion_custom_emoji_block():
     assert [(entity.offset, entity.length, entity.document_id) for entity in custom] == [
         (entity.offset, entity.length, entity.document_id) for entity in medallion_entities
     ]
+
+
+def test_premium_editor_inserts_medallion_block_before_details_footer():
+    text = "Заголовок\n\n#80историйоглавном\n\n🔎 Подробнее"
+    medallion_html = (
+        '<tg-emoji emoji-id="111">🟧</tg-emoji><tg-emoji emoji-id="112">🟧</tg-emoji>\n'
+        '<tg-emoji emoji-id="113">🟧</tg-emoji><tg-emoji emoji-id="114">🟧</tg-emoji>\n⠀'
+    )
+    link_offset = add_surrogate(text).index(add_surrogate("🔎"))
+    entities = [
+        MessageEntityTextUrl(
+            offset=link_offset,
+            length=len(add_surrogate("🔎 Подробнее")),
+            url="https://example.org/details",
+        )
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(
+        text,
+        entities,
+        medallion_html_block=medallion_html,
+    )
+
+    assert count == 1
+    assert new_text.endswith("🟧🟧\n🟧🟧\n⠀\n\n🔎 Подробнее")
+    assert new_text.index("🟧") < new_text.index("🔎 Подробнее")
+    custom = [entity for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert [entity.document_id for entity in custom] == [111, 112, 113, 114]
+    shifted_link = next(entity for entity in new_entities if isinstance(entity, MessageEntityTextUrl))
+    sur_new_text = add_surrogate(new_text)
+    assert del_surrogate(sur_new_text[shifted_link.offset : shifted_link.offset + shifted_link.length]) == "🔎 Подробнее"
+
+
+def test_premium_editor_does_not_insert_medallion_block_twice():
+    text = "Заголовок\n\n🟧\n⠀\n\n🔎 Подробнее"
+    medallion_html = '<tg-emoji emoji-id="111">🟧</tg-emoji>\n⠀'
+    entities = [MessageEntityCustomEmoji(offset=11, length=2, document_id=111)]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(
+        text,
+        entities,
+        medallion_html_block=medallion_html,
+    )
+
+    assert new_text == text
+    assert new_entities == entities
+    assert count == 0
