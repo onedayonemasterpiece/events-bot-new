@@ -352,3 +352,29 @@ def test_daily_added_rock_row_replaces_music_icon_not_recent_flag():
     assert count == 1
     custom_ids = [entity.document_id for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
     assert DEFAULT_DAILY_SINGLE_EMOJI_DOCUMENT_IDS["🤘"] in custom_ids
+
+
+def test_premium_editor_preserves_existing_medallion_custom_emoji_block():
+    text = "#80историйоглавном\n\n🟧🟧🟧🟧\n🟧🟧🟧🟧\n⠀\n\n🔎 Подробнее"
+    medallion_entities = [
+        MessageEntityCustomEmoji(offset=23 + index * 2, length=2, document_id=9000 + index)
+        for index in range(4)
+    ]
+    link_offset = add_surrogate(text).index(add_surrogate("🔎"))
+    entities = [
+        *medallion_entities,
+        MessageEntityTextUrl(
+            offset=link_offset,
+            length=len(add_surrogate("🔎 Подробнее")),
+            url="https://example.org/details",
+        ),
+    ]
+
+    new_text, new_entities, count = apply_daily_free_premium_emojis(text, entities)
+
+    assert new_text == text
+    assert count == 0
+    custom = [entity for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
+    assert [(entity.offset, entity.length, entity.document_id) for entity in custom] == [
+        (entity.offset, entity.length, entity.document_id) for entity in medallion_entities
+    ]
