@@ -18,6 +18,8 @@ The base CherryFlash profile may insert one guide-excursion promo scene per day 
 
 Selection is base-profile only: partner tracks and Eco never receive excursion promo scenes. Selection skips sold-out occurrences and avoids showing the same occurrence on consecutive days; insertion happens at a random position from slot 2 through slot 6, with a random approved palette.
 
+The guide promo motion contract is intentionally non-static: the generated video trims the first two local frames of the guide scene, keeps a tiny upward drift through the P2 information read, and keeps background bubbles moving during P3 with depth-scaled speeds so they do not visually freeze behind the foreground exit. CTA text must remain screenshotable: phone numbers are shown as phone numbers, Telegram booking shows `@username`, and VK-only booking falls back to a compact `vk.com/<slug>`/`VK` label instead of a human name that cannot be used for booking.
+
 ## Canonical routes
 
 - Current `/v` feature: `docs/features/crumple-video/README.md`

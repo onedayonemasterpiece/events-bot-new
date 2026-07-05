@@ -56,6 +56,7 @@ SPLIT_Y = approval.SPLIT_Y
 SCENE_TOTAL_LOCAL = approval.SCENE1_TOTAL_LOCAL
 SCENE_TEXT_START = approval.SCENE1_TEXT_START
 GUIDE_EXCURSION_TOTAL_LOCAL = 6.14
+GUIDE_EXCURSION_FRAME_TRIM_SECONDS = 2.0 / approval.FPS
 INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
@@ -812,10 +813,11 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         "black_lime": {"bg":"#111416","cream":"#F4F3DF","accent":"#D6FF3F","ink":"#080909","pill":"#3F4548","bubble":"#33393E","line":"#6F777B","top":"#D6FF3F"},
     }
     vp = v7_palettes.get(pal_name, v7_palettes["prussian_cream"])
-    # The approved scene was authored at 720x1280 with 3x antialiasing.  The
+    # The approved scene was authored at 720x1280 and is supersampled here to
+    # protect avatar/icon/text edges after Kaggle + Telegram/VK compression. The
     # renderer may run in preview mode too, so author in canonical coordinates
     # and scale down/up at the very end.
-    CW, CH, S = 720, 1280, 3
+    CW, CH, S = 720, 1280, 4
     RW, RH = CW*S, CH*S
     t = float(local_t)
     P0_END = 0.36
@@ -823,7 +825,7 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
     T_HOLD = 1.20
     T_MOVE = 0.75
     T_INFO = 2.50
-    T_EXIT = 0.58
+    T_EXIT = 0.88
     P1_END = T_ENTRY + T_HOLD
     P2_END = T_ENTRY + T_HOLD + T_MOVE
     P3_START = P2_END + T_INFO
@@ -861,22 +863,22 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         else:
             p1 = 1.0
         p2 = eio((mt - P1_END) / T_MOVE) if mt >= P1_END else 0.0
+        p2_drift = c01((mt - P2_END) / T_INFO) if mt >= P2_END else 0.0
         bg_exit = ei((t - (P0_END + P3_START)) / T_EXIT) if t >= P0_END + P3_START else 0.0
         fade = (1 - 0.72 * bg_exit) * reveal
         im = Image.new('RGBA', (RW, RH), rgba(vp['bg'], 255 * fade))
         d = ImageDraw.Draw(im, 'RGBA')
         bs = lerp(.86, 1.0, p1)
-        bubble_p2 = -48 * p2
-        bubble_exit = -155 * bg_exit
+        bubble_p2 = -48 * p2 - 16 * p2_drift
         bg_up = -55 * bg_exit
         bubbles = [
-            ((200, 380), (104, 340), 245, '#3C4352', 126),
-            ((560, 1060), (665, 1130), 214, '#3C4352', 116),
-            ((642, 305), (780, 275), 145, '#263C52', 52),
+            ((200, 380), (104, 340), 245, '#3C4352', 126, 1.00),
+            ((560, 1060), (665, 1130), 214, '#3C4352', 116, 0.72),
+            ((642, 305), (780, 275), 145, '#263C52', 52, 0.48),
         ]
-        for st, en, r, col, a in bubbles:
+        for st, en, r, col, a, depth in bubbles:
             cx = lerp(st[0], en[0], p1)
-            cy = lerp(st[1], en[1], p1) + bubble_p2 + bubble_exit + bg_up * .12
+            cy = lerp(st[1], en[1], p1) + bubble_p2 * depth + (-210 * bg_exit * depth) + bg_up * .12
             rr = r * bs
             d.ellipse((xy(cx-rr), xy(cy-rr), xy(cx+rr), xy(cy+rr)), fill=rgba(col, a*fade))
         # In v7 the orange stripe is the frontmost background surface.  The
@@ -989,6 +991,10 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         label = str(promo.get('contact_label') or 'ЗАПИСЬ').strip().upper()
         if contact.startswith('@'):
             label = 'ЗАПИСЬ В TELEGRAM'
+        elif contact.startswith('+') or contact.startswith('8 '):
+            label = 'ЗАПИСЬ ПО ТЕЛЕФОНУ'
+        elif contact.lower().startswith('vk.com/'):
+            label = 'ЗАПИСЬ В VK'
         lf=ft(approval.AKROBAT_BOLD,20)
         # Fit contact inside v7 CTA without changing the CTA block mass.
         size=52
@@ -1004,8 +1010,25 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         d.text((xy(52),xy(1218)), 'kenigevents • guide promo', font=ff, fill=rgba(vp['cream'],245))
         return im
 
-    def halo_layer() -> Image.Image | None:
-        start=P0_END+3.38; dur=.88; p0=c01((t-start)/dur)
+    def title_halo_layer() -> Image.Image | None:
+        start=P0_END+2.82; dur=.72; p0=c01((t-start)/dur)
+        if p0 <= 0 or p0 >= 1: return None
+        strength=math.sin(math.pi*p0)
+        im=Image.new('RGBA',(RW,RH),(0,0,0,0))
+        glow=Image.new('RGBA',(RW,RH),(0,0,0,0)); gd=ImageDraw.Draw(glow,'RGBA')
+        x,y,w,h=34,648,652,244
+        gd.rounded_rectangle((xy(x),xy(y),xy(x+w),xy(y+h)), radius=xy(34), outline=rgba(vp['accent'],86*strength), width=xy(4))
+        im.alpha_composite(glow.filter(ImageFilter.GaussianBlur(xy(18))))
+        sheen=Image.new('RGBA',(RW,RH),(0,0,0,0)); sd=ImageDraw.Draw(sheen,'RGBA')
+        cx=lerp(x-160,x+w+120,p0); bw=80
+        sd.polygon([(xy(cx-bw),xy(y+h+20)),(xy(cx+bw),xy(y+h+20)),(xy(cx+bw+88),xy(y-20)),(xy(cx-bw+88),xy(y-20))], fill=rgba(vp['cream'],46*strength))
+        mask=Image.new('L',(RW,RH),0); md=ImageDraw.Draw(mask); md.rounded_rectangle((xy(x),xy(y),xy(x+w),xy(y+h)), radius=xy(34), fill=220)
+        sheen.putalpha(Image.composite(sheen.getchannel('A'), Image.new('L',(RW,RH),0), mask))
+        im.alpha_composite(sheen)
+        return im
+
+    def cta_halo_layer() -> Image.Image | None:
+        start=P0_END+3.44; dur=.92; p0=c01((t-start)/dur)
         if p0 <= 0 or p0 >= 1: return None
         strength=math.sin(math.pi*p0)
         im=Image.new('RGBA',(RW,RH),(0,0,0,0)); x,y,w,h=52,1068,616,94
@@ -1030,6 +1053,8 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
     def comp(base: Image.Image, layer: Image.Image | None, start: float, rise: float, exit_delay: float, exit_dist: float=560) -> None:
         if layer is None or t < start: return
         ap=eo((t-start)/.70); yoff=rise*(1-ap); op=min(1,(t-start)/.22)
+        if t >= P0_END + P2_END:
+            yoff += -18 * c01((t-(P0_END+P2_END))/T_INFO)
         if t >= P0_END + P3_START + exit_delay:
             ep=ei((t-(P0_END+P3_START+exit_delay))/T_EXIT); yoff += -exit_dist*ep; op *= max(0,1-ep*1.12)
         tmp=Image.new('RGBA',(RW,RH),(0,0,0,0)); tmp.alpha_composite(layer,(0,xy(yoff)))
@@ -1044,15 +1069,18 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
     elif mt < P1_END:
         sc=.9+.1*((mt-T_ENTRY)/T_HOLD); cx,cy=360,640
     else:
-        sc=1.0; q=eio((mt-P1_END)/T_MOVE); cx,cy=360,lerp(640,450,q)
+        sc=1.0; q=eio((mt-P1_END)/T_MOVE)
+        drift = -22 * c01((mt-P2_END)/T_INFO) if mt >= P2_END else 0.0
+        cx,cy=360,lerp(640,450,q)+drift
     op=eo((t-P0_END)/.18)
     if t >= P0_END + P3_START:
         ep=ei((t-(P0_END+P3_START))/T_EXIT); cy += -610*ep; op *= max(0,1-ep*1.1)
     paste_center(im, avatar_layer(), cx, cy, sc, op)
     comp(im, label_icon_layer(), P0_END+1.80, 44, .04, 560)
     comp(im, title_layer(), P0_END+1.96, 62, .09, 560)
+    comp(im, title_halo_layer(), P0_END+2.34, 38, .09, 560)
     comp(im, date_layer(), P0_END+2.18, 48, .14, 560)
-    comp(im, halo_layer(), P0_END+2.40, 52, .19, 560)
+    comp(im, cta_halo_layer(), P0_END+2.40, 52, .19, 560)
     comp(im, cta_layer(), P0_END+2.40, 52, .19, 560)
     return down(im)
 
@@ -1264,6 +1292,8 @@ def _render_scene_frames(scenes: list[RenderScene]) -> int:
             )
         )
         local_t = float(scene.start_local)
+        if scene.variant == "guide_excursion_promo":
+            local_t = max(local_t, GUIDE_EXCURSION_FRAME_TRIM_SECONDS)
         scene_total_local = (
             FINAL_CARD_DURATION
             if scene.variant == "brand_outro"

@@ -295,8 +295,16 @@ def _contact_for_candidate(candidate: GuideExcursionPromoCandidate) -> tuple[str
         tg = _extract_telegram_username(value)
         if tg:
             return "запись", f"@{tg}"
+    for value in (candidate.booking_url, candidate.channel_url):
+        vk_label = _extract_vk_booking_label(value)
+        if vk_label:
+            return "запись", vk_label
     if candidate.source_username and not candidate.source_username.startswith("wall"):
-        return "запись", f"@{candidate.source_username}" if "_" in candidate.source_username or candidate.channel_url.startswith("https://t.me/") else candidate.source_title or candidate.source_username
+        if candidate.channel_url.startswith("https://t.me/"):
+            return "запись", f"@{candidate.source_username}"
+        if re.match(r"^[A-Za-z0-9_.-]{3,64}$", candidate.source_username):
+            return "запись", f"vk.com/{candidate.source_username}"
+        return "запись", candidate.source_title or candidate.source_username
     host = _host_label(candidate.booking_url) or _host_label(candidate.channel_url)
     if host:
         return "бронь", host
@@ -316,6 +324,25 @@ def _extract_telegram_username(value: str | None) -> str:
         if parts and re.match(r"^[A-Za-z0-9_]{4,32}$", parts[0]):
             return parts[0]
     return ""
+
+
+def _extract_vk_booking_label(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = parsed.netloc.lower().removeprefix("www.")
+    if host not in {"vk.com", "m.vk.com"}:
+        return ""
+    parts = [part for part in parsed.path.split("/") if part]
+    if not parts:
+        return "vk.com"
+    slug = parts[0].strip()
+    if slug.startswith(("wall", "photo", "video", "album")) or slug in {"club", "public", "event"}:
+        return "VK"
+    if re.match(r"^[A-Za-z0-9_.-]{3,64}$", slug):
+        return f"vk.com/{slug}"
+    return "VK"
 
 
 def _host_label(value: str | None) -> str:
