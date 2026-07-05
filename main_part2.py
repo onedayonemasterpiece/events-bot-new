@@ -21705,7 +21705,7 @@ def create_app() -> web.Application:
             return web.json_response(payload, status=status)
 
     async def call_redirect_handler(request: web.Request) -> web.Response:
-        raw = collapse_ws(request.query.get("phone") or "")
+        raw = re.sub(r"\s+", " ", request.query.get("phone") or "").strip()
         digits = re.sub(r"\D", "", raw)
         if len(digits) == 11 and digits.startswith("8"):
             digits = "7" + digits[1:]
