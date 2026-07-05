@@ -15101,22 +15101,18 @@ async def schedule_event_update_tasks(
             depends_on=tg_ics_deps,
             replace_depends_on=True,
         )
-    vk_dep: str | None = None
     if not skip_vk_sync:
-        # Schedule vk_sync before Telegram event publishing so the two public
-        # surfaces keep the same Smart Update contract. Imported VK events keep
-        # `source_vk_post_url` pointing at the external source wall post; those
-        # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
+        # Schedule VK publication independently from Telegram. Imported VK events
+        # keep `source_vk_post_url` pointing at the external source wall post;
+        # those must still get a redactional post in `VK_EVENTS_GROUP_ID`, but
+        # VK media/API failures must not block Telegram event announcements.
         if not await _event_has_existing_managed_vk_post(ev):
-            vk_dep = vk_dep_key
-            results[JobTask.vk_sync] = vk_dep
+            results[JobTask.vk_sync] = vk_dep_key
             await enqueue_job(db, eid, JobTask.vk_sync)
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [telegraph_dep_key]
         if JobTask.tg_ics_post in results:
             tg_event_deps.append(tg_ics_dep_key)
-        if vk_dep:
-            tg_event_deps.append(vk_dep)
         publish_source_url = await _event_primary_publish_source_url(db, ev)
         ev_added_at = _ensure_utc(getattr(ev, "added_at", None))
         prefer_fresh_tg_slot = bool(

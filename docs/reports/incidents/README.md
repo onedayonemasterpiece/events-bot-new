@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-05-tg-afisha-vk-dependency-backlog.md`
+  - Scope: Telegram event publishing JobOutbox dependencies, `schedule_event_update_tasks`, and VK/TG fanout coupling.
+  - Must not regress: `tg_event_publish` must not depend on `vk_sync`; VK media/API failures must not block valid Telegram event announcements, while Telegram spacing and daytime publish window remain enforced.
 - `INC-2026-07-03-event-6045-static-defect.md`
   - Scope: Telegram Monitoring OCR date extraction/merge, Smart Update social-candidate date provenance/eventness routing, writer grounding, and public/static repair for event `6045` from `@signalkld/11052`.
   - Must not regress: record/vinyl metadata such as `LP 33 1/3 RPM` must not become an event date; social candidates with dates ungrounded in source text or poster OCR must route through LLM-first eventness review before create; non-event coffee/music promo sources must not publish active future static/Telegraph/Telegram/VK event surfaces.
