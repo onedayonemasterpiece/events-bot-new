@@ -438,8 +438,8 @@ async def test_tg_event_publish_new_posts_outrank_existing_post_edits(tmp_path, 
 
     processed = await main._run_due_jobs_once(db, None)
 
-    assert processed == 2
-    assert calls == [new_first_id, existing_id]
+    assert processed == 1
+    assert calls == [new_first_id]
     async with db.get_session() as session:
         second_job = (
             await session.execute(
@@ -449,8 +449,18 @@ async def test_tg_event_publish_new_posts_outrank_existing_post_edits(tmp_path, 
                 )
             )
         ).scalar_one()
+        existing_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == existing_id,
+                    JobOutbox.task == JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
     assert second_job.status == JobStatus.pending
+    assert existing_job.status == JobStatus.pending
     assert main._ensure_utc(second_job.next_run_at) > datetime.now(timezone.utc)
+    assert main._ensure_utc(existing_job.next_run_at) > datetime.now(timezone.utc)
 
 
 @pytest.mark.asyncio

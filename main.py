@@ -14706,19 +14706,6 @@ async def _defer_tg_event_publish_if_spacing_blocked(
     job_id = getattr(job, "id", None)
     if not job_id:
         return None
-    current_event_post_id: int | None = None
-    if getattr(job, "event_id", None) is not None:
-        current_event = await session.get(Event, int(job.event_id))
-        try:
-            current_event_post_id = int(getattr(current_event, "tg_event_post_id", None) or 0) or None
-        except (TypeError, ValueError):
-            current_event_post_id = None
-    if current_event_post_id:
-        # Re-editing or premium/medallion reconciliation of an existing message
-        # does not create a channel-top post and must not throttle real new
-        # Afisha announcements.
-        return None
-
     now_utc = _ensure_utc(now or datetime.now(timezone.utc))
     interval = _tg_event_publish_interval()
     candidate = _normalize_tg_event_publish_run_at(now_utc)

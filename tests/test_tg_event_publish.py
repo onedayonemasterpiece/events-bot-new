@@ -198,18 +198,18 @@ def test_build_tg_event_announcement_free_event_keeps_search_hashtag():
 
 
 @pytest.mark.asyncio
-async def test_tg_event_publish_runs_premium_editor_after_send(monkeypatch):
+async def test_tg_event_publish_schedules_premium_editor_after_send(monkeypatch):
     event = _event(ticket_link=None, ticket_price_min=None, ticket_price_max=None, is_free=True)
-    edited = []
+    scheduled = []
 
     async def fake_hook_text(event_arg, source_text, **_kwargs):
         return "Описание события."
 
-    async def fake_edit_now(targets, *, context, medallion_html_block=None):
-        edited.append((targets, context, medallion_html_block))
+    def fake_schedule(targets, *, context, medallion_html_block=None):
+        scheduled.append((targets, context, medallion_html_block))
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
-    monkeypatch.setattr(main, "_edit_tg_premium_emoji_now", fake_edit_now)
+    monkeypatch.setattr(main, "_schedule_tg_premium_emoji_editor", fake_schedule)
     bot = DummyTgBot()
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
@@ -223,7 +223,7 @@ async def test_tg_event_publish_runs_premium_editor_after_send(monkeypatch):
     assert post_id == 101
     assert mode == "text"
     assert source_hash
-    assert edited == [([("@kldevents", 101)], "tg_event_publish_send", None)]
+    assert scheduled == [([("@kldevents", 101)], "tg_event_publish_send", None)]
     message_text = bot.messages[0][1]
     assert "🟡 Бесплатно" in message_text
     assert "#бесплатно" in message_text

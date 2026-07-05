@@ -28,7 +28,7 @@ Status: MVP.
 
 ## Runtime
 
-Публикация ежедневного анонса и event posts остаётся Bot API-задачей. Для canonical `tg_event_publish` event posts `publish_tg_event_announcement` после успешной отправки/редактирования сразу ожидает Telethon-редактор (`delay_seconds=0`) на отправленных message ids, чтобы Premium emoji и custom-emoji medallions были частью publish evidence без публичного многоминутного gap. Daily/bulk non-event surfaces всё ещё могут использовать delayed background scheduling.
+Публикация ежедневного анонса и event posts остаётся Bot API-задачей. После успешной отправки/редактирования `send_daily_announcement` и `publish_tg_event_announcement` планируют Telethon-редактор на отправленные message ids с delay/jitter. Event publisher не должен ждать редактор синхронно: при catch-up это вызывает Telegram `FloodWait` и может сломать 10-минутную cadence публикаций.
 
 Env:
 
@@ -54,9 +54,9 @@ Env:
   link;
 - соблюдает правило media group: у альбома нет inline-кнопки, поэтому CTA
   должен быть ссылкой в caption/text;
-- запускает/ожидает premium/custom emoji editor на отправленные message ids.
+- планирует premium/custom emoji editor на отправленные message ids.
 
-Если компенсация запускается через обычный `publish_tg_event_announcement`, event-post editor уже ожидается синхронно. Если используется другой короткий one-off процесс или daily/background path, нельзя полагаться только на detached `asyncio.create_task()` без ожидания: процесс может завершиться до задержки `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS`. Такой repair обязан либо дождаться `edit_messages_with_env(..., delay_seconds=0/≈180)`, либо явно запустить `scripts/tg_premium_emoji_editor.py --chat <channel> --message-id <id>` после публикации. Closure evidence: Telethon reread с registration/ticket entity и ненулевым/ожидаемым набором `MessageEntityCustomEmoji` или явный blocker.
+Если компенсация запускается из короткого one-off процесса, нельзя полагаться только на detached `asyncio.create_task()` без ожидания: процесс может завершиться до задержки `TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS`. Такой repair обязан либо дождаться `edit_messages_with_env(..., delay_seconds≈180)`, либо явно запустить `scripts/tg_premium_emoji_editor.py --chat <channel> --message-id <id>` после публикации. Closure evidence: Telethon reread с registration/ticket entity и ненулевым/ожидаемым набором `MessageEntityCustomEmoji` или явный blocker.
 
 ## Session control
 

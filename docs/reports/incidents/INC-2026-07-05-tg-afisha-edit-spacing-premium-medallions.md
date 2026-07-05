@@ -83,15 +83,15 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 ## Immediate Mitigation
 
 - Code change makes no-post `tg_event_publish` rows outrank existing-message edit jobs.
-- Existing Telegram posts are no longer treated as future publication anchors in initial scheduling.
-- Existing-message edit completions are ignored as new-post spacing anchors unless they are the current top/latest post.
-- The canonical event publisher now awaits the Premium/medallion editor immediately for event posts instead of scheduling it as a delayed detached task.
+- No-post announcements are sorted ahead of existing-message edit rows.
+- Execution spacing remains mandatory for every `tg_event_publish`, including existing-message jobs, because they may send a new message on mode change.
+- Premium/medallion editor remains delayed/rate-limited to avoid Telegram FloodWait.
 
 ## Corrective Actions
 
 - Separate new channel-top announcements from edit/reconciliation work in due-job ordering and spacing.
 - Keep Telegram's product-level daytime window and 10-minute cadence for real new posts, but do not let old edits spend that cadence.
-- Make premium emoji / medallion enrichment part of the event publish transaction path for `tg_event_publish` posts.
+- Keep premium emoji / medallion enrichment delayed and rate-limited; do not run it synchronously inside bulk publication catch-up.
 
 ## Follow-up Actions
 
@@ -113,6 +113,11 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
   - Runtime log shows immediate enrichment before job done: `10:46:38 tg_premium_emoji.edit_done context=tg_event_publish_send ... message_id=1906 ... replacements=2`, then `RUN [E6670] done`.
   - Backlog dependency mitigation removed remaining active/future `vk_sync:*` tokens from `13` pending/error `tg_event_publish` rows; backup table `codex_backup_20260705_tg_edit_spacing_vk_deps_20260705_104732`; remaining active/future `tg_event_publish.depends_on LIKE '%vk_sync:%'` = `0`.
   - Evidence artifacts saved locally under `artifacts/codex/tg-afisha-edit-spacing-20260705/` (not committed).
+
+
+## Regression During Mitigation — 2026-07-05 10:47 UTC
+
+The first mitigation in SHA `85ea298a` incorrectly let any event with an existing `tg_event_post_id` bypass execution spacing. That was unsafe: an existing-post job can still send a new public message when the desired mode changes (`text`/`photo_caption`/`album_caption`). Production then burst new `@kldevents` message ids `1906`, `1907`, `1908`, `1911`, `1916`, `1919` within minutes and the synchronous premium editor hit Telegram `FloodWait`. Follow-up hotfix restores the hard execution gate for every `tg_event_publish`; no-post rows still outrank edit rows in sorting, but no job may bypass the 10-minute public-send cadence.
 
 ## Prevention
 

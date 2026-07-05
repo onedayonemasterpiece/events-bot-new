@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **Telegram Afisha publishing**: separated real new `tg_event_publish` announcements from existing-message edit/reconciliation jobs so old edits no longer consume the 10-minute new-post lane; canonical event posts now run Premium/custom-emoji medallion enrichment immediately instead of leaving a delayed public gap.
+- **Telegram Afisha publishing**: restored the hard 10-minute execution gate for every `tg_event_publish` that may send a public message, while keeping no-post announcements ordered ahead of existing-message edit/reconciliation jobs; Premium/custom-emoji medallion enrichment stays delayed to avoid Telegram FloodWait bursts.
 - **Guide visual digest / Telegram phones**: reverted the overbuilt call-button/redirect workaround and render phone-only Telegram visual digest rows as only a linked excursion title, without duplicating the phone next to it; VK keeps phone text human-formatted/plain.
 - **Telegram event publishing**: decoupled `tg_event_publish` from `vk_sync` so VK media/API failures no longer block valid Telegram event announcements; Telegram still keeps its daytime publish window and spacing rules.
 - **Static site / info partners bento copy**: updated `/partners/` heading and captions, switched КППК to the official-site RZD/KPPK mark with `АО «КППК»`, removed captions for `Знание`/`Акт Опус`, and replaced the two-column logo board with a fixed-row, logo-normalized 4-column mobile / 8-column desktop greedy bento placement grid.

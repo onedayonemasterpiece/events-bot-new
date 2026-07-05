@@ -6208,7 +6208,7 @@ async def publish_tg_event_announcement(
                 )
             else:
                 raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
-            await _edit_tg_premium_emoji_now(
+            _schedule_tg_premium_emoji_editor(
                 [(target, int(existing_id))],
                 context="tg_event_publish_edit",
                 medallion_html_block=medallion_block or None,
@@ -6310,7 +6310,7 @@ async def publish_tg_event_announcement(
             )
 
     if sent_id is not None:
-        await _edit_tg_premium_emoji_now(
+        _schedule_tg_premium_emoji_editor(
             [(target, int(sent_id))],
             context="tg_event_publish_send",
             medallion_html_block=medallion_block or None,
