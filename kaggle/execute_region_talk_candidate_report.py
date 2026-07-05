@@ -35,13 +35,31 @@ class DirectKaggleClient:
         owner, slug = dataset.split("/", 1)
         self.api.dataset_delete(owner, slug, no_confirm=no_confirm)
 
+    def dataset_status(self, dataset: str) -> str:
+        return str(self.api.dataset_status(dataset))
+
+    def dataset_list_files(self, dataset: str) -> list[str]:
+        response = self.api.dataset_list_files(dataset, page_size=100)
+        files = getattr(response, "files", response)
+        return [str(getattr(item, "name", item)) for item in (files or [])]
+
     def push_kernel(self, *, kernel_path, dataset_sources=None) -> None:
         meta_path = Path(kernel_path) / "kernel-metadata.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if dataset_sources is not None:
             meta["dataset_sources"] = [str(x) for x in dataset_sources if str(x).strip()]
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        self.api.kernels_push(str(kernel_path))
+        try:
+            self.api.kernels_push(str(kernel_path))
+        except Exception as exc:
+            response = getattr(exc, "response", None)
+            body = ""
+            if response is not None:
+                try:
+                    body = str(response.text or "")[:1000]
+                except Exception:
+                    body = ""
+            raise RuntimeError("Kaggle kernels_push failed" + (f": {body}" if body else "")) from exc
 
     def get_kernel_status(self, kernel_ref: str) -> dict[str, Any]:
         response = self.api.kernels_status(kernel_ref)
@@ -106,6 +124,23 @@ def create_or_replace_dataset(client: Any, username: str, slug: str, title: str,
     return dataset_ref
 
 
+def wait_dataset_ready(client: Any, dataset_ref: str, *, expected_files: list[str], timeout_seconds: int = 240) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_status = ""
+    last_files: list[str] = []
+    while time.monotonic() < deadline:
+        try:
+            last_status = str(client.dataset_status(dataset_ref))
+            raw_files = client.dataset_list_files(dataset_ref)
+            last_files = [str(getattr(x, "name", x)) for x in raw_files]
+            if last_status.lower() == "ready" and all(name in last_files for name in expected_files):
+                return
+        except Exception:
+            pass
+        time.sleep(5)
+    raise TimeoutError(f"dataset not ready: {dataset_ref} status={last_status} files={last_files}")
+
+
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
     safe_slug = slugify(run_id, max_len=32)
@@ -143,6 +178,9 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     config_ref = create_or_replace_dataset(client, username, f"region-talk-config-{safe_slug}", f"Region Talk config {safe_slug}", write_config)
     secret_ref = create_or_replace_dataset(client, username, f"region-talk-secrets-{safe_slug}", f"Region Talk secrets {safe_slug}", write_secret)
     key_ref = create_or_replace_dataset(client, username, f"region-talk-key-{safe_slug}", f"Region Talk key {safe_slug}", write_key)
+    wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "region_talk_run_config.json"])
+    wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc"])
+    wait_dataset_ready(client, key_ref, expected_files=["region_talk_fernet.key"])
     return [config_ref, secret_ref, key_ref]
 
 
@@ -168,7 +206,7 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:
     if username:
         meta["id"] = f"{username}/{slug}"
     meta["slug"] = slug
-    meta["title"] = f"Region Talk Candidate Report {run_id}"[:100]
+    meta["title"] = "Region Talk Candidate Report"
     meta["enable_gpu"] = False
     meta["enable_internet"] = True
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
