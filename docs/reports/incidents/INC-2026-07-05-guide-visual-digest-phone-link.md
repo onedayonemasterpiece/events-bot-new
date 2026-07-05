@@ -41,6 +41,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 - 2026-07-05 09:29 UTC — Bot API `editMessageReplyMarkup` added inline button `📞 Позвонить: Школа юного альпаковеда` to both messages; user feedback identified this as product-overengineered and not the requested UX.
 - 2026-07-05 09:35 UTC — product correction: remove the button/redirect path and render phone-only Telegram visual digest rows compactly: title links to the source post and the phone remains a bare E.164 suffix (`+79622555491`), while keeping VK human-formatted.
 - 2026-07-05 09:39 UTC — deployed `deployment-01KWRT9S3G3F4MCYY0262W9JQE` / SHA `4ce2f7b1c12272e4e45d6fcb2eafebfe45ebf10b`; Bot API edited `@wheretogo39/221` and `@youwillsee39/240` captions to `+79622555491` and removed the previous inline button. Public embeds confirm `e164=true`, `pretty=false`, `button_text=false`, `call_url=false`.
+- 2026-07-05 09:45 UTC — compact product refinement deployed as `deployment-01KWRTNESWECBP61C3AF44FM6T` / SHA `fed63068b27606298201f7088e284551b15b12d3`: phone-only row title links to source post `https://t.me/excursions_profitour/943`, phone remains suffix `+79622555491`; Bot API and public embeds confirm `source_url=true`, `e164=true`, `button_text=false`, `call_url=false`.
 
 ## Root Cause
 
@@ -104,11 +105,11 @@ Existing issue `148` Telegram captions were first edited to `+7 (962) 255-54-91`
 
 ## Release And Closure Evidence
 
-- deployed SHA: `4ce2f7b1c12272e4e45d6fcb2eafebfe45ebf10b` (reachable from `origin/main`; supersedes the overbuilt button/redirect workaround)
+- deployed SHA: `fed63068b27606298201f7088e284551b15b12d3` (reachable from `origin/main`; supersedes the overbuilt button/redirect workaround)
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree
-- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWRT9S3G3F4MCYY0262W9JQE`
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWRTNESWECBP61C3AF44FM6T`
 - regression checks: `python3 -m py_compile main_part2.py guide_excursions/visual_digest.py markup.py`; `git diff --check`; manual helper smoke for Telegram `tel:` internal HTML, Bot API entity conversion, title `text_link` preservation, VK plain-phone output, and visual digest call-button URL generation. Full pytest was blocked locally by missing global `pytest` (`/usr/bin/python3: No module named pytest`).
-- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `guide_visual_digest=ok`; `/call?phone=79622555491` now returns `404`, confirming the redirect workaround is removed; Bot API edit of `@wheretogo39/221` and `@youwillsee39/240` succeeded with `has_e164=true`, `has_pretty=false`; public embeds for both messages show `+79622555491` and no `Позвонить` button text or `/call` URL.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `guide_visual_digest=ok`; `/call?phone=79622555491` returns `404`, confirming the redirect workaround is removed; Bot API edit of `@wheretogo39/221` and `@youwillsee39/240` succeeded with `has_e164=true`, `has_source_title_link=true`, `reply_markup_present=false`; public embeds for both messages show title link to `https://t.me/excursions_profitour/943`, phone `+79622555491`, and no `Позвонить` button text or `/call` URL.
 
 ## Prevention
 
