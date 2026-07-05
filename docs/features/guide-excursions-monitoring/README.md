@@ -366,17 +366,11 @@ Production contract:
   (`GUIDE_VISUAL_DIGEST_TARGET_CHATS` или fallback `GUIDE_DIGEST_TARGET_CHATS`):
   одна картинка + HTML-caption, где названия экскурсий являются ссылками
   (`<a href="...">название</a>`), без отдельных URL рядом и без VK shortener;
-  если запись/контакт представлен телефоном, Telegram caption обязан делать его
-  кликабельным телефонным CTA: видимый номер форматируется в привычном виде
-  `+7 (XXX) XXX-XX-XX`, внутренний HTML содержит `tel:`-линк
-  (`<a href="tel:+...">+7 ...</a>`) и не трогает уже готовые source/title
-  ссылки; при отправке в Bot API HTML caption
-  конвертируется в `caption_entities`, где телефон уходит как entity
-  `phone_number`, а title/footer ссылки — как `text_link`; дополнительно под
-  Telegram-постом добавляется inline-кнопка `📞 Позвонить: ...`, ведущая на
-  HTTPS `/call?phone=...` redirect, потому что Telegram-клиенты не везде
-  превращают phone entity внутри photo caption в tap-to-call; VK-текст при этом
-  оставляет телефон обычным видимым номером;
+  если запись/контакт представлен телефоном, Telegram caption показывает номер
+  прямо в строке дайджеста в auto-linkable E.164-форме (`+7XXXXXXXXXX`), без
+  отдельных кнопок, redirect-страниц и `tel:` HTML-обёрток; готовые source/title
+  ссылки остаются обычными `<a href="...">название</a>`, а VK-текст оставляет
+  телефон обычным человекочитаемым номером;
   после хештегов caption добавляет пустую строку и социальный футер
   `Подписаться · Max · Вконтакте`: `Подписаться` ведёт на текущий Telegram target,
   Max — на `https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec`,

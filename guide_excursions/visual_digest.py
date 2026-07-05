@@ -21,20 +21,14 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
-from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
-from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
-from markup import (
-    format_tel_link_for_display,
-    linkify_phones_for_telegram_html,
-    telegram_html_to_text_entities,
-    tel_href_for_phone_value,
-)
+from markup import format_tel_link_for_display
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1439,19 +1433,11 @@ async def publish_visual_digest_to_telegram(
     primary_caption = ""
     for target in targets:
         caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id), target_chat=target)
-        caption_text, caption_entities = telegram_html_to_text_entities(caption)
-        call_buttons = visual_digest_call_button_rows(rows)
         if not primary_caption:
             primary_caption = caption
         try:
             upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
-            msg = await bot.send_photo(
-                target,
-                upload,
-                caption=caption_text,
-                caption_entities=caption_entities or None,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=call_buttons) if call_buttons else None,
-            )
+            msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
             message_id = int(getattr(msg, "message_id", 0) or 0)
             published_targets[_tg_public_target_key(target)] = {
                 "message_ids": [message_id] if message_id else [],
@@ -1512,6 +1498,18 @@ def _normalize_phone(value: str | None) -> str | None:
         digits = "7" + digits
     if len(digits) == 11 and digits.startswith("7"):
         return format_tel_link_for_display(f"tel:+{digits}") or f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
+    return raw if raw.startswith("+") else None
+
+
+def _telegram_phone_auto_link_text(value: str | None) -> str | None:
+    raw = _plain(value)
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) == 10:
+        digits = "7" + digits
+    if len(digits) == 11 and digits.startswith("7"):
+        return f"+{digits}"
     return raw if raw.startswith("+") else None
 
 
@@ -1680,41 +1678,6 @@ def _visual_digest_telegram_footer(target_chat: str | int | None = None) -> str:
     )
 
 
-def _call_redirect_base_url() -> str:
-    raw = collapse_ws(
-        os.getenv("GUIDE_VISUAL_DIGEST_CALL_BASE_URL")
-        or os.getenv("CALL_REDIRECT_BASE_URL")
-        or os.getenv("EVENTS_BOT_PUBLIC_BASE_URL")
-        or "https://events-bot-new-wngqia.fly.dev"
-    ).rstrip("/")
-    return raw or "https://events-bot-new-wngqia.fly.dev"
-
-
-def visual_digest_call_button_rows(rows: Sequence[Mapping[str, Any]]) -> list[list[InlineKeyboardButton]]:
-    buttons: list[list[InlineKeyboardButton]] = []
-    base_url = _call_redirect_base_url()
-    for row in rows:
-        link, is_phone = _primary_link(row)
-        if not (link and is_phone):
-            continue
-        href = tel_href_for_phone_value(link)
-        digits = re.sub(r"\D", "", href)
-        if not digits:
-            continue
-        title = _fit(_plain(row.get("canonical_title")) or "экскурсия", 34)
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=f"📞 Позвонить: {title}",
-                    url=f"{base_url}/call?phone={quote(digits, safe='')}",
-                )
-            ]
-        )
-        if len(buttons) >= 5:
-            break
-    return buttons
-
-
 async def build_visual_digest_telegram_text(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -1736,7 +1699,7 @@ async def build_visual_digest_telegram_text(
         title = _plain(row.get("canonical_title")) or "Экскурсия"
         link, is_phone = _primary_link(row)
         if link and is_phone:
-            display = _normalize_phone(link) or _plain(link)
+            display = _telegram_phone_auto_link_text(link) or _plain(link)
             line = f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}"
         elif link:
             line = f"{idx}. {_tg_link(title, link)}"
@@ -1747,7 +1710,7 @@ async def build_visual_digest_telegram_text(
     lines.extend(footer_tail)
     text = "\n".join(lines).strip()
     if len(text) <= 1024:
-        return linkify_phones_for_telegram_html(text)
+        return text
     # Caption hard-limit guard: keep linked titles, hashtags and the social footer; shorten only intro/overflow.
     compact_lines = [lines[0], ""]
     for idx, row in enumerate(items, start=1):
@@ -1756,7 +1719,7 @@ async def build_visual_digest_telegram_text(
         if link and not is_phone:
             compact_lines.append(f"{idx}. {_tg_link(title, link)}")
         elif link:
-            display = _normalize_phone(link) or _plain(link)
+            display = _telegram_phone_auto_link_text(link) or _plain(link)
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}")
         else:
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)}")
@@ -1767,7 +1730,7 @@ async def build_visual_digest_telegram_text(
         body = compact_lines[:-footer_len]
         body.pop()
         compact_lines = body + tail
-    return linkify_phones_for_telegram_html("\n".join(compact_lines).strip())
+    return "\n".join(compact_lines).strip()
 
 
 async def build_visual_digest_vk_text(

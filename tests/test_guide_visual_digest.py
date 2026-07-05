@@ -88,7 +88,7 @@ async def test_visual_digest_telegram_footer_uses_target_channel_subscribe_link(
 
 
 @pytest.mark.asyncio
-async def test_visual_digest_telegram_text_linkifies_phone_contacts():
+async def test_visual_digest_telegram_text_uses_auto_linkable_phone_text():
     rows = [
         {
             "id": 3,
@@ -107,7 +107,7 @@ async def test_visual_digest_telegram_text_linkifies_phone_contacts():
     text = await build_visual_digest_telegram_text(rows, issue_id=44)
 
     assert (
-        '1. Школа юного альпаковеда — <a href="tel:+79622555491">+7 (962) 255-54-91</a>'
+        '1. Школа юного альпаковеда — +79622555491'
         in text
     )
     assert '<a href="https://vk.com/natakkaz">Домашняя прогулка</a>' in text
