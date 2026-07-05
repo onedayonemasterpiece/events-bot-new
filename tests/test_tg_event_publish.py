@@ -2103,8 +2103,8 @@ def _medallion_test_config():
                 "priority": 10,
                 "aliases": ["80 историй о главном", "kgd80.ru"],
                 "rows": 4,
-                "cols": 6,
-                "emoji_ids": ids("x", cols=6),
+                "cols": 7,
+                "emoji_ids": ids("x", cols=7),
             },
             "znanie-russia": {
                 "label": "Знание",
@@ -2145,7 +2145,7 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
     finally:
         tg_medallions.reset_medallion_config_cache()
 
-    assert html_text.count('<tg-emoji emoji-id=') == 40
+    assert html_text.count('<tg-emoji emoji-id=') == 44
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
@@ -2221,9 +2221,9 @@ def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 40  # combined 6x4 KGD80+Znanie + one 4x4 location medallion
+    assert len(custom) == 44  # combined 7x4 KGD80+Znanie + one 4x4 location medallion
     assert {entity.custom_emoji_id[0] for entity in custom} == {"x", "h"}
-    assert text.count("🟧") == 40
+    assert text.count("🟧") == 44
 
 
 def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_two(monkeypatch):
@@ -2245,7 +2245,7 @@ def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_two(monkeypatch
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 40
+    assert len(custom) == 44
     # Pushkin is mandatory; max two means only the combined festival/partner signal remains.
     assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "x"}
 
@@ -2291,7 +2291,7 @@ def test_tg_medallion_selection_caps_at_two_for_telegram(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     medallion_lines = [line for line in html_text.splitlines() if "<tg-emoji" in line]
-    assert [line.count("<tg-emoji") for line in medallion_lines] == [10, 10, 10, 10]
+    assert [line.count("<tg-emoji") for line in medallion_lines] == [11, 11, 11, 11]
     assert "\u200a" in medallion_lines[0]
 
 

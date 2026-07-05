@@ -27,7 +27,7 @@
 
 ### Changed
 
-- **Telegram event medallions**: replaced the separate KGD80 + `Знание` Telegram pair with one 6×4 overlapped `kgd80-znanie` custom-emoji unit, kept standalone `Знание` for other events, and allow a venue/location medallion to return as the second Telegram slot for KGD80 posts.
+- **Telegram event medallions**: replaced the separate KGD80 + `Знание` Telegram pair with one 7×4 overlapped `kgd80-znanie` custom-emoji unit, kept standalone `Знание` for other events, and allow a venue/location medallion to return as the second Telegram slot for KGD80 posts.
 - **Telegram event medallions**: capped Telegram post medallions at two and prioritize festival/program plus organizer/partner over venue/location when more matches exist, avoiding three-wide mobile wrap attempts entirely.
 - **Telegram event medallions**: moved channel medallion mosaics above the `Подробнее` footer, tightened the media-group `Подробнее` → `Max` footer gap, and changed channel publishing to send clean bot posts first while the delayed Premium Telethon editor inserts real custom-emoji medallions without visible placeholder grids.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
