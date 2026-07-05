@@ -139,6 +139,8 @@ INTENT_SETS: dict[str, list[str]] = {
         "обсуждение погоды без связи с поездкой или мероприятием",
         "объявление о потерянном телефоне, найденных вещах или пропаже без связи с событием",
         "обсуждение цены бензина, дизеля, топлива или заправок без маршрута поездки",
+        "вопрос где есть бензин, дизель или топливо на заправках",
+        "вопрос о наличии бензина, дизеля или топлива на азс",
         "обсуждение выборов, политики или чиновников без вопроса о событии",
         "реклама товаров с маркетплейса, артикулом, wildberries или ссылкой на товар",
         "реклама помощи студентам, учебных работ, экзаменов, зачётов или услуг",
@@ -172,6 +174,12 @@ POSITIVE_INTENT_SETS = [name for name in INTENT_SETS if name != "negative_intent
 ROUTE_INTENT_SETS = {"route_poi_far_context", "route_poi_medium_interest", "route_poi_close_actionable"}
 EVENT_INTENT_SETS = {"event_far_context", "event_close_question", "event_site_search_or_listing", "badge_filter_need"}
 ORGANIZER_INTENT_SETS = {"organizer_comment_fit", "organizer_event_post_context", "organizer_submission_or_partnership"}
+EVENT_FUTURE_REQUIRED_ACTIONS = {
+    "event_recommendation_reply",
+    "organizer_visibility_clarification",
+    "event_site_search_or_listing",
+    "badge_filter_need",
+}
 REGION_REQUIRED_ACTIONS = {
     "trip_route_poi_recommendation",
     "event_recommendation_reply",
@@ -226,9 +234,65 @@ _MEDICINE_SCOPE_RE = re.compile(
     r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|лор\b|педиатр\w*|терапевт\w*|поликлиник\w*|"
     r"больниц\w*|лечени\w*|анализ\w*|мрт\b|узи\b|при[её]м\s+врач\w*|запис\w*\s+к\s+врач)\b"
 )
+_GASOLINE_AVAILABILITY_SCOPE_RE = re.compile(
+    r"(?i)("
+    r"\b(?:где|есть\s+ли|подскажите|кто\s+знает|наличи\w*|появил\w*|остал\w*|ищу|найти|найд[её]тся)"
+    r".{0,90}\b(?:бензин\w*|дизел\w*|топлив\w*|азс\b|заправк\w*)\b|"
+    r"\b(?:бензин\w*|дизел\w*|топлив\w*|азс\b|заправк\w*)\b"
+    r".{0,90}\b(?:где|есть|наличи\w*|появил\w*|остал\w*|законч\w*|найти|подскажите)\b"
+    r")"
+)
 _SURFACE_MEDICINE_SCOPE_RE = re.compile(
     r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|педиатр\w*|здоровь\w*|симптом\w*|"
     r"грудн\w*\s+вскармливан\w*|гв\b|лечени\w*|психолог\w*|диет\w*|худе\w*)\b"
+)
+_RU_MONTHS = {
+    "января": 1,
+    "январь": 1,
+    "февраля": 2,
+    "февраль": 2,
+    "марта": 3,
+    "март": 3,
+    "апреля": 4,
+    "апрель": 4,
+    "мая": 5,
+    "май": 5,
+    "июня": 6,
+    "июнь": 6,
+    "июля": 7,
+    "июль": 7,
+    "августа": 8,
+    "август": 8,
+    "сентября": 9,
+    "сентябрь": 9,
+    "октября": 10,
+    "октябрь": 10,
+    "ноября": 11,
+    "ноябрь": 11,
+    "декабря": 12,
+    "декабрь": 12,
+}
+_NUMERIC_DATE_RE = re.compile(r"(?<!\d)(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?(?!\d)")
+_TEXT_DATE_RE = re.compile(
+    r"(?i)(?:(\d{1,2})\s*(?:-|–|—|по)\s*)?(\d{1,2})\s+"
+    r"(января|январь|февраля|февраль|марта|март|апреля|апрель|мая|май|июня|июнь|июля|июль|"
+    r"августа|август|сентября|сентябрь|октября|октябрь|ноября|ноябрь|декабря|декабрь)"
+    r"(?:\s+(\d{4}))?"
+)
+_RELATIVE_TOMORROW_RE = re.compile(r"(?i)\b(?:завтра|послезавтра)\b")
+_RELATIVE_TODAY_RE = re.compile(r"(?i)\bсегодня\b")
+_PAST_EVENT_SIGNAL_RE = re.compile(
+    r"(?i)\b("
+    r"прош[её]л|прошла|прошли|состоял[ао]сь|состоялись|прошедш\w*|завершил[ао]сь|завершились|"
+    r"отч[её]т|фотоотч[её]т|итоги|после\s+мероприяти\w*|спасибо\s+организатор\w*|"
+    r"поблагодар\w*|были\s+на|посетили|отметили|отпраздновали"
+    r")\b"
+)
+_FUTURE_EVENT_SIGNAL_RE = re.compile(
+    r"(?i)\b("
+    r"состоится|пройд[её]т|будет|начн[её]тся|приглашаем|приходите|жд[её]м|регистрация\s+открыта|"
+    r"анонс|афиша|запланирован\w*|откроется|стартует"
+    r")\b"
 )
 _KGD_REGION_HINT_RE = re.compile(
     r"(?i)("
@@ -484,6 +548,8 @@ def _out_of_scope_noise_type(text: str) -> str:
     compact = normalize_comment_text(text)
     if not compact:
         return ""
+    if _GASOLINE_AVAILABILITY_SCOPE_RE.search(compact):
+        return "out_of_scope_gasoline_availability"
     # Keep mixed questions when they also contain explicit route/event context:
     # "снимаем квартиру, куда съездить?" is a route question, but "где снять
     # квартиру?" is out of acquisition scope.
@@ -514,6 +580,157 @@ def _surface_out_of_scope_type(profile: dict[str, Any]) -> str:
 def _first_match(pattern: re.Pattern[str], text: str) -> str:
     match = pattern.search(text or "")
     return match.group(0) if match else ""
+
+
+def _retrieval_now() -> datetime:
+    raw = (
+        os.getenv("ACQ_COMMENT_RETRIEVAL_NOW_ISO")
+        or os.getenv("KAGGLE_RUN_STARTED_AT")
+        or os.getenv("ACQ_RUN_STARTED_AT")
+        or ""
+    ).strip()
+    if raw:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            pass
+    return datetime.now(timezone.utc)
+
+
+def _normalize_event_year(year_raw: str | None, *, reference_year: int) -> int:
+    if not year_raw:
+        return reference_year
+    year = int(year_raw)
+    if year < 100:
+        return 2000 + year
+    return year
+
+
+def _safe_date(year: int, month: int, day: int) -> datetime | None:
+    try:
+        return datetime(year, month, day, tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _extract_event_dates(text: str, *, reference: datetime) -> list[datetime]:
+    compact = normalize_comment_text(text)
+    dates: list[datetime] = []
+    for match in _NUMERIC_DATE_RE.finditer(compact):
+        day = int(match.group(1))
+        month = int(match.group(2))
+        year = _normalize_event_year(match.group(3), reference_year=reference.year)
+        dt = _safe_date(year, month, day)
+        if dt is not None:
+            dates.append(dt)
+    for match in _TEXT_DATE_RE.finditer(compact):
+        start_day_raw, end_day_raw, month_raw, year_raw = match.groups()
+        month = _RU_MONTHS.get(str(month_raw).casefold())
+        if not month:
+            continue
+        year = _normalize_event_year(year_raw, reference_year=reference.year)
+        for day_raw in [start_day_raw, end_day_raw]:
+            if not day_raw:
+                continue
+            dt = _safe_date(year, month, int(day_raw))
+            if dt is not None:
+                dates.append(dt)
+    base = reference.date()
+    if _RELATIVE_TODAY_RE.search(compact):
+        dates.append(datetime(base.year, base.month, base.day, tzinfo=timezone.utc))
+    for match in _RELATIVE_TOMORROW_RE.finditer(compact):
+        delta_days = 2 if match.group(0).casefold() == "послезавтра" else 1
+        target = base.toordinal() + delta_days
+        target_date = datetime.fromordinal(target)
+        dates.append(target_date.replace(tzinfo=timezone.utc))
+    # Deduplicate while preserving deterministic order.
+    seen: set[str] = set()
+    out: list[datetime] = []
+    for dt in dates:
+        key = dt.date().isoformat()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(dt)
+    return out
+
+
+def _event_temporal_text(row: dict[str, Any]) -> str:
+    return normalize_comment_text(" ".join(
+        str(row.get(key) or "")
+        for key in [
+            "text",
+            "text_snapshot",
+            "source_post_text_snapshot",
+            "source_post_text",
+            "reply_parent_text_snapshot",
+            "reply_parent_text",
+            "analysis_context_snapshot",
+            "analysis_text",
+        ]
+    ))
+
+
+def _event_temporal_assessment(row: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    action = str(row.get("candidate_action_type") or _action_for_intent(str(row.get("intent_set") or "")))
+    if action not in EVENT_FUTURE_REQUIRED_ACTIONS:
+        return {
+            "event_temporal_status": "not_required",
+            "event_temporal_evidence_ru": "для этой цели не требуется проверка будущей даты события",
+            "event_latest_detected_date": "",
+            "event_temporal_gate_passed": True,
+        }
+    now = (now or _retrieval_now()).astimezone(timezone.utc)
+    reference = _parse_created_at(row.get("created_at")) or now
+    text = _event_temporal_text(row)
+    dates = _extract_event_dates(text, reference=reference)
+    if dates:
+        latest = max(dates)
+        if latest.date() < now.date():
+            return {
+                "event_temporal_status": "past_event",
+                "event_temporal_evidence_ru": f"найдена дата события {latest.strftime('%d.%m.%Y')}, она раньше даты запуска {now.strftime('%d.%m.%Y')}",
+                "event_latest_detected_date": latest.date().isoformat(),
+                "event_temporal_gate_passed": False,
+            }
+        return {
+            "event_temporal_status": "future_or_today",
+            "event_temporal_evidence_ru": f"найдена дата события {latest.strftime('%d.%m.%Y')}, она не раньше даты запуска {now.strftime('%d.%m.%Y')}",
+            "event_latest_detected_date": latest.date().isoformat(),
+            "event_temporal_gate_passed": True,
+        }
+    has_past = bool(_PAST_EVENT_SIGNAL_RE.search(text))
+    has_future = bool(_FUTURE_EVENT_SIGNAL_RE.search(text))
+    if has_past and not has_future:
+        return {
+            "event_temporal_status": "past_event_signal",
+            "event_temporal_evidence_ru": "по тексту похоже на отчёт/благодарность/итоги уже прошедшего события",
+            "event_latest_detected_date": "",
+            "event_temporal_gate_passed": False,
+        }
+    if has_future:
+        return {
+            "event_temporal_status": "future_signal_no_date",
+            "event_temporal_evidence_ru": "есть смысловой сигнал будущего/анонсируемого события, но точная дата не извлечена",
+            "event_latest_detected_date": "",
+            "event_temporal_gate_passed": True,
+        }
+    return {
+        "event_temporal_status": "unknown_event_time",
+        "event_temporal_evidence_ru": "дата события не найдена; строка остаётся кандидатом только до финальной LLM-проверки",
+        "event_latest_detected_date": "",
+        "event_temporal_gate_passed": True,
+    }
+
+
+def _hard_semantic_rejected(row: dict[str, Any]) -> bool:
+    if _truthy_value(row.get("semantic_candidate_rejected")):
+        return True
+    exclusion = str(row.get("semantic_exclusion_type") or row.get("candidate_noise_type") or "")
+    return exclusion in {"past_event", "past_event_signal", "out_of_scope_gasoline_availability"}
 
 
 def _region_positive_min_score() -> float:
@@ -704,6 +921,15 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
     features = _text_quality_features(str(row.get("text") or row.get("text_snapshot") or ""))
     intent_supported = _intent_has_text_support(str(row.get("text") or row.get("text_snapshot") or ""), str(row.get("intent_set") or ""))
     out_of_scope = _out_of_scope_noise_type(str(row.get("text") or row.get("text_snapshot") or ""))
+    context_out_of_scope = _out_of_scope_noise_type(_event_temporal_text(row))
+    if context_out_of_scope and not out_of_scope:
+        out_of_scope = context_out_of_scope
+    temporal = _event_temporal_assessment(row)
+    semantic_exclusion = ""
+    if out_of_scope == "out_of_scope_gasoline_availability":
+        semantic_exclusion = out_of_scope
+    elif not temporal.get("event_temporal_gate_passed"):
+        semantic_exclusion = str(temporal.get("event_temporal_status") or "past_event")
     raw_score = float(row.get(scoring_method) or row.get("score") or 0.0)
     relation = str(row.get("relation") or "").strip()
     source_post_relation = relation in {"vk_social_wall_post", "tg_channel_post_context"} or bool(row.get("is_post"))
@@ -715,6 +941,16 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
         diagnostic_noise_type = out_of_scope
     elif not intent_supported:
         diagnostic_noise_type = "intent_without_text_support"
+    if semantic_exclusion:
+        diagnostic_noise_type = semantic_exclusion
+    row.update({
+        "event_temporal_status": temporal.get("event_temporal_status"),
+        "event_temporal_evidence_ru": temporal.get("event_temporal_evidence_ru"),
+        "event_latest_detected_date": temporal.get("event_latest_detected_date"),
+        "event_temporal_gate_passed": bool(temporal.get("event_temporal_gate_passed")),
+        "semantic_exclusion_type": semantic_exclusion,
+        "semantic_candidate_rejected": bool(semantic_exclusion),
+    })
     if not _deterministic_prefilter_enabled():
         row["raw_score"] = raw_score
         row["question_boost"] = 0.0
@@ -723,7 +959,7 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
         row["question_signal"] = bool(features["question_signal"])
         row["candidate_noise_type"] = diagnostic_noise_type
         row["intent_text_supported"] = bool(intent_supported)
-        row["pre_llm_candidate_eligible"] = True
+        row["pre_llm_candidate_eligible"] = not bool(semantic_exclusion)
         row["llm_gate_selection_basis"] = "semantic_top_n_no_deterministic_prefilter"
         return
     if features["hard_noise"]:
@@ -752,6 +988,8 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
         row["candidate_noise_type"] = out_of_scope
     elif not intent_supported:
         row["candidate_noise_type"] = "intent_without_text_support"
+    if semantic_exclusion:
+        row["candidate_noise_type"] = semantic_exclusion
     row["intent_text_supported"] = bool(intent_supported)
     row["pre_llm_candidate_eligible"] = bool(
         features["question_signal"]
@@ -759,6 +997,7 @@ def _apply_text_quality_to_candidate(row: dict[str, Any], *, scoring_method: str
         and not out_of_scope
         and intent_supported
         and (not source_post_relation or source_post_allowed)
+        and not semantic_exclusion
     )
     row["llm_gate_selection_basis"] = "legacy_deterministic_prefilter"
 
@@ -987,6 +1226,9 @@ _REPORT_REJECT_NOISE_TYPES = {
     "too_short_non_question",
     "intent_without_text_support",
     "source_post_not_comment",
+    "past_event",
+    "past_event_signal",
+    "out_of_scope_gasoline_availability",
 }
 
 
@@ -1031,6 +1273,8 @@ def _report_candidate_eligible(row: dict[str, Any], *, allow_source_posts: bool 
     if scope not in {"", "monitoring_candidate", "historical_calibration"}:
         return False
     if not _candidate_region_eligible(row):
+        return False
+    if _hard_semantic_rejected(row):
         return False
     text = str(row.get("text_snapshot") or row.get("text") or "")
     features = _text_quality_features(text)
@@ -2088,6 +2332,7 @@ def _dashboard_summary_rows(
         {"section": "Итог", "metric": "Где есть хотя бы слабый смысл", "value": len(monitored)},
         {"section": "Итог", "metric": "Где ничего не найдено/не попало", "value": len(no_signal)},
         {"section": "Как читать", "metric": "surface_summary", "value": "Главный лист: где мониторить, сколько вопросов и как часто они встречаются."},
+        {"section": "Как читать", "metric": "surface_backlog", "value": "Отдельный лист подтверждённых, кандидатов и ожидающих проверки комментариев/обсуждений площадок; именно там видны event-source publics, которые ещё только ждут resolve/скан."},
         {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список площадок из payload/run: видно, где ничего не нашлось или площадка не анализировалась."},
         {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено и явные +/−/затронуто по последнему запуску."},
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
@@ -2164,6 +2409,12 @@ _RU_HEADERS = {
     "transport_hint": "Транспорт",
     "question_signal": "Есть вопрос?",
     "candidate_noise_type": "Диагностика шума",
+    "semantic_exclusion_type": "Смысловой стоп-фильтр",
+    "semantic_candidate_rejected": "Отклонено стоп-фильтром?",
+    "event_temporal_status": "Дата события: статус",
+    "event_temporal_evidence_ru": "Дата события: доказательство",
+    "event_latest_detected_date": "Дата события: найдено",
+    "event_temporal_gate_passed": "Дата события: прошла gate?",
     "intent_text_supported": "Смысл подтверждён текстом",
     "pre_llm_candidate_eligible": "В LLM-gate?",
     "llm_gate_selection_basis": "Основа отбора в LLM",
@@ -2276,6 +2527,8 @@ _RU_HEADERS = {
     "llm_queue_status_ru": "Очередь LLM",
     "is_in_llm_gate_queue": "В top-N LLM queue?",
     "goal_sheet": "Лист цели",
+    "backlog_bucket": "Backlog (код)",
+    "backlog_bucket_ru": "Backlog: как читать",
 }
 
 
@@ -2302,7 +2555,7 @@ def _xlsx_value(header: str, value: Any) -> Any:
         return json.dumps(value, ensure_ascii=False)
     if header in {"discovered_at", "report_generated_at", "generated_at", "last_processed_at"}:
         return _format_datetime_ru(value)
-    if header.endswith("_created_at") or header == "created_at" or header.endswith("_at") or header in {"period_min_created_at", "period_max_created_at"}:
+    if header.endswith("_created_at") or header == "created_at" or header.endswith("_at") or header.endswith("_date") or header in {"period_min_created_at", "period_max_created_at"}:
         return _format_date_ru(value)
     if isinstance(value, float):
         return round(value, 1)
@@ -2452,6 +2705,13 @@ def _criteria_status(row: dict[str, Any]) -> tuple[str, str]:
         evidence = str(row.get("region_evidence_ru") or "нет доказательства Калининградской области")
         return f"rejected_region:{confidence}", f"не прошёл региональный gate Калининградской области: {evidence}"
     noise = str(row.get("candidate_noise_type") or "").strip()
+    if _hard_semantic_rejected(row):
+        exclusion = str(row.get("semantic_exclusion_type") or noise or "")
+        if exclusion == "out_of_scope_gasoline_availability":
+            return "rejected_noise:out_of_scope_gasoline_availability", "отфильтровано: вопросы наличия бензина/топлива/АЗС не наша acquisition-тема"
+        if exclusion in {"past_event", "past_event_signal"}:
+            evidence = str(row.get("event_temporal_evidence_ru") or "событие выглядит прошедшим")
+            return f"rejected_temporal:{exclusion}", f"отфильтровано: работаем с будущими событиями; {evidence}"
     if _is_source_post_context(row):
         return "rejected_source_post_context", "это исходный пост/контекст, не пользовательский комментарий для ответа"
     if _report_noise_rejected(row) or noise.startswith("out_of_scope"):
@@ -2595,6 +2855,43 @@ def _monitoring_target_rows(surface_summaries: list[dict[str, Any]], *, limit: i
     ))[:limit]
 
 
+def _surface_backlog_rows(surface_inventory: list[dict[str, Any]], *, limit: int = 1000) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in surface_inventory:
+        status = str(row.get("status") or "").strip().lower()
+        selection = str(row.get("selection_status") or "").strip().lower()
+        scan_state = str(row.get("scan_state") or "").strip().lower()
+        source = str(row.get("source") or "").strip().lower()
+        if selection == "selected":
+            bucket = "selected_for_monitoring"
+            bucket_ru = "подтверждено/выбрано для постоянного мониторинга"
+        elif selection == "candidate" and int(float(row.get("answerable_question_candidates") or 0)) + int(float(row.get("ask_clarification_contexts") or 0)) > 0:
+            bucket = "candidate_has_signal"
+            bucket_ru = "кандидат: есть сигнал, нужно больше данных/LLM/ручной отсмотр"
+        elif status in {"needs_comment_resolve", "seed", "candidate", "approved"} or scan_state in {"queued_waiting_replyable_budget", "queued_waiting_scan_budget", "queued", "waiting_scan"}:
+            bucket = "waiting_scan_or_commentability"
+            bucket_ru = "ожидает проверки комментариев/обсуждения или скана"
+        elif source in {"tg_monitoring", "tg_monitoring_canonical", "vk_source", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} and selection != "rejected":
+            bucket = "known_source_backlog"
+            bucket_ru = "известный источник в backlog, ещё нет полезного профиля"
+        else:
+            continue
+        enriched = dict(row)
+        enriched["backlog_bucket"] = bucket
+        enriched["backlog_bucket_ru"] = bucket_ru
+        rows.append(enriched)
+    return sorted(rows, key=lambda r: (
+        {
+            "selected_for_monitoring": 0,
+            "candidate_has_signal": 1,
+            "waiting_scan_or_commentability": 2,
+            "known_source_backlog": 3,
+        }.get(str(r.get("backlog_bucket") or ""), 9),
+        str(r.get("source") or ""),
+        str(r.get("surface_title") or r.get("surface_key") or ""),
+    ))[:limit]
+
+
 def _write_xlsx(
     path: Path,
     rows: list[dict[str, Any]],
@@ -2614,6 +2911,7 @@ def _write_xlsx(
     rejected_noise_rows: list[dict[str, Any]] | None = None,
     goal_candidate_rows: dict[str, list[dict[str, Any]]] | None = None,
     monitoring_target_rows: list[dict[str, Any]] | None = None,
+    surface_backlog_rows: list[dict[str, Any]] | None = None,
     region_catalog_rows: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
@@ -2622,6 +2920,8 @@ def _write_xlsx(
         from openpyxl.utils import get_column_letter
     except Exception:
         return
+    if surface_backlog_rows is None and surface_inventory is not None:
+        surface_backlog_rows = _surface_backlog_rows(surface_inventory)
     wb = Workbook()
     ws = wb.active
     ws.title = "manual_review"
@@ -2632,7 +2932,8 @@ def _write_xlsx(
         "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
         "region_confidence", "region_gate_status", "region_evidence_ru", "region_signal_source", "region_score",
         "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
-        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported",
+        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "semantic_exclusion_type",
+        "event_temporal_status", "event_temporal_evidence_ru", "intent_text_supported",
         "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis",
     ]
     manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Площадка" for h in headers[10:20]} | {h: "Текст и контекст" for h in headers[20:25]} | {h: "Регион" for h in headers[25:30]} | {h: "Решение" for h in headers[30:]}
@@ -2702,13 +3003,34 @@ def _write_xlsx(
         for idx, width in enumerate([18, 36, 44, 48, 10, 30, 20, 20, 20, 20, 18, 18, 18, 16, 14, 14, 14, 16, 14, 14, 20, 90], start=1):
             targets.column_dimensions[get_column_letter(idx)].width = width
 
+    if surface_backlog_rows is not None:
+        backlog = wb.create_sheet("surface_backlog")
+        backlog_headers = [
+            "backlog_bucket_ru", "backlog_bucket", "selection_status", "recommendation",
+            "surface_title", "surface_url", "platform", "surface_type_ru", "surface_type",
+            "status", "scan_state", "source", "increment_status", "is_incremental_last_run",
+            "discovered_at", "discovered_in_run_id", "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at",
+            "region_confidence", "region_evidence_ru", "comments_embedded", "answerable_question_candidates",
+            "route_poi_questions", "event_questions", "event_site_search_questions", "ask_clarification_contexts",
+            "members_or_subscribers", "summary_ru",
+        ]
+        backlog_groups = {h: "Куда смотреть дальше" for h in backlog_headers[:4]} | {h: "Площадка" for h in backlog_headers[4:12]} | {h: "Прогресс" for h in backlog_headers[12:19]} | {h: "Потенциал" for h in backlog_headers[19:]}
+        _append_grouped_header(backlog, backlog_headers, backlog_groups)
+        if not surface_backlog_rows:
+            backlog.append(["Нет подтверждённых/кандидатных/ожидающих площадок в текущем payload.", *[""] * (len(backlog_headers) - 1)])
+        _append_data_rows(backlog, surface_backlog_rows, backlog_headers, hyperlink_field="surface_url", style="surface")
+        backlog.freeze_panes = "A3"
+        for idx, width in enumerate([62, 30, 18, 36, 44, 48, 10, 30, 18, 24, 30, 24, 30, 14, 20, 20, 18, 18, 18, 16, 90, 14, 14, 14, 14, 16, 14, 20, 90], start=1):
+            backlog.column_dimensions[get_column_letter(idx)].width = width
+
     if goal_candidate_rows is not None:
         goal_headers = [
             "future_goal_ru", "llm_final_check_ru", "llm_queue_status_ru", "models_matched", "model_count", "best_score",
             "surface_title", "surface_key", "platform", "surface_type", "context_url", "created_at", "comment_age_days",
             "region_confidence", "region_evidence_ru",
             "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
-            "top_intent_phrase", "intent_set", "candidate_action_type", "processed_in_run_id", "last_processed_at",
+            "top_intent_phrase", "intent_set", "candidate_action_type", "event_temporal_status", "event_temporal_evidence_ru",
+            "processed_in_run_id", "last_processed_at",
         ]
         for sheet_name, spec in _GOAL_SHEET_SPECS.items():
             sheet_rows = goal_candidate_rows.get(sheet_name, [])
@@ -2730,7 +3052,8 @@ def _write_xlsx(
         "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
         "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
         "future_goal_ru", "region_confidence", "region_evidence_ru", "top_intent_phrase", "intent_set",
-        "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
+        "candidate_action_type", "question_signal", "candidate_noise_type", "semantic_exclusion_type",
+        "event_temporal_status", "event_temporal_evidence_ru", "intent_text_supported",
         "is_in_llm_gate_queue", "llm_queue_status_ru",
     ]
         processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:9]} | {h: "Где найдено" for h in processed_headers[9:16]} | {h: "Текст и контекст" for h in processed_headers[16:23]} | {h: "Регион" for h in processed_headers[23:25]} | {h: "Почему принято/отклонено" for h in processed_headers[25:]}
@@ -2748,7 +3071,8 @@ def _write_xlsx(
         noise_headers = [
             "criteria_status_ru", "criteria_status", "analysis_kind", "surface_key", "platform", "surface_type",
             "relation", "created_at", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
-            "region_confidence", "region_evidence_ru", "top_intent_phrase", "score", "positive_score", "negative_score", "candidate_noise_type",
+            "region_confidence", "region_evidence_ru", "top_intent_phrase", "score", "positive_score", "negative_score",
+            "candidate_noise_type", "semantic_exclusion_type", "event_temporal_status", "event_temporal_evidence_ru",
         ]
         noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Текст и контекст" for h in noise_headers[9:14]} | {h: "Регион" for h in noise_headers[14:16]} | {h: "Шум/диагностика" for h in noise_headers[16:]}
         _append_grouped_header(noise, noise_headers, noise_groups)
@@ -2828,7 +3152,8 @@ def _write_xlsx(
         ex = wb.create_sheet(sheet_name)
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
+            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type",
+            "candidate_noise_type", "semantic_exclusion_type", "event_temporal_status", "event_temporal_evidence_ru",
             "llm_gate_selection_basis", "region_confidence", "region_evidence_ru", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
             "top_intent_phrase", "destination_hint", "transport_hint",
         ]
@@ -2852,7 +3177,8 @@ def _write_xlsx(
         ctx = wb.create_sheet(sheet_name)
         ctx_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
+            "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type",
+            "candidate_noise_type", "semantic_exclusion_type", "event_temporal_status", "event_temporal_evidence_ru",
             "llm_gate_selection_basis", "region_confidence", "region_evidence_ru", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
             "top_intent_phrase", "destination_hint", "transport_hint",
         ]
@@ -2931,6 +3257,7 @@ def _write_xlsx(
         "summary_ru",
         "run_delta_sources",
         "monitoring_targets",
+        "surface_backlog",
         "goal_ask_event_details",
         "goal_reply_events",
         "goal_reply_routes",
@@ -3180,6 +3507,7 @@ def run_comment_semantic_retrieval(
         if c.get("model_name") == gate_model
         and c.get("candidate_usage_scope") == "monitoring_candidate"
         and _candidate_region_eligible(c)
+        and not _hard_semantic_rejected(c)
     ]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
     gate_candidate_keys = {
@@ -3279,6 +3607,7 @@ def run_comment_semantic_retrieval(
         for sheet_name, spec in _GOAL_SHEET_SPECS.items()
     }
     monitoring_targets = _monitoring_target_rows(surface_summaries)
+    surface_backlog = _surface_backlog_rows(surface_inventory)
     dashboard_rows = _dashboard_summary_rows(
         summary={
             "comments_embedded": len(records),
@@ -3313,7 +3642,9 @@ def run_comment_semantic_retrieval(
         "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
-        "intent_text_supported", "pre_llm_candidate_eligible", "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis", "model_disagreement_bucket",
+        "semantic_exclusion_type", "semantic_candidate_rejected", "event_temporal_status", "event_temporal_evidence_ru",
+        "event_latest_detected_date", "event_temporal_gate_passed", "intent_text_supported", "pre_llm_candidate_eligible",
+        "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis", "model_disagreement_bucket",
     ]
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
@@ -3376,6 +3707,7 @@ def run_comment_semantic_retrieval(
         rejected_noise_rows=rejected_noise_examples,
         goal_candidate_rows=goal_candidate_sheets,
         monitoring_target_rows=monitoring_targets,
+        surface_backlog_rows=surface_backlog,
     )
 
     summary = {

@@ -855,6 +855,22 @@ async def test_runtime_seed_payload_includes_existing_telegram_monitoring_source
 
 
 @pytest.mark.asyncio
+async def test_runtime_seed_payload_includes_canonical_telegram_monitoring_sources(db):
+    from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _runtime_env_from_config
+
+    payload = await collect_runtime_seed_payload(db)
+    by_external = {item["external_id"]: item for item in payload["surfaces"]}
+    env = _runtime_env_from_config(AcqConfig(max_surfaces_per_run=4), payload)
+    tg_meta = {item["external_id"]: item for item in json.loads(env["ACQ_TG_SEED_SURFACES_JSON"])}
+
+    assert by_external["tg:ecoklgd"]["source"] == "tg_monitoring_canonical"
+    assert by_external["tg:ecoklgd"]["status"] == "needs_comment_resolve"
+    assert by_external["tg:ecoklgd"]["reach"]["basis"] == "telegram_monitoring_canonical_source"
+    assert "sources.yml" in by_external["tg:ecoklgd"]["topic_hint"]
+    assert tg_meta["tg:ecoklgd"]["source"] == "tg_monitoring_canonical"
+
+
+@pytest.mark.asyncio
 async def test_runtime_seed_payload_does_not_reintroduce_resolved_or_rejected_telega_channels(db):
     from subscriber_acquisition.kaggle_runner import collect_runtime_seed_payload, _approved_seed_urls_from_payload
 

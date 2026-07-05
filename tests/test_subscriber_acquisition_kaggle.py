@@ -456,6 +456,7 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert "question_patterns" in workbook.sheetnames
     assert "canonical_questions" in workbook.sheetnames
     assert "monitoring_targets" in workbook.sheetnames
+    assert "surface_backlog" in workbook.sheetnames
     assert "goal_ask_event_details" in workbook.sheetnames
     assert "goal_reply_events" in workbook.sheetnames
     assert "goal_reply_routes" in workbook.sheetnames
@@ -600,11 +601,12 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
     from openpyxl import load_workbook
 
     workbook = load_workbook(path)
-    assert workbook.sheetnames[:3] == ["run_delta_sources", "monitoring_targets", "goal_ask_event_details"]
+    assert workbook.sheetnames[:4] == ["run_delta_sources", "monitoring_targets", "surface_backlog", "goal_ask_event_details"]
     assert workbook["surface_summary"]["A3"].fill.fgColor.rgb == "00C6EFCE"
     assert workbook["full_surface_list"]["A3"].fill.fgColor.rgb == "00FFF2CC"
     assert workbook["summary_counts"]["G3"].fill.fgColor.rgb == "00FFF2CC"
     assert workbook["monitoring_targets"]["A3"].fill.fgColor.rgb == "00C6EFCE"
+    assert "surface_backlog" in workbook.sheetnames
     assert workbook["goal_reply_routes"]["A3"].fill.fgColor.rgb == "00E2F0D9"
     processed = workbook["processed_comments_last_run"]
     headers = [cell.value for cell in processed[2]]
@@ -816,6 +818,67 @@ def test_comment_semantic_region_gate_blocks_report_and_surface_selection():
     )[0]
     assert summary["recommendation"] == "reject_region_unknown"
     assert summary["selection_status"] == "rejected"
+
+
+def test_comment_semantic_hard_filters_past_events_and_gasoline(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_NOW_ISO", "2026-07-05T12:00:00+00:00")
+
+    past_event = {
+        "surface_key": "vk:vagonka39",
+        "platform": "vk",
+        "surface_type": "community",
+        "candidate_action_type": "organizer_visibility_clarification",
+        "intent_set": "organizer_event_post_context",
+        "text_snapshot": "В субботу 4 июля прошёл концерт, спасибо организаторам!",
+        "context_url": "https://vk.com/wall-1_2",
+        "created_at": "2026-07-04T08:00:00+00:00",
+        "candidate_usage_scope": "monitoring_candidate",
+        "region_confidence": "confirmed",
+        "positive_negative_margin": 0.5,
+    }
+    retrieval._apply_text_quality_to_candidate(past_event, scoring_method="positive_negative_margin")
+
+    assert past_event["semantic_candidate_rejected"] is True
+    assert past_event["semantic_exclusion_type"] == "past_event"
+    assert past_event["pre_llm_candidate_eligible"] is False
+    assert retrieval._report_candidate_eligible(past_event) is False
+    status, status_ru = retrieval._criteria_status(past_event)
+    assert status == "rejected_temporal:past_event"
+    assert "будущими событиями" in status_ru
+
+    future_event = {
+        **past_event,
+        "text_snapshot": "8 июля состоится концерт, нужна ли регистрация?",
+        "created_at": "2026-07-04T08:00:00+00:00",
+        "candidate_action_type": "event_recommendation_reply",
+        "intent_set": "event_close_question",
+    }
+    retrieval._apply_text_quality_to_candidate(future_event, scoring_method="positive_negative_margin")
+    assert future_event["semantic_candidate_rejected"] is False
+    assert future_event["event_temporal_status"] == "future_or_today"
+    assert future_event["pre_llm_candidate_eligible"] is True
+
+    gasoline = {
+        "surface_key": "vk:club42481124",
+        "platform": "vk",
+        "surface_type": "community",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "text_snapshot": "Подскажите где сейчас есть бензин 95 на заправках?",
+        "context_url": "https://vk.com/topic-1_2?post=3",
+        "candidate_usage_scope": "monitoring_candidate",
+        "region_confidence": "confirmed",
+        "positive_negative_margin": 0.5,
+    }
+    retrieval._apply_text_quality_to_candidate(gasoline, scoring_method="positive_negative_margin")
+    assert gasoline["candidate_noise_type"] == "out_of_scope_gasoline_availability"
+    assert gasoline["semantic_candidate_rejected"] is True
+    assert gasoline["pre_llm_candidate_eligible"] is False
+    assert retrieval._report_candidate_eligible(gasoline) is False
+    status, status_ru = retrieval._criteria_status(gasoline)
+    assert status == "rejected_noise:out_of_scope_gasoline_availability"
+    assert "бензина" in status_ru
 
 
 def test_comment_semantic_legacy_deterministic_prefilter_is_explicit_opt_in(monkeypatch):

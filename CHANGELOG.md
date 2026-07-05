@@ -4,6 +4,9 @@
 
 ### Added
 
+- Added Subscriber Acquisition XLSX `surface_backlog` sheet for selected surfaces,
+  candidates with signal, and known TG/VK monitoring sources waiting for
+  commentability resolve or bounded scan.
 - Added delta-first Subscriber Acquisition semantic XLSX sheets: `decision_deltas`, `processed_comments_last_run`, and `rejected_noise_examples`, with Russian criteria explanations for each processed comment/context.
 - Implemented the optional Subscriber Acquisition `acq_comment_semantic_retrieval.v1` Kaggle stage: collected TG/VK comments are embedded locally, benchmarked across e5-base/bge-m3, exported to clickable XLSX/CSV artifacts, profiled per surface, and only top retrieval candidates are passed to the Gemma gate.
 - Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
@@ -15,6 +18,11 @@
 
 ### Changed
 
+- Subscriber Acquisition semantic retrieval now excludes already-past event
+  contexts and after-event reports from `goal_*`, `monitoring_targets` and the
+  Gemma top-N queue, while also hard-filtering gasoline/fuel/АЗС availability
+  questions as out-of-scope; enabled Telegram Monitoring canonical sources from
+  `sources.yml` are included in the discovery backlog even before DB seeding.
 - Subscriber Acquisition semantic retrieval now applies a dedicated
   Kaliningrad Oblast region gate before `goal_*`, `monitoring_targets` and
   Gemma LLM-gate selection: it embeds surface metadata, source post, parent

@@ -338,7 +338,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             is_smartik = vk_handle in SMARTIK_KALININGRAD_VK_BY_HANDLE
             is_social_search = vk_handle in VK_SOCIAL_SEARCH_VK_BY_HANDLE
             is_curated_social = is_smartik or is_social_search
-            is_new_frontier = source in {"discovered", "linked_discussion", "tg_monitoring", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
+            is_new_frontier = source in {"discovered", "linked_discussion", "tg_monitoring", "tg_monitoring_canonical", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"} or is_curated_social
             is_discovered_replyable_tg = source in {"discovered", "linked_discussion"}
             is_replyable_tg = str(row.platform or "").lower() == "tg" and surface_type in {"group", "chat", "megagroup", "linked_discussion"}
             needs_tg_comment_resolve = str(row.platform or "").lower() == "tg" and (
@@ -415,10 +415,44 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             source = str(item.get("source") or "").strip().lower()
-            if source in {"discovered", "linked_discussion", "tg_monitoring", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"}:
+            if source in {"discovered", "linked_discussion", "tg_monitoring", "tg_monitoring_canonical", "telega_in", "smartik_kaliningrad_catalog", "vk_social_search"}:
                 surfaces.append(item)
             else:
                 pending_existing.append(item)
+
+        def _append_tg_monitoring_seed(
+            *,
+            handle: str,
+            title: str | None,
+            source: str,
+            topic_hint: str,
+            reach: dict[str, Any],
+            risk: dict[str, Any],
+        ) -> bool:
+            clean_handle = str(handle or "").strip().strip("@").strip("/")
+            if not clean_handle:
+                return False
+            if clean_handle.casefold() in terminal_tg_handles:
+                return False
+            external_id = f"tg:{clean_handle}"
+            key = ("tg", external_id)
+            if key in seen:
+                return False
+            seen.add(key)
+            surfaces.append({
+                "platform": "tg",
+                "surface_type": "unknown_public",
+                "url": f"https://t.me/{clean_handle}",
+                "title": title or clean_handle,
+                "handle": clean_handle,
+                "external_id": external_id,
+                "status": "needs_comment_resolve",
+                "source": source,
+                "topic_hint": topic_hint,
+                "reach": reach,
+                "risk": risk,
+            })
+            return True
         tg_source_table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='telegram_source'"))).scalar_one_or_none()
         if tg_source_table_exists:
             info = (await session.execute(text("PRAGMA table_info(telegram_source)"))).all()
@@ -437,38 +471,26 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 handle = str(row.get("username") or "").strip().strip("@").strip("/")
                 if not handle:
                     continue
-                if handle.casefold() in terminal_tg_handles:
-                    continue
-                external_id = f"tg:{handle}"
-                key = ("tg", external_id)
-                if key in seen:
-                    continue
-                seen.add(key)
                 title = str(row.get("title") or "").strip() or None
                 festival_series = str(row.get("festival_series") or "").strip()
                 trust_level = str(row.get("trust_level") or "").strip()
                 reach: dict[str, Any] = {"confidence": "low", "basis": "telegram_monitoring_source"}
                 if row.get("last_scan_at"):
                     reach["monitor_last_scan_at"] = str(row.get("last_scan_at"))
-                surfaces.append({
-                    "platform": "tg",
-                    "surface_type": "unknown_public",
-                    "url": f"https://t.me/{handle}",
-                    "title": title or handle,
-                    "handle": handle,
-                    "external_id": external_id,
-                    "status": "needs_comment_resolve",
-                    "source": "tg_monitoring",
-                    "topic_hint": "existing Telegram monitoring source; resolve linked discussion/comments before replyability review",
-                    "reach": reach,
-                    "risk": {
+                _append_tg_monitoring_seed(
+                    handle=handle,
+                    title=title,
+                    source="tg_monitoring",
+                    topic_hint="existing Telegram monitoring source; resolve linked discussion/comments before replyability review",
+                    reach=reach,
+                    risk={
                         "safety_risk": "low",
                         "spam_risk": "unknown",
                         "trust_level": trust_level or None,
                         "festival_source": bool(row.get("festival_source") or festival_series),
                         "festival_series": festival_series or None,
                     },
-                })
+                )
         for handle, title, source_url in [*ROUTE_CALIBRATION_TG_SEEDS, *TELEGA_IN_KALININGRAD_TG_SEEDS]:
             external_id = f"tg:{handle}"
             key = ("tg", external_id)
@@ -488,6 +510,26 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "reach": {"confidence": "low", "basis": "route_calibration_seed" if handle == "vKalinigrad_recomendations" else "telega_in_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
             })
+        try:
+            from telegram_sources import canonical_tg_sources
+        except Exception:
+            canonical_tg_sources = None  # type: ignore[assignment]
+        if canonical_tg_sources is not None:
+            for spec in canonical_tg_sources():
+                _append_tg_monitoring_seed(
+                    handle=spec.username,
+                    title=spec.username,
+                    source="tg_monitoring_canonical",
+                    topic_hint="canonical Telegram Monitoring source from docs/features/telegram-monitoring/sources.yml; resolve linked discussion/comments before replyability review",
+                    reach={"confidence": "low", "basis": "telegram_monitoring_canonical_source"},
+                    risk={
+                        "safety_risk": "low",
+                        "spam_risk": "unknown",
+                        "trust_level": spec.trust_level,
+                        "festival_source": bool(spec.festival_series),
+                        "festival_series": spec.festival_series,
+                    },
+                )
         for handle, title, source_url in SMARTIK_KALININGRAD_VK_SEEDS:
             external_id = f"vk:{handle}"
             key = ("vk", external_id)

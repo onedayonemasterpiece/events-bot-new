@@ -66,6 +66,13 @@ comment/post against a dedicated region catalog and requires
 `monitoring_targets` or the Gemma LLM gate. Rows with `region_unknown` or
 `out_of_region` stay in diagnostics/reporting, but are not selected for event
 or route acquisition until later scans prove the Kaliningrad context.
+Event-related candidates are also forward-looking: if the source
+post/comment/parent context proves the event date is already past, or the text
+is only an after-event report/thanks, the row is `past_event` /
+`past_event_signal` and is excluded from `goal_*`, `monitoring_targets` and the
+Gemma top-N queue. Fuel availability questions such as “где есть
+бензин/дизель/топливо/АЗС” are hard out-of-scope
+(`out_of_scope_gasoline_availability`) even if they look transport-adjacent.
 For the shared S22 Telegram auth bundle the launcher also keeps a local remote
 session marker/cooldown (`ACQ_REMOTE_SESSION_COOLDOWN_SECONDS`, default 600s)
 and directly checks the acquisition Kaggle kernel ref before a new live TG run.

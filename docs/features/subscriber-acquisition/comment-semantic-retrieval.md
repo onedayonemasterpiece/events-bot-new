@@ -87,6 +87,27 @@ margin is `ACQ_COMMENT_RETRIEVAL_REGION_MARGIN_MIN_SCORE=0.06`, so a generic
 “куда съездить?” without local anchors should stay `unknown` rather than spend
 LLM budget.
 
+## Future-event and hard out-of-scope gates
+
+Event acquisition is forward-looking. Rows whose future action is to answer an
+event question or ask an organizer (`event_recommendation_reply`,
+`organizer_visibility_clarification`, `event_site_search_or_listing`,
+`badge_filter_need`) must pass an event-time gate before they can appear in
+`goal_*`, `monitoring_targets` or the Gemma top-N queue:
+
+- explicit dates in the current text plus source-post/parent context are parsed
+  against the run date; if the latest detected event date is before the run date,
+  the row is `past_event` and diagnostic-only;
+- post-event semantic signals such as отчёт/итоги/спасибо организаторам reject
+  as `past_event_signal` when no future/announcement signal is present;
+- future/today dates and future announcement signals can pass, but still require
+  final LLM validation before any real reply/question.
+
+Fuel availability is outside the product scope: questions like “где есть
+бензин/дизель/топливо/АЗС?” are marked
+`out_of_scope_gasoline_availability` and are excluded from goal sheets and LLM
+budget even if the vector model sees route/transport similarity.
+
 ## Sources and scope
 
 Use only current Subscriber Acquisition Discovery sources:
@@ -512,6 +533,11 @@ The XLSX must include these operator-facing sheets:
   signal or an already selected status, with live links, last analyzed run/time,
   latest event-question and latest route-recommendation dates, answerable/ask
   counts and member/commenter stats when collected.
+- `surface_backlog`: separate “where to look next” sheet for selected surfaces,
+  candidate surfaces with signal, and known sources that are still waiting for
+  linked-discussion/commentability resolve or a bounded scan. Existing
+  Telegram/VK event-monitoring sources should be visible here even before they
+  have useful comment profiles.
 - `goal_ask_event_details`: short candidate sheet for organizer-owned posts or
   contexts where the future action is to ask a useful clarification about an
   event.
