@@ -170,6 +170,7 @@ Runtime contract:
 - `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
 - no more than two visual medallion units are rendered for one Telegram event; item-level dimensions are allowed so a 7×4 composite still counts as one unit;
 - in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
+- the delayed Premium Telethon editor is also persisted as a `tg_premium_emoji_edit` outbox job after each `tg_event_publish` send/edit; the in-memory delayed task may complete first, but the durable row recovers deploy/restart losses and is throttled by `TG_PREMIUM_EMOJI_JOB_INTERVAL_SECONDS`;
 - no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
 - when a Telegram medallion block is present, the `Подробнее` footer follows directly after the final braille separator line (`⠀\n🔎 Подробнее`); when no medallion block is present, the post keeps the ordinary blank line before the footer;

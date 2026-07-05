@@ -73,6 +73,7 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 - Unit test: canonical event publisher awaits/runs the premium emoji editor path for event posts.
 - Production DB check after deploy: due no-post active/future `tg_event_publish` rows drain ahead of existing-message edit rows; `depends_on` still excludes `vk_sync` for active today/future rows.
 - Runtime log check: `tg_premium_emoji.edit_done` appears for newly sent/edited event posts without a delayed multi-minute public gap.
+- Unit tests: delayed event-post Premium/custom-emoji enrichment is persisted as a `tg_premium_emoji_edit` outbox job and due edit jobs are spaced to avoid FloodWait bursts.
 - Public smoke: verify a new `@kldevents` top-of-channel post after deploy and confirm premium emoji/medallion editor evidence.
 
 ### Required evidence
@@ -95,6 +96,7 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 - Separate new channel-top announcements from edit/reconciliation work in due-job ordering and spacing.
 - Keep Telegram's product-level daytime window and 10-minute cadence for real new posts, but do not let old edits spend that cadence.
 - Keep premium emoji / medallion enrichment delayed and rate-limited; do not run it synchronously inside bulk publication catch-up.
+- Persist delayed premium emoji / medallion enrichment in outbox so deploys/restarts cannot lose the in-memory scheduled edit; throttle due edit jobs separately from public post spacing.
 
 ## Follow-up Actions
 
@@ -137,10 +139,15 @@ Production audit after the operator report found that the Музей Миров�
 
 Compensating repair was required for already edited public messages whose wrong medallion block was inserted before this fix; delayed premium-editor retries alone were insufficient because the editor's normal idempotency path only inserts missing expected blocks and does not remove wrong historical blocks. The repair removed the wrong `ММО` block from `1907`, replaced the wrong second medallion on `1908`, and reran premium/medallion enrichment for messages skipped by the FloodWait/restart window.
 
+## Premium Edit Lost On Deploy — 2026-07-05 15:29 UTC
+
+A fresh photo-caption post `@kldevents/1941` was published at `2026-07-05 15:29:49 UTC` without Premium icons. The root cause was that `publish_tg_event_announcement()` scheduled the Premium/custom-emoji edit only as an in-memory delayed `asyncio.create_task()`. The production deploy at `2026-07-05 15:31 UTC` restarted the process before the delayed editor fired, so no `tg_premium_emoji.edit_done` line existed for message `1941`. The corrective action adds a durable `tg_premium_emoji_edit` outbox task after every `tg_event_publish` send/edit. The editor remains idempotent: if the in-memory task already edited the post, the outbox job finishes with no changes; if deploy/restart interrupts the delay, the outbox job performs the edit later. Due edit jobs are separately throttled so catch-up cannot produce a Telegram FloodWait burst.
+
 ## Prevention
 
 - Regression tests guard against edit jobs consuming the announcement lane.
 - Regression tests guard that short Telegram medallion acronyms such as `ММО` do not match inside ordinary words and still match when used as standalone aliases.
 - Medallion insertion now consumes the old blank separator before the `Подробнее` footer and replaces it with a single newline after the medallion block, preventing a visible empty row under medallions while leaving non-medallion posts unchanged.
+- Delayed Premium/custom-emoji edits for event posts are durable `tg_premium_emoji_edit` outbox rows; an in-memory delayed editor is no longer the only path, so deploys/restarts during the edit delay do not leave posts permanently un-enriched.
 - Incident record must be raised for any future changes to Telegram spacing, fresh-lane ordering, or premium/medallion editor scheduling.
 - Production closure requires proving that the next slots are real new top-of-channel posts when no-post events are waiting, not just any `tg_event_publish done` row.

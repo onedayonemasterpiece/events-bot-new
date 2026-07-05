@@ -14320,6 +14320,41 @@ async def enqueue_job(
         return "new"
 
 
+async def enqueue_tg_event_premium_emoji_edit_job(
+    db: Database | None,
+    event_id: int | None,
+    message_id: int | None,
+    *,
+    next_run_at: datetime | None = None,
+) -> str | None:
+    """Persist the delayed Premium/custom-emoji edit for a Telegram event post.
+
+    The original editor task runs in memory and can be lost on deploy/restart.
+    This outbox row is the durable recovery path; the editor itself is
+    idempotent, so it is safe if the in-memory task already completed first.
+    """
+
+    if db is None or event_id is None or message_id is None:
+        return None
+    try:
+        from tg_premium_emojis import premium_emoji_editor_enabled
+
+        if not premium_emoji_editor_enabled():
+            return None
+    except Exception:
+        logging.warning("premium emoji editor enabled check failed", exc_info=True)
+        return None
+    run_at = next_run_at or (datetime.now(timezone.utc) + _tg_premium_emoji_job_delay())
+    return await enqueue_job(
+        db,
+        int(event_id),
+        JobTask.tg_premium_emoji_edit,
+        payload={"message_id": int(message_id)},
+        next_run_at=run_at,
+        coalesce_key=f"{JobTask.tg_premium_emoji_edit.value}:{int(event_id)}",
+    )
+
+
 def _event_has_managed_vk_post(ev: Event) -> bool:
     existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
     if not existing_vk_url:
@@ -14519,6 +14554,40 @@ def _tg_event_publish_fresh_queue_horizon() -> timedelta:
     except (TypeError, ValueError):
         hours = 8.0
     return timedelta(hours=max(1.0, hours))
+
+
+def _tg_premium_emoji_edit_interval() -> timedelta:
+    """Minimum gap between durable Premium/custom-emoji edit jobs.
+
+    Ordinary `tg_event_publish` slots are already spaced at roughly 10 minutes,
+    but a restart can leave several delayed edit jobs due at once. Keep a
+    separate edit-only throttle so catch-up cannot trigger Telegram FloodWait.
+    """
+
+    raw = os.getenv("TG_PREMIUM_EMOJI_JOB_INTERVAL_SECONDS", "90")
+    try:
+        seconds = float(str(raw).strip())
+    except (TypeError, ValueError):
+        seconds = 90.0
+    return timedelta(seconds=max(15.0, seconds))
+
+
+def _tg_premium_emoji_job_delay() -> timedelta:
+    try:
+        from tg_premium_emojis import (
+            premium_emoji_editor_delay_seconds,
+            premium_emoji_editor_jitter_seconds,
+        )
+
+        delay = float(premium_emoji_editor_delay_seconds())
+        jitter = float(premium_emoji_editor_jitter_seconds())
+    except Exception:
+        logging.warning("premium emoji job delay config failed; using 150s", exc_info=True)
+        delay = 150.0
+        jitter = 0.0
+    if jitter > 0:
+        delay += random.SystemRandom().uniform(0.0, jitter)
+    return timedelta(seconds=max(0.0, delay))
 
 
 def _same_source_event_publish_interval() -> timedelta:
@@ -14772,6 +14841,57 @@ async def _defer_tg_event_publish_if_spacing_blocked(
         await session.commit()
         logging.info(
             "TG_EVENT spacing defer job_id=%s event_id=%s next_run_at=%s latest_anchor=%s",
+            job_id,
+            getattr(job, "event_id", None),
+            deferred_until.isoformat(),
+            latest_anchor.isoformat(),
+        )
+        return deferred_until
+    return None
+
+
+async def _defer_tg_premium_emoji_edit_if_spacing_blocked(
+    session,
+    job: JobOutbox,
+    *,
+    now: datetime | None = None,
+) -> datetime | None:
+    """Throttle durable Telegram Premium/custom-emoji edits after restarts."""
+
+    job_id = getattr(job, "id", None)
+    if not job_id:
+        return None
+    now_utc = _ensure_utc(now or datetime.now(timezone.utc))
+    interval = _tg_premium_emoji_edit_interval()
+    rows = (
+        await session.execute(
+            select(JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+            .where(
+                JobOutbox.task == JobTask.tg_premium_emoji_edit,
+                JobOutbox.id != int(job_id),
+                JobOutbox.status.in_([JobStatus.done, JobStatus.running]),
+                JobOutbox.updated_at >= now_utc - timedelta(hours=2),
+            )
+            .order_by(JobOutbox.updated_at.desc())
+            .limit(20)
+        )
+    ).all()
+    anchors = [
+        _ensure_utc(updated_at if status == JobStatus.done else (updated_at or next_run_at))
+        for status, next_run_at, updated_at in rows
+    ]
+    anchors = [anchor for anchor in anchors if anchor is not None]
+    if not anchors:
+        return None
+    latest_anchor = max(anchors)
+    deferred_until = latest_anchor + interval
+    if deferred_until > now_utc:
+        job.next_run_at = deferred_until
+        job.updated_at = now_utc
+        session.add(job)
+        await session.commit()
+        logging.info(
+            "TG_PREMIUM spacing defer job_id=%s event_id=%s next_run_at=%s latest_anchor=%s",
             job_id,
             getattr(job, "event_id", None),
             deferred_until.isoformat(),
@@ -16882,6 +17002,7 @@ TASK_LABELS = {
 JOB_TTL: dict[JobTask, int] = {
     JobTask.telegraph_build: 3600,
     JobTask.tg_event_publish: 3600,
+    JobTask.tg_premium_emoji_edit: 3600,
     JobTask.ics_publish: 3600,
     JobTask.tg_ics_post: 3600,
     JobTask.month_pages: 3600,
@@ -16892,6 +17013,7 @@ JOB_TTL: dict[JobTask, int] = {
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.telegraph_build: 900,
     JobTask.tg_event_publish: 180,
+    JobTask.tg_premium_emoji_edit: 180,
     JobTask.ics_publish: 60,
     JobTask.tg_ics_post: 60,
     JobTask.month_pages: 180,
@@ -16905,6 +17027,7 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
     JobTask.telegraph_build,
     JobTask.vk_sync,
     JobTask.tg_event_publish,
+    JobTask.tg_premium_emoji_edit,
     JobTask.ics_publish,
     JobTask.tg_ics_post,
 }
@@ -17215,6 +17338,7 @@ async def _run_due_jobs_once_locked(
         JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
         JobTask.tg_event_publish: 0,
+        JobTask.tg_premium_emoji_edit: 0,
         JobTask.ics_publish: 0,
         JobTask.tg_ics_post: 0,
         JobTask.month_pages: 1,
@@ -17519,6 +17643,23 @@ async def _run_due_jobs_once_locked(
                         job_id=obj.id,
                         task=obj.task.value,
                         reason="tg_spacing",
+                        next_run_at=deferred_to.isoformat(),
+                    )
+                    continue
+            if obj.task == JobTask.tg_premium_emoji_edit:
+                deferred_to = await _defer_tg_premium_emoji_edit_if_spacing_blocked(
+                    session,
+                    obj,
+                    now=datetime.now(timezone.utc),
+                )
+                if deferred_to:
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="tg_premium_spacing",
                         next_run_at=deferred_to.isoformat(),
                     )
                     continue
@@ -21016,7 +21157,59 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             source_hash=source_hash,
         )
         logline("TG", event_id, "event done", url=url)
+    if post_id:
+        await enqueue_tg_event_premium_emoji_edit_job(db, event_id, int(post_id))
     return True
+
+
+async def job_edit_tg_event_premium_emoji(event_id: int, db: Database, bot: Bot | None) -> bool:
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+    if not ev:
+        return False
+    post_id = getattr(ev, "tg_event_post_id", None)
+    if not post_id:
+        logging.info("job_edit_tg_event_premium_emoji: skip no post event_id=%s", event_id)
+        return False
+    target = _tg_event_channel_target()
+    if not target:
+        logging.info("job_edit_tg_event_premium_emoji: skip no target event_id=%s", event_id)
+        return False
+    try:
+        from tg_premium_emojis import edit_messages_with_env, premium_emoji_editor_enabled
+
+        if not premium_emoji_editor_enabled():
+            return False
+        medallion_block = event_medallion_html_block(ev)
+        results = await edit_messages_with_env(
+            [(target, int(post_id))],
+            delay_seconds=0,
+            medallion_html_block=medallion_block or None,
+        )
+        logging.info(
+            "tg_premium_emoji.edit_done context=tg_event_publish_durable results=%s",
+            [
+                {
+                    "chat": item.chat,
+                    "message_id": item.message_id,
+                    "edited": item.edited,
+                    "replacements": item.replacements,
+                    "error": item.error,
+                }
+                for item in results
+            ],
+        )
+        errors = [item.error for item in results if item.error]
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        return any(bool(item.edited or item.replacements) for item in results)
+    except Exception:
+        logging.exception(
+            "tg_premium_emoji.edit_failed context=tg_event_publish_durable event_id=%s post_id=%s",
+            event_id,
+            post_id,
+        )
+        raise
 
 
 async def _persist_vk_source_post_result(
@@ -21284,6 +21477,7 @@ JOB_HANDLERS = {
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
     "tg_event_publish": job_publish_tg_event_post,
+    "tg_premium_emoji_edit": job_edit_tg_event_premium_emoji,
     "ics_publish": ics_publish,
     "tg_ics_post": tg_ics_post,
     "month_pages": job_month_pages_debounced,

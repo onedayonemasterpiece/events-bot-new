@@ -7,7 +7,9 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+
 - **CherryFlash / guide excursions**: restored the approved SVG Repo icon assets in the promo scene and kept guide promo dates in the human CherryFlash format (`10 ИЮЛЯ • 11:00`) instead of numeric `10.07 11:00`.
+- **Telegram event Premium emojis**: made delayed event-post Premium/custom-emoji enrichment durable through the outbox and throttled catch-up edit jobs, so deploys/restarts no longer lose the scheduled medallion/icon edit.
 - **CherryFlash / guide excursions**: corrected the integrated guide-excursion renderer to follow the approved v7 geometry/timing exactly, including the P0 reveal/motion start instead of a static first card.
 - **Telegram event medallions**: removed the extra blank line between an inserted custom-emoji medallion block and the `Подробнее` footer; posts without medallions keep the normal blank separator before the footer.
 - **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.

@@ -1264,6 +1264,7 @@ class JobTask(str, Enum):
     telegraph_build = "telegraph_build"
     vk_sync = "vk_sync"
     tg_event_publish = "tg_event_publish"
+    tg_premium_emoji_edit = "tg_premium_emoji_edit"
     ics_publish = "ics_publish"
     tg_ics_post = "tg_ics_post"
     month_pages = "month_pages"

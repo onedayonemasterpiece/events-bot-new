@@ -362,6 +362,140 @@ async def test_due_tg_event_publish_backlog_is_spaced_at_execution(tmp_path, mon
         main._ensure_utc(first_job.updated_at) + timedelta(minutes=10)
     )
 
+
+@pytest.mark.asyncio
+async def test_durable_tg_premium_emoji_edit_job_is_enqueued(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_PREMIUM_EMOJI_EDITOR", "1")
+    monkeypatch.setenv("TG_PREMIUM_EMOJI_EDIT_DELAY_SECONDS", "0")
+    monkeypatch.setenv("TG_PREMIUM_EMOJI_EDIT_JITTER_SECONDS", "0")
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        ev = Event(
+            title="Premium recovery",
+            description="d",
+            date="2026-07-10",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        event_id = int(ev.id)
+
+    result = await main.enqueue_tg_event_premium_emoji_edit_job(
+        db,
+        event_id,
+        1941,
+        next_run_at=now,
+    )
+
+    assert result == "new"
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.tg_premium_emoji_edit,
+                )
+            )
+        ).scalar_one()
+    assert job.status == JobStatus.pending
+    assert job.payload == {"message_id": 1941}
+    assert job.coalesce_key == f"{JobTask.tg_premium_emoji_edit.value}:{event_id}"
+
+
+@pytest.mark.asyncio
+async def test_due_tg_premium_emoji_edit_jobs_are_spaced(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_PREMIUM_EMOJI_JOB_INTERVAL_SECONDS", "90")
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    async with db.get_session() as session:
+        first = Event(
+            title="First premium",
+            description="d",
+            date="2026-07-10",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+        )
+        second = Event(
+            title="Second premium",
+            description="d",
+            date="2026-07-11",
+            time="13:00",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(first)
+        session.add(second)
+        await session.commit()
+        await session.refresh(first)
+        await session.refresh(second)
+        session.add(
+            JobOutbox(
+                event_id=first.id,
+                task=JobTask.tg_premium_emoji_edit,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=second.id,
+                task=JobTask.tg_premium_emoji_edit,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+        first_id = int(first.id)
+        second_id = int(second.id)
+
+    calls: list[int] = []
+
+    async def fake_premium_edit(eid, db_obj, bot_obj):
+        calls.append(eid)
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {"tg_premium_emoji_edit": fake_premium_edit})
+
+    processed = await main._run_due_jobs_once(db, None)
+
+    assert processed == 1
+    assert calls == [first_id]
+    async with db.get_session() as session:
+        first_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == first_id,
+                    JobOutbox.task == JobTask.tg_premium_emoji_edit,
+                )
+            )
+        ).scalar_one()
+        second_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == second_id,
+                    JobOutbox.task == JobTask.tg_premium_emoji_edit,
+                )
+            )
+        ).scalar_one()
+
+    assert first_job.status == JobStatus.done
+    assert second_job.status == JobStatus.pending
+    assert main._ensure_utc(second_job.next_run_at) >= (
+        main._ensure_utc(first_job.updated_at) + timedelta(seconds=90)
+    )
+
+
 @pytest.mark.asyncio
 async def test_tg_event_publish_new_posts_outrank_existing_post_edits(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
