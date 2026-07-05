@@ -438,6 +438,10 @@ The XLSX must include these operator-facing sheets:
   comment/post-context in the monitoring window, with `criteria_status_ru`
   explaining whether it matched reply/ask-context criteria or why it was
   rejected. This is the place to audit “what comments were processed last time”.
+  It must never put a source post into a column named “Комментарий”: operator
+  columns are split into `current_comment_text`, `reply_parent_comment_text`,
+  `source_post_text`, `current_post_text`, `evidence_type_ru` and
+  `future_goal_ru`.
 - `rejected_noise_examples`: diagnostic noise only. “Lost phone / found items”
   style comments may appear here because negative vectors are used after
   collection/embedding as evidence of filtering; they must not be promoted into
@@ -466,8 +470,12 @@ The XLSX must include these operator-facing sheets:
   count and clickable examples. Rows with final `selection_status=selected` are
   filled light green; rows newly discovered/touched in the last run are filled
   light yellow when they are not already selected.
-- one `eligible_<model>` sheet per embedding model, so e5-base and bge-m3 can be
-  inspected independently instead of only seeing the recommended gate model.
+- one `answerable_<model>` sheet per embedding model for successful reply-like
+  questions, and one `ask_contexts_<model>` sheet per model for source posts /
+  organizer-owned contexts where the acquisition action is to ask a clarification
+  ourselves. These sheets must use the same split text columns as
+  `processed_comments_last_run`, so it is visually clear whether the row is a
+  user comment, a reply-parent comment, or the original post/announcement.
 - `question_patterns`: grouped question patterns with counts and examples,
   e.g. route with children, route transport, ticket/price, registration/seats,
   age/children, location/entry, Pushkin/free/accessibility and organizer
@@ -484,6 +492,17 @@ The XLSX must include these operator-facing sheets:
   retrieval queries. The per-candidate `top_intent_phrase` is the closest phrase
   from this catalog for the candidate’s `intent_set`.
 - `manual_review`: mixed calibration sample with empty human-label columns.
+
+The report must expose the planned future acquisition goal for each candidate:
+`event_recommendation_reply` = answer event questions,
+`trip_route_poi_recommendation` = answer with route/POI recommendation,
+`organizer_visibility_clarification` / source-post contexts = ask event
+organizers clarifying questions, `event_site_search_or_listing` = point to
+event search/afisha/collections, `organizer_submission_or_partnership` = tell
+organizers where to add events or discuss info-partnership, and
+`badge_filter_need` = answer with quick event filters such as children/free/
+Pushkin-card/accessibility. Sticker strategy remains a separate discovery lane,
+not a semantic reply candidate in this workbook.
 
 Human-facing XLSX formatting should use Russian column labels, grouped header
 bands, `dd.mm.yyyy` date strings and one-decimal normalized rates where possible.

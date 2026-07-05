@@ -15,6 +15,10 @@
 
 ### Changed
 
+- Clarified Subscriber Acquisition XLSX report semantics: report sheets now use
+  operator-facing “площадка”, split user comments, reply-parent comments and
+  source post/announcement text into separate columns, and expose the future
+  acquisition goal for each semantic candidate.
 - Expanded Subscriber Acquisition Discovery deep/night scan budgets 10x for surfaces, TG/VK messages/comments, profile discovery and Kaggle runtime/launcher timeouts so the next run can produce meaningful cumulative deltas.
 - Reworded Subscriber Acquisition report terminology from “поверхности с профилем” to operator-facing “площадки с анализом комментариев” and added explicit +/−/touched delta counters to `summary_ru`/`summary_counts`.
 - Subscriber Acquisition semantic retrieval now separates the default vector

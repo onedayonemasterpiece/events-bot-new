@@ -1169,7 +1169,7 @@ def _surface_decision_summaries(
                 f"{profile.get('days_since_latest_activity') or '?'} дней назад; не выбирать сейчас, только revival-watch"
             )
         elif surface_scope_noise:
-            summary_ru = f"поверхность не по теме acquisition ({surface_scope_noise}); не выбирать для ответов/маршрутов/событий"
+            summary_ru = f"площадка не по теме acquisition ({surface_scope_noise}); не выбирать для ответов/маршрутов/событий"
         increment_status = _surface_increment_status(profile, {
             "comments_embedded": profile.get("comments_embedded"),
         })
@@ -1199,7 +1199,11 @@ def _surface_decision_summaries(
             "analysis_max_comment_age_days": profile.get("analysis_max_comment_age_days"),
             "stale_activity_days": profile.get("stale_activity_days"),
             "unique_commenters": profile.get("unique_commenters"),
-            "unique_commenters_note": "" if profile.get("unique_commenters_observed") else "not_collected_in_this_run",
+            "unique_commenters_note": (
+                "уникальные авторы комментариев/сообщений за указанный период анализа площадки"
+                if profile.get("unique_commenters_observed")
+                else "не собрано в этом run"
+            ),
             "comments_total": profile.get("comments_total"),
             "comments_embedded": profile.get("comments_embedded"),
             "comments_per_day": profile.get("comments_per_day"),
@@ -1544,7 +1548,7 @@ def _surface_inventory_rows(
             "event_questions": summary.get("event_questions") or 0,
             "event_site_search_questions": summary.get("event_site_search_questions") or 0,
             "ask_clarification_contexts": summary.get("ask_clarification_contexts") or 0,
-            "summary_ru": summary.get("summary_ru") or "В этом прогоне полезных сигналов не найдено или поверхность не попала в comment retrieval.",
+            "summary_ru": summary.get("summary_ru") or "В этом прогоне полезных сигналов не найдено или площадка не попала в comment retrieval.",
         })
     return sorted(rows, key=lambda r: (
         {"selected": 0, "candidate": 1, "rejected": 2}.get(str(r.get("selection_status")), 3),
@@ -1720,12 +1724,12 @@ def _dashboard_summary_rows(
         {"section": "Итог", "metric": "Где есть хотя бы слабый смысл", "value": len(monitored)},
         {"section": "Итог", "metric": "Где ничего не найдено/не попало", "value": len(no_signal)},
         {"section": "Как читать", "metric": "surface_summary", "value": "Главный лист: где мониторить, сколько вопросов и как часто они встречаются."},
-        {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список поверхностей из payload/run: видно, где ничего не нашлось или поверхность не анализировалась."},
+        {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список площадок из payload/run: видно, где ничего не нашлось или площадка не анализировалась."},
         {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено и явные +/−/затронуто по последнему запуску."},
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
         {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
         {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
-        {"section": "Freshness", "metric": "Активность", "value": f"Для включения в мониторинг учитываются свежие комментарии до {_max_comment_age_days()} дней; поверхности без активности больше {_stale_activity_days()} дней отклоняются сейчас, но исторические строки остаются для эталонных вопросов и контроля смыслов."},
+        {"section": "Freshness", "metric": "Активность", "value": f"Для включения в мониторинг учитываются свежие комментарии до {_max_comment_age_days()} дней; площадки без активности больше {_stale_activity_days()} дней отклоняются сейчас, но исторические строки остаются для эталонных вопросов и контроля смыслов."},
     ]
 
 
@@ -1753,13 +1757,13 @@ _RU_HEADERS = {
     "note_ru": "Пояснение",
     "score": "Оценка",
     "rank_global": "Ранг общий",
-    "rank_within_surface": "Ранг в группе",
-    "surface_key": "ID поверхности",
+    "rank_within_surface": "Ранг в площадке",
+    "surface_key": "ID площадки",
     "platform": "Платформа",
     "surface_type": "Тип (техн.)",
     "surface_type_ru": "Тип площадки",
     "surface_title": "Название",
-    "surface_url": "Ссылка",
+    "surface_url": "Ссылка на площадку/чат",
     "status": "Статус",
     "selection_status": "Итоговый статус",
     "scan_state": "Сканирование",
@@ -1776,11 +1780,17 @@ _RU_HEADERS = {
     "comment_age_days": "Возраст, дней",
     "candidate_usage_scope": "Роль строки",
     "is_within_monitoring_window": "В окне мониторинга?",
-    "context_url": "Ссылка на контекст",
-    "text_snapshot": "Комментарий",
-    "analysis_context_snapshot": "Контекст поста/родителя",
-    "source_post_text_snapshot": "Исходный пост",
-    "reply_parent_text_snapshot": "Родительский комментарий",
+    "context_url": "Ссылка на конкретный комментарий/пост",
+    "text_snapshot": "Текущий текст (комментарий или пост)",
+    "analysis_context_snapshot": "Общий контекст для модели",
+    "current_comment_text": "Текущий комментарий",
+    "current_post_text": "Текущий пост / анонс",
+    "source_post_text": "Пост, под которым написан комментарий",
+    "source_post_text_snapshot": "Пост, под которым написан комментарий",
+    "reply_parent_comment_text": "Комментарий-родитель (если это reply)",
+    "reply_parent_text_snapshot": "Комментарий-родитель (если это reply)",
+    "evidence_type_ru": "Что это за текст",
+    "future_goal_ru": "Будущая цель",
     "top_intent_phrase": "Ближайшая модельная фраза",
     "positive_score": "Похожесть +",
     "negative_score": "Похожесть −",
@@ -1794,9 +1804,9 @@ _RU_HEADERS = {
     "pre_llm_candidate_eligible": "В LLM-gate?",
     "llm_gate_selection_basis": "Основа отбора в LLM",
     "recommendation": "Рекомендация",
-    "members_or_subscribers": "Участники",
-    "period_min_created_at": "Период с",
-    "period_max_created_at": "Период по",
+    "members_or_subscribers": "Участники/подписчики (если собрано)",
+    "period_min_created_at": "Период анализа с",
+    "period_max_created_at": "Период анализа по",
     "period_days": "Дней",
     "period_label": "Период",
     "latest_comment_at": "Последний комментарий",
@@ -1806,7 +1816,7 @@ _RU_HEADERS = {
     "freshness_status": "Свежесть",
     "analysis_max_comment_age_days": "Окно анализа, дней",
     "stale_activity_days": "Порог неактивности, дней",
-    "unique_commenters": "Уникальные авторы",
+    "unique_commenters": "Уникальные авторы комментариев за период",
     "unique_commenters_note": "Авторы: примечание",
     "comments_total": "Всего комментариев",
     "comments_embedded": "В анализе",
@@ -1860,7 +1870,7 @@ _RU_HEADERS = {
     "real_question_examples_total": "Реальных вопросов",
     "monitoring_candidate_examples": "Свежих примеров",
     "historical_calibration_examples": "Исторических примеров",
-    "surfaces_count": "Поверхностей",
+    "surfaces_count": "Площадок",
     "source_note_ru": "Пояснение",
     "delta_type": "Тип дельты",
     "decision_change_ru": "Что изменилось / как читать",
@@ -1891,6 +1901,8 @@ def _format_datetime_ru(value: Any) -> Any:
 
 
 def _xlsx_value(header: str, value: Any) -> Any:
+    if header == "members_or_subscribers" and (value is None or value == ""):
+        return "не собрано"
     if value is None:
         return ""
     if isinstance(value, (list, dict)):
@@ -1934,6 +1946,40 @@ def _append_grouped_header(ws: Any, headers: list[str], groups: dict[str, str] |
         start = end + 1
 
 
+_FUTURE_GOAL_RU = {
+    "trip_route_poi_recommendation": "отвечать на вопросы рекомендацией маршрута",
+    "event_recommendation_reply": "отвечать на вопросы о событиях",
+    "organizer_visibility_clarification": "задавать уточняющие вопросы о событиях",
+    "event_site_search_or_listing": "отвечать ссылкой на афишу/поиск/подборку событий",
+    "organizer_submission_or_partnership": "подсказывать организаторам, куда добавить событие / инфопартнёрство",
+    "badge_filter_need": "отвечать подборкой или фильтром событий: детям, бесплатно, Пушкинская карта и т.п.",
+}
+
+
+def _display_row(row: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(row)
+    text = str(enriched.get("text_snapshot") or enriched.get("text") or "")
+    source_post = str(enriched.get("source_post_text_snapshot") or "")
+    parent = str(enriched.get("reply_parent_text_snapshot") or "")
+    is_source_post = _is_source_post_context(enriched)
+    action_type = str(enriched.get("candidate_action_type") or "")
+    if not action_type:
+        action_type = _action_for_intent(str(enriched.get("intent_set") or ""))
+    if is_source_post:
+        enriched.setdefault("evidence_type_ru", "исходный пост/анонс, не комментарий")
+        enriched.setdefault("current_comment_text", "")
+        enriched.setdefault("current_post_text", text)
+        enriched.setdefault("source_post_text", text or source_post)
+    else:
+        enriched.setdefault("evidence_type_ru", "пользовательский комментарий/сообщение")
+        enriched.setdefault("current_comment_text", text)
+        enriched.setdefault("current_post_text", "")
+        enriched.setdefault("source_post_text", source_post)
+    enriched.setdefault("reply_parent_comment_text", parent)
+    enriched.setdefault("future_goal_ru", _FUTURE_GOAL_RU.get(action_type, "диагностика/не выбрано для будущего действия"))
+    return enriched
+
+
 def _append_data_rows(
     ws: Any,
     rows: list[dict[str, Any]],
@@ -1947,12 +1993,13 @@ def _append_data_rows(
     selected_fill = PatternFill("solid", fgColor="C6EFCE")
     increment_fill = PatternFill("solid", fgColor="FFF2CC")
     for row in rows:
-        ws.append([_xlsx_value(h, row.get(h)) for h in headers])
+        display_row = _display_row(row)
+        ws.append([_xlsx_value(h, display_row.get(h)) for h in headers])
         if style == "surface":
             fill = None
-            if str(row.get("selection_status") or "") == "selected":
+            if str(display_row.get("selection_status") or "") == "selected":
                 fill = selected_fill
-            elif _is_counted_increment_status(row.get("increment_status")):
+            elif _is_counted_increment_status(display_row.get("increment_status")):
                 fill = increment_fill
             if fill is not None:
                 for cell in ws[ws.max_row]:
@@ -1967,9 +2014,9 @@ def _append_data_rows(
                 for header in delta_headers:
                     if header in headers:
                         ws.cell(ws.max_row, headers.index(header) + 1).fill = increment_fill
-        if hyperlink_field and row.get(hyperlink_field):
+        if hyperlink_field and display_row.get(hyperlink_field):
             url_cell = ws.cell(ws.max_row, headers.index(hyperlink_field) + 1)
-            url_cell.hyperlink = str(row.get(hyperlink_field))
+            url_cell.hyperlink = str(display_row.get(hyperlink_field))
             url_cell.style = "Hyperlink"
 
 
@@ -2050,13 +2097,15 @@ def _write_xlsx(
     headers = [
         "label", "action_class", "is_actionable_reply_opportunity", "false_positive_type", "model_disagreement_bucket",
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
-        "relation", "is_post", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
+        "relation", "is_post", "evidence_type_ru", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url",
+        "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+        "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
         "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible", "llm_gate_selection_basis",
     ]
-    manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Поверхность" for h in headers[10:17]} | {h: "Текст и контекст" for h in headers[17:22]} | {h: "Решение" for h in headers[22:]}
+    manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Площадка" for h in headers[10:20]} | {h: "Текст и контекст" for h in headers[20:25]} | {h: "Решение" for h in headers[25:]}
     _append_grouped_header(ws, headers, manual_groups)
     _append_data_rows(ws, rows, headers, hyperlink_field="context_url")
-    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 16, 12, 45, 70, 70, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
+    for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 28, 16, 18, 14, 28, 48, 80, 70, 90, 90, 54, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
         ws.column_dimensions[get_column_letter(idx)].width = width
     ws.freeze_panes = "A3"
 
@@ -2092,15 +2141,16 @@ def _write_xlsx(
         processed_headers = [
             "criteria_status_ru", "criteria_status", "analysis_kind", "model_name", "score", "rank_global",
             "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
-            "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "intent_set",
+            "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
+            "future_goal_ru", "top_intent_phrase", "intent_set",
             "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
             "pre_llm_candidate_eligible", "llm_gate_selection_basis",
         ]
-        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:6]} | {h: "Где найдено" for h in processed_headers[6:13]} | {h: "Комментарий/контекст" for h in processed_headers[13:16]} | {h: "Почему принято/отклонено" for h in processed_headers[16:]}
+        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:6]} | {h: "Где найдено" for h in processed_headers[6:13]} | {h: "Текст и контекст" for h in processed_headers[13:20]} | {h: "Почему принято/отклонено" for h in processed_headers[20:]}
         _append_grouped_header(processed, processed_headers, processed_groups)
         _append_data_rows(processed, processed_comment_rows, processed_headers, hyperlink_field="context_url")
         processed.freeze_panes = "A3"
-        for idx, width in enumerate([62, 30, 16, 34, 12, 12, 30, 10, 18, 22, 10, 18, 14, 48, 90, 90, 60, 28, 34, 14, 30, 18, 18, 34], start=1):
+        for idx, width in enumerate([62, 30, 16, 34, 12, 12, 30, 10, 18, 22, 10, 18, 14, 48, 28, 90, 70, 90, 90, 54, 60, 28, 34, 14, 30, 18, 18, 34], start=1):
             processed.column_dimensions[get_column_letter(idx)].width = width
 
     if rejected_noise_rows is not None:
@@ -2110,14 +2160,14 @@ def _write_xlsx(
         noise = wb.create_sheet("rejected_noise_examples", noise_index)
         noise_headers = [
             "criteria_status_ru", "criteria_status", "analysis_kind", "surface_key", "platform", "surface_type",
-            "relation", "created_at", "context_url", "text_snapshot", "analysis_context_snapshot",
+            "relation", "created_at", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
             "top_intent_phrase", "score", "positive_score", "negative_score", "candidate_noise_type",
         ]
-        noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Шум/диагностика" for h in noise_headers[9:]}
+        noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Текст и контекст" for h in noise_headers[9:14]} | {h: "Шум/диагностика" for h in noise_headers[14:]}
         _append_grouped_header(noise, noise_headers, noise_groups)
         _append_data_rows(noise, rejected_noise_rows, noise_headers, hyperlink_field="context_url")
         noise.freeze_panes = "A3"
-        for idx, width in enumerate([62, 30, 16, 30, 10, 18, 22, 18, 48, 90, 90, 60, 12, 12, 12, 30], start=1):
+        for idx, width in enumerate([62, 30, 16, 30, 10, 18, 22, 18, 48, 28, 90, 70, 90, 90, 60, 12, 12, 12, 30], start=1):
             noise.column_dimensions[get_column_letter(idx)].width = width
 
     if surface_summaries:
@@ -2135,7 +2185,7 @@ def _write_xlsx(
             "filtered_noise_contexts", "relation_counts_json", "unique_commenters_note", "answerable_examples", "ask_question_examples",
         ]
         surf_groups = {
-            **{h: "Поверхность" for h in surf_headers[:8]},
+            **{h: "Площадка" for h in surf_headers[:8]},
             **{h: "Период, свежесть и объём" for h in surf_headers[8:25]},
             **{h: "Потенциал" for h in surf_headers[25:39]},
             **{h: "Пояснения" for h in surf_headers[35:]},
@@ -2155,7 +2205,7 @@ def _write_xlsx(
             "comments_embedded", "answerable_question_candidates",
             "route_poi_questions", "event_questions", "event_site_search_questions", "ask_clarification_contexts", "summary_ru",
         ]
-        inv_groups = {h: "Поверхность" for h in inv_headers[:9]} | {h: "Результат анализа" for h in inv_headers[9:]}
+        inv_groups = {h: "Площадка" for h in inv_headers[:9]} | {h: "Результат анализа" for h in inv_headers[9:]}
         _append_grouped_header(inv, inv_headers, inv_groups)
         _append_data_rows(inv, surface_inventory, inv_headers, hyperlink_field="surface_url", style="surface")
         inv.freeze_panes = "A3"
@@ -2189,15 +2239,16 @@ def _write_xlsx(
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "llm_gate_selection_basis", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+            "llm_gate_selection_basis", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+            "top_intent_phrase", "destination_hint", "transport_hint",
         ]
-        ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Поверхность" for h in ex_headers[4:13]} | {h: "Комментарий и контекст" for h in ex_headers[13:17]} | {h: "Действие" for h in ex_headers[17:]}
+        ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Площадка" for h in ex_headers[4:13]} | {h: "Решение" for h in ex_headers[13:17]} | {h: "Текст и контекст" for h in ex_headers[17:24]} | {h: "Действие" for h in ex_headers[24:]}
         _append_grouped_header(ex, ex_headers, ex_groups)
         if not example_rows:
             ex.append(["Нет успешных вопросов/сообщений, по которым можно доказать потенциальный ответ, в этом run."])
         _append_data_rows(ex, example_rows, ex_headers, hyperlink_field="context_url")
         ex.freeze_panes = "A3"
-        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
+        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 34, 30, 45, 48, 28, 90, 70, 90, 90, 54, 55, 22, 18], start=1):
             ex.column_dimensions[get_column_letter(idx)].width = width
 
     for model_name, context_rows in (model_ask_contexts or {}).items():
@@ -2212,15 +2263,16 @@ def _write_xlsx(
         ctx_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "llm_gate_selection_basis", "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "destination_hint", "transport_hint",
+            "llm_gate_selection_basis", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+            "top_intent_phrase", "destination_hint", "transport_hint",
         ]
-        ctx_groups = {h: "Скоринг" for h in ctx_headers[:4]} | {h: "Поверхность" for h in ctx_headers[4:13]} | {h: "Это пост/контекст для вопроса, не user-comment reply" for h in ctx_headers[13:18]} | {h: "Действие" for h in ctx_headers[18:]}
+        ctx_groups = {h: "Скоринг" for h in ctx_headers[:4]} | {h: "Площадка" for h in ctx_headers[4:13]} | {h: "Решение" for h in ctx_headers[13:17]} | {h: "Это пост/контекст для вопроса, не user-comment reply" for h in ctx_headers[17:24]} | {h: "Действие" for h in ctx_headers[24:]}
         _append_grouped_header(ctx, ctx_headers, ctx_groups)
         if not context_rows:
             ctx.append(["Нет контекстов постов, по которым можно было бы самим задать уточняющий вопрос организатору, в этом run."])
         _append_data_rows(ctx, context_rows, ctx_headers, hyperlink_field="context_url")
         ctx.freeze_panes = "A3"
-        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 45, 80, 80, 55, 22, 18], start=1):
+        for idx, width in enumerate([34, 12, 12, 16, 30, 10, 18, 18, 10, 12, 28, 30, 24, 34, 30, 45, 48, 28, 90, 70, 90, 90, 54, 55, 22, 18], start=1):
             ctx.column_dimensions[get_column_letter(idx)].width = width
 
     if question_patterns is not None:

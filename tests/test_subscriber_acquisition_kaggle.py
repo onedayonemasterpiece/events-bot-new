@@ -537,7 +537,17 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
                 "analysis_kind": "user_comment",
                 "context_url": "https://vk.com/wall-1_2?reply=3",
                 "text_snapshot": "Куда сходить?",
-            }
+                "source_post_text_snapshot": "Анонс концерта",
+            },
+            {
+                "criteria_status_ru": "это исходный пост/контекст",
+                "criteria_status": "rejected_source_post_context",
+                "analysis_kind": "post_context",
+                "context_url": "https://vk.com/wall-1_2",
+                "relation": "vk_social_wall_post",
+                "is_post": True,
+                "text_snapshot": "Анонс события, по которому можно спросить детали",
+            },
         ],
         rejected_noise_rows=[
             {
@@ -557,6 +567,19 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
     assert workbook["surface_summary"]["A3"].fill.fgColor.rgb == "00C6EFCE"
     assert workbook["full_surface_list"]["A3"].fill.fgColor.rgb == "00FFF2CC"
     assert workbook["summary_counts"]["G3"].fill.fgColor.rgb == "00FFF2CC"
+    processed = workbook["processed_comments_last_run"]
+    headers = [cell.value for cell in processed[2]]
+    assert "Текущий комментарий" in headers
+    assert "Текущий пост / анонс" in headers
+    assert "Комментарий" not in headers
+    comment_col = headers.index("Текущий комментарий") + 1
+    post_col = headers.index("Текущий пост / анонс") + 1
+    source_post_col = headers.index("Пост, под которым написан комментарий") + 1
+    assert processed.cell(3, comment_col).value == "Куда сходить?"
+    assert processed.cell(3, post_col).value in (None, "")
+    assert processed.cell(3, source_post_col).value == "Анонс концерта"
+    assert processed.cell(4, comment_col).value in (None, "")
+    assert processed.cell(4, post_col).value == "Анонс события, по которому можно спросить детали"
 
 
 def test_comment_retrieval_increment_requires_verified_run_id(monkeypatch):
