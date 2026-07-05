@@ -1,0 +1,160 @@
+# О Калининграде говорят / Region Talk Channel
+
+> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP-0 docs-first design**; no Telegram channel, VK community, production crawler, YDB tables, tokens or publishing are created in this pass.
+
+## Document map
+
+- [Source discovery](source-discovery.md) — как находить и оценивать внешние русскоязычные источники.
+- [Post discovery](post-discovery.md) — мониторинг утверждённых источников, semantic bank v1 и candidate scoring.
+- [Image postcardness](image-postcardness.md) — каскад оценки фотографий и VLM JSON contract.
+- [YDB schema draft](ydb-schema.md) — все новые persistent-данные фичи живут в YDB, не в SQLite.
+- [MVP candidate report](mvp-candidate-report.md) — XLSX/CSV/JSON/Markdown результат для ручного просмотра.
+- [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
+- [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
+- [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
+- [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
+- [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and open questions.
+
+## Product intent
+
+**«О Калининграде говорят»** — автономный discovery/publishing pipeline, который показывает, как о Калининградской области говорят за пределами региона: тревел-блогеры, авторские каналы, travel/architecture/history/nature/city-life сообщества, маршруты выходного дня, море, гастрономия и визуально красивые места.
+
+Формат канала **не** должен выглядеть как “мы украли чужой пост”. Целевой формат:
+
+- короткое собственное summary;
+- что именно в регионе отметил источник;
+- какие смыслы были позитивными, нейтрально-полезными или конструктивно-критичными;
+- ссылка на оригинальный источник;
+- визуальная карточка/карусель только если `rights_policy` это разрешает.
+
+Это **не** новостной канал, не происшествия, не политика, не региональный агрегатор и не трэш. Это curated discovery внешних позитивных, полезных или mixed-but-valuable публикаций о регионе.
+
+## Scope summary
+
+Pipeline должен уметь:
+
+1. Находить внерегиональные русскоязычные Telegram/VK/web-источники, которые потенциально пишут о Калининградской области.
+2. Мониторить новые посты только у `accepted`/`candidate` источников с курсорами и `next_fetch_after`.
+3. Находить содержательные посты о регионе, а не keyword-only совпадения.
+4. Отсекать новости, трэш, политику, происшествия, low-quality ads, repost farms и unsafe visuals.
+5. Оценивать позитивные, нейтрально-полезные и конструктивно-негативные смыслы.
+6. Оценивать фотографии: красивость, открыточность, региональную визуальную релевантность, техническое качество и publication safety.
+7. Сохранять source/post/media/candidate/run state в **YDB sidecar**.
+8. Формировать MVP candidate report / favorites table, прежде всего **XLSX** для ручного просмотра.
+9. Запускать final LLM/VLM verifier только на top candidates.
+10. В будущем генерировать короткий пост, ставить в очередь, публиковать в Telegram и VK и вести ledger.
+
+## Non-goals for MVP
+
+- Не создавать сейчас Telegram-канал и VK-сообщество.
+- Не писать production-код и не подключать реальную автопубликацию в docs-first pass.
+- Не мониторить личные профили как основной источник.
+- Не делать новости, происшествия, политику, скандалы или региональные калининградские новостные паблики.
+- Не копировать полные тексты чужих постов.
+- Не публиковать и не модифицировать чужие фото без `rights_policy`.
+- Не включать fully autonomous publish без dry-run/shadow mode и manual gates.
+- Не делать LLM/VLM на каждый пост/картинку без vector/scoring cascade.
+- Не хранить новые persistent-данные фичи в SQLite; SQLite можно читать только как legacy/input snapshot, если это уже принято проектом.
+
+## Relationship to existing repo architecture
+
+### Subscriber Acquisition
+
+Related: [`docs/features/subscriber-acquisition/`](../subscriber-acquisition/README.md).
+
+Reuse product discipline: social-source discovery, Telegram/VK surface discovery, link/forward/mention graph, anti-spam caution, sparse high-signal actions and manual review before public actions. Difference: subscriber acquisition ищет места для точечных рекомендаций событий, а Region Talk ищет внешние **посты о регионе** для curated channel/report.
+
+### Post Metrics & Popularity
+
+Related: [`docs/features/post-metrics/README.md`](../post-metrics/README.md), `source_parsing/post_metrics.py`.
+
+Post metrics remain the quantitative layer (`views`, `likes`, comments/reposts where available, per-source baselines). Region Talk is the qualitative discovery/curation layer. `engagement_normalized_score` may read metrics as a weak tie-breaker, but strong media + semantic fit + rights/safety gates dominate.
+
+### Unsigned personalization semantic retrieval
+
+Related: [`semantic-vector-retrieval.md`](../unsigned-personalization/semantic-vector-retrieval.md), [`event-detail-related.md`](../unsigned-personalization/event-detail-related.md), [`event-detail-related-probe.md`](../unsigned-personalization/event-detail-related-probe.md).
+
+Reuse the architectural pattern:
+
+```text
+vector retrieval = recall stage
+verifier = precision stage
+heavy computation offline/Kaggle
+public/future publish hot path has no provider/vector calls
+```
+
+MVP vector recall must use **dual-model enrichment**, not an A/B choice: run both `intfloat/multilingual-e5-base` and `BAAI/bge-m3`, merge/union their top-K semantic matches and keep per-model evidence so recall becomes broader and quality improves through score fusion. The implementation must record `embedding_model`, `embedding_dim`, document version and per-model/fused scores so every accepted candidate remains auditable.
+
+### Kaggle static/offline discipline
+
+Related: [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md), `kaggle_status.py`, `kaggle_registry.py`, `video_announce/kaggle_client.py`.
+
+Region Talk should be an offline Kaggle job, not an uncontrolled publisher:
+
+```text
+immutable run config / source seeds / YDB cursor snapshot
+  → Kaggle discovery/scoring run with status ledger and locks
+  → artifacts: xlsx/csv/json/md/html + model reports
+  → manual review / favorites
+  → optional dry-run previews
+  → controlled publication only in later MVPs
+```
+
+Status events should include `preflight_ok`, `sources_scanned`, `posts_fetched`, `media_scored`, `candidates_created`, `report_written`, `queue_written`, `publish_dry_run_done` and terminal failure. Secrets must be injected as Kaggle secrets or encrypted split datasets and never printed.
+
+### YDB sidecar boundary
+
+All new persistent state for this feature goes to YDB: sources, source state, graph edges, posts, media, embeddings, semantic matches, candidates, favorites, publication assets, queue, ledger, verifier cache and discovery runs. Core Fly SQLite remains the event bot database and may be read only as an input snapshot/legacy source. Do not add Region Talk tables to SQLite without a separate architecture decision.
+
+## Architecture shape
+
+```text
+source catalogs / links / mentions / manual seeds
+  → source candidates
+  → source scoring
+  → monitored sources
+
+monitored sources
+  → new posts
+  → region relevance anchors + semantic vector recall
+  → non-news / non-trash / non-politics filters
+  → text value scoring
+  → image postcardness scoring
+  → top candidate verifier
+  → XLSX/CSV/JSON/Markdown candidate report + favorites table
+  → manual review
+  → publication queue (future)
+  → Telegram publish + VK carousel publish (future)
+  → publication ledger
+```
+
+The feature has three contours:
+
+1. **Source Discovery** — find/evaluate external sources that may write about Kaliningrad Oblast.
+2. **Post Discovery** — scan monitored sources and select concrete posts about the region.
+3. **Publishing** — candidate → verifier → render assets → queue → Telegram/VK publish → ledger. Disabled until later MVPs.
+
+## MVP result: XLSX-first candidate report
+
+For the current MVP, the visible result is a spreadsheet/report, not a live channel:
+
+- primary: `artifacts/region-talk/candidates-latest.xlsx`;
+- companion: `artifacts/region-talk/candidates-latest.csv`;
+- machine-readable: `data/region-talk/candidates-latest.json`;
+- review-friendly: `artifacts/region-talk/candidates-latest.md` or `.html`.
+
+The XLSX must make the whole funnel visible: what was found, what was added to candidates/favorites, what dropped out, which image-quality gates passed/failed, and the final candidates for human eye review. See [MVP candidate report](mvp-candidate-report.md).
+
+## External references and technical constraints
+
+- Telegram Bot API supports HTTPS requests, JSON/form/multipart payloads and file uploads via multipart; `sendMediaGroup` sends albums of 2–10 media items. Use it only after the bot is admin in the future channel and publication is enabled. Source: <https://core.telegram.org/bots/api>.
+- YDB Python SDK supports endpoint/database/auth/TLS configuration through a Driver, Query Service for YQL/transactions and Table Service for schema/bulk operations; production docs must include retries/backoff and structured errors. Source: <https://ydb-platform.github.io/ydb-python-sdk/>.
+- VK wall image publishing target path is `photos.getWallUploadServer` → upload binary image → `photos.saveWallPhoto` → `wall.post` attachments, but a 2026 `vk-api-schema` issue reports `photos.getWallUploadServer` error 27 with Community Token while text-only `wall.post` works. VK image upload token type must be validated in dry-run before enabling VK image publishing. Source: <https://github.com/VKCOM/vk-api-schema/issues/242>.
+
+## Acceptance status for this docs pass
+
+- Production implementation: **not implemented**.
+- Channel/community creation: **not done**.
+- Real tokens/secrets: **not introduced**.
+- Publishing: **not performed**.
+- Next useful task: implement MVP-1 candidate-report-only job against manual seeds, YDB test credentials and XLSX artifacts.

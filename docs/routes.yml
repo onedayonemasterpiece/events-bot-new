@@ -232,6 +232,27 @@ features:
       - main_part2.py
       - promo.py
       - handlers/promo_cmd.py
+  region_talk_channel:
+    status: design
+    docs: docs/features/region-talk-channel/README.md
+    source_discovery: docs/features/region-talk-channel/source-discovery.md
+    post_discovery: docs/features/region-talk-channel/post-discovery.md
+    image_postcardness: docs/features/region-talk-channel/image-postcardness.md
+    ydb_schema: docs/features/region-talk-channel/ydb-schema.md
+    mvp_candidate_report: docs/features/region-talk-channel/mvp-candidate-report.md
+    llm_verifier_contract: docs/features/region-talk-channel/llm-verifier-contract.md
+    publication_queue: docs/features/region-talk-channel/publication-queue.md
+    telegram_vk_publishing: docs/features/region-talk-channel/telegram-vk-publishing.md
+    risk_register: docs/features/region-talk-channel/risk-register.md
+    implementation_plan: docs/features/region-talk-channel/implementation-plan.md
+    related_subscriber_acquisition: docs/features/subscriber-acquisition/README.md
+    related_post_metrics: docs/features/post-metrics/README.md
+    related_unsigned_personalization: docs/features/unsigned-personalization/semantic-vector-retrieval.md
+    related_kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    storage: ydb_sidecar
+    mvp_artifact: artifacts/region-talk/candidates-latest.xlsx
+    planned_pipeline: region_talk_discovery
+
   static_site_pages:
     status: preview
     docs: docs/features/static-site-pages/README.md

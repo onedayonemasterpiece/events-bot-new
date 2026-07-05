@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Kaliningrad-best-post-monitoring design**: added the docs-first `region-talk-channel` feature package for «О Калининграде говорят», covering source/post discovery, dual-model e5-base + bge-m3 vector-recall enrichment/fusion, YDB sidecar schema, XLSX-first MVP candidate report with image-quality model reports, Gemini Flash-Lite verifier contract, rights policy, Telegram/VK future publishing contracts and risk register; no production code, tokens, channel/community creation or publishing were introduced.
 - **Yandex Cloud infra skill**: added a project `yandex-cloud-infra` skill documenting the existing local `yc` path, user-level auth cache location, KenigEvents CDN/DNS folder ids, static CDN resource/certificate ids, and public TLS acceptance checks so agents do not start unnecessary browser auth flows or print secrets.
 - **Smart Update / event reference enrichment design**: added the canonical feature spec for Smart Update-called event reference enrichment, with Wikipedia/Wikidata as the first strict provider, source-role separation (`event_source` vs `reference_source`), sparse/giveaway gates, writer coverage rules, and a required Smart Update bot-report line whenever Wikipedia facts are accepted or used.
 - **VK event repair / edit failures**: made `sync_vk_source_post` stop treating an unavailable `wall.edit` (for example expired edit window) as a successful update, so stale managed VK posts do not get fresh hashes without changing public text.

@@ -1,0 +1,67 @@
+# LLM/VLM verifier and post-writer contract
+
+Status: design. Use Gemini Flash-Lite / current configured lite/flash-lite model via env for final verifier/post writer. Do not call it for every post.
+
+## Call policy
+
+Call verifier only for:
+
+- top candidates entering `favorites`/report;
+- candidates being queued;
+- every candidate before any future autopublish.
+
+Never call verifier for the raw corpus. Cache by `post_id`, `text_hash`, selected media hashes, `semantic_bank_version`, `verifier_policy_version` and `model_id`.
+
+## Input
+
+- source metadata and `rights_policy`;
+- original post URL;
+- text excerpt / normalized text, not unbounded raw payload;
+- selected media thumbnails/URLs or local image files;
+- image scoring report;
+- semantic matches and candidate score;
+- target platforms (`telegram`, `vk`);
+- desired tone: concise, careful attribution, no hype.
+
+## Tasks
+
+1. Confirm the post is about Kaliningrad Oblast.
+2. Confirm it is not news/trash/politics/incident/ad-only.
+3. Confirm source is suitable and external/mixed.
+4. Confirm selected images are strong enough and safe.
+5. Confirm summary does not overclaim.
+6. Extract positive, neutral/useful and constructive concern points.
+7. Decide publication readiness.
+8. Draft platform-specific text for future Telegram/VK use.
+
+## Output JSON
+
+```json
+{
+  "decision": "approve|reject|needs_review",
+  "publication_readiness": "report_only|manual_review|ready_for_queue|ready_for_autopublish",
+  "reason_short": "...",
+  "region_relevance_confirmed": true,
+  "non_news_confirmed": true,
+  "media_strong_confirmed": true,
+  "rights_warning": null,
+  "positive_points": ["..."],
+  "neutral_points": ["..."],
+  "concern_points": ["..."],
+  "telegram_text": "...",
+  "vk_text": "...",
+  "title_short": "...",
+  "source_attribution": "...",
+  "image_report_short": "...",
+  "risk_flags": []
+}
+```
+
+## Writing rules
+
+- Do not copy full original text.
+- Do not invent facts.
+- Do not imply source endorsed our channel.
+- Always include source attribution and original link.
+- Keep useful concerns when present, but do not sensationalize.
+- Avoid “лучший”, “все в восторге” and similar overclaims unless directly justified, and still prefer restrained wording.
