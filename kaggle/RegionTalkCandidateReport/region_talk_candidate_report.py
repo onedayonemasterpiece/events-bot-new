@@ -687,52 +687,70 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         visual_stage = "skipped_by_text_gate"
         visual_skip_reason = ""
         image_cost_saved = True
+        current_stage = ""
         gate_trace: list[str] = []
 
+        semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "llm_required").strip().lower()
+        deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
         if not fresh["fresh_enough"]:
             drop_gate, rejection = "freshness_gate", "reject_stale_or_missing_date"
             visual_skip_reason = fresh["freshness_reason"]
             gate_trace.append("freshness_gate:reject")
         else:
             gate_trace.append("freshness_gate:pass")
-        if not rejection and not scope["kaliningrad_oblast_only_scope"]:
-            drop_gate, rejection = "kaliningrad_oblast_only_scope_gate", "reject_not_kaliningrad_oblast_only"
-            visual_skip_reason = scope["region_scope_reason"]
-            gate_trace.append("kaliningrad_oblast_only_scope_gate:reject")
-        elif not rejection:
-            gate_trace.append("kaliningrad_oblast_only_scope_gate:pass")
-        if not rejection and ad_gate["is_ad_or_promo"]:
-            drop_gate, rejection = "ad_promo_announcement_gate", "reject_ad_or_promo"
-            visual_skip_reason = ad_gate["ad_promo_reason"]
-            gate_trace.append("ad_promo_announcement_gate:reject")
-        elif not rejection:
-            gate_trace.append("ad_promo_announcement_gate:pass")
-        if not rejection and substance["text_substance_score"] < 0.25:
-            drop_gate, rejection = "content_substance_visit_impression_gate", "reject_low_substance"
-            visual_skip_reason = substance["substance_reason"]
-            gate_trace.append("content_substance_visit_impression_gate:reject")
-        elif not rejection:
-            gate_trace.append("content_substance_visit_impression_gate:pass")
-        if not rejection and ts["newsiness_score"] >= 0.45:
-            drop_gate, rejection = "not_news_gate", "newsiness"
-            visual_skip_reason = "reject: news/prosecution/incident cues"
-            gate_trace.append("not_news_gate:reject")
-        elif not rejection:
-            gate_trace.append("not_news_gate:pass")
-        if not rejection and ts["trash_score"] >= 0.35:
-            drop_gate, rejection = "not_trash_gate", "trash"
-            visual_skip_reason = "reject: trash/shock cues"
-            gate_trace.append("not_trash_gate:reject")
-        elif not rejection:
-            gate_trace.append("not_trash_gate:pass")
+
+        # LLM-first policy: regex/keyword/lexicon checks below are evidence only by default.
+        # They must not decide user-visible semantic meaning (region-only, ad/promo, substance, news/trash).
+        semantic_evidence_flags: list[str] = []
+        if not scope["kaliningrad_oblast_only_scope"]:
+            semantic_evidence_flags.append("deterministic_scope_evidence_not_oblast_only")
+        if ad_gate["is_ad_or_promo"]:
+            semantic_evidence_flags.append("deterministic_ad_promo_evidence")
+        if substance["text_substance_score"] < 0.25:
+            semantic_evidence_flags.append("deterministic_low_substance_evidence")
+        if ts["newsiness_score"] >= 0.45:
+            semantic_evidence_flags.append("deterministic_news_evidence")
+        if ts["trash_score"] >= 0.35:
+            semantic_evidence_flags.append("deterministic_trash_evidence")
+        gate_trace.append("kaliningrad_oblast_only_scope_gate:evidence_only")
+        gate_trace.append("ad_promo_announcement_gate:evidence_only")
+        gate_trace.append("content_substance_visit_impression_gate:evidence_only")
+        gate_trace.append("not_news_not_trash_gate:evidence_only")
+
+        if not rejection and semantic_gate_mode in {"llm_required", "llm", "semantic_required"} and not deterministic_override:
+            drop_gate, rejection = "llm_semantic_gate", "semantic_gate_not_run"
+            visual_skip_reason = "LLM semantic gate is required; deterministic regex/keyword evidence is not allowed to make final semantic decisions"
+            current_stage = "semantic_review_required"
+            gate_trace.append("llm_semantic_gate:required_not_configured")
+        elif not rejection and deterministic_override:
+            # Explicit debug-only compatibility mode. Not allowed for final/user-facing quality claims.
+            if not scope["kaliningrad_oblast_only_scope"]:
+                drop_gate, rejection = "kaliningrad_oblast_only_scope_gate", "reject_not_kaliningrad_oblast_only"
+                visual_skip_reason = scope["region_scope_reason"]
+            elif ad_gate["is_ad_or_promo"]:
+                drop_gate, rejection = "ad_promo_announcement_gate", "reject_ad_or_promo"
+                visual_skip_reason = ad_gate["ad_promo_reason"]
+            elif substance["text_substance_score"] < 0.25:
+                drop_gate, rejection = "content_substance_visit_impression_gate", "reject_low_substance"
+                visual_skip_reason = substance["substance_reason"]
+            elif ts["newsiness_score"] >= 0.45:
+                drop_gate, rejection = "not_news_gate", "newsiness"
+                visual_skip_reason = "reject: deterministic news cue; debug override only"
+            elif ts["trash_score"] >= 0.35:
+                drop_gate, rejection = "not_trash_gate", "trash"
+                visual_skip_reason = "reject: deterministic trash cue; debug override only"
+            if rejection:
+                current_stage = "dropped_text_gate"
+                gate_trace.append("deterministic_semantic_override:reject")
 
         if rejection:
             ms = image_scores_skipped(visual_skip_reason or rejection)
             score = 0.0
-            current_stage = "dropped_text_gate"
+            if current_stage != "semantic_review_required":
+                current_stage = "dropped_text_gate"
         else:
-            gate_trace.append("semantic_dual_model_enrichment:feature_enriched_pending_vector_models")
-            visual_stage = "scored_after_text_gates"
+            gate_trace.append("semantic_dual_model_enrichment:llm_semantic_gate_passed_or_disabled")
+            visual_stage = "scored_after_llm_text_gates"
             visual_skip_reason = ""
             image_cost_saved = False
             ms = media_scores(bool(p.get("has_media")), ts)
@@ -778,7 +796,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "image_scoring_skipped": str(image_cost_saved).lower(),
             "discovery_edges_count": len(edge_rows),
             "gate_order_trace": " → ".join(gate_trace),
-            "semantic_enrichment_stage": "dual_model_vector_enrichment_pending" if not rejection else "skipped_by_text_gate",
+            "semantic_evidence_flags": "; ".join(semantic_evidence_flags),
+            "semantic_gate_mode": semantic_gate_mode,
+            "deterministic_semantic_gate_override": str(deterministic_override).lower(),
+            "semantic_enrichment_stage": "llm_semantic_gate_required" if current_stage == "semantic_review_required" else ("dual_model_vector_enrichment_pending" if not rejection else "skipped_by_text_gate"),
         }
         row.pop("place_matches", None)
         new_posts.append(row)

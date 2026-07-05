@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / LLM-first gate correction**: demoted deterministic regex/keyword/place checks to evidence-only features by default; without an LLM semantic gate, fresh posts now remain `semantic_review_required` with image scoring skipped instead of being accepted/rejected by regex.
 - **Region Talk Channel / Excel-safe XLSX writer**: switched MVP-1.x candidate workbook generation to an `openpyxl` writer with illegal-character sanitization, Excel cell length limits and formula escaping after Telegram-delivered lightweight OpenXML workbooks still opened as damaged in desktop Excel.
 - **Region Talk Channel / MVP-1.x strict discovery gates**: added Kaliningrad-only scope rules, place lexicon v1, seed sources v2, freshness/ad/substance pre-image gates, forwarded/link source graph export, source probe fields and expanded XLSX evidence sheets for the next dry-run.
 - **Region Talk Channel / XLSX compatibility**: hardened the MVP-1 workbook writer with standard OpenXML styles and document properties after Telegram-delivered `candidates-latest.xlsx` opened as damaged in desktop Excel.

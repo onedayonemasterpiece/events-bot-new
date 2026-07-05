@@ -104,11 +104,15 @@ A post must be substantively about Kaliningrad Oblast only. Multiple oblast citi
 Gate order:
 
 1. freshness (`REGION_TALK_MIN_POST_DATE=2026-01-01` for current run);
-2. `kaliningrad_oblast_only_scope_gate` using the place lexicon as recall/guardrail;
-3. ad/promo/announcement rejection, including contests, registrations, dictations, tours, ticket/service/event promos;
-4. content substance / visit-impression gate;
-5. not-news / not-trash;
+2. `kaliningrad_oblast_only_scope_gate` as an LLM-owned semantic decision; the place lexicon only supplies recall/evidence;
+3. LLM-owned ad/promo/announcement decision, with keyword/lexicon hints passed only as evidence;
+4. LLM-owned content substance / visit-impression decision;
+5. LLM-owned not-news / not-trash decision;
 6. semantic dual-model enrichment (`intfloat/multilingual-e5-base` + `BAAI/bge-m3`) as recall enrichment/fusion, not A/B comparison;
 7. image postcardness scoring only after all text gates pass.
 
 Visual quality is evaluated only for selected non-ad posts about the region. Rows skipped by text gates must expose `visual_scoring_stage=skipped_by_text_gate`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
+
+### LLM-first semantic gate ownership
+
+Deterministic regex/keyword/place-lexicon checks are evidence only. They may populate `matched_place_names`, `external_geo_mentions`, `ad_promo_hits`, `text_substance_score` and `semantic_evidence_flags`, but they must not be the final reason to accept/reject region scope, ad/promo status, substance, news/trash or candidate quality. If the LLM semantic gate is not configured, fresh posts must remain `semantic_review_required` and image scoring must stay skipped.

@@ -73,7 +73,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
 
-    def test_text_gates_skip_image_scoring_for_ads_and_stale_posts(self) -> None:
+    def test_semantic_meaning_requires_llm_not_regex_rejection(self) -> None:
         mod = load_module()
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
         posts = [
@@ -84,8 +84,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             payload = mod.build_report(seeds, [], posts, "gate-run", Path(td))
         dropped = payload["sheets"]["08_dropped_posts"]
         reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
-        self.assertEqual(reasons["post_ad"], "reject_ad_or_promo")
+        self.assertEqual(reasons["post_ad"], "semantic_gate_not_run")
         self.assertEqual(reasons["post_old"], "reject_stale_or_missing_date")
+        by_id = {r["post_id"]: r for r in dropped}
+        self.assertEqual(by_id["post_ad"]["current_stage"], "semantic_review_required")
+        self.assertIn("deterministic_ad_promo_evidence", by_id["post_ad"]["semantic_evidence_flags"])
         self.assertEqual(payload["summary"]["image_model_calls"], 0)
         self.assertTrue(all(r["image_scoring_skipped"] == "true" for r in dropped))
 

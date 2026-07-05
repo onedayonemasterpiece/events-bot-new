@@ -64,6 +64,9 @@ REGION_TALK_MAX_VLM_CALLS=10
 REGION_TALK_IMAGE_SCORING_MODE=cv_only|cv_aesthetic|cv_aesthetic_clip|cv_aesthetic_clip_vlm
 REGION_TALK_MIN_POST_DATE=2026-01-01
 REGION_TALK_FRESHNESS_HALF_LIFE_DAYS=30
+REGION_TALK_SEMANTIC_GATE_MODE=llm_required
+# Debug-only, never for final quality claims:
+# REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES=0
 REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
 REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
 REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
@@ -101,6 +104,8 @@ The reviewer should be able to answer from XLSX alone:
 
 `post fetched → freshness gate → kaliningrad_oblast_only_scope_gate → ad/promo/announcement gate → content substance / visit-impression gate → not-news / not-trash gate → semantic dual-model enrichment → image postcardness scoring → verifier/top candidates → candidate/favorite`.
 
-Image scoring is skipped before text gates pass, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
+Image scoring is skipped until LLM semantic text gates pass, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
 
 Comments are only for source discovery/link evidence and never publication material. Forwarded/reposted origins become source-frontier graph edges, not automatically monitored sources.
+
+LLM-first note: deterministic checks are evidence only. Do not close a run as quality-screened if it produced `semantic_review_required` rows because the LLM semantic gate was not configured.

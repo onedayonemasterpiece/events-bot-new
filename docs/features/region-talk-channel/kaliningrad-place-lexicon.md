@@ -9,7 +9,7 @@ The lexicon helps the Region Talk monitor recognize posts that are substantively
 It is **not** a keyword-only final classifier. It is used for:
 
 - recall of regional places that may appear without the word “Калининград”;
-- scope guardrails for `kaliningrad_oblast_only_scope_gate`;
+- scope evidence for the LLM-owned `kaliningrad_oblast_only_scope_gate`;
 - explainability columns in XLSX;
 - features for later semantic/vector and verifier stages.
 
