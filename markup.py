@@ -74,11 +74,13 @@ def tel_href_for_phone_value(value: str | None) -> str:
 # - +7 999 123 45 67
 # - (4012) 12-34-56
 # - 8 401 43 3 19 17
+# Newlines are intentionally excluded from phone separators so numbered-list
+# Telegram captions do not link the next item number into the phone href.
 _PHONE_RE = re.compile(
     r"(?<![/\w])"
     r"("
-    r"(?:\+7|8)\s*[\s(-]*\d{3,5}[\s)-]*[\d\s-]{5,}\d"
-    r"|\(\d{3,5}\)\s*[\d\s-]{5,}\d"
+    r"(?:\+7|8)[^\S\r\n]*(?:[(-]|[^\S\r\n])*\d{3,5}(?:[)-]|[^\S\r\n])*(?:\d|[^\S\r\n]|-){5,}\d"
+    r"|\(\d{3,5}\)[^\S\r\n]*(?:\d|[^\S\r\n]|-){5,}\d"
     r")"
     r"(?![/\w])",
     re.IGNORECASE,

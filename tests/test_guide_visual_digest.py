@@ -88,6 +88,32 @@ async def test_visual_digest_telegram_footer_uses_target_channel_subscribe_link(
 
 
 @pytest.mark.asyncio
+async def test_visual_digest_telegram_text_linkifies_phone_contacts():
+    rows = [
+        {
+            "id": 3,
+            "canonical_title": "Школа юного альпаковеда",
+            "date": "2026-07-04",
+            "booking_text": "+7 (962) 255-54-91",
+        },
+        {
+            "id": 4,
+            "canonical_title": "Домашняя прогулка",
+            "date": "2026-07-05",
+            "booking_url": "https://vk.com/natakkaz",
+        },
+    ]
+
+    text = await build_visual_digest_telegram_text(rows, issue_id=44)
+
+    assert (
+        '1. Школа юного альпаковеда — <a href="tel:+79622555491">+7 962 255-54-91</a>'
+        in text
+    )
+    assert '<a href="https://vk.com/natakkaz">Домашняя прогулка</a>' in text
+
+
+@pytest.mark.asyncio
 async def test_visual_digest_vk_text_keeps_phone_without_shortener():
     calls = []
 

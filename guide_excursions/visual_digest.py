@@ -28,6 +28,7 @@ from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
+from markup import linkify_phones_for_telegram_html
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1697,7 +1698,7 @@ async def build_visual_digest_telegram_text(
     lines.extend(footer_tail)
     text = "\n".join(lines).strip()
     if len(text) <= 1024:
-        return text
+        return linkify_phones_for_telegram_html(text)
     # Caption hard-limit guard: keep linked titles, hashtags and the social footer; shorten only intro/overflow.
     compact_lines = [lines[0], ""]
     for idx, row in enumerate(items, start=1):
@@ -1717,7 +1718,7 @@ async def build_visual_digest_telegram_text(
         body = compact_lines[:-footer_len]
         body.pop()
         compact_lines = body + tail
-    return "\n".join(compact_lines).strip()
+    return linkify_phones_for_telegram_html("\n".join(compact_lines).strip())
 
 
 async def build_visual_digest_vk_text(

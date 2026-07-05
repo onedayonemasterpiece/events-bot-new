@@ -120,3 +120,12 @@ def test_linkify_phones_for_telegram_html_keeps_existing_links():
         'Запись: <a href="tel:+74012463635">+7 (4012) 46-36-35</a>. '
         '<a href="https://example.com">+7 (999) 000-00-00</a>'
     )
+
+
+def test_linkify_phones_for_telegram_html_does_not_cross_numbered_list_lines():
+    html = "1. Запись — +7 962 255-54-91\n2. Другая экскурсия"
+
+    assert linkify_phones_for_telegram_html(html) == (
+        '1. Запись — <a href="tel:+79622555491">+7 962 255-54-91</a>\n'
+        "2. Другая экскурсия"
+    )

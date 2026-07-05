@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-05-guide-visual-digest-phone-link.md`
+  - Scope: Guide excursions `visual_schedule` Telegram caption generation and phone-only booking contacts.
+  - Must not regress: Telegram visual digest captions must render phone contacts as explicit `tel:` links while preserving existing title/source links and leaving VK digest phone text plain.
 - `INC-2026-07-05-tg-afisha-vk-dependency-backlog.md`
   - Scope: Telegram event publishing JobOutbox dependencies, `schedule_event_update_tasks`, and VK/TG fanout coupling.
   - Must not regress: `tg_event_publish` must not depend on `vk_sync`; VK media/API failures must not block valid Telegram event announcements, while Telegram spacing and daytime publish window remain enforced.
