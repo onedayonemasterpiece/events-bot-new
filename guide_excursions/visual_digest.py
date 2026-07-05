@@ -1700,7 +1700,9 @@ async def build_visual_digest_telegram_text(
         link, is_phone = _primary_link(row)
         if link and is_phone:
             display = _telegram_phone_auto_link_text(link) or _plain(link)
-            line = f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}"
+            source_link = _plain(row.get("source_post_url") or row.get("channel_url"))
+            linked_title = _tg_link(title, source_link) if source_link else html.escape(title, quote=False)
+            line = f"{idx}. {linked_title} — {html.escape(display, quote=False)}"
         elif link:
             line = f"{idx}. {_tg_link(title, link)}"
         else:
@@ -1720,7 +1722,9 @@ async def build_visual_digest_telegram_text(
             compact_lines.append(f"{idx}. {_tg_link(title, link)}")
         elif link:
             display = _telegram_phone_auto_link_text(link) or _plain(link)
-            compact_lines.append(f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}")
+            source_link = _plain(row.get("source_post_url") or row.get("channel_url"))
+            linked_title = _tg_link(title, source_link) if source_link else html.escape(title, quote=False)
+            compact_lines.append(f"{idx}. {linked_title} — {html.escape(display, quote=False)}")
         else:
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)}")
     compact_lines.extend(footer_tail)

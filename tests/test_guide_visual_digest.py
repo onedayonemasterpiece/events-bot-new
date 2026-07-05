@@ -95,6 +95,7 @@ async def test_visual_digest_telegram_text_uses_auto_linkable_phone_text():
             "canonical_title": "Школа юного альпаковеда",
             "date": "2026-07-04",
             "booking_text": "+7 (962) 255-54-91",
+            "source_post_url": "https://t.me/excursions_profitour/943",
         },
         {
             "id": 4,
@@ -107,7 +108,7 @@ async def test_visual_digest_telegram_text_uses_auto_linkable_phone_text():
     text = await build_visual_digest_telegram_text(rows, issue_id=44)
 
     assert (
-        '1. Школа юного альпаковеда — +79622555491'
+        '1. <a href="https://t.me/excursions_profitour/943">Школа юного альпаковеда</a> — +79622555491'
         in text
     )
     assert '<a href="https://vk.com/natakkaz">Домашняя прогулка</a>' in text

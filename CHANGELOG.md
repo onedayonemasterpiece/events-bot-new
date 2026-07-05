@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **Guide visual digest / Telegram phones**: reverted the overbuilt call-button/redirect workaround and render phone-only Telegram visual digest contacts as bare E.164 numbers (`+7XXXXXXXXXX`) in the digest line, preserving title/source links and keeping VK digest phone text human-formatted/plain.
+- **Guide visual digest / Telegram phones**: reverted the overbuilt call-button/redirect workaround and render phone-only Telegram visual digest rows compactly: the excursion title links to the source post and the phone remains a bare E.164 suffix (`+7XXXXXXXXXX`), while VK keeps phone text human-formatted/plain.
 - **Telegram event publishing**: decoupled `tg_event_publish` from `vk_sync` so VK media/API failures no longer block valid Telegram event announcements; Telegram still keeps its daytime publish window and spacing rules.
 - **Static site / info partners bento copy**: updated `/partners/` heading and captions, switched КППК to the official-site RZD/KPPK mark with `АО «КППК»`, removed captions for `Знание`/`Акт Опус`, and replaced the two-column logo board with a fixed-row, logo-normalized 4-column mobile / 8-column desktop greedy bento placement grid.
 - **Static site / info partners logo board**: replaced `/partners/` card-like category tiles with a flat logo+caption board, corrected КППК naming/display, and changed visible captions to partner-specific context labels including Кантата as `партнёр по образовательной программе`.
