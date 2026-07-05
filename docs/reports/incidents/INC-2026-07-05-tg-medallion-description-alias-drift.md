@@ -1,10 +1,10 @@
 # INC-2026-07-05 Telegram Medallion Description Alias Drift
 
-Status: mitigated
+Status: closed
 Severity: sev3
 Service: Telegram event publishing / Premium custom-emoji medallions
 Opened: 2026-07-05
-Closed: —
+Closed: 2026-07-05
 Owners: events-bot operator / Codex
 Related incidents: `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions.md`, `INC-2026-07-05-tg-afisha-vk-dependency-backlog.md`
 Related docs: `docs/features/static-site-pages/event-token-medallions.md`, `docs/operations/release-governance.md`
@@ -102,10 +102,15 @@ Edited public Telegram posts in place:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending Fly deploy from `origin/main`
-- regression checks: pending final test/deploy evidence
-- post-deploy verification: pending production smoke
+- deployed SHA: `bf74aea6` (`fix(tg): constrain medallion venue alias matches`), reachable from `origin/main`.
+- deploy path: Fly remote deploy to `events-bot-new-wngqia`, image `deployment-01KWS1C8GB2XJ51VXA15SKGBD6`, machine version `1599`, health `1/1 passing`.
+- regression checks:
+  - `pytest tests/test_tg_event_publish.py -k 'medallion or album_footer' -q` → `11 passed, 65 deselected`;
+  - production smoke inside Fly: Tretyakovka description mentioning `Остров Канта`/`Кафедральный собор` selects only `tretyakovka-kaliningrad`; Rock N Roll City with `festival=Симфония ветра` at `Янтарь холл` selects only `yantar-hall`.
+- post-repair verification:
+  - `@kldevents/1916` now has only `tretyakovka-kaliningrad` (`[4,4,4,4]`);
+  - `@kldevents/1908` now has only `yantar-hall` (`[4,4,4,4]`);
+  - repair receipt: `artifacts/codex/tg-medallion-wrong-repair/repair_receipt.json` (not committed).
 
 ## Prevention
 
