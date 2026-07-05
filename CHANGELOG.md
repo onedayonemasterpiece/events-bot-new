@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site pages / event-comment-feedback cleanup**: clarified that one-off Kaggle comment discovery builds its source manifest from current event database `EventSource`/legacy source links rather than a hardcoded monitoring list, documented platform-specific post `comments` counters, multi-event source-post handling, verified no bidi-control characters in new docs, and simplified the icon semantics table.
 - **Static site pages / Сигналы обсуждения design**: added the docs-first `event-comment-feedback` child feature with a YDB sidecar schema draft, fixed phrase bank v1, group-level LLM verifier contract, static JSON/UI carousel contract, and offline probe/evaluation plan; no production collection/export/UI code is implemented yet.
 
 ### Fixed

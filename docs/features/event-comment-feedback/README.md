@@ -55,12 +55,12 @@ No public page view may call YDB, Telegram, VK, embedding providers or LLMs.
 
 Related docs/code: [`docs/features/post-metrics/README.md`](../post-metrics/README.md), `source_parsing/post_metrics.py`, `models.py::TelegramPostMetric`, `models.py::VkPostMetric`.
 
-Current post metrics store raw `views`, `likes` and Telegram `reactions_json`; there is no canonical `comments_count` field yet. Comment feedback should be a **qualitative sibling** of post-metrics, not a replacement:
+Current post metrics snapshots already have platform-specific raw `comments` counters for TG/VK posts alongside `views`, `likes`, reposts/reactions where available. What does **not** exist yet is a single canonical/public `comments_count` field on the `Event` or static-preview event layer. Comment feedback should be a **qualitative sibling** of post-metrics, not a replacement:
 
 - reuse source-post identity and raw-count discipline where possible;
-- use `comments_count` only as a fetch/ranking/precheck signal when available;
-- do not expose technical source/service splits in public UI;
-- if `comments_count` is added later, document it in post-metrics and keep public counter policy explicit.
+- use platform `comments` counters only as a fetch/ranking/precheck signal for the one-off discovery run;
+- do not expose technical source/service splits or raw comment-count internals in public UI unless separately approved;
+- if a canonical/public `comments_count` is added later, document it in post-metrics and keep public counter policy explicit.
 
 ### Event / EventSource model
 
@@ -144,17 +144,20 @@ not: 100 comments → 20 LLM calls
 
 ## Data flow
 
+The monitoring source list is **not a manually maintained chat/community list**. For each one-off Kaggle discovery run the job builds a bounded seed list from the current event database/static export: future/current active events that are renderable on the static site, plus their linked source posts. The run answers “which comments attached to current event sources should be analyzed now?”, not “which social spaces should we monitor forever?”.
+
 1. **Select future/actionable events** from the existing canonical event/static snapshot: active lifecycle, public/searchable/renderable on static site, future or current, with `EventSource`/source URL/source ids and preferably a raw comment-count signal.
-2. **Resolve sources** from `EventSource`, legacy `Event.source_post_url/source_vk_post_url`, `source_chat_id/source_message_id`, and static preview/source URLs.
-3. **Fetch comments incrementally** by source capability. If comments are forbidden/unavailable/private, mark source state and continue.
-4. **Normalize/dedup/redact** empty/link-only/spam-like/ticket-resale-like/bot-like comments; store hashes and author hashes only.
-5. **Embed only changed comments** with model/dim/document version and `text_hash`.
-6. **Vector match** comment embeddings against phrase-bank prototypes in memory; YDB stores vectors/cache but is not the MVP vector DB.
-7. **Aggregate** by `event_id + phrase_id`: evidence counts, unique authors, source diversity, score/margin, risk/conflict flags.
-8. **Decide publication path**: low-risk/high-confidence vector-only; medium/high-risk verifier; weak/ambiguous suppressed.
-9. **Verify groups when needed** via cached batch LLM verifier over phrase groups, not comments.
-10. **Export static manifest** with aggregate items only.
-11. **Render static site**; browser never calls YDB/LLM/VK/TG for this block.
+2. **Resolve event sources** from `EventSource` rows first, then legacy `Event.source_post_url/source_vk_post_url`, `source_chat_id/source_message_id`, and static preview/source URLs. Normalize each TG/VK post into a `platform_post_key`, deduplicate posts across events, and keep event-source links for later event-level interpretation.
+3. **Build the one-off Kaggle source manifest** for this run: `event_id`, `event_source_id`, `source_url`, platform, `platform_post_key`, optional last known `comments` counter, source fingerprint and fetch capability/status from previous YDB state if present. No unrelated discovery seeds are added.
+4. **Fetch comments incrementally** by source capability. If comments are forbidden/unavailable/private, mark source state and continue.
+5. **Normalize/dedup/redact** empty/link-only/spam-like/ticket-resale-like/bot-like comments; store hashes and author hashes only.
+6. **Embed only changed comments** with model/dim/document version and `text_hash`.
+7. **Vector match** comment embeddings against phrase-bank prototypes in memory; YDB stores vectors/cache but is not the MVP vector DB.
+8. **Aggregate** by `event_id + phrase_id`: evidence counts, unique authors, source diversity, score/margin, risk/conflict flags.
+9. **Decide publication path**: low-risk/high-confidence vector-only; medium/high-risk verifier; weak/ambiguous suppressed.
+10. **Verify groups when needed** via cached batch LLM verifier over phrase groups, not comments.
+11. **Export static manifest** with aggregate items only.
+12. **Render static site**; browser never calls YDB/LLM/VK/TG for this block.
 
 ## YDB storage model
 
@@ -172,16 +175,17 @@ All new persistent data lives in the YDB sidecar described in [YDB schema draft]
 
 Proposed job kind: `event_comment_feedback_discovery` (`comment_feedback_discovery` as a short module/CLI alias). It runs offline/Kaggle and is not part of the public-page hot path.
 
-1. **Select future/actionable events**: active lifecycle, public/searchable/renderable static pages, future/current dates, source URLs/TG/VK ids, optional comment-count signal from post metrics or platform metadata.
-2. **Resolve sources**: prefer `EventSource` rows; fall back to legacy `Event.source_post_url`, `source_vk_post_url`, `source_chat_id`, `source_message_id` and static export source URLs.
-3. **Fetch incrementally**: skip unchanged sources when comment count/cursor/TTL says no refresh; limited refresh when state is unclear; forbidden/private/unavailable source does not fail the whole run.
-4. **Normalize/dedup/redact**: drop empty/link-only/spam-like/ticket-resale-like/bot-like comments, store hashes and redacted text for backend-only audit.
-5. **Embed changed comments only** with recorded model/dim/document version.
-6. **Vector match** top-K phrase candidates with positive/hard-negative/next-best margins.
-7. **Aggregate by `event_id + phrase_id`** and compute evidence/diversity/conflict/risk flags.
-8. **Decide publication path**: strict vector-only for low-risk/high-confidence; verifier/manual review for medium/high-risk; suppress weak/ambiguous.
-9. **Export static JSON** allowlisted aggregate items only.
-10. **Trigger/hand off static-site rebuild** through the existing Kaggle/static-site builder protocol when public state changes.
+1. **Select future/actionable events**: active lifecycle, public/searchable/renderable static pages, future/current dates, source URLs/TG/VK ids, optional platform `comments` signal from post metrics or platform metadata.
+2. **Resolve event sources**: prefer `EventSource` rows; fall back to legacy `Event.source_post_url`, `source_vk_post_url`, `source_chat_id`, `source_message_id` and static export source URLs. This step creates the one-off Kaggle source manifest for the selected event set and does not depend on a hardcoded list of monitored chats.
+3. **Deduplicate source posts but preserve links**: one `platform_post_key` may be reused by several events; source-level fetch state is shared, while event-level phrase interpretation stays tied to `event_id + event_source_id`. Multi-event source posts can be suppressed/manual-review in MVP if the event relation is ambiguous.
+4. **Fetch incrementally**: skip unchanged sources when comment count/cursor/TTL says no refresh; limited refresh when state is unclear; forbidden/private/unavailable source does not fail the whole run.
+5. **Normalize/dedup/redact**: drop empty/link-only/spam-like/ticket-resale-like/bot-like comments, store hashes and redacted text for backend-only audit.
+6. **Embed changed comments only** with recorded model/dim/document version.
+7. **Vector match** top-K phrase candidates with positive/hard-negative/next-best margins.
+8. **Aggregate by `event_id + phrase_id`** and compute evidence/diversity/conflict/risk flags.
+9. **Decide publication path**: strict vector-only for low-risk/high-confidence; verifier/manual review for medium/high-risk; suppress weak/ambiguous.
+10. **Export static JSON** allowlisted aggregate items only.
+11. **Trigger/hand off static-site rebuild** through the existing Kaggle/static-site builder protocol when public state changes.
 
 ## Vector matching strategy
 

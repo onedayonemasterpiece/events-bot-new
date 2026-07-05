@@ -19,17 +19,19 @@ YDB TTL deletion is asynchronous. Every query that reads expirable state must al
 - `event_id` and `event_source_id` may start as `Utf8` to tolerate exported snapshots; if implementation commits to core SQLite integer ids, use `Uint64` and keep JSON export numeric.
 - `platform` values: `telegram | vk`.
 - `platform_post_key` examples: `vk:{owner_id}:{post_id}`, `tg:{channel_id}:{message_id}`.
+- The source list for a run is generated from current event/source rows, not from a manual permanent monitoring list. Source-post fetch state is source-level; event interpretation is event-linked.
+- Multi-event source posts are possible. MVP may suppress/manual-review ambiguous multi-event posts, but the schema should not require duplicating raw comment fetch state per event.
 - `comment_key` examples: `vk:{owner_id}:{post_id}:{comment_id}`, `tg:{discussion_chat_id}:{thread_top_id}:{message_id}`.
 - Store vectors as `String`/`Bytes` blob or JSON only as an MVP cache format. YDB is not required to execute ANN search.
 
 ## 1. `event_comment_source_state`
 
-Purpose: incremental crawl state for an event source.
+Purpose: incremental crawl state for a platform source post that is linked to one or more current events.
 
 | Field | Type | Notes |
 |---|---|---|
-| `event_id` | `Utf8`/`Uint64` | Core event id from snapshot. |
-| `event_source_id` | `Utf8`/`Uint64` | `event_source.id` where available. |
+| `event_id` | `Utf8`/`Uint64` | Primary event id for MVP/source manifest convenience; do not treat as the only possible event link. |
+| `event_source_id` | `Utf8`/`Uint64` | Primary `event_source.id` where available. |
 | `platform` | `Utf8` | `telegram` or `vk`. |
 | `source_url` | `Utf8` | Public source URL if available. |
 | `platform_post_key` | `Utf8` | Stable post key. |
@@ -53,6 +55,24 @@ Indexes/query needs:
 - `idx_event_comment_source_state_event_id(event_id)`;
 - `idx_event_comment_source_state_next_fetch(next_fetch_after)`;
 - `idx_event_comment_source_state_fetch_status(fetch_status)`.
+
+### Optional follow-up: `event_comment_source_link`
+
+If real data shows many source posts linked to several events, add a separate link table instead of duplicating crawl state:
+
+| Field | Type | Notes |
+|---|---|---|
+| `event_id` | `Utf8`/`Uint64` | Event interpreted from the source post. |
+| `event_source_id` | `Utf8`/`Uint64` | Core `event_source.id`. |
+| `platform` | `Utf8` | `telegram|vk`. |
+| `platform_post_key` | `Utf8` | Shared fetched source post. |
+| `relation_status` | `Utf8` | `active|ambiguous|suppressed|manual_review`. |
+| `source_fingerprint` | `Utf8` | Event-source relation hash. |
+| `updated_at` | `Timestamp` | Latest relation state. |
+
+Primary key: `(event_id, event_source_id, platform, platform_post_key)`.
+
+For MVP, ambiguous multi-event source posts may simply set `relation_status=manual_review`/suppressed in the run artifact rather than being published.
 
 ## 2. `event_source_comment`
 

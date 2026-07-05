@@ -112,11 +112,11 @@ Do not call the block “Отзывы”, “Рейтинг”, “Отзывы 
 
 ## Icon/tone semantics
 
-| Icon | Tone | Meaning |
-|---|---|---|
-| `🙂` / `smile_green` | `positive` | Positive interest, anticipation, trust, love for artist, intent to attend. |
-| `😐` / `neutral_gray` | `neutral` | Practical interest, questions, clarifications. |
-| `🙁` / `sad_red` | `concern` | Frustration, barrier, doubt or problem; not necessarily “event is bad”. |
+| Visual | Icon id | Tone | Meaning |
+|---|---|---|---|
+| Green smiling face | `smile_green` | `positive` | Positive interest, anticipation, trust, love for artist, intent to attend. |
+| Gray neutral face | `neutral_gray` | `neutral` | Practical interest, questions, clarifications. |
+| Red sad face | `sad_red` | `concern` | Frustration, barrier, doubt or problem; not necessarily “event is bad”. |
 
 Red can be a popularity signal, e.g. “В комментариях расстраиваются, что билеты быстро закончились”. Do not let red cards dominate or appear first if strong positive/neutral context exists.
 
