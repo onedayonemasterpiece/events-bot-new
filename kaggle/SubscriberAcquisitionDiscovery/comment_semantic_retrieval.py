@@ -18,6 +18,7 @@ from typing import Any, Callable, Iterable
 
 STAGE_NAME = "acq_comment_semantic_retrieval.v1"
 DEFAULT_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
+REQUIRED_MODELS = list(DEFAULT_MODELS)
 DEFAULT_GATE_MODEL = "intfloat/multilingual-e5-base"
 DEFAULT_SCORING_METHOD = "positive_negative_margin"
 
@@ -1051,7 +1052,7 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         "monitoring_decision_hint": decision,
         "monitoring_reason": reason,
         "llm_budget_recommendation": {
-            "send_top_comments_to_llm": min(actionable, _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", 80, min_value=1)),
+            "send_top_comments_to_llm": min(actionable, _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", 24, min_value=1)),
             "reason": "top retrieval candidates only; no full-comment LLM pass",
         },
     }
@@ -1883,6 +1884,15 @@ _RU_HEADERS = {
     "rejected_in_delta_this_run": "Отклонено в дельте",
     "comments_embedded_delta_this_run": "Комм. в дельте",
     "answerable_questions_delta_this_run": "Вопросов в дельте",
+    "processed_in_run_id": "Обработано в run_id",
+    "last_processed_at": "Последняя обработка",
+    "models_matched": "Модели, где найдено",
+    "model_count": "Моделей",
+    "best_score": "Лучшая оценка",
+    "llm_final_check_ru": "LLM-проверка",
+    "llm_queue_status_ru": "Очередь LLM",
+    "is_in_llm_gate_queue": "В top-N LLM queue?",
+    "goal_sheet": "Лист цели",
 }
 
 
@@ -1907,7 +1917,7 @@ def _xlsx_value(header: str, value: Any) -> Any:
         return ""
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
-    if header in {"discovered_at", "report_generated_at", "generated_at"}:
+    if header in {"discovered_at", "report_generated_at", "generated_at", "last_processed_at"}:
         return _format_datetime_ru(value)
     if header.endswith("_created_at") or header == "created_at" or header.endswith("_at") or header in {"period_min_created_at", "period_max_created_at"}:
         return _format_date_ru(value)
@@ -1956,6 +1966,18 @@ _FUTURE_GOAL_RU = {
 }
 
 
+def _run_id_datetime(run_id: Any) -> str:
+    raw = str(run_id or "").strip()
+    match = re.match(r"^(\d{8})-(\d{6})$", raw)
+    if not match:
+        return ""
+    try:
+        dt = datetime.strptime("".join(match.groups()), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except Exception:
+        return ""
+
+
 def _display_row(row: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(row)
     text = str(enriched.get("text_snapshot") or enriched.get("text") or "")
@@ -1976,7 +1998,15 @@ def _display_row(row: dict[str, Any]) -> dict[str, Any]:
         enriched.setdefault("current_post_text", "")
         enriched.setdefault("source_post_text", source_post)
     enriched.setdefault("reply_parent_comment_text", parent)
-    enriched.setdefault("future_goal_ru", _FUTURE_GOAL_RU.get(action_type, "диагностика/не выбрано для будущего действия"))
+    if not enriched.get("processed_in_run_id") and enriched.get("run_id"):
+        enriched["processed_in_run_id"] = enriched.get("run_id")
+    if not enriched.get("last_processed_at"):
+        enriched["last_processed_at"] = _run_id_datetime(enriched.get("processed_in_run_id") or enriched.get("run_id"))
+    criteria = str(enriched.get("criteria_status") or "")
+    if criteria.startswith("rejected"):
+        enriched.setdefault("future_goal_ru", "")
+    else:
+        enriched.setdefault("future_goal_ru", _FUTURE_GOAL_RU.get(action_type, "диагностика/не выбрано для будущего действия"))
     return enriched
 
 
@@ -1992,6 +2022,7 @@ def _append_data_rows(
 
     selected_fill = PatternFill("solid", fgColor="C6EFCE")
     increment_fill = PatternFill("solid", fgColor="FFF2CC")
+    goal_fill = PatternFill("solid", fgColor="E2F0D9")
     for row in rows:
         display_row = _display_row(row)
         ws.append([_xlsx_value(h, display_row.get(h)) for h in headers])
@@ -2014,6 +2045,9 @@ def _append_data_rows(
                 for header in delta_headers:
                     if header in headers:
                         ws.cell(ws.max_row, headers.index(header) + 1).fill = increment_fill
+        elif style == "goal":
+            for cell in ws[ws.max_row]:
+                cell.fill = goal_fill
         if hyperlink_field and display_row.get(hyperlink_field):
             url_cell = ws.cell(ws.max_row, headers.index(hyperlink_field) + 1)
             url_cell.hyperlink = str(display_row.get(hyperlink_field))
@@ -2046,9 +2080,28 @@ def _criteria_status(row: dict[str, Any]) -> tuple[str, str]:
 
 def _processed_comment_rows(candidates: list[dict[str, Any]], *, gate_model: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
     monitoring_rows = [r for r in candidates if str(r.get("candidate_usage_scope") or "") == "monitoring_candidate"]
-    if gate_model and any(str(r.get("model_name") or "") == gate_model for r in monitoring_rows):
-        monitoring_rows = [r for r in monitoring_rows if str(r.get("model_name") or "") == gate_model]
-    best = _best_context_rows(monitoring_rows)
+    by_context: dict[str, dict[str, Any]] = {}
+    for row in monitoring_rows:
+        key = str(row.get("context_url") or row.get("comment_id") or row.get("text_snapshot") or "")
+        if not key:
+            continue
+        bucket = by_context.setdefault(key, {"rows": [], "models": set()})
+        bucket["rows"].append(row)
+        if row.get("model_name"):
+            bucket["models"].add(str(row.get("model_name")))
+    best: list[dict[str, Any]] = []
+    for bucket in by_context.values():
+        rows = bucket["rows"]
+        if gate_model:
+            gate_rows = [r for r in rows if str(r.get("model_name") or "") == gate_model]
+            rows = gate_rows or rows
+        row = sorted(rows, key=lambda r: float(r.get("rank_global") or 999999))[0]
+        enriched = dict(row)
+        models = sorted(bucket["models"])
+        enriched["models_matched"] = ", ".join(models)
+        enriched["model_count"] = len(models)
+        enriched["best_score"] = max(_row_score(r) for r in bucket["rows"])
+        best.append(enriched)
     out: list[dict[str, Any]] = []
     for row in sorted(best, key=lambda r: str(r.get("created_at") or ""), reverse=True)[:limit]:
         status, status_ru = _criteria_status(row)
@@ -2065,6 +2118,94 @@ def _rejected_noise_rows(processed_rows: list[dict[str, Any]], *, limit: int = 3
         row for row in processed_rows
         if str(row.get("criteria_status") or "").startswith("rejected")
     ][:limit]
+
+
+_GOAL_SHEET_SPECS: dict[str, dict[str, Any]] = {
+    "goal_ask_event_details": {
+        "title": "уточняющие вопросы организаторам",
+        "actions": {"organizer_visibility_clarification"},
+        "source_posts": True,
+    },
+    "goal_reply_events": {
+        "title": "ответы на вопросы о событиях",
+        "actions": {"event_recommendation_reply", "event_site_search_or_listing", "badge_filter_need"},
+        "source_posts": False,
+    },
+    "goal_reply_routes": {
+        "title": "ответы рекомендацией маршрута",
+        "actions": {"trip_route_poi_recommendation"},
+        "source_posts": False,
+    },
+    "goal_other_acq": {
+        "title": "прочие acquisition-кандидаты",
+        "actions": {"organizer_submission_or_partnership"},
+        "source_posts": False,
+    },
+}
+
+
+def _goal_candidate_rows(
+    candidates: list[dict[str, Any]],
+    *,
+    actions: set[str],
+    source_posts: bool | None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in candidates:
+        action = str(row.get("candidate_action_type") or _action_for_intent(str(row.get("intent_set") or "")))
+        if action not in actions:
+            continue
+        is_source_post = _is_source_post_context(row)
+        if source_posts is True and not is_source_post:
+            continue
+        if source_posts is False and is_source_post:
+            continue
+        if not _report_candidate_eligible(row, allow_source_posts=True, allow_historical=False):
+            continue
+        key = (str(row.get("context_url") or row.get("comment_id") or row.get("text_snapshot") or ""), action)
+        if not key[0]:
+            continue
+        bucket = grouped.setdefault(key, {"best": row, "models": set(), "intent_sets": set(), "phrases": set()})
+        bucket["models"].add(str(row.get("model_name") or "unknown"))
+        bucket["intent_sets"].add(str(row.get("intent_set") or ""))
+        if row.get("top_intent_phrase"):
+            bucket["phrases"].add(str(row.get("top_intent_phrase")))
+        if _row_score(row) > _row_score(bucket["best"]):
+            bucket["best"] = row
+    out: list[dict[str, Any]] = []
+    for bucket in grouped.values():
+        best = dict(bucket["best"])
+        models = sorted(m for m in bucket["models"] if m)
+        best["models_matched"] = ", ".join(models)
+        best["model_count"] = len(models)
+        best["best_score"] = _row_score(best)
+        best["future_goal_ru"] = _FUTURE_GOAL_RU.get(str(best.get("candidate_action_type") or ""), "")
+        best["llm_final_check_ru"] = "нужна финальная LLM-проверка перед реальным ответом/вопросом"
+        best["llm_queue_status_ru"] = "в top-N LLM queue" if _truthy_value(best.get("is_in_llm_gate_queue")) else "векторный кандидат; ждёт LLM gate"
+        out.append(best)
+    return sorted(out, key=lambda r: (-int(r.get("model_count") or 0), -float(r.get("best_score") or 0), str(r.get("created_at") or "")))[:limit]
+
+
+def _monitoring_target_rows(surface_summaries: list[dict[str, Any]], *, limit: int = 500) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in surface_summaries:
+        answerable = int(float(row.get("answerable_question_candidates") or 0))
+        ask = int(float(row.get("ask_clarification_contexts") or 0))
+        status = str(row.get("selection_status") or "")
+        if status == "rejected" and answerable <= 0 and ask <= 0:
+            continue
+        if answerable <= 0 and ask <= 0 and status != "selected":
+            continue
+        enriched = dict(row)
+        enriched["last_processed_at"] = _run_id_datetime(row.get("last_analyzed_run_id") or row.get("discovered_in_run_id"))
+        rows.append(enriched)
+    return sorted(rows, key=lambda r: (
+        {"selected": 0, "candidate": 1, "rejected": 2}.get(str(r.get("selection_status") or ""), 9),
+        -int(float(r.get("answerable_question_candidates") or 0)),
+        -int(float(r.get("ask_clarification_contexts") or 0)),
+        str(r.get("surface_title") or r.get("surface_key") or ""),
+    ))[:limit]
 
 
 def _write_xlsx(
@@ -2084,6 +2225,8 @@ def _write_xlsx(
     decision_delta_rows: list[dict[str, Any]] | None = None,
     processed_comment_rows: list[dict[str, Any]] | None = None,
     rejected_noise_rows: list[dict[str, Any]] | None = None,
+    goal_candidate_rows: dict[str, list[dict[str, Any]]] | None = None,
+    monitoring_target_rows: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         from openpyxl import Workbook
@@ -2100,7 +2243,8 @@ def _write_xlsx(
         "relation", "is_post", "evidence_type_ru", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url",
         "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
         "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
-        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported", "pre_llm_candidate_eligible", "llm_gate_selection_basis",
+        "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported",
+        "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis",
     ]
     manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Площадка" for h in headers[10:20]} | {h: "Текст и контекст" for h in headers[20:25]} | {h: "Решение" for h in headers[25:]}
     _append_grouped_header(ws, headers, manual_groups)
@@ -2135,22 +2279,74 @@ def _write_xlsx(
         for idx, width in enumerate([30, 70, 30, 10, 30, 18, 44, 46, 24, 24, 36, 18, 30, 14, 16, 16, 20, 90], start=1):
             delta.column_dimensions[get_column_letter(idx)].width = width
 
+        run_delta = wb.create_sheet("run_delta_sources")
+        run_delta_headers = [
+            "decision_change_ru", "surface_title", "surface_url", "platform", "surface_type_ru",
+            "selection_status", "increment_status", "comments_embedded", "answerable_question_candidates",
+            "ask_clarification_contexts", "latest_comment_at", "summary_ru",
+        ]
+        run_delta_groups = {h: "Что изменилось в последнем запуске" for h in run_delta_headers[:3]} | {h: "Площадка" for h in run_delta_headers[3:5]} | {h: "Вердикт" for h in run_delta_headers[5:]}
+        _append_grouped_header(run_delta, run_delta_headers, run_delta_groups)
+        if not decision_delta_rows:
+            run_delta.append(["В этом запуске нет подтверждённых изменений источников/площадок.", *[""] * (len(run_delta_headers) - 1)])
+        _append_data_rows(run_delta, decision_delta_rows, run_delta_headers, hyperlink_field="surface_url", style="surface")
+        run_delta.freeze_panes = "A3"
+        for idx, width in enumerate([74, 44, 48, 10, 30, 18, 30, 14, 16, 16, 18, 90], start=1):
+            run_delta.column_dimensions[get_column_letter(idx)].width = width
+
+    if monitoring_target_rows is not None:
+        targets = wb.create_sheet("monitoring_targets")
+        target_headers = [
+            "selection_status", "recommendation", "surface_title", "surface_url", "platform", "surface_type_ru",
+            "last_analyzed_run_id", "last_processed_at", "discovered_at", "discovered_in_run_id",
+            "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at",
+            "answerable_question_candidates", "route_poi_questions", "event_questions", "event_site_search_questions",
+            "ask_clarification_contexts", "comments_embedded", "unique_commenters", "members_or_subscribers", "summary_ru",
+        ]
+        target_groups = {h: "Вердикт для постоянного мониторинга" for h in target_headers[:4]} | {h: "Площадка" for h in target_headers[4:10]} | {h: "Накопительный результат" for h in target_headers[10:]}
+        _append_grouped_header(targets, target_headers, target_groups)
+        if not monitoring_target_rows:
+            targets.append(["empty", "Пока нет площадок с подтверждённым полезным сигналом для постоянного мониторинга.", *[""] * (len(target_headers) - 2)])
+        _append_data_rows(targets, monitoring_target_rows, target_headers, hyperlink_field="surface_url", style="surface")
+        targets.freeze_panes = "A3"
+        for idx, width in enumerate([18, 36, 44, 48, 10, 30, 20, 20, 20, 20, 18, 18, 18, 16, 14, 14, 14, 16, 14, 14, 20, 90], start=1):
+            targets.column_dimensions[get_column_letter(idx)].width = width
+
+    if goal_candidate_rows is not None:
+        goal_headers = [
+            "future_goal_ru", "llm_final_check_ru", "llm_queue_status_ru", "models_matched", "model_count", "best_score",
+            "surface_title", "surface_key", "platform", "surface_type", "context_url", "created_at", "comment_age_days",
+            "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
+            "top_intent_phrase", "intent_set", "candidate_action_type", "processed_in_run_id", "last_processed_at",
+        ]
+        for sheet_name, spec in _GOAL_SHEET_SPECS.items():
+            sheet_rows = goal_candidate_rows.get(sheet_name, [])
+            goal = wb.create_sheet(sheet_name)
+            goal_groups = {h: "Кандидат по цели" for h in goal_headers[:6]} | {h: "Где найдено" for h in goal_headers[6:13]} | {h: "Текст и контекст" for h in goal_headers[13:18]} | {h: "Почему подходит" for h in goal_headers[18:]}
+            _append_grouped_header(goal, goal_headers, goal_groups)
+            if not sheet_rows:
+                goal.append([f"Нет кандидатов: {spec.get('title')}", *[""] * (len(goal_headers) - 1)])
+            _append_data_rows(goal, sheet_rows, goal_headers, hyperlink_field="context_url", style="goal")
+            goal.freeze_panes = "A3"
+            for idx, width in enumerate([54, 54, 28, 42, 10, 12, 44, 30, 10, 18, 48, 18, 14, 28, 90, 70, 90, 90, 60, 28, 34, 20, 20], start=1):
+                goal.column_dimensions[get_column_letter(idx)].width = width
+
     if processed_comment_rows is not None:
         processed_index = 2 if (dashboard_rows and decision_delta_rows is not None) else (1 if (dashboard_rows or decision_delta_rows is not None) else 0)
         processed = wb.create_sheet("processed_comments_last_run", processed_index)
         processed_headers = [
-            "criteria_status_ru", "criteria_status", "analysis_kind", "model_name", "score", "rank_global",
-            "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
-            "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
-            "future_goal_ru", "top_intent_phrase", "intent_set",
-            "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
-            "pre_llm_candidate_eligible", "llm_gate_selection_basis",
-        ]
-        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:6]} | {h: "Где найдено" for h in processed_headers[6:13]} | {h: "Текст и контекст" for h in processed_headers[13:20]} | {h: "Почему принято/отклонено" for h in processed_headers[20:]}
+        "criteria_status_ru", "criteria_status", "analysis_kind", "model_name", "models_matched", "model_count", "score", "best_score", "rank_global",
+        "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
+        "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
+        "future_goal_ru", "top_intent_phrase", "intent_set",
+        "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
+        "is_in_llm_gate_queue", "llm_queue_status_ru",
+    ]
+        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:9]} | {h: "Где найдено" for h in processed_headers[9:16]} | {h: "Текст и контекст" for h in processed_headers[16:23]} | {h: "Почему принято/отклонено" for h in processed_headers[23:]}
         _append_grouped_header(processed, processed_headers, processed_groups)
         _append_data_rows(processed, processed_comment_rows, processed_headers, hyperlink_field="context_url")
         processed.freeze_panes = "A3"
-        for idx, width in enumerate([62, 30, 16, 34, 12, 12, 30, 10, 18, 22, 10, 18, 14, 48, 28, 90, 70, 90, 90, 54, 60, 28, 34, 14, 30, 18, 18, 34], start=1):
+        for idx, width in enumerate([62, 30, 16, 34, 42, 10, 12, 12, 12, 30, 10, 18, 22, 10, 18, 14, 48, 28, 90, 70, 90, 90, 54, 60, 28, 34, 14, 30, 18, 18, 28], start=1):
             processed.column_dimensions[get_column_letter(idx)].width = width
 
     if rejected_noise_rows is not None:
@@ -2305,7 +2501,7 @@ def _write_xlsx(
     if intent_catalog_rows:
         cat = wb.create_sheet("intent_catalog")
         cat_headers = ["intent_set", "intent_set_ru", "phrase_order", "model_phrase", "candidate_action_type", "is_negative", "note_ru"]
-        cat_groups = {h: "Группа смысла" for h in cat_headers[:3]} | {h: "Модельная фраза" for h in cat_headers[3:]} 
+        cat_groups = {h: "Группа смысла" for h in cat_headers[:3]} | {h: "Модельная фраза" for h in cat_headers[3:]}
         _append_grouped_header(cat, cat_headers, cat_groups)
         _append_data_rows(cat, intent_catalog_rows, cat_headers)
         cat.freeze_panes = "A3"
@@ -2326,6 +2522,40 @@ def _write_xlsx(
         {"metric": "rows", "value": len(rows)},
         {"metric": "generated_at", "value": datetime.now(timezone.utc).isoformat()},
     ], ["metric", "value"])
+
+    preferred_order = [
+        "summary_ru",
+        "run_delta_sources",
+        "monitoring_targets",
+        "goal_ask_event_details",
+        "goal_reply_events",
+        "goal_reply_routes",
+        "goal_other_acq",
+        "surface_summary",
+        "full_surface_list",
+        "summary_counts",
+        "decision_deltas",
+        "processed_comments_last_run",
+        "rejected_noise_examples",
+        "manual_review",
+        "answerable_e5_base",
+        "answerable_bge_m3",
+        "ask_contexts_e5_base",
+        "ask_contexts_bge_m3",
+        "question_patterns",
+        "canonical_questions",
+        "intent_catalog",
+        "scope",
+        "summary",
+    ]
+    insert_at = 0
+    for sheet_name in preferred_order:
+        if sheet_name not in wb.sheetnames:
+            continue
+        sheet = wb[sheet_name]
+        wb._sheets.remove(sheet)
+        wb._sheets.insert(insert_at, sheet)
+        insert_at += 1
     wb.save(path)
 
 
@@ -2393,8 +2623,18 @@ def _load_models_from_env() -> list[str]:
     models = _json_env("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", DEFAULT_MODELS)
     if isinstance(models, str):
         models = [models]
-    out = [str(m).strip() for m in models if str(m).strip()]
-    return out or list(DEFAULT_MODELS)
+    out: list[str] = []
+    for model in models:
+        clean = str(model).strip()
+        if clean and clean not in out:
+            out.append(clean)
+    # Product contract: every collected comment/post-context is embedded by
+    # both supported semantic models. Operators may add extra models, but cannot
+    # accidentally downgrade a live discovery run to a one-model smoke.
+    for required in REQUIRED_MODELS:
+        if required not in out:
+            out.append(required)
+    return out or list(REQUIRED_MODELS)
 
 
 def _batch_for_model(model_name: str) -> int:
@@ -2416,7 +2656,7 @@ def run_comment_semantic_retrieval(
     output_path.mkdir(parents=True, exist_ok=True)
     scoring_method = os.getenv("ACQ_COMMENT_RETRIEVAL_SCORING_METHOD") or DEFAULT_SCORING_METHOD
     max_length = _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LENGTH", 128, min_value=16)
-    max_llm_candidates = _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", _int_env("ACQ_MAX_LLM_CALLS_PER_RUN", 80, min_value=1), min_value=1)
+    max_llm_candidates = _int_env("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", 24, min_value=1)
     max_manual_rows = _int_env("ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS", 800, min_value=20)
     models = _load_models_from_env()
     source_run_id = _source_run_id_from_env()
@@ -2523,6 +2763,16 @@ def run_comment_semantic_retrieval(
         and c.get("candidate_usage_scope") == "monitoring_candidate"
     ]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
+    gate_candidate_keys = {
+        (str(c.get("context_url") or c.get("comment_id") or c.get("text_snapshot") or ""), str(c.get("model_name") or ""))
+        for c in gate_candidates
+    }
+    for c in all_candidates:
+        c["is_in_llm_gate_queue"] = (
+            str(c.get("context_url") or c.get("comment_id") or c.get("text_snapshot") or ""),
+            str(c.get("model_name") or ""),
+        ) in gate_candidate_keys
+        c["llm_queue_status_ru"] = "в top-N LLM queue" if c["is_in_llm_gate_queue"] else "нет"
 
     progress_callback("surface_profile", {"surfaces": len({r.get('surface_key') for r in records}), "progress_percent": 78})
     profiles: list[dict[str, Any]] = []
@@ -2594,6 +2844,15 @@ def run_comment_semantic_retrieval(
         scoring_method=scoring_method,
     )
     decision_deltas = _decision_delta_rows(surface_inventory, scope_rows=scope_rows)
+    goal_candidate_sheets = {
+        sheet_name: _goal_candidate_rows(
+            all_candidates,
+            actions=set(spec["actions"]),
+            source_posts=bool(spec["source_posts"]),
+        )
+        for sheet_name, spec in _GOAL_SHEET_SPECS.items()
+    }
+    monitoring_targets = _monitoring_target_rows(surface_summaries)
     dashboard_rows = _dashboard_summary_rows(
         summary={
             "comments_embedded": len(records),
@@ -2626,7 +2885,7 @@ def run_comment_semantic_retrieval(
         "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
-        "intent_text_supported", "pre_llm_candidate_eligible", "llm_gate_selection_basis", "model_disagreement_bucket",
+        "intent_text_supported", "pre_llm_candidate_eligible", "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis", "model_disagreement_bucket",
     ]
     _write_csv(candidates_csv, all_candidates, candidate_fields)
     _write_csv(profiles_csv, [{**p, "semantic_presence": json.dumps(p.get("semantic_presence"), ensure_ascii=False), "dominant_detected_interests": ",".join(p.get("dominant_detected_interests") or [])} for p in profiles], [
@@ -2680,6 +2939,8 @@ def run_comment_semantic_retrieval(
         decision_delta_rows=decision_deltas,
         processed_comment_rows=processed_last_run,
         rejected_noise_rows=rejected_noise_examples,
+        goal_candidate_rows=goal_candidate_sheets,
+        monitoring_target_rows=monitoring_targets,
     )
 
     summary = {

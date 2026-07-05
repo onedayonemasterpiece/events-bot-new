@@ -26,6 +26,7 @@ TERMINAL_FAILED = {"ERROR", "FAILED", "CANCELED", "CANCELLED", "CANCEL_ACKNOWLED
 REMOTE_SESSION_COOLDOWN_SECONDS_DEFAULT = 600
 DISCOVERY_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
 LEGACY_S22_AUTH_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_S22"
+REQUIRED_COMMENT_RETRIEVAL_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 TELEGA_IN_KALININGRAD_TG_SEEDS = [
     ("Kaliningrad_jenskiy", "Женский чат Калининград", "https://telega.in/channels/Kaliningrad_jenskiy/card"),
@@ -206,6 +207,28 @@ class DiscoveryRuntimeResult:
 
 def _json_env_value(items: list[Any]) -> str:
     return json.dumps([item for item in items if str(item).strip()], ensure_ascii=False)
+
+
+def _comment_retrieval_models_env_value() -> str:
+    """Always ship both supported semantic models to Kaggle.
+
+    A local env override may append experimental models, but cannot accidentally
+    turn the live discovery report into a one-model smoke report.
+    """
+    configured: list[Any] = []
+    raw = (os.getenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON") or "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            configured = parsed if isinstance(parsed, list) else [parsed]
+        except Exception:
+            configured = [raw]
+    models: list[str] = []
+    for model in [*configured, *REQUIRED_COMMENT_RETRIEVAL_MODELS]:
+        clean = str(model or "").strip()
+        if clean and clean not in models:
+            models.append(clean)
+    return json.dumps(models or list(REQUIRED_COMMENT_RETRIEVAL_MODELS), ensure_ascii=False)
 
 
 def _vk_seed_item_priority(item: dict[str, Any], index: int) -> tuple[int, int]:
@@ -587,9 +610,9 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP": os.getenv("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", "30"),
         "ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN": os.getenv("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", "80"),
         "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL": os.getenv("ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL", "0"),
-        "ACQ_COMMENT_RETRIEVAL_MODELS_JSON": os.getenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", ""),
+        "ACQ_COMMENT_RETRIEVAL_MODELS_JSON": _comment_retrieval_models_env_value(),
         "ACQ_COMMENT_RETRIEVAL_GATE_MODEL": os.getenv("ACQ_COMMENT_RETRIEVAL_GATE_MODEL", ""),
-        "ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES": os.getenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", ""),
+        "ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES": os.getenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", "24"),
         "ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS": os.getenv("ACQ_COMMENT_RETRIEVAL_MANUAL_SAMPLE_ROWS", ""),
         "ACQ_COMMENT_RETRIEVAL_SCORING_METHOD": os.getenv("ACQ_COMMENT_RETRIEVAL_SCORING_METHOD", ""),
         "ACQ_COMMENT_RETRIEVAL_DEVICE": os.getenv("ACQ_COMMENT_RETRIEVAL_DEVICE", ""),

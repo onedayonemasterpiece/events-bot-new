@@ -269,6 +269,7 @@ VK_SCAN_STATS: dict[str, int] = {
     "surfaces_rejected_inaccessible": 0,
     "profile_surfaces_discovered_from_authors": 0,
     "profile_surfaces_discovered_from_members": 0,
+    "profile_surfaces_metadata_enriched": 0,
 }
 TG_SCAN_STATS: dict[str, int] = {
     "surfaces_attempted": 0,
@@ -1706,6 +1707,115 @@ def _enrich_vk_surface_profile_metadata(surface: dict[str, Any], *, domain: str,
             pass
 
 
+def _vk_profile_domain_from_surface(surface: dict[str, Any]) -> str:
+    for value in [
+        str(surface.get("external_id") or "").split(":", 1)[-1],
+        surface.get("handle"),
+        _handle_from_url(str(surface.get("url") or ""), platform="vk") if surface.get("url") else "",
+    ]:
+        clean = str(value or "").strip().strip("/").rstrip(".,)")
+        if _is_vk_profile_domain(clean):
+            return clean
+    return ""
+
+
+def _enrich_vk_discovered_profile_surfaces(
+    surfaces: dict[str, dict[str, Any]],
+    *,
+    token_lanes: list[tuple[str, str]],
+    diagnostics: list[str],
+) -> None:
+    """Resolve FIO/screen_name for newly discovered profile-wall candidates.
+
+    The scan itself can only discover `vk:id...` from public author/member ids.
+    Reports become unreadable if those candidates stay as bare numeric ids, so
+    this best-effort read-only metadata pass runs before payload/report export.
+    """
+    if not token_lanes:
+        return
+    cap = _int_env("ACQ_MAX_VK_PROFILE_NAME_ENRICH_PER_RUN", 100, min_value=0)
+    if cap <= 0:
+        return
+    targets: list[tuple[str, dict[str, Any], str]] = []
+    for key, surface in surfaces.items():
+        if str(surface.get("platform") or "").strip().lower() != "vk":
+            continue
+        if str(surface.get("surface_type") or "").strip().lower() != "profile":
+            continue
+        domain = _vk_profile_domain_from_surface(surface)
+        if not domain:
+            continue
+        if surface.get("title") and not str(surface.get("title")).startswith("id"):
+            continue
+        targets.append((key, surface, domain))
+        if len(targets) >= cap:
+            break
+    if not targets:
+        return
+    by_domain = {domain.casefold(): (key, surface) for key, surface, domain in targets}
+    enriched = 0
+    chunk_size = 100
+    for offset in range(0, len(targets), chunk_size):
+        chunk = targets[offset: offset + chunk_size]
+        try:
+            response, lane = _vk_api_with_fallback(
+                "users.get",
+                token_lanes=token_lanes,
+                params={
+                    "user_ids": ",".join(domain for _key, _surface, domain in chunk),
+                    "fields": "screen_name,followers_count",
+                },
+            )
+        except Exception as exc:
+            diagnostics.append(f"vk profile metadata enrichment failed: {exc}")
+            continue
+        users = response if isinstance(response, list) else []
+        for user in users:
+            if not isinstance(user, dict):
+                continue
+            keys = []
+            if user.get("id") is not None:
+                keys.append(f"id{int(user.get('id') or 0)}".casefold())
+            screen_name = str(user.get("screen_name") or "").strip()
+            if screen_name:
+                keys.append(screen_name.casefold())
+            matched = next((by_domain[k] for k in keys if k in by_domain), None)
+            if not matched:
+                continue
+            _key, surface = matched
+            first = str(user.get("first_name") or "").strip()
+            last = str(user.get("last_name") or "").strip()
+            title = " ".join(x for x in [first, last] if x).strip()
+            if title:
+                surface["title"] = title
+                enriched += 1
+            if screen_name:
+                surface["handle"] = screen_name
+                surface["url"] = f"https://vk.com/{screen_name}"
+            reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
+            if user.get("followers_count") is not None:
+                try:
+                    reach["followers"] = int(user.get("followers_count") or 0)
+                    reach["basis"] = "vk_profile_metadata"
+                    reach["confidence"] = "medium"
+                    surface["reach"] = reach
+                except Exception:
+                    pass
+        if users:
+            diagnostics.append(f"vk profiles: enriched metadata for {enriched} profile-wall candidates via users.get/{lane}")
+    VK_SCAN_STATS["profile_surfaces_metadata_enriched"] += enriched
+
+
+def _finalize_vk_scan_surfaces(
+    surfaces: dict[str, dict[str, Any]],
+    *,
+    token_lanes: list[tuple[str, str]],
+    diagnostics: list[str],
+) -> list[dict[str, Any]]:
+    _enrich_vk_discovered_profile_surfaces(surfaces, token_lanes=token_lanes, diagnostics=diagnostics)
+    return list(surfaces.values())
+
+
 def _vk_topic_context_url(group_id: int, topic_id: int, comment_id: int | None = None) -> str:
     url = f"https://vk.com/topic-{group_id}_{topic_id}"
     if comment_id:
@@ -2054,7 +2164,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     board_comments=max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before),
                 )
                 VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
-                return list(surfaces.values()), opportunities, diagnostics
+                return _finalize_vk_scan_surfaces(surfaces, token_lanes=token_lanes, diagnostics=diagnostics), opportunities, diagnostics
             board_delta = max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before)
             topic_delta = max(0, int(VK_SCAN_STATS.get("board_topics_seen", 0)) - board_topics_before)
             if board_delta > 0:
@@ -2115,7 +2225,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                     if reviewed_post_opp:
                         opportunities.append(reviewed_post_opp)
                         if len(opportunities) >= _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 20, min_value=1):
-                            return list(surfaces.values()), opportunities, diagnostics
+                            return _finalize_vk_scan_surfaces(surfaces, token_lanes=token_lanes, diagnostics=diagnostics), opportunities, diagnostics
             if not owner_id or not post_id:
                 continue
             comment_count = int(((post.get("comments") or {}).get("count") or 0) if isinstance(post.get("comments"), dict) else 0)
@@ -2205,7 +2315,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
                 board_comments=max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before),
             )
             VK_SCAN_STATS["surfaces_with_comments_or_boards"] += 1
-            return list(surfaces.values()), opportunities, diagnostics
+            return _finalize_vk_scan_surfaces(surfaces, token_lanes=token_lanes, diagnostics=diagnostics), opportunities, diagnostics
         wall_delta = max(0, int(VK_SCAN_STATS.get("comments_seen", 0)) - wall_comments_before)
         board_delta = max(0, int(VK_SCAN_STATS.get("board_comments_seen", 0)) - board_comments_before)
         if wall_delta > 0 or board_delta > 0:
@@ -2214,7 +2324,7 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
         else:
             _mark_vk_surface_no_comments(surface)
             VK_SCAN_STATS["surfaces_rejected_no_comments"] += 1
-    return list(surfaces.values()), opportunities, diagnostics
+    return _finalize_vk_scan_surfaces(surfaces, token_lanes=token_lanes, diagnostics=diagnostics), opportunities, diagnostics
 
 def _load_status_loader():
     try:

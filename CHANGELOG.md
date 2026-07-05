@@ -15,6 +15,12 @@
 
 ### Changed
 
+- Subscriber Acquisition semantic retrieval now always ships/runs both required
+  embedding models on Kaggle, caps the default Gemma top-N queue at 24, resolves
+  discovered VK profile-wall names via `users.get`, and reorganizes the XLSX
+  into first-read `run_delta_sources`, cumulative `monitoring_targets`, and
+  separate goal sheets for organizer clarifications, event replies, route
+  replies and other acquisition candidates.
 - Clarified Subscriber Acquisition XLSX report semantics: report sheets now use
   operator-facing “площадка”, split user comments, reply-parent comments and
   source post/announcement text into separate columns, and expose the future

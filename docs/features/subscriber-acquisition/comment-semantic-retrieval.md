@@ -159,11 +159,13 @@ Run exactly the same comment dataset and preprocessing through both models:
 Do not choose thresholds from absolute cosine values before analyzing score
 distributions. Ranking and percentiles are primary.
 
-Bounded live smoke runs with a hard wall-clock target (for example the current
-≤10 minute Kaggle discovery check) may explicitly run only one model via
-`ACQ_COMMENT_RETRIEVAL_MODELS_JSON` to leave time for TG/VK scan and Gemma gate.
-Such files must be labelled as smoke reports, not as the e5-base vs BGE-M3
-benchmark.
+Bounded live runs with a hard wall-clock target (for example the current
+≤10 minute Kaggle discovery check) may reduce scanned surfaces/messages and the
+Gemma top-N gate, but **must not** reduce semantic retrieval to one embedding
+model. The runtime always appends both required models
+(`intfloat/multilingual-e5-base`, `BAAI/bge-m3`) even when
+`ACQ_COMMENT_RETRIEVAL_MODELS_JSON` is misconfigured to a single model; local
+overrides may only add experimental models.
 
 ### Scoring methods
 
@@ -441,7 +443,10 @@ The XLSX must include these operator-facing sheets:
   It must never put a source post into a column named “Комментарий”: operator
   columns are split into `current_comment_text`, `reply_parent_comment_text`,
   `source_post_text`, `current_post_text`, `evidence_type_ru` and
-  `future_goal_ru`.
+  `future_goal_ru`. This sheet is diagnostic, not the candidate shortlist: it
+  shows `models_matched`/`model_count` and a clear `llm_queue_status_ru` so a
+  rejected/noise row cannot visually look like a future-goal candidate only
+  because it came from the semantic top-N pool.
 - `rejected_noise_examples`: diagnostic noise only. “Lost phone / found items”
   style comments may appear here because negative vectors are used after
   collection/embedding as evidence of filtering; they must not be promoted into
@@ -452,6 +457,27 @@ The XLSX must include these operator-facing sheets:
   `analyzed_comments_this_run`, plus explicit delta columns for removed
   surfaces, selected/candidate/rejected-in-delta, embedded comments and
   answerable questions in the delta.
+- `run_delta_sources`: short, first-read version of the last-run delta with
+  only changed/newly touched площадки and clickable links. It exists so the
+  operator can immediately see what the latest Kaggle run actually changed
+  before opening the full inventory.
+- `monitoring_targets`: cumulative “selected/candidate for permanent
+  monitoring” sheet. It contains only площадки with confirmed useful semantic
+  signal or an already selected status, with live links, last analyzed run/time,
+  latest event-question and latest route-recommendation dates, answerable/ask
+  counts and member/commenter stats when collected.
+- `goal_ask_event_details`: short candidate sheet for organizer-owned posts or
+  contexts where the future action is to ask a useful clarification about an
+  event.
+- `goal_reply_events`: short candidate sheet for user comments/questions where
+  the future action is to answer about events, afisha/search/listing or quick
+  event filters.
+- `goal_reply_routes`: short candidate sheet for user comments/questions where
+  the future action is to answer with a route/POI recommendation.
+- `goal_other_acq`: short candidate sheet for organizer submission/partnership
+  acquisition questions. A row may repeat across diagnostic/model sheets, but
+  goal sheets must contain only useful vector-selected candidates that still
+  require final LLM validation before any real public reply.
 - `scope`: run id, stage, model list/gate model, actual comment period,
   platform/surface/relation counts and the configured scan budgets; this answers
   whether the file came from all stored surfaces or from a bounded Kaggle sample.
@@ -491,7 +517,8 @@ The XLSX must include these operator-facing sheets:
 - `intent_catalog`: the complete catalog of model phrases/senses embedded as
   retrieval queries. The per-candidate `top_intent_phrase` is the closest phrase
   from this catalog for the candidate’s `intent_set`.
-- `manual_review`: mixed calibration sample with empty human-label columns.
+- `manual_review`: mixed calibration sample with empty human-label columns; it
+  is intentionally noisier than goal sheets.
 
 The report must expose the planned future acquisition goal for each candidate:
 `event_recommendation_reply` = answer event questions,
@@ -616,7 +643,8 @@ The research stage is complete only when:
 6. route/POI candidates include destination/POI/transport hints and
    `route_target_status`;
 7. the report compares speed and candidate quality of e5-base vs bge-m3;
-8. the report recommends one model/config for the next MVP run;
+8. the report shows both-model output, speed and candidate differences while
+   keeping the configured gate model explicit for the bounded Gemma top-N queue;
 9. no full-comment LLM processing is used;
 10. no production table is mutated without explicit approval;
 11. no external Telegram/VK posting happens.

@@ -454,7 +454,13 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert "full_surface_list" in workbook.sheetnames
     assert "question_patterns" in workbook.sheetnames
     assert "canonical_questions" in workbook.sheetnames
-    assert workbook.sheetnames[:3] == ["summary_ru", "decision_deltas", "processed_comments_last_run"]
+    assert "monitoring_targets" in workbook.sheetnames
+    assert "goal_ask_event_details" in workbook.sheetnames
+    assert "goal_reply_events" in workbook.sheetnames
+    assert "goal_reply_routes" in workbook.sheetnames
+    assert "answerable_e5_base" in workbook.sheetnames
+    assert "answerable_bge_m3" in workbook.sheetnames
+    assert workbook.sheetnames[:3] == ["summary_ru", "run_delta_sources", "monitoring_targets"]
     summary_values = [row[1] for row in workbook["summary_ru"].iter_rows(min_row=3, max_col=2, values_only=True)]
     assert "Площадок с анализом комментариев" in summary_values
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
@@ -530,6 +536,34 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
                 "increment_status": "newly_discovered_this_run",
             }
         ],
+        monitoring_target_rows=[
+            {
+                "selection_status": "selected",
+                "recommendation": "monitor_for_reply_opportunities",
+                "surface_title": "Selected",
+                "surface_url": "https://t.me/selected",
+                "platform": "tg",
+                "surface_type_ru": "Telegram-группа/чат",
+                "answerable_question_candidates": 1,
+            }
+        ],
+        goal_candidate_rows={
+            "goal_reply_routes": [
+                {
+                    "future_goal_ru": "отвечать на вопросы рекомендацией маршрута",
+                    "context_url": "https://t.me/selected/1",
+                    "text_snapshot": "Куда съездить на один день?",
+                    "source_post_text_snapshot": "Про поездки по области",
+                    "candidate_action_type": "trip_route_poi_recommendation",
+                    "models_matched": "intfloat/multilingual-e5-base, BAAI/bge-m3",
+                    "model_count": 2,
+                    "best_score": 0.5,
+                }
+            ],
+            "goal_ask_event_details": [],
+            "goal_reply_events": [],
+            "goal_other_acq": [],
+        },
         processed_comment_rows=[
             {
                 "criteria_status_ru": "соответствует: реальный вопрос",
@@ -563,10 +597,12 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
     from openpyxl import load_workbook
 
     workbook = load_workbook(path)
-    assert workbook.sheetnames[:3] == ["decision_deltas", "processed_comments_last_run", "rejected_noise_examples"]
+    assert workbook.sheetnames[:3] == ["run_delta_sources", "monitoring_targets", "goal_ask_event_details"]
     assert workbook["surface_summary"]["A3"].fill.fgColor.rgb == "00C6EFCE"
     assert workbook["full_surface_list"]["A3"].fill.fgColor.rgb == "00FFF2CC"
     assert workbook["summary_counts"]["G3"].fill.fgColor.rgb == "00FFF2CC"
+    assert workbook["monitoring_targets"]["A3"].fill.fgColor.rgb == "00C6EFCE"
+    assert workbook["goal_reply_routes"]["A3"].fill.fgColor.rgb == "00E2F0D9"
     processed = workbook["processed_comments_last_run"]
     headers = [cell.value for cell in processed[2]]
     assert "Текущий комментарий" in headers
@@ -696,6 +732,13 @@ def test_comment_semantic_retrieval_vector_scan_does_not_prefilter_before_llm(mo
     route_with_flat_context = {"text_snapshot": "Снимаем квартиру в Калининграде, куда съездить на один день?", "positive_negative_margin": 0.5, "intent_set": "route_poi_close_actionable"}
     retrieval._apply_text_quality_to_candidate(route_with_flat_context, scoring_method="positive_negative_margin")
     assert route_with_flat_context["pre_llm_candidate_eligible"] is True
+
+
+def test_comment_semantic_retrieval_requires_two_models_even_if_env_single(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", '["intfloat/multilingual-e5-base"]')
+
+    assert retrieval._load_models_from_env() == ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 
 def test_comment_semantic_legacy_deterministic_prefilter_is_explicit_opt_in(monkeypatch):
@@ -1622,7 +1665,20 @@ def test_kaggle_runtime_env_allowlists_vk_monitoring_seeds_for_discovery():
     assert "ACQ_MAX_VK_COMMENTS_PER_POST" in env
     assert "ACQ_ENABLE_COMMENT_SEMANTIC_RETRIEVAL" in env
     assert "ACQ_COMMENT_RETRIEVAL_MODELS_JSON" in env
+    assert json.loads(env["ACQ_COMMENT_RETRIEVAL_MODELS_JSON"]) == ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
+    assert env["ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES"] == "24"
     assert env["ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY"] == "1"
+
+
+def test_kaggle_runtime_env_forces_two_semantic_models(monkeypatch):
+    from subscriber_acquisition.config import AcqConfig
+    from subscriber_acquisition.kaggle_runner import _runtime_env_from_config
+
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", '["intfloat/multilingual-e5-base"]')
+
+    env = _runtime_env_from_config(AcqConfig(), {"surfaces": []})
+
+    assert json.loads(env["ACQ_COMMENT_RETRIEVAL_MODELS_JSON"]) == ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 
 def test_kaggle_runtime_env_allows_explicit_vk_profile_wall_seed():
@@ -1668,6 +1724,35 @@ def test_vk_member_profile_discovery_adds_bounded_profile_candidates(monkeypatch
     assert surfaces["vk:id10"]["discovered_in_run_id"] == "member-run"
     assert runtime.VK_SCAN_STATS["profile_surfaces_discovered_from_members"] == 2
     assert "discovered 2 member profile-wall candidates" in diagnostics[0]
+
+
+def test_vk_profile_metadata_enrichment_names_discovered_profiles(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_MAX_VK_PROFILE_NAME_ENRICH_PER_RUN", "10")
+    runtime.VK_SCAN_STATS["profile_surfaces_metadata_enriched"] = 0
+    surface = runtime._profile_surface_from_user_id(10, source="discovered_vk_author", context="comment author")
+    assert surface is not None
+    surfaces = {str(surface["external_id"]): surface}
+
+    def fake_vk(method, *, token_lanes, params):
+        assert method == "users.get"
+        assert params["user_ids"] == "id10"
+        return [{"id": 10, "first_name": "Иван", "last_name": "Иванов", "screen_name": "ivanov", "followers_count": 42}], "TEST_TOKEN"
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+    diagnostics = []
+
+    runtime._enrich_vk_discovered_profile_surfaces(
+        surfaces,
+        token_lanes=[("TEST_TOKEN", "token")],
+        diagnostics=diagnostics,
+    )
+
+    assert surfaces["vk:id10"]["title"] == "Иван Иванов"
+    assert surfaces["vk:id10"]["handle"] == "ivanov"
+    assert surfaces["vk:id10"]["url"] == "https://vk.com/ivanov"
+    assert surfaces["vk:id10"]["reach"]["followers"] == 42
+    assert runtime.VK_SCAN_STATS["profile_surfaces_metadata_enriched"] == 1
 
 
 def test_runtime_env_passes_tg_channel_resolve_budget():
