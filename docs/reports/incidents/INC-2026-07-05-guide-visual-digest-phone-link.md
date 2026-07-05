@@ -39,7 +39,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 - 2026-07-05 09:25 UTC — deployed `deployment-01KWRSFJ3Z0FBVRJ1CW4PY8Y1A`; `/call` initially returned 500 due missing local normalizer import.
 - 2026-07-05 09:28 UTC — deployed `deployment-01KWRSK1P4H7R6NS6JA64E17T1`; `/healthz` ready and `/call?phone=79622555491` returned HTML with `tel:+79622555491` fallback.
 - 2026-07-05 09:29 UTC — Bot API `editMessageReplyMarkup` added inline button `📞 Позвонить: Школа юного альпаковеда` to both messages; user feedback identified this as product-overengineered and not the requested UX.
-- 2026-07-05 09:35 UTC — product correction: remove the button/redirect path and render phone-only Telegram visual digest rows compactly: title links to the source post and the phone remains a bare E.164 suffix (`+79622555491`), while keeping VK human-formatted.
+- 2026-07-05 09:35 UTC — product correction: remove the button/redirect path and render phone-only Telegram visual digest rows as only a linked title, without duplicating the phone next to it, while keeping VK human-formatted.
 - 2026-07-05 09:39 UTC — deployed `deployment-01KWRT9S3G3F4MCYY0262W9JQE` / SHA `4ce2f7b1c12272e4e45d6fcb2eafebfe45ebf10b`; Bot API edited `@wheretogo39/221` and `@youwillsee39/240` captions to `+79622555491` and removed the previous inline button. Public embeds confirm `e164=true`, `pretty=false`, `button_text=false`, `call_url=false`.
 - 2026-07-05 09:45 UTC — compact product refinement deployed as `deployment-01KWRTNESWECBP61C3AF44FM6T` / SHA `fed63068b27606298201f7088e284551b15b12d3`: phone-only row title links to source post `https://t.me/excursions_profitour/943`, phone remains suffix `+79622555491`; Bot API and public embeds confirm `source_url=true`, `e164=true`, `button_text=false`, `call_url=false`.
 
@@ -72,7 +72,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 
 ### Mandatory checks before closure or deploy
 
-- Targeted regression proving Telegram visual digest phone contacts render as a source-linked title plus bare E.164 suffix (`— +7XXXXXXXXXX`), without `tel:` HTML and without a separate call button.
+- Targeted regression proving Telegram visual digest phone contacts render as a source-linked title only, without a visible phone suffix, `tel:` HTML, or a separate call button.
 - Regression proving existing title/source links remain `<a href="https://...">title</a>` and are not double-linked.
 - Regression or manual check that VK visual digest text keeps phone contacts plain and does not call the VK shortener for phones.
 - `python3 -m py_compile guide_excursions/visual_digest.py markup.py`.
@@ -90,11 +90,11 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 
 ## Immediate Mitigation
 
-Existing issue `148` Telegram captions were first edited to `+7 (962) 255-54-91`, then briefly given an inline call button/redirect. That was the wrong product solution: it added a separate CTA and service route instead of making the digest line itself usable. The correction is to remove the button/redirect and show the title as the source link and the phone as a bare E.164 suffix (`+79622555491`), the simplest Telegram auto-linkable text form, while preserving footer links.
+Existing issue `148` Telegram captions were first edited to `+7 (962) 255-54-91`, then briefly given an inline call button/redirect. That was the wrong product solution: it added a separate CTA and service route instead of making the digest line itself usable. The correction is to remove the button/redirect and show only the title as the source link, removing the explicit phone suffix from Telegram visual digest rows while preserving footer links.
 
 ## Corrective Actions
 
-- Render phone-only Telegram visual digest rows as linked source titles plus bare E.164 phone suffixes (`— +7XXXXXXXXXX`) and do not wrap phones in `tel:` HTML.
+- Render phone-only Telegram visual digest rows as linked source titles only; do not duplicate the phone in the Telegram list row and do not wrap phones in `tel:` HTML.
 - Remove the overbuilt inline call CTA/HTTPS redirect workaround from the product path.
 - Keep VK visual digest phone contacts human-formatted/plain and do not call the VK shortener for phones.
 - Document the Telegram E.164 caption contract in the guide excursions monitoring feature doc.
@@ -113,4 +113,4 @@ Existing issue `148` Telegram captions were first edited to `+7 (962) 255-54-91`
 
 ## Prevention
 
-The incident record is the regression contract for future visual digest caption changes; the unit test/smoke keeps Telegram phone rows as linked source titles plus bare E.164 suffixes while VK keeps phone numbers human-formatted/plain. Closure should be upgraded from mitigated to closed after a human Telegram-client spot-check confirms tap-to-call on the edited digest.
+The incident record is the regression contract for future visual digest caption changes; the unit test/smoke keeps Telegram phone rows as linked source titles only while VK keeps phone numbers human-formatted/plain. Closure should be upgraded from mitigated to closed after a human Telegram-client spot-check confirms tap-to-call on the edited digest.

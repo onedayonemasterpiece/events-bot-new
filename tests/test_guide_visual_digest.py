@@ -88,7 +88,7 @@ async def test_visual_digest_telegram_footer_uses_target_channel_subscribe_link(
 
 
 @pytest.mark.asyncio
-async def test_visual_digest_telegram_text_uses_auto_linkable_phone_text():
+async def test_visual_digest_telegram_text_uses_source_link_for_phone_contacts():
     rows = [
         {
             "id": 3,
@@ -108,9 +108,10 @@ async def test_visual_digest_telegram_text_uses_auto_linkable_phone_text():
     text = await build_visual_digest_telegram_text(rows, issue_id=44)
 
     assert (
-        '1. <a href="https://t.me/excursions_profitour/943">Школа юного альпаковеда</a> — +79622555491'
+        '1. <a href="https://t.me/excursions_profitour/943">Школа юного альпаковеда</a>'
         in text
     )
+    assert '+79622555491' not in text
     assert '<a href="https://vk.com/natakkaz">Домашняя прогулка</a>' in text
 
 

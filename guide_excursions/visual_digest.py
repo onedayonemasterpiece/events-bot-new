@@ -1699,10 +1699,12 @@ async def build_visual_digest_telegram_text(
         title = _plain(row.get("canonical_title")) or "Экскурсия"
         link, is_phone = _primary_link(row)
         if link and is_phone:
-            display = _telegram_phone_auto_link_text(link) or _plain(link)
             source_link = _plain(row.get("source_post_url") or row.get("channel_url"))
-            linked_title = _tg_link(title, source_link) if source_link else html.escape(title, quote=False)
-            line = f"{idx}. {linked_title} — {html.escape(display, quote=False)}"
+            if source_link:
+                line = f"{idx}. {_tg_link(title, source_link)}"
+            else:
+                display = _telegram_phone_auto_link_text(link) or _plain(link)
+                line = f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}"
         elif link:
             line = f"{idx}. {_tg_link(title, link)}"
         else:
@@ -1721,10 +1723,12 @@ async def build_visual_digest_telegram_text(
         if link and not is_phone:
             compact_lines.append(f"{idx}. {_tg_link(title, link)}")
         elif link:
-            display = _telegram_phone_auto_link_text(link) or _plain(link)
             source_link = _plain(row.get("source_post_url") or row.get("channel_url"))
-            linked_title = _tg_link(title, source_link) if source_link else html.escape(title, quote=False)
-            compact_lines.append(f"{idx}. {linked_title} — {html.escape(display, quote=False)}")
+            if source_link:
+                compact_lines.append(f"{idx}. {_tg_link(title, source_link)}")
+            else:
+                display = _telegram_phone_auto_link_text(link) or _plain(link)
+                compact_lines.append(f"{idx}. {html.escape(title, quote=False)} — {html.escape(display, quote=False)}")
         else:
             compact_lines.append(f"{idx}. {html.escape(title, quote=False)}")
     compact_lines.extend(footer_tail)
