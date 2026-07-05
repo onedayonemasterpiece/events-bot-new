@@ -34,6 +34,9 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 - 2026-07-05 10:31 UTC — production DB showed `140` pending `tg_event_publish` jobs; many due at `10:35:52 UTC`, including no-post active/future events such as `6670`, `6664`, `6652`, `6651`.
 - 2026-07-05 10:31 UTC — runtime logs confirmed repeated `reason=tg_spacing` deferrals and delayed premium editor completions such as message `1587` at `10:28:40 UTC`.
 - 2026-07-05 10:39 UTC — regression tests added for no-post announcements outranking existing-message edit jobs and for synchronous premium editor invocation from the canonical event publisher.
+- 2026-07-05 11:09 UTC — production audit found false Музей Мирового океана medallion selection from the short `ММО` alias matching inside words (`программой`, `Эммой`, `фильмом`).
+- 2026-07-05 11:13 UTC — alias-boundary fix `6f2166c1` was deployed as Fly image `deployment-01KWRZM8WGSCZ8X5HZ1EQR13YP`, machine version `1597`.
+- 2026-07-05 11:17–11:22 UTC — compensating Telegram repair edited affected messages `1907`, `1908`, `1911`, `1916`, `1919`, `1921`, `1922`, `1830`, `1825`, `1822`, `1699`, `1770`, `1788`, `1780`, `1781`, `1799` with 18–28s spacing and no FloodWait.
 
 ## Root Cause
 
@@ -102,11 +105,13 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 
 - initial deployed SHA: `85ea298ae4eae46b3dbeaa605357a163344b0246` (`origin/main`, Fly image `deployment-01KWRY0VEJ2FGEF1E95NDMQ2GV`, machine version `1592`). This mitigation caused a burst regression (see section below).
 - corrected deployed SHA: `bf1675b54a6a8901dbb60b4fb579e1ff39f17ee9` (`origin/main`, Fly image `deployment-01KWRYFSEGKSZEH3QXW90P7M80`, machine version `1593`).
+- medallion alias fix SHA: `6f2166c1da9b7e34f10f0e357206012a8d6cee06` (`origin/main`, Fly image `deployment-01KWRZM8WGSCZ8X5HZ1EQR13YP`, machine version `1597`).
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean branch `hotfix/tg-afisha-edit-spacing`; the same SHAs were pushed to `origin/main` before deploy.
 - regression checks:
   - `python3 -m py_compile main.py main_part2.py tg_premium_emojis.py` passed.
   - initial mitigation tests: `uv run --with-requirements requirements.txt --with pytest pytest -q tests/test_job_due_filter.py::test_due_tg_event_publish_backlog_is_spaced_at_execution tests/test_job_due_filter.py::test_tg_event_publish_new_posts_outrank_existing_post_edits tests/test_job_due_filter.py::test_fresh_tg_event_publish_is_not_starved_by_old_backlog tests/test_tg_event_publish.py::test_tg_event_publish_runs_premium_editor_after_send tests/test_tg_event_publish.py::test_tg_event_announcement_places_medallions_before_details_footer tests/test_tg_event_publish.py::test_tg_promo_medallion_block_uses_custom_emoji_entities` → `6 passed`.
   - burst-regression hotfix tests: `uv run --with-requirements requirements.txt --with pytest pytest -q tests/test_job_due_filter.py::test_due_tg_event_publish_backlog_is_spaced_at_execution tests/test_job_due_filter.py::test_tg_event_publish_new_posts_outrank_existing_post_edits tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send` → `3 passed`.
+  - medallion alias tests: `uv run --with-requirements requirements.txt --with pytest pytest -q tests/test_tg_event_publish.py::test_tg_event_announcement_places_medallions_before_details_footer tests/test_tg_event_publish.py::test_tg_promo_medallion_block_uses_custom_emoji_entities tests/test_tg_event_publish.py::test_tg_medallions_do_not_match_short_acronym_inside_words tests/test_tg_event_publish.py::test_tg_medallions_match_short_acronym_as_standalone_token tests/test_tg_event_publish.py::test_tg_event_publish_schedules_premium_editor_after_send tests/test_job_due_filter.py::test_due_tg_event_publish_backlog_is_spaced_at_execution tests/test_job_due_filter.py::test_tg_event_publish_new_posts_outrank_existing_post_edits` → `7 passed`.
   - `git diff --check` passed before commit.
 - post-deploy verification:
   - `/healthz` OK at `2026-07-05 10:44 UTC`, Fly machine version `1592`; corrected hotfix `/healthz` OK at `2026-07-05 10:53 UTC`, Fly machine version `1593`.
@@ -115,6 +120,10 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
   - Initial runtime log showed immediate enrichment before job done for `1906`, but this synchronous editor path was reverted after it caused Telegram `FloodWait` during catch-up.
   - Corrected hotfix verification: at `2026-07-05 10:56:38–10:56:39 UTC`, due `tg_event_publish` rows were skipped with `reason=tg_spacing next_run_at=2026-07-05T10:58:59.300683+00:00 latest_anchor=2026-07-05T10:48:59.300683+00:00`; no new `tg_event_publish done` rows appeared after `10:49:16` before the next allowed slot.
   - Backlog dependency mitigation removed remaining active/future `vk_sync:*` tokens from `13` pending/error `tg_event_publish` rows; backup table `codex_backup_20260705_tg_edit_spacing_vk_deps_20260705_104732`; remaining active/future `tg_event_publish.depends_on LIKE '%vk_sync:%'` = `0`.
+  - Alias-boundary production probe after `6f2166c1`: event `6530` (`Показ фильма «Переселенцы. История Первых»), `6660` (`День КА-ПИ-БА-РЫ!`) and `6656` (`Louisa Voice of the Soul`) returned no medallions; event `6534` returned `yantar-hall` + `simfoniya-vetra`, not `world-ocean-museum`.
+  - Compensating repair post-check: Telegram dry-run for messages `1907`, `1908`, `1911`, `1916`, `1919`, `1921`, `1922`, `1830`, `1825`, `1822`, `1699`, `1770`, `1788`, `1780`, `1781`, `1799` returned `dry_replacements=0`; message `1907` no longer had a visual medallion block or `world-ocean-museum` entities, message `1908` had `yantar-hall=16` and `simfoniya-vetra=16` entities only.
+  - Runtime log after deploy showed the normal delayed editor path succeeding for a fresh post: `2026-07-05 11:22:39 UTC tg_premium_emoji.edit_done context=tg_event_publish_send message_id=1924 edited=True replacements=3 error=None`.
+  - `/healthz` OK at `2026-07-05 11:23 UTC`, Fly machine version `1597`, no health issues.
   - Evidence artifacts saved locally under `artifacts/codex/tg-afisha-edit-spacing-20260705/` (not committed).
 
 
@@ -126,7 +135,7 @@ The first mitigation in SHA `85ea298a` incorrectly let any event with an existin
 
 Production audit after the operator report found that the Музей Мирового океана Telegram medallion was selected for unrelated recent posts because the short alias `ММО` was matched as a raw substring. Examples: event `6534` matched `ммо` inside `программой`, event `6530` inside `Эммой`, event `6660` inside `фильмом`, event `6656` inside `фильмом`. This made the channel show stray `ММО` medallions and made it look as if the medallion had been applied to multiple unrelated posts. The corrective code requires medallion aliases to match as standalone tokens/phrases, preserving explicit full aliases/venue/source URL matches while blocking acronym-in-word false positives.
 
-Compensating repair is required for already edited public messages whose wrong medallion block was inserted before this fix; delayed premium-editor retries alone are insufficient because the editor's normal idempotency path only inserts missing expected blocks and does not remove wrong historical blocks.
+Compensating repair was required for already edited public messages whose wrong medallion block was inserted before this fix; delayed premium-editor retries alone were insufficient because the editor's normal idempotency path only inserts missing expected blocks and does not remove wrong historical blocks. The repair removed the wrong `ММО` block from `1907`, replaced the wrong second medallion on `1908`, and reran premium/medallion enrichment for messages skipped by the FloodWait/restart window.
 
 ## Prevention
 
