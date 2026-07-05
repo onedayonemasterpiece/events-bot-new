@@ -2171,6 +2171,8 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
         tg_medallions.reset_medallion_config_cache()
 
     assert html_text.count('<tg-emoji emoji-id=') == 44
+    assert "⠀\n\n🔎 Подробнее" not in html_text
+    assert '⠀\n<a href="https://telegra.ph/event">🔎 Подробнее</a>' in html_text
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
@@ -2343,6 +2345,7 @@ def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypa
     assert '<tg-emoji emoji-id=' not in html_text
     assert "🟧" not in html_text
     assert "🔎 Подробнее" in html_text
+    assert '\n\n<a href="https://telegra.ph/event">🔎 Подробнее</a>' in html_text
 
 
 def test_tg_medallion_selection_caps_at_two_for_telegram(monkeypatch):

@@ -402,7 +402,8 @@ def test_premium_editor_inserts_medallion_block_before_details_footer():
     )
 
     assert count == 1
-    assert new_text.endswith("🟧🟧\n🟧🟧\n⠀\n\n🔎 Подробнее")
+    assert new_text.endswith("🟧🟧\n🟧🟧\n⠀\n🔎 Подробнее")
+    assert "⠀\n\n🔎 Подробнее" not in new_text
     assert new_text.index("🟧") < new_text.index("🔎 Подробнее")
     custom = [entity for entity in new_entities if isinstance(entity, MessageEntityCustomEmoji)]
     assert [entity.document_id for entity in custom] == [111, 112, 113, 114]

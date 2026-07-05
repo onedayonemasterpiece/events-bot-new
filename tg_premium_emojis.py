@@ -271,7 +271,7 @@ def _medallion_block_already_present(
     return True
 
 
-def _find_medallion_insert_offset(text: str) -> int:
+def _find_medallion_insert_span(text: str) -> tuple[int, int, bool]:
     footer_markers = ("🔎 Подробнее", "✨ Подробнее", "📅 Добавить в календарь")
     best = -1
     for marker in footer_markers:
@@ -282,8 +282,11 @@ def _find_medallion_insert_offset(text: str) -> int:
         prefix = text[:best]
         while prefix.endswith("\n"):
             prefix = prefix[:-1]
-        return len(add_surrogate(prefix))
-    return len(add_surrogate(text.rstrip()))
+        insert_at = len(add_surrogate(prefix))
+        consume_until = len(add_surrogate(text[:best]))
+        return insert_at, consume_until, True
+    end = len(add_surrogate(text.rstrip()))
+    return end, end, False
 
 
 def _insert_medallion_html_block(
@@ -298,18 +301,20 @@ def _insert_medallion_html_block(
         return text, list(entities or []), 0
 
     sur_text = add_surrogate(text)
-    insert_at = _find_medallion_insert_offset(text)
+    insert_at, consume_until, before_footer = _find_medallion_insert_span(text)
     prefix = "\n\n" if insert_at > 0 else ""
-    # When inserting before an existing footer, keep the original blank lines
-    # that already separate the footer from the body; otherwise duplicate
-    # spacing can push the CTA line down.
-    suffix = ""
+    # Before a footer, consume the blank separator that used to precede
+    # `Подробнее` and replace it with a single newline after the medallion.
+    # This keeps the footer directly under the medallion block without an
+    # extra empty line, while posts without medallions keep their original gap.
+    suffix = "\n" if before_footer else ""
     insertion = prefix + block_text + suffix
     insertion_sur = add_surrogate(insertion)
-    delta = len(insertion_sur)
-    new_sur_text = sur_text[:insert_at] + insertion_sur + sur_text[insert_at:]
+    consumed = max(0, consume_until - insert_at)
+    delta = len(insertion_sur) - consumed
+    new_sur_text = sur_text[:insert_at] + insertion_sur + sur_text[consume_until:]
 
-    shifted = [_shift_entity_for_insertion(entity, insert_at, delta) for entity in (entities or [])]
+    shifted = [_shift_entity_for_insertion(entity, consume_until, delta) for entity in (entities or [])]
     block_start = insert_at + len(add_surrogate(prefix))
     inserted_entities = [
         MessageEntityCustomEmoji(

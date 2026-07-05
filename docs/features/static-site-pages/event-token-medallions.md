@@ -172,6 +172,7 @@ Runtime contract:
 - in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
 - no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
+- when a Telegram medallion block is present, the `Подробнее` footer follows directly after the final braille separator line (`⠀\n🔎 Подробнее`); when no medallion block is present, the post keeps the ordinary blank line before the footer;
 - `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
 - events of «80 историй о главном» use the curated `kgd80-znanie` composite when present: `80 историй` is drawn on top and `Знание` is shifted behind it with a one-cell overlap, making the pair seven cells wide instead of two separate 4×4 medallions;
 - standalone `znanie-russia` remains available for non-KGD80 events, while standalone KGD80 is intentionally not kept in the Telegram pack/config; `world-ocean-museum` is also omitted from the one Telegram pack to leave capacity for the wider 7×4 KGD80+Znanie composite;

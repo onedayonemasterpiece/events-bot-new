@@ -5734,8 +5734,9 @@ def build_tg_event_announcement(
     medallion_block = event_medallion_html_block(event) if include_medallions else ""
     if medallion_block:
         lines.extend(["", medallion_block])
+    else:
+        lines.append("")
 
-    lines.append("")
     footer_links: list[str] = []
     details_url = _tg_event_details_url(event)
     if details_url and not details_button_highlight:

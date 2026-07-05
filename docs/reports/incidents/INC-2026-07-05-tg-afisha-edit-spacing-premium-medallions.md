@@ -141,5 +141,6 @@ Compensating repair was required for already edited public messages whose wrong 
 
 - Regression tests guard against edit jobs consuming the announcement lane.
 - Regression tests guard that short Telegram medallion acronyms such as `ММО` do not match inside ordinary words and still match when used as standalone aliases.
+- Medallion insertion now consumes the old blank separator before the `Подробнее` footer and replaces it with a single newline after the medallion block, preventing a visible empty row under medallions while leaving non-medallion posts unchanged.
 - Incident record must be raised for any future changes to Telegram spacing, fresh-lane ordering, or premium/medallion editor scheduling.
 - Production closure requires proving that the next slots are real new top-of-channel posts when no-post events are waiting, not just any `tg_event_publish done` row.
