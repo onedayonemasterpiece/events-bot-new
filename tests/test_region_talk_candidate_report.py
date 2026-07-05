@@ -129,6 +129,22 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(payload["sheets"]["04b_needs_llm_retry"]), 1)
         self.assertEqual(payload["sheets"]["04b_needs_llm_retry"][0]["current_stage"], "needs_llm_retry")
 
+    def test_llm_sync_wrapper_works_inside_active_event_loop(self) -> None:
+        mod = load_module()
+        class FakeClient:
+            async def generate_content_async(self, **kwargs):
+                class Usage:
+                    input_tokens = 1
+                    output_tokens = 1
+                    total_tokens = 2
+                return '{"decision":"accept","reason":"ok"}', Usage()
+        mod.get_region_talk_llm_gateway = lambda default_env_var_name: FakeClient()
+        async def inner():
+            return mod.call_region_talk_semantic_llm({"text":"Калининград"}, {}, model="fake", default_env_var_name="GOOGLE_API_KEY3")
+        result = __import__('asyncio').run(inner())
+        self.assertEqual(result["llm_gate_status"], "ok")
+        self.assertEqual(result["llm_decision"], "accept")
+
 
 if __name__ == "__main__":
     unittest.main()

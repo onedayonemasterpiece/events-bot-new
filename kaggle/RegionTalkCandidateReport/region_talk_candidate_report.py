@@ -1040,8 +1040,11 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
         except RuntimeError:
             running_loop = None
         if running_loop is not None:
-            raise RuntimeError("active_event_loop_not_supported_for_region_talk_llm")
-        text, usage = asyncio.run(_call())
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                text, usage = pool.submit(lambda: asyncio.run(_call())).result()
+        else:
+            text, usage = asyncio.run(_call())
         data = parse_llm_json(text)
         decision = str(data.get("decision") or "needs_review").strip().lower()
         if decision not in {"accept", "needs_review", "reject"}:
