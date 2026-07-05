@@ -106,6 +106,8 @@ On 2026-07-05 the operator noticed that Telegram Афиша (`@kldevents`) had n
   - Backlog mitigation removed `vk_sync:*` from 83 pending active today/future `tg_event_publish` rows; remaining active today/future pending Telegram jobs with `depends_on LIKE '%vk_sync:%'` = `0`.
   - Telegram posts resumed with dependencies excluding VK, e.g. event `6679` published at `2026-07-05 08:43:02 UTC` to `https://t.me/c/3954607218/1891` with deps `telegraph_build:6679,tg_ics_post:6679`.
 
+- 2026-07-05 follow-up during `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions`: stripped the remaining active/future `vk_sync:*` tokens from `13` pending/error `tg_event_publish` rows after backing them up to `codex_backup_20260705_tg_edit_spacing_vk_deps_20260705_104732`; remaining active/future rows with VK dependency = `0`.
+
 ## Prevention
 
 - `vk_sync` must be treated as an independent public surface and best-effort retry path for Telegram purposes.

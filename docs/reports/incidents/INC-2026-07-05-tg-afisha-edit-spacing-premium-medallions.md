@@ -100,10 +100,19 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `85ea298ae4eae46b3dbeaa605357a163344b0246` (`origin/main`, Fly image `deployment-01KWRY0VEJ2FGEF1E95NDMQ2GV`, machine version `1592`).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean branch `hotfix/tg-afisha-edit-spacing`; the same SHA was pushed to `origin/main` before deploy.
+- regression checks:
+  - `python3 -m py_compile main.py main_part2.py tg_premium_emojis.py` passed.
+  - `uv run --with-requirements requirements.txt --with pytest pytest -q tests/test_job_due_filter.py::test_due_tg_event_publish_backlog_is_spaced_at_execution tests/test_job_due_filter.py::test_tg_event_publish_new_posts_outrank_existing_post_edits tests/test_job_due_filter.py::test_fresh_tg_event_publish_is_not_starved_by_old_backlog tests/test_tg_event_publish.py::test_tg_event_publish_runs_premium_editor_after_send tests/test_tg_event_publish.py::test_tg_event_announcement_places_medallions_before_details_footer tests/test_tg_event_publish.py::test_tg_promo_medallion_block_uses_custom_emoji_entities` → `6 passed`.
+  - `git diff --check` passed before commit.
+- post-deploy verification:
+  - `/healthz` OK at `2026-07-05 10:44 UTC`, Fly machine version `1592`.
+  - Runtime file mirror was enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, active `/data/runtime_logs/events-bot.log` present.
+  - Production DB after deploy: new no-post event `6670` published at `2026-07-05 10:46:38 UTC` as `https://t.me/c/3954607218/1906`; public embed `https://t.me/s/kldevents` contained message `1906` and title `Стендап: «Шоу историй со зрителями»`.
+  - Runtime log shows immediate enrichment before job done: `10:46:38 tg_premium_emoji.edit_done context=tg_event_publish_send ... message_id=1906 ... replacements=2`, then `RUN [E6670] done`.
+  - Backlog dependency mitigation removed remaining active/future `vk_sync:*` tokens from `13` pending/error `tg_event_publish` rows; backup table `codex_backup_20260705_tg_edit_spacing_vk_deps_20260705_104732`; remaining active/future `tg_event_publish.depends_on LIKE '%vk_sync:%'` = `0`.
+  - Evidence artifacts saved locally under `artifacts/codex/tg-afisha-edit-spacing-20260705/` (not committed).
 
 ## Prevention
 
