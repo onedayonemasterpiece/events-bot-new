@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -494,12 +495,30 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert "canonical_questions" in workbook.sheetnames
     assert "monitoring_targets" in workbook.sheetnames
     assert "surface_backlog" in workbook.sheetnames
+    assert "semantic_union_candidates" in workbook.sheetnames
+    assert "reply_event_candidates" in workbook.sheetnames
+    assert "reply_route_candidates" in workbook.sheetnames
+    assert "ask_organizer_candidates" in workbook.sheetnames
+    assert "llm_gate_results" in workbook.sheetnames
+    assert "model_comparison" in workbook.sheetnames
+    assert "surface_scan_funnel" in workbook.sheetnames
     assert "goal_ask_event_details" in workbook.sheetnames
     assert "goal_reply_events" in workbook.sheetnames
     assert "goal_reply_routes" in workbook.sheetnames
     assert "answerable_e5_base" in workbook.sheetnames
     assert "answerable_bge_m3" in workbook.sheetnames
-    assert workbook.sheetnames[:3] == ["summary_ru", "run_delta_sources", "monitoring_targets"]
+    assert workbook.sheetnames[:10] == [
+        "summary_ru",
+        "run_delta_sources",
+        "monitoring_targets",
+        "surface_backlog",
+        "semantic_union_candidates",
+        "reply_event_candidates",
+        "reply_route_candidates",
+        "ask_organizer_candidates",
+        "llm_gate_results",
+        "model_comparison",
+    ]
     summary_values = [row[1] for row in workbook["summary_ru"].iter_rows(min_row=3, max_col=2, values_only=True)]
     assert "Площадок с анализом комментариев" in summary_values
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
@@ -840,8 +859,8 @@ def test_semantic_union_allows_bge_only_and_e5_only_candidates(monkeypatch):
     retrieval = load_retrieval()
     monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", "10")
     rows = [
-        _semantic_goal_row(retrieval, key="e5", goal="reply_to_user_event_or_route", model="intfloat/multilingual-e5-base", margin=0.9),
-        _semantic_goal_row(retrieval, key="bge", goal="reply_to_user_event_or_route", model="BAAI/bge-m3", margin=0.95),
+        _semantic_goal_row(retrieval, key="e5", goal="reply_to_user_event_question", model="intfloat/multilingual-e5-base", margin=0.9),
+        _semantic_goal_row(retrieval, key="bge", goal="reply_to_user_event_question", model="BAAI/bge-m3", margin=0.95),
     ]
 
     union = retrieval._build_semantic_union_candidates(rows)
@@ -871,7 +890,7 @@ def test_semantic_union_does_not_drop_source_posts_or_comments_without_question_
     no_question_comment = _semantic_goal_row(
         retrieval,
         key="comment",
-        goal="reply_to_user_event_or_route",
+        goal="reply_to_user_route_recommendation",
         model="intfloat/multilingual-e5-base",
         margin=0.91,
         text="Посоветуйте маршрут по области на выходные",
@@ -890,7 +909,7 @@ def test_semantic_union_separates_historical_rows_from_production_queue(monkeypa
     old_row = _semantic_goal_row(
         retrieval,
         key="old",
-        goal="reply_to_user_event_or_route",
+        goal="reply_to_user_event_question",
         model="BAAI/bge-m3",
         margin=0.99,
         created_at="2025-01-01T10:00:00+00:00",
@@ -898,7 +917,7 @@ def test_semantic_union_separates_historical_rows_from_production_queue(monkeypa
     new_row = _semantic_goal_row(
         retrieval,
         key="new",
-        goal="reply_to_user_event_or_route",
+        goal="reply_to_user_event_question",
         model="intfloat/multilingual-e5-base",
         margin=0.8,
     )
@@ -908,6 +927,63 @@ def test_semantic_union_separates_historical_rows_from_production_queue(monkeypa
 
     assert any(row["production_bucket"] == "historical_calibration_candidates" for row in union)
     assert {row["context_url"] for row in selected} == {"https://t.me/test/new"}
+
+
+def test_semantic_goals_are_split_between_event_route_and_organizer():
+    retrieval = load_retrieval()
+
+    assert "reply_to_user_event_or_route" not in retrieval.SEMANTIC_GOAL_SETS
+    assert retrieval.SEMANTIC_GOAL_ACTION_TYPES["reply_to_user_event_question"] == "event_recommendation_reply"
+    assert retrieval.SEMANTIC_GOAL_ACTION_TYPES["reply_to_user_route_recommendation"] == "trip_route_poi_recommendation"
+    assert retrieval.SEMANTIC_GOAL_ACTION_TYPES["ask_organizer_event_details"] == "organizer_visibility_clarification"
+
+
+def test_semantic_topk_is_adaptive_for_tiny_samples(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_E5_DENSE_TOPK_PER_GOAL", "80")
+    monkeypatch.setenv("ACQ_SEMANTIC_TOPK_FRACTION_PER_GOAL", "0.20")
+    monkeypatch.setenv("ACQ_SEMANTIC_TOPK_MIN_PER_GOAL", "5")
+    rows = [
+        _semantic_goal_row(
+            retrieval,
+            key=str(i),
+            goal="reply_to_user_event_question",
+            model="intfloat/multilingual-e5-base",
+            margin=1.0 - (i / 100.0),
+        )
+        for i in range(50)
+    ]
+
+    top = retrieval._topk_per_goal_channel(rows)
+
+    assert len(top) == 10
+    assert {row["adaptive_topk_effective"] for row in top} == {10}
+
+
+def test_semantic_llm_queue_is_goal_balanced(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_LLM_FINAL_SCOPE_MAX_TOTAL", "6")
+    monkeypatch.setenv("ACQ_LLM_FINAL_SCOPE_MAX_PER_GOAL", "2")
+    rows = []
+    for goal in ["reply_to_user_event_question", "reply_to_user_route_recommendation", "ask_organizer_event_details"]:
+        for idx in range(4):
+            rows.append(_semantic_goal_row(
+                retrieval,
+                key=f"{goal}-{idx}",
+                goal=goal,
+                model="intfloat/multilingual-e5-base",
+                margin=0.95 - (idx / 100.0),
+                relation="vk_social_wall_post" if goal == "ask_organizer_event_details" else "group_message",
+                is_post=goal == "ask_organizer_event_details",
+            ))
+    union = retrieval._build_semantic_union_candidates(rows)
+    selected = retrieval._select_semantic_llm_gate_candidates(union, 99)
+    counts = Counter(row["goal"] for row in selected)
+
+    assert len(selected) == 6
+    assert counts["reply_to_user_event_question"] == 2
+    assert counts["reply_to_user_route_recommendation"] == 2
+    assert counts["ask_organizer_event_details"] == 2
 
 
 def test_comment_semantic_retrieval_requires_two_models_even_if_env_single(monkeypatch):

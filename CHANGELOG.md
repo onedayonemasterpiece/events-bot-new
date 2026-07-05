@@ -4,12 +4,17 @@
 
 ### Added
 
+- Added Subscriber Acquisition three-goal semantic retrieval: event-question
+  replies, route-recommendation replies, and organizer-detail questions are now
+  separate E5+BGE semantic queues with Excel-safe candidate sheets
+  (`reply_event_candidates`, `reply_route_candidates`,
+  `ask_organizer_candidates`).
 - Added shared Supabase `runtime_resource_leases` migration/RPCs and wired
   Subscriber Acquisition Discovery live Telegram launches to acquire/release the
   `TELEGRAM_AUTH_BUNDLE_DISCOVERY` session lease before pushing Kaggle.
-- Added Subscriber Acquisition two-goal semantic-union report sheets
-  (`semantic_union_candidates`, `reply_to_user_candidates`,
-  `ask_organizer_candidates`, `model_comparison`, `historical_calibration`,
+- Added Subscriber Acquisition semantic-union report sheets
+  (`semantic_union_candidates`, `reply_event_candidates`,
+  `reply_route_candidates`, `ask_organizer_candidates`, `model_comparison`, `historical_calibration`,
   `surface_scan_funnel`) with E5/BGE hit/rank/margin fields.
 - Added Subscriber Acquisition XLSX `surface_backlog` sheet for selected surfaces,
   candidates with signal, and known TG/VK monitoring sources waiting for
@@ -25,10 +30,14 @@
 
 ### Changed
 
+- Subscriber Acquisition semantic retrieval now uses role-aware embedding text,
+  adaptive per-goal topK, goal-balanced final LLM scope limits, and semantic
+  MMR/diversity caps so tiny runs do not pass every row into the union and one
+  broad reply goal cannot starve route or organizer candidates.
 - Subscriber Acquisition retrieval now forms the LLM queue from a quota-balanced
   union of `intfloat/multilingual-e5-base` and `BAAI/bge-m3` for
-  `reply_to_user_event_or_route` and `ask_organizer_event_details`, so BGE-only
-  and E5-only candidates can both reach Gemma without deterministic
+  split event-reply, route-reply, and organizer-ask goals, so BGE-only and
+  E5-only candidates can both reach Gemma without deterministic
   question/keyword/source-post gates.
 - Subscriber Acquisition Discovery seed payload selection now applies separate
   new/rescan/approved-rescan quotas and propagates scan-quota metadata into the

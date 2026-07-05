@@ -23,43 +23,57 @@ DEFAULT_GATE_MODEL = "intfloat/multilingual-e5-base"
 DEFAULT_SCORING_METHOD = "positive_negative_margin"
 
 SEMANTIC_GOAL_SETS: dict[str, dict[str, list[str]]] = {
-    "reply_to_user_event_or_route": {
+    "reply_to_user_event_question": {
         "positive": [
-            "Пользователь задает вопрос о мероприятии и хочет получить полезный ответ.",
-            "Человек спрашивает, куда сходить в Калининграде или Калининградской области.",
-            "Пользователь просит помочь выбрать маршрут, место, поездку или достопримечательность.",
-            "Человек уточняет детали события: время, билеты, регистрацию, возраст, место, программу.",
-            "Комментарий содержит просьбу о совете по маршруту, транспорту, поездке или событию.",
-            "Пользователь не рекламирует событие, а спрашивает у других людей совет или уточнение.",
+            "Пользовательский комментарий, где человек спрашивает или уточняет детали мероприятия.",
+            "Человек хочет получить ответ про событие: время, место, билеты, регистрацию, возраст, программу или условия участия.",
+            "Комментарий пользователя содержит практический вопрос об афише, концерте, экскурсии, фестивале, лекции, мастер-классе или другом событии.",
+            "Пользователь не публикует анонс, а просит помочь разобраться с деталями мероприятия.",
         ],
         "negative": [
-            "Это рекламный пост или анонс без вопроса пользователя.",
-            "Это вакансия, недвижимость, продажа товара или бытовая реклама.",
-            "Это новостной пост без запроса помощи.",
-            "Это исходная публикация паблика, а не запрос пользователя.",
+            "Это исходный пост, новость, афиша или рекламный анонс без пользовательского вопроса.",
+            "Это обсуждение маршрута, поездки или достопримечательностей, а не вопрос о деталях события.",
+            "Это бытовой спор, реакция, шутка, благодарность или комментарий без запроса ответа.",
+            "Это вакансия, недвижимость, продажа товара, услуга или общая городская новость.",
+        ],
+    },
+    "reply_to_user_route_recommendation": {
+        "positive": [
+            "Пользовательский комментарий, где человек просит совет по маршруту, поездке или прогулке.",
+            "Человек спрашивает, куда поехать, что посмотреть, какой маршрут выбрать или как спланировать день.",
+            "Комментарий пользователя содержит запрос рекомендации по месту, достопримечательности, транспорту или маршруту по Калининградской области.",
+            "Пользователь хочет получить полезный ответ о путешествии, прогулке, дороге, локациях или вариантах поездки.",
+        ],
+        "negative": [
+            "Это вопрос о билетах, регистрации, времени или программе конкретного мероприятия, а не маршрутная рекомендация.",
+            "Это исходный пост, новость, афиша или рекламный анонс без пользовательского запроса.",
+            "Это общая городская новость, политика, происшествие, бытовая тема или спор.",
+            "Это вакансия, недвижимость, продажа товара или услуга без запроса маршрута.",
         ],
     },
     "ask_organizer_event_details": {
         "positive": [
-            "Паблик или организатор опубликовал анонс события, и в комментариях можно задать уточняющий вопрос.",
-            "Пост описывает мероприятие в Калининграде или Калининградской области, но детали могут быть неполными.",
-            "Анонс события, где уместно уточнить регистрацию, билеты, возраст, время, место или программу.",
-            "Публикация о будущем мероприятии, фестивале, экскурсии, концерте, лекции, мастер-классе или прогулке.",
-            "Пост организатора, под которым можно спросить практическую деталь о событии.",
+            "Исходный анонс будущего мероприятия, под которым уместно задать уточняющий вопрос организатору.",
+            "Пост организатора или площадки описывает событие, но может не хватать практических деталей.",
+            "Публикация приглашает людей на мероприятие, экскурсию, фестиваль, концерт, лекцию, мастер-класс или прогулку.",
+            "Под этим постом можно вежливо уточнить регистрацию, билеты, возраст, время, место, программу или условия участия.",
         ],
         "negative": [
-            "Это новость без возможности полезно задать вопрос организатору.",
-            "Это прошедшее событие или отчет о событии.",
-            "Это рекламная публикация не про событие.",
-            "Это вакансия, недвижимость, продажа товара или услуга без связи с мероприятием.",
+            "Это пользовательский комментарий, где нужно ответить человеку, а не задавать вопрос организатору.",
+            "Это новость, отчет или пост о завершившемся событии.",
+            "Это общая городская публикация без события для посещения.",
+            "Это реклама товара, вакансии, недвижимости или услуги без мероприятия.",
         ],
     },
 }
 
 SEMANTIC_GOAL_ACTION_TYPES: dict[str, str] = {
-    "reply_to_user_event_or_route": "event_or_route_recommendation_reply",
+    "reply_to_user_event_question": "event_recommendation_reply",
+    "reply_to_user_route_recommendation": "trip_route_poi_recommendation",
     "ask_organizer_event_details": "organizer_visibility_clarification",
 }
+SEMANTIC_REPLY_GOALS = {"reply_to_user_event_question", "reply_to_user_route_recommendation"}
+SEMANTIC_PRODUCTION_GOALS = ["reply_to_user_event_question", "reply_to_user_route_recommendation", "ask_organizer_event_details"]
 
 INTENT_SETS: dict[str, list[str]] = {
     "route_poi_far_context": [
@@ -386,13 +400,15 @@ def _int_env(name: str, default: int, *, min_value: int | None = None) -> int:
     return value
 
 
-def _float_env(name: str, default: float, *, min_value: float | None = None) -> float:
+def _float_env(name: str, default: float, *, min_value: float | None = None, max_value: float | None = None) -> float:
     try:
         value = float(os.getenv(name) or default)
     except Exception:
         value = float(default)
     if min_value is not None:
         value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
     return value
 
 
@@ -517,6 +533,13 @@ def _mean(values: list[float]) -> float:
 
 
 def _action_for_intent(intent_set: str) -> str:
+    if intent_set == "reply_to_user_event_question":
+        return "event_recommendation_reply"
+    if intent_set == "reply_to_user_route_recommendation":
+        return "trip_route_poi_recommendation"
+    # Compatibility for historical artifacts only. New production runs no
+    # longer generate this combined goal; event and route replies are separate
+    # semantic queues.
     if intent_set == "reply_to_user_event_or_route":
         return "event_or_route_recommendation_reply"
     if intent_set == "ask_organizer_event_details":
@@ -535,7 +558,7 @@ def _action_for_intent(intent_set: str) -> str:
 
 
 def _route_target_hint(text: str, intent_set: str) -> dict[str, Any]:
-    if intent_set not in ROUTE_INTENT_SETS:
+    if intent_set not in ROUTE_INTENT_SETS and intent_set != "reply_to_user_route_recommendation":
         return {"route_target_status": "not_applicable", "destination_hint": "", "poi_hints": [], "transport_hint": "unknown", "event_ids": []}
     destinations = [m.group(0) for m in _ROUTE_DEST_RE.finditer(text or "")]
     transport = "unknown"
@@ -1074,6 +1097,87 @@ def _record_analysis_text(record: dict[str, Any]) -> str:
     return ("Текущий комментарий/пост: " + text + "\n\nКонтекст для понимания:\n" + "\n".join(context_parts))[:1800]
 
 
+def _record_role(record: dict[str, Any]) -> str:
+    relation = str(record.get("relation") or "").strip()
+    if relation in {"vk_social_wall_post", "tg_channel_post_context"} or _truthy_value(record.get("is_post")):
+        return "source_post"
+    if relation in {"vk_comment", "vk_board_comment", "linked_discussion", "group_message", "chat_message", "reply"}:
+        return "user_comment"
+    return relation or "unknown"
+
+
+def _record_current_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(str(record.get("text") or record.get("text_snapshot") or ""))
+
+
+def _record_parent_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(str(record.get("reply_parent_text_snapshot") or record.get("reply_parent_text") or ""))
+
+
+def _record_source_post_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(str(record.get("source_post_text_snapshot") or record.get("source_post_text") or record.get("source_context_title") or ""))
+
+
+def _record_surface_context_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(" ".join(
+        str(record.get(key) or "")
+        for key in ["surface_title", "surface_url", "surface_type", "platform", "topic_hint", "discovery_source_context"]
+    ))
+
+
+def _record_reply_goal_text(record: dict[str, Any], goal: str) -> str:
+    """Role-aware semantic view for reply goals.
+
+    This is intentionally not a hard source-type gate.  Source posts are still
+    embedded, but the text tells E5/BGE what role the current text plays so a
+    broad topical announcement competes poorly with actual user needs.
+    """
+    current = _record_current_text(record)
+    parent = _record_parent_text(record)
+    source = _record_source_post_text(record)
+    if goal == "reply_to_user_event_question":
+        label = "пользовательский комментарий, где человеку можно ответить про детали события"
+    elif goal == "reply_to_user_route_recommendation":
+        label = "пользовательский комментарий, где человеку можно ответить рекомендацией маршрута или места"
+    else:
+        label = "пользовательский комментарий, где человеку можно ответить"
+    parts = [
+        f"Goal: найти {label}.",
+        f"Current text role: {_record_role(record)}",
+        f"Current text: {current[:700]}",
+    ]
+    if parent:
+        parts.append(f"Parent/context comment: {parent[:450]}")
+    if source:
+        parts.append(f"Source post context, only for understanding and not as user request: {source[:650]}")
+    return "\n".join(parts)[:1900]
+
+
+def _record_ask_goal_text(record: dict[str, Any]) -> str:
+    current = _record_current_text(record)
+    source = _record_source_post_text(record)
+    surface = _record_surface_context_text(record)
+    post_text = current if _is_source_post_context(record) else (source or current)
+    parts = [
+        "Goal: найти исходный анонс будущего события, где можно задать уточняющий вопрос организатору.",
+        f"Current text role: {_record_role(record)}",
+        f"Post/announcement text: {post_text[:1000]}",
+    ]
+    if surface:
+        parts.append(f"Surface/context: {surface[:500]}")
+    if not _is_source_post_context(record) and current and current != post_text:
+        parts.append(f"User comment context, not the organizer announcement itself: {current[:350]}")
+    return "\n".join(parts)[:1900]
+
+
+def _record_semantic_goal_text(record: dict[str, Any], goal: str) -> str:
+    if goal in SEMANTIC_REPLY_GOALS:
+        return _record_reply_goal_text(record, goal)
+    if goal == "ask_organizer_event_details":
+        return _record_ask_goal_text(record)
+    return _record_analysis_text(record)
+
+
 def _parse_created_at(value: Any) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
@@ -1416,6 +1520,10 @@ def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item["candidate_usage_scope"] = usage_scope
         analysis_text = _record_analysis_text(item)
         item["analysis_text"] = analysis_text
+        item["current_text_view"] = _record_current_text(item)
+        item["reply_goal_view"] = _record_reply_goal_text(item, "reply_to_user_event_question")
+        item["ask_goal_view"] = _record_ask_goal_text(item)
+        item["region_view"] = _record_region_text(item)
         item["analysis_context_snapshot"] = "\n".join(
             part for part in [
                 normalize_comment_text(str(item.get("source_post_text_snapshot") or item.get("source_post_text") or item.get("source_context_title") or ""))[:700],
@@ -1534,10 +1642,12 @@ def _normalize_semantic_goal_rows(rows: list[dict[str, Any]]) -> None:
 
 def _topk_per_goal_channel(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     topk_by_channel = {
-        "e5_dense": _int_env("ACQ_E5_DENSE_TOPK_PER_GOAL", 80, min_value=1),
-        "bge_m3_dense": _int_env("ACQ_BGE_M3_DENSE_TOPK_PER_GOAL", 80, min_value=1),
-        "bge_m3_sparse": _int_env("ACQ_BGE_M3_SPARSE_TOPK_PER_GOAL", 80, min_value=1),
+        "e5_dense": _int_env("ACQ_E5_DENSE_TOPK_PER_GOAL", 40, min_value=1),
+        "bge_m3_dense": _int_env("ACQ_BGE_M3_DENSE_TOPK_PER_GOAL", 40, min_value=1),
+        "bge_m3_sparse": _int_env("ACQ_BGE_M3_SPARSE_TOPK_PER_GOAL", 40, min_value=1),
     }
+    topk_fraction = _float_env("ACQ_SEMANTIC_TOPK_FRACTION_PER_GOAL", 0.20, min_value=0.01, max_value=1.0)
+    topk_min = _int_env("ACQ_SEMANTIC_TOPK_MIN_PER_GOAL", 5, min_value=1)
     out: list[dict[str, Any]] = []
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -1547,7 +1657,13 @@ def _topk_per_goal_channel(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rank_field = f"{channel}_rank"
         for idx, row in enumerate(group_rows, start=1):
             row[rank_field] = idx
-        out.extend(group_rows[:topk_by_channel.get(channel, 80)])
+        configured_topk = topk_by_channel.get(channel, 40)
+        adaptive_topk = max(topk_min, int(math.ceil(len(group_rows) * topk_fraction)))
+        effective_topk = min(configured_topk, adaptive_topk, len(group_rows))
+        for row in group_rows[:effective_topk]:
+            row["adaptive_topk_effective"] = effective_topk
+            row["adaptive_topk_fraction"] = topk_fraction
+        out.extend(group_rows[:effective_topk])
     return out
 
 
@@ -1637,6 +1753,33 @@ def _build_semantic_union_candidates(rows: list[dict[str, Any]]) -> list[dict[st
     return union_rows
 
 
+def _row_thread_key(row: dict[str, Any]) -> str:
+    for key in ("thread_id", "post_id", "topic_id"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return f"{key}:{value}"
+    url = str(row.get("context_url") or "").strip()
+    if url:
+        return "url:" + re.sub(r"(?:\\?|&)?reply=\\d+.*$", "", url)
+    return "text:" + hashlib.sha1(str(row.get("text_snapshot") or row.get("analysis_text") or "").encode("utf-8", "ignore")).hexdigest()
+
+
+def _row_vector(row: dict[str, Any]) -> list[float]:
+    vec = row.get("_semantic_vector")
+    if isinstance(vec, list):
+        try:
+            return [float(x) for x in vec]
+        except Exception:
+            return []
+    return []
+
+
+def _vector_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+    return _dot(a, b)
+
+
 def _balanced_goal_take(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in sorted(rows, key=lambda r: float(r.get("final_semantic_score") or 0.0), reverse=True):
@@ -1656,25 +1799,80 @@ def _balanced_goal_take(rows: list[dict[str, Any]], limit: int) -> list[dict[str
     return out
 
 
+def _semantic_diverse_take(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if limit <= 0 or not rows:
+        return []
+    lambda_score = _float_env("ACQ_LLM_DIVERSITY_MMR_LAMBDA", 0.7, min_value=0.0, max_value=1.0)
+    max_per_surface = _int_env("ACQ_LLM_MAX_PER_SURFACE_PER_GOAL", 2, min_value=1)
+    max_per_thread = _int_env("ACQ_LLM_MAX_PER_THREAD_OR_POST_PER_GOAL", 1, min_value=1)
+    remaining = _balanced_goal_take(rows, len(rows))
+    selected: list[dict[str, Any]] = []
+    surface_counts: Counter[str] = Counter()
+    thread_counts: Counter[str] = Counter()
+    while remaining and len(selected) < limit:
+        best_idx = -1
+        best_value = -10**9
+        for idx, row in enumerate(remaining):
+            surface_key = str(row.get("surface_key") or "unknown")
+            thread_key = _row_thread_key(row)
+            if surface_counts[surface_key] >= max_per_surface or thread_counts[thread_key] >= max_per_thread:
+                continue
+            relevance = float(row.get("final_semantic_score") or 0.0)
+            vec = _row_vector(row)
+            redundancy = max((_vector_similarity(vec, _row_vector(prev)) for prev in selected), default=0.0)
+            value = lambda_score * relevance - (1.0 - lambda_score) * redundancy
+            if value > best_value:
+                best_value = value
+                best_idx = idx
+        if best_idx < 0:
+            # Constraints can be too tight for tiny runs; relax them after the
+            # first pass so a single active surface can still produce evidence.
+            best_idx = max(range(len(remaining)), key=lambda i: float(remaining[i].get("final_semantic_score") or 0.0))
+        row = remaining.pop(best_idx)
+        selected.append(row)
+        surface_counts[str(row.get("surface_key") or "unknown")] += 1
+        thread_counts[_row_thread_key(row)] += 1
+    return selected
+
+
 def _select_semantic_llm_gate_candidates(union_rows: list[dict[str, Any]], max_llm_candidates: int) -> list[dict[str, Any]]:
     include_historical = _include_historical_in_llm_queue()
     production_rows = [
         row for row in union_rows
         if include_historical or str(row.get("production_bucket") or "production_candidates") == "production_candidates"
     ]
-    reply_budget = _int_env("ACQ_REPLY_TO_USER_LLM_BUDGET", 80, min_value=1)
-    ask_budget = _int_env("ACQ_ASK_ORGANIZER_LLM_BUDGET", 40, min_value=1)
-    total_budget = max_llm_candidates
+    total_budget = min(max_llm_candidates, _int_env("ACQ_LLM_FINAL_SCOPE_MAX_TOTAL", 12, min_value=1))
+    fallback_per_goal = max(1, min(_int_env("ACQ_LLM_FINAL_SCOPE_MAX_PER_GOAL", 4, min_value=1), total_budget))
+    legacy_reply_budget = _int_env("ACQ_REPLY_TO_USER_LLM_BUDGET", fallback_per_goal * 2, min_value=1)
+    legacy_reply_per_goal = max(1, min(fallback_per_goal, int(math.ceil(legacy_reply_budget / 2.0))))
+    goal_budgets = {
+        "reply_to_user_event_question": _int_env("ACQ_REPLY_EVENT_LLM_BUDGET", legacy_reply_per_goal, min_value=1),
+        "reply_to_user_route_recommendation": _int_env("ACQ_REPLY_ROUTE_LLM_BUDGET", legacy_reply_per_goal, min_value=1),
+        "ask_organizer_event_details": _int_env("ACQ_ASK_ORGANIZER_LLM_BUDGET", fallback_per_goal, min_value=1),
+    }
     selected: list[dict[str, Any]] = []
-    for goal, budget in [
-        ("reply_to_user_event_or_route", reply_budget),
-        ("ask_organizer_event_details", ask_budget),
-    ]:
+    selected_keys: set[tuple[str, str]] = set()
+    for goal in SEMANTIC_PRODUCTION_GOALS:
+        budget = min(goal_budgets.get(goal, fallback_per_goal), max(0, total_budget - len(selected)))
+        if budget <= 0:
+            continue
         goal_rows = [row for row in production_rows if str(row.get("goal") or "") == goal]
-        selected.extend(_balanced_goal_take(goal_rows, min(budget, max(0, total_budget - len(selected)))))
-        if len(selected) >= total_budget:
-            break
-    selected = selected[:total_budget]
+        for row in _semantic_diverse_take(goal_rows, budget):
+            key = (_stable_candidate_key(row), str(row.get("goal") or ""))
+            if key not in selected_keys:
+                selected.append(row)
+                selected_keys.add(key)
+    if len(selected) < total_budget:
+        remaining = [
+            row for row in sorted(production_rows, key=lambda r: float(r.get("final_semantic_score") or 0.0), reverse=True)
+            if (_stable_candidate_key(row), str(row.get("goal") or "")) not in selected_keys
+        ]
+        for row in _semantic_diverse_take(remaining, total_budget - len(selected)):
+            key = (_stable_candidate_key(row), str(row.get("goal") or ""))
+            if key not in selected_keys:
+                selected.append(row)
+                selected_keys.add(key)
+    selected = sorted(selected[:total_budget], key=lambda r: (SEMANTIC_PRODUCTION_GOALS.index(str(r.get("goal"))) if str(r.get("goal")) in SEMANTIC_PRODUCTION_GOALS else 99, -float(r.get("final_semantic_score") or 0.0)))
     for idx, row in enumerate(selected, start=1):
         row["llm_gate_rank"] = idx
         row["is_in_llm_gate_queue"] = True
@@ -2672,7 +2870,8 @@ def _dashboard_summary_rows(
         {"section": "Semantic union", "metric": "Только E5", "value": summary.get("semantic_union_e5_only", 0)},
         {"section": "Semantic union", "metric": "Только BGE-M3 dense", "value": summary.get("semantic_union_bge_m3_dense_only", 0)},
         {"section": "Semantic union", "metric": "Обе dense-модели", "value": summary.get("semantic_union_both_dense", 0)},
-        {"section": "Semantic union", "metric": "В LLM: ответы пользователям", "value": summary.get("reply_to_user_llm_gate_candidates", 0)},
+        {"section": "Semantic union", "metric": "В LLM: вопросы о событиях", "value": summary.get("reply_event_question_llm_gate_candidates", 0)},
+        {"section": "Semantic union", "metric": "В LLM: рекомендации маршрутов", "value": summary.get("reply_route_recommendation_llm_gate_candidates", 0)},
         {"section": "Semantic union", "metric": "В LLM: вопросы организаторам", "value": summary.get("ask_organizer_llm_gate_candidates", 0)},
         {"section": "Итог", "metric": "Выбрано", "value": total.get("selected_surfaces", 0)},
         {"section": "Итог", "metric": "Кандидаты", "value": total.get("candidate_surfaces", 0)},
@@ -2690,7 +2889,7 @@ def _dashboard_summary_rows(
         {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено и явные +/−/затронуто по последнему запуску."},
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
         {"section": "Как читать", "metric": "semantic_union_candidates", "value": "Главный лист semantic-only отбора: видно goal, E5/BGE hits, ranks, margins, итоговый score и LLM queue."},
-        {"section": "Как читать", "metric": "reply_to_user_candidates / ask_organizer_candidates", "value": "Короткие goal-листы для двух будущих действий; строки ещё проходят финальный LLM-gate перед реальным ответом."},
+        {"section": "Как читать", "metric": "reply_event_candidates / reply_route_candidates / ask_organizer_candidates", "value": "Короткие Excel-safe goal-листы для трёх независимых действий: ответ по событию, ответ маршрутом, уточняющий вопрос организатору."},
         {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
         {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
         {"section": "Freshness", "metric": "Активность", "value": f"Для включения в мониторинг учитываются свежие комментарии до {_max_comment_age_days()} дней; площадки без активности больше {_stale_activity_days()} дней отклоняются сейчас, но исторические строки остаются для эталонных вопросов и контроля смыслов."},
@@ -3290,6 +3489,8 @@ def _write_xlsx(
     rejected_noise_rows: list[dict[str, Any]] | None = None,
     semantic_union_rows: list[dict[str, Any]] | None = None,
     reply_to_user_rows: list[dict[str, Any]] | None = None,
+    reply_event_question_rows: list[dict[str, Any]] | None = None,
+    reply_route_recommendation_rows: list[dict[str, Any]] | None = None,
     ask_organizer_rows: list[dict[str, Any]] | None = None,
     llm_gate_result_rows: list[dict[str, Any]] | None = None,
     model_comparison_rows: list[dict[str, Any]] | None = None,
@@ -3433,6 +3634,7 @@ def _write_xlsx(
     semantic_headers = [
         "goal", "candidate_action_type", "is_in_llm_gate_queue", "llm_gate_rank", "production_bucket",
         "model_agreement", "final_semantic_score", "selection_source",
+        "semantic_text_view", "adaptive_topk_effective", "adaptive_topk_fraction",
         "hit_by_e5_dense", "hit_by_bge_m3_dense", "hit_by_bge_m3_sparse",
         "e5_dense_rank", "bge_m3_dense_rank", "bge_m3_sparse_rank",
         "e5_dense_score", "bge_m3_dense_score", "bge_m3_sparse_score",
@@ -3453,7 +3655,8 @@ def _write_xlsx(
             su.column_dimensions[get_column_letter(idx)].width = width
 
     for sheet_name, sheet_rows in [
-        ("reply_to_user_candidates", reply_to_user_rows),
+        ("reply_event_candidates", reply_event_question_rows if reply_event_question_rows is not None else reply_to_user_rows),
+        ("reply_route_candidates", reply_route_recommendation_rows),
         ("ask_organizer_candidates", ask_organizer_rows),
         ("llm_gate_results", llm_gate_result_rows),
         ("historical_calibration", historical_calibration_rows),
@@ -3703,7 +3906,8 @@ def _write_xlsx(
         "monitoring_targets",
         "surface_backlog",
         "semantic_union_candidates",
-        "reply_to_user_candidates",
+        "reply_event_candidates",
+        "reply_route_candidates",
         "ask_organizer_candidates",
         "llm_gate_results",
         "model_comparison",
@@ -3884,11 +4088,20 @@ def run_comment_semantic_retrieval(
         intent_embed_sec += time.perf_counter() - t0
 
         comments = [str(r.get("analysis_text") or r.get("text") or "") for r in records]
+        semantic_goal_texts = {
+            goal: [_record_semantic_goal_text(r, goal) for r in records]
+            for goal in SEMANTIC_GOAL_SETS
+        }
         region_contexts = [_record_region_text(r) for r in records]
         progress_callback("embedding_comments", {"model_name": model_name, "comments_total": len(comments), "comments_processed": 0, "progress_percent": 20})
         t0 = time.perf_counter()
         comment_vectors = _to_list_matrix(backend.encode(comments, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if comments else []
         comment_embedding_sec = time.perf_counter() - t0
+        semantic_goal_comment_vectors: dict[str, list[list[float]]] = {}
+        for goal, texts in semantic_goal_texts.items():
+            t_goal = time.perf_counter()
+            semantic_goal_comment_vectors[goal] = _to_list_matrix(backend.encode(texts, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if texts else []
+            comment_embedding_sec += time.perf_counter() - t_goal
         t0 = time.perf_counter()
         region_vectors = _to_list_matrix(backend.encode(region_contexts, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if region_contexts else []
         region_embedding_sec = time.perf_counter() - t0
@@ -3897,12 +4110,14 @@ def run_comment_semantic_retrieval(
         model_rows: list[dict[str, Any]] = []
         model_semantic_goal_rows: list[dict[str, Any]] = []
         now_for_bucket = datetime.now(timezone.utc)
-        for rec, vec, region_vec in zip(records, comment_vectors, region_vectors):
+        for rec_idx, (rec, vec, region_vec) in enumerate(zip(records, comment_vectors, region_vectors)):
             region_scores = _score_region_context(region_vec, region_positive_vectors, region_negative_vectors)
             region_assessment = _assess_record_region(rec, region_scores)
             for goal, goal_vectors in semantic_goal_vectors.items():
+                goal_vecs = semantic_goal_comment_vectors.get(goal) or []
+                semantic_vec = goal_vecs[rec_idx] if rec_idx < len(goal_vecs) else vec
                 scored_goal = _score_semantic_goal(
-                    vec,
+                    semantic_vec,
                     goal_vectors["positive"],
                     goal_vectors["negative"],
                     SEMANTIC_GOAL_SETS[goal]["positive"],
@@ -3916,6 +4131,8 @@ def run_comment_semantic_retrieval(
                 enriched_goal["intent_set"] = goal
                 enriched_goal["candidate_action_type"] = SEMANTIC_GOAL_ACTION_TYPES[goal]
                 enriched_goal["retrieval_channel"] = _model_dense_channel(model_name)
+                enriched_goal["_semantic_vector"] = semantic_vec
+                enriched_goal["semantic_text_view"] = "reply_goal_view" if goal in SEMANTIC_REPLY_GOALS else ("ask_goal_view" if goal == "ask_organizer_event_details" else "analysis_text")
                 enriched_goal["production_bucket"] = _production_bucket_for_goal(enriched_goal, goal, now=now_for_bucket)
                 enriched_goal["max_length"] = max_length
                 enriched_goal["batch_size"] = batch_size
@@ -4015,6 +4232,10 @@ def run_comment_semantic_retrieval(
     for c in semantic_union_candidates:
         c.setdefault("is_in_llm_gate_queue", False)
         c.setdefault("llm_queue_status_ru", "векторный кандидат; ждёт LLM gate")
+    for c in semantic_union_candidates:
+        # Internal only for MMR; never write embedding vectors into XLSX/JSON
+        # artifacts.
+        c.pop("_semantic_vector", None)
 
     progress_callback("surface_profile", {"surfaces": len({r.get('surface_key') for r in records}), "progress_percent": 78})
     profiles: list[dict[str, Any]] = []
@@ -4094,9 +4315,14 @@ def run_comment_semantic_retrieval(
         scoring_method=scoring_method,
     )
     decision_deltas = _decision_delta_rows(surface_inventory, scope_rows=scope_rows)
-    reply_to_user_candidates = [
+    reply_event_question_candidates = [
         row for row in semantic_union_candidates
-        if str(row.get("goal") or "") == "reply_to_user_event_or_route"
+        if str(row.get("goal") or "") == "reply_to_user_event_question"
+        and str(row.get("production_bucket") or "") == "production_candidates"
+    ]
+    reply_route_recommendation_candidates = [
+        row for row in semantic_union_candidates
+        if str(row.get("goal") or "") == "reply_to_user_route_recommendation"
         and str(row.get("production_bucket") or "") == "production_candidates"
     ]
     ask_organizer_candidates = [
@@ -4150,7 +4376,9 @@ def run_comment_semantic_retrieval(
             "semantic_union_e5_only": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "e5_only"]),
             "semantic_union_bge_m3_dense_only": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "bge_m3_dense_only"]),
             "semantic_union_both_dense": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "both_dense"]),
-            "reply_to_user_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_event_or_route"]),
+            "reply_event_question_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_event_question"]),
+            "reply_route_recommendation_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_route_recommendation"]),
+            "reply_to_user_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) in SEMANTIC_REPLY_GOALS]),
             "ask_organizer_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "ask_organizer_event_details"]),
         },
         surface_summaries=surface_summaries,
@@ -4189,6 +4417,7 @@ def run_comment_semantic_retrieval(
     semantic_union_fields = [
         "run_id", "goal", "candidate_action_type", "is_in_llm_gate_queue", "llm_gate_rank", "production_bucket",
         "model_agreement", "final_semantic_score", "selection_source",
+        "semantic_text_view", "adaptive_topk_effective", "adaptive_topk_fraction",
         "hit_by_e5_dense", "hit_by_bge_m3_dense", "hit_by_bge_m3_sparse",
         "e5_dense_rank", "bge_m3_dense_rank", "bge_m3_sparse_rank",
         "e5_dense_score", "bge_m3_dense_score", "bge_m3_sparse_score",
@@ -4259,7 +4488,9 @@ def run_comment_semantic_retrieval(
         processed_comment_rows=processed_last_run,
         rejected_noise_rows=rejected_noise_examples,
         semantic_union_rows=semantic_union_candidates,
-        reply_to_user_rows=reply_to_user_candidates,
+        reply_to_user_rows=reply_event_question_candidates + reply_route_recommendation_candidates,
+        reply_event_question_rows=reply_event_question_candidates,
+        reply_route_recommendation_rows=reply_route_recommendation_candidates,
         ask_organizer_rows=ask_organizer_candidates,
         llm_gate_result_rows=gate_candidates,
         model_comparison_rows=model_comparison_rows,
@@ -4291,7 +4522,9 @@ def run_comment_semantic_retrieval(
         "semantic_union_bge_m3_dense_only": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "bge_m3_dense_only"]),
         "semantic_union_both_dense": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "both_dense"]),
         "semantic_union_bge_m3_sparse_only": len([r for r in semantic_union_candidates if str(r.get("model_agreement")) == "bge_m3_sparse_only"]),
-        "reply_to_user_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_event_or_route"]),
+        "reply_event_question_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_event_question"]),
+        "reply_route_recommendation_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "reply_to_user_route_recommendation"]),
+        "reply_to_user_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) in SEMANTIC_REPLY_GOALS]),
         "ask_organizer_llm_gate_candidates": len([r for r in gate_candidates if str(r.get("goal")) == "ask_organizer_event_details"]),
         "historical_rows_excluded_from_production_queue": len([
             r for r in semantic_union_candidates

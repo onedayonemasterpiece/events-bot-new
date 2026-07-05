@@ -17,7 +17,7 @@ This stage is a semantic-retrieval funnel inside the existing Discovery run:
 Discovery scanner
   -> collect human comments/messages from replyable surfaces
   -> compute local embeddings on Kaggle
-  -> score comments against two product-action semantic goals with both E5 and BGE-M3
+  -> score comments against three product-action semantic goals with both E5 and BGE-M3
   -> build a deduped E5+BGE union, not an E5-only gate
   -> produce surface semantic profiles + ranked comment/post candidates
   -> send quota-balanced top candidates to Gemma/LLM gate
@@ -37,15 +37,18 @@ Important separation for reports:
   report-quality gate so a noisy vector match is not promoted into an
   “эталонный вопрос”.
 
-## 2026-07-05 two-goal semantic-only funnel
+## 2026-07-05 three-goal semantic-only funnel
 
 Production candidate selection is now action-led rather than broad-topic-led.
-The LLM queue is formed from two independent semantic goals:
+The LLM queue is formed from three independent semantic goals:
 
-1. `reply_to_user_event_or_route` — user comments/messages where someone needs
-   help with events, afisha, routes, trips, transport-to-place, or choosing
-   what to visit in Kaliningrad Oblast.
-2. `ask_organizer_event_details` — source posts/announcements where it may be
+1. `reply_to_user_event_question` — user comments/messages where someone asks
+   about event details: afisha, registration, tickets, timing, age, place,
+   programme or participation conditions.
+2. `reply_to_user_route_recommendation` — user comments/messages where someone
+   asks for a route, trip, place, attraction, transport-to-place, or how to plan
+   a day/walk in Kaliningrad Oblast.
+3. `ask_organizer_event_details` — source posts/announcements where it may be
    useful to ask an organizer a short clarification about registration, tickets,
    age, timing, place, programme or other missing event detail.
 
@@ -63,17 +66,38 @@ The production pool is the **union** of:
 - optional future `top_k_bge_m3_sparse`.
 
 `both_dense` increases confidence but is not required. E5-only and BGE-M3-only
-rows can enter the LLM queue. Regex/keyword lists, question mark detection,
-relation/source type, source-post flags, temporal/gasoline diagnostics and
-other handcrafted labels are not allowed to affect production admission or
-final semantic rank; they are report diagnostics only.
+rows can enter the LLM queue. Top-K is adaptive so tiny runs do not admit every
+record just because `topK > sample_size`:
+
+```text
+effective_topk = min(env_topk,
+                     max(ACQ_SEMANTIC_TOPK_MIN_PER_GOAL,
+                         ceil(records_count * ACQ_SEMANTIC_TOPK_FRACTION_PER_GOAL)))
+```
+
+Regex/keyword lists, question mark detection, relation/source type,
+source-post flags, temporal/gasoline diagnostics and other handcrafted labels
+are not allowed to affect production admission or final semantic rank; they are
+report diagnostics only.
+
+Before LLM, semantic-union rows are selected with goal-balanced quotas and
+semantic diversity scheduling:
+
+- `ACQ_LLM_FINAL_SCOPE_MAX_TOTAL=12` by default for diagnostic/smoke runs;
+- `ACQ_LLM_FINAL_SCOPE_MAX_PER_GOAL=4`;
+- `ACQ_REPLY_EVENT_LLM_BUDGET`, `ACQ_REPLY_ROUTE_LLM_BUDGET`,
+  `ACQ_ASK_ORGANIZER_LLM_BUDGET` can override per-goal caps;
+- `ACQ_LLM_MAX_PER_SURFACE_PER_GOAL`, `ACQ_LLM_MAX_PER_THREAD_OR_POST_PER_GOAL`
+  and `ACQ_LLM_DIVERSITY_MMR_LAMBDA` prevent one surface/thread from filling
+  the whole final shortlist.
 
 New report sheets:
 
 - `semantic_union_candidates` — full union with `hit_by_e5_dense`,
   `hit_by_bge_m3_dense`, ranks, margins, final score and selection source;
-- `reply_to_user_candidates` and `ask_organizer_candidates` — compact goal
-  lists for the two future product actions;
+- `reply_event_candidates`, `reply_route_candidates`, and
+  `ask_organizer_candidates` — compact Excel-safe goal lists for the three
+  future product actions;
 - `llm_gate_results`, `model_comparison`, `historical_calibration`,
   `surface_scan_funnel`, `false_positive_review`.
 
@@ -142,7 +166,7 @@ LLM budget.
 Event acquisition is forward-looking. The retrieval stage still calculates
 temporal and out-of-scope diagnostic labels so operators can spot false
 positives in reports. These labels must not become deterministic admission/rank
-rules for the two-goal semantic-union LLM queue; the negative semantic goal
+rules for the three-goal semantic-union LLM queue; the negative semantic goal
 phrases and the final LLM gate own production acceptance.
 
 - explicit dates in the current text plus source-post/parent context are parsed
