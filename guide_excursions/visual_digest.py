@@ -21,14 +21,20 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
+from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
-from aiogram.types import BufferedInputFile
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
-from markup import format_tel_link_for_display, linkify_phones_for_telegram_html, telegram_html_to_text_entities
+from markup import (
+    format_tel_link_for_display,
+    linkify_phones_for_telegram_html,
+    telegram_html_to_text_entities,
+    tel_href_for_phone_value,
+)
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1434,6 +1440,7 @@ async def publish_visual_digest_to_telegram(
     for target in targets:
         caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id), target_chat=target)
         caption_text, caption_entities = telegram_html_to_text_entities(caption)
+        call_buttons = visual_digest_call_button_rows(rows)
         if not primary_caption:
             primary_caption = caption
         try:
@@ -1443,6 +1450,7 @@ async def publish_visual_digest_to_telegram(
                 upload,
                 caption=caption_text,
                 caption_entities=caption_entities or None,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=call_buttons) if call_buttons else None,
             )
             message_id = int(getattr(msg, "message_id", 0) or 0)
             published_targets[_tg_public_target_key(target)] = {
@@ -1670,6 +1678,41 @@ def _visual_digest_telegram_footer(target_chat: str | int | None = None) -> str:
             _tg_link("Вконтакте", VISUAL_DIGEST_TG_VK_URL),
         ]
     )
+
+
+def _call_redirect_base_url() -> str:
+    raw = collapse_ws(
+        os.getenv("GUIDE_VISUAL_DIGEST_CALL_BASE_URL")
+        or os.getenv("CALL_REDIRECT_BASE_URL")
+        or os.getenv("EVENTS_BOT_PUBLIC_BASE_URL")
+        or "https://events-bot-new-wngqia.fly.dev"
+    ).rstrip("/")
+    return raw or "https://events-bot-new-wngqia.fly.dev"
+
+
+def visual_digest_call_button_rows(rows: Sequence[Mapping[str, Any]]) -> list[list[InlineKeyboardButton]]:
+    buttons: list[list[InlineKeyboardButton]] = []
+    base_url = _call_redirect_base_url()
+    for row in rows:
+        link, is_phone = _primary_link(row)
+        if not (link and is_phone):
+            continue
+        href = tel_href_for_phone_value(link)
+        digits = re.sub(r"\D", "", href)
+        if not digits:
+            continue
+        title = _fit(_plain(row.get("canonical_title")) or "экскурсия", 34)
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=f"📞 Позвонить: {title}",
+                    url=f"{base_url}/call?phone={quote(digits, safe='')}",
+                )
+            ]
+        )
+        if len(buttons) >= 5:
+            break
+    return buttons
 
 
 async def build_visual_digest_telegram_text(

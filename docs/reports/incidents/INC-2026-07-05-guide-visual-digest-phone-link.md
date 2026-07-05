@@ -34,6 +34,8 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 - 2026-07-05 09:01 UTC — follow-up entity send path deployed as `deployment-01KWRR50H87ZTWE0BZE5MYER3N`; `/healthz` ready.
 - 2026-07-05 09:06 UTC — final phone-display fallback deployed as `deployment-01KWRRDMH9F1H12NW40BTVMAFT`; `/healthz` ready.
 - 2026-07-05 09:06 UTC — existing Telegram messages `@wheretogo39/221` and `@youwillsee39/240` edited in place to visible phone format `+7 (962) 255-54-91`; Bot API returned successful edits. Public embed confirms the new visible phone text, but Telegram public HTML still does not expose `tel:` attributes (`tel_count=0`).
+- 2026-07-05 09:10 UTC — user confirmed the phone still was not tappable in Telegram client; root cause expanded from missing code linkification to Telegram client/Bot API caption phone-link limitation.
+- 2026-07-05 09:11 UTC — mitigation design changed to guaranteed inline button: `📞 Позвонить: ...` uses an HTTP Bot API button URL pointing at `/call?phone=...`, and the server route redirects/falls back to `tel:+...`.
 
 ## Root Cause
 
@@ -82,13 +84,14 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 
 ## Immediate Mitigation
 
-Existing issue `148` Telegram captions were edited in place. Because Telegram Bot API treats equivalent `tel:`/`phone_number` caption entity attempts as not modified or strips them from returned caption entities, the repair also changed the visible number to the more reliably phone-detected Russian format `+7 (962) 255-54-91` while preserving source/title/footer links.
+Existing issue `148` Telegram captions were edited in place. Because Telegram Bot API treats equivalent `tel:`/`phone_number` caption entity attempts as not modified or strips them from returned caption entities, the repair also changed the visible number to the more reliably phone-detected Russian format `+7 (962) 255-54-91` while preserving source/title/footer links. After user confirmation that this still was not tappable in Telegram, the mitigation was expanded to an inline `📞 Позвонить` button backed by an HTTPS `/call` redirect to `tel:`.
 
 ## Corrective Actions
 
 - Apply `linkify_phones_for_telegram_html()` to generated Telegram visual digest captions after HTML link construction and compacting, then send captions through explicit Bot API `caption_entities` so phone contacts are `phone_number` entities rather than relying on Telegram HTML `tel:` parsing.
-- Add a guide visual digest regression test for phone contacts in Telegram captions.
-- Document the Telegram `tel:` contract in the guide excursions monitoring feature doc.
+- Add a guaranteed Telegram inline call CTA for phone-only visual digest items: `📞 Позвонить: ...` opens an HTTPS `/call?phone=...` route that immediately redirects to `tel:+...` and displays a fallback call link.
+- Add a guide visual digest regression test/smoke for phone contacts and call buttons.
+- Document the Telegram call-button contract in the guide excursions monitoring feature doc.
 
 ## Follow-up Actions
 

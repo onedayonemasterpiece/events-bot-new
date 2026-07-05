@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Guide visual digest / Telegram call CTA**: added a `/call?phone=...` HTTPS redirect and inline `📞 Позвонить` buttons for phone-only visual digest items, so Telegram users have a guaranteed tappable call action even when caption phone auto-linking fails.
 - **Guide visual digest / Telegram phones**: made phone-only booking contacts in Telegram visual digest captions explicit phone entities, while preserving existing title/source links and keeping VK digest phone text plain.
 - **Telegram event publishing**: decoupled `tg_event_publish` from `vk_sync` so VK media/API failures no longer block valid Telegram event announcements; Telegram still keeps its daytime publish window and spacing rules.
 - **Static site / info partners bento copy**: updated `/partners/` heading and captions, switched КППК to the official-site RZD/KPPK mark with `АО «КППК»`, removed captions for `Знание`/`Акт Опус`, and replaced the two-column logo board with a fixed-row, logo-normalized 4-column mobile / 8-column desktop greedy bento placement grid.

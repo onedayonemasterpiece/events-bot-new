@@ -372,7 +372,10 @@ Production contract:
   (`<a href="tel:+...">+7 ...</a>`) и не трогает уже готовые source/title
   ссылки; при отправке в Bot API HTML caption
   конвертируется в `caption_entities`, где телефон уходит как entity
-  `phone_number`, а title/footer ссылки — как `text_link`; VK-текст при этом
+  `phone_number`, а title/footer ссылки — как `text_link`; дополнительно под
+  Telegram-постом добавляется inline-кнопка `📞 Позвонить: ...`, ведущая на
+  HTTPS `/call?phone=...` redirect, потому что Telegram-клиенты не везде
+  превращают phone entity внутри photo caption в tap-to-call; VK-текст при этом
   оставляет телефон обычным видимым номером;
   после хештегов caption добавляет пустую строку и социальный футер
   `Подписаться · Max · Вконтакте`: `Подписаться` ведёт на текущий Telegram target,

@@ -21704,7 +21704,45 @@ def create_app() -> web.Application:
             status, payload = await _runtime_health_report(app, db, bot)
             return web.json_response(payload, status=status)
 
+    async def call_redirect_handler(request: web.Request) -> web.Response:
+        raw = collapse_ws(request.query.get("phone") or "")
+        digits = re.sub(r"\D", "", raw)
+        if len(digits) == 11 and digits.startswith("8"):
+            digits = "7" + digits[1:]
+        if len(digits) == 10:
+            digits = "7" + digits
+        if not (len(digits) == 11 and digits.startswith("7")):
+            return web.Response(text="Invalid phone", status=400)
+        tel_url = f"tel:+{digits}"
+        display = format_tel_link_for_display(tel_url) or f"+{digits}"
+        safe_tel = html.escape(tel_url, quote=True)
+        safe_display = html.escape(display, quote=False)
+        body = f"""<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="0; url={safe_tel}">
+  <title>Позвонить {safe_display}</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fff8f1; color: #2a1d17; }}
+    main {{ max-width: 440px; padding: 28px; text-align: center; }}
+    a {{ display: inline-block; margin-top: 18px; padding: 14px 20px; border-radius: 999px; background: #1f8f4d; color: white; text-decoration: none; font-weight: 700; }}
+  </style>
+  <script>location.replace({json.dumps(tel_url)});</script>
+</head>
+<body>
+  <main>
+    <h1>Позвонить</h1>
+    <p>Если звонок не открылся автоматически, нажмите кнопку.</p>
+    <a href="{safe_tel}">📞 {safe_display}</a>
+  </main>
+</body>
+</html>"""
+        return web.Response(text=body, content_type="text/html")
+
     app.router.add_get("/healthz", health_handler)
+    app.router.add_get("/call", call_redirect_handler)
     app.router.add_get("/metrics", metrics_handler)
     from kaggle_status import make_kaggle_run_event_handler
 
