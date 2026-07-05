@@ -25,6 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 KERNEL_SRC = PROJECT_ROOT / "kaggle" / "EventCommentFeedback"
 PHRASE_BANK = PROJECT_ROOT / "docs" / "features" / "event-comment-feedback" / "phrase-bank-v1.md"
+PHRASE_BANK_JSON = PROJECT_ROOT / "docs" / "features" / "event-comment-feedback" / "phrase-bank-v1.json"
 ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "event-comment-feedback"
 DEFAULT_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
@@ -439,6 +440,8 @@ def create_input_datasets(
     payload_content.mkdir(parents=True, exist_ok=True)
     write_manifest(manifest, payload_content)
     shutil.copy2(PHRASE_BANK, payload_content / "phrase-bank-v1.md")
+    if PHRASE_BANK_JSON.exists():
+        shutil.copy2(PHRASE_BANK_JSON, payload_content / "phrase-bank-v1.json")
     (payload_content / "run_config.json").write_text(json.dumps(run_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     archive_path = bundle / "event_comment_feedback_payload.tarball"
     with tarfile.open(archive_path, "w:gz") as tf:
@@ -550,7 +553,7 @@ def prepare_manifest_and_config(args: argparse.Namespace, *, run_id: str) -> tup
         "request_sleep": args.request_sleep,
         "embedding_api_allowed": False,
         "llm_api_allowed_for_final_polish_only": True,
-        "read_mode": "human_like_api_paced_v1",
+        "read_mode": "api_read_paced_v1",
     }
     return manifest, config
 
@@ -562,7 +565,7 @@ def main() -> int:
     parser.add_argument("--run-date", default=os.getenv("EVENT_COMMENT_FEEDBACK_RUN_DATE", datetime.now(timezone.utc).date().isoformat()))
     parser.add_argument("--run-id", default=os.getenv("EVENT_COMMENT_FEEDBACK_RUN_ID", ""))
     parser.add_argument("--telegram-bundle-env", default=os.getenv("EVENT_COMMENT_FEEDBACK_TELEGRAM_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"))
-    parser.add_argument("--max-comments-per-source", type=int, default=int(os.getenv("EVENT_COMMENT_FEEDBACK_MAX_COMMENTS_PER_SOURCE", "60")))
+    parser.add_argument("--max-comments-per-source", type=int, default=int(os.getenv("EVENT_COMMENT_FEEDBACK_MAX_COMMENTS_PER_SOURCE", "300")))
     parser.add_argument("--request-sleep", type=float, default=float(os.getenv("EVENT_COMMENT_FEEDBACK_REQUEST_SLEEP", "0.45")))
     parser.add_argument("--timeout-minutes", type=int, default=int(os.getenv("EVENT_COMMENT_FEEDBACK_KAGGLE_TIMEOUT_MINUTES", "180")))
     parser.add_argument("--poll-interval", type=int, default=int(os.getenv("EVENT_COMMENT_FEEDBACK_KAGGLE_POLL_INTERVAL", "30")))

@@ -288,6 +288,7 @@ features:
     status: mvp_probe
     docs: docs/features/event-comment-feedback/README.md
     phrase_bank_v1: docs/features/event-comment-feedback/phrase-bank-v1.md
+    phrase_bank_v1_json: docs/features/event-comment-feedback/phrase-bank-v1.json
     ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
     llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
     static_site_contract: docs/features/event-comment-feedback/static-site-contract.md

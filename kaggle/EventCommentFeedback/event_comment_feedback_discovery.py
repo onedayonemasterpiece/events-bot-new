@@ -4,8 +4,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-RUN_SCHEMA_VERSION = "event-comment-feedback-kaggle-dual-local-v1"
-PHRASE_BANK_VERSION = "event-comment-feedback-phrase-bank-v1"
+RUN_SCHEMA_VERSION = "event-comment-feedback-kaggle-dual-prototype-v2"
+PHRASE_BANK_VERSION = "event-comment-feedback-phrase-bank-v1-json"
+READ_MODE = "api_read_paced_v1"
 REQUIRED_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 GATE_MODEL = "intfloat/multilingual-e5-base"
 SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'event_comment_feedback_discovery.py')).resolve().parent
@@ -31,6 +32,7 @@ EVENT_PHASES = {
     'fetch_tg_progress': 'fetch',
     'fetch_vk_progress': 'fetch',
     'fetch_done': 'fetch',
+    'fetch_error_summary_written': 'fetch',
     'model_load_start': 'embed',
     'model_encode_start': 'embed',
     'model_encode_done': 'embed',
@@ -131,7 +133,7 @@ def emit(event: str, **payload: Any) -> None:
 
 def human_delay(base_seconds: float, *, index: int = 0, platform: str = '') -> float:
     base = max(0.2, float(base_seconds or 0.45))
-    # Human-like: non-uniform pauses, occasional longer breath between batches.
+    # API paced read: non-uniform pauses and longer breath between batches.
     delay = random.uniform(base * 0.75, base * 1.85)
     if index and index % 17 == 0:
         delay += random.uniform(2.0, 5.0)
@@ -219,6 +221,55 @@ def is_probable_source_copy(text: str) -> bool:
     user=any(w in t for w in ['жду','ждём','ждем','пойду','идём','идем','хочу','ура','класс','спасибо','?','жаль','дорого','подскажите','можно','интересно','люблю'])
     return len(t)>320 and formal>=3 and not user
 
+
+def is_probable_private_ticket_request(text: str) -> bool:
+    t=low(text)
+    return bool(RESALE_RE.search(t)) if 'RESALE_RE' in globals() else bool(re.search(r'(?i)(приму\s+в\s+дар|дайте\s+.*билет|проходк|лишн\w*\s+билет|у\s+кого.*билет)', t))
+
+def source_comment_cap(post: dict[str, Any], global_cap: int) -> int:
+    ceiling = max(1, int(global_cap or 300))
+    metric = int(post.get('metric_comments') or 0)
+    if metric <= 0:
+        wanted = min(60, ceiling)
+    elif metric <= 20:
+        wanted = 30
+    elif metric <= 100:
+        wanted = 100
+    elif metric <= 500:
+        wanted = 200
+    else:
+        wanted = 300
+    return max(1, min(ceiling, wanted))
+
+def redact_error_example(err: dict[str, Any]) -> dict[str, Any]:
+    allow = {'platform','platform_post_key','status','error_type','code','message','seconds','cap','fetched','total_available','skip_reason'}
+    return {k: v for k, v in err.items() if k in allow and v is not None}
+
+def write_fetch_error_summary(errors: list[dict[str, Any]], skipped: list[dict[str, Any]], source_diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
+    buckets: dict[str, dict[str, Any]] = {}
+    def add(kind: str, item: dict[str, Any]) -> None:
+        key = '|'.join([kind, str(item.get('platform') or ''), str(item.get('status') or item.get('skip_reason') or ''), str(item.get('code') or item.get('error_type') or '')])
+        b = buckets.setdefault(key, {'kind': kind, 'platform': item.get('platform'), 'status': item.get('status') or item.get('skip_reason'), 'code': item.get('code'), 'error_type': item.get('error_type'), 'count': 0, 'examples': []})
+        b['count'] += 1
+        if len(b['examples']) < 5:
+            b['examples'].append(redact_error_example(item))
+    for err in errors:
+        add('fetch_error', err)
+    for sk in skipped:
+        add('source_skipped', sk)
+    summary = {
+        'schema_version': 'event-comment-feedback-fetch-error-summary-v1',
+        'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+        'errors_total': len(errors),
+        'skipped_total': len(skipped),
+        'source_diagnostics_total': len(source_diagnostics),
+        'buckets': sorted(buckets.values(), key=lambda b: (-int(b['count']), str(b.get('platform') or ''), str(b.get('status') or ''))),
+        'source_diagnostics_samples': source_diagnostics[:200],
+    }
+    (WORK/'fetch_error_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    emit('fetch_error_summary_written', errors=len(errors), skipped=len(skipped), buckets=len(summary['buckets']), progress_label=f"ошибки источников: {len(errors)} / skipped {len(skipped)}")
+    return summary
+
 def build_fetch_posts(manifest: dict[str,Any]):
     events=manifest['events']; grouped={}
     for link in sorted(manifest['source_links'], key=lambda s:(-int(s.get('metric_comments') or 0), events.get(str(s['event_id']),{}).get('date') or '', int(s['event_id']), s['platform_post_key'])):
@@ -231,9 +282,12 @@ def build_fetch_posts(manifest: dict[str,Any]):
     selected=[]; skipped=[]
     for p in sorted(grouped.values(), key=lambda p:(-int(p.get('metric_comments') or 0), p['platform_post_key'])):
         parsed=p.get('parsed') or {}
-        if p['platform']=='telegram' and not parsed.get('username'): skipped.append({**p,'skip_reason':'telegram_private_or_chat_id_without_username'})
-        elif p['platform']=='vk' and (parsed.get('owner_id') is None or parsed.get('post_id') is None): skipped.append({**p,'skip_reason':'vk_missing_owner_or_post_id'})
-        else: selected.append(p)
+        if p['platform']=='telegram' and not (parsed.get('username') or parsed.get('chat_id')):
+            skipped.append({**p,'skip_reason':'telegram_missing_username_or_chat_id'})
+        elif p['platform']=='vk' and (parsed.get('owner_id') is None or parsed.get('post_id') is None):
+            skipped.append({**p,'skip_reason':'vk_missing_owner_or_post_id'})
+        else:
+            selected.append(p)
     return selected, skipped
 
 async def fetch_tg(posts, max_comments:int, sleep_s:float):
@@ -243,63 +297,108 @@ async def fetch_tg(posts, max_comments:int, sleep_s:float):
     api_id=int(os.getenv('TG_API_ID') or os.getenv('TELEGRAM_API_ID') or '0'); api_hash=os.getenv('TG_API_HASH') or os.getenv('TELEGRAM_API_HASH') or ''
     session, kwargs=decode_bundle('TELEGRAM_AUTH_BUNDLE_DISCOVERY')
     client=TelegramClient(StringSession(session), api_id, api_hash, **kwargs)
-    comments=[]; errors=[]; account={}
+    comments=[]; errors=[]; diagnostics=[]; account={}
     await client.connect()
     try:
         if not await client.is_user_authorized(): raise RuntimeError('TELEGRAM_AUTH_BUNDLE_DISCOVERY unauthorized')
         me=await client.get_me(); account={'id':int(me.id),'username':getattr(me,'username',None),'bundle':'TELEGRAM_AUTH_BUNDLE_DISCOVERY'}
         for idx,p in enumerate(posts,1):
-            parsed=p['parsed']; username=parsed.get('username'); mid=int(parsed.get('message_id') or 0)
+            parsed=p['parsed']; username=parsed.get('username'); chat_id=parsed.get('chat_id'); mid=int(parsed.get('message_id') or 0); cap=source_comment_cap(p,max_comments)
+            entity_ref = username or chat_id
+            got=0; scanned=0
             try:
-                entity=await client.get_entity(username); got=0
-                async for msg in client.iter_messages(entity, reply_to=mid, limit=max_comments):
+                entity=await client.get_entity(entity_ref)
+                async for msg in client.iter_messages(entity, reply_to=mid, limit=cap):
+                    scanned+=1
                     txt=normalize_text(getattr(msg,'message',None) or '')
-                    if not txt or getattr(msg,'post',False) or getattr(msg,'fwd_from',None) or is_link_or_emoji_only(txt) or is_probable_source_copy(txt): continue
+                    if not txt or getattr(msg,'post',False) or getattr(msg,'fwd_from',None) or is_link_or_emoji_only(txt) or is_probable_source_copy(txt) or is_probable_private_ticket_request(txt): continue
                     sender_id=getattr(msg,'sender_id',None)
-                    comments.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'source_urls':p['source_urls'],'comment_key':f'tg:{username}:{mid}:{msg.id}','created_at':getattr(msg,'date',None).isoformat() if getattr(msg,'date',None) else None,'author_hash':short_hash(f'tg:{sender_id}' if sender_id else f'tgmsg:{msg.id}'),'text':txt,'links':p['links']}); got+=1
+                    source_key = f'tg:{username}:{mid}' if username else f'tgid:{chat_id}:{mid}'
+                    comments.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'source_urls':p['source_urls'],'comment_key':f'{source_key}:{msg.id}','created_at':getattr(msg,'date',None).isoformat() if getattr(msg,'date',None) else None,'author_hash':short_hash(f'tg:{sender_id}' if sender_id else f'tgmsg:{msg.id}'),'text':txt,'links':p['links']}); got+=1
+                diagnostics.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'cap':cap,'fetched':got,'scanned':scanned,'metric_comments':p.get('metric_comments'),'entity_mode':'username' if username else 'chat_id'})
                 if idx%25==0: emit('fetch_tg_progress', done=idx,total=len(posts),comments=len(comments),errors=len(errors), progress_label=f'TG источники {idx}/{len(posts)} · комментарии {len(comments)}')
                 await async_human_pause(sleep_s, index=idx, platform='telegram')
             except FloodWaitError as exc:
-                errors.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'status':'flood_wait','seconds':int(exc.seconds)})
+                errors.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'status':'flood_wait','seconds':int(exc.seconds),'cap':cap})
                 if exc.seconds<=45: await asyncio.sleep(exc.seconds)
                 else: break
             except Exception as exc:
-                errors.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'status':'error','error_type':type(exc).__name__,'message':str(exc)[:240]})
+                errors.append({'platform':'telegram','platform_post_key':p['platform_post_key'],'status':'error','error_type':type(exc).__name__,'message':str(exc)[:240],'cap':cap})
     finally: await client.disconnect()
-    return comments, errors, account
+    return comments, errors, diagnostics, account
+
+def _vk_error_status(code: Any) -> str:
+    try: code=int(code)
+    except Exception: return 'api_error'
+    if code in {15, 18, 30, 100}: return 'not_accessible_or_deleted'
+    if code in {6, 9, 10, 29}: return 'retryable_api_error'
+    return 'api_error'
 
 def fetch_vk(posts, max_comments:int, sleep_s:float):
     import requests
-    token=(os.getenv('VK_SERVICE_TOKEN') or os.getenv('VK_SERVICE_KEY') or os.getenv('VK_ACCESS_TOKEN') or '').strip(); comments=[]; errors=[]
-    if not token: return comments, [{'platform':'vk','status':'missing_token'}]
+    token=(os.getenv('VK_SERVICE_TOKEN') or os.getenv('VK_SERVICE_KEY') or os.getenv('VK_ACCESS_TOKEN') or '').strip(); comments=[]; errors=[]; diagnostics=[]
+    if not token: return comments, [{'platform':'vk','status':'missing_token'}], diagnostics
+    session=requests.Session()
     for idx,p in enumerate(posts,1):
-        parsed=p['parsed']; owner=parsed.get('owner_id'); post=parsed.get('post_id')
+        parsed=p['parsed']; owner=parsed.get('owner_id'); post=parsed.get('post_id'); cap=source_comment_cap(p,max_comments)
+        fetched=0; scanned=0; total_available=None; offset=0; seen=set(); pages=0
         try:
-            params={'owner_id':int(owner),'post_id':int(post),'count':max_comments,'need_likes':0,'thread_items_count':0,'v':'5.199','access_token':token,'sort':'asc'}
-            data=requests.get('https://api.vk.com/method/wall.getComments', params=params, timeout=25).json()
-            if 'error' in data:
-                errors.append({'platform':'vk','platform_post_key':p['platform_post_key'],'status':'api_error','code':data['error'].get('error_code'),'message':data['error'].get('error_msg')}); continue
-            for item in ((data.get('response') or {}).get('items') or []):
-                txt=normalize_text(item.get('text') or '')
-                if not txt or is_link_or_emoji_only(txt) or is_probable_source_copy(txt): continue
-                comments.append({'platform':'vk','platform_post_key':p['platform_post_key'],'source_urls':p['source_urls'],'comment_key':f"vk:{owner}:{post}:{item.get('id')}",'created_at':dt.datetime.fromtimestamp(int(item.get('date') or 0), dt.timezone.utc).isoformat() if item.get('date') else None,'author_hash':short_hash(f"vk:{item.get('from_id')}"),'text':txt,'links':p['links']})
+            while fetched < cap:
+                count=max(1,min(100,cap-fetched)); pages+=1
+                params={'owner_id':int(owner),'post_id':int(post),'count':count,'offset':offset,'need_likes':0,'thread_items_count':10,'v':'5.199','access_token':token,'sort':'desc'}
+                data=None
+                for attempt in range(1,4):
+                    try:
+                        data=session.get('https://api.vk.com/method/wall.getComments', params=params, timeout=25).json(); break
+                    except Exception as exc:
+                        if attempt>=3: raise
+                        time.sleep(1.5*attempt)
+                if 'error' in data:
+                    err=data['error']; code=err.get('error_code'); status=_vk_error_status(code)
+                    errors.append({'platform':'vk','platform_post_key':p['platform_post_key'],'status':status,'code':code,'message':err.get('error_msg'),'cap':cap})
+                    if status=='retryable_api_error' and pages==1:
+                        time.sleep(2.5); continue
+                    break
+                resp=data.get('response') or {}; total_available=resp.get('count', total_available); items=resp.get('items') or []
+                if not items: break
+                for item in items:
+                    scanned+=1
+                    key=f"vk:{owner}:{post}:{item.get('id')}"
+                    if key in seen: continue
+                    seen.add(key)
+                    txt=normalize_text(item.get('text') or '')
+                    if txt and not is_link_or_emoji_only(txt) and not is_probable_source_copy(txt) and not is_probable_private_ticket_request(txt):
+                        comments.append({'platform':'vk','platform_post_key':p['platform_post_key'],'source_urls':p['source_urls'],'comment_key':key,'created_at':dt.datetime.fromtimestamp(int(item.get('date') or 0), dt.timezone.utc).isoformat() if item.get('date') else None,'author_hash':short_hash(f"vk:{item.get('from_id')}"),'text':txt,'links':p['links']}); fetched+=1
+                    thread=(item.get('thread') or {}).get('items') or []
+                    for reply in thread:
+                        rkey=f"vk:{owner}:{post}:{item.get('id')}:{reply.get('id')}"
+                        if rkey in seen: continue
+                        seen.add(rkey); rtxt=normalize_text(reply.get('text') or '')
+                        if rtxt and not is_link_or_emoji_only(rtxt) and not is_probable_source_copy(rtxt) and not is_probable_private_ticket_request(rtxt):
+                            comments.append({'platform':'vk','platform_post_key':p['platform_post_key'],'source_urls':p['source_urls'],'comment_key':rkey,'parent_comment_key':key,'created_at':dt.datetime.fromtimestamp(int(reply.get('date') or 0), dt.timezone.utc).isoformat() if reply.get('date') else None,'author_hash':short_hash(f"vk:{reply.get('from_id')}"),'text':rtxt,'links':p['links']}); fetched+=1
+                    if fetched>=cap: break
+                offset += len(items)
+                if offset >= int(total_available or 0): break
+                sync_human_pause(max(0.05, sleep_s/2), index=offset, platform='vk_page')
+            diagnostics.append({'platform':'vk','platform_post_key':p['platform_post_key'],'cap':cap,'fetched':fetched,'scanned':scanned,'total_available':total_available,'pages':pages,'metric_comments':p.get('metric_comments')})
             if idx%50==0: emit('fetch_vk_progress', done=idx,total=len(posts),comments=len(comments),errors=len(errors), progress_label=f'VK источники {idx}/{len(posts)} · комментарии {len(comments)}')
             sync_human_pause(sleep_s, index=idx, platform='vk')
-        except Exception as exc: errors.append({'platform':'vk','platform_post_key':p['platform_post_key'],'status':'error','error_type':type(exc).__name__,'message':str(exc)[:240]})
-    return comments, errors
+        except Exception as exc:
+            errors.append({'platform':'vk','platform_post_key':p['platform_post_key'],'status':'error','error_type':type(exc).__name__,'message':str(exc)[:240],'cap':cap})
+    return comments, errors, diagnostics
 
-def quoted_values(line: str): return [normalize_text(v) for v in re.findall(r'[“\"]([^”\"]+)[”\"]', line) if normalize_text(v)]
-def parse_phrase_bank(path: Path):
+def quoted_values(line: str): return [normalize_text(v) for v in re.findall(r'[“"]([^”"]+)[”"]', line) if normalize_text(v)]
+def parse_phrase_bank_markdown(path: Path):
     text=path.read_text(encoding='utf-8'); parts=re.split(r'(?m)^###\s+(\d+)\.\s+`([^`]+)`\s*$', text); out=[]
     for idx in range(1,len(parts),3):
-        p={'num':int(parts[idx]),'id':parts[idx+1],'category':'','signal_type':'','tone':'internal','icon':'','risk':'internal','vector_only_allowed':False,'requires_llm_verification':True,'publishable':True,'public_sentence':None,'min_evidence_count':2,'min_unique_authors':2,'positive_prototypes':[],'hard_negatives':[]}
+        p={'num':int(parts[idx]),'id':parts[idx+1],'category':'','signal_type':'','tone':'internal','icon':'','risk':'internal','vector_only_allowed':False,'requires_llm_verification':True,'publishable':True,'public_sentence':None,'card_title':None,'card_text':None,'family':None,'singular_safe':False,'min_evidence_count':2,'min_unique_authors':2,'positive_prototypes':[],'hard_negatives':[]}
         for raw in parts[idx+2].splitlines():
             line=raw.strip()
             if line.startswith('- **Category:**'): p['category']=normalize_text(line.split(':**',1)[1])
             elif line.startswith('- **signal_type:**'):
                 m=re.search(r'`([^`]+)`',line); p['signal_type']=m.group(1) if m else ''
             elif line.startswith('- **tone/icon/risk:**'):
-                vals=re.findall(r'`([^`]+)`',line);
+                vals=re.findall(r'`([^`]+)`',line)
                 if len(vals)>=3: p['tone'],p['icon'],p['risk']=vals[:3]
             elif line.startswith('- **Policy:**'): p['vector_only_allowed']='vector_only_allowed=true' in line; p['requires_llm_verification']='requires_llm_verification=true' in line
             elif line.startswith('- **public_sentence:**'):
@@ -313,11 +412,38 @@ def parse_phrase_bank(path: Path):
             elif line.startswith('- **Positive prototypes:**'): p['positive_prototypes']=quoted_values(line)
             elif line.startswith('- **Hard negatives:**'): p['hard_negatives']=quoted_values(line)
         if not p['public_sentence']: p['publishable']=False
+        p['card_title']=p.get('card_title') or p.get('public_sentence') or p['id']
+        p['card_text']=p.get('card_text') or p.get('public_sentence') or p['card_title']
+        p['family']=p.get('family') or p.get('category') or p['id']
         out.append(p)
     return out
 
-def phrase_doc(p): return ' | '.join([str(p.get('public_sentence') or p['id']), str(p.get('signal_type') or ''), '; '.join(p.get('positive_prototypes') or [])])
-def neg_doc(p): return ' | '.join(p.get('hard_negatives') or [])
+def parse_phrase_bank(path: Path):
+    if path.suffix == '.json':
+        data=json.loads(path.read_text(encoding='utf-8'))
+        phrases=data.get('phrases') if isinstance(data,dict) else data
+        if not isinstance(phrases,list): raise RuntimeError('phrase bank JSON must contain phrases[]')
+        for p in phrases:
+            if p.get('public_sentence') in {'null','None',''}: p['public_sentence']=None
+            p['publishable']=bool(p.get('publishable') and p.get('public_sentence'))
+            p.setdefault('card_title', p.get('public_sentence') or p.get('id'))
+            p.setdefault('card_text', p.get('public_sentence') or p.get('card_title'))
+            p.setdefault('family', p.get('category') or p.get('id'))
+            p.setdefault('positive_prototypes', [])
+            p.setdefault('hard_negatives', [])
+            p.setdefault('singular_safe', False)
+        return phrases
+    return parse_phrase_bank_markdown(path)
+
+def phrase_docs(p):
+    docs=[]
+    for value in [p.get('card_title'), p.get('card_text'), p.get('public_sentence'), *(p.get('positive_prototypes') or [])]:
+        v=normalize_text(value or '')
+        if v and v not in docs: docs.append(v)
+    return docs or [str(p.get('id'))]
+
+def neg_docs(p): return [normalize_text(v) for v in (p.get('hard_negatives') or []) if normalize_text(v)]
+def phrase_sparse_text(p): return ' | '.join([str(p.get('card_title') or ''), str(p.get('card_text') or ''), str(p.get('public_sentence') or ''), '; '.join(p.get('positive_prototypes') or [])])
 def prefix(model,text,is_query): return (('query: ' if is_query else 'passage: ') + text) if 'multilingual-e5' in model.lower() else text
 
 def sparse_counter(text):
@@ -335,85 +461,133 @@ def cos_counter(a,b):
     dot=sum(v*b.get(k,0) for k,v in a.items());
     if dot<=0: return 0.0
     return float(dot/(math.sqrt(sum(v*v for v in a.values()))*math.sqrt(sum(v*v for v in b.values()))))
-QUESTION_IDS={'ticket_availability_question','time_questions','duration_questions','children_questions','location_questions','pushkin_card_questions','accessibility_questions','parking_questions','payment_questions','age_limit_questions','online_recording_questions','registration_interest','extra_places_question','extra_date_request','refund_exchange_questions'}
-RESALE_RE=re.compile(r'(?i)(\b(?:продам|продаю|куплю|ищу|нужен|нужны)\b[^\n]{0,40}\bбилет|\bбилет[^\n]{0,40}\b(?:продам|продаю|куплю|ищу|нужен|нужны)|есть\s+у\s+кого|у\s+кого(?:-то)?\s+есть|лишн\w*\s+билет|напишите\s+(?:пожалуйста\s+)?(?:в\s+)?(?:личк|лс))')
-QUESTION_RE=re.compile(r'(?i)(\?|подскаж\w*|можно\s+ли|есть\s+ли|будет\s+ли|остал\w*|где\b|когда\b|во\s+сколько|сколько\b|как\b|нужн\w*\s+ли|регистрац\w*)')
-GUARDS={'children_questions':[r'дет',r'реб[её]н',r'школь',r'возраст'],'accessibility_questions':[r'пандус',r'маломобиль',r'инвалид',r'коляск',r'лифт'],'weather_concern':[r'дожд',r'погод',r'ливн',r'гр[оа]з',r'ветер'],'ticket_availability_question':[r'билет',r'мест',r'регистрац',r'попасть'],'ticket_interest_high':[r'билет',r'мест',r'регистрац',r'попасть'],'high_demand_from_ticket_friction':[r'билет',r'мест',r'регистрац',r'попасть',r'тираж',r'успева'],'time_questions':[r'во сколько',r'время',r'начал',r'вход',r'длит']}
+QUESTION_IDS={'ticket_availability_question','time_questions','duration_questions','children_questions','location_questions','pushkin_card_questions','accessibility_questions','parking_questions','payment_questions','age_limit_questions','online_recording_questions','registration_interest','extra_places_question','extra_date_request','refund_exchange_questions','barcode_or_eticket_question','late_entry_question','admission_rules_question','food_drinks_question','security_rules_question','sector_or_seat_question','stroller_question','wheelchair_accessibility_question'}
+RESALE_RE=re.compile(r'(?i)(\b(?:продам|продаю|куплю|ищу|нужен|нужны)\b[^\n]{0,50}\b(?:билет|проходк)|\b(?:билет|проходк)[^\n]{0,50}\b(?:продам|продаю|куплю|ищу|нужен|нужны)|есть\s+у\s+кого|у\s+кого(?:-то)?\s+есть|лишн\w*\s+билет|приму\s+в\s+дар[^\n]{0,40}\bбилет|дайте[^\n]{0,40}\bбилет|напишите\s+(?:пожалуйста\s+)?(?:в\s+)?(?:личк|лс))')
+QUESTION_RE=re.compile(r'(?i)(\?|подскаж\w*|можно\s+ли|есть\s+ли|будет\s+ли|остал\w*|где\b|когда\b|во\s+сколько|сколько\b|как\b|нужн\w*\s+ли|регистрац\w*|пустят|вход|проход)')
+TICKET_TOPIC=[r'билет',r'мест',r'регистрац',r'попасть',r'разобрал',r'законч',r'проходк',r'qr',r'штрих',r'ссылк',r'купить']
+GUARDS={'children_questions':[r'дет',r'реб[её]н',r'школь',r'возраст'],'accessibility_questions':[r'пандус',r'маломобиль',r'инвалид',r'коляск',r'лифт'],'weather_concern':[r'дожд',r'погод',r'ливн',r'гр[оа]з',r'ветер'],'ticket_availability_question':TICKET_TOPIC,'ticket_interest_high':TICKET_TOPIC,'sold_out_discussion':TICKET_TOPIC,'sold_out_disappointment':TICKET_TOPIC,'high_demand_from_ticket_friction':TICKET_TOPIC,'ticket_purchase_technical_problem':[r'ссылк',r'куп',r'оплат',r'не\s+работ',r'ошибк',r'vpn',r'сайт'],'ticket_link_broken':[r'ссылк',r'не\s+откры',r'не\s+работ',r'ошибк',r'сайт'],'registration_closed':[r'регистрац',r'мест',r'билет',r'законч',r'закрыт'],'time_questions':[r'во сколько',r'время',r'начал',r'вход',r'длит'],'stroller_question':[r'детск.*коляск|коляск.*детск|с\s+коляск'],'wheelchair_accessibility_question':[r'инвалид|маломобиль|пандус|лифт|коляск.*инвалид'],'food_drinks_question':[r'вод|напит|ед|пронос'],'security_rules_question':[r'досмотр|нельзя|сумк|безопас|пронос'],'sector_or_seat_question':[r'сектор|мест|ряд|танцпол|сидяч'],'crowd_management_concern':[r'толп|очеред|много\s+люд|вход']}
 def guard(text,pid):
     t=low(text); reasons=[]
     if pid in QUESTION_IDS:
         if RESALE_RE.search(t): reasons.append('ticket_resale_or_private_ticket_request')
         elif not QUESTION_RE.search(t): reasons.append('question_phrase_without_question_marker')
+    if pid in {'sold_out_discussion','sold_out_disappointment'} and not any(re.search(p,t,re.I) for p in TICKET_TOPIC):
+        reasons.append('sold_out_without_ticket_topic')
+    if pid in {'accessibility_questions','accessibility_concern'} and any(re.search(p,t,re.I) for p in [r'ссылк',r'куп',r'билет',r'оплат',r'vpn']):
+        reasons.append('accessibility_confused_with_ticket_purchase')
     pats=GUARDS.get(pid)
     if pats and not any(re.search(p,t,re.I) for p in pats): reasons.append('phrase_lexical_guard')
     return reasons
 
-def encode_model(model_name, texts, is_query):
-    from sentence_transformers import SentenceTransformer
-    emit('model_load_start', model=model_name, progress_percent=45, progress_label=f'загрузка модели {model_name}')
-    model=SentenceTransformer(model_name, device=os.getenv('ACQ_COMMENT_RETRIEVAL_DEVICE') or None)
-    try: model.max_seq_length=128
-    except Exception: pass
+def encode_with_loaded_model(model_name, model, texts, is_query):
     batch=32 if 'multilingual-e5' in model_name.lower() else 8
     emit('model_encode_start', model=model_name, count=len(texts), is_query=is_query, batch=batch, progress_label=f'embeddings {model_name}: {len(texts)} текстов')
     arr=model.encode([prefix(model_name,t,is_query) for t in texts], batch_size=batch, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=True)
     emit('model_encode_done', model=model_name, count=len(texts), is_query=is_query, progress_label=f'embeddings готовы {model_name}')
     return arr
 
+def model_phrase_scores(comment_vec, proto_vecs, proto_meta, neg_vecs, neg_meta):
+    phrase_scores=defaultdict(lambda:{'score':-9.0,'prototype':None,'negative_score':0.0})
+    vals=comment_vec @ proto_vecs.T
+    for i,score_v in enumerate(vals):
+        pid, proto = proto_meta[i]
+        s=float(score_v)
+        if s > phrase_scores[pid]['score']:
+            phrase_scores[pid]={'score':s,'prototype':proto,'negative_score':0.0}
+    if len(neg_meta):
+        nvals=comment_vec @ neg_vecs.T
+        for i,score_v in enumerate(nvals):
+            pid, _neg = neg_meta[i]
+            phrase_scores[pid]['negative_score']=max(float(score_v), float(phrase_scores[pid].get('negative_score') or 0.0))
+    ranked=sorted([(v['score'], pid, v) for pid,v in phrase_scores.items()], reverse=True)
+    ranks={pid:rank for rank,(_s,pid,_v) in enumerate(ranked,1)}
+    return phrase_scores, ranked, ranks
+
 def score(comments, manifest, phrases):
-    publish=[p for p in phrases if p.get('publishable') and p.get('public_sentence')]
-    pdocs=[phrase_doc(p) for p in publish]; ndocs=[neg_doc(p) for p in publish]
-    unique={}
-    event_comments=defaultdict(list)
+    runtime=[p for p in phrases if p.get('runtime_enabled', True)]
+    public_by_id={p['id']:p for p in runtime if p.get('publishable') and p.get('public_sentence')}
+    unique={}; event_comments=defaultdict(list)
     for c in comments:
         for link in c.get('links') or []:
             item=dict(c); item['event_id']=int(link['event_id']); event_comments[item['event_id']].append(item)
             th=short_hash(low(c['text']),24); unique.setdefault(th, {'text_hash':th,'text':c['text']})
     ulist=list(unique.values()); texts=[u['text'] for u in ulist]
+    if not texts: return {}, []
+    proto_meta=[]; proto_docs=[]; neg_meta=[]; neg_texts=[]
+    for p in runtime:
+        for doc in phrase_docs(p):
+            proto_meta.append((p['id'], doc)); proto_docs.append(doc)
+        for doc in neg_docs(p):
+            neg_meta.append((p['id'], doc)); neg_texts.append(doc)
     model_scores={}
-    for model in REQUIRED_MODELS:
-        pos=encode_model(model,pdocs,True); neg=encode_model(model,ndocs,True); cvec=encode_model(model,texts,False)
+    from sentence_transformers import SentenceTransformer
+    for model_name in REQUIRED_MODELS:
+        emit('model_load_start', model=model_name, progress_percent=45, progress_label=f'загрузка модели {model_name}')
+        model=SentenceTransformer(model_name, device=os.getenv('ACQ_COMMENT_RETRIEVAL_DEVICE') or None)
+        try: model.max_seq_length=128
+        except Exception: pass
+        pos_vec=encode_with_loaded_model(model_name, model, proto_docs, True)
+        neg_vec=encode_with_loaded_model(model_name, model, neg_texts, True) if neg_texts else []
+        cvec=encode_with_loaded_model(model_name, model, texts, False)
         rows={}
         for ci,u in enumerate(ulist):
-            vals=sorted([(float(cvec[ci] @ pos[pi]), p['id'], pi) for pi,p in enumerate(publish)], reverse=True)
-            top, pid, pi=vals[0]; second, spid, _=vals[1] if len(vals)>1 else (0.0,None,-1); ns=float(cvec[ci] @ neg[pi]) if ndocs[pi] else 0.0
-            rows[u['text_hash']]={'top_phrase_id':pid,'top_score':top,'second_phrase_id':spid,'second_score':second,'margin_neg':top-ns,'top5':{pid2:rank for rank,(_s,pid2,_pi) in enumerate(vals[:5],1)},'scores5':{pid2:s for s,pid2,_pi in vals[:5]}}
-        model_scores[model]=rows
-    by_phrase={p['id']:p for p in publish}; sparse={p['id']:sparse_counter(phrase_doc(p)) for p in publish}
+            ps, ranked, ranks = model_phrase_scores(cvec[ci], pos_vec, proto_meta, neg_vec, neg_meta)
+            rows[u['text_hash']]={'phrase_scores':ps,'ranked':ranked[:12],'ranks':ranks,'top_phrase_id':ranked[0][1] if ranked else None,'top_score':float(ranked[0][0]) if ranked else 0.0,'top5':{pid:rank for rank,(_s,pid,_v) in enumerate(ranked[:5],1)},'scores12':{pid:s for s,pid,_v in ranked[:12]}}
+        model_scores[model_name]=rows
+        del model
+    by_phrase={p['id']:p for p in runtime}; sparse={p['id']:sparse_counter(phrase_sparse_text(p)) for p in runtime}
     event_results={}; evidence=[]
     for eid, rows in event_comments.items():
-        seen=set(); groups=defaultdict(lambda:{'phrase':None,'comments':[],'authors':set(),'sources':set(),'scores':[]})
+        seen=set(); groups=defaultdict(lambda:{'phrase':None,'comments':[],'authors':set(),'sources':set(),'scores':[]}); suppressed_internal=[]
         for c in rows:
             th=short_hash(low(c['text']),24); ah=c.get('author_hash') or ''; k=(th,ah)
             if k in seen: continue
             seen.add(k)
             e5=model_scores[REQUIRED_MODELS[0]].get(th); bge=model_scores[REQUIRED_MODELS[1]].get(th)
             if not e5 or not bge: continue
-            pid=e5['top_phrase_id']; p=by_phrase.get(pid); bge_rank=bge.get('top5',{}).get(pid,999); reasons=guard(c['text'],pid)
-            ss=cos_counter(sparse_counter(c['text']), sparse.get(pid, Counter()))
-            if ss < 0.01: reasons.append('sparse_support_low')
-            if e5['margin_neg'] < -0.015: reasons.append('negative_margin_low')
-            if bge_rank > 3: reasons.append('bge_not_top3')
-            if reasons: continue
-            cand={'e5_score':round(e5['top_score'],4),'bge_top_phrase_id':bge['top_phrase_id'],'bge_rank_for_e5_phrase':bge_rank,'bge_same_phrase_score':round(float(bge.get('scores5',{}).get(pid,0.0)),4),'sparse_score':round(ss,4),'model_agreement':bge['top_phrase_id']==pid}
+            candidate_ids=set(pid for _s,pid,_v in e5['ranked'][:8]) | set(pid for _s,pid,_v in bge['ranked'][:8])
+            best=None
+            for pid in candidate_ids:
+                p=by_phrase.get(pid)
+                if not p: continue
+                e5_rank=e5['ranks'].get(pid,999); bge_rank=bge['ranks'].get(pid,999)
+                e5_row=e5['phrase_scores'].get(pid,{}); bge_row=bge['phrase_scores'].get(pid,{})
+                e5_score=float(e5_row.get('score') or 0.0); bge_score=float(bge_row.get('score') or 0.0)
+                neg=max(float(e5_row.get('negative_score') or 0.0), float(bge_row.get('negative_score') or 0.0))
+                ss=cos_counter(sparse_counter(c['text']), sparse.get(pid, Counter()))
+                reasons=guard(c['text'],pid)
+                if ss < 0.006: reasons.append('sparse_support_low')
+                if (max(e5_score,bge_score)-neg) < -0.01: reasons.append('negative_margin_low')
+                if not ((e5_rank<=5 and bge_rank<=5) or (e5_rank==1 and bge_rank<=10) or (bge_rank==1 and e5_rank<=10)):
+                    reasons.append('dual_rank_weak')
+                ensemble=0.40*e5_score+0.40*bge_score+0.10*(1.0/max(e5_rank,1)+1.0/max(bge_rank,1))+0.10*ss-0.15*max(0.0,neg-max(e5_score,bge_score))
+                cand={'phrase_id':pid,'e5_score':round(e5_score,4),'bge_score':round(bge_score,4),'e5_rank':e5_rank,'bge_rank':bge_rank,'sparse_score':round(ss,4),'negative_score':round(neg,4),'ensemble_score':round(ensemble,4),'e5_prototype':e5_row.get('prototype'),'bge_prototype':bge_row.get('prototype'),'model_agreement':e5.get('top_phrase_id')==bge.get('top_phrase_id')}
+                if reasons: continue
+                if best is None or ensemble > best[0]: best=(ensemble,pid,p,cand)
+            if best is None: continue
+            _ensemble,pid,p,cand=best
+            if not p.get('publishable') or p.get('risk')=='internal' or p.get('tone')=='internal':
+                suppressed_internal.append({'phrase_id':pid,'comment_key':c.get('comment_key'),'text_snippet':c['text'][:220],**cand})
+                continue
             g=groups[pid]; g['phrase']=p; item=dict(c); item['candidate']=cand; g['comments'].append(item); g['authors'].add(ah); g['sources'].add(c.get('platform_post_key')); g['scores'].append(cand)
         accepted=[]; other=[]
         for pid,g in groups.items():
             p=g['phrase']; ev=len(g['comments']); au=len(g['authors']); min_ev=int(p.get('min_evidence_count') or 2); min_au=int(p.get('min_unique_authors') or 2)
             if ev>=min_ev and au>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low': status='public_ready_dual_kaggle'
+            elif p.get('singular_safe') and ev>=1 and au>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}: status='public_ready_singular_dual_kaggle'
             elif ev>=min_ev and au>=min_au: status='needs_review_dual_kaggle'
             else: status='suppressed_weak_dual_kaggle'
-            cs=sorted(g['comments'], key=lambda x:x['candidate']['e5_score'], reverse=True)
-            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'evidence_count':ev,'unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
+            cs=sorted(g['comments'], key=lambda x:x['candidate']['ensemble_score'], reverse=True)
+            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'evidence_count':ev,'unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
             for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]})
             (accepted if status.startswith('public_ready') else other).append(rec)
-        event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other}
+        event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other,'suppressed_internal_samples':suppressed_internal[:20]}
     return event_results,evidence
 
-def write_reports(manifest, comments, errors, event_results, evidence):
+def write_reports(manifest, comments, errors, event_results, evidence, fetch_error_summary=None):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
-    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':'human_like_api_paced_v1','models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'events_with_comments':len(event_results),'fetch_errors':len(errors),'events_with_public_ready':sum(1 for r in event_results.values() if r['accepted_items']),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['status']=='needs_review_dual_kaggle' for i in r['review_or_suppressed_items']))}
+    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':sum(1 for r in event_results.values() if r['accepted_items']),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['status']=='needs_review_dual_kaggle' for i in r['review_or_suppressed_items']))}
     (WORK/'event_comment_feedback_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     (WORK/'event_comment_feedback_probe.json').write_text(json.dumps({**summary,'events':event_results}, ensure_ascii=False, indent=2), encoding='utf-8')
     rows=[]
@@ -424,9 +598,9 @@ def write_reports(manifest, comments, errors, event_results, evidence):
             for it in items:
                 if not it['status'].startswith(status_prefix): continue
                 if tone and it.get('tone')!=tone: continue
-                vals.append(f"{it['public_sentence']} ({it['evidence_count']}/{it['unique_authors_count']})")
+                vals.append(f"{it.get('card_title') or it.get('public_sentence')} — {it.get('card_text') or ''} ({it['evidence_count']}/{it['unique_authors_count']})")
             return '\n'.join(vals[:6])
-        rows.append({'event_id':int(eid),'date':ev.get('date'),'time':ev.get('time'),'title':ev.get('title'),'venue':ev.get('location_name'),'comments_seen':res['comments_seen_count'],'dedup_comments':res['dedup_comments_count'],'public_positive':join('public_ready','positive'),'public_neutral':join('public_ready','neutral'),'public_negative':join('public_ready','concern'),'review_positive':join('needs_review','positive'),'review_neutral':join('needs_review','neutral'),'review_negative':join('needs_review','concern'),'suppressed_weak_top':join('suppressed_weak'),'evidence_snippets':'\n---\n'.join([sn for it in items[:6] for sn in it.get('evidence_snippets',[])][:6]),'note':'Kaggle dual local embeddings: intfloat/multilingual-e5-base + BAAI/bge-m3; embedding API disabled'})
+        rows.append({'event_id':int(eid),'date':ev.get('date'),'time':ev.get('time'),'title':ev.get('title'),'venue':ev.get('location_name'),'comments_seen':res['comments_seen_count'],'dedup_comments':res['dedup_comments_count'],'public_positive':join('public_ready','positive'),'public_neutral':join('public_ready','neutral'),'public_negative':join('public_ready','concern'),'review_positive':join('needs_review','positive'),'review_neutral':join('needs_review','neutral'),'review_negative':join('needs_review','concern'),'suppressed_weak_top':join('suppressed_weak'),'evidence_snippets':'\n---\n'.join([sn for it in items[:6] for sn in it.get('evidence_snippets',[])][:6]),'note':'Kaggle dual local prototype ensemble: intfloat/multilingual-e5-base + BAAI/bge-m3; embedding API disabled'})
     headers=list(rows[0].keys()) if rows else ['note']
     with (WORK/'event_comment_feedback_full_table.csv').open('w',encoding='utf-8-sig',newline='') as f:
         w=csv.DictWriter(f,fieldnames=headers); w.writeheader(); w.writerows(rows or [{'note':'No rows'}])
@@ -455,19 +629,24 @@ def main():
         ensure_deps(); load_secrets()
         config_path=find_input_file('run_config.json')
         manifest_path=find_input_file('prod_source_manifest_full.json.gz')
-        phrase_path=find_input_file('phrase-bank-v1.md')
+
+        try:
+            phrase_path=find_input_file('phrase-bank-v1.json')
+        except FileNotFoundError:
+            phrase_path=find_input_file('phrase-bank-v1.md')
         emit('input_files_found', run_config=str(config_path), manifest=str(manifest_path), phrase_bank=str(phrase_path), progress_percent=4, progress_label='payload найден')
         config=load_json_any(config_path); manifest=load_json_any(manifest_path); phrases=parse_phrase_bank(phrase_path)
         max_comments=int(config.get('max_comments_per_source') or 60); sleep_s=float(config.get('request_sleep') or 0.18)
         selected, skipped=build_fetch_posts(manifest); tg=[p for p in selected if p['platform']=='telegram']; vk=[p for p in selected if p['platform']=='vk']
-        emit('preflight_ok', events=manifest.get('event_count'), source_posts=manifest.get('source_post_count'), selected=len(selected), tg=len(tg), vk=len(vk), skipped=len(skipped), models=REQUIRED_MODELS, embedding_api_allowed=False, read_mode='human_like_api_paced_v1', request_sleep=sleep_s, progress_percent=8, progress_label=f'источники: TG {len(tg)} / VK {len(vk)}')
-        tg_comments,tg_errors,tg_account=asyncio.run(fetch_tg(tg,max_comments,sleep_s)) if tg else ([],[],{})
-        vk_comments,vk_errors=fetch_vk(vk,max_comments,sleep_s) if vk else ([],[])
-        comments=tg_comments+vk_comments; errors=tg_errors+vk_errors
-        (WORK/'comments_raw_redacted.json').write_text(json.dumps({'comments':comments,'errors':errors,'telegram_account':tg_account}, ensure_ascii=False, indent=2), encoding='utf-8')
+        emit('preflight_ok', events=manifest.get('event_count'), source_posts=manifest.get('source_post_count'), selected=len(selected), tg=len(tg), vk=len(vk), skipped=len(skipped), models=REQUIRED_MODELS, embedding_api_allowed=False, read_mode=READ_MODE, request_sleep=sleep_s, progress_percent=8, progress_label=f'источники: TG {len(tg)} / VK {len(vk)}')
+        tg_comments,tg_errors,tg_diag,tg_account=asyncio.run(fetch_tg(tg,max_comments,sleep_s)) if tg else ([],[],[],{})
+        vk_comments,vk_errors,vk_diag=fetch_vk(vk,max_comments,sleep_s) if vk else ([],[],[])
+        comments=tg_comments+vk_comments; errors=tg_errors+vk_errors; source_diagnostics=tg_diag+vk_diag
+        fetch_summary=write_fetch_error_summary(errors, skipped, source_diagnostics)
+        (WORK/'comments_raw_redacted.json').write_text(json.dumps({'comments':comments,'errors':errors,'source_diagnostics':source_diagnostics,'telegram_account':tg_account}, ensure_ascii=False, indent=2), encoding='utf-8')
         emit('fetch_done', comments=len(comments), errors=len(errors), tg_comments=len(tg_comments), vk_comments=len(vk_comments), progress_percent=40, progress_label=f'комментарии: {len(comments)}')
         event_results,evidence=score(comments, manifest, phrases) if comments else ({}, [])
-        write_reports(manifest, comments, errors, event_results, evidence)
+        write_reports(manifest, comments, errors, event_results, evidence, fetch_summary)
         emit('kernel_done', progress_percent=100, progress_label='готово')
     except Exception as exc:
         emit('kernel_failed', error_type=type(exc).__name__, message=str(exc)[:1000], progress_label='ошибка')

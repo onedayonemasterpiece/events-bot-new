@@ -8,7 +8,7 @@
 
 ## Документы фичи
 
-- [Phrase bank v1](phrase-bank-v1.md) — фиксированная библиотека публичных фраз, prototypes и hard negatives.
+- [Phrase bank v1](phrase-bank-v1.md) / runtime [phrase-bank-v1.json](phrase-bank-v1.json) — фиксированная библиотека публичных фраз, card copy, prototypes и hard negatives.
 - [YDB schema draft](ydb-schema.md) — sidecar-хранилище комментариев, embeddings, matches, verifier cache и public state.
 - [LLM verifier contract](llm-verifier-contract.md) — group-level batch verifier, cache keys, forbidden patterns.
 - [Static-site contract](static-site-contract.md) — JSON manifest, UI block, carousel, icon semantics.
@@ -104,9 +104,9 @@ The MVP-1 runner is:
 - required Telegram bundle env: `TELEGRAM_AUTH_BUNDLE_DISCOVERY` by default;
 - resource lease when status callback is configured: `telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY`.
 
-The launcher creates three per-run private Kaggle inputs: payload (`run_config.json`, `prod_source_manifest_full.json.gz`, `phrase-bank-v1.md`), encrypted secret cipher, and Fernet key. It then pushes the kernel, verifies attached dataset sources, polls `kernels_status`, downloads output on terminal completion/failure, and can attach a status dataset created through `create_kaggle_run_config(...)` when `--status-db` and `--status-callback-url` are provided.
+The launcher creates three per-run private Kaggle inputs: payload (`run_config.json`, `prod_source_manifest_full.json.gz`, `phrase-bank-v1.md`, `phrase-bank-v1.json`), encrypted secret cipher, and Fernet key. It then pushes the kernel, verifies attached dataset sources, polls `kernels_status`, downloads output on terminal completion/failure, and can attach a status dataset created through `create_kaggle_run_config(...)` when `--status-db` and `--status-callback-url` are provided.
 
-The runner is intentionally not a local embedding/API shortcut: embeddings are computed inside Kaggle with the two local sentence-transformer models `intfloat/multilingual-e5-base` and `BAAI/bge-m3`; `embedding_api_allowed=false` is written to the run config and report summary.
+The runner is intentionally not a local embedding/API shortcut: embeddings are computed inside Kaggle with the two local sentence-transformer models `intfloat/multilingual-e5-base` and `BAAI/bge-m3`; `embedding_api_allowed=false` is written to the run config and report summary. Since v2 matching uses prototype-level scoring: every phrase prototype is embedded separately and candidates come from `topK(E5) ∪ topK(BGE)`, not from E5 top-1 with BGE veto.
 
 The current source reading mode is **API-read with conservative throttling**, not a UI/browser “human-like” reader: Telegram comments are read through Telethon `iter_messages(..., reply_to=...)`; VK comments through `wall.getComments`; the kernel sleeps between source posts and records FloodWait/API errors. A future production increment must add persistent source state/cursors/capability tracking in YDB before this becomes scheduled crawling.
 
@@ -403,3 +403,15 @@ Allowed framing:
 - [ ] Medium/high-risk phrases require verifier/manual review or are suppressed.
 - [ ] Ticket/sold-out conflict policy is tested.
 - [ ] Phrase precision and unsafe-publication gates pass in probe.
+
+### MVP-2 P0 hardening after external review
+
+The second probe revision addresses the first-run quality gaps before any static-site UI block:
+
+- runtime phrase bank is now machine-readable `phrase-bank-v1.json`; Markdown remains human documentation;
+- phrase matching is prototype-level: positive/hard-negative examples are embedded separately;
+- both models contribute candidates through an E5/BGE union with reciprocal-rank and sparse topical support;
+- practical question classes can use singular-safe copy (for example “Есть вопрос про билеты”) while reputation/positive claims keep stricter evidence thresholds;
+- added practical classes for ticket purchase/link problems, closed registration, entry rules, water/security/seat questions, stroller vs wheelchair, performance praise and giveaway/tag suppression;
+- VK fetch uses pagination/thread items and adaptive per-source caps; Telegram no longer drops all `chat_id/message_id` sources before fetch;
+- every run writes `fetch_error_summary.json` so access/rate/deleted/comment-thread failures are visible without reading raw comments.
