@@ -143,6 +143,13 @@ Compensating repair was required for already edited public messages whose wrong 
 
 A fresh photo-caption post `@kldevents/1941` was published at `2026-07-05 15:29:49 UTC` without Premium icons. The root cause was that `publish_tg_event_announcement()` scheduled the Premium/custom-emoji edit only as an in-memory delayed `asyncio.create_task()`. The production deploy at `2026-07-05 15:31 UTC` restarted the process before the delayed editor fired, so no `tg_premium_emoji.edit_done` line existed for message `1941`. The corrective action adds a durable `tg_premium_emoji_edit` outbox task after every `tg_event_publish` send/edit. The editor remains idempotent: if the in-memory task already edited the post, the outbox job finishes with no changes; if deploy/restart interrupts the delay, the outbox job performs the edit later. Due edit jobs are separately throttled so catch-up cannot produce a Telegram FloodWait burst.
 
+Release evidence for the durable editor fix:
+
+- SHA `ed041764052562266a86eb9e1004ed7a6a10329c` was pushed to `origin/main` and deployed as Fly image `deployment-01KWSFTZC4JP9D2739CVJVNYAG`; `/healthz` was OK after deploy.
+- Compensating repair edited missed public messages `@kldevents/1943`, `@kldevents/1941`, and `@kldevents/1928`; follow-up scan confirmed Premium entities (`custom_count` respectively `19`, `5`, `5`) and the expected Tretyakovka medallion block on `1943`.
+- Public smoke after deploy: fresh post `@kldevents/1944` at `2026-07-05 16:00:40 UTC` initially had no custom emoji during the intentional delay, then was enriched at `2026-07-05 16:03:42 UTC` (`context=tg_event_publish_send`, `edited=True`, `replacements=1`). The durable outbox row `27383` ran at `2026-07-05 16:03:55 UTC` and completed `nochange`, proving restart-safe idempotent fallback was scheduled and executed.
+- Targeted tests for the durable editor/medallion path passed: `35 passed, 71 deselected` across `tests/test_job_due_filter.py`, `tests/test_tg_event_publish.py`, and `tests/test_tg_premium_emojis.py`.
+
 ## Prevention
 
 - Regression tests guard against edit jobs consuming the announcement lane.
