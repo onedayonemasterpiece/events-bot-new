@@ -362,6 +362,96 @@ async def test_due_tg_event_publish_backlog_is_spaced_at_execution(tmp_path, mon
         main._ensure_utc(first_job.updated_at) + timedelta(minutes=10)
     )
 
+@pytest.mark.asyncio
+async def test_tg_event_publish_new_posts_outrank_existing_post_edits(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    async with db.get_session() as session:
+        existing = Event(
+            title="Existing edit",
+            description="d",
+            date="2026-07-10",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+            added_at=now - timedelta(days=2),
+            tg_event_post_id=100,
+            tg_event_post_url="https://t.me/c/1/100",
+        )
+        new_first = Event(
+            title="New announcement",
+            description="d",
+            date="2026-07-11",
+            time="13:00",
+            location_name="loc",
+            source_text="src",
+            added_at=now - timedelta(hours=12),
+        )
+        new_second = Event(
+            title="Second new announcement",
+            description="d",
+            date="2026-07-12",
+            time="14:00",
+            location_name="loc",
+            source_text="src",
+            added_at=now - timedelta(hours=13),
+        )
+        session.add(existing)
+        session.add(new_first)
+        session.add(new_second)
+        await session.commit()
+        await session.refresh(existing)
+        await session.refresh(new_first)
+        await session.refresh(new_second)
+        for ev in (existing, new_first, new_second):
+            session.add(
+                JobOutbox(
+                    event_id=ev.id,
+                    task=JobTask.tg_event_publish,
+                    status=JobStatus.pending,
+                    next_run_at=now,
+                    updated_at=now,
+                )
+            )
+        await session.commit()
+        existing_id = int(existing.id)
+        new_first_id = int(new_first.id)
+        new_second_id = int(new_second.id)
+
+    calls: list[int] = []
+
+    async def fake_tg_publish(eid, db_obj, bot_obj):
+        calls.append(eid)
+        async with db_obj.get_session() as session:
+            event = await session.get(Event, int(eid))
+            if event and not getattr(event, "tg_event_post_id", None):
+                event.tg_event_post_id = 1000 + len(calls)
+                event.tg_event_post_url = f"https://t.me/c/1/{event.tg_event_post_id}"
+                session.add(event)
+                await session.commit()
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {"tg_event_publish": fake_tg_publish})
+
+    processed = await main._run_due_jobs_once(db, None)
+
+    assert processed == 2
+    assert calls == [new_first_id, existing_id]
+    async with db.get_session() as session:
+        second_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == new_second_id,
+                    JobOutbox.task == JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
+    assert second_job.status == JobStatus.pending
+    assert main._ensure_utc(second_job.next_run_at) > datetime.now(timezone.utc)
+
 
 @pytest.mark.asyncio
 async def test_fresh_tg_event_publish_is_not_starved_by_old_backlog(

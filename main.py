@@ -14706,26 +14706,62 @@ async def _defer_tg_event_publish_if_spacing_blocked(
     job_id = getattr(job, "id", None)
     if not job_id:
         return None
+    current_event_post_id: int | None = None
+    if getattr(job, "event_id", None) is not None:
+        current_event = await session.get(Event, int(job.event_id))
+        try:
+            current_event_post_id = int(getattr(current_event, "tg_event_post_id", None) or 0) or None
+        except (TypeError, ValueError):
+            current_event_post_id = None
+    if current_event_post_id:
+        # Re-editing or premium/medallion reconciliation of an existing message
+        # does not create a channel-top post and must not throttle real new
+        # Afisha announcements.
+        return None
+
     now_utc = _ensure_utc(now or datetime.now(timezone.utc))
     interval = _tg_event_publish_interval()
     candidate = _normalize_tg_event_publish_run_at(now_utc)
     if candidate <= now_utc:
         candidate = now_utc
 
+    max_post_id = (
+        await session.execute(select(func.max(Event.tg_event_post_id)))
+    ).scalar_one_or_none()
+    try:
+        max_post_id_int = int(max_post_id or 0)
+    except (TypeError, ValueError):
+        max_post_id_int = 0
+
     rows = (
         await session.execute(
-            select(JobOutbox.id, JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+            select(
+                JobOutbox.id,
+                JobOutbox.status,
+                JobOutbox.next_run_at,
+                JobOutbox.updated_at,
+                Event.tg_event_post_id,
+            )
+            .outerjoin(Event, Event.id == JobOutbox.event_id)
             .where(
                 JobOutbox.task == JobTask.tg_event_publish,
                 JobOutbox.id != int(job_id),
                 JobOutbox.status.in_([JobStatus.done, JobStatus.running]),
             )
             .order_by(JobOutbox.updated_at.desc())
-            .limit(25)
+            .limit(50)
         )
     ).all()
     anchors: list[datetime] = []
-    for _id, status, next_run_at, updated_at in rows:
+    for _id, status, next_run_at, updated_at, event_post_id in rows:
+        try:
+            event_post_id_int = int(event_post_id or 0)
+        except (TypeError, ValueError):
+            event_post_id_int = 0
+        if status == JobStatus.done and max_post_id_int and event_post_id_int < max_post_id_int:
+            # A done row for an older message is usually an edit/catch-up pass.
+            # It should not move the new-post spacing anchor forward.
+            continue
         anchor = _ensure_utc(updated_at if status == JobStatus.done else (updated_at or next_run_at))
         if anchor:
             anchors.append(anchor)
@@ -14783,6 +14819,7 @@ async def next_tg_event_publish_run_at(
                     JobOutbox.next_run_at,
                     JobOutbox.updated_at,
                     Event.added_at,
+                    Event.tg_event_post_id,
                 )
                 .outerjoin(Event, Event.id == JobOutbox.event_id)
                 .where(JobOutbox.task == JobTask.tg_event_publish)
@@ -14790,6 +14827,13 @@ async def next_tg_event_publish_run_at(
                 .limit(200)
             )
         ).all()
+        max_post_id = (
+            await session.execute(select(func.max(Event.tg_event_post_id)))
+        ).scalar_one_or_none()
+    try:
+        max_post_id_int = int(max_post_id or 0)
+    except (TypeError, ValueError):
+        max_post_id_int = 0
     source_event_ids = (
         set(await _same_publish_source_event_ids(db, source_url, exclude_event_id=exclude_event_id))
         if source_url and source_interval > interval
@@ -14801,7 +14845,19 @@ async def next_tg_event_publish_run_at(
     candidate_local = candidate.astimezone(LOCAL_TZ)
     backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
     fresh_cutoff = now_utc - _tg_event_publish_fresh_queue_horizon()
-    for _event_id, status, next_run_at, updated_at, event_added_at in rows:
+    for _event_id, status, next_run_at, updated_at, event_added_at, event_post_id in rows:
+        try:
+            event_post_id_int = int(event_post_id or 0)
+        except (TypeError, ValueError):
+            event_post_id_int = 0
+        if status in {JobStatus.pending, JobStatus.running} and event_post_id_int:
+            # Existing Telegram messages are edit/reconciliation jobs, not
+            # future channel-top announcements. They must not reserve publish
+            # slots for newly imported events.
+            continue
+        if status == JobStatus.done and max_post_id_int and event_post_id_int < max_post_id_int:
+            # Older-message edit completions must not become spacing anchors.
+            continue
         anchor = None
         if status in {JobStatus.pending, JobStatus.running}:
             anchor = _ensure_utc(next_run_at)
@@ -17180,6 +17236,7 @@ async def _run_due_jobs_once_locked(
         JobTask.festival_pages: 1,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
+    tg_event_post_id: dict[int, int | None] = {}
     tg_event_ids = sorted(
         {
             int(j.event_id)
@@ -17189,27 +17246,48 @@ async def _run_due_jobs_once_locked(
     )
     if tg_event_ids:
         async with db.get_session() as session:
-            rows = await session.execute(
-                select(Event.id, Event.added_at).where(Event.id.in_(tg_event_ids))
-            )
+            rows = (
+                await session.execute(
+                    select(Event.id, Event.added_at, Event.tg_event_post_id).where(
+                        Event.id.in_(tg_event_ids)
+                    )
+                )
+            ).all()
             tg_event_added_at = {
-                int(event_id): _ensure_utc(added_at) for event_id, added_at in rows.all()
+                int(event_id): _ensure_utc(added_at)
+                for event_id, added_at, _post_id in rows
+            }
+            tg_event_post_id = {
+                int(event_id): (int(post_id) if post_id else None)
+                for event_id, _added_at, post_id in rows
             }
     fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
 
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
         task_priority = priority.get(j.task, 99)
         if j.task == JobTask.tg_event_publish and j.event_id is not None:
-            added_at = tg_event_added_at.get(int(j.event_id))
+            event_id = int(j.event_id)
+            added_at = tg_event_added_at.get(event_id)
+            has_existing_tg_post = bool(tg_event_post_id.get(event_id))
             # When an old catch-up/backfill backlog is being throttled one post at
             # a time, fresh Smart Update imports must not be starved behind rows
             # that can be safely announced later. Within the fresh lane, newest
             # imports go first so a live Smart Update does not wait behind an
             # hours-old mini-backlog. Spacing is still enforced by
             # _defer_tg_event_publish_if_spacing_blocked before every send.
-            if added_at and added_at >= fresh_cutoff:
+            #
+            # Existing Telegram posts are edit/reconciliation work, not new
+            # channel-top announcements. They must not consume the scarce "new
+            # post every N minutes" lane while no-post event announcements are
+            # waiting.
+            if added_at and added_at >= fresh_cutoff and not has_existing_tg_post:
                 return (task_priority, 1, -int(added_at.timestamp()), j.id)
-            return (task_priority, 2, j.id, 0)
+            if not has_existing_tg_post:
+                added_rank = -int(added_at.timestamp()) if added_at else 0
+                return (task_priority, 2, added_rank, j.id)
+            if added_at and added_at >= fresh_cutoff:
+                return (task_priority, 3, -int(added_at.timestamp()), j.id)
+            return (task_priority, 4, j.id, 0)
         return (task_priority, 0, j.id, 0)
 
     jobs.sort(key=_job_due_sort_key)

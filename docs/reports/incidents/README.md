@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions.md`
+  - Scope: Telegram event publishing due ordering/spacing for new posts versus existing-message edits, plus Premium/custom-emoji medallion enrichment timing.
+  - Must not regress: existing Telegram post edits must not consume the scarce new-post spacing lane while no-post events wait; canonical `tg_event_publish` posts must run Premium/medallion editor evidence as part of publication, not as an untracked delayed gap.
 - `INC-2026-07-05-guide-visual-digest-phone-link.md`
   - Scope: Guide excursions `visual_schedule` Telegram caption generation and phone-only booking contacts.
   - Must not regress: Telegram visual digest captions must send phone contacts as explicit `phone_number` entities while preserving existing title/source links and leaving VK digest phone text plain.

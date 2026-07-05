@@ -6208,7 +6208,7 @@ async def publish_tg_event_announcement(
                 )
             else:
                 raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
-            _schedule_tg_premium_emoji_editor(
+            await _edit_tg_premium_emoji_now(
                 [(target, int(existing_id))],
                 context="tg_event_publish_edit",
                 medallion_html_block=medallion_block or None,
@@ -6310,7 +6310,7 @@ async def publish_tg_event_announcement(
             )
 
     if sent_id is not None:
-        _schedule_tg_premium_emoji_editor(
+        await _edit_tg_premium_emoji_now(
             [(target, int(sent_id))],
             context="tg_event_publish_send",
             medallion_html_block=medallion_block or None,
@@ -7398,6 +7398,49 @@ async def send_daily_announcement(
         raise pending_error
     return sent
 
+
+
+async def _edit_tg_premium_emoji_now(
+    targets: Sequence[tuple[str | int, int]],
+    *,
+    context: str,
+    medallion_html_block: str | None = None,
+) -> None:
+    if not targets:
+        return
+    try:
+        from tg_premium_emojis import (
+            edit_messages_with_env,
+            premium_emoji_editor_enabled,
+        )
+
+        if not premium_emoji_editor_enabled():
+            return
+        results = await edit_messages_with_env(
+            targets,
+            delay_seconds=0,
+            medallion_html_block=medallion_html_block,
+        )
+        logging.info(
+            "tg_premium_emoji.edit_done context=%s results=%s",
+            context,
+            [
+                {
+                    "chat": item.chat,
+                    "message_id": item.message_id,
+                    "edited": item.edited,
+                    "replacements": item.replacements,
+                    "error": item.error,
+                }
+                for item in results
+            ],
+        )
+    except Exception:
+        logging.exception(
+            "tg_premium_emoji.edit_failed context=%s targets=%s",
+            context,
+            targets,
+        )
 
 
 def _schedule_tg_premium_emoji_editor(
