@@ -1,6 +1,6 @@
 # INC-2026-07-05 Guide visual digest Telegram phone not clickable
 
-Status: open
+Status: mitigated
 Severity: sev3
 Service: Guide excursions visual digest Telegram publication
 Opened: 2026-07-05
@@ -30,6 +30,10 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 - 2026-07-05 08:30 UTC — production scheduled visual guide digest issue `148` created/published.
 - 2026-07-05 08:49 UTC — public embed checked: phone present, no `tel:` entity.
 - 2026-07-05 08:50 UTC — root cause localized to `guide_excursions/visual_digest.py::build_visual_digest_telegram_text`.
+- 2026-07-05 08:54 UTC — initial code fix deployed as `deployment-01KWRQPF8D8MPH787YTARCZ7HK`; `/healthz` ready.
+- 2026-07-05 09:01 UTC — follow-up entity send path deployed as `deployment-01KWRR50H87ZTWE0BZE5MYER3N`; `/healthz` ready.
+- 2026-07-05 09:06 UTC — final phone-display fallback deployed as `deployment-01KWRRDMH9F1H12NW40BTVMAFT`; `/healthz` ready.
+- 2026-07-05 09:06 UTC — existing Telegram messages `@wheretogo39/221` and `@youwillsee39/240` edited in place to visible phone format `+7 (962) 255-54-91`; Bot API returned successful edits. Public embed confirms the new visible phone text, but Telegram public HTML still does not expose `tel:` attributes (`tel_count=0`).
 
 ## Root Cause
 
@@ -78,7 +82,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 
 ## Immediate Mitigation
 
-Pending code deploy, no safe user-facing workaround was applied manually because the source caption must preserve existing HTML title links and channel-specific footer links.
+Existing issue `148` Telegram captions were edited in place. Because Telegram Bot API treats equivalent `tel:`/`phone_number` caption entity attempts as not modified or strips them from returned caption entities, the repair also changed the visible number to the more reliably phone-detected Russian format `+7 (962) 255-54-91` while preserving source/title/footer links.
 
 ## Corrective Actions
 
@@ -92,11 +96,12 @@ Pending code deploy, no safe user-facing workaround was applied manually because
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `dc624ddbf5ae78754c66d9a260610f011c3ab37e` (reachable from `origin/main`)
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWRRDMH9F1H12NW40BTVMAFT`
+- regression checks: `python3 -m py_compile guide_excursions/visual_digest.py markup.py`; `git diff --check`; manual helper smoke for Telegram `tel:` internal HTML, Bot API entity conversion, title `text_link` preservation, and VK plain-phone output. Full pytest was blocked locally by missing global `pytest` (`/usr/bin/python3: No module named pytest`).
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `guide_visual_digest=ok`; Bot API edit of `@wheretogo39/221` and `@youwillsee39/240` succeeded with visible `+7 (962) 255-54-91`; public embeds for both messages show the updated phone text. Telegram public embed still reports `tel_count=0`, recorded as Telegram-side rendering limitation rather than code-path absence.
 
 ## Prevention
 
-The incident record is the regression contract for future visual digest caption changes; the unit test must keep Telegram phone contacts clickable while VK keeps phone numbers plain.
+The incident record is the regression contract for future visual digest caption changes; the unit tests and helper smoke keep Telegram phone contacts in a phone-detectable display format with explicit internal `tel:`/entity handling while VK keeps phone numbers plain. Closure should be upgraded from mitigated to closed after a human Telegram-client spot-check confirms tap-to-call on the edited digest.
