@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site pages / Сигналы обсуждения design**: added the docs-first `event-comment-feedback` child feature with a YDB sidecar schema draft, fixed phrase bank v1, group-level LLM verifier contract, static JSON/UI carousel contract, and offline probe/evaluation plan; no production collection/export/UI code is implemented yet.
 
 ### Fixed
 
