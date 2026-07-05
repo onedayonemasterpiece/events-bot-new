@@ -28,7 +28,7 @@ from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
-from markup import linkify_phones_for_telegram_html, telegram_html_to_text_entities
+from markup import format_tel_link_for_display, linkify_phones_for_telegram_html, telegram_html_to_text_entities
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1503,7 +1503,7 @@ def _normalize_phone(value: str | None) -> str | None:
     if len(digits) == 10:
         digits = "7" + digits
     if len(digits) == 11 and digits.startswith("7"):
-        return f"+7 {digits[1:4]} {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
+        return format_tel_link_for_display(f"tel:+{digits}") or f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
     return raw if raw.startswith("+") else None
 
 
