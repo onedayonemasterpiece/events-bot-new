@@ -1,10 +1,10 @@
 # INC-2026-07-05 Guide Visual Digest Stale VK Booking Link
 
-Status: open
+Status: closed
 Severity: sev2
 Service: guide excursions visual digest / VK and Telegram fanout
 Opened: 2026-07-05
-Closed: —
+Closed: 2026-07-05
 Owners: bot operations / guide excursions
 Related incidents: `INC-2026-07-05-guide-visual-digest-phone-link`, `INC-2026-04-23-guide-digest-extraction-loss`, `INC-2026-04-21-guide-gemma4-partial-monitoring`
 Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/incident-management.md`
@@ -32,6 +32,8 @@ Guide visual digest issue `#148` was published to Telegram and VK with the first
 - 2026-07-05 08:30 UTC: visual digest issue `#148` was created/published.
 - 2026-07-05 08:40 UTC: VK wall post `https://vk.com/wall-238875824_94` was published with first link `wall-190663987_8037`.
 - 2026-07-05: operator reported the stale first link; investigation confirmed root cause.
+- 2026-07-05 17:06 UTC: deployed code fix `e391675f` to Fly app `events-bot-new-wngqia`, machine version `1605`.
+- 2026-07-05 17:09 UTC: production repair edited Telegram messages `@wheretogo39/221`, `@youwillsee39/240`, and VK wall post `https://vk.com/wall-238875824_94` to use current source `https://vk.com/wall-190663987_9010`.
 
 ## Root Cause
 
@@ -78,13 +80,15 @@ Guide visual digest issue `#148` was published to Telegram and VK with the first
 
 ## Immediate Mitigation
 
-- Pending in this branch: repair occurrence `#400`, issue `#148` captions, and VK wall post `https://vk.com/wall-238875824_94` to use the current schedule source `https://vk.com/wall-190663987_9010`.
+- Repaired production occurrence `#400`: `booking_url` and `fact_pack_json.booking_url` now point to current source `https://vk.com/wall-190663987_9010`; stale booking fact claims for `wall-190663987_8037` were removed after row-level backups.
+- Edited Telegram visual digest captions in place for `@wheretogo39/221` and `@youwillsee39/240`.
+- Edited VK wall post `https://vk.com/wall-238875824_94` in place, preserving the existing photo attachment.
 
 ## Corrective Actions
 
 - Added a visual digest primary-link guard that demotes stale source-internal VK wall links from preliminary multi-event schedules and falls back to the current source post.
 - Added regression coverage for issue `#148` shape.
-- Pending production data/public repair.
+- Production data/public repair completed for occurrence `#400`, issue `#148`, Telegram messages `221`/`240`, and VK wall post `94`.
 
 ## Follow-up Actions
 
@@ -93,10 +97,14 @@ Guide visual digest issue `#148` was published to Telegram and VK with the first
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `e391675f19a4aa0e26836da04cb65e20f5f393f1` (`fix(guide): demote stale visual digest links`), pushed to `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree; image `deployment-01KWSKVHJBXJ6C907T68AW4GAF`, machine `683961db016e28`, version `1605`.
+- regression checks: `/tmp/eventsbot-pytest-venv/bin/python -m pytest -q tests/test_guide_visual_digest.py tests/test_guide_gemma4_prompt_contract.py` passed (`21 passed`); `python3 -m py_compile guide_excursions/visual_digest.py kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py`; `git diff --check`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `db=ok`; Fly status showed one passing machine check.
+- production repair backups: `codex_backup_20260705_guide_stale_link_occurrence_20260705_170611`, `codex_backup_20260705_guide_stale_link_issue_20260705_170611`, `codex_backup_20260705_guide_stale_link_fact_20260705_170611`, plus v2 backups with suffix `20260705_170945`.
+- production DB verification: `guide_occurrence #400` now has `booking_url=https://vk.com/wall-190663987_9010`, `booking_text=Предварительная запись у Хранителей руин`, `channel_url=https://vk.com/wall-190663987_9010`; `guide_digest_issue #148.text` contains `9010` and no `8037`; `media_items_json.item_states["400"].booking_url=https://vk.com/wall-190663987_9010`.
+- Telegram verification: public embeds for `https://t.me/wheretogo39/221` and `https://t.me/youwillsee39/240` contain `wall-190663987_9010` and no `wall-190663987_8037`.
+- VK verification: authenticated `wall.getById` for `-238875824_94` contains `[https://vk.com/wall-190663987_9010|Путешествие по следам советского кино]`, no `8037`, and still has a `photo` attachment.
 
 ## Prevention
 
