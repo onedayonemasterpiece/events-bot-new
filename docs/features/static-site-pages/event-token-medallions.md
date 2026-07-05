@@ -168,7 +168,7 @@ Runtime contract:
 - custom emoji pack capacity is 200 stickers; one 4×4 medallion consumes 16 stickers, so one pack fits 12 full medallions with 8 spare slots;
 - production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
 - `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
-- no more than three medallions are rendered for one event;
+- no more than three medallions are rendered for one event; when all three slots are used, the horizontal separator between 4×4 medallion mosaics is removed to keep the row inside Telegram mobile widths;
 - in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
 - no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;

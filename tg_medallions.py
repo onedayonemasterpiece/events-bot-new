@@ -155,6 +155,11 @@ def render_medallion_html_block(medallions: list[dict[str, Any]] | None = None) 
     cols = int(cfg.get("cols") or COLS_DEFAULT)
     alt = html.escape(str(cfg.get("alt") or ALT_DEFAULT))
     sep = html.escape(str(cfg.get("separator") or SEP_DEFAULT))
+    # Three 4x4 medallions are close to Telegram mobile line width on some
+    # clients; remove the one visible separator character between medallions
+    # only in that crowded case. One/two medallions keep the normal optical gap.
+    if len(medallions) >= 3:
+        sep = ""
     lines: list[str] = []
     for row in range(rows):
         parts: list[str] = []

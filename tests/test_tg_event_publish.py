@@ -2223,3 +2223,23 @@ def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypa
     assert '<tg-emoji emoji-id=' not in html_text
     assert "🟧" not in html_text
     assert "🔎 Подробнее" in html_text
+
+
+def test_tg_medallion_three_pack_uses_no_separator(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            festival="80 историй о главном",
+            location_name="Историко-художественный музей",
+        )
+        html_text = main.build_tg_event_announcement(event, "Описание.")
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    first_medallion_line = next(line for line in html_text.splitlines() if "<tg-emoji" in line)
+    assert "\u200a" not in first_medallion_line
+    assert first_medallion_line.count("<tg-emoji") == 12
