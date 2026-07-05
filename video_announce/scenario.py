@@ -4525,6 +4525,34 @@ class VideoAnnounceScenario:
                 "assets/cherryflash_icons/library-building-342687.svg",
             ),
             (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "walk.svg",
+                "assets/cherryflash_icons/walk.svg",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "route.svg",
+                "assets/cherryflash_icons/route.svg",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "boat.svg",
+                "assets/cherryflash_icons/boat.svg",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "walk.mask.png",
+                "assets/cherryflash_icons/walk.mask.png",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "route.mask.png",
+                "assets/cherryflash_icons/route.mask.png",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "water.mask.png",
+                "assets/cherryflash_icons/water.mask.png",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "building.mask.png",
+                "assets/cherryflash_icons/building.mask.png",
+            ),
+            (
                 project_root / "video_announce" / "assets" / "Akrobat-Black.otf",
                 "assets/Akrobat-Black.otf",
             ),

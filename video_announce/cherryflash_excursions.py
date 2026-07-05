@@ -59,6 +59,21 @@ _PHONE_RE = re.compile(r"(?:\+?7|8)?[\s\-()]*(?:\d[\s\-()]*){10,}")
 _TG_USERNAME_RE = re.compile(r"@([A-Za-z0-9_]{4,32})")
 
 _PALETTES = ("prussian_cream", "deep_wine_ivory", "museum_green_ivory", "black_lime")
+_MONTHS_GENITIVE_UPPER = (
+    "",
+    "ЯНВАРЯ",
+    "ФЕВРАЛЯ",
+    "МАРТА",
+    "АПРЕЛЯ",
+    "МАЯ",
+    "ИЮНЯ",
+    "ИЮЛЯ",
+    "АВГУСТА",
+    "СЕНТЯБРЯ",
+    "ОКТЯБРЯ",
+    "НОЯБРЯ",
+    "ДЕКАБРЯ",
+)
 
 
 @dataclass(frozen=True)
@@ -142,12 +157,12 @@ def _format_payload_date(raw_date: str, raw_time: str) -> str:
         return raw_time.strip()
     try:
         day = date.fromisoformat(raw_date)
-        value = f"{day.day:02d}.{day.month:02d}"
+        value = f"{day.day} {_MONTHS_GENITIVE_UPPER[day.month]}"
     except Exception:
         value = raw_date
     raw_time = raw_time.strip()
     if raw_time:
-        value = f"{value} {raw_time[:5]}"
+        value = f"{value} • {raw_time[:5]}"
     return value
 
 

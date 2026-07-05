@@ -754,15 +754,47 @@ def _draw_water_icon(size: int, color: tuple[int, int, int], accent: tuple[int, 
     return img
 
 
+_GUIDE_ICON_MASK_FILES = {
+    # Real SVG Repo selections used by the approved still/video design.  The
+    # renderer uses pre-rendered alpha masks so production does not need Cairo,
+    # but the source SVGs live next to the masks in video_announce/assets.
+    "walk": "walk.mask.png",
+    "route": "route.mask.png",
+    "water": "water.mask.png",
+    "building": "building.mask.png",
+}
+
+
+def _resolve_guide_icon_mask(kind: str) -> Path | None:
+    filename = _GUIDE_ICON_MASK_FILES.get(kind) or _GUIDE_ICON_MASK_FILES["walk"]
+    candidates = (
+        ROOT / "video_announce" / "assets" / "cherryflash_icons" / filename,
+        ROOT / "assets" / "cherryflash_icons" / filename,
+        Path(__file__).resolve().parent.parent / "video_announce" / "assets" / "cherryflash_icons" / filename,
+    )
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
 def _guide_icon(kind: str, size: int, color: tuple[int, int, int], accent: tuple[int, int, int]) -> Image.Image:
-    if kind == "building":
+    key = kind if kind in _GUIDE_ICON_MASK_FILES else "walk"
+    mask_path = _resolve_guide_icon_mask(key)
+    if mask_path is not None:
+        mask = Image.open(mask_path).convert("L").resize((size, size), Image.Resampling.LANCZOS)
+        icon = Image.new("RGBA", (size, size), (*color, 255))
+        icon.putalpha(mask)
+        return icon
+    # Fallback only for broken local/dev packaging; production packages the SVG
+    # Repo masks above. Do not treat this as the designed icon path.
+    if key == "building":
         return _draw_building_icon(size, color, accent)
-    if kind == "route":
+    if key == "route":
         return _draw_route_icon(size, color, accent)
-    if kind == "water":
+    if key == "water":
         return _draw_water_icon(size, color, accent)
     return _draw_walk_icon(size, color, accent)
-
 
 
 # V7-compatible guide excursion scene renderer.
@@ -922,17 +954,8 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         ix,iy,iw,ih = 590,50,80,80
         d.rounded_rectangle((xy(ix),xy(iy),xy(ix+iw),xy(iy+ih)), radius=xy(18), fill=rgba(vp['accent'],255))
         kind = str(promo.get('icon_kind') or 'walk')
-        icon = Image.new('RGBA', (xy(52), xy(52)), (0,0,0,0))
-        gd = ImageDraw.Draw(icon, 'RGBA')
-        if kind == 'water':
-            # v7-style simple functional glyph: three clear waves, no face-like arcs.
-            col = rgba(vp['ink'],255); width = xy(5)
-            for yy in (19, 28, 37):
-                gd.arc((xy(8), xy(yy-8), xy(28), xy(yy+8)), 180, 360, fill=col, width=width)
-                gd.arc((xy(25), xy(yy-8), xy(45), xy(yy+8)), 180, 360, fill=col, width=width)
-        else:
-            icon = _guide_icon(kind, xy(52), ImageColor.getrgb(vp['ink']), ImageColor.getrgb(vp['cream']))
-            icon = icon.resize((xy(52), xy(52)), Image.Resampling.LANCZOS)
+        icon = _guide_icon(kind, xy(52), ImageColor.getrgb(vp['ink']), ImageColor.getrgb(vp['cream']))
+        icon = icon.resize((xy(52), xy(52)), Image.Resampling.LANCZOS)
         im.alpha_composite(icon, (xy(ix+(iw-52)/2), xy(iy+(ih-52)/2)))
         return im
 
