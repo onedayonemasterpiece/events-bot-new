@@ -104,6 +104,17 @@ immutable run config / source seeds / YDB cursor snapshot
 
 Status events should include `preflight_ok`, `sources_scanned`, `posts_fetched`, `media_scored`, `candidates_created`, `report_written`, `queue_written`, `publish_dry_run_done` and terminal failure. Secrets must be injected as Kaggle secrets or encrypted split datasets and never printed.
 
+### MVP-1 implemented runner
+
+Implementation entrypoints added for the first Candidate Report Only run:
+
+- local/Kaggle script: `kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py`;
+- Kaggle metadata: `kaggle/RegionTalkCandidateReport/kernel-metadata.json`;
+- Kaggle launcher: `kaggle/execute_region_talk_candidate_report.py`;
+- focused smoke tests: `tests/test_region_talk_candidate_report.py`.
+
+Telegram source monitoring is explicitly **Telethon-based**. MVP-1 prefers `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for Region Talk discovery and can fall back to `TELEGRAM_AUTH_BUNDLE_S22` when deliberately configured for Kaggle-style remote monitoring. It does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
+
 ### Reuse existing Kaggle infrastructure
 
 Before implementation, the Region Talk runner must inspect and reuse existing repo patterns instead of writing a runner from scratch. Required local anchors:

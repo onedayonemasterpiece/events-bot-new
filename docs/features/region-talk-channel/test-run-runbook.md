@@ -6,6 +6,14 @@ Status: operational design for the first Candidate Report Only run. This runbook
 
 Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`](seed-sources-v1.csv), writes YDB dev/test or dry-run state, and exports a cumulative XLSX workbook with current-run delta.
 
+## Implemented MVP-1 entrypoints
+
+- `kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py` — Telethon-based bounded fetch/scoring/export script.
+- `kaggle/execute_region_talk_candidate_report.py` — Kaggle push/poll/download launcher using private encrypted input datasets for secrets.
+- `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
+
+Telegram reading is through Telethon (`TELEGRAM_AUTH_BUNDLE_DISCOVERY` preferred for this feature), not through Bot API.
+
 ## Hard stop rules
 
 - `REGION_TALK_DRY_RUN=1` is required.
