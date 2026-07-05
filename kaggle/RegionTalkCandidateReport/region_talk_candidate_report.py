@@ -912,7 +912,99 @@ def sheet_xml(rows: list[dict[str, Any]]) -> str:
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><dimension ref="A1:{last}"/><sheetData>{''.join(body)}</sheetData><autoFilter ref="A1:{col_name(len(headers))}1"/></worksheet>'''
 
 
+
+def excel_safe_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    if isinstance(value, (list, dict)):
+        text = json.dumps(value, ensure_ascii=False)
+    else:
+        text = str(value)
+    try:
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE  # type: ignore
+        text = ILLEGAL_CHARACTERS_RE.sub("", text)
+    except Exception:
+        text = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F]", "", text)
+    if text.startswith(("=", "+", "-", "@")):
+        text = "'" + text
+    if len(text) > 32767:
+        text = text[:32700] + "… [truncated for Excel]"
+    return text
+
+
+def write_xlsx_openpyxl(path: Path, sheets: dict[str, list[dict[str, Any]]]) -> None:
+    try:
+        from openpyxl import Workbook  # type: ignore
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # type: ignore
+        from openpyxl.utils import get_column_letter  # type: ignore
+    except Exception:
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openpyxl"])
+            from openpyxl import Workbook  # type: ignore
+            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # type: ignore
+            from openpyxl.utils import get_column_letter  # type: ignore
+        else:
+            raise
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb = Workbook()
+    wb.remove(wb.active)
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin = Side(style="thin", color="D9E2F3")
+    header_border = Border(bottom=thin)
+    used_titles: set[str] = set()
+    for sheet_name, raw_rows in sheets.items():
+        title = re.sub(r"[:\\/?*\[\]]", "_", str(sheet_name))[:31] or "sheet"
+        base_title = title
+        i = 2
+        while title in used_titles:
+            suffix = f"_{i}"
+            title = (base_title[:31-len(suffix)] + suffix)[:31]
+            i += 1
+        used_titles.add(title)
+        rows = raw_rows if isinstance(raw_rows, list) else [{"value": raw_rows}]
+        ws = wb.create_sheet(title=title)
+        headers = rows_headers([r for r in rows if isinstance(r, dict)])
+        headers = [h for h in headers if h != "place_matches"] or ["empty"]
+        ws.append(headers)
+        widths = {idx: len(str(header)) for idx, header in enumerate(headers, start=1)}
+        for raw in rows:
+            row = raw if isinstance(raw, dict) else {"value": raw}
+            values = [excel_safe_value(row.get(header, "")) for header in headers]
+            ws.append(values)
+            for idx, value in enumerate(values, start=1):
+                widths[idx] = min(max(widths.get(idx, 0), len(str(value))), 80)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.border = header_border
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+        for row_cells in ws.iter_rows(min_row=2):
+            for cell in row_cells:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+        ws.freeze_panes = "A2"
+        if ws.max_row >= 1 and ws.max_column >= 1:
+            ws.auto_filter.ref = ws.dimensions
+        for idx, width in widths.items():
+            ws.column_dimensions[get_column_letter(idx)].width = max(10, min(width + 2, 60))
+    wb.properties.creator = "events-bot-new / Region Talk"
+    wb.properties.title = "Region Talk MVP-1.x candidate report"
+    wb.properties.subject = "Excel-safe openpyxl workbook"
+    wb.save(path)
+
+
 def write_xlsx(path: Path, sheets: dict[str, list[dict[str, Any]]]) -> None:
+    try:
+        write_xlsx_openpyxl(path, sheets)
+    except Exception as exc:
+        print(f"[region-talk] openpyxl_xlsx_writer_failed fallback=minimal error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        write_xlsx_minimal(path, sheets)
+
+def write_xlsx_minimal(path: Path, sheets: dict[str, list[dict[str, Any]]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     names = list(sheets.keys())
     sheet_overrides = ''.join(

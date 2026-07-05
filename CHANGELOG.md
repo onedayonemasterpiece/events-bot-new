@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Excel-safe XLSX writer**: switched MVP-1.x candidate workbook generation to an `openpyxl` writer with illegal-character sanitization, Excel cell length limits and formula escaping after Telegram-delivered lightweight OpenXML workbooks still opened as damaged in desktop Excel.
 - **Region Talk Channel / MVP-1.x strict discovery gates**: added Kaliningrad-only scope rules, place lexicon v1, seed sources v2, freshness/ad/substance pre-image gates, forwarded/link source graph export, source probe fields and expanded XLSX evidence sheets for the next dry-run.
 - **Region Talk Channel / XLSX compatibility**: hardened the MVP-1 workbook writer with standard OpenXML styles and document properties after Telegram-delivered `candidates-latest.xlsx` opened as damaged in desktop Excel.
 - **Region Talk Channel / MVP-1 runner**: added the first Candidate Report Only implementation with a Telethon-based bounded Telegram fetch path, private encrypted Kaggle input datasets, script-kernel metadata/launcher, dry-run hard stops, cv-only image/report scoring, cumulative XLSX/CSV/JSON/Markdown/HTML artifacts and focused workbook/scoring tests; publishing remains disabled.
