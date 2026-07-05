@@ -718,7 +718,7 @@ def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
         "place": _place_line(row),
         "meeting_point": _plain(_fact(row, "meeting_point") or row.get("meeting_point")),
         "route": _route_raw(row),
-        "booking_url": _plain(row.get("booking_url")),
+        "booking_url": _visual_booking_url(row),
         "price_text": _plain(row.get("price_text")),
         "seats_text": seats,
         "seats_count": _seats_count(seats),
@@ -1481,6 +1481,71 @@ def _is_vk_url(url: str | None) -> bool:
     return bool(re.match(r"^(?:https?://)?(?:m\.)?vk\.(?:com|ru)/", raw))
 
 
+def _vk_wall_ref(url: str | None) -> tuple[int, int] | None:
+    raw = _plain(url)
+    match = re.search(r"(?:vk\.(?:com|ru)/)?wall(-?\d+)_(\d+)", raw, flags=re.I)
+    if not match:
+        return None
+    try:
+        return int(match.group(1)), int(match.group(2))
+    except Exception:
+        return None
+
+
+def _is_empty_booking_text(value: str | None) -> bool:
+    raw = _plain(value).lower().replace("ё", "е")
+    return raw in {
+        "",
+        "not specified",
+        "не указано",
+        "нет",
+        "n/a",
+        "none",
+    }
+
+
+def _looks_preliminary_schedule_source(row: Mapping[str, Any]) -> bool:
+    source_text = _plain(row.get("dedup_source_text")).lower().replace("ё", "е")
+    if not source_text:
+        return False
+    return bool(
+        re.search(r"предварительн\w*\s+расписан", source_text)
+        or (
+            "расписан" in source_text
+            and re.search(r"анонс\w*\s+.*кажд", source_text)
+        )
+    )
+
+
+def _visual_booking_url(row: Mapping[str, Any]) -> str:
+    """Return the viewer-facing booking URL after visual-digest safety checks.
+
+    Some guide sources publish a fresh multi-event schedule where each repeated
+    route title points to an old detailed wall post.  Those links are useful
+    route context, but they are unsafe as primary booking/details links for the
+    future occurrence.  In that shape the current schedule post is the safer
+    public source until a fresh occurrence-specific booking link appears.
+    """
+
+    booking_url = _plain(row.get("booking_url"))
+    if not booking_url:
+        return ""
+    source = _plain(row.get("source_post_url") or row.get("channel_url"))
+    booking_ref = _vk_wall_ref(booking_url)
+    source_ref = _vk_wall_ref(source)
+    if (
+        booking_ref
+        and source_ref
+        and booking_ref[0] == source_ref[0]
+        and booking_ref[1] != source_ref[1]
+        and _plain(row.get("post_kind") or _fact(row, "post_kind")) == "announce_multi"
+        and _is_empty_booking_text(_plain(row.get("booking_text") or row.get("booking_line")))
+        and _looks_preliminary_schedule_source(row)
+    ):
+        return ""
+    return booking_url
+
+
 def _is_phoneish(value: str | None) -> bool:
     raw = _plain(value).lower()
     if raw.startswith("tel:"):
@@ -1566,7 +1631,7 @@ async def _shorten_external_for_vk(
 
 def _primary_link(row: Mapping[str, Any]) -> tuple[str | None, bool]:
     # Return (link_or_phone, is_phone). Booking is the action link; source post is fallback.
-    booking_url = _plain(row.get("booking_url"))
+    booking_url = _visual_booking_url(row)
     booking_text = _plain(row.get("booking_text") or row.get("booking_line"))
     if booking_url:
         return booking_url, _is_phoneish(booking_url)

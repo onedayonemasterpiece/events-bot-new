@@ -379,6 +379,7 @@ Production contract:
   `название — ссылка`. VK-ссылки оформляются кликабельным названием (`[vk-url|title]`),
   внешние URL сокращаются через `utils.getShortLink`, телефонные контакты не
   сокращаются;
+- primary link safety: если future occurrence пришла из preliminary/multi-event schedule, а `booking_url` указывает на другой wall-post того же VK-источника без явной актуальной записи, visual digest должен демотировать такой исторический route/detail link и использовать current `source_post_url`/`channel_url`;
 - хештеги в Telegram/VK включают базовые `#экскурсии #Калининград
   #УхтыКалининград` плюс упомянутые города/узнаваемые локации карточки
   (`#Зеленоградск`, `#Балтийск`, `#КуршскаяКоса`, `#Амалиенау` и т.п.);

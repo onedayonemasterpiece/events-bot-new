@@ -36,6 +36,8 @@ def test_guide_extract_prompt_preserves_multi_date_public_schedule() -> None:
     assert "tentative_or_free_date" in prompt_source
     assert "do not output an extra template/no-date occurrence" in prompt_source
     assert "title_normalized must be a short stable route identity core" in prompt_source
+    assert "do not use an inline route-title link to an older wall post" in prompt_source
+    assert "current booking/details page for the same dated line" in prompt_source
     assert "3️⃣ мая means 3 мая" in prompt_source
     assert "1️⃣3️⃣ мая means 13 мая" in prompt_source
 

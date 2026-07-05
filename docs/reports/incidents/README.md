@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-05-guide-visual-digest-stale-vk-booking-link.md`
+  - Scope: guide excursions visual digest `visual_schedule`, LLM extraction of `booking_url` from multi-event schedule links, and VK/Telegram caption primary-link selection.
+  - Must not regress: a future schedule occurrence must not expose a historical source wall post as the primary booking/details link; repeated-route inline links must be validated against current occurrence context or demoted to source/current post fallback.
 - `INC-2026-07-05-tg-medallion-description-alias-drift.md`
   - Scope: Telegram custom-emoji medallion selection for event posts.
   - Must not regress: ordinary venue medallion aliases must match only actual location fields, not event descriptions/search digests/festival labels; curated program medallions such as KGD80 remain explicit exceptions.

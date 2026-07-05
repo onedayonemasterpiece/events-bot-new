@@ -116,6 +116,35 @@ async def test_visual_digest_telegram_text_uses_source_link_for_phone_contacts()
 
 
 @pytest.mark.asyncio
+async def test_visual_digest_text_demotes_stale_vk_links_from_preliminary_schedule():
+    row = {
+        "id": 400,
+        "canonical_title": "Путешествие по следам советского кино",
+        "date": "2026-07-08",
+        "post_kind": "announce_multi",
+        "booking_url": "https://vk.ru/wall-190663987_8037",
+        "booking_text": "not specified",
+        "source_post_url": "https://vk.com/wall-190663987_9010",
+        "channel_url": "https://vk.com/wall-190663987_9010",
+        "dedup_source_text": (
+            "Афиша прогулок «Хранителей руин» в июле! "
+            "Делимся предварительным расписанием благотворительных прогулок. "
+            "8 июля — путешествие по следам советского кино. "
+            "Подробные анонсы прогулок будут появляться каждую неделю."
+        ),
+    }
+
+    tg_text = await build_visual_digest_telegram_text([row], issue_id=148)
+    vk_text = await build_visual_digest_vk_text([row], issue_id=148)
+
+    assert "wall-190663987_8037" not in tg_text
+    assert "wall-190663987_8037" not in vk_text
+    assert '<a href="https://vk.com/wall-190663987_9010">Путешествие по следам советского кино</a>' in tg_text
+    assert "[https://vk.com/wall-190663987_9010|Путешествие по следам советского кино]" in vk_text
+    assert _visual_item_state(row).get("booking_url") in {"", None}
+
+
+@pytest.mark.asyncio
 async def test_visual_digest_vk_text_keeps_phone_without_shortener():
     calls = []
 

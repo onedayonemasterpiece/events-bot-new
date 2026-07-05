@@ -2153,6 +2153,7 @@ async def _extract_announce_post_tier1(
         "- use post.schedule_blocks as the complete schedule index when text_excerpt is shortened; keep source_block_id equal to the block id when a block id is available\n"
         "- numeric emoji keycaps in dates are normal digits: 3️⃣ мая means 3 мая; 1️⃣3️⃣ мая means 13 мая\n"
         "- if a dated line has no explicit closed/sold-out/cancelled marker and the post has shared booking/contact/meeting facts, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- booking_url must be a current booking/registration/details link for this occurrence; in multi-date schedules do not use an inline route-title link to an older wall post unless the surrounding text explicitly says it is the current booking/details page for the same dated line\n"
         "- if a dated line is explicitly tentative/preliminary/only hoped-for or says it is just a free date to move another walk into, do not mark it digest-ready; use digest_eligible=false with digest_eligibility_reason=tentative_or_free_date\n"
         "- when a dated line says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"
         "- do not output an extra template/no-date occurrence for a route already covered by concrete dated occurrences in this same post\n"
