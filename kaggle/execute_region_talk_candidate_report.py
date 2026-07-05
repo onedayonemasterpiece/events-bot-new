@@ -16,7 +16,54 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in os.sys.path:
     os.sys.path.insert(0, str(PROJECT_ROOT))
 
-from video_announce.kaggle_client import KaggleClient  # noqa: E402
+try:
+    from video_announce.kaggle_client import KaggleClient  # type: ignore  # noqa: E402
+except Exception:  # pragma: no cover - lightweight fallback when app deps are missing
+    KaggleClient = None  # type: ignore
+
+
+class DirectKaggleClient:
+    def __init__(self) -> None:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        self.api = KaggleApi()
+        self.api.authenticate()
+
+    def create_dataset(self, folder, *, public=False, quiet=True, convert_to_csv=False, dir_mode="zip") -> None:
+        self.api.dataset_create_new(str(folder), public=public, quiet=quiet, convert_to_csv=convert_to_csv, dir_mode=dir_mode)
+
+    def delete_dataset(self, dataset: str, *, no_confirm: bool = True) -> None:
+        owner, slug = dataset.split("/", 1)
+        self.api.dataset_delete(owner, slug, no_confirm=no_confirm)
+
+    def push_kernel(self, *, kernel_path, dataset_sources=None) -> None:
+        meta_path = Path(kernel_path) / "kernel-metadata.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if dataset_sources is not None:
+            meta["dataset_sources"] = [str(x) for x in dataset_sources if str(x).strip()]
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.api.kernels_push(str(kernel_path))
+
+    def get_kernel_status(self, kernel_ref: str) -> dict[str, Any]:
+        response = self.api.kernels_status(kernel_ref)
+        if hasattr(response, "to_dict"):
+            out = response.to_dict()
+        else:
+            try:
+                out = json.loads(str(response))
+            except Exception:
+                out = {}
+        if not out.get("status"):
+            status = getattr(response, "status", None)
+            if status is not None:
+                out["status"] = status.name if hasattr(status, "name") else str(status)
+        failure = getattr(response, "failure_message", None) or getattr(response, "failureMessage", None)
+        if failure and not out.get("failureMessage"):
+            out["failureMessage"] = failure
+        return out
+
+    def download_kernel_output(self, kernel_ref: str, *, path, force=True) -> list[str]:
+        files, _ = self.api.kernels_output(kernel_ref, path=str(path), force=force, quiet=False)
+        return [str(x) for x in files]
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport"
 ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-candidate-report"
@@ -39,7 +86,7 @@ def slugify(value: str, *, max_len: int = 48) -> str:
     return (slug or uuid.uuid4().hex[:8])[:max_len].rstrip("-")
 
 
-def create_or_replace_dataset(client: KaggleClient, username: str, slug: str, title: str, writer) -> str:
+def create_or_replace_dataset(client: Any, username: str, slug: str, title: str, writer) -> str:
     dataset_ref = f"{username}/{slug}"
     with tempfile.TemporaryDirectory() as tmp_dir:
         folder = Path(tmp_dir)
@@ -59,7 +106,7 @@ def create_or_replace_dataset(client: KaggleClient, username: str, slug: str, ti
     return dataset_ref
 
 
-def build_input_datasets(client: KaggleClient, *, run_id: str, username: str) -> list[str]:
+def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
     safe_slug = slugify(run_id, max_len=32)
     env_config = {
@@ -128,7 +175,7 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:
     return dst
 
 
-def poll_kernel(client: KaggleClient, kernel_ref: str, *, timeout_minutes: int, poll_interval_seconds: int) -> dict[str, Any]:
+def poll_kernel(client: Any, kernel_ref: str, *, timeout_minutes: int, poll_interval_seconds: int) -> dict[str, Any]:
     deadline = time.monotonic() + max(60, timeout_minutes * 60)
     last: dict[str, Any] = {}
     while time.monotonic() < deadline:
@@ -167,7 +214,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_only")
     kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)
-    client = KaggleClient()
+    client = KaggleClient() if KaggleClient is not None else DirectKaggleClient()
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME is required")
