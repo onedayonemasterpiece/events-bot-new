@@ -951,7 +951,7 @@ def ensure_google_ai_import_path() -> None:
     candidates = [Path.cwd(), Path(__file__).resolve().parent, Path("/kaggle/working")]
     inp = Path("/kaggle/input")
     if inp.exists():
-        candidates.extend(p.parent for p in inp.rglob("google_ai/__init__.py"))
+        candidates.extend(p.parent.parent for p in inp.rglob("google_ai/__init__.py"))
     for parent in candidates:
         if (parent / "google_ai" / "__init__.py").exists() and str(parent) not in sys.path:
             sys.path.insert(0, str(parent))
