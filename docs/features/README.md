@@ -31,7 +31,7 @@
 
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
 - `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: MVP-0 `event_detail_related`, localStorage + Supabase telemetry/profile без auth
-- `docs/features/region-talk-channel/README.md` — **О Калининграде говорят** / Kaliningrad-best-post-monitoring: docs-first discovery/report pipeline для внешних публикаций о Калининградской области, XLSX MVP, YDB sidecar, future TG/VK publishing
+- `docs/features/region-talk-channel/README.md` — **О Калининграде говорят** / Kaliningrad-best-post-monitoring: docs-first discovery/report pipeline для внешних публикаций о Калининградской области, seed-list v1, cumulative XLSX MVP, YDB sidecar, future TG/VK publishing
 
 ## Как добавлять новую фичу
 

@@ -101,3 +101,27 @@ For the main queue/report section:
 - 2–5 strong images are preferred for VK carousel;
 - if only 1 image passes, Telegram single-photo is possible later, VK may use one photo + branded quote/summary cards;
 - weak media may appear only in debug section.
+
+
+## MVP-1 visible proof requirements
+
+MVP-1 must visibly prove image scoring usefulness in `04_review_queue`, `05_favorites` and `09_image_quality`. For each candidate/favorite show:
+
+- selected image or thumbnail/local artifact reference;
+- `postcardness_score`;
+- `aesthetic_score`;
+- `region_visual_relevance_score`;
+- `publication_safety_score`;
+- model explanation;
+- why the image passed or failed.
+
+Main favorites require strong images. Good text + weak image goes only to `10_good_text_weak_media`.
+
+## Explicit scoring modes
+
+The first test runner may implement only one mode, but docs/config must name all modes:
+
+- `cv_only` — cheap resolution/blur/brightness/duplicate/safety gates only.
+- `cv_aesthetic` — cheap CV plus lightweight aesthetic/technical scoring.
+- `cv_aesthetic_clip` — cheap CV + aesthetic + CLIP/SigLIP zero-shot prompts.
+- `cv_aesthetic_clip_vlm` — full cascade with VLM verifier for top media only.

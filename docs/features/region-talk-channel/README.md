@@ -8,12 +8,14 @@
 - [Post discovery](post-discovery.md) — мониторинг утверждённых источников, semantic bank v1 и candidate scoring.
 - [Image postcardness](image-postcardness.md) — каскад оценки фотографий и VLM JSON contract.
 - [YDB schema draft](ydb-schema.md) — все новые persistent-данные фичи живут в YDB, не в SQLite.
-- [MVP candidate report](mvp-candidate-report.md) — XLSX/CSV/JSON/Markdown результат для ручного просмотра.
+- [MVP candidate report](mvp-candidate-report.md) — cumulative/delta-aware XLSX review workbook contract.
+- [Seed sources v1](seed-sources-v1.md) + [CSV](seed-sources-v1.csv) — стартовый seed-list для MVP-1 probe.
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
-- [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and open questions.
+- [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and readiness checklist.
+- [MVP-1 test-run runbook](test-run-runbook.md) — bounded Candidate Report Only runbook.
 
 ## Product intent
 
@@ -102,6 +104,18 @@ immutable run config / source seeds / YDB cursor snapshot
 
 Status events should include `preflight_ok`, `sources_scanned`, `posts_fetched`, `media_scored`, `candidates_created`, `report_written`, `queue_written`, `publish_dry_run_done` and terminal failure. Secrets must be injected as Kaggle secrets or encrypted split datasets and never printed.
 
+### Reuse existing Kaggle infrastructure
+
+Before implementation, the Region Talk runner must inspect and reuse existing repo patterns instead of writing a runner from scratch. Required local anchors:
+
+- Telegram Monitoring: `kaggle/TelegramMonitor/telegram_monitor.py`, `source_parsing/telegram/service.py`, `source_parsing/telegram/split_secrets.py`;
+- CherryFlash: `kaggle/CherryFlash/`, `scripts/run_cherryflash_live.py`;
+- generic Kaggle status/registry: `kaggle_status.py`, `kaggle/kaggle_status_client.py`, `kaggle_registry.py`;
+- Kaggle push/dataset client: `video_announce/kaggle_client.py`;
+- static/offline artifact discipline: `kaggle/StaticSiteBuilder/static_site_builder.py`.
+
+Reuse run id generation, status ledger, run lock/resource lease, dry-run mode, progress events, artifact paths, secrets handling, retry/backoff, failure reporting, immutable run config and existing publisher/lock patterns where relevant. MVP-1 must keep `REGION_TALK_DISABLE_PUBLISH=1`.
+
 ### YDB sidecar boundary
 
 All new persistent state for this feature goes to YDB: sources, source state, graph edges, posts, media, embeddings, semantic matches, candidates, favorites, publication assets, queue, ledger, verifier cache and discovery runs. Core Fly SQLite remains the event bot database and may be read only as an input snapshot/legacy source. Do not add Region Talk tables to SQLite without a separate architecture decision.
@@ -138,12 +152,11 @@ The feature has three contours:
 
 For the current MVP, the visible result is a spreadsheet/report, not a live channel:
 
-- primary: `artifacts/region-talk/candidates-latest.xlsx`;
-- companion: `artifacts/region-talk/candidates-latest.csv`;
-- machine-readable: `data/region-talk/candidates-latest.json`;
-- review-friendly: `artifacts/region-talk/candidates-latest.md` or `.html`.
+- latest workbook: `artifacts/region-talk/candidates-latest.xlsx`;
+- per-run immutable workbook: `artifacts/region-talk/runs/{run_id}/region-talk-candidates-{run_id}.xlsx`;
+- companion CSV/JSON/Markdown/HTML artifacts in the same per-run folder.
 
-The XLSX must make the whole funnel visible: what was found, what was added to candidates/favorites, what dropped out, which image-quality gates passed/failed, and the final candidates for human eye review. See [MVP candidate report](mvp-candidate-report.md).
+The XLSX must be cumulative and delta-aware: it shows what was found, what is new this run, what changed stage, what became candidate/favorite, what dropped out, which image-quality gates passed/failed, and the final candidates for human eye review. See [MVP candidate report](mvp-candidate-report.md).
 
 ## External references and technical constraints
 

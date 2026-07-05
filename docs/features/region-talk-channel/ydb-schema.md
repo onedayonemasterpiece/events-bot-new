@@ -23,6 +23,25 @@ Operational requirements:
 - audit log for every run and publication attempt;
 - rollback limitations documented: published external posts cannot be transactionally rolled back with DB state.
 
+## Stable IDs and dedupe
+
+Stable ids must be deterministic across runs:
+
+```text
+source_id    = stable hash(platform + canonical_source_url_or_handle)
+post_id      = stable hash(platform + platform_post_key_or_canonical_post_url)
+media_id     = stable hash(post_id + media_url_or_phash)
+candidate_id = stable hash(post_id + semantic_bank_version + selected_media_fingerprint)
+```
+
+Dedupe requirements:
+
+- canonicalize URLs before hashing;
+- normalize Telegram handles and VK/VK Video handles;
+- store `text_hash` for posts and perceptual hash for images;
+- run semantic duplicate checks for near-identical reposts;
+- repeated source/post observations update cumulative state (`first_seen_run_id`, `last_seen_run_id`, `seen_run_count`) instead of creating duplicate candidates.
+
 ## Table overview
 
 ### 1. `region_talk_source_candidate`

@@ -235,6 +235,9 @@ features:
   region_talk_channel:
     status: design
     docs: docs/features/region-talk-channel/README.md
+    seed_sources_v1: docs/features/region-talk-channel/seed-sources-v1.md
+    seed_sources_v1_csv: docs/features/region-talk-channel/seed-sources-v1.csv
+    test_run_runbook: docs/features/region-talk-channel/test-run-runbook.md
     source_discovery: docs/features/region-talk-channel/source-discovery.md
     post_discovery: docs/features/region-talk-channel/post-discovery.md
     image_postcardness: docs/features/region-talk-channel/image-postcardness.md
