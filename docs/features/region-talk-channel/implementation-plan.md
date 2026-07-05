@@ -85,7 +85,7 @@ The first test run can start only when:
    - `REGION_TALK_MAX_SOURCES`
    - `REGION_TALK_MAX_POSTS_PER_SOURCE`
    - `REGION_TALK_MAX_IMAGES_PER_POST`
-   - `REGION_TALK_MAX_LLM_CALLS`
+   - Supabase `google_ai` limiter (`google_ai_model_limits` + `google_ai_reserve`) for LLM call/key/rate budget; no local `REGION_TALK_MAX_LLM_CALLS` authority
    - `REGION_TALK_MAX_VLM_CALLS`
    - `REGION_TALK_SEED_FILE`
    - `REGION_TALK_OUTPUT_DIR`
@@ -137,6 +137,6 @@ The first test run can start only when:
 2. Which YDB project/folder and credential lane should own the sidecar.
 3. Whether MVP-1 writes to real YDB dev/test or dry-run JSON first.
 4. Fusion policy for dual-model recall: top-K per model, score normalization, union/rerank weights and disagreement handling for e5-base + bge-m3 enrichment.
-5. Final Flash-Lite model id/env lane and quota budget.
+5. Final model id/default env lane and quota budget must be visible in Supabase limiter/report summary; `GOOGLE_API_KEY2` is not a default for Region Talk; current scoped default is the Supabase-registered reserve lane `GOOGLE_API_KEY3`.
 6. Media rights policy thresholds for `media_reuse_allowed`.
 7. First-run caps for `REGION_TALK_MAX_SOURCES` and post/image budgets.

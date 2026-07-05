@@ -59,9 +59,13 @@ REGION_TALK_OUTPUT_DIR=artifacts/region-talk/runs/${RUN_ID}
 REGION_TALK_MAX_SOURCES=5
 REGION_TALK_MAX_POSTS_PER_SOURCE=20
 REGION_TALK_MAX_IMAGES_PER_POST=8
-REGION_TALK_MAX_LLM_CALLS=10
+# LLM call/key/rate limits are strict Supabase google_ai limiter state, not env counters.
+# Required for live/Kaggle quality runs: SUPABASE_URL + SUPABASE_KEY/SUPABASE_SERVICE_KEY.
 REGION_TALK_MAX_VLM_CALLS=10
-REGION_TALK_IMAGE_SCORING_MODE=cv_only|cv_aesthetic|cv_aesthetic_clip|cv_aesthetic_clip_vlm
+REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
+REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME=GOOGLE_API_KEY3
+REGION_TALK_IMAGE_SCORING_MODE=cv_aesthetic_clip
+REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=1
 REGION_TALK_MIN_POST_DATE=2026-01-01
 REGION_TALK_FRESHNESS_HALF_LIFE_DAYS=30
 REGION_TALK_SEMANTIC_GATE_MODE=llm_required
@@ -102,9 +106,9 @@ The reviewer should be able to answer from XLSX alone:
 
 ## MVP-1.x filtering order
 
-`post fetched → freshness gate → kaliningrad_oblast_only_scope_gate → ad/promo/announcement gate → content substance / visit-impression gate → not-news / not-trash gate → semantic dual-model enrichment → image postcardness scoring → verifier/top candidates → candidate/favorite`.
+`post fetched → freshness gate → cheap pre-LLM cost guard for obvious non-region/ad/low-substance rows → LLM final semantic gate through Supabase google_ai limiter → Kaggle-local actual-image scoring → reviewable/publication-ready split → candidate/favorite`.
 
-Image scoring is skipped until LLM semantic text gates pass, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
+The deterministic scope/ad/substance/news checks are evidence and cost guards only. They may prevent spending Supabase quota on obvious rejects, but accepted/reviewable semantic fit for publication is owned by the LLM final gate. Image scoring is skipped until `llm_decision=accept`, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
 
 Comments are only for source discovery/link evidence and never publication material. Forwarded/reposted origins become source-frontier graph edges, not automatically monitored sources.
 
@@ -112,19 +116,27 @@ LLM-first note: deterministic checks are evidence only. Do not close a run as qu
 
 ## MVP-1.y reviewable pre-candidate policy
 
-If the LLM semantic gate is required but the row is not called because the budget is exhausted or the model/key is unavailable, the row is **not** a final reject. It is exported as `pre_candidate_needs_llm` and kept visible in `04_review_queue` / `14b_pre_candidates_needing_llm` with image scoring skipped.
+If the LLM semantic gate is required but Supabase limiter/RPC is unavailable, rows are fail-closed into `pre_candidate_needs_llm` with `llm_gate_status=not_run_supabase_limiter_unavailable`; there is no direct SDK/key fallback. If Supabase reserve/provider returns quota/error, rows become `needs_llm_retry` and are exported in `04b_needs_llm_retry` / `14c_llm_errors`.
 
 Recommended next dry-run:
 
 ```bash
-REGION_TALK_MAX_LLM_CALLS=20
 REGION_TALK_MAX_VLM_CALLS=20
 REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
-REGION_TALK_GOOGLE_API_KEY_ENV=GOOGLE_API_KEY2
+REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME=GOOGLE_API_KEY3
+GOOGLE_AI_ALLOW_RESERVE_FALLBACK=0
+GOOGLE_AI_LOCAL_LIMITER_FALLBACK=0
+GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR=0
+REGION_TALK_IMAGE_SCORING_MODE=cv_aesthetic_clip
+REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=1
 ```
 
 The XLSX has:
 
+- `00_product_summary` — product-readable counts and model/limit source;
 - `03_funnel` — sequential funnel;
 - `03b_gate_counts` — independent evidence counts;
+- `04a_final_shortlist` — human shortlist, not debug trash;
+- `04b_needs_llm_retry` / `14c_llm_errors` — rows blocked by Supabase/provider quota/errors;
+- `04c_debug_rejects` — obvious non-region/ad/low-substance rejects;
 - `14b_pre_candidates_needing_llm` — reviewable rows waiting for semantic model/manual review.

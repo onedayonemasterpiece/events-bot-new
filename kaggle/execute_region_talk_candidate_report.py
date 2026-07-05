@@ -151,13 +151,16 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "5"),
         "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "20"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
-        "REGION_TALK_MAX_LLM_CALLS": os.environ.get("REGION_TALK_MAX_LLM_CALLS", "0"),
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
-        "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_only"),
+        "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip"),
+        "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "llm_required"),
         "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
-        "REGION_TALK_GOOGLE_API_KEY_ENV": os.environ.get("REGION_TALK_GOOGLE_API_KEY_ENV", "GOOGLE_API_KEY2"),
+        "REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME": os.environ.get("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3"),
+        "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": "0",
+        "GOOGLE_AI_LOCAL_LIMITER_FALLBACK": "0",
+        "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": "0",
         "REGION_TALK_SEED_FILE": os.environ.get("REGION_TALK_SEED_FILE", "seed-sources-v2.csv"),
         "REGION_TALK_PLACE_LEXICON_FILE": os.environ.get("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv"),
         "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", "2026-01-01"),
@@ -167,7 +170,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     secret_names = [
         "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
-        "GOOGLE_API_KEY", "GOOGLE_API_KEY2", "GOOGLE_API_KEY_2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
+        "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
+        "GOOGLE_API_KEY", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
     ]
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
@@ -210,6 +214,7 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:
     dst = tmp / KERNEL_PATH.name
     shutil.copytree(KERNEL_PATH, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"))
     shutil.copy2(PROJECT_ROOT / "kaggle" / "kaggle_status_client.py", dst / "kaggle_status_client.py")
+    shutil.copytree(PROJECT_ROOT / "google_ai", dst / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     meta_path = dst / "kernel-metadata.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
@@ -259,12 +264,15 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_SOURCES", str(args.max_sources))
     os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "20")
     os.environ.setdefault("REGION_TALK_MAX_IMAGES_PER_POST", "8")
-    os.environ.setdefault("REGION_TALK_MAX_LLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
-    os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_only")
+    os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip")
+    os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1")
     os.environ.setdefault("REGION_TALK_SEMANTIC_GATE_MODE", "llm_required")
     os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
-    os.environ.setdefault("REGION_TALK_GOOGLE_API_KEY_ENV", "GOOGLE_API_KEY2")
+    os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3")
+    os.environ.setdefault("GOOGLE_AI_ALLOW_RESERVE_FALLBACK", "0")
+    os.environ.setdefault("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "0")
+    os.environ.setdefault("GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR", "0")
     os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
     os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")

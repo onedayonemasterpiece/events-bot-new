@@ -76,6 +76,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
     def test_semantic_meaning_requires_llm_not_regex_rejection(self) -> None:
         mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
         posts = [
             {"post_id":"post_ad", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/1", "platform_post_key":"tg:src:1", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: зарегистрируйтесь на географический диктант, билеты и программа мероприятия", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"},
@@ -87,12 +88,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         review = payload["sheets"]["04_review_queue"]
         dropped_reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
         self.assertEqual(dropped_reasons["post_old"], "reject_stale_or_missing_date")
-        by_review_id = {r["post_id"]: r for r in review}
-        self.assertEqual(by_review_id["post_ad"]["rejection_reason"], "semantic_gate_not_run")
-        self.assertEqual(by_review_id["post_ad"]["current_stage"], "pre_candidate_needs_llm")
-        self.assertIn("deterministic_ad_promo_evidence", by_review_id["post_ad"]["semantic_evidence_flags"])
+        self.assertEqual(dropped_reasons["post_ad"], "debug_reject_pre_llm_guard")
+        by_dropped_id = {r["post_id"]: r for r in dropped}
+        self.assertIn("deterministic_ad_promo_evidence", by_dropped_id["post_ad"]["semantic_evidence_flags"])
         self.assertEqual(payload["summary"]["image_model_calls"], 0)
-        self.assertEqual(payload["summary"]["pre_candidates_created"], 1)
+        self.assertEqual(payload["summary"]["pre_candidates_created"], 0)
         self.assertTrue(all(r["image_scoring_skipped"] == "true" for r in dropped + review))
 
     def test_ambiguous_place_requires_context(self) -> None:
@@ -106,22 +106,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
     def test_llm_accept_allows_image_scoring(self) -> None:
         mod = load_module()
-        old_max = os.environ.get("REGION_TALK_MAX_LLM_CALLS")
-        os.environ["REGION_TALK_MAX_LLM_CALLS"] = "1"
-        try:
-            mod.call_region_talk_semantic_llm = lambda post, evidence: {"llm_gate_status":"ok", "llm_model":"fake", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"visit_impression_candidate", "llm_reason":"ok"}
-            seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
-            posts = [{"post_id":"post_ok", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/3", "platform_post_key":"tg:src:3", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, личные впечатления, море, дюны и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
-            with tempfile.TemporaryDirectory() as td:
-                payload = mod.build_report(seeds, [], posts, "llm-accept-run", Path(td))
-            self.assertEqual(payload["summary"]["llm_calls"], 1)
-            self.assertEqual(payload["summary"]["image_model_calls"], 1)
-            self.assertTrue(payload["sheets"]["09_image_quality"])
-        finally:
-            if old_max is None:
-                os.environ.pop("REGION_TALK_MAX_LLM_CALLS", None)
-            else:
-                os.environ["REGION_TALK_MAX_LLM_CALLS"] = old_max
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"visit_impression_candidate", "llm_reason":"ok"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_ok", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/3", "platform_post_key":"tg:src:3", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, личные впечатления, море, дюны и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "llm-accept-run", Path(td))
+        self.assertEqual(payload["summary"]["llm_calls"], 1)
+        self.assertEqual(payload["summary"]["llm_limit_source"], "supabase_google_ai")
+        self.assertEqual(payload["summary"]["image_model_calls"], 1)
+        self.assertTrue(payload["sheets"]["09_image_quality"])
+
+    def test_llm_error_has_retry_sheet(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"rate_limited", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_reason":"RateLimitError: rpd"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_retry", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/4", "platform_post_key":"tg:src:4", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны, Светлогорск и полезные впечатления от поездки", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "llm-retry-run", Path(td))
+        self.assertEqual(payload["summary"]["llm_retry_rows"], 1)
+        self.assertEqual(len(payload["sheets"]["04b_needs_llm_retry"]), 1)
+        self.assertEqual(payload["sheets"]["04b_needs_llm_retry"][0]["current_stage"], "needs_llm_retry")
 
 
 if __name__ == "__main__":

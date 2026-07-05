@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Supabase-limited LLM and real image scoring**: routed Region Talk semantic LLM calls through the shared Supabase `google_ai` limiter with fallback disabled, removed the `GOOGLE_API_KEY2` default and env-call-count authority, added product shortlist/retry/debug XLSX sheets, split reviewable vs publication-ready image gates, downloaded Telegram media for post-LLM scoring, and added Kaggle-local CLIP actual-image scoring observability.
 - **Region Talk Channel / reviewable LLM-first pre-candidates**: changed missing/budgeted semantic gates from final rejects to `pre_candidate_needs_llm` review rows, wired a bounded Gemini semantic gate before image scoring, added sequential vs independent funnel sheets, and hardened ambiguous place matches so common words like `Лесной` require context.
 - **Region Talk Channel / LLM-first gate correction**: demoted deterministic regex/keyword/place checks to evidence-only features by default; without an LLM semantic gate, fresh posts now remain `semantic_review_required` with image scoring skipped instead of being accepted/rejected by regex.
 - **Region Talk Channel / Excel-safe XLSX writer**: switched MVP-1.x candidate workbook generation to an `openpyxl` writer with illegal-character sanitization, Excel cell length limits and formula escaping after Telegram-delivered lightweight OpenXML workbooks still opened as damaged in desktop Excel.

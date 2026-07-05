@@ -330,3 +330,16 @@ New sheets:
 `03_funnel` is sequential. Independent evidence counts moved to `03b_gate_counts`.
 
 Image rows in `09_image_quality` are created only after `llm_decision=accept`; pre-candidates keep `visual_scoring_stage=skipped_by_text_gate` and `image_scoring_cost_saved=true`.
+
+## MVP-1.z Supabase-limited LLM + product shortlist update
+
+LLM semantic calls must use the shared `google_ai` Supabase limiter (`google_ai_reserve`, `google_ai_mark_sent`, `google_ai_finalize`) with fallback disabled. The report no longer treats `REGION_TALK_MAX_LLM_CALLS` or a direct `REGION_TALK_GOOGLE_API_KEY_ENV=GOOGLE_API_KEY2` path as authoritative. Runtime summary fields must expose `llm_limit_source`, `llm_provider`, `llm_model`, `llm_default_env_var_name`, Supabase model caps, `llm_calls_ok`, `llm_calls_error`, `llm_quota_errors`, and `llm_retry_rows`.
+
+Human review starts at `00_product_summary` and `04a_final_shortlist`. `04_review_queue` remains a wider engineering queue. Obvious pre-LLM cost-guard rejects are moved to `04c_debug_rejects`; quota/provider failures are moved to `04b_needs_llm_retry` and `14c_llm_errors`.
+
+Image quality claims must distinguish:
+
+- `image_model_input_type=actual_image`, `image_model_runtime=kaggle_local`, `image_model_type=clip` — real Kaggle-local neural scoring;
+- `image_model_input_type=metadata_only`, `image_model_type=cv_only` — fallback/debug only, not proof of image-quality model success.
+
+Image gating is split into `image_reviewable=true` vs `image_publication_ready=true`; a row can be useful for human review without being auto-ready for publication.
