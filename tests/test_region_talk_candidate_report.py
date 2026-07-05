@@ -33,7 +33,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertTrue(xlsx.exists())
             with zipfile.ZipFile(xlsx) as zf:
+                names = set(zf.namelist())
                 workbook = zf.read("xl/workbook.xml").decode("utf-8")
+            self.assertIn("xl/styles.xml", names)
+            self.assertIn("docProps/core.xml", names)
+            self.assertIn("docProps/app.xml", names)
             self.assertIn("04_review_queue", workbook)
             self.assertIn("09_image_quality", workbook)
             self.assertIn("15_manual_decisions", workbook)

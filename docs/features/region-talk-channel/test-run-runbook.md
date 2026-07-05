@@ -72,6 +72,7 @@ YDB mode must be one of:
 
 - `artifacts/region-talk/runs/{run_id}/region-talk-candidates-{run_id}.xlsx`
 - `artifacts/region-talk/candidates-latest.xlsx`
+- XLSX files must be desktop-Excel compatible OpenXML packages, including workbook relationships, `xl/styles.xml`, and `docProps/*`; do not rely on a zip-only smoke check.
 - CSV/JSON/Markdown/HTML companions as defined in [MVP candidate report](mvp-candidate-report.md)
 - run audit JSON
 - redacted log excerpt if needed
