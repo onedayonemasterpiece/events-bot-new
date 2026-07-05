@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added delta-first Subscriber Acquisition semantic XLSX sheets: `decision_deltas`, `processed_comments_last_run`, and `rejected_noise_examples`, with Russian criteria explanations for each processed comment/context.
 - Implemented the optional Subscriber Acquisition `acq_comment_semantic_retrieval.v1` Kaggle stage: collected TG/VK comments are embedded locally, benchmarked across e5-base/bge-m3, exported to clickable XLSX/CSV artifacts, profiled per surface, and only top retrieval candidates are passed to the Gemma gate.
 - Documented Subscriber Acquisition `acq_comment_semantic_retrieval.v1`: a Kaggle-local embedding funnel and e5-base vs bge-m3 benchmark that profiles comments/surfaces before sending only top candidates to the Gemma gate, with YDB/artifact-first storage guidance for bulk retrieval outputs.
 - Documented Subscriber Acquisition `organizer_clarification` as a separate shadow subfeature: organizer-owned event publics can produce review-only clarification-question candidates after vector matching to known events, ideal event-card gap analysis, same-thread dedupe, and LLM final wording validation.
@@ -14,6 +15,8 @@
 
 ### Changed
 
+- Expanded Subscriber Acquisition Discovery deep/night scan budgets 10x for surfaces, TG/VK messages/comments, profile discovery and Kaggle runtime/launcher timeouts so the next run can produce meaningful cumulative deltas.
+- Reworded Subscriber Acquisition report terminology from “поверхности с профилем” to operator-facing “площадки с анализом комментариев” and added explicit +/−/touched delta counters to `summary_ru`/`summary_counts`.
 - Subscriber Acquisition semantic retrieval now separates the default vector
   LLM-gate from human-facing report evidence: top-N semantic rows still reach
   Gemma without deterministic/regex prefiltering, while `answerable_*`,

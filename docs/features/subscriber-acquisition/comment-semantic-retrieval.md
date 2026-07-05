@@ -423,11 +423,31 @@ Research-stage bulk output is artifact-first:
 The XLSX must include these operator-facing sheets:
 
 - `summary_ru`: dashboard-style Russian explanation of what the file means,
-  how to read it and what the important limitations are.
+  how to read it and what the important limitations are. The first visible
+  block is the last-run delta: `+` newly found, `−` removed (currently zero
+  unless a future importer records removals), touched/analyzed surfaces,
+  selected/candidate/rejected within the delta, comments embedded in the delta
+  and answerable questions in the delta. Use the term “площадки”, not the
+  literal “поверхности”, in Russian operator text.
+- `decision_deltas`: the first working sheet after `summary_ru`; it contains
+  only surfaces that were newly discovered, newly analyzed or touched by the
+  verified last run. If `KAGGLE_RUN_ID`/`ACQ_SOURCE_RUN_ID` is missing, this
+  sheet must explicitly say that the last-run delta is not proven instead of
+  showing the whole inventory as a delta.
+- `processed_comments_last_run`: one best scored row per latest processed
+  comment/post-context in the monitoring window, with `criteria_status_ru`
+  explaining whether it matched reply/ask-context criteria or why it was
+  rejected. This is the place to audit “what comments were processed last time”.
+- `rejected_noise_examples`: diagnostic noise only. “Lost phone / found items”
+  style comments may appear here because negative vectors are used after
+  collection/embedding as evidence of filtering; they must not be promoted into
+  candidate/surface decision sheets as useful opportunities.
 - `summary_counts`: counts by platform/surface type and final status:
   total/selected/candidate/rejected, plus the last-run increment:
   `newly_discovered_this_run`, `increment_touched_this_run` and
-  `analyzed_comments_this_run`.
+  `analyzed_comments_this_run`, plus explicit delta columns for removed
+  surfaces, selected/candidate/rejected-in-delta, embedded comments and
+  answerable questions in the delta.
 - `scope`: run id, stage, model list/gate model, actual comment period,
   platform/surface/relation counts and the configured scan budgets; this answers
   whether the file came from all stored surfaces or from a bounded Kaggle sample.

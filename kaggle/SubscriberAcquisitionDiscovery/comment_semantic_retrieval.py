@@ -1177,6 +1177,7 @@ def _surface_decision_summaries(
             "surface_key": surface_key,
             "platform": profile.get("platform"),
             "surface_type": profile.get("surface_type"),
+            "surface_type_ru": _SURFACE_TYPE_RU.get(str(profile.get("surface_type") or ""), profile.get("surface_type")),
             "surface_title": profile.get("surface_title"),
             "surface_url": profile.get("surface_url"),
             "members_or_subscribers": profile.get("members_or_subscribers"),
@@ -1450,6 +1451,15 @@ _COUNTED_INCREMENT_STATUSES = {
 }
 
 
+_SURFACE_TYPE_RU = {
+    "channel": "Telegram-канал",
+    "group": "Telegram-группа/чат",
+    "linked_discussion": "чат комментариев Telegram-канала",
+    "community": "VK-сообщество",
+    "profile": "VK-стена личного профиля",
+}
+
+
 def _is_counted_increment_status(status: Any) -> bool:
     return str(status or "") in _COUNTED_INCREMENT_STATUSES
 
@@ -1506,6 +1516,10 @@ def _surface_inventory_rows(
             "surface_key": key,
             "platform": surface.get("platform") or summary.get("platform"),
             "surface_type": surface.get("surface_type") or summary.get("surface_type"),
+            "surface_type_ru": _SURFACE_TYPE_RU.get(
+                str(surface.get("surface_type") or summary.get("surface_type") or ""),
+                surface.get("surface_type") or summary.get("surface_type"),
+            ),
             "surface_title": surface.get("title") or summary.get("surface_title"),
             "surface_url": surface.get("url") or summary.get("surface_url"),
             "status": surface.get("status"),
@@ -1540,6 +1554,65 @@ def _surface_inventory_rows(
     ))
 
 
+def _decision_delta_label(row: dict[str, Any]) -> str:
+    status = str(row.get("increment_status") or "")
+    selection = str(row.get("selection_status") or "")
+    status_ru = {
+        "selected": "выбрано для мониторинга",
+        "candidate": "кандидат / нужна досборка",
+        "rejected": "пока отклонено",
+    }.get(selection, selection or "без итогового статуса")
+    if status == "newly_discovered_and_analyzed_this_run":
+        return f"новая площадка, сразу проанализированы комментарии; решение: {status_ru}"
+    if status == "newly_discovered_this_run":
+        return f"новая площадка в этом запуске; комментарии ещё не дали профиля; решение: {status_ru}"
+    if status == "analyzed_comments_this_run":
+        return f"в этом запуске заново обработаны комментарии; решение: {status_ru}"
+    if status == "touched_no_eligible_comments_this_run":
+        return f"в этом запуске проверена, но полезных комментариев не найдено; решение: {status_ru}"
+    return f"не дельта последнего запуска; решение: {status_ru}"
+
+
+def _decision_delta_rows(surface_inventory: list[dict[str, Any]], *, scope_rows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    scope = {str(r.get("metric")): r.get("value") for r in (scope_rows or [])}
+    verified_increment_source = _has_verified_increment_source(scope) if scope else True
+    rows: list[dict[str, Any]] = []
+    if not verified_increment_source:
+        return [{
+            "delta_type": "not_verified",
+            "decision_change_ru": "KAGGLE_RUN_ID/ACQ_SOURCE_RUN_ID отсутствует: нельзя доказать, что строки относятся именно к последнему запуску.",
+        }]
+    for row in surface_inventory:
+        if not _is_counted_increment_status(row.get("increment_status")):
+            continue
+        delta_type = str(row.get("increment_status") or "")
+        rows.append({
+            "delta_type": delta_type,
+            "decision_change_ru": _decision_delta_label(row),
+            "surface_key": row.get("surface_key"),
+            "platform": row.get("platform"),
+            "surface_type": row.get("surface_type"),
+            "surface_type_ru": row.get("surface_type_ru"),
+            "surface_title": row.get("surface_title"),
+            "surface_url": row.get("surface_url"),
+            "status": row.get("status"),
+            "scan_state": row.get("scan_state"),
+            "recommendation": row.get("recommendation"),
+            "selection_status": row.get("selection_status"),
+            "increment_status": row.get("increment_status"),
+            "comments_embedded": row.get("comments_embedded"),
+            "answerable_question_candidates": row.get("answerable_question_candidates"),
+            "ask_clarification_contexts": row.get("ask_clarification_contexts"),
+            "latest_comment_at": row.get("latest_comment_at"),
+            "summary_ru": row.get("summary_ru"),
+        })
+    return sorted(rows, key=lambda r: (
+        {"newly_discovered_and_analyzed_this_run": 0, "newly_discovered_this_run": 1, "analyzed_comments_this_run": 2, "touched_no_eligible_comments_this_run": 3}.get(str(r.get("delta_type")), 9),
+        {"selected": 0, "candidate": 1, "rejected": 2}.get(str(r.get("selection_status")), 3),
+        str(r.get("surface_title") or r.get("surface_key") or ""),
+    ))
+
+
 def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for row in surface_inventory:
@@ -1551,6 +1624,9 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
             grouped[key]["newly_discovered_this_run"] += 1
         if _is_counted_increment_status(row.get("increment_status")):
             grouped[key]["increment_touched_this_run"] += 1
+            grouped[key][f"{status}_in_delta_this_run"] += 1
+            grouped[key]["comments_embedded_delta_this_run"] += int(float(row.get("comments_embedded") or 0))
+            grouped[key]["answerable_questions_delta_this_run"] += int(float(row.get("answerable_question_candidates") or 0))
         if str(row.get("increment_status") or "") in {"analyzed_comments_this_run", "newly_discovered_and_analyzed_this_run"}:
             grouped[key]["analyzed_comments_this_run"] += 1
     rows: list[dict[str, Any]] = []
@@ -1567,6 +1643,12 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
             "newly_discovered_this_run": counter.get("newly_discovered_this_run", 0),
             "increment_touched_this_run": counter.get("increment_touched_this_run", 0),
             "analyzed_comments_this_run": counter.get("analyzed_comments_this_run", 0),
+            "removed_surfaces_this_run": counter.get("removed_surfaces_this_run", 0),
+            "selected_in_delta_this_run": counter.get("selected_in_delta_this_run", 0),
+            "candidate_in_delta_this_run": counter.get("candidate_in_delta_this_run", 0),
+            "rejected_in_delta_this_run": counter.get("rejected_in_delta_this_run", 0),
+            "comments_embedded_delta_this_run": counter.get("comments_embedded_delta_this_run", 0),
+            "answerable_questions_delta_this_run": counter.get("answerable_questions_delta_this_run", 0),
         })
     rows.insert(0, {
         "platform": "ALL",
@@ -1578,6 +1660,12 @@ def _summary_count_rows(surface_inventory: list[dict[str, Any]]) -> list[dict[st
         "newly_discovered_this_run": total_counter.get("newly_discovered_this_run", 0),
         "increment_touched_this_run": total_counter.get("increment_touched_this_run", 0),
         "analyzed_comments_this_run": total_counter.get("analyzed_comments_this_run", 0),
+        "removed_surfaces_this_run": total_counter.get("removed_surfaces_this_run", 0),
+        "selected_in_delta_this_run": total_counter.get("selected_in_delta_this_run", 0),
+        "candidate_in_delta_this_run": total_counter.get("candidate_in_delta_this_run", 0),
+        "rejected_in_delta_this_run": total_counter.get("rejected_in_delta_this_run", 0),
+        "comments_embedded_delta_this_run": total_counter.get("comments_embedded_delta_this_run", 0),
+        "answerable_questions_delta_this_run": total_counter.get("answerable_questions_delta_this_run", 0),
     })
     return rows
 
@@ -1606,18 +1694,25 @@ def _dashboard_summary_rows(
     )
     return [
         {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
+        {"section": "Как читать сначала", "metric": "decision_deltas", "value": "Первый рабочий лист после summary_ru: только площадки, изменившиеся/обработанные в последнем подтверждённом запуске. С него начинается просмотр дельт."},
+        {"section": "Как читать сначала", "metric": "processed_comments_last_run", "value": "Показывает последние обработанные комментарии/пост-контексты и колонку criteria_status_ru: прошёл ли контекст критерии отчёта или почему отфильтрован."},
+        {"section": "Дельта последнего запуска", "metric": "Был ли новый запуск", "value": run_status_ru},
+        {"section": "Дельта последнего запуска", "metric": "Площадок добавлено (+)", "value": total.get("newly_discovered_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Площадок убрано (−)", "value": total.get("removed_surfaces_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Площадок затронуто/проверено", "value": total.get("increment_touched_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Из них выбрано для мониторинга", "value": total.get("selected_in_delta_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Из них кандидаты/дособрать", "value": total.get("candidate_in_delta_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Из них отклонено", "value": total.get("rejected_in_delta_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Комментариев в дельте", "value": total.get("comments_embedded_delta_this_run", 0)},
+        {"section": "Дельта последнего запуска", "metric": "Вопросов для ответа в дельте", "value": total.get("answerable_questions_delta_this_run", 0)},
         {"section": "Охват", "metric": "Комментариев обработано", "value": summary.get("comments_embedded") or scope.get("comments_after_filter")},
         {"section": "Охват", "metric": "Свежих для мониторинга", "value": scope.get("monitoring_window_comments")},
         {"section": "Охват", "metric": "Исторических для эталонов/контроля", "value": scope.get("historical_calibration_comments")},
-        {"section": "Охват", "metric": "Поверхностей с профилем", "value": summary.get("surface_profiles_count") or scope.get("surfaces_profiled")},
-        {"section": "Охват", "metric": "Все поверхности в списке", "value": len(surface_inventory or [])},
+        {"section": "Охват", "metric": "Площадок с анализом комментариев", "value": summary.get("surface_profiles_count") or scope.get("surfaces_profiled")},
+        {"section": "Охват", "metric": "Все площадки в списке", "value": len(surface_inventory or [])},
         {"section": "Итог", "metric": "Выбрано", "value": total.get("selected_surfaces", 0)},
         {"section": "Итог", "metric": "Кандидаты", "value": total.get("candidate_surfaces", 0)},
         {"section": "Итог", "metric": "Отклонено", "value": total.get("rejected_surfaces", 0)},
-        {"section": "Инкремент последнего запуска", "metric": "Был ли новый запуск", "value": run_status_ru},
-        {"section": "Инкремент последнего запуска", "metric": "Новых ссылок/стен найдено", "value": total.get("newly_discovered_this_run", 0)},
-        {"section": "Инкремент последнего запуска", "metric": "Поверхностей затронуто/проанализировано", "value": total.get("increment_touched_this_run", 0)},
-        {"section": "Инкремент последнего запуска", "metric": "С комментариями в анализе", "value": total.get("analyzed_comments_this_run", 0)},
         {"section": "Период", "metric": "С даты", "value": scope.get("period_min_created_at")},
         {"section": "Период", "metric": "По дату", "value": scope.get("period_max_created_at")},
         {"section": "Модели", "metric": "Модели смысла", "value": summary.get("models") or scope.get("models")},
@@ -1626,7 +1721,7 @@ def _dashboard_summary_rows(
         {"section": "Итог", "metric": "Где ничего не найдено/не попало", "value": len(no_signal)},
         {"section": "Как читать", "metric": "surface_summary", "value": "Главный лист: где мониторить, сколько вопросов и как часто они встречаются."},
         {"section": "Как читать", "metric": "full_surface_list", "value": "Полный список поверхностей из payload/run: видно, где ничего не нашлось или поверхность не анализировалась."},
-        {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено."},
+        {"section": "Как читать", "metric": "summary_counts", "value": "Сводка по каждому типу: всего / выбрано / кандидаты / отклонено и явные +/−/затронуто по последнему запуску."},
         {"section": "Как читать", "metric": "intent_catalog", "value": "Список модельных смыслов, по которым ищем. top_intent_phrase в примерах берётся именно отсюда."},
         {"section": "Ограничения", "metric": "Контекст", "value": "Новые прогоны сохраняют исходный пост/родительский комментарий; в старых артефактах контекст восстановить нельзя."},
         {"section": "Ограничения", "metric": "Не наши темы", "value": "Недвижимость и медицина отсекаются как out_of_scope, если нет явной связи с маршрутом/событием."},
@@ -1661,7 +1756,8 @@ _RU_HEADERS = {
     "rank_within_surface": "Ранг в группе",
     "surface_key": "ID поверхности",
     "platform": "Платформа",
-    "surface_type": "Тип",
+    "surface_type": "Тип (техн.)",
+    "surface_type_ru": "Тип площадки",
     "surface_title": "Название",
     "surface_url": "Ссылка",
     "status": "Статус",
@@ -1766,6 +1862,17 @@ _RU_HEADERS = {
     "historical_calibration_examples": "Исторических примеров",
     "surfaces_count": "Поверхностей",
     "source_note_ru": "Пояснение",
+    "delta_type": "Тип дельты",
+    "decision_change_ru": "Что изменилось / как читать",
+    "criteria_status": "Критерии (код)",
+    "criteria_status_ru": "Прошёл критерии?",
+    "analysis_kind": "Что анализировали",
+    "removed_surfaces_this_run": "Удалено (−)",
+    "selected_in_delta_this_run": "Выбрано в дельте",
+    "candidate_in_delta_this_run": "Кандидатов в дельте",
+    "rejected_in_delta_this_run": "Отклонено в дельте",
+    "comments_embedded_delta_this_run": "Комм. в дельте",
+    "answerable_questions_delta_this_run": "Вопросов в дельте",
 }
 
 
@@ -1851,14 +1958,66 @@ def _append_data_rows(
                 for cell in ws[ws.max_row]:
                     cell.fill = fill
         elif style == "summary_counts":
-            if any(int(float(row.get(h) or 0)) > 0 for h in ["newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"] if h in headers):
-                for header in ["newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"]:
+            delta_headers = [
+                "newly_discovered_this_run", "removed_surfaces_this_run", "increment_touched_this_run", "analyzed_comments_this_run",
+                "selected_in_delta_this_run", "candidate_in_delta_this_run", "rejected_in_delta_this_run",
+                "comments_embedded_delta_this_run", "answerable_questions_delta_this_run",
+            ]
+            if any(int(float(row.get(h) or 0)) > 0 for h in delta_headers if h in headers):
+                for header in delta_headers:
                     if header in headers:
                         ws.cell(ws.max_row, headers.index(header) + 1).fill = increment_fill
         if hyperlink_field and row.get(hyperlink_field):
             url_cell = ws.cell(ws.max_row, headers.index(hyperlink_field) + 1)
             url_cell.hyperlink = str(row.get(hyperlink_field))
             url_cell.style = "Hyperlink"
+
+
+def _criteria_status(row: dict[str, Any]) -> tuple[str, str]:
+    if _report_real_question_row(row, allow_historical=False):
+        return "accepted_reply_candidate", "соответствует: реальный вопрос, можно рассматривать ответ"
+    if _is_source_post_context(row) and _report_candidate_eligible(row, allow_source_posts=True, allow_historical=False):
+        return "accepted_ask_context", "соответствует: это пост/контекст, где можно задать уточняющий вопрос организатору"
+    scope = str(row.get("candidate_usage_scope") or "")
+    if scope == "historical_calibration":
+        return "rejected_historical", "не fresh-дельта: исторический пример только для эталонов/QA"
+    if scope and scope != "monitoring_candidate":
+        return "rejected_wrong_scope", f"не в свежем окне мониторинга: {scope}"
+    noise = str(row.get("candidate_noise_type") or "").strip()
+    if _is_source_post_context(row):
+        return "rejected_source_post_context", "это исходный пост/контекст, не пользовательский комментарий для ответа"
+    if _report_noise_rejected(row) or noise.startswith("out_of_scope"):
+        return f"rejected_noise:{noise or 'noise'}", f"отфильтровано как шум/не наша тема: {noise or 'noise'}"
+    if not _truthy_value(row.get("question_signal")):
+        return "rejected_no_question", "нет вопроса от пользователя"
+    if not _truthy_value(row.get("intent_text_supported")):
+        return "rejected_intent_not_supported", "векторная близость есть, но текст не подтверждает нужный смысл"
+    if _row_score(row) < _report_min_comment_score():
+        return "rejected_low_score", "ниже порога человекочитаемого отчёта"
+    return "rejected_report_gate", "не прошло строгие критерии отчёта; векторный кандидат оставлен только для диагностики"
+
+
+def _processed_comment_rows(candidates: list[dict[str, Any]], *, gate_model: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
+    monitoring_rows = [r for r in candidates if str(r.get("candidate_usage_scope") or "") == "monitoring_candidate"]
+    if gate_model and any(str(r.get("model_name") or "") == gate_model for r in monitoring_rows):
+        monitoring_rows = [r for r in monitoring_rows if str(r.get("model_name") or "") == gate_model]
+    best = _best_context_rows(monitoring_rows)
+    out: list[dict[str, Any]] = []
+    for row in sorted(best, key=lambda r: str(r.get("created_at") or ""), reverse=True)[:limit]:
+        status, status_ru = _criteria_status(row)
+        enriched = dict(row)
+        enriched["criteria_status"] = status
+        enriched["criteria_status_ru"] = status_ru
+        enriched["analysis_kind"] = "post_context" if _is_source_post_context(row) else "user_comment"
+        out.append(enriched)
+    return out
+
+
+def _rejected_noise_rows(processed_rows: list[dict[str, Any]], *, limit: int = 300) -> list[dict[str, Any]]:
+    return [
+        row for row in processed_rows
+        if str(row.get("criteria_status") or "").startswith("rejected")
+    ][:limit]
 
 
 def _write_xlsx(
@@ -1875,6 +2034,9 @@ def _write_xlsx(
     summary_counts: list[dict[str, Any]] | None = None,
     dashboard_rows: list[dict[str, Any]] | None = None,
     intent_catalog_rows: list[dict[str, Any]] | None = None,
+    decision_delta_rows: list[dict[str, Any]] | None = None,
+    processed_comment_rows: list[dict[str, Any]] | None = None,
+    rejected_noise_rows: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         from openpyxl import Workbook
@@ -1907,10 +2069,61 @@ def _write_xlsx(
         for idx, width in enumerate([18, 32, 120], start=1):
             dash.column_dimensions[get_column_letter(idx)].width = width
 
+    if decision_delta_rows is not None:
+        delta = wb.create_sheet("decision_deltas", 1 if dashboard_rows else 0)
+        delta_headers = [
+            "delta_type", "decision_change_ru", "surface_key", "platform", "surface_type_ru", "surface_type",
+            "surface_title", "surface_url", "status", "scan_state", "recommendation", "selection_status",
+            "increment_status", "comments_embedded", "answerable_question_candidates", "ask_clarification_contexts",
+            "latest_comment_at", "summary_ru",
+        ]
+        delta_groups = {h: "Что изменилось" for h in delta_headers[:2]} | {h: "Площадка" for h in delta_headers[2:8]} | {h: "Решение" for h in delta_headers[8:13]} | {h: "Сигналы" for h in delta_headers[13:]}
+        _append_grouped_header(delta, delta_headers, delta_groups)
+        if not decision_delta_rows:
+            delta.append(["empty", "В этом артефакте нет подтверждённых дельт последнего запуска. Проверьте KAGGLE_RUN_ID/ACQ_SOURCE_RUN_ID и лист full_surface_list.", *[""] * (len(delta_headers) - 2)])
+        _append_data_rows(delta, decision_delta_rows, delta_headers, hyperlink_field="surface_url", style="surface")
+        delta.freeze_panes = "A3"
+        for idx, width in enumerate([30, 70, 30, 10, 30, 18, 44, 46, 24, 24, 36, 18, 30, 14, 16, 16, 20, 90], start=1):
+            delta.column_dimensions[get_column_letter(idx)].width = width
+
+    if processed_comment_rows is not None:
+        processed_index = 2 if (dashboard_rows and decision_delta_rows is not None) else (1 if (dashboard_rows or decision_delta_rows is not None) else 0)
+        processed = wb.create_sheet("processed_comments_last_run", processed_index)
+        processed_headers = [
+            "criteria_status_ru", "criteria_status", "analysis_kind", "model_name", "score", "rank_global",
+            "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
+            "context_url", "text_snapshot", "analysis_context_snapshot", "top_intent_phrase", "intent_set",
+            "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
+            "pre_llm_candidate_eligible", "llm_gate_selection_basis",
+        ]
+        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:6]} | {h: "Где найдено" for h in processed_headers[6:13]} | {h: "Комментарий/контекст" for h in processed_headers[13:16]} | {h: "Почему принято/отклонено" for h in processed_headers[16:]}
+        _append_grouped_header(processed, processed_headers, processed_groups)
+        _append_data_rows(processed, processed_comment_rows, processed_headers, hyperlink_field="context_url")
+        processed.freeze_panes = "A3"
+        for idx, width in enumerate([62, 30, 16, 34, 12, 12, 30, 10, 18, 22, 10, 18, 14, 48, 90, 90, 60, 28, 34, 14, 30, 18, 18, 34], start=1):
+            processed.column_dimensions[get_column_letter(idx)].width = width
+
+    if rejected_noise_rows is not None:
+        noise_index = None
+        if processed_comment_rows is not None:
+            noise_index = 3 if dashboard_rows and decision_delta_rows is not None else 2
+        noise = wb.create_sheet("rejected_noise_examples", noise_index)
+        noise_headers = [
+            "criteria_status_ru", "criteria_status", "analysis_kind", "surface_key", "platform", "surface_type",
+            "relation", "created_at", "context_url", "text_snapshot", "analysis_context_snapshot",
+            "top_intent_phrase", "score", "positive_score", "negative_score", "candidate_noise_type",
+        ]
+        noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Шум/диагностика" for h in noise_headers[9:]}
+        _append_grouped_header(noise, noise_headers, noise_groups)
+        _append_data_rows(noise, rejected_noise_rows, noise_headers, hyperlink_field="context_url")
+        noise.freeze_panes = "A3"
+        for idx, width in enumerate([62, 30, 16, 30, 10, 18, 22, 18, 48, 90, 90, 60, 12, 12, 12, 30], start=1):
+            noise.column_dimensions[get_column_letter(idx)].width = width
+
     if surface_summaries:
         surf = wb.create_sheet("surface_summary")
         surf_headers = [
-            "recommendation", "selection_status", "surface_key", "platform", "surface_type", "surface_title", "surface_url",
+            "recommendation", "selection_status", "surface_key", "platform", "surface_type_ru", "surface_type", "surface_title", "surface_url",
             "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days",
             "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status", "unique_commenters",
             "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
@@ -1936,7 +2149,7 @@ def _write_xlsx(
     if surface_inventory:
         inv = wb.create_sheet("full_surface_list")
         inv_headers = [
-            "surface_key", "platform", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
+            "surface_key", "platform", "surface_type_ru", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
             "members_or_subscribers", "recommendation", "selection_status", "increment_status", "is_incremental_last_run",
             "discovered_at", "discovered_in_run_id", "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status",
             "comments_embedded", "answerable_question_candidates",
@@ -1951,8 +2164,13 @@ def _write_xlsx(
 
     if summary_counts:
         counts = wb.create_sheet("summary_counts")
-        count_headers = ["platform", "surface_type", "total_surfaces", "selected_surfaces", "candidate_surfaces", "rejected_surfaces", "newly_discovered_this_run", "increment_touched_this_run", "analyzed_comments_this_run"]
-        count_groups = {h: "Тип поверхности" for h in count_headers[:2]} | {h: "Итог" for h in count_headers[2:]}
+        count_headers = [
+            "platform", "surface_type", "total_surfaces", "selected_surfaces", "candidate_surfaces", "rejected_surfaces",
+            "newly_discovered_this_run", "removed_surfaces_this_run", "increment_touched_this_run", "analyzed_comments_this_run",
+            "selected_in_delta_this_run", "candidate_in_delta_this_run", "rejected_in_delta_this_run",
+            "comments_embedded_delta_this_run", "answerable_questions_delta_this_run",
+        ]
+        count_groups = {h: "Тип площадки" for h in count_headers[:2]} | {h: "Итог" for h in count_headers[2:6]} | {h: "Дельта последнего запуска" for h in count_headers[6:]}
         _append_grouped_header(counts, count_headers, count_groups)
         _append_data_rows(counts, summary_counts, count_headers, style="summary_counts")
         counts.freeze_panes = "A3"
@@ -2304,6 +2522,15 @@ def run_comment_semantic_retrieval(
     model_ask_contexts = {model_name: _model_ask_context_rows(all_candidates, model_name) for model_name in models}
     surface_inventory = _surface_inventory_rows(surfaces_by_external, surface_summaries)
     summary_counts = _summary_count_rows(surface_inventory)
+    processed_last_run = _processed_comment_rows(
+        all_candidates,
+        gate_model=gate_model,
+        limit=_int_env("ACQ_COMMENT_RETRIEVAL_PROCESSED_COMMENTS_XLSX_ROWS", 500, min_value=20),
+    )
+    rejected_noise_examples = _rejected_noise_rows(
+        processed_last_run,
+        limit=_int_env("ACQ_COMMENT_RETRIEVAL_REJECTED_NOISE_XLSX_ROWS", 300, min_value=20),
+    )
     intent_catalog = _intent_catalog_rows()
     run_id = source_run_id or "unknown_source_run"
     scope_rows = _scope_rows(
@@ -2314,6 +2541,7 @@ def run_comment_semantic_retrieval(
         gate_model=gate_model,
         scoring_method=scoring_method,
     )
+    decision_deltas = _decision_delta_rows(surface_inventory, scope_rows=scope_rows)
     dashboard_rows = _dashboard_summary_rows(
         summary={
             "comments_embedded": len(records),
@@ -2360,7 +2588,7 @@ def run_comment_semantic_retrieval(
         "eligible_question_candidates", "monitoring_decision_hint", "monitoring_reason", "dominant_detected_interests", "semantic_presence",
     ])
     _write_csv(surface_summary_csv, surface_summaries, [
-        "surface_key", "platform", "surface_type", "surface_title", "surface_url", "members_or_subscribers", "selection_status",
+        "surface_key", "platform", "surface_type", "surface_type_ru", "surface_title", "surface_url", "members_or_subscribers", "selection_status",
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters", "unique_commenters_note",
         "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id",
         "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days",
@@ -2397,6 +2625,9 @@ def run_comment_semantic_retrieval(
         summary_counts=summary_counts,
         dashboard_rows=dashboard_rows,
         intent_catalog_rows=intent_catalog,
+        decision_delta_rows=decision_deltas,
+        processed_comment_rows=processed_last_run,
+        rejected_noise_rows=rejected_noise_examples,
     )
 
     summary = {

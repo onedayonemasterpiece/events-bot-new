@@ -549,7 +549,7 @@ def _estimate_llm_input_tokens(prompt: str) -> int:
 
 
 def _llm_gate_max_calls_per_run() -> int:
-    return _int_env("ACQ_MAX_LLM_CALLS_PER_RUN", 80, min_value=1)
+    return _int_env("ACQ_MAX_LLM_CALLS_PER_RUN", 200, min_value=1)
 
 
 def _llm_limit_snapshot() -> dict[str, Any]:
@@ -1589,13 +1589,13 @@ def _discover_vk_member_profile_surfaces(
 ) -> None:
     if not _truthy_env("ACQ_ENABLE_VK_MEMBER_PROFILE_DISCOVERY", False):
         return
-    cap = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", 5, min_value=0)
+    cap = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_DISCOVERED_PER_RUN", 50, min_value=0)
     if cap <= 0 or int(VK_SCAN_STATS.get("profile_surfaces_discovered_from_members", 0) or 0) >= cap:
         return
     clean = str(domain or "").strip().strip("/").rstrip(".,)")
     if not clean or _is_vk_profile_domain(clean):
         return
-    per_group = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", min(3, cap), min_value=0)
+    per_group = _int_env("ACQ_MAX_VK_MEMBER_PROFILES_PER_GROUP", min(30, cap), min_value=0)
     if per_group <= 0:
         return
     try:
@@ -1818,9 +1818,9 @@ def _scan_vk_board_discussions(
     deadline: float | None,
     comment_records: list[dict[str, Any]] | None = None,
 ) -> bool:
-    max_topics = _int_env("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", 3, min_value=0)
-    max_comments = _int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 20, min_value=1)
-    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 20, min_value=1)
+    max_topics = _int_env("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", 30, min_value=0)
+    max_comments = _int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 200, min_value=1)
+    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 200, min_value=1)
     if max_topics <= 0 or _deadline_reached(deadline):
         return False
     group_id = _vk_group_id_from_domain(domain, token_lanes, diagnostics)
@@ -1966,10 +1966,10 @@ def scan_vk_shadow_surfaces(seed_urls: list[str], allowlist: list[str], *, comme
         return [], [], diagnostics
     if not token_lanes:
         return [], [], ["VK allowlist is non-empty but VK token is not configured; emitted VK seeds only"]
-    max_surfaces = _int_env("ACQ_MAX_VK_SURFACES_PER_RUN", _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1), min_value=1)
-    max_posts = _int_env("ACQ_MAX_VK_POSTS_PER_SURFACE", _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 10, min_value=1), min_value=1)
-    max_comments = _int_env("ACQ_MAX_VK_COMMENTS_PER_POST", _int_env("ACQ_MAX_THREADS_PER_SURFACE", 15, min_value=1), min_value=1)
-    max_author_profiles = _int_env("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", 8, min_value=0)
+    max_surfaces = _int_env("ACQ_MAX_VK_SURFACES_PER_RUN", _int_env("ACQ_MAX_SURFACES_PER_RUN", 50, min_value=1), min_value=1)
+    max_posts = _int_env("ACQ_MAX_VK_POSTS_PER_SURFACE", _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 100, min_value=1), min_value=1)
+    max_comments = _int_env("ACQ_MAX_VK_COMMENTS_PER_POST", _int_env("ACQ_MAX_THREADS_PER_SURFACE", 150, min_value=1), min_value=1)
+    max_author_profiles = _int_env("ACQ_MAX_VK_AUTHOR_PROFILES_DISCOVERED_PER_RUN", 80, min_value=0)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()
     surfaces: dict[str, dict[str, Any]] = {}
     opportunities: list[dict[str, Any]] = []
@@ -2350,13 +2350,13 @@ async def scan_telegram_shadow_surfaces(seed_urls: list[str], *, comment_records
         diagnostics.append("telegram credentials are not configured; emitted seed-only shadow payload")
         return [], [], diagnostics
 
-    max_surfaces = _int_env("ACQ_MAX_SURFACES_PER_RUN", 5, min_value=1)
-    max_channel_resolves = _int_env("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", max(30, max_surfaces * 3), min_value=1)
-    max_frontier = _int_env("ACQ_MAX_TG_FRONTIER_PER_RUN", max(20, max_surfaces * 4), min_value=max_surfaces)
-    max_messages = _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 25, min_value=1)
-    max_threads = _int_env("ACQ_MAX_THREADS_PER_SURFACE", 5, min_value=1)
-    max_channel_link_posts = _int_env("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", 5, min_value=0)
-    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 30, min_value=1)
+    max_surfaces = _int_env("ACQ_MAX_SURFACES_PER_RUN", 50, min_value=1)
+    max_channel_resolves = _int_env("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", max(300, max_surfaces * 3), min_value=1)
+    max_frontier = _int_env("ACQ_MAX_TG_FRONTIER_PER_RUN", max(200, max_surfaces * 4), min_value=max_surfaces)
+    max_messages = _int_env("ACQ_MAX_MESSAGES_PER_SURFACE", 250, min_value=1)
+    max_threads = _int_env("ACQ_MAX_THREADS_PER_SURFACE", 50, min_value=1)
+    max_channel_link_posts = _int_env("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", 50, min_value=0)
+    max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 300, min_value=1)
     search_queries = [str(q).strip() for q in list(_json_env("ACQ_TG_SEARCH_QUERIES_JSON", DEFAULT_TG_SEARCH_QUERIES) or []) if str(q).strip()]
     search_limit = _int_env("ACQ_TG_SEARCH_MESSAGES_PER_QUERY", 0, min_value=0)
     default_target_url = (os.getenv("ACQ_DEFAULT_LINK_TARGET_URL") or "https://t.me/kenigevents").strip()

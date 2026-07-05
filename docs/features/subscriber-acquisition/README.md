@@ -179,15 +179,15 @@ when the discovery bundle is absent; session guards and Kaggle status leases use
 the actual selected env scope, so discovery can run independently from Telegram
 Monitoring.
 
-For the current MVP, discovery runs intentionally use a small incremental scope
-by default: `ACQ_MAX_SURFACES_PER_RUN=4`,
-`ACQ_MAX_MESSAGES_PER_SURFACE=40`, `ACQ_MAX_THREADS_PER_SURFACE=8`,
-`ACQ_MAX_OPPORTUNITIES_PER_RUN=20`, and the Kaggle runtime deadline defaults to
-`ACQ_RUNTIME_DEADLINE_SECONDS=540` with a 900s launcher timeout. This keeps a
-normal run under roughly ten minutes while still touching a few Telegram
-replyable surfaces, VK communities/profile walls and newly discovered links.
-Increase these budgets only after the operator has seen visible map growth and
-quality in the XLSX/Telegraph reports.
+As of 2026-07-05, discovery uses a temporary deep/night scan budget because the
+small MVP sample did not produce readable deltas: `ACQ_MAX_SURFACES_PER_RUN=40`,
+`ACQ_MAX_MESSAGES_PER_SURFACE=400`, `ACQ_MAX_THREADS_PER_SURFACE=80`,
+`ACQ_MAX_OPPORTUNITIES_PER_RUN=200`, `ACQ_MAX_TG_FRONTIER_PER_RUN=200`,
+`ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN=300`, `ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS=50`,
+VK wall/comment/profile limits are also expanded 10x, and the Kaggle runtime
+deadline is `ACQ_RUNTIME_DEADLINE_SECONDS=5400` with a 9000s launcher timeout.
+After the next deep run proves which cumulative signals are useful, reduce these
+budgets back to a normal operational envelope.
 
 
 ### Organizer clarification acquisition

@@ -446,11 +446,17 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
 
     workbook = load_workbook(summary["artifacts"]["manual_review_xlsx"], read_only=True)
     assert "summary_ru" in workbook.sheetnames
+    assert "decision_deltas" in workbook.sheetnames
+    assert "processed_comments_last_run" in workbook.sheetnames
+    assert "rejected_noise_examples" in workbook.sheetnames
     assert "summary_counts" in workbook.sheetnames
     assert "intent_catalog" in workbook.sheetnames
     assert "full_surface_list" in workbook.sheetnames
     assert "question_patterns" in workbook.sheetnames
     assert "canonical_questions" in workbook.sheetnames
+    assert workbook.sheetnames[:3] == ["summary_ru", "decision_deltas", "processed_comments_last_run"]
+    summary_values = [row[1] for row in workbook["summary_ru"].iter_rows(min_row=3, max_col=2, values_only=True)]
+    assert "Площадок с анализом комментариев" in summary_values
     route_candidates = [c for c in result["candidates"] if c["candidate_action_type"] == "trip_route_poi_recommendation"]
     assert route_candidates
     assert any(c["target_hint"]["route_target_status"] == "route_needed" for c in route_candidates)
@@ -504,8 +510,42 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
                 "candidate_surfaces": 0,
                 "rejected_surfaces": 0,
                 "newly_discovered_this_run": 1,
+                "removed_surfaces_this_run": 0,
                 "increment_touched_this_run": 1,
                 "analyzed_comments_this_run": 1,
+                "selected_in_delta_this_run": 1,
+                "candidate_in_delta_this_run": 0,
+                "rejected_in_delta_this_run": 0,
+                "comments_embedded_delta_this_run": 3,
+                "answerable_questions_delta_this_run": 1,
+            }
+        ],
+        decision_delta_rows=[
+            {
+                "delta_type": "newly_discovered_this_run",
+                "decision_change_ru": "новая площадка",
+                "surface_key": "vk:id123",
+                "surface_url": "https://vk.com/id123",
+                "selection_status": "candidate",
+                "increment_status": "newly_discovered_this_run",
+            }
+        ],
+        processed_comment_rows=[
+            {
+                "criteria_status_ru": "соответствует: реальный вопрос",
+                "criteria_status": "accepted_reply_candidate",
+                "analysis_kind": "user_comment",
+                "context_url": "https://vk.com/wall-1_2?reply=3",
+                "text_snapshot": "Куда сходить?",
+            }
+        ],
+        rejected_noise_rows=[
+            {
+                "criteria_status_ru": "отфильтровано как шум",
+                "criteria_status": "rejected_noise:intent_without_text_support",
+                "analysis_kind": "user_comment",
+                "context_url": "https://vk.com/wall-1_2?reply=4",
+                "text_snapshot": "Потерял телефон",
             }
         ],
     )
@@ -513,6 +553,7 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
     from openpyxl import load_workbook
 
     workbook = load_workbook(path)
+    assert workbook.sheetnames[:3] == ["decision_deltas", "processed_comments_last_run", "rejected_noise_examples"]
     assert workbook["surface_summary"]["A3"].fill.fgColor.rgb == "00C6EFCE"
     assert workbook["full_surface_list"]["A3"].fill.fgColor.rgb == "00FFF2CC"
     assert workbook["summary_counts"]["G3"].fill.fgColor.rgb == "00FFF2CC"
