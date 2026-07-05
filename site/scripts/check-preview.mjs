@@ -66,6 +66,13 @@ for (const marker of [
 const eventDecisionLabHtml = readFileSync(join(root, 'lab/event-decision-block/index.html'), 'utf8');
 for (const marker of [
   'event-decision-lab',
+  'decision-v2-overlap-lab',
+  'decision-variant-v2-date-card',
+  'decision-variant-v2-medallion-shelf',
+  'decision-variant-v2-attached-medallions',
+  'decision-variant-v2-zero-medallions',
+  'mandatory-action-row',
+  'large-medallion-strip',
   'decision-variant-p03',
   'decision-variant-p01',
   'decision-variant-p04',

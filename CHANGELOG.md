@@ -26,6 +26,7 @@
 
 ### Changed
 
+- **Static site pages / event decision-block lab V2**: reworked `/lab/event-decision-block/` around the approved hero-overlap contract after Gemini Pro and a-opus review, restoring title-inside-sheet, mandatory buy/calendar/share/like icon actions, large medallion shelves and zero-medallion safety variants.
 - **Static site pages / event hero date block**: replaced the dark gradient date card with a semantic high-contrast split-badge date block, using a large terracotta date and readable weekday/time column before the CTA row.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
 - **Static site pages / merged vector-medallion MVP preview**: merged the Smart Update vector-identity gate and medallion SVG upgrade branches, rebuilt `preview-20260702t1536-merged-vector-medallions` from the 2026-07-02 production snapshot with `399` active/future events through id `6613`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and `399` stable CDN ICS files, and verified public `/poisk/`, `/vystavki/`, `/partners/`, `/lab/medallions/`, sample fresh event pages `6601`/`6605`/`6613`, Yandex auth readiness, mocked UI search, real Edge search and the `/vystavki/` duplicate audit since `2026-07-02`.
