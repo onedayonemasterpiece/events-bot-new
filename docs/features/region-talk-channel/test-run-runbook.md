@@ -109,3 +109,22 @@ Image scoring is skipped until LLM semantic text gates pass, and skipped rows mu
 Comments are only for source discovery/link evidence and never publication material. Forwarded/reposted origins become source-frontier graph edges, not automatically monitored sources.
 
 LLM-first note: deterministic checks are evidence only. Do not close a run as quality-screened if it produced `semantic_review_required` rows because the LLM semantic gate was not configured.
+
+## MVP-1.y reviewable pre-candidate policy
+
+If the LLM semantic gate is required but the row is not called because the budget is exhausted or the model/key is unavailable, the row is **not** a final reject. It is exported as `pre_candidate_needs_llm` and kept visible in `04_review_queue` / `14b_pre_candidates_needing_llm` with image scoring skipped.
+
+Recommended next dry-run:
+
+```bash
+REGION_TALK_MAX_LLM_CALLS=20
+REGION_TALK_MAX_VLM_CALLS=20
+REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
+REGION_TALK_GOOGLE_API_KEY_ENV=GOOGLE_API_KEY2
+```
+
+The XLSX has:
+
+- `03_funnel` — sequential funnel;
+- `03b_gate_counts` — independent evidence counts;
+- `14b_pre_candidates_needing_llm` — reviewable rows waiting for semantic model/manual review.

@@ -15,6 +15,8 @@ FIELDS = [
     "ambiguity_level", "allowed_for_kaliningrad_scope", "requires_context", "reject_if_external_context",
     "source_url", "source_note",
 ]
+AMBIGUOUS_CONTEXT_NAMES = {"Лесной", "Морское", "Рыбачий", "Приморье", "Русское", "Малиновка", "Куликово", "Покровское", "Дивное", "Ясное", "Северный", "Красное", "Весёлое", "Высокое", "Луговое", "Невское"}
+
 CORE_REQUIRED = {
     "Калининград", "Багратионовск", "Балтийск", "Гвардейск", "Гурьевск", "Гусев", "Зеленоградск",
     "Краснознаменск", "Ладушкин", "Мамоново", "Неман", "Нестеров", "Озёрск", "Пионерский",
@@ -77,6 +79,9 @@ def dedupe_rows(rows: Iterable[dict[str, str]]) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for raw in rows:
         row = {field: str(raw.get(field, "") or "").strip() for field in FIELDS}
+        if row.get("canonical_name") in AMBIGUOUS_CONTEXT_NAMES:
+            row["requires_context"] = "true"
+            row["ambiguity_level"] = "high"
         if not row["place_id"]:
             row["place_id"] = "kgd_place_" + re.sub(r"[^a-z0-9]+", "_", norm_name(row["canonical_name"]))[:80].strip("_")
         base = row["place_id"]

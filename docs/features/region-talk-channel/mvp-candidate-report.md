@@ -322,3 +322,11 @@ New sheets:
 
 - `17_source_graph_edges`;
 - `18_place_lexicon_matches`.
+
+## MVP-1.y LLM-first review queue update
+
+`semantic_gate_not_run` is no longer a terminal semantic reject. Fresh rows that need semantic judgment but are not model-reviewed in the current budget become `pre_candidate_needs_llm` and stay visible in `04_review_queue` plus `14b_pre_candidates_needing_llm`.
+
+`03_funnel` is sequential. Independent evidence counts moved to `03b_gate_counts`.
+
+Image rows in `09_image_quality` are created only after `llm_decision=accept`; pre-candidates keep `visual_scoring_stage=skipped_by_text_gate` and `image_scoring_cost_saved=true`.

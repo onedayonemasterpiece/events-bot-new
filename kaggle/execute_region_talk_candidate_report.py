@@ -155,6 +155,9 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
         "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_only"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
+        "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "llm_required"),
+        "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
+        "REGION_TALK_GOOGLE_API_KEY_ENV": os.environ.get("REGION_TALK_GOOGLE_API_KEY_ENV", "GOOGLE_API_KEY2"),
         "REGION_TALK_SEED_FILE": os.environ.get("REGION_TALK_SEED_FILE", "seed-sources-v2.csv"),
         "REGION_TALK_PLACE_LEXICON_FILE": os.environ.get("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv"),
         "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", "2026-01-01"),
@@ -164,6 +167,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     secret_names = [
         "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
+        "GOOGLE_API_KEY", "GOOGLE_API_KEY2", "GOOGLE_API_KEY_2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
     ]
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
@@ -258,6 +262,9 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_LLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_only")
+    os.environ.setdefault("REGION_TALK_SEMANTIC_GATE_MODE", "llm_required")
+    os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
+    os.environ.setdefault("REGION_TALK_GOOGLE_API_KEY_ENV", "GOOGLE_API_KEY2")
     os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
     os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")

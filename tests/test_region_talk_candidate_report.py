@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import json
 import sys
 import tempfile
@@ -83,14 +84,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "gate-run", Path(td))
         dropped = payload["sheets"]["08_dropped_posts"]
-        reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
-        self.assertEqual(reasons["post_ad"], "semantic_gate_not_run")
-        self.assertEqual(reasons["post_old"], "reject_stale_or_missing_date")
-        by_id = {r["post_id"]: r for r in dropped}
-        self.assertEqual(by_id["post_ad"]["current_stage"], "semantic_review_required")
-        self.assertIn("deterministic_ad_promo_evidence", by_id["post_ad"]["semantic_evidence_flags"])
+        review = payload["sheets"]["04_review_queue"]
+        dropped_reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
+        self.assertEqual(dropped_reasons["post_old"], "reject_stale_or_missing_date")
+        by_review_id = {r["post_id"]: r for r in review}
+        self.assertEqual(by_review_id["post_ad"]["rejection_reason"], "semantic_gate_not_run")
+        self.assertEqual(by_review_id["post_ad"]["current_stage"], "pre_candidate_needs_llm")
+        self.assertIn("deterministic_ad_promo_evidence", by_review_id["post_ad"]["semantic_evidence_flags"])
         self.assertEqual(payload["summary"]["image_model_calls"], 0)
-        self.assertTrue(all(r["image_scoring_skipped"] == "true" for r in dropped))
+        self.assertEqual(payload["summary"]["pre_candidates_created"], 1)
+        self.assertTrue(all(r["image_scoring_skipped"] == "true" for r in dropped + review))
+
+    def test_ambiguous_place_requires_context(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        ant = mod.kaliningrad_oblast_only_scope_gate("Рыжий лесной муравей строит огромные муравейники в тайге", lexicon)
+        self.assertFalse(ant["kaliningrad_oblast_only_scope"])
+        self.assertIn("Лесной", ant["ambiguous_place_names"])
+        kosa = mod.kaliningrad_oblast_only_scope_gate("Лесной, Куршская коса, Калининградская область — спокойная остановка маршрута", lexicon)
+        self.assertTrue(kosa["kaliningrad_oblast_only_scope"])
+
+    def test_llm_accept_allows_image_scoring(self) -> None:
+        mod = load_module()
+        old_max = os.environ.get("REGION_TALK_MAX_LLM_CALLS")
+        os.environ["REGION_TALK_MAX_LLM_CALLS"] = "1"
+        try:
+            mod.call_region_talk_semantic_llm = lambda post, evidence: {"llm_gate_status":"ok", "llm_model":"fake", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"visit_impression_candidate", "llm_reason":"ok"}
+            seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+            posts = [{"post_id":"post_ok", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/3", "platform_post_key":"tg:src:3", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, личные впечатления, море, дюны и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+            with tempfile.TemporaryDirectory() as td:
+                payload = mod.build_report(seeds, [], posts, "llm-accept-run", Path(td))
+            self.assertEqual(payload["summary"]["llm_calls"], 1)
+            self.assertEqual(payload["summary"]["image_model_calls"], 1)
+            self.assertTrue(payload["sheets"]["09_image_quality"])
+        finally:
+            if old_max is None:
+                os.environ.pop("REGION_TALK_MAX_LLM_CALLS", None)
+            else:
+                os.environ["REGION_TALK_MAX_LLM_CALLS"] = old_max
 
 
 if __name__ == "__main__":
