@@ -809,6 +809,106 @@ def test_comment_semantic_retrieval_vector_scan_does_not_prefilter_before_llm(mo
     assert route_with_flat_context["pre_llm_candidate_eligible"] is True
 
 
+def _semantic_goal_row(retrieval, *, key: str, goal: str, model: str, margin: float, channel: str | None = None, created_at: str = "2026-07-01T10:00:00+00:00", relation: str = "group_message", is_post: bool = False, text: str = "Нужен совет по событию без вопросительного знака"):
+    return {
+        "surface_key": "tg:test",
+        "platform": "tg",
+        "surface_type": "linked_discussion",
+        "context_url": f"https://t.me/test/{key}",
+        "comment_id": key,
+        "created_at": created_at,
+        "relation": relation,
+        "is_post": is_post,
+        "text": text,
+        "text_snapshot": text,
+        "goal": goal,
+        "intent_set": goal,
+        "candidate_action_type": retrieval.SEMANTIC_GOAL_ACTION_TYPES[goal],
+        "model_name": model,
+        "retrieval_channel": channel or retrieval._model_dense_channel(model),
+        "positive_score": margin + 0.5,
+        "negative_score": 0.5,
+        "semantic_margin": margin,
+        "production_bucket": retrieval._production_bucket_for_goal({"created_at": created_at}, goal),
+        "region_confidence": "confirmed",
+        "region_gate_status": "semantic_region_confirmed",
+    }
+
+
+def test_semantic_union_allows_bge_only_and_e5_only_candidates(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MAX_LLM_CANDIDATES", "10")
+    rows = [
+        _semantic_goal_row(retrieval, key="e5", goal="reply_to_user_event_or_route", model="intfloat/multilingual-e5-base", margin=0.9),
+        _semantic_goal_row(retrieval, key="bge", goal="reply_to_user_event_or_route", model="BAAI/bge-m3", margin=0.95),
+    ]
+
+    union = retrieval._build_semantic_union_candidates(rows)
+    by_url = {row["context_url"]: row for row in union}
+
+    assert by_url["https://t.me/test/e5"]["hit_by_e5_dense"] is True
+    assert by_url["https://t.me/test/e5"]["hit_by_bge_m3_dense"] is False
+    assert by_url["https://t.me/test/bge"]["hit_by_bge_m3_dense"] is True
+    assert by_url["https://t.me/test/bge"]["hit_by_e5_dense"] is False
+    selected = retrieval._select_semantic_llm_gate_candidates(union, 10)
+    assert {row["context_url"] for row in selected} == {"https://t.me/test/e5", "https://t.me/test/bge"}
+
+
+def test_semantic_union_does_not_drop_source_posts_or_comments_without_question_mark(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.delenv("ACQ_INCLUDE_HISTORICAL_IN_LLM_QUEUE", raising=False)
+    source_post = _semantic_goal_row(
+        retrieval,
+        key="post",
+        goal="ask_organizer_event_details",
+        model="BAAI/bge-m3",
+        margin=0.9,
+        relation="vk_social_wall_post",
+        is_post=True,
+        text="В субботу состоится мастер-класс для детей",
+    )
+    no_question_comment = _semantic_goal_row(
+        retrieval,
+        key="comment",
+        goal="reply_to_user_event_or_route",
+        model="intfloat/multilingual-e5-base",
+        margin=0.91,
+        text="Посоветуйте маршрут по области на выходные",
+    )
+
+    union = retrieval._build_semantic_union_candidates([source_post, no_question_comment])
+    selected = retrieval._select_semantic_llm_gate_candidates(union, 10)
+
+    assert {row["context_url"] for row in selected} == {"https://t.me/test/post", "https://t.me/test/comment"}
+    assert any(row["is_post"] is True and row["goal"] == "ask_organizer_event_details" for row in selected)
+
+
+def test_semantic_union_separates_historical_rows_from_production_queue(monkeypatch):
+    retrieval = load_retrieval()
+    monkeypatch.delenv("ACQ_INCLUDE_HISTORICAL_IN_LLM_QUEUE", raising=False)
+    old_row = _semantic_goal_row(
+        retrieval,
+        key="old",
+        goal="reply_to_user_event_or_route",
+        model="BAAI/bge-m3",
+        margin=0.99,
+        created_at="2025-01-01T10:00:00+00:00",
+    )
+    new_row = _semantic_goal_row(
+        retrieval,
+        key="new",
+        goal="reply_to_user_event_or_route",
+        model="intfloat/multilingual-e5-base",
+        margin=0.8,
+    )
+
+    union = retrieval._build_semantic_union_candidates([old_row, new_row])
+    selected = retrieval._select_semantic_llm_gate_candidates(union, 10)
+
+    assert any(row["production_bucket"] == "historical_calibration_candidates" for row in union)
+    assert {row["context_url"] for row in selected} == {"https://t.me/test/new"}
+
+
 def test_comment_semantic_retrieval_requires_two_models_even_if_env_single(monkeypatch):
     retrieval = load_retrieval()
     monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_MODELS_JSON", '["intfloat/multilingual-e5-base"]')
@@ -1813,6 +1913,34 @@ def test_llm_gate_rejects_low_confidence_acceptance(monkeypatch):
     assert runtime._llm_review_opportunity_sync(opp, surface, diagnostics) is None
     assert runtime.LLM_GATE_STATS["rejected_low_confidence"] == 1
     assert "relevance" in diagnostics[0]
+
+
+def test_llm_gate_json_salvage_and_fallback_needs_human_review(monkeypatch):
+    runtime = load_runtime()
+    parsed = runtime._parse_llm_json('prefix {"is_candidate": false, "reason": "нет"} suffix')
+    assert parsed["is_candidate"] is False
+    assert runtime.LLM_GATE_STATS["json_salvaged"] >= 1
+
+    monkeypatch.setattr(runtime, "_google_api_key", lambda: ("test-key", "GOOGLE_API_KEY_TEST"))
+    monkeypatch.setattr(runtime, "_reserve_llm_gate_call", lambda _prompt, _diagnostics: True)
+    monkeypatch.setattr(runtime, "_call_acq_llm_gate_sync", lambda _opp, _surface: (_ for _ in ()).throw(RuntimeError("boom")))
+    diagnostics = []
+    reviewed = runtime._llm_review_opportunity_sync(
+        {
+            "platform": "tg",
+            "context_url": "https://t.me/test/1",
+            "context_text_snippet": "Посоветуйте куда сходить",
+            "matched_intent": "event_or_route_recommendation_reply",
+            "topic_cluster": "reply_to_user_event_or_route",
+            "scores": {"relevance": 0.9},
+            "evidence": {"semantic_retrieval": {"selection_source": "bge_m3_dense"}},
+        },
+        {"title": "Тест", "url": "https://t.me/test"},
+        diagnostics,
+    )
+
+    assert reviewed["review_status"] == "needs_human_review"
+    assert reviewed["evidence"]["llm_gate"]["status"] == "needs_human_review"
 
 
 def test_llm_gate_prompt_rejects_event_local_schedule_logistics():

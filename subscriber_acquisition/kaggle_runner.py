@@ -366,8 +366,46 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 int(row.id or 0),
             )
 
+        def _quota_env(name: str, default: int) -> int:
+            raw = os.getenv(name)
+            try:
+                value = int(str(raw).strip()) if raw not in {None, ""} else default
+            except Exception:
+                value = default
+            return max(0, value)
+
+        scan_quota_limits = {
+            "new": _quota_env("ACQ_NEW_SURFACE_SCAN_QUOTA", 10),
+            "rescan": _quota_env("ACQ_RESCAN_SURFACE_QUOTA", 15),
+            "approved_rescan": _quota_env("ACQ_APPROVED_SURFACE_RESCAN_QUOTA", 5),
+        }
+        scan_quota_counts = {"new": 0, "rescan": 0, "approved_rescan": 0, "skipped_due_runtime_limit": 0}
+
+        def _scan_quota_bucket(row: AcqSurface) -> str:
+            if str(row.status or "").strip().lower() == "approved" and row.last_scan_at is not None:
+                return "approved_rescan"
+            if row.last_scan_at is not None:
+                return "rescan"
+            return "new"
+
+        def _reserve_new_static_seed() -> bool:
+            if scan_quota_counts["new"] >= scan_quota_limits["new"]:
+                scan_quota_counts["skipped_due_runtime_limit"] += 1
+                # Keep catalog/monitoring seeds visible in the backlog payload
+                # for operator transparency; runtime scan caps still bound the
+                # crawler. DB-backed rows above are the primary quota-selected
+                # scan set.
+                return True
+            scan_quota_counts["new"] += 1
+            return True
+
         pending_existing: list[dict[str, Any]] = []
         for row in sorted(rows, key=_surface_priority):
+            quota_bucket = _scan_quota_bucket(row)
+            if scan_quota_counts[quota_bucket] >= scan_quota_limits[quota_bucket]:
+                scan_quota_counts["skipped_due_runtime_limit"] += 1
+                continue
+            scan_quota_counts[quota_bucket] += 1
             platform = str(row.platform or "").strip().lower()
             if platform == "tg" and is_tg_bot_or_service_surface(url=row.url, handle=row.handle, external_id=row.external_id):
                 row.status = "rejected_bot_or_service"
@@ -412,6 +450,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                         row.reach_json = {"confidence": "low", "basis": basis}
                     session.add(row)
             item = row.model_dump()
+            item["scan_quota_bucket"] = quota_bucket
             key = (str(item.get("platform") or ""), str(item.get("external_id") or item.get("url") or ""))
             seen.add(key)
             source = str(item.get("source") or "").strip().lower()
@@ -438,6 +477,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = ("tg", external_id)
             if key in seen:
                 return False
+            if not _reserve_new_static_seed():
+                return False
             seen.add(key)
             surfaces.append({
                 "platform": "tg",
@@ -451,6 +492,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "topic_hint": topic_hint,
                 "reach": reach,
                 "risk": risk,
+                "scan_quota_bucket": "new",
             })
             return True
         tg_source_table_exists = (await session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='telegram_source'"))).scalar_one_or_none()
@@ -496,6 +538,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = ("tg", external_id)
             if key in seen:
                 continue
+            if not _reserve_new_static_seed():
+                continue
             seen.add(key)
             surfaces.append({
                 "platform": "tg",
@@ -509,6 +553,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "topic_hint": f"Telegram route/POI calibration seed: {source_url}" if handle == "vKalinigrad_recomendations" else f"Telega.in Kaliningrad regional catalog seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "route_calibration_seed" if handle == "vKalinigrad_recomendations" else "telega_in_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+                "scan_quota_bucket": "new",
             })
         try:
             from telegram_sources import canonical_tg_sources
@@ -535,6 +580,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
             key = ("vk", external_id)
             if key in seen:
                 continue
+            if not _reserve_new_static_seed():
+                continue
             seen.add(key)
             surfaces.append({
                 "platform": "vk",
@@ -548,11 +595,14 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "topic_hint": f"Smartik Kaliningrad public catalog seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "smartik_catalog_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+                "scan_quota_bucket": "new",
             })
         for handle, title, source_url in VK_SOCIAL_SEARCH_VK_SEEDS:
             external_id = f"vk:{handle}"
             key = ("vk", external_id)
             if key in seen:
+                continue
+            if not _reserve_new_static_seed():
                 continue
             seen.add(key)
             surfaces.append({
@@ -567,6 +617,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 "topic_hint": f"VK social/search seed: {source_url}",
                 "reach": {"confidence": "low", "basis": "vk_social_search_seed"},
                 "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+                "scan_quota_bucket": "new",
             })
         surfaces.extend(pending_existing)
         await session.commit()
@@ -598,6 +649,8 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                 key = ("vk", external_id)
                 if key in seen:
                     continue
+                if not _reserve_new_static_seed():
+                    continue
                 seen.add(key)
                 surfaces.append({
                     "platform": "vk",
@@ -611,6 +664,7 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
                     "topic_hint": "existing VK monitoring source",
                     "reach": {"confidence": "low", "basis": "vk_source_seed"},
                     "risk": {"safety_risk": "low", "spam_risk": "unknown"},
+                    "scan_quota_bucket": "new",
                 })
     seen_payload = [item for item in surfaces if item.get("_kind") == "seen_opportunities"]
     visible_surfaces = [item for item in surfaces if item.get("_kind") != "seen_opportunities"]
@@ -619,6 +673,11 @@ async def collect_runtime_seed_payload(db) -> dict[str, Any]:
         payload["seen_opportunities"] = [{"context_url": url} for url in seen_payload[0].get("context_urls", [])]
     if terminal_tg_handles:
         payload["known_terminal_tg_handles"] = sorted(terminal_tg_handles)
+    if "scan_quota_limits" in locals() and "scan_quota_counts" in locals():
+        payload["scan_quota_stats"] = {
+            **{f"{key}_quota": value for key, value in scan_quota_limits.items()},
+            **{f"{key}_selected": value for key, value in scan_quota_counts.items()},
+        }
     return payload
 
 
@@ -640,6 +699,11 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
         "ACQ_MAX_LLM_CALLS_PER_RUN": os.getenv("ACQ_MAX_LLM_CALLS_PER_RUN", "200"),
         "ACQ_RUNTIME_DEADLINE_SECONDS": os.getenv("ACQ_RUNTIME_DEADLINE_SECONDS", "5400"),
         "ACQ_MAX_TG_FRONTIER_PER_RUN": os.getenv("ACQ_MAX_TG_FRONTIER_PER_RUN", ""),
+        "ACQ_NEW_SURFACE_SCAN_QUOTA": os.getenv("ACQ_NEW_SURFACE_SCAN_QUOTA", "10"),
+        "ACQ_RESCAN_SURFACE_QUOTA": os.getenv("ACQ_RESCAN_SURFACE_QUOTA", "15"),
+        "ACQ_APPROVED_SURFACE_RESCAN_QUOTA": os.getenv("ACQ_APPROVED_SURFACE_RESCAN_QUOTA", "5"),
+        "ACQ_NEW_SURFACES_SELECTED_FOR_SCAN": str((seed_payload.get("scan_quota_stats") or {}).get("new_selected") or ""),
+        "ACQ_NEW_SURFACES_SKIPPED_DUE_RUNTIME_LIMIT": str((seed_payload.get("scan_quota_stats") or {}).get("skipped_due_runtime_limit_selected") or ""),
         "ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN": os.getenv("ACQ_MAX_TG_CHANNEL_RESOLVES_PER_RUN", ""),
         "ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS": os.getenv("ACQ_MAX_TG_CHANNEL_POSTS_FOR_LINKS", "50"),
         "ACQ_TG_SEARCH_QUERIES_JSON": os.getenv("ACQ_TG_SEARCH_QUERIES_JSON", ""),
@@ -692,6 +756,7 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
                 "source": item.get("source"),
                 "title": item.get("title"),
                 "topic_hint": item.get("topic_hint"),
+                "scan_quota_bucket": item.get("scan_quota_bucket"),
             }
             reach = item.get("reach") or item.get("reach_json")
             if isinstance(reach, dict):
@@ -718,6 +783,7 @@ def _runtime_env_from_config(config: AcqConfig, seed_payload: dict[str, Any]) ->
                 "source": item.get("source"),
                 "title": item.get("title"),
                 "topic_hint": item.get("topic_hint"),
+                "scan_quota_bucket": item.get("scan_quota_bucket"),
             }
             reach = item.get("reach") or item.get("reach_json")
             if isinstance(reach, dict):

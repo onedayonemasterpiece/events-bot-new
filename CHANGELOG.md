@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added Subscriber Acquisition two-goal semantic-union report sheets
+  (`semantic_union_candidates`, `reply_to_user_candidates`,
+  `ask_organizer_candidates`, `model_comparison`, `historical_calibration`,
+  `surface_scan_funnel`) with E5/BGE hit/rank/margin fields.
 - Added Subscriber Acquisition XLSX `surface_backlog` sheet for selected surfaces,
   candidates with signal, and known TG/VK monitoring sources waiting for
   commentability resolve or bounded scan.
@@ -18,6 +22,18 @@
 
 ### Changed
 
+- Subscriber Acquisition retrieval now forms the LLM queue from a quota-balanced
+  union of `intfloat/multilingual-e5-base` and `BAAI/bge-m3` for
+  `reply_to_user_event_or_route` and `ask_organizer_event_details`, so BGE-only
+  and E5-only candidates can both reach Gemma without deterministic
+  question/keyword/source-post gates.
+- Subscriber Acquisition Discovery seed payload selection now applies separate
+  new/rescan/approved-rescan quotas and propagates scan-quota metadata into the
+  Kaggle runtime/report counters.
+- Subscriber Acquisition Gemma gate now retries transient failures, salvages
+  JSON embedded in extra text, passes semantic-union provenance to the prompt,
+  and emits `needs_human_review` fallback opportunities instead of silently
+  dropping failed LLM reviews.
 - Subscriber Acquisition XLSX deltas now separate true newly scanned surfaces,
   newly discovered links queued into backlog, and static seed/backlog rows, add
   total report-map counts next to the delta, color processed comment rows

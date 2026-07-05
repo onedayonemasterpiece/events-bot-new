@@ -17,9 +17,10 @@ This stage is a semantic-retrieval funnel inside the existing Discovery run:
 Discovery scanner
   -> collect human comments/messages from replyable surfaces
   -> compute local embeddings on Kaggle
-  -> score comments against intent sets
-  -> produce surface semantic profiles + ranked comment candidates
-  -> send only top candidates to Gemma/LLM gate
+  -> score comments against two product-action semantic goals with both E5 and BGE-M3
+  -> build a deduped E5+BGE union, not an E5-only gate
+  -> produce surface semantic profiles + ranked comment/post candidates
+  -> send quota-balanced top candidates to Gemma/LLM gate
   -> import accepted opportunities and write benchmark/report artifacts
 ```
 
@@ -29,12 +30,61 @@ still owns final semantic acceptance and any public wording.
 
 Important separation for reports:
 
-- the default LLM gate receives top-N vector semantic rows **without**
-  deterministic/regex prefiltering;
+- the default LLM gate receives top-N **semantic-union** rows **without**
+  deterministic/regex/keyword/question-mark prefiltering;
 - human-facing evidence (`answerable_*`, `ask_contexts_*`, `surface_summary`,
   `question_patterns`, `canonical_questions`) uses a stricter post-vector
   report-quality gate so a noisy vector match is not promoted into an
   “эталонный вопрос”.
+
+## 2026-07-05 two-goal semantic-only funnel
+
+Production candidate selection is now action-led rather than broad-topic-led.
+The LLM queue is formed from two independent semantic goals:
+
+1. `reply_to_user_event_or_route` — user comments/messages where someone needs
+   help with events, afisha, routes, trips, transport-to-place, or choosing
+   what to visit in Kaliningrad Oblast.
+2. `ask_organizer_event_details` — source posts/announcements where it may be
+   useful to ask an organizer a short clarification about registration, tickets,
+   age, timing, place, programme or other missing event detail.
+
+For each goal and each model the score is:
+
+```text
+semantic_margin = max_similarity(candidate, positive_goal_phrases)
+                  - max_similarity(candidate, negative_goal_phrases)
+```
+
+The production pool is the **union** of:
+
+- `top_k_e5_dense`;
+- `top_k_bge_m3_dense`;
+- optional future `top_k_bge_m3_sparse`.
+
+`both_dense` increases confidence but is not required. E5-only and BGE-M3-only
+rows can enter the LLM queue. Regex/keyword lists, question mark detection,
+relation/source type, source-post flags, temporal/gasoline diagnostics and
+other handcrafted labels are not allowed to affect production admission or
+final semantic rank; they are report diagnostics only.
+
+New report sheets:
+
+- `semantic_union_candidates` — full union with `hit_by_e5_dense`,
+  `hit_by_bge_m3_dense`, ranks, margins, final score and selection source;
+- `reply_to_user_candidates` and `ask_organizer_candidates` — compact goal
+  lists for the two future product actions;
+- `llm_gate_results`, `model_comparison`, `historical_calibration`,
+  `surface_scan_funnel`, `false_positive_review`.
+
+Operational freshness is the only non-semantic partition before LLM:
+
+- `ACQ_PRODUCTION_COMMENT_MAX_AGE_DAYS=180`;
+- `ACQ_PRODUCTION_EVENT_POST_MAX_AGE_DAYS=90`;
+- `ACQ_INCLUDE_HISTORICAL_IN_LLM_QUEUE=0` by default.
+
+Historical rows remain in calibration/report sheets but do not spend production
+LLM budget by default.
 
 The report-quality gate requires a real question for reply examples, supported
 intent in the current text, no explicit offer/ad/cross-post/out-of-scope
@@ -87,31 +137,31 @@ margin is `ACQ_COMMENT_RETRIEVAL_REGION_MARGIN_MIN_SCORE=0.06`, so a generic
 “куда съездить?” without local anchors should stay `unknown` rather than spend
 LLM budget.
 
-## Future-event and hard out-of-scope gates
+## Future-event and out-of-scope diagnostics
 
-Event acquisition is forward-looking. Rows whose future action is to answer an
-event question or ask an organizer (`event_recommendation_reply`,
-`organizer_visibility_clarification`, `event_site_search_or_listing`,
-`badge_filter_need`) must pass an event-time gate before they can appear in
-`goal_*`, `monitoring_targets` or the Gemma top-N queue:
+Event acquisition is forward-looking. The retrieval stage still calculates
+temporal and out-of-scope diagnostic labels so operators can spot false
+positives in reports. These labels must not become deterministic admission/rank
+rules for the two-goal semantic-union LLM queue; the negative semantic goal
+phrases and the final LLM gate own production acceptance.
 
 - explicit dates in the current text plus source-post/parent context are parsed
   against the run date; if the latest detected event date is before the run date,
   the row is `past_event` and diagnostic-only;
 - post-event semantic signals such as отчёт/итоги/спасибо организаторам,
-  `прошёл`, `стартовал`, `начался`, `открыл` reject as
-  `past_event_signal`;
+  `прошёл`, `стартовал`, `начался`, `открыл` are marked as
+  `past_event_signal` diagnostics;
 - if a mixed post says that something already happened/started and the latest
-  detected date is today or earlier, the past signal wins. This keeps
-  “прошёл/стартовал” report-style posts out of organizer ask candidates even
-  when the text also contains a vague “сегодня будет…” continuation;
+  detected date is today or earlier, the diagnostic past signal is shown so
+  review can catch “прошёл/стартовал” report-style posts even when the text also
+  contains a vague “сегодня будет…” continuation;
 - future dates after the run date and clean future announcement signals can
   pass, but still require final LLM validation before any real reply/question.
 
 Fuel availability is outside the product scope: questions like “где есть
 бензин/дизель/топливо/АЗС?” are marked
-`out_of_scope_gasoline_availability` and are excluded from goal sheets and LLM
-budget even if the vector model sees route/transport similarity.
+`out_of_scope_gasoline_availability` for audit; the semantic negative goal and
+LLM gate must make the production rejection.
 
 ## Sources and scope
 
@@ -123,9 +173,8 @@ Use only current Subscriber Acquisition Discovery sources:
 - VK personal profile wall comments when the profile wall is explicitly
   discovered/seeded, publicly readable, actively maintained and has comments;
 - VK discussion-board topics/comments;
-- VK wall posts only as context/noise/source-post evidence by default; they are
-  exported separately as `relation=vk_social_wall_post` and do not spend reply
-  budget unless `ACQ_ALLOW_SOURCE_POST_REPLY_CANDIDATES=1` is explicitly set;
+- VK wall posts/source posts may enter `ask_organizer_event_details` through
+  semantic scoring, but they are never treated as user-comment reply rows;
 - existing `acq_surface`, manual `/acq_surface_add`, Telegram Monitoring/VK
   monitoring seed payloads, documented Telega.in/Smartik/search seeds, newly
   discovered public community links, and explicitly discovered VK profile-wall

@@ -241,6 +241,9 @@ LLM_GATE_STATS: dict[str, int] = {
     "skipped_same_run_context": 0,
     "blocked_rate_limit": 0,
     "estimated_input_tokens": 0,
+    "retries": 0,
+    "json_salvaged": 0,
+    "needs_human_review": 0,
 }
 OPPORTUNITY_SCREENING_STATS: dict[str, int] = {
     "texts_screened": 0,
@@ -616,11 +619,17 @@ def _llm_gate_prompt(opp: dict[str, Any], surface: dict[str, Any]) -> str:
             "is_source_post_record": bool(context_chain.get("is_source_post_record")),
         },
         "comment_text": current_text,
+        "goal": opp.get("topic_cluster") or opp.get("matched_intent"),
+        "candidate_action_type": opp.get("action_type"),
+        "created_at": opp.get("context_created_at"),
         "semantic_intent": opp.get("matched_intent"),
         "semantic_topic_cluster": opp.get("topic_cluster"),
         "proposed_target": opp.get("link_target"),
         "target_hint": opp.get("target_hint"),
         "semantic_retrieval": (opp.get("evidence") or {}).get("semantic_retrieval") or opp.get("retrieval_evidence"),
+        "model_scores": (opp.get("scores") or {}),
+        "why_selected": ((opp.get("evidence") or {}).get("semantic_retrieval") or {}).get("selection_source")
+            or ((opp.get("evidence") or {}).get("semantic_retrieval") or {}).get("selection_basis"),
         "checklist_questions": checklist_questions,
     }
     return (
@@ -663,7 +672,15 @@ def _parse_llm_json(raw: str) -> dict[str, Any]:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I).strip()
         text = re.sub(r"\s*```$", "", text).strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except Exception:
+        start = text.find("{")
+        end = text.rfind("}")
+        if 0 <= start < end:
+            LLM_GATE_STATS["json_salvaged"] += 1
+            return json.loads(text[start:end + 1])
+        raise
 
 
 def _call_acq_llm_gate_sync(opp: dict[str, Any], surface: dict[str, Any]) -> dict[str, Any]:
@@ -677,17 +694,49 @@ def _call_acq_llm_gate_sync(opp: dict[str, Any], surface: dict[str, Any]) -> dic
     model = _acq_llm_model()
     logger.info("acq.llm_gate_call model=%s key_env=%s", model, key_env)
     prompt = _llm_gate_prompt(opp, surface)
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=gtypes.GenerateContentConfig(
-            temperature=0,
-            max_output_tokens=_int_env("ACQ_LLM_GATE_MAX_OUTPUT_TOKENS", 900, min_value=256),
-            response_mime_type="application/json",
-            response_schema=LLM_GATE_SCHEMA,
-        ),
-    )
-    return _parse_llm_json(_extract_llm_text(response))
+    attempts = _int_env("ACQ_LLM_GATE_RETRY_ATTEMPTS", 3, min_value=1)
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=gtypes.GenerateContentConfig(
+                    temperature=0,
+                    max_output_tokens=_int_env("ACQ_LLM_GATE_MAX_OUTPUT_TOKENS", 900, min_value=256),
+                    response_mime_type="application/json",
+                    response_schema=LLM_GATE_SCHEMA,
+                ),
+            )
+            return _parse_llm_json(_extract_llm_text(response))
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            LLM_GATE_STATS["retries"] += 1
+            time.sleep(min(8.0, 0.8 * (2 ** (attempt - 1))) + random.random() * 0.25)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _needs_human_review_fallback(opp: dict[str, Any], exc: Exception) -> dict[str, Any]:
+    updated = dict(opp)
+    scores = dict(updated.get("scores") or {})
+    scores["source"] = "gemma4_acquisition_gate_fallback"
+    scores["relevance"] = min(float(scores.get("relevance") or 0.0), 0.5)
+    scores["spam_risk"] = "unknown"
+    scores["safety_risk"] = "unknown"
+    updated["scores"] = scores
+    evidence = dict(updated.get("evidence") or {})
+    evidence["llm_gate"] = {
+        "model": _acq_llm_model(),
+        "status": "needs_human_review",
+        "is_candidate": None,
+        "reason": f"LLM gate failed after retries: {type(exc).__name__}",
+    }
+    updated["evidence"] = evidence
+    updated["review_status"] = "needs_human_review"
+    return updated
 
 
 def _review_is_high_confidence(review: dict[str, Any]) -> tuple[bool, str]:
@@ -778,9 +827,10 @@ def _llm_review_opportunity_sync(opp: dict[str, Any], surface: dict[str, Any], d
         return accepted
     except Exception as exc:
         LLM_GATE_STATS["errors"] += 1
+        LLM_GATE_STATS["needs_human_review"] += 1
         diagnostics.append(f"acq llm gate error: {type(exc).__name__}: {str(exc)[:300]}")
         logger.warning("acq llm gate failed", exc_info=True)
-        return None
+        return _needs_human_review_fallback(opp, exc)
 
 
 async def _llm_review_opportunity_async(opp: dict[str, Any], surface: dict[str, Any], diagnostics: list[str]) -> dict[str, Any] | None:
@@ -1188,6 +1238,13 @@ def _collect_vk_comment_record(
 
 def _retrieval_link_target_for_candidate(candidate: dict[str, Any], *, default_target_url: str) -> dict[str, Any]:
     action = str(candidate.get("candidate_action_type") or "")
+    if action == "event_or_route_recommendation_reply":
+        return {
+            "kind": "event_or_route_recommendation_needed",
+            "url": os.getenv("ACQ_SEARCH_PAGE_URL") or f"{_static_site_base_url()}/poisk/",
+            "label": "Поиск событий/маршрутов KenigEvents",
+            "reason": "semantic union found user request for event or route recommendation",
+        }
     if action == "trip_route_poi_recommendation":
         return {
             "kind": "route_needed",
@@ -1212,6 +1269,7 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
         return None
     action = str(candidate.get("candidate_action_type") or "event_recommendation_reply")
     if action in {
+        "event_or_route_recommendation_reply",
         "trip_route_poi_recommendation",
         "event_recommendation_reply",
         "organizer_visibility_clarification",
@@ -1233,6 +1291,9 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
     scores = {
         "relevance": max(0.0, min(1.0, float(candidate.get("score") or 0.0))),
         "retrieval_score": float(candidate.get("score") or 0.0),
+        "goal_score": float(candidate.get("final_semantic_score") or candidate.get("score") or 0.0),
+        "model_score": float(candidate.get("semantic_margin_e5") or candidate.get("semantic_margin_bge_m3") or candidate.get("semantic_margin") or 0.0),
+        "selection_source": candidate.get("selection_source") or candidate.get("llm_gate_selection_basis"),
         "positive_score": float(candidate.get("positive_score") or 0.0),
         "negative_score": float(candidate.get("negative_score") or 0.0),
         "spam_risk": "low",
@@ -1261,6 +1322,7 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
         "retrieval_evidence": {
             "stage": COMMENT_RETRIEVAL_STAGE_NAME,
             "model_name": candidate.get("model_name"),
+            "goal": candidate.get("goal"),
             "intent_set": candidate.get("intent_set"),
             "region_confidence": candidate.get("region_confidence"),
             "region_gate_status": candidate.get("region_gate_status"),
@@ -1274,6 +1336,14 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
             "rank_within_surface": candidate.get("rank_within_surface"),
             "funnel_bucket": candidate.get("funnel_bucket"),
             "model_disagreement_bucket": candidate.get("model_disagreement_bucket"),
+            "model_agreement": candidate.get("model_agreement"),
+            "selection_source": candidate.get("selection_source"),
+            "final_semantic_score": candidate.get("final_semantic_score"),
+            "hit_by_e5_dense": candidate.get("hit_by_e5_dense"),
+            "hit_by_bge_m3_dense": candidate.get("hit_by_bge_m3_dense"),
+            "hit_by_bge_m3_sparse": candidate.get("hit_by_bge_m3_sparse"),
+            "semantic_margin_e5": candidate.get("semantic_margin_e5"),
+            "semantic_margin_bge_m3": candidate.get("semantic_margin_bge_m3"),
         },
         "evidence": {
             "relation": candidate.get("relation"),
@@ -1281,6 +1351,7 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
             "semantic_retrieval": {
                 "stage": COMMENT_RETRIEVAL_STAGE_NAME,
                 "model_name": candidate.get("model_name"),
+                "goal": candidate.get("goal"),
                 "intent_set": candidate.get("intent_set"),
                 "score": candidate.get("score"),
                 "top_intent_phrase": candidate.get("top_intent_phrase"),
@@ -1290,6 +1361,14 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
                 "rank_within_surface": candidate.get("rank_within_surface"),
                 "funnel_bucket": candidate.get("funnel_bucket"),
                 "selection_basis": candidate.get("llm_gate_selection_basis"),
+                "selection_source": candidate.get("selection_source"),
+                "model_agreement": candidate.get("model_agreement"),
+                "final_semantic_score": candidate.get("final_semantic_score"),
+                "hit_by_e5_dense": candidate.get("hit_by_e5_dense"),
+                "hit_by_bge_m3_dense": candidate.get("hit_by_bge_m3_dense"),
+                "hit_by_bge_m3_sparse": candidate.get("hit_by_bge_m3_sparse"),
+                "semantic_margin_e5": candidate.get("semantic_margin_e5"),
+                "semantic_margin_bge_m3": candidate.get("semantic_margin_bge_m3"),
             },
         },
     }
@@ -1406,7 +1485,8 @@ def _run_comment_retrieval_llm_gate(
         reviewed = _llm_review_opportunity_sync(opp, surface, diagnostics)
         COMMENT_RETRIEVAL_STATS["llm_gate_candidates_reviewed"] += 1
         if reviewed:
-            COMMENT_RETRIEVAL_STATS["llm_gate_candidates_accepted"] += 1
+            if str(reviewed.get("review_status") or "") != "needs_human_review":
+                COMMENT_RETRIEVAL_STATS["llm_gate_candidates_accepted"] += 1
             scanned_opportunities.append(reviewed)
 
 
@@ -2916,6 +2996,8 @@ def build_shadow_payload(
                 seed["source"] = str(seed_meta["source"])
             if seed_meta.get("topic_hint"):
                 seed["topic_hint"] = str(seed_meta["topic_hint"])
+            if seed_meta.get("scan_quota_bucket"):
+                seed["scan_quota_bucket"] = str(seed_meta["scan_quota_bucket"])
             if seed_meta.get("title"):
                 seed["title"] = str(seed_meta["title"])
             if isinstance(seed_meta.get("reach"), dict):
@@ -2948,6 +3030,8 @@ def build_shadow_payload(
                     seed["source"] = str(seed_meta["source"])
                 if seed_meta.get("topic_hint"):
                     seed["topic_hint"] = str(seed_meta["topic_hint"])
+                if seed_meta.get("scan_quota_bucket"):
+                    seed["scan_quota_bucket"] = str(seed_meta["scan_quota_bucket"])
                 if isinstance(seed_meta.get("reach"), dict):
                     seed["reach"] = {**seed.get("reach", {}), **seed_meta["reach"]}
             surfaces_by_external[seed["external_id"]] = seed
@@ -2967,6 +3051,8 @@ def build_shadow_payload(
                 seed["source"] = str(seed_meta["source"])
             if seed_meta.get("topic_hint"):
                 seed["topic_hint"] = str(seed_meta["topic_hint"])
+            if seed_meta.get("scan_quota_bucket"):
+                seed["scan_quota_bucket"] = str(seed_meta["scan_quota_bucket"])
             if isinstance(seed_meta.get("reach"), dict):
                 seed["reach"] = {**seed.get("reach", {}), **seed_meta["reach"]}
         surfaces_by_external[seed["external_id"]] = seed
@@ -2976,6 +3062,23 @@ def build_shadow_payload(
     scanned_list = list(scanned_surfaces or [])
     scanned_tg = [s for s in scanned_list if s.get("platform") == "tg"]
     scanned_vk = [s for s in scanned_list if s.get("platform") == "vk"]
+    seed_values = list(surfaces_by_external.values())
+    new_seeded = [s for s in seed_values if str(s.get("scan_quota_bucket") or "") == "new"]
+    new_scanned = [
+        s for s in seed_values
+        if str(s.get("scan_quota_bucket") or "") == "new"
+        and str(s.get("scan_state") or "") in {"scanned", "comments_available", "resolved_has_linked_discussion", "resolved_commentable"}
+    ]
+    new_no_comments = [
+        s for s in seed_values
+        if str(s.get("scan_quota_bucket") or "") == "new"
+        and str(s.get("scan_state") or "") in {"resolved_no_comments", "checked_no_comments"}
+    ]
+    new_failed = [
+        s for s in seed_values
+        if str(s.get("scan_quota_bucket") or "") == "new"
+        and (str(s.get("status") or "").startswith("rejected") or str(s.get("scan_state") or "") in {"checked_inaccessible", "failed"})
+    ]
     comment_retrieval_summary = dict((comment_retrieval_result or {}).get("summary") or {})
     payload = {
         "run_id": _current_run_id(),
@@ -2992,6 +3095,12 @@ def build_shadow_payload(
             "vk_scanned_or_discovered_surfaces": len(scanned_vk),
             "telegram_live_scan_enabled": _truthy_env("ACQ_ENABLE_LIVE_TG_SCAN", False),
             "vk_allowlist_scan_enabled": bool(allowed_vk),
+            "new_surfaces_queued": len(new_seeded),
+            "new_surfaces_selected_for_scan": _int_env("ACQ_NEW_SURFACES_SELECTED_FOR_SCAN", 0, min_value=0),
+            "new_surfaces_scanned_successfully": len(new_scanned),
+            "new_surfaces_no_comments": len(new_no_comments),
+            "new_surfaces_failed": len(new_failed),
+            "new_surfaces_skipped_due_runtime_limit": _int_env("ACQ_NEW_SURFACES_SKIPPED_DUE_RUNTIME_LIMIT", 0, min_value=0),
             "llm_gate_enabled": _llm_gate_enabled(),
             "llm_gate_model": _acq_llm_model(),
             "llm_gate": dict(LLM_GATE_STATS),
