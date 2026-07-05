@@ -94,3 +94,56 @@ async def test_fill_missing_about_can_be_disabled_by_env(tmp_path, monkeypatch):
     )
 
     assert result == {}
+
+
+def test_payload_as_json_inserts_guide_excursion_promo_scene() -> None:
+    events = []
+    items = []
+    for event_id, pos in ((1, 1), (2, 2), (3, 3)):
+        events.append(
+            Event(
+                id=event_id,
+                title=f"Event {event_id}",
+                description="d",
+                date="2026-07-09",
+                time="19:00",
+                location_name="Place",
+                city="Калининград",
+                photo_urls=[f"https://example.com/{event_id}.jpg"],
+                photo_count=1,
+            )
+        )
+        items.append(
+            VideoAnnounceItem(
+                session_id=700,
+                event_id=event_id,
+                position=pos,
+                final_about=f"Event {event_id}",
+                final_description="desc",
+            )
+        )
+    session = VideoAnnounceSession(
+        id=700,
+        selection_params={
+            "mode": "popular_review",
+            "guide_excursion_promo": {
+                "occurrence_id": 42,
+                "title": "История в переплётах: экскурсия по библиотеке БФУ",
+                "date_iso": "2026-07-10",
+                "time": "11:00",
+                "avatar_images": ["assets/guide_avatars/amber_fringilla.jpg"],
+                "contact": "@amber_fringilla",
+                "contact_label": "запись",
+                "palette": "museum_green_ivory",
+                "icon_kind": "building",
+                "insert_position": 3,
+            },
+        },
+    )
+    payload = RenderPayload(session=session, items=items, events=events)
+
+    data = json.loads(selection.payload_as_json(payload, timezone.utc))
+
+    assert data["scenes"][2]["scene_variant"] == "guide_excursion_promo"
+    assert data["scenes"][2]["guide_excursion"]["occurrence_id"] == 42
+    assert data["scenes"][2]["images"] == ["assets/guide_avatars/amber_fringilla.jpg"]

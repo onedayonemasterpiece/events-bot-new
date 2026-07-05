@@ -1,0 +1,7 @@
+<!-- Source: SVG Repo library-building, https://www.svgrepo.com/svg/342687/library-building, CC0. Simplified repo-local monochrome variant for CherryFlash guide-excursion scene. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <path d="M8 25L32 9l24 16" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13 29h38v24H13z" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M22 35v13M32 35v13M42 35v13" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+  <path d="M9 55h46" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -46,6 +46,10 @@ from telegram_business import (
 )
 from net import http_call
 from .about import normalize_about_with_fallback
+from .cherryflash_excursions import (
+    choose_guide_excursion_promo,
+    guide_avatar_bundle_files,
+)
 from .finalize import prepare_final_texts
 from .poster_overlay import enrich_payload_with_poster_overlays
 from .kaggle_client import (
@@ -2510,6 +2514,16 @@ class VideoAnnounceScenario:
             return
         main_chat_id = None
         params = self._popular_review_selection_params()
+        try:
+            guide_promo = await choose_guide_excursion_promo(
+                self.db,
+                profile_key=POPULAR_REVIEW_PROFILE,
+            )
+        except Exception:
+            logger.exception("video_announce: failed to choose CherryFlash guide excursion promo")
+            guide_promo = None
+        if guide_promo:
+            params["guide_excursion_promo"] = guide_promo
 
         async with self.db.get_session() as session:
             obj = VideoAnnounceSession(
@@ -2546,6 +2560,16 @@ class VideoAnnounceScenario:
                 for item, meta in zip(selection.picks, selection.trace.values())
             ),
         )
+        if guide_promo:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    "CherryFlash guide promo: "
+                    f"#{guide_promo.get('occurrence_id')} · {guide_promo.get('title')} · "
+                    f"{guide_promo.get('date_iso')} {guide_promo.get('time') or ''} · "
+                    f"slot {guide_promo.get('insert_position')}"
+                ),
+            )
 
         msg = await self.start_render(
             obj.id,
@@ -4497,6 +4521,10 @@ class VideoAnnounceScenario:
                 "assets/Pulsarium.mp3",
             ),
             (
+                project_root / "video_announce" / "assets" / "cherryflash_icons" / "library-building-342687.svg",
+                "assets/cherryflash_icons/library-building-342687.svg",
+            ),
+            (
                 project_root / "video_announce" / "assets" / "Akrobat-Black.otf",
                 "assets/Akrobat-Black.otf",
             ),
@@ -4539,6 +4567,7 @@ class VideoAnnounceScenario:
                     f"assets/ro_znanie_fonts/{name}",
                 )
             )
+        files.extend(guide_avatar_bundle_files(project_root))
         return files
 
     async def _prefetch_scene_images(

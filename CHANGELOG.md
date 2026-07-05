@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
+
 ### Fixed
 - **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 

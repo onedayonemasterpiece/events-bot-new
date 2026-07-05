@@ -28,6 +28,10 @@ from models import (
     VideoAnnounceSession,
 )
 from .about import normalize_about_with_fallback
+from .cherryflash_excursions import (
+    GUIDE_EXCURSION_PROMO_KEY,
+    insert_guide_excursion_promo_scene,
+)
 from .kaggle_client import KaggleClient
 from .prompts import selection_prompt, selection_response_format, about_fill_prompt, about_fill_response_format
 from .custom_types import (
@@ -1341,6 +1345,10 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
                 }
             )
         scenes = expanded
+    if mode == "popular_review":
+        promo = selection_params.get(GUIDE_EXCURSION_PROMO_KEY)
+        if isinstance(promo, dict):
+            scenes = insert_guide_excursion_promo_scene(scenes, promo)
 
     # Extract date range and cities from events for intro
     # Use payload.events directly to get cities (events have .city attribute)
