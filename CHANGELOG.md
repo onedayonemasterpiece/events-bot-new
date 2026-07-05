@@ -7,6 +7,7 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+- **CherryFlash / guide excursions**: improved the guide promo scene after Kaggle video review: higher supersampling for sharper object edges, first-frame trimming to avoid an abrupt static start, continuous P2/P3 bubble drift for the 3D depth effect, title-then-CTA halo guidance, and screenshotable booking contacts (`@username`, phone, or compact VK label).
 - **CherryFlash / guide excursions**: restored the approved SVG Repo icon assets in the promo scene and kept guide promo dates in the human CherryFlash format (`10 ИЮЛЯ • 11:00`) instead of numeric `10.07 11:00`.
 - **CherryFlash / guide excursions**: corrected the integrated guide-excursion renderer to follow the approved v7 geometry/timing exactly, including the P0 reveal/motion start instead of a static first card.
 - **Telegram event medallions**: removed the extra blank line between an inserted custom-emoji medallion block and the `Подробнее` footer; posts without medallions keep the normal blank separator before the footer.

@@ -8,6 +8,7 @@ import pytest
 
 from db import Database
 from video_announce.cherryflash_excursions import choose_guide_excursion_promo, seats_count
+from video_announce.cherryflash_excursions import _extract_vk_booking_label
 
 
 def test_seats_count_requires_positive_explicit_free_places() -> None:
@@ -15,6 +16,11 @@ def test_seats_count_requires_positive_explicit_free_places() -> None:
     assert seats_count("1") == 1
     assert seats_count("запись в резерв") == 0
     assert seats_count("количество мест ограничено") is None
+
+
+def test_vk_booking_contact_is_screenshotable_handle() -> None:
+    assert _extract_vk_booking_label("https://vk.com/natakkaz") == "vk.com/natakkaz"
+    assert _extract_vk_booking_label("https://vk.com/wall290624941_10230") == "VK"
 
 
 @pytest.mark.asyncio
