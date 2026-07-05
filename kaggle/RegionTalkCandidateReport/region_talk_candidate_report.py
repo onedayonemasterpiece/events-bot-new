@@ -945,10 +945,22 @@ def build_region_talk_supabase_client() -> Any:
     return _REGION_TALK_SUPABASE_CLIENT
 
 
+
+
+def ensure_google_ai_import_path() -> None:
+    candidates = [Path.cwd(), Path(__file__).resolve().parent, Path("/kaggle/working")]
+    inp = Path("/kaggle/input")
+    if inp.exists():
+        candidates.extend(p.parent for p in inp.rglob("google_ai/__init__.py"))
+    for parent in candidates:
+        if (parent / "google_ai" / "__init__.py").exists() and str(parent) not in sys.path:
+            sys.path.insert(0, str(parent))
+
 def get_region_talk_llm_gateway(default_env_var_name: str) -> Any:
     global _REGION_TALK_GOOGLE_CLIENT
     if _REGION_TALK_GOOGLE_CLIENT is not None:
         return _REGION_TALK_GOOGLE_CLIENT
+    ensure_google_ai_import_path()
     try:
         from google_ai import GoogleAIClient, SecretsProvider  # type: ignore
     except Exception:

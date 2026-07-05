@@ -182,6 +182,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         shutil.copy2(feature_dir / "seed-sources-v1.csv", folder / "seed-sources-v1.csv")
         shutil.copy2(feature_dir / "seed-sources-v2.csv", folder / "seed-sources-v2.csv")
         shutil.copy2(feature_dir / "kaliningrad-place-lexicon-v1.csv", folder / "kaliningrad-place-lexicon-v1.csv")
+        shutil.copytree(PROJECT_ROOT / "google_ai", folder / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         (folder / "region_talk_run_config.json").write_text(json.dumps({"run_id": run_id, "env": env_config, "seed_file": env_config["REGION_TALK_SEED_FILE"], "place_lexicon_file": env_config["REGION_TALK_PLACE_LEXICON_FILE"]}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def write_secret(folder: Path) -> None:
@@ -193,7 +194,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     config_ref = create_or_replace_dataset(client, username, f"region-talk-config-{safe_slug}", f"Region Talk config {safe_slug}", write_config)
     secret_ref = create_or_replace_dataset(client, username, f"region-talk-secrets-{safe_slug}", f"Region Talk secrets {safe_slug}", write_secret)
     key_ref = create_or_replace_dataset(client, username, f"region-talk-key-{safe_slug}", f"Region Talk key {safe_slug}", write_key)
-    wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json"])
+    wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json", "google_ai/__init__.py"])
     wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc"])
     wait_dataset_ready(client, key_ref, expected_files=["region_talk_fernet.key"])
     return [config_ref, secret_ref, key_ref]
