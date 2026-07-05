@@ -284,6 +284,18 @@ features:
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs
+  event_comment_feedback:
+    status: mvp_probe
+    docs: docs/features/event-comment-feedback/README.md
+    phrase_bank_v1: docs/features/event-comment-feedback/phrase-bank-v1.md
+    ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
+    llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
+    static_site_contract: docs/features/event-comment-feedback/static-site-contract.md
+    probe_plan: docs/features/event-comment-feedback/probe-plan.md
+    launcher: scripts/run_event_comment_feedback_kaggle.py
+    kaggle_kernel: kaggle/EventCommentFeedback/event_comment_feedback_discovery.py
+    related_static_site: docs/features/static-site-pages/README.md
+    related_subscriber_acquisition: docs/features/subscriber-acquisition/requirements.md
   unsigned_personalization:
     status: design
     docs: docs/features/unsigned-personalization/README.md

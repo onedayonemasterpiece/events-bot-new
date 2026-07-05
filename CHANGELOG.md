@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Event Comment Feedback / Kaggle probe**: added the `event_comment_feedback_discovery` Kaggle CPU probe runner and kernel, using only in-Kaggle `intfloat/multilingual-e5-base` + `BAAI/bge-m3` embeddings, encrypted split secret datasets, payload dataset binding, Kaggle API polling/download, optional shared status-ledger callbacks, and docs for the API-read (not full human-like) source-reading boundary.
 - **Yandex Cloud infra skill**: added a project `yandex-cloud-infra` skill documenting the existing local `yc` path, user-level auth cache location, KenigEvents CDN/DNS folder ids, static CDN resource/certificate ids, and public TLS acceptance checks so agents do not start unnecessary browser auth flows or print secrets.
 - **Smart Update / event reference enrichment design**: added the canonical feature spec for Smart Update-called event reference enrichment, with Wikipedia/Wikidata as the first strict provider, source-role separation (`event_source` vs `reference_source`), sparse/giveaway gates, writer coverage rules, and a required Smart Update bot-report line whenever Wikipedia facts are accepted or used.
 - **VK event repair / edit failures**: made `sync_vk_source_post` stop treating an unavailable `wall.edit` (for example expired edit window) as a successful update, so stale managed VK posts do not get fresh hashes without changing public text.
