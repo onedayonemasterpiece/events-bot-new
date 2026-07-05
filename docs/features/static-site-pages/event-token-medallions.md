@@ -168,12 +168,12 @@ Runtime contract:
 - custom emoji pack capacity is 200 stickers; one 4×4 medallion consumes 16 stickers, so one pack fits 12 full medallions with 8 spare slots;
 - production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
 - `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
-- no more than three medallions are rendered for one event; when all three slots are used, medallions stay full-size and are split into two visual rows (`2+1`) to avoid both mobile wrapping and logo cropping;
+- no more than two medallions are rendered for one Telegram event; when more matches exist, festival/program and organizer/partner medallions win over venue/location medallions because the venue is already written in the post text above;
 - in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
 - no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
 - `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
-- events of «80 историй о главном» get the curated `kgd80` + `znanie-russia` pair when those documents are present, then the highest-priority matching venue/organizer if there is room;
+- events of «80 историй о главном» get the curated `kgd80` + `znanie-russia` pair when those documents are present; matching venue/location medallions are used only for events without two stronger festival/organizer signals;
 - disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
 
 The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.

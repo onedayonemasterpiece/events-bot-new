@@ -2134,7 +2134,7 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
     finally:
         tg_medallions.reset_medallion_config_cache()
 
-    assert html_text.count('<tg-emoji emoji-id=') == 48
+    assert html_text.count('<tg-emoji emoji-id=') == 32
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
@@ -2171,12 +2171,12 @@ def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 48  # 3 full medallions x 4 x 4, split as 2+1 rows
-    assert {entity.custom_emoji_id[0] for entity in custom} == {"k", "z", "h"}
-    assert text.count("🟧") == 48
+    assert len(custom) == 32  # max 2 Telegram medallions x 4 x 4
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"k", "z"}
+    assert text.count("🟧") == 32
 
 
-def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypatch):
+def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_two(monkeypatch):
     import json
     import tg_medallions
 
@@ -2195,9 +2195,9 @@ def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypat
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 48
-    # Pushkin is mandatory; max three means venue is dropped for this crowded case.
-    assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k", "z"}
+    assert len(custom) == 32
+    # Pushkin is mandatory; max two means only the top festival/program signal remains.
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k"}
 
 
 def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypatch):
@@ -2225,7 +2225,7 @@ def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypa
     assert "🔎 Подробнее" in html_text
 
 
-def test_tg_medallion_three_pack_splits_without_cropping(monkeypatch):
+def test_tg_medallion_selection_caps_at_two_for_telegram(monkeypatch):
     import json
     import tg_medallions
 
@@ -2241,5 +2241,5 @@ def test_tg_medallion_three_pack_splits_without_cropping(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     medallion_lines = [line for line in html_text.splitlines() if "<tg-emoji" in line]
-    assert [line.count("<tg-emoji") for line in medallion_lines] == [8, 8, 8, 8, 4, 4, 4, 4]
+    assert [line.count("<tg-emoji") for line in medallion_lines] == [8, 8, 8, 8]
     assert "\u200a" in medallion_lines[0]

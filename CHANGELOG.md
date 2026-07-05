@@ -8,7 +8,7 @@
 
 ### Added
 
-- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of three medallions per event.
+- **Telegram event medallions**: added runtime custom-emoji medallion enrichment for `tg_event_publish` posts with a configurable one-pack mapping, Pushkin-card support, disabled-slug guardrails and a maximum of two medallions per Telegram event.
 - **Personalization / authorized search feedback tags**: restored the authenticated search-result feedback prompt, local fallback queue, Supabase RPC migration for `event_search_feedback` / `event_search_tag_candidates`, and `/poisk/` seed tag UX so good user queries can become moderated static search-tag pages.
 - **Static site / information partners**: restored the `/partners/` information-partners page, footer navigation link, preview sitemap/check coverage and canonical feature docs for partner logo/status handling with nofollow external links.
 - **Static site pages / announcement-site brand mark**: restored the corrected graphite/terracotta monogram SVG/favicon and root announcement landing guard from the logo-fix branch, keeping the static preview on the accepted no-raster brand mark contract.
@@ -20,7 +20,7 @@
 
 ### Changed
 
-- **Telegram event medallions**: replaced the cropped three-medallion compact layout with a full-size `2+1` split, keeping two-medallion posts unchanged while avoiding mobile wraps without cutting logos.
+- **Telegram event medallions**: capped Telegram post medallions at two and prioritize festival/program plus organizer/partner over venue/location when more matches exist, avoiding three-wide mobile wrap attempts entirely.
 - **Telegram event medallions**: moved channel medallion mosaics above the `Подробнее` footer, tightened the media-group `Подробнее` → `Max` footer gap, and changed channel publishing to send clean bot posts first while the delayed Premium Telethon editor inserts real custom-emoji medallions without visible placeholder grids.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
 - **Static site pages / merged vector-medallion MVP preview**: merged the Smart Update vector-identity gate and medallion SVG upgrade branches, rebuilt `preview-20260702t1536-merged-vector-medallions` from the 2026-07-02 production snapshot with `399` active/future events through id `6613`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and `399` stable CDN ICS files, and verified public `/poisk/`, `/vystavki/`, `/partners/`, `/lab/medallions/`, sample fresh event pages `6601`/`6605`/`6613`, Yandex auth readiness, mocked UI search, real Edge search and the `/vystavki/` duplicate audit since `2026-07-02`.

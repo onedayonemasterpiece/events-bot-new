@@ -13,7 +13,7 @@ ALT_DEFAULT = "🟧"
 ROWS_DEFAULT = 4
 COLS_DEFAULT = 4
 SEP_DEFAULT = "\u200a"
-MAX_MEDALLIONS_DEFAULT = 3
+MAX_MEDALLIONS_DEFAULT = 2
 DISABLED_SLUGS = {
     "rostec-arena", "signal", "locostandup", "ruin-keepers",
     "meow-afisha", "kaliningrad-art-museum",
@@ -77,7 +77,7 @@ def medallion_config() -> dict[str, Any]:
         "rows": rows,
         "cols": cols,
         "separator": str(data.get("separator") or SEP_DEFAULT),
-        "max_medallions": int(data.get("max_medallions") or MAX_MEDALLIONS_DEFAULT),
+        "max_medallions": min(2, int(data.get("max_medallions") or MAX_MEDALLIONS_DEFAULT)),
         "items": clean_items,
     }
 
@@ -111,7 +111,7 @@ def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[di
     items: dict[str, dict[str, Any]] = cfg.get("items") or {}
     if not items:
         return []
-    max_items = int(limit or cfg.get("max_medallions") or MAX_MEDALLIONS_DEFAULT)
+    max_items = min(2, int(limit or cfg.get("max_medallions") or MAX_MEDALLIONS_DEFAULT))
     haystack = _event_haystack(event)
     selected: dict[str, dict[str, Any]] = {}
 
