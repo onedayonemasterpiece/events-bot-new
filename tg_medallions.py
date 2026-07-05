@@ -161,12 +161,23 @@ def render_medallion_html_block(medallions: list[dict[str, Any]] | None = None) 
     if len(medallions) >= 3:
         sep = ""
     lines: list[str] = []
+    compact_three = len(medallions) >= 3
     for row in range(rows):
         parts: list[str] = []
-        for med in medallions:
+        for med_index, med in enumerate(medallions):
             ids = med.get("emoji_ids_flat") or []
             cells: list[str] = []
-            for col in range(cols):
+            column_range = range(cols)
+            if compact_three:
+                if med_index == 0:
+                    # Keep the left edge of the first medallion and drop its
+                    # inner-most column.
+                    column_range = range(0, max(0, cols - 1))
+                elif med_index == len(medallions) - 1:
+                    # Keep the right edge of the last medallion and drop its
+                    # inner-most column. The middle medallion stays full-size.
+                    column_range = range(1, cols)
+            for col in column_range:
                 idx = row * cols + col
                 if idx >= len(ids):
                     continue

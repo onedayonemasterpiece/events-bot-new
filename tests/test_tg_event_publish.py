@@ -2134,7 +2134,7 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
     finally:
         tg_medallions.reset_medallion_config_cache()
 
-    assert html_text.count('<tg-emoji emoji-id=') == 48
+    assert html_text.count('<tg-emoji emoji-id=') == 40
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
@@ -2171,9 +2171,9 @@ def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 48  # 3 medallions x 4 x 4
+    assert len(custom) == 40  # compact 3 medallions: (3 + 4 + 3) x 4
     assert {entity.custom_emoji_id[0] for entity in custom} == {"k", "z", "h"}
-    assert text.count("🟧") == 48
+    assert text.count("🟧") == 40
 
 
 def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypatch):
@@ -2195,7 +2195,7 @@ def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_three(monkeypat
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 48
+    assert len(custom) == 40
     # Pushkin is mandatory; max three means venue is dropped for this crowded case.
     assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k", "z"}
 
@@ -2242,4 +2242,4 @@ def test_tg_medallion_three_pack_uses_no_separator(monkeypatch):
 
     first_medallion_line = next(line for line in html_text.splitlines() if "<tg-emoji" in line)
     assert "\u200a" not in first_medallion_line
-    assert first_medallion_line.count("<tg-emoji") == 12
+    assert first_medallion_line.count("<tg-emoji") == 10

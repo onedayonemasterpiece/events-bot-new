@@ -20,7 +20,7 @@
 
 ### Changed
 
-- **Telegram event medallions**: removed the extra hair-space separator between 4×4 medallion mosaics when a post renders three medallions, reducing mobile line wraps.
+- **Telegram event medallions**: tightened the three-medallion layout from 12 to 10 custom-emoji cells per row (`3+4+3`), keeping two-medallion posts unchanged and reducing mobile line wraps.
 - **Telegram event medallions**: moved channel medallion mosaics above the `Подробнее` footer, tightened the media-group `Подробнее` → `Max` footer gap, and changed channel publishing to send clean bot posts first while the delayed Premium Telethon editor inserts real custom-emoji medallions without visible placeholder grids.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
 - **Static site pages / merged vector-medallion MVP preview**: merged the Smart Update vector-identity gate and medallion SVG upgrade branches, rebuilt `preview-20260702t1536-merged-vector-medallions` from the 2026-07-02 production snapshot with `399` active/future events through id `6613`, refreshed Supabase pgvector `search_v3`/`related_v1` documents and `399` stable CDN ICS files, and verified public `/poisk/`, `/vystavki/`, `/partners/`, `/lab/medallions/`, sample fresh event pages `6601`/`6605`/`6613`, Yandex auth readiness, mocked UI search, real Edge search and the `/vystavki/` duplicate audit since `2026-07-02`.
