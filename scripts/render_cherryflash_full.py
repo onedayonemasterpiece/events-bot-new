@@ -825,7 +825,7 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
     T_HOLD = 1.20
     T_MOVE = 0.75
     T_INFO = 2.50
-    T_EXIT = 0.88
+    T_EXIT = 0.58
     P1_END = T_ENTRY + T_HOLD
     P2_END = T_ENTRY + T_HOLD + T_MOVE
     P3_START = P2_END + T_INFO

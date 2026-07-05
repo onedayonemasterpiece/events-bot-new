@@ -153,16 +153,14 @@ def insert_guide_excursion_promo_scene(scenes: list[dict[str, Any]], promo: Mapp
 
 
 def _format_payload_date(raw_date: str, raw_time: str) -> str:
-    if not raw_date:
-        return raw_time.strip()
-    try:
-        day = date.fromisoformat(raw_date)
-        value = f"{day.day} {_MONTHS_GENITIVE_UPPER[day.month]}"
-    except Exception:
-        value = raw_date
     raw_time = raw_time.strip()
+    try:
+        day = date.fromisoformat(str(raw_date or "").strip())
+        value = f"{day.day:02d}.{day.month:02d}"
+    except Exception:
+        value = str(raw_date or "").strip()
     if raw_time:
-        value = f"{value} • {raw_time[:5]}"
+        return f"{value} {raw_time[:5]}" if value else raw_time[:5]
     return value
 
 

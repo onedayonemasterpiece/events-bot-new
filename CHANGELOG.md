@@ -10,7 +10,7 @@
 
 - **Guide visual digest links**: demote stale source-internal VK wall links from preliminary multi-event schedules so repeated-route titles fall back to the current source post instead of sending Telegram/VK digest readers to an old occurrence.
 - **CherryFlash / guide excursions**: improved the guide promo scene after Kaggle video review: higher supersampling for sharper object edges, first-frame trimming to avoid an abrupt static start, continuous P2/P3 bubble drift for the 3D depth effect, title-then-CTA halo guidance, and screenshotable booking contacts (`@username`, phone, or compact VK label).
-- **CherryFlash / guide excursions**: restored the approved SVG Repo icon assets in the promo scene and kept guide promo dates in the human CherryFlash format (`10 ИЮЛЯ • 11:00`) instead of numeric `10.07 11:00`.
+- **CherryFlash / guide excursions**: restored the approved SVG Repo icon assets in the promo scene, returned guide promo dates to the approved compact card format (`10.07 11:00`), and matched the v7 fast P3 exit timing.
 - **Telegram event Premium emojis**: made delayed event-post Premium/custom-emoji enrichment durable through the outbox and throttled catch-up edit jobs, so deploys/restarts no longer lose the scheduled medallion/icon edit.
 - **CherryFlash / guide excursions**: corrected the integrated guide-excursion renderer to follow the approved v7 geometry/timing exactly, including the P0 reveal/motion start instead of a static first card.
 - **Telegram event medallions**: removed the extra blank line between an inserted custom-emoji medallion block and the `Подробнее` footer; posts without medallions keep the normal blank separator before the footer.
