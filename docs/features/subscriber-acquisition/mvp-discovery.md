@@ -70,8 +70,9 @@ contract:
   reply action would be a public comment under that post; official event-source
   wall posts remain excluded from this path;
 - VK discussion boards are scanned read-only through `board.getTopics` and
-  `board.getComments`; matching board comments are linked with `topic-...`
-  evidence URLs and still require Gemma acceptance before review;
+  `board.getComments` with per-request comment count capped at the VK API
+  limit of 100; matching board comments are linked with `topic-...` evidence
+  URLs and still require Gemma acceptance before review;
 - the seed payload includes extra VK social/search communities found by
   Kaliningrad discovery queries (`kuda_go_kld`, `club_topplace`, `kuda_dety39`,
   `kidsreview_kaliningrad`, `visit.kaliningrad`, route/tourism publics) so the

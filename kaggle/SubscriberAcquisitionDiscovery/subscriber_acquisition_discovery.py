@@ -1946,7 +1946,7 @@ def _scan_vk_board_discussions(
     comment_records: list[dict[str, Any]] | None = None,
 ) -> bool:
     max_topics = _int_env("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", 30, min_value=0)
-    max_comments = _int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 200, min_value=1)
+    max_comments = min(_int_env("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", 100, min_value=1), 100)
     max_opportunities = _int_env("ACQ_MAX_OPPORTUNITIES_PER_RUN", 200, min_value=1)
     if max_topics <= 0 or _deadline_reached(deadline):
         return False

@@ -18,6 +18,20 @@
 
 ### Changed
 
+- Subscriber Acquisition XLSX deltas now separate true newly scanned surfaces,
+  newly discovered links queued into backlog, and static seed/backlog rows, add
+  total report-map counts next to the delta, color processed comment rows
+  green/red, clarify the embedding model used for the top-N LLM queue, and keep
+  source-post text out of the user-comment column.
+- Subscriber Acquisition temporal gating is stricter for event candidates:
+  report-style posts containing “прошёл/стартовал/начался/открыл” are excluded
+  from `goal_*`/LLM queues when they refer to today or the past, even if they
+  also contain vague future wording.
+- Subscriber Acquisition organizer-ask goal sheets now exclude question-like
+  user wall/channel messages, keeping `goal_ask_event_details` for organizer
+  announcement contexts rather than ordinary user questions.
+- Subscriber Acquisition VK board scanning now caps `board.getComments` count
+  at 100 so VK discussion-board comments are not lost to invalid count errors.
 - Subscriber Acquisition semantic retrieval now excludes already-past event
   contexts and after-event reports from `goal_*`, `monitoring_targets` and the
   Gemma top-N queue, while also hard-filtering gasoline/fuel/АЗС availability

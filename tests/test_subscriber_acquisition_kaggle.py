@@ -655,8 +655,11 @@ def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
     assert processed.cell(3, comment_col).value == "Куда сходить?"
     assert processed.cell(3, post_col).value in (None, "")
     assert processed.cell(3, source_post_col).value == "Анонс концерта"
+    assert processed.cell(3, 1).fill.fgColor.rgb == "00C6EFCE"
     assert processed.cell(4, comment_col).value in (None, "")
     assert processed.cell(4, post_col).value == "Анонс события, по которому можно спросить детали"
+    assert processed.cell(4, source_post_col).value in (None, "")
+    assert processed.cell(4, 1).fill.fgColor.rgb == "00F4CCCC"
 
 
 def test_comment_retrieval_increment_requires_verified_run_id(monkeypatch):
@@ -719,6 +722,37 @@ def test_comment_retrieval_increment_requires_verified_run_id(monkeypatch):
     counts = retrieval._summary_count_rows(inventory)
     assert counts[0]["increment_touched_this_run"] == 1
     assert counts[0]["analyzed_comments_this_run"] == 1
+
+    inventory = retrieval._surface_inventory_rows(
+        {
+            "vk:id123": {
+                "platform": "vk",
+                "surface_type": "profile",
+                "url": "https://vk.com/id123",
+                "external_id": "vk:id123",
+                "source": "discovered_vk_author",
+                "discovered_in_run_id": "run-1",
+            },
+            "tg:seed": {
+                "platform": "tg",
+                "surface_type": "channel",
+                "url": "https://t.me/seed",
+                "external_id": "tg:seed",
+                "source": "tg_monitoring_canonical",
+                "discovered_in_run_id": "run-1",
+            },
+        },
+        [],
+    )
+    by_key = {row["surface_key"]: row for row in inventory}
+    assert by_key["vk:id123"]["increment_status"] == "queued_discovered_backlog_this_run"
+    assert by_key["tg:seed"]["increment_status"] == "seed_backlog_visible_this_run"
+    counts = retrieval._summary_count_rows(inventory)
+    assert counts[0]["queued_discovered_backlog_this_run"] == 1
+    assert counts[0]["seed_backlog_visible_this_run"] == 1
+    assert counts[0]["increment_touched_this_run"] == 0
+    delta_rows = retrieval._decision_delta_rows(inventory, scope_rows=[{"metric": "source_run_provenance", "value": "kaggle_run_id"}])
+    assert {row["delta_type"] for row in delta_rows} == {"queued_discovered_backlog_this_run", "seed_backlog_visible_this_run"}
 
 
 def test_comment_semantic_retrieval_vector_scan_does_not_prefilter_before_llm(monkeypatch):
@@ -895,6 +929,27 @@ def test_comment_semantic_hard_filters_past_events_and_gasoline(monkeypatch):
     assert future_event["event_temporal_status"] == "future_or_today"
     assert future_event["pre_llm_candidate_eligible"] is True
 
+    mixed_past_today = {
+        **past_event,
+        "text_snapshot": "На стадионе прошёл большой концерт, сегодня снова будет шоу.",
+        "created_at": "2026-07-05T08:00:00+00:00",
+        "candidate_action_type": "organizer_visibility_clarification",
+        "intent_set": "organizer_event_post_context",
+    }
+    retrieval._apply_text_quality_to_candidate(mixed_past_today, scoring_method="positive_negative_margin")
+    assert mixed_past_today["semantic_exclusion_type"] == "past_event_signal"
+    assert retrieval._goal_candidate_rows([mixed_past_today], actions={"organizer_visibility_clarification"}, source_posts=True) == []
+
+    already_started = {
+        **past_event,
+        "text_snapshot": "На стадионе стартовал вечерний концерт, который открыл Родион Газманов.",
+        "created_at": "2026-07-05T08:00:00+00:00",
+        "candidate_action_type": "organizer_visibility_clarification",
+        "intent_set": "organizer_event_post_context",
+    }
+    retrieval._apply_text_quality_to_candidate(already_started, scoring_method="positive_negative_margin")
+    assert already_started["semantic_exclusion_type"] == "past_event_signal"
+
     gasoline = {
         "surface_key": "vk:club42481124",
         "platform": "vk",
@@ -1030,6 +1085,19 @@ def test_report_quality_keeps_source_posts_as_ask_context_but_not_question_catal
     assert retrieval._model_ask_context_rows([source_post], "intfloat/multilingual-e5-base") == [source_post]
     assert retrieval._build_question_patterns([source_post]) == []
     assert retrieval._canonical_question_catalog_rows([source_post]) == []
+
+    user_question_wall_post = {
+        **source_post,
+        "text_snapshot": "У кого есть два лишних билета на концерт?",
+        "question_signal": True,
+        "context_url": "https://vk.com/wall-1_3",
+    }
+    assert retrieval._model_ask_context_rows([user_question_wall_post], "intfloat/multilingual-e5-base") == []
+    assert retrieval._goal_candidate_rows(
+        [user_question_wall_post],
+        actions={"organizer_visibility_clarification"},
+        source_posts=True,
+    ) == []
 
 
 def test_report_quality_allows_historical_real_questions_only_for_canonical_catalog():
@@ -1586,6 +1654,32 @@ def test_vk_scan_marks_no_comments_surface(monkeypatch):
     assert surfaces[0]["status"] == "rejected_no_comments"
     assert surfaces[0]["scan_state"] == "checked_no_public_comments_or_boards"
     assert surfaces[0]["risk"]["reply_policy"] == "no_reply_surface"
+
+
+def test_vk_board_comments_count_is_capped_to_vk_api_limit(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setattr(runtime, "_vk_token_lanes", lambda: [("TEST_TOKEN", "token")])
+    monkeypatch.setattr(runtime, "_human_pause_sync", lambda *args, **kwargs: None)
+    monkeypatch.setenv("ACQ_MAX_VK_POSTS_PER_SURFACE", "0")
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_TOPICS_PER_SURFACE", "1")
+    monkeypatch.setenv("ACQ_MAX_VK_BOARD_COMMENTS_PER_TOPIC", "200")
+    counts: list[int] = []
+
+    def fake_vk(method, *, token_lanes, params):
+        if method == "wall.get":
+            return {"items": []}, "TEST_TOKEN"
+        if method == "board.getTopics":
+            return {"items": [{"id": 55, "title": "Вопросы"}]}, "TEST_TOKEN"
+        if method == "board.getComments":
+            counts.append(params["count"])
+            return {"items": []}, "TEST_TOKEN"
+        raise AssertionError(method)
+
+    monkeypatch.setattr(runtime, "_vk_api_with_fallback", fake_vk)
+
+    runtime.scan_vk_shadow_surfaces(["https://vk.com/club123"], ["https://vk.com/club123"])
+
+    assert counts == [100]
 
 
 

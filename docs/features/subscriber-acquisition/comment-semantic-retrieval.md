@@ -98,10 +98,15 @@ event question or ask an organizer (`event_recommendation_reply`,
 - explicit dates in the current text plus source-post/parent context are parsed
   against the run date; if the latest detected event date is before the run date,
   the row is `past_event` and diagnostic-only;
-- post-event semantic signals such as отчёт/итоги/спасибо организаторам reject
-  as `past_event_signal` when no future/announcement signal is present;
-- future/today dates and future announcement signals can pass, but still require
-  final LLM validation before any real reply/question.
+- post-event semantic signals such as отчёт/итоги/спасибо организаторам,
+  `прошёл`, `стартовал`, `начался`, `открыл` reject as
+  `past_event_signal`;
+- if a mixed post says that something already happened/started and the latest
+  detected date is today or earlier, the past signal wins. This keeps
+  “прошёл/стартовал” report-style posts out of organizer ask candidates even
+  when the text also contains a vague “сегодня будет…” continuation;
+- future dates after the run date and clean future announcement signals can
+  pass, but still require final LLM validation before any real reply/question.
 
 Fuel availability is outside the product scope: questions like “где есть
 бензин/дизель/топливо/АЗС?” are marked
@@ -493,16 +498,21 @@ The XLSX must include these operator-facing sheets:
 
 - `summary_ru`: dashboard-style Russian explanation of what the file means,
   how to read it and what the important limitations are. The first visible
-  block is the last-run delta: `+` newly found, `−` removed (currently zero
-  unless a future importer records removals), touched/analyzed surfaces,
-  selected/candidate/rejected within the delta, comments embedded in the delta
-  and answerable questions in the delta. Use the term “площадки”, not the
-  literal “поверхности”, in Russian operator text.
+  block is the last-run delta: total площадки in the report map, newly
+  discovered-and-scanned surfaces, newly discovered links placed into backlog,
+  seed/backlog rows shown for transparency but not counted as new growth,
+  touched/analyzed surfaces, comments embedded in the delta and answerable
+  questions in the delta. Use the term “площадки”, not the literal
+  “поверхности”, in Russian operator text.
 - `decision_deltas`: the first working sheet after `summary_ru`; it contains
-  only surfaces that were newly discovered, newly analyzed or touched by the
-  verified last run. If `KAGGLE_RUN_ID`/`ACQ_SOURCE_RUN_ID` is missing, this
-  sheet must explicitly say that the last-run delta is not proven instead of
-  showing the whole inventory as a delta.
+  surfaces that were newly discovered, newly queued into backlog, newly
+  analyzed or touched by the verified last run. It must distinguish true
+  runtime-discovered backlog (`queued_discovered_backlog_this_run`) from static
+  seed/backlog rows (`seed_backlog_visible_this_run`) so the operator does not
+  read the same seed list as “+N” every run. If
+  `KAGGLE_RUN_ID`/`ACQ_SOURCE_RUN_ID` is missing, this sheet must explicitly say
+  that the last-run delta is not proven instead of showing the whole inventory
+  as a delta.
 - `processed_comments_last_run`: one best scored row per latest processed
   comment/post-context in the monitoring window, with `criteria_status_ru`
   explaining whether it matched reply/ask-context criteria or why it was
@@ -520,7 +530,10 @@ The XLSX must include these operator-facing sheets:
   candidate/surface decision sheets as useful opportunities.
 - `summary_counts`: counts by platform/surface type and final status:
   total/selected/candidate/rejected, plus the last-run increment:
-  `newly_discovered_this_run`, `increment_touched_this_run` and
+  `newly_discovered_this_run` (new and already scanned/touched),
+  `queued_discovered_backlog_this_run` (new links awaiting scan),
+  `seed_backlog_visible_this_run` (known seed/backlog surfaced in the report,
+  not growth), `increment_touched_this_run` and
   `analyzed_comments_this_run`, plus explicit delta columns for removed
   surfaces, selected/candidate/rejected-in-delta, embedded comments and
   answerable questions in the delta.
@@ -540,7 +553,9 @@ The XLSX must include these operator-facing sheets:
   have useful comment profiles.
 - `goal_ask_event_details`: short candidate sheet for organizer-owned posts or
   contexts where the future action is to ask a useful clarification about an
-  event.
+  event. Question-like wall posts/messages from ordinary users must not be
+  promoted into organizer ask context merely because they are technically
+  `vk_social_wall_post` / `tg_channel_post_context`.
 - `goal_reply_events`: short candidate sheet for user comments/questions where
   the future action is to answer about events, afisha/search/listing or quick
   event filters.
