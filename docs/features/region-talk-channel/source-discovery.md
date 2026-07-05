@@ -155,3 +155,37 @@ Store every link/mention/repost/catalog-neighbor relationship in `region_talk_so
 - Broken/private/forbidden source does not fail the run.
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery.
+
+## MVP-1.x forwarded/repost/comment discovery hardening
+
+Link-to-link discovery now treats forwarded/reposted origin as a high-value source graph edge:
+
+- Telegram: `forwarded_from`, `forward_origin`, `fwd_from`, accessible original channel/post link, author/source attribution, links in forwarded text.
+- VK: `copy_history`, repost source, original wall post link, attachment source links and photo credits.
+
+Edge types: `forward_origin`, `repost_origin`, `copy_history_origin`, `post_text_link`, `comment_link`, `photo_credit`, `profile_link`, `catalog_neighbor`.
+
+Discovered originals are added to source frontier/review, not monitored automatically. A source profile probe is required first.
+
+Comments are never content candidates. They may be scanned only for source discovery with redacted evidence fields:
+
+- `from_comment_id_hash`;
+- `comment_text_redacted`;
+- `extracted_url`;
+- `extracted_handle`;
+- `evidence_context_short`;
+- `author_hash_optional`;
+- `privacy_status=redacted`.
+
+No raw comment bodies or personal ids should appear in public artifacts.
+
+Depth/budget defaults for MVP-1.x:
+
+```bash
+REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
+REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
+REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
+REGION_TALK_MAX_SOURCE_PROFILE_FETCHES=300
+REGION_TALK_MAX_SOURCE_PROBES=120
+REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
+```

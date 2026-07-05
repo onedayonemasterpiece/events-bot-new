@@ -302,3 +302,23 @@ Future-only preview of Telegram/VK text/card readiness. No real publishing in MV
 ## Strong media gate
 
 Main favorites require strong photos. Without strong photos a post may be shown only in `10_good_text_weak_media`, not in main publication queue.
+
+## MVP-1.x workbook additions
+
+`04_review_queue` and candidate sheets include strict gate evidence:
+
+- `kaliningrad_oblast_only_scope`, `matched_place_names`, `matched_place_types`, `matched_place_priority_tiers`, `matched_place_aliases`, `external_geo_mentions`, `region_scope_reason`;
+- `is_forwarded_or_repost`, `forwarded_from_source_title`, `forwarded_from_url`, `original_source_candidate_id`, `discovery_edges_count`;
+- `text_substance_score`, `visit_impression_score`, `useful_route_score`, `emotion_observation_score`, `memorable_details_score`;
+- `visual_scoring_stage`, `visual_scoring_skip_reason`, `image_scoring_cost_saved`.
+
+`08_dropped_posts` includes `drop_gate`, `rejection_reason`, `is_ad_or_promo`, `post_age_days`, `text_substance_score`, and `image_scoring_skipped`.
+
+`12_sources_discovered` includes explicit links, forwarded/repost origins, normalized URL, platform guess, edge type, source status and confidence.
+
+`13_sources_monitored` includes source profile probe fields: sampled post count, Kaliningrad hit count, ad/news/trash ratios, original-media score, link/forward richness and monitor priority score.
+
+New sheets:
+
+- `17_source_graph_edges`;
+- `18_place_lexicon_matches`.

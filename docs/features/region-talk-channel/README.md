@@ -10,6 +10,8 @@
 - [YDB schema draft](ydb-schema.md) — все новые persistent-данные фичи живут в YDB, не в SQLite.
 - [MVP candidate report](mvp-candidate-report.md) — cumulative/delta-aware XLSX review workbook contract.
 - [Seed sources v1](seed-sources-v1.md) + [CSV](seed-sources-v1.csv) — стартовый seed-list для MVP-1 probe.
+- [Seed sources v2](seed-sources-v2.md) + [CSV](seed-sources-v2.csv) — 300+ row MVP-1.x source frontier; profile-probe before monitoring.
+- [Kaliningrad place lexicon](kaliningrad-place-lexicon.md) + [CSV](kaliningrad-place-lexicon-v1.csv) — regional place recall/scope guardrail.
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
@@ -182,3 +184,8 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
 - Real tokens/secrets: **not introduced**.
 - Publishing: **not performed**.
 - Next useful task: implement MVP-1 candidate-report-only job against manual seeds, YDB test credentials and XLSX artifacts.
+
+
+## MVP-1.x strict selection update
+
+Пост должен быть содержательно про Калининградскую область. Можно несколько городов/посёлков/мест внутри области; нельзя брать мульти-региональные подборки, рекламу/промо/анонсы, прошлогодние посты или слабые по содержанию визуальные дампы. Image scoring запускается только после freshness, Kaliningrad-only, non-ad, substance and non-news/non-trash gates.

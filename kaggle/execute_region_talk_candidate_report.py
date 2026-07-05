@@ -155,19 +155,26 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
         "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_only"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
+        "REGION_TALK_SEED_FILE": os.environ.get("REGION_TALK_SEED_FILE", "seed-sources-v2.csv"),
+        "REGION_TALK_PLACE_LEXICON_FILE": os.environ.get("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv"),
+        "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", "2026-01-01"),
+        "REGION_TALK_FRESHNESS_HALF_LIFE_DAYS": os.environ.get("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
     }
     secret_names = [
         "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
-        "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
+        "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
     ]
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
     encrypted = Fernet(key).encrypt(json.dumps(secrets, ensure_ascii=False).encode("utf-8"))
 
     def write_config(folder: Path) -> None:
-        shutil.copy2(PROJECT_ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv", folder / "seed-sources-v1.csv")
-        (folder / "region_talk_run_config.json").write_text(json.dumps({"run_id": run_id, "env": env_config, "seed_file": "seed-sources-v1.csv"}, ensure_ascii=False, indent=2), encoding="utf-8")
+        feature_dir = PROJECT_ROOT / "docs" / "features" / "region-talk-channel"
+        shutil.copy2(feature_dir / "seed-sources-v1.csv", folder / "seed-sources-v1.csv")
+        shutil.copy2(feature_dir / "seed-sources-v2.csv", folder / "seed-sources-v2.csv")
+        shutil.copy2(feature_dir / "kaliningrad-place-lexicon-v1.csv", folder / "kaliningrad-place-lexicon-v1.csv")
+        (folder / "region_talk_run_config.json").write_text(json.dumps({"run_id": run_id, "env": env_config, "seed_file": env_config["REGION_TALK_SEED_FILE"], "place_lexicon_file": env_config["REGION_TALK_PLACE_LEXICON_FILE"]}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def write_secret(folder: Path) -> None:
         (folder / "region_talk_secrets.enc").write_bytes(encrypted)
@@ -178,7 +185,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     config_ref = create_or_replace_dataset(client, username, f"region-talk-config-{safe_slug}", f"Region Talk config {safe_slug}", write_config)
     secret_ref = create_or_replace_dataset(client, username, f"region-talk-secrets-{safe_slug}", f"Region Talk secrets {safe_slug}", write_secret)
     key_ref = create_or_replace_dataset(client, username, f"region-talk-key-{safe_slug}", f"Region Talk key {safe_slug}", write_key)
-    wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "region_talk_run_config.json"])
+    wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json"])
     wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc"])
     wait_dataset_ready(client, key_ref, expected_files=["region_talk_fernet.key"])
     return [config_ref, secret_ref, key_ref]
@@ -251,6 +258,10 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_LLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_only")
+    os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
+    os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
+    os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
+    os.environ.setdefault("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30")
     kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)
     client = KaggleClient() if KaggleClient is not None else DirectKaggleClient()
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()

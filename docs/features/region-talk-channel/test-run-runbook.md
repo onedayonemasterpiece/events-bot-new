@@ -53,7 +53,8 @@ Found local patterns include TelegramMonitor, CherryFlash, generic `kaggle_statu
 ```bash
 REGION_TALK_DRY_RUN=1
 REGION_TALK_DISABLE_PUBLISH=1
-REGION_TALK_SEED_FILE=docs/features/region-talk-channel/seed-sources-v1.csv
+REGION_TALK_SEED_FILE=docs/features/region-talk-channel/seed-sources-v2.csv
+REGION_TALK_PLACE_LEXICON_FILE=docs/features/region-talk-channel/kaliningrad-place-lexicon-v1.csv
 REGION_TALK_OUTPUT_DIR=artifacts/region-talk/runs/${RUN_ID}
 REGION_TALK_MAX_SOURCES=5
 REGION_TALK_MAX_POSTS_PER_SOURCE=20
@@ -61,6 +62,12 @@ REGION_TALK_MAX_IMAGES_PER_POST=8
 REGION_TALK_MAX_LLM_CALLS=10
 REGION_TALK_MAX_VLM_CALLS=10
 REGION_TALK_IMAGE_SCORING_MODE=cv_only|cv_aesthetic|cv_aesthetic_clip|cv_aesthetic_clip_vlm
+REGION_TALK_MIN_POST_DATE=2026-01-01
+REGION_TALK_FRESHNESS_HALF_LIFE_DAYS=30
+REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
+REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
+REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
+REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
 ```
 
 YDB mode must be one of:
@@ -89,3 +96,11 @@ The reviewer should be able to answer from XLSX alone:
 6. Which posts dropped and why?
 7. Which image model reports explain the selected photos?
 8. Which candidates need manual review/favorite/reject decisions?
+
+## MVP-1.x filtering order
+
+`post fetched → freshness gate → kaliningrad_oblast_only_scope_gate → ad/promo/announcement gate → content substance / visit-impression gate → not-news / not-trash gate → semantic dual-model enrichment → image postcardness scoring → verifier/top candidates → candidate/favorite`.
+
+Image scoring is skipped before text gates pass, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
+
+Comments are only for source discovery/link evidence and never publication material. Forwarded/reposted origins become source-frontier graph edges, not automatically monitored sources.

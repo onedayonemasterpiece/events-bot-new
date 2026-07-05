@@ -96,3 +96,19 @@ candidate_score =
 ```
 
 MVP hard gate: main candidates require at least one strong image. Good text with weak media goes only to debug sheet `good_text_weak_media`, not to publication queue.
+
+## MVP-1.x strict post gates
+
+A post must be substantively about Kaliningrad Oblast only. Multiple oblast cities, settlements, natural places or landmarks are allowed; multi-region/country lists are rejected even when Kaliningrad is mentioned positively.
+
+Gate order:
+
+1. freshness (`REGION_TALK_MIN_POST_DATE=2026-01-01` for current run);
+2. `kaliningrad_oblast_only_scope_gate` using the place lexicon as recall/guardrail;
+3. ad/promo/announcement rejection, including contests, registrations, dictations, tours, ticket/service/event promos;
+4. content substance / visit-impression gate;
+5. not-news / not-trash;
+6. semantic dual-model enrichment (`intfloat/multilingual-e5-base` + `BAAI/bge-m3`) as recall enrichment/fusion, not A/B comparison;
+7. image postcardness scoring only after all text gates pass.
+
+Visual quality is evaluated only for selected non-ad posts about the region. Rows skipped by text gates must expose `visual_scoring_stage=skipped_by_text_gate`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.

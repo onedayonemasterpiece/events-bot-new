@@ -21,9 +21,9 @@ from typing import Any, Iterable
 from xml.sax.saxutils import escape
 
 RUN_STARTED_AT = datetime.now(timezone.utc)
-DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг"]
+DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг", "Краснолесье", "Виштынец", "Роминтенская пуща", "Балтийская коса", "Янтарный", "Балтийск", "Советск", "Неман", "Правдинск", "Черняховск"]
 NEWS_WORDS = ["происшеств", "дтп", "авар", "полици", "суд", "задерж", "штраф", "войн", "полит", "скандал", "убий", "пожар"]
-AD_WORDS = ["скидк", "промокод", "купить", "заказать", "реклама", "партнёр", "партнер", "оплат", "бронь"]
+AD_WORDS = ["скидк", "промокод", "купить", "заказать", "реклама", "партнёр", "партнер", "оплат", "бронь", "регистрация", "анонс", "конкурс", "диктант", "географический диктант", "билеты", "забронировать"]
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
 POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "архитект", "истори", "маршрут", "музей", "пляж", "курорт", "прогул", "путешеств"]
 
@@ -62,6 +62,11 @@ def canonical_handle(value: str) -> str:
     if raw and not raw.startswith("@") and re.fullmatch(r"[A-Za-z0-9_\.]+", raw):
         raw = "@" + raw
     return raw
+
+
+def seed_sort_number(value: Any) -> int:
+    m = re.search(r"\d+", str(value or ""))
+    return int(m.group(0)) if m else 999999
 
 
 def canonical_source_url(platform: str, handle: str, url: str) -> str:
@@ -171,16 +176,17 @@ class Seed:
 
 def find_seed_file(config: dict[str, Any]) -> Path:
     candidates = []
-    for raw in [os.getenv("REGION_TALK_SEED_FILE"), config.get("seed_file"), "seed-sources-v1.csv", "docs/features/region-talk-channel/seed-sources-v1.csv"]:
+    for raw in [os.getenv("REGION_TALK_SEED_FILE"), config.get("seed_file"), "seed-sources-v2.csv", "docs/features/region-talk-channel/seed-sources-v2.csv", "seed-sources-v1.csv", "docs/features/region-talk-channel/seed-sources-v1.csv"]:
         if raw:
             candidates.append(Path(str(raw)))
     for root in [Path.cwd(), Path(__file__).resolve().parent, Path("/kaggle/input")]:
         if root.exists():
+            candidates.extend(root.rglob("seed-sources-v2.csv"))
             candidates.extend(root.rglob("seed-sources-v1.csv"))
     for p in candidates:
         if p.exists():
             return p
-    raise FileNotFoundError("seed-sources-v1.csv not found")
+    raise FileNotFoundError("seed-sources-v2.csv/seed-sources-v1.csv not found")
 
 
 def load_seeds(path: Path) -> list[Seed]:
@@ -209,6 +215,294 @@ def load_seeds(path: Path) -> list[Seed]:
         ))
     return seeds
 
+
+
+PLACE_LEXICON_FIELDS = [
+    "place_id", "canonical_name", "place_type", "municipality", "district_or_okrug", "is_city", "is_settlement",
+    "is_tourist_place", "is_nature_place", "is_historical_name", "aliases", "old_names", "latin_aliases",
+    "common_misspellings", "geo_scope", "priority_tier", "ambiguity_level", "allowed_for_kaliningrad_scope",
+    "requires_context", "reject_if_external_context", "source_url", "source_note",
+]
+EXTERNAL_REGION_TERMS = [
+    "карелия", "алтай", "дагестан", "байкал", "камчатка", "сахалин", "кавказ", "крым", "сочи",
+    "санкт-петербург", "петербург", "ленинградская область", "москва", "московская область", "казань",
+    "татарстан", "владимир", "суздаль", "ярославль", "кострома", "нижний новгород", "псков",
+    "новгород", "мурманск", "териберка", "архангельск", "вологда", "урал", "сибирь", "приморье",
+    "владивосток", "краснодарский край", "адыгея", "эльбрус", "чечня", "ингушетия", "осетия",
+    "башкирия", "пермский край", "самара", "саратов", "волгоград", "астрахань", "тюмень",
+]
+EXTERNAL_COUNTRY_TERMS = [
+    "польша", "литва", "латвия", "эстония", "германия", "беларусь", "грузия", "армения", "турция",
+    "италия", "франция", "испания", "португалия", "норвегия", "финляндия", "швеция", "китай",
+]
+AD_PROMO_WORDS = [
+    "реклама", "промокод", "скидк", "акция", "конкурс", "розыгрыш", "партнёр", "партнер", "спонсор",
+    "купить", "заказать", "забронировать", "бронь", "билеты", "билет", "стоимость", "цена", "руб",
+    "регистрация", "зарегистр", "анонс", "приглашаем", "приходите", "участвуйте", "географический диктант",
+    "диктант", "тур ", "туры", "экскурсия", "экскурсии", "программа мероприятия", "мероприятие состоится",
+]
+SUBSTANCE_WORDS = ["маршрут", "дорога", "путь", "добраться", "совет", "полезн", "истори", "место", "что посмотреть", "где", "когда", "почему"]
+VISIT_WORDS = ["побывал", "побывали", "посетил", "посетили", "ездили", "поехали", "приехали", "гуляли", "увидели", "запомнил", "запомнилось", "впечатлен", "впечатления"]
+EMOTION_WORDS = ["красив", "впечатля", "атмосфер", "удивител", "люблю", "очар", "запомни", "магия", "спокойн", "вдохнов", "вау", "эмоци"]
+MEMORABLE_WORDS = ["больше всего", "особенно", "запомни", "неожиданно", "удивило", "главное", "лучшее", "самое", "деталь", "история"]
+URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|\bt\.me/[A-Za-z0-9_+/.-]+|\bvk\.com/[A-Za-z0-9_./-]+")
+HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,}")
+
+
+def normalize_geo_text(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").lower().replace("ё", "е")).strip()
+
+
+def text_main_content_for_geo(text: str) -> str:
+    kept: list[str] = []
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        low = normalize_geo_text(line)
+        if not line:
+            continue
+        if URL_RE.search(line) and len(line) < 140:
+            continue
+        if low.startswith(("подпис", "источник:", "фото:", "подробнее", "читать", "наш сайт", "реклама")):
+            continue
+        if line.startswith("#") or ("#" in line and len(line) < 80):
+            continue
+        kept.append(line)
+    return "\n".join(kept) or (text or "")
+
+
+def split_semicolon(value: str) -> list[str]:
+    return [x.strip() for x in re.split(r"\s*;\s*", value or "") if x.strip()]
+
+
+def find_place_lexicon_file(config: dict[str, Any] | None = None) -> Path | None:
+    raw_candidates = [
+        os.getenv("REGION_TALK_PLACE_LEXICON_FILE"),
+        (config or {}).get("place_lexicon_file") if config else None,
+        "kaliningrad-place-lexicon-v1.csv",
+        "docs/features/region-talk-channel/kaliningrad-place-lexicon-v1.csv",
+    ]
+    candidates = [Path(str(x)) for x in raw_candidates if x]
+    for root in [Path.cwd(), Path(__file__).resolve().parent, Path("/kaggle/input")]:
+        if root.exists():
+            candidates.extend(root.rglob("kaliningrad-place-lexicon-v1.csv"))
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def load_place_lexicon(path: Path | None) -> list[dict[str, Any]]:
+    if not path or not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        clean = {field: str(row.get(field) or "").strip() for field in PLACE_LEXICON_FIELDS}
+        terms: list[tuple[str, str]] = [(clean["canonical_name"], "canonical_name")]
+        for col in ("aliases", "old_names", "latin_aliases", "common_misspellings"):
+            for value in split_semicolon(clean.get(col, "")):
+                terms.append((value, col))
+        clean["match_terms"] = [(term, kind, normalize_geo_text(term)) for term, kind in terms if term]
+        out.append(clean)
+    return out
+
+
+def term_in_text(norm_term: str, norm_text: str) -> bool:
+    if not norm_term:
+        return False
+    escaped = re.escape(norm_term)
+    return re.search(rf"(?<![0-9a-zа-я]){escaped}(?![0-9a-zа-я])", norm_text, flags=re.I) is not None
+
+
+def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    norm = normalize_geo_text(text)
+    matches: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for place in lexicon:
+        if str(place.get("allowed_for_kaliningrad_scope") or "").lower() != "true":
+            continue
+        for term, kind, norm_term in place.get("match_terms") or []:
+            if len(norm_term) < 3:
+                continue
+            if term_in_text(norm_term, norm):
+                key = (place.get("place_id") or place.get("canonical_name") or "", term)
+                if key in seen:
+                    continue
+                seen.add(key)
+                idx = norm.find(norm_term)
+                raw_text = text or ""
+                matches.append({
+                    "place_id": place.get("place_id", ""),
+                    "matched_place_name": term,
+                    "canonical_name": place.get("canonical_name", ""),
+                    "place_type": place.get("place_type", ""),
+                    "municipality": place.get("municipality", ""),
+                    "priority_tier": place.get("priority_tier", ""),
+                    "alias_used": term if kind != "canonical_name" else "",
+                    "match_context": re.sub(r"\s+", " ", raw_text[max(0, idx-80):idx+len(term)+80])[:240] if idx >= 0 else "",
+                    "requires_context": place.get("requires_context", ""),
+                    "accepted_as_region_evidence": "needs_context" if str(place.get("requires_context") or "").lower() == "true" else "true",
+                })
+    return matches
+
+
+def external_geo_mentions(text: str) -> tuple[list[str], list[str]]:
+    norm = normalize_geo_text(text_main_content_for_geo(text))
+    regions = [term for term in EXTERNAL_REGION_TERMS if term_in_text(normalize_geo_text(term), norm)]
+    countries = [term for term in EXTERNAL_COUNTRY_TERMS if term_in_text(normalize_geo_text(term), norm)]
+    return sorted(set(regions)), sorted(set(countries))
+
+
+def kaliningrad_oblast_only_scope_gate(text: str, lexicon: list[dict[str, Any]]) -> dict[str, Any]:
+    main_text = text_main_content_for_geo(text)
+    matches = match_kaliningrad_places(main_text, lexicon)
+    strong_matches = [m for m in matches if m.get("accepted_as_region_evidence") == "true"]
+    external_regions, external_countries = external_geo_mentions(text)
+    ok = bool(strong_matches or matches) and not external_regions and not external_countries
+    reason = ""
+    if not matches:
+        reason = "reject: no Kaliningrad Oblast place evidence in main content"
+    elif external_regions or external_countries:
+        reason = "reject: external destinations in main content: " + "; ".join(external_regions + external_countries)
+    else:
+        reason = "accepted: matched Kaliningrad Oblast places only: " + "; ".join(sorted({m['canonical_name'] for m in matches})[:10])
+    return {
+        "kaliningrad_oblast_only_scope": ok,
+        "matched_place_names": "; ".join(sorted({m["canonical_name"] for m in matches})),
+        "matched_place_types": "; ".join(sorted({m["place_type"] for m in matches if m.get("place_type")})),
+        "matched_place_priority_tiers": "; ".join(sorted({m["priority_tier"] for m in matches if m.get("priority_tier")})),
+        "matched_place_aliases": "; ".join(sorted({m["alias_used"] for m in matches if m.get("alias_used")})),
+        "mentioned_kaliningrad_places": "; ".join(sorted({m["canonical_name"] for m in matches})),
+        "mentioned_external_regions": "; ".join(external_regions),
+        "mentioned_external_countries": "; ".join(external_countries),
+        "external_region_count": len(external_regions),
+        "external_country_count": len(external_countries),
+        "external_geo_mentions": "; ".join(external_regions + external_countries),
+        "region_scope_decision": "accept_kaliningrad_oblast_only" if ok else "reject_not_kaliningrad_oblast_only",
+        "region_scope_reason": reason,
+        "place_matches": matches,
+    }
+
+
+def parse_post_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def freshness_gate(post_date: Any) -> dict[str, Any]:
+    min_raw = os.getenv("REGION_TALK_MIN_POST_DATE", "2026-01-01")
+    min_dt = datetime.fromisoformat(min_raw).replace(tzinfo=timezone.utc)
+    now = RUN_STARTED_AT
+    dt = parse_post_datetime(post_date)
+    if dt is None:
+        return {"fresh_enough": False, "post_age_days": "", "freshness_score": 0.0, "freshness_reason": "reject: missing post date", "min_post_date": min_raw}
+    age_days = max(0, (now - dt).days)
+    half_life = max(1, getenv_int("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", 30))
+    score = round(1 / (1 + age_days / half_life), 3)
+    ok = dt >= min_dt and dt.year >= min_dt.year
+    return {"fresh_enough": ok, "post_age_days": age_days, "freshness_score": score if ok else 0.0, "freshness_reason": "accepted" if ok else f"reject: post_date before {min_raw}", "min_post_date": min_raw}
+
+
+def score_substance(text: str) -> dict[str, Any]:
+    low = normalize_geo_text(text)
+    length_score = min(0.35, len(text or "") / 1200)
+    useful = min(1.0, 0.18 * sum(1 for w in SUBSTANCE_WORDS if w in low))
+    visit = min(1.0, 0.22 * sum(1 for w in VISIT_WORDS if w in low))
+    emotion = min(1.0, 0.16 * sum(1 for w in EMOTION_WORDS if w in low))
+    memorable = min(1.0, 0.22 * sum(1 for w in MEMORABLE_WORDS if w in low))
+    substance = round(min(1.0, length_score + 0.35*useful + 0.30*visit + 0.20*emotion + 0.25*memorable), 3)
+    return {
+        "text_substance_score": substance,
+        "visit_impression_score": round(visit, 3),
+        "useful_route_score": round(useful, 3),
+        "emotion_observation_score": round(emotion, 3),
+        "memorable_details_score": round(memorable, 3),
+        "substance_reason": "accepted substantive/experience text" if substance >= 0.25 else "reject: thin text, visual dump, SEO list, or low-context mention",
+    }
+
+
+def ad_promo_gate(text: str) -> dict[str, Any]:
+    low = normalize_geo_text(text)
+    hits = [w.strip() for w in AD_PROMO_WORDS if w.strip() and w in low]
+    is_ad = bool(hits)
+    return {"is_ad_or_promo": is_ad, "ad_promo_hits": "; ".join(sorted(set(hits))), "ad_promo_reason": "reject: ad/promo/announcement cues: " + "; ".join(sorted(set(hits))) if is_ad else "accepted: no hard ad/promo cues"}
+
+
+def extract_urls_and_handles(text: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for m in URL_RE.finditer(text or ""):
+        raw = m.group(0).rstrip(').,;!?:»”')
+        norm = raw if raw.startswith(("http://", "https://")) else "https://" + raw.lstrip("/")
+        if norm not in seen:
+            seen.add(norm); out.append({"raw_url": raw, "normalized_url": norm, "extracted_handle": ""})
+    for m in HANDLE_RE.finditer(text or ""):
+        handle = m.group(0)
+        norm = "https://t.me/" + handle.lstrip("@")
+        if norm not in seen:
+            seen.add(norm); out.append({"raw_url": handle, "normalized_url": norm, "extracted_handle": handle})
+    return out
+
+
+def classify_platform_url(url: str) -> tuple[str, str]:
+    low = (url or "").lower()
+    if "t.me/" in low:
+        return ("telegram_post" if re.search(r"t\.me/[a-z0-9_]+/\d+", low) else "telegram_channel", "telegram")
+    if "vk.com/wall" in low:
+        return "vk_wall_post", "vk"
+    if "vk.com/" in low:
+        return "vk_public", "vk"
+    if "dzen.ru" in low:
+        return "dzen_article", "dzen"
+    if "youtube.com" in low or "youtu.be" in low:
+        return "youtube_channel", "youtube"
+    if "rutube.ru" in low:
+        return "rutube_channel", "rutube"
+    return "website", "web"
+
+
+def discover_links_for_post(post: dict[str, Any], run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    from_source = str(post.get("source_id") or "")
+    source_title = str(post.get("source_title") or "")
+    post_id = str(post.get("post_id") or "")
+    post_url = str(post.get("post_url") or "")
+    items = extract_urls_and_handles(str(post.get("text") or ""))
+    if post.get("forwarded_from_url"):
+        items.append({"raw_url": str(post.get("forwarded_from_url")), "normalized_url": str(post.get("forwarded_from_url")), "extracted_handle": str(post.get("forwarded_from_handle") or "")})
+    for i, item in enumerate(items, start=1):
+        normalized = item["normalized_url"]
+        link_type, platform = classify_platform_url(normalized)
+        edge_type = "forward_origin" if normalized == post.get("forwarded_from_url") else "post_text_link"
+        cand_id = "src_cand_" + stable_hash(platform, normalized)
+        edge_id = "edge_" + stable_hash(from_source, post_id, normalized, edge_type)
+        rows.append({
+            "source_candidate_id": cand_id, "discovered_from_source": source_title, "discovered_from_post_url": post_url,
+            "discovered_from_comment_hash": "", "discovery_type": "forwarded_from" if edge_type == "forward_origin" else "post_text",
+            "edge_type": edge_type, "raw_url": item["raw_url"], "normalized_url": normalized, "platform_guess": link_type,
+            "candidate_source_status": "source_frontier", "confidence": 0.85 if edge_type == "forward_origin" else 0.55,
+        })
+        edges.append({
+            "edge_id": edge_id, "from_source_id": from_source, "from_source_title": source_title, "from_post_id": post_id,
+            "to_source_candidate_id": cand_id, "to_source_title": item.get("extracted_handle") or normalized, "edge_type": edge_type,
+            "evidence_url": normalized, "evidence_context_short": make_summary(str(post.get("text_excerpt") or post.get("text") or ""))[:240],
+            "confidence": 0.85 if edge_type == "forward_origin" else 0.55, "discovery_depth": 1, "run_id": run_id,
+        })
+    return rows, edges
+
+
+def image_scores_skipped(reason: str) -> dict[str, Any]:
+    return {"technical_quality_score":0.0,"aesthetic_score":0.0,"postcardness_score":0.0,"region_visual_relevance_score":0.0,"publication_safety_score":0.0,"low_noise_score":0.0,"overall_media_score":0.0,"is_selected_for_publication":False,"recognized_visual_elements":"","model_short_explanation":"Image scoring skipped by text gate: " + reason,"failure_reason":"image_scoring_skipped_by_text_gate","model_id":"cv_only_metadata_v1","model_version":"2026-07-05"}
 
 def score_text(text: str) -> dict[str, Any]:
     low = (text or "").lower()
@@ -262,7 +556,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     max_posts = getenv_int("REGION_TALK_MAX_POSTS_PER_SOURCE", 20)
     fetch_enabled = getenv_bool("REGION_TALK_FETCH_TELEGRAM", True)
     monitored = [s for s in seeds if s.platform == "telegram" and s.monitoring_enabled]
-    monitored = sorted(monitored, key=lambda s: (s.priority, int(s.source_seed_id or 999)))[:max_sources]
+    monitored = sorted(monitored, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id)))[:max_sources]
     source_rows: list[dict[str, Any]] = []
     posts: list[dict[str, Any]] = []
     if not fetch_enabled:
@@ -282,7 +576,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 source_rows.append({**asdict(s), "source_id": s.source_id, "canonical_url": s.canonical_url, "fetch_status":"skipped_telethon_not_installed"})
             return source_rows, posts
     bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
-    raw = (os.getenv(bundle_env) or os.getenv("TELEGRAM_AUTH_BUNDLE_S22") or "").strip()
+    raw = (os.getenv(bundle_env) or "").strip()
     api_id = int((os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID") or "0").strip() or 0)
     api_hash = (os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH") or "").strip()
     bundle: dict[str, Any] = {}
@@ -322,7 +616,27 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         dt = getattr(msg, "date", None)
                         post_url = f"https://t.me/{handle}/{mid}"
                         has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
-                        posts.append({"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url})
+                        fwd = getattr(msg, "fwd_from", None) or getattr(msg, "forward", None)
+                        forwarded_from_handle = ""
+                        forwarded_from_title = ""
+                        forwarded_from_url = ""
+                        forwarded_from_post_url = ""
+                        forwarded_from_confidence = 0.0
+                        if fwd:
+                            from_name = str(getattr(fwd, "from_name", None) or "").strip()
+                            forwarded_from_title = from_name
+                            from_id = getattr(fwd, "from_id", None)
+                            channel_id = str(getattr(from_id, "channel_id", "") or "")
+                            if channel_id:
+                                forwarded_from_handle = "channel_" + channel_id
+                                forwarded_from_url = "https://t.me/c/" + channel_id
+                                original_mid = getattr(fwd, "channel_post", None)
+                                if original_mid:
+                                    forwarded_from_post_url = forwarded_from_url + "/" + str(original_mid)
+                                forwarded_from_confidence = 0.7
+                            elif from_name:
+                                forwarded_from_confidence = 0.45
+                        posts.append({"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""})
                         if len(seen) >= max_posts:
                             break
                     if len(seen) >= max_posts:
@@ -341,57 +655,183 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
 def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: list[dict[str, Any]], run_id: str, output_dir: Path) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     run_now = utc_now_iso()
+    lexicon_path = find_place_lexicon_file({})
+    lexicon = load_place_lexicon(lexicon_path)
     source_seed_rows = [{**asdict(s), "source_id": s.source_id, "canonical_url": s.canonical_url} for s in seeds]
     candidates: list[dict[str, Any]] = []
     media_rows: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
     new_posts: list[dict[str, Any]] = []
     increment: list[dict[str, Any]] = []
+    discovered_rows: list[dict[str, Any]] = []
+    graph_edges: list[dict[str, Any]] = []
+    place_match_rows: list[dict[str, Any]] = []
     seed_by_id = {s.source_seed_id: s for s in seeds}
+
     for p in posts:
         seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or '')) or (seeds[0] if seeds else None)
-        ts = score_text(p.get("text") or "")
-        ms = media_scores(bool(p.get("has_media")), ts)
-        cid = "cand_" + stable_hash(p["post_id"], "region-talk-semantic-bank-v1", ms.get("overall_media_score"))
+        text = p.get("text") or ""
+        ts = score_text(text)
+        scope = kaliningrad_oblast_only_scope_gate(text, lexicon)
+        fresh = freshness_gate(p.get("post_date"))
+        ad_gate = ad_promo_gate(text)
+        substance = score_substance(text)
+        link_rows, edge_rows = discover_links_for_post(p, run_id)
+        discovered_rows.extend(link_rows)
+        graph_edges.extend(edge_rows)
+
+        cid = "cand_" + stable_hash(p["post_id"], "region-talk-semantic-bank-v1", text[:120])
         mid = "media_" + stable_hash(p["post_id"], p.get("post_url"), "media0")
-        score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0
-        current_stage = "post_fetched"
+        drop_gate = ""
         rejection = ""
-        if ts["region_relevance_score"] < 0.35:
-            current_stage, rejection = "dropped_not_region", "not_about_region"
-        elif ts["newsiness_score"] >= 0.45:
-            current_stage, rejection = "dropped_news", "newsiness"
-        elif ts["trash_score"] >= 0.35:
-            current_stage, rejection = "dropped_trash", "trash"
-        elif not ms["is_selected_for_publication"]:
-            current_stage, rejection = "good_text_weak_media" if ts["region_relevance_score"] >= 0.35 else "dropped_weak_media", ms["failure_reason"]
-        elif score >= 0.45:
-            current_stage = "favorite" if score >= 0.62 else "semantic_candidate"
+        visual_stage = "skipped_by_text_gate"
+        visual_skip_reason = ""
+        image_cost_saved = True
+        gate_trace: list[str] = []
+
+        if not fresh["fresh_enough"]:
+            drop_gate, rejection = "freshness_gate", "reject_stale_or_missing_date"
+            visual_skip_reason = fresh["freshness_reason"]
+            gate_trace.append("freshness_gate:reject")
         else:
-            current_stage, rejection = "dropped_low_score", "candidate_score_low"
-        media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": (p.get("post_url") + "#media") if p.get("has_media") else "", "thumbnail":"", **ms})
-        row = {**p, **ts, **ms, "candidate_id": cid, "candidate_score": score, "current_stage": current_stage, "rejection_reason": rejection, "short_summary": make_summary(p.get("text") or ""), "why_this_is_about_kaliningrad": ", ".join(ts.get("anchor_hits") or []) or "no strong anchor", "what_positive": ", ".join(ts.get("positive_hits") or []), "what_neutral_or_useful":"route/place/travel context" if ts["region_relevance_score"] else "", "what_concern":"news/ad/trash risk checked", "image_model_report_short": ms["model_short_explanation"], "risk_flags": "; ".join([rejection] if rejection else ([] if p.get("rights_policy") != "unknown" else ["rights_unknown"])), "suggested_action": "manual_review" if current_stage in {"favorite","semantic_candidate"} else "reject", "manual_decision":"", "reviewer_comment":""}
+            gate_trace.append("freshness_gate:pass")
+        if not rejection and not scope["kaliningrad_oblast_only_scope"]:
+            drop_gate, rejection = "kaliningrad_oblast_only_scope_gate", "reject_not_kaliningrad_oblast_only"
+            visual_skip_reason = scope["region_scope_reason"]
+            gate_trace.append("kaliningrad_oblast_only_scope_gate:reject")
+        elif not rejection:
+            gate_trace.append("kaliningrad_oblast_only_scope_gate:pass")
+        if not rejection and ad_gate["is_ad_or_promo"]:
+            drop_gate, rejection = "ad_promo_announcement_gate", "reject_ad_or_promo"
+            visual_skip_reason = ad_gate["ad_promo_reason"]
+            gate_trace.append("ad_promo_announcement_gate:reject")
+        elif not rejection:
+            gate_trace.append("ad_promo_announcement_gate:pass")
+        if not rejection and substance["text_substance_score"] < 0.25:
+            drop_gate, rejection = "content_substance_visit_impression_gate", "reject_low_substance"
+            visual_skip_reason = substance["substance_reason"]
+            gate_trace.append("content_substance_visit_impression_gate:reject")
+        elif not rejection:
+            gate_trace.append("content_substance_visit_impression_gate:pass")
+        if not rejection and ts["newsiness_score"] >= 0.45:
+            drop_gate, rejection = "not_news_gate", "newsiness"
+            visual_skip_reason = "reject: news/prosecution/incident cues"
+            gate_trace.append("not_news_gate:reject")
+        elif not rejection:
+            gate_trace.append("not_news_gate:pass")
+        if not rejection and ts["trash_score"] >= 0.35:
+            drop_gate, rejection = "not_trash_gate", "trash"
+            visual_skip_reason = "reject: trash/shock cues"
+            gate_trace.append("not_trash_gate:reject")
+        elif not rejection:
+            gate_trace.append("not_trash_gate:pass")
+
+        if rejection:
+            ms = image_scores_skipped(visual_skip_reason or rejection)
+            score = 0.0
+            current_stage = "dropped_text_gate"
+        else:
+            gate_trace.append("semantic_dual_model_enrichment:feature_enriched_pending_vector_models")
+            visual_stage = "scored_after_text_gates"
+            visual_skip_reason = ""
+            image_cost_saved = False
+            ms = media_scores(bool(p.get("has_media")), ts)
+            media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": (p.get("post_url") + "#media") if p.get("has_media") else "", "thumbnail":"", **ms})
+            score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
+            if not ms["is_selected_for_publication"]:
+                current_stage, rejection, drop_gate = "good_text_weak_media", ms["failure_reason"], "image_postcardness_gate"
+                gate_trace.append("image_postcardness_gate:reject")
+            elif score >= 0.45:
+                current_stage = "favorite" if score >= 0.62 else "semantic_candidate"
+                gate_trace.append("image_postcardness_gate:pass")
+            else:
+                current_stage, rejection, drop_gate = "dropped_low_score", "candidate_score_low", "candidate_score_gate"
+                gate_trace.append("candidate_score_gate:reject")
+
+        for m in scope.get("place_matches") or []:
+            place_match_rows.append({
+                "post_id": p.get("post_id"), "post_url": p.get("post_url"),
+                "matched_place_name": m.get("matched_place_name"), "canonical_name": m.get("canonical_name"),
+                "place_type": m.get("place_type"), "municipality": m.get("municipality"),
+                "priority_tier": m.get("priority_tier"), "alias_used": m.get("alias_used"),
+                "match_context": m.get("match_context"), "requires_context": m.get("requires_context"),
+                "accepted_as_region_evidence": m.get("accepted_as_region_evidence"),
+            })
+
+        row = {
+            **p, **ts, **scope, **fresh, **ad_gate, **substance, **ms,
+            "candidate_id": cid, "candidate_score": score, "current_stage": current_stage,
+            "drop_gate": drop_gate, "rejection_reason": rejection,
+            "short_summary": make_summary(text),
+            "why_this_is_about_kaliningrad": scope["region_scope_reason"],
+            "what_positive": ", ".join(ts.get("positive_hits") or []),
+            "what_neutral_or_useful": "route/place/travel context" if substance["text_substance_score"] >= 0.25 else "",
+            "what_concern": rejection or "text gates passed; image checked",
+            "image_model_report_short": ms["model_short_explanation"],
+            "risk_flags": "; ".join([rejection] if rejection else ([] if p.get("rights_policy") != "unknown" else ["rights_unknown"])),
+            "suggested_action": "manual_review" if current_stage in {"favorite","semantic_candidate"} else "reject",
+            "manual_decision":"", "reviewer_comment":"",
+            "region_scope_gate": "pass" if scope["kaliningrad_oblast_only_scope"] else "fail",
+            "visual_scoring_stage": visual_stage,
+            "visual_scoring_skip_reason": visual_skip_reason,
+            "image_scoring_cost_saved": str(image_cost_saved).lower(),
+            "image_scoring_skipped": str(image_cost_saved).lower(),
+            "discovery_edges_count": len(edge_rows),
+            "gate_order_trace": " → ".join(gate_trace),
+            "semantic_enrichment_stage": "dual_model_vector_enrichment_pending" if not rejection else "skipped_by_text_gate",
+        }
+        row.pop("place_matches", None)
         new_posts.append(row)
         increment.append({"entity_type":"post", "entity_id":p["post_id"], "source_title":p.get("source_title"), "post_url":p.get("post_url"), "first_seen_run_id":run_id, "previous_run_id":"", "current_run_id":run_id, "first_seen_at":run_now, "last_seen_at":run_now, "seen_run_count":1, "previous_stage":"", "current_stage":current_stage, "stage_transition":"new→"+current_stage, "new_this_run":"yes", "changed_this_run":"yes", "change_reason":rejection or "first_seen", "candidate_score_previous":"", "candidate_score_current":score, "candidate_score_delta":"", "media_score_previous":"", "media_score_current":ms["overall_media_score"], "media_score_delta":"", "manual_review_status":"unreviewed", "next_action":row["suggested_action"]})
         if current_stage in {"favorite", "semantic_candidate"}:
             candidates.append(row)
-        elif current_stage == "good_text_weak_media":
-            dropped.append(row)
         else:
             dropped.append(row)
+
     review_queue = sorted(candidates, key=lambda r: float(r.get("candidate_score") or 0), reverse=True)
     for i, r in enumerate(review_queue, start=1):
         r["rank"] = i
         r["status_badge"] = "READY" if r["current_stage"] == "favorite" else "NEEDS_REVIEW"
         r["new_or_seen"] = "NEW"
     favorites = [r for r in review_queue if r.get("current_stage") == "favorite"]
-    run_summary = [{"run_id":run_id,"started_at":RUN_STARTED_AT.isoformat(),"finished_at":run_now,"git_sha":os.getenv("GIT_SHA", ""),"branch":"","config_profile":"mvp1","dry_run":"1","ydb_namespace":os.getenv("REGION_TALK_YDB_NAMESPACE") or "dry-run-json","seed_file_version":"v1","source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),"posts_region_relevant":sum(1 for r in new_posts if r["region_relevance_score"]>=0.35),"posts_with_strong_media":sum(1 for r in new_posts if r["is_selected_for_publication"]),"candidates_created":len(candidates),"favorites_created":len(favorites),"dropped_news":sum(1 for r in dropped if r["rejection_reason"]=="newsiness"),"dropped_trash":sum(1 for r in dropped if r["rejection_reason"]=="trash"),"dropped_not_region":sum(1 for r in dropped if r["rejection_reason"]=="not_about_region"),"dropped_weak_media":sum(1 for r in dropped if "media" in str(r.get("rejection_reason"))),"dropped_duplicate":0,"dropped_rights":0,"llm_calls":0,"image_model_calls":len(media_rows),"errors_count":sum(1 for s in source_rows if s.get("fetch_status") == "error"),"artifact_paths":""}]
+
+    # Source profile probe MVP: derive probe metrics from fetched sample; sources are not automatically monitored from discovery.
+    posts_by_source: dict[str, list[dict[str, Any]]] = {}
+    for row in new_posts:
+        posts_by_source.setdefault(str(row.get("source_id") or ""), []).append(row)
+    enriched_source_rows: list[dict[str, Any]] = []
+    for srow in source_rows:
+        sid = str(srow.get("source_id") or "")
+        sampled = posts_by_source.get(sid, [])
+        n = len(sampled)
+        kal_hits = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
+        ad_hits = sum(1 for r in sampled if r.get("is_ad_or_promo"))
+        news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
+        trash_hits = sum(1 for r in sampled if float(r.get("trash_score") or 0) >= 0.35)
+        original_media = sum(1 for r in sampled if r.get("has_media"))
+        link_richness = sum(int(r.get("discovery_edges_count") or 0) for r in sampled)
+        monitor_score = round((kal_hits / max(1, n))*0.35 + (original_media/max(1,n))*0.20 + min(1, link_richness/10)*0.15 + max(0, 1-ad_hits/max(1,n))*0.15 + max(0, 1-news_hits/max(1,n))*0.10, 3) if n else 0.0
+        status = "probed" if n else ("profile_resolved" if srow.get("fetch_status") == "ok" else "blocked")
+        enriched_source_rows.append({**srow,
+            "source_probe_status": status, "sampled_post_count": n, "kaliningrad_hit_count": kal_hits,
+            "russia_travel_score": round(kal_hits/max(1,n),3), "authorial_voice_score": 0.5,
+            "original_media_score": round(original_media/max(1,n),3), "ad_ratio": round(ad_hits/max(1,n),3),
+            "news_ratio": round(news_hits/max(1,n),3), "trash_ratio": round(trash_hits/max(1,n),3),
+            "image_prevalence": round(original_media/max(1,n),3), "link_richness_score": round(min(1, link_richness/10),3),
+            "forwarded_origin_richness_score": round(sum(1 for r in sampled if r.get("is_forwarded_or_repost"))/max(1,n),3),
+            "source_graph_value_score": round(min(1, link_richness/10),3), "monitor_priority_score": monitor_score,
+            "source_probe_reason": "derived from recent fetched posts; no automatic monitoring without manual/probe acceptance",
+        })
+    source_rows = enriched_source_rows
+
+    summary_row = {"run_id":run_id,"started_at":RUN_STARTED_AT.isoformat(),"finished_at":run_now,"git_sha":os.getenv("GIT_SHA", ""),"branch":"","config_profile":"mvp1.x_strict_text_gates","dry_run":"1","ydb_namespace":os.getenv("REGION_TALK_YDB_NAMESPACE") or "dry-run-json","seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible","place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),"source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),"posts_region_relevant":sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),"posts_with_strong_media":sum(1 for r in new_posts if r.get("is_selected_for_publication")),"candidates_created":len(candidates),"favorites_created":len(favorites),"dropped_news":sum(1 for r in dropped if r["rejection_reason"]=="newsiness"),"dropped_trash":sum(1 for r in dropped if r["rejection_reason"]=="trash"),"dropped_not_region":sum(1 for r in dropped if r["rejection_reason"]=="reject_not_kaliningrad_oblast_only"),"dropped_ad_or_promo":sum(1 for r in dropped if r["rejection_reason"]=="reject_ad_or_promo"),"dropped_stale":sum(1 for r in dropped if r["rejection_reason"]=="reject_stale_or_missing_date"),"dropped_low_substance":sum(1 for r in dropped if r["rejection_reason"]=="reject_low_substance"),"dropped_weak_media":sum(1 for r in dropped if "media" in str(r.get("rejection_reason"))),"dropped_duplicate":0,"dropped_rights":0,"llm_calls":0,"image_model_calls":len(media_rows),"image_scoring_skipped_by_text_gate":sum(1 for r in new_posts if r.get("image_scoring_skipped") == "true"),"discovered_links":len(discovered_rows),"source_graph_edges":len(graph_edges),"errors_count":sum(1 for s in source_rows if s.get("fetch_status") == "error"),"artifact_paths":""}
+    run_summary = [summary_row]
     funnel = []
-    for stage in ["seed_source","source_monitored","post_fetched","region_relevant","strong_media","semantic_candidate","favorite"]:
-        count = {"seed_source":len(seeds),"source_monitored":len(source_rows),"post_fetched":len(posts),"region_relevant":run_summary[0]["posts_region_relevant"],"strong_media":run_summary[0]["posts_with_strong_media"],"semantic_candidate":len([r for r in candidates if r["current_stage"]=="semantic_candidate"]),"favorite":len(favorites)}[stage]
+    for stage in ["seed_source","source_monitored","post_fetched","fresh","kaliningrad_oblast_only","non_ad","substantive","strong_media","semantic_candidate","favorite"]:
+        count = {"seed_source":len(seeds),"source_monitored":len(source_rows),"post_fetched":len(posts),"fresh":sum(1 for r in new_posts if r.get("fresh_enough")),"kaliningrad_oblast_only":summary_row["posts_region_relevant"],"non_ad":sum(1 for r in new_posts if not r.get("is_ad_or_promo")),"substantive":sum(1 for r in new_posts if float(r.get("text_substance_score") or 0) >= 0.25),"strong_media":summary_row["posts_with_strong_media"],"semantic_candidate":len([r for r in candidates if r["current_stage"]=="semantic_candidate"]),"favorite":len(favorites)}[stage]
         funnel.append({"stage":stage,"current_run_count":count,"previous_run_count":"","delta":"","total_cumulative":count,"top_rejection_reasons":"","notes":""})
     sheets = {
-        "00_readme":[{"field":"what","value":"Region Talk MVP-1 Candidate Report Only; no Telegram/VK publishing."},{"field":"run_id","value":run_id},{"field":"generated_at","value":run_now}],
+        "00_readme":[{"field":"what","value":"Region Talk MVP-1.x Candidate Report Only; strict text gates before image scoring; no Telegram/VK publishing."},{"field":"run_id","value":run_id},{"field":"generated_at","value":run_now}],
         "01_run_summary":run_summary,
         "02_increment":increment,
         "03_funnel":funnel,
@@ -403,11 +843,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "09_image_quality":media_rows,
         "10_good_text_weak_media":[r for r in dropped if r.get("current_stage") == "good_text_weak_media"],
         "11_sources_seed":source_seed_rows,
-        "12_sources_discovered":[],
+        "12_sources_discovered":discovered_rows,
         "13_sources_monitored":source_rows,
         "14_verifier_reports":[],
         "15_manual_decisions":[{"candidate_id":"","manual_decision":"favorite|reject|approve_for_preview|approve_for_queue|block_source","reviewer":"","reviewed_at":"","reviewer_comment":"","rights_override":"","source_status_override":""}],
-        "16_publish_preview_future":[{"note":"Future only. REGION_TALK_DISABLE_PUBLISH=1; no real publishing in MVP-1."}],
+        "16_publish_preview_future":[{"note":"Future only. REGION_TALK_DISABLE_PUBLISH=1; no real publishing in MVP-1.x."}],
+        "17_source_graph_edges":graph_edges,
+        "18_place_lexicon_matches":place_match_rows,
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)
@@ -416,7 +858,6 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.md").write_text(render_md(payload), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.html").write_text(render_html(payload), encoding="utf-8")
-    # Kaggle output-root convenience copies
     for p in [xlsx, output_dir / f"region-talk-candidates-{run_id}.json", output_dir / f"region-talk-candidates-{run_id}.md", output_dir / f"region-talk-candidates-{run_id}.html", output_dir / f"region-talk-candidates-{run_id}.csv"]:
         target = Path.cwd() / p.name
         if target.resolve() != p.resolve():
@@ -426,7 +867,6 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "run_id": run_id, "xlsx": str(latest), "summary": run_summary[0]}, ensure_ascii=False, indent=2), encoding="utf-8")
     payload["latest_xlsx"] = str(latest)
     return payload
-
 
 def make_summary(text: str) -> str:
     clean = re.sub(r"\s+", " ", text or "").strip()
