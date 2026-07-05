@@ -122,8 +122,15 @@ On 2026-07-05 the operator reported that Telegram Афиша did not look active
 
 The first mitigation in SHA `85ea298a` incorrectly let any event with an existing `tg_event_post_id` bypass execution spacing. That was unsafe: an existing-post job can still send a new public message when the desired mode changes (`text`/`photo_caption`/`album_caption`). Production then burst new `@kldevents` message ids `1906`, `1907`, `1908`, `1911`, `1916`, `1919` within minutes and the synchronous premium editor hit Telegram `FloodWait`. Follow-up hotfix restores the hard execution gate for every `tg_event_publish`; no-post rows still outrank edit rows in sorting, but no job may bypass the 10-minute public-send cadence.
 
+## Medallion Alias Regression — 2026-07-05 11:09 UTC
+
+Production audit after the operator report found that the Музей Мирового океана Telegram medallion was selected for unrelated recent posts because the short alias `ММО` was matched as a raw substring. Examples: event `6534` matched `ммо` inside `программой`, event `6530` inside `Эммой`, event `6660` inside `фильмом`, event `6656` inside `фильмом`. This made the channel show stray `ММО` medallions and made it look as if the medallion had been applied to multiple unrelated posts. The corrective code requires medallion aliases to match as standalone tokens/phrases, preserving explicit full aliases/venue/source URL matches while blocking acronym-in-word false positives.
+
+Compensating repair is required for already edited public messages whose wrong medallion block was inserted before this fix; delayed premium-editor retries alone are insufficient because the editor's normal idempotency path only inserts missing expected blocks and does not remove wrong historical blocks.
+
 ## Prevention
 
 - Regression tests guard against edit jobs consuming the announcement lane.
+- Regression tests guard that short Telegram medallion acronyms such as `ММО` do not match inside ordinary words and still match when used as standalone aliases.
 - Incident record must be raised for any future changes to Telegram spacing, fresh-lane ordering, or premium/medallion editor scheduling.
 - Production closure requires proving that the next slots are real new top-of-channel posts when no-post events are waiting, not just any `tg_event_publish done` row.

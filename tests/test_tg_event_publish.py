@@ -2118,6 +2118,12 @@ def _medallion_test_config():
                 "aliases": ["Историко-художественный музей"],
                 "emoji_ids": ids("h"),
             },
+            "world-ocean-museum": {
+                "label": "ММО",
+                "priority": 40,
+                "aliases": ["Музей Мирового океана", "ММО", "World Ocean Museum"],
+                "emoji_ids": ids("m"),
+            },
         },
     }
 
@@ -2143,6 +2149,45 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
+
+
+def test_tg_medallions_do_not_match_short_acronym_inside_words(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Показ фильма «Переселенцы. История Первых»",
+            description="В рамках программы состоится творческая встреча с Эммой Басовой.",
+            search_digest="Показ фильма и встреча с Эммой Басовой.",
+            location_name="Дом молодёжи",
+        )
+        slugs = [item["slug"] for item in tg_medallions.resolve_event_medallions(event)]
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert "world-ocean-museum" not in slugs
+
+
+def test_tg_medallions_match_short_acronym_as_standalone_token(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Лекция ММО",
+            description="Встреча в ММО.",
+            location_name="Музей Мирового океана",
+        )
+        slugs = [item["slug"] for item in tg_medallions.resolve_event_medallions(event)]
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert "world-ocean-museum" in slugs
 
 
 def test_tg_event_album_footer_uses_compact_social_gap():

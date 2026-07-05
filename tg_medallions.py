@@ -24,6 +24,31 @@ def _norm(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").replace("ё", "е").lower()).strip()
 
 
+_ALIAS_BOUNDARY_RE = re.compile(r"[0-9a-zа-я]", re.IGNORECASE)
+
+
+def _alias_matches_haystack(alias: str, haystack: str) -> bool:
+    """Return true only when alias appears as a standalone token/phrase.
+
+    Telegram medallion aliases may be very short (`ММО`). Plain substring
+    matching turns that into false positives inside ordinary words such as
+    `программой`, `Эммой`, `фильмом`. Boundaries keep URL/domain aliases and
+    multi-word venue names working while preventing short acronym drift.
+    """
+
+    if not alias or not haystack:
+        return False
+    start = haystack.find(alias)
+    while start >= 0:
+        end = start + len(alias)
+        before = haystack[start - 1] if start > 0 else ""
+        after = haystack[end] if end < len(haystack) else ""
+        if not _ALIAS_BOUNDARY_RE.match(before) and not _ALIAS_BOUNDARY_RE.match(after):
+            return True
+        start = haystack.find(alias, start + 1)
+    return False
+
+
 def _truthy_env(name: str, default: bool = True) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -148,7 +173,7 @@ def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[di
         if slug in selected or slug in suppress_alias_slugs:
             continue
         aliases = item.get("aliases_norm") or []
-        if aliases and any(alias in haystack for alias in aliases):
+        if aliases and any(_alias_matches_haystack(alias, haystack) for alias in aliases):
             add(slug, "alias_match")
 
     ordered = sorted(

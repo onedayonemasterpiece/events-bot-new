@@ -176,6 +176,7 @@ Runtime contract:
 - events of «80 историй о главном» use the curated `kgd80-znanie` composite when present: `80 историй` is drawn on top and `Знание` is shifted behind it by two cells, making the pair six cells wide instead of two separate 4×4 medallions;
 - standalone `znanie-russia` remains available for non-KGD80 events, while standalone KGD80 is intentionally not kept in the Telegram pack/config;
 - because `kgd80-znanie` occupies only one visual slot, a matching venue/location medallion can be rendered as the second slot for KGD80 events without reintroducing the broken three-wide mobile layout;
+- Telegram alias matching is token/phrase-bounded, not raw substring matching: short acronyms such as `ММО` must appear as standalone tokens or an explicit full alias/venue/source signal, so ordinary words like `программой`, `Эммой` or `фильмом` do not attach the Музей Мирового океана medallion;
 - disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
 
 The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Wider composites use the same row step and 100px columns (for example, `kgd80-znanie` is `600×353.5` before slicing into 6×4 cells). Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.
