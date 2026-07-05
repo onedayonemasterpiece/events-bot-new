@@ -135,6 +135,24 @@ def _event_haystack(event: Any) -> str:
     return _norm(" | ".join(parts))
 
 
+def _event_location_haystack(event: Any) -> str:
+    parts: list[str] = []
+    for attr in ("location_name", "location_address", "city"):
+        value = getattr(event, attr, None)
+        if value:
+            parts.append(str(value))
+    return _norm(" | ".join(parts))
+
+
+def _event_identity_haystack(event: Any) -> str:
+    parts: list[str] = []
+    for attr in ("title", "festival", "source_post_url", "source_vk_post_url", "tg_source_author"):
+        value = getattr(event, attr, None)
+        if value:
+            parts.append(str(value))
+    return _norm(" | ".join(parts))
+
+
 def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[dict[str, Any]]:
     cfg = medallion_config()
     if not cfg.get("enabled"):
@@ -144,6 +162,8 @@ def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[di
         return []
     max_items = min(2, int(limit or cfg.get("max_medallions") or MAX_MEDALLIONS_DEFAULT))
     haystack = _event_haystack(event)
+    location_haystack = _event_location_haystack(event)
+    identity_haystack = _event_identity_haystack(event)
     selected: dict[str, dict[str, Any]] = {}
 
     def add(slug: str, reason: str, priority_boost: int = 0) -> None:
@@ -169,12 +189,15 @@ def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[di
             add("kgd80-80-stories", "kgd80_curated", -40)
             add("znanie-russia", "kgd80_curated_partner", -35)
 
+    identity_alias_slugs = {"znanie-russia"}
     for slug, item in items.items():
         if slug in selected or slug in suppress_alias_slugs:
             continue
         aliases = item.get("aliases_norm") or []
-        if aliases and any(_alias_matches_haystack(alias, haystack) for alias in aliases):
-            add(slug, "alias_match")
+        match_scope = str(item.get("match_scope") or ("identity" if slug in identity_alias_slugs else "location")).strip().lower()
+        alias_haystack = identity_haystack if match_scope == "identity" else location_haystack
+        if aliases and alias_haystack and any(_alias_matches_haystack(alias, alias_haystack) for alias in aliases):
+            add(slug, f"{match_scope}_alias_match")
 
     ordered = sorted(
         selected.values(),

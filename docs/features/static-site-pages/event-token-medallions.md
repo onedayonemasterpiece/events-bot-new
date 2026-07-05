@@ -176,6 +176,7 @@ Runtime contract:
 - events of «80 историй о главном» use the curated `kgd80-znanie` composite when present: `80 историй` is drawn on top and `Знание` is shifted behind it with a one-cell overlap, making the pair seven cells wide instead of two separate 4×4 medallions;
 - standalone `znanie-russia` remains available for non-KGD80 events, while standalone KGD80 is intentionally not kept in the Telegram pack/config; `world-ocean-museum` is also omitted from the one Telegram pack to leave capacity for the wider 7×4 KGD80+Znanie composite;
 - because `kgd80-znanie` occupies only one visual slot, a matching venue/location medallion can be rendered as the second slot for KGD80 events without reintroducing the broken three-wide mobile layout;
+- ordinary Telegram venue/location medallions match aliases only against `location_name`, `location_address` and `city`; descriptions, search digests, film/program text and festival labels must not add venue medallions;
 - Telegram alias matching is token/phrase-bounded, not raw substring matching: short acronyms such as `ММО` must appear as standalone tokens or an explicit full alias/venue/source signal, so ordinary words like `программой`, `Эммой` or `фильмом` do not attach the Музей Мирового океана medallion;
 - disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
 

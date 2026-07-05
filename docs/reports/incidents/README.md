@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-05-tg-medallion-description-alias-drift.md`
+  - Scope: Telegram custom-emoji medallion selection for event posts.
+  - Must not regress: ordinary venue medallion aliases must match only actual location fields, not event descriptions/search digests/festival labels; curated program medallions such as KGD80 remain explicit exceptions.
 - `INC-2026-07-05-tg-afisha-edit-spacing-premium-medallions.md`
   - Scope: Telegram event publishing due ordering/spacing for new posts versus existing-message edits, plus Premium/custom-emoji medallion enrichment timing.
   - Must not regress: existing Telegram post edits must not consume the scarce new-post spacing lane while no-post events wait; canonical `tg_event_publish` posts must run Premium/medallion editor evidence as part of publication, not as an untracked delayed gap.

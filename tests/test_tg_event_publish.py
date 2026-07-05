@@ -2118,6 +2118,31 @@ def _medallion_test_config():
                 "aliases": ["Историко-художественный музей"],
                 "emoji_ids": ids("h"),
             },
+
+            "yantar-hall": {
+                "label": "Янтарь холл",
+                "priority": 11,
+                "aliases": ["Янтарь холл"],
+                "emoji_ids": ids("y"),
+            },
+            "kant-island": {
+                "label": "Остров Канта",
+                "priority": 21,
+                "aliases": ["Остров Канта", "Кафедральный собор"],
+                "emoji_ids": ids("o"),
+            },
+            "tretyakovka-kaliningrad": {
+                "label": "Третьяковка",
+                "priority": 31,
+                "aliases": ["Филиал Третьяковской галереи", "Третьяковка"],
+                "emoji_ids": ids("t"),
+            },
+            "simfoniya-vetra": {
+                "label": "Симфония ветра",
+                "priority": 91,
+                "aliases": ["Симфония ветра"],
+                "emoji_ids": ids("s"),
+            },
             "world-ocean-museum": {
                 "label": "ММО",
                 "priority": 40,
@@ -2189,6 +2214,51 @@ def test_tg_medallions_match_short_acronym_as_standalone_token(monkeypatch):
 
     assert "world-ocean-museum" in slugs
 
+
+
+def test_tg_medallions_match_venue_aliases_only_against_location_fields(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Таланты и покойники",
+            description=(
+                "Фильм рассказывает про остров Канта, Кафедральный собор "
+                "и другие достопримечательности региона."
+            ),
+            search_digest="Культурное наследие, остров Канта и Кафедральный собор.",
+            location_name="Филиал Третьяковской галереи",
+            location_address="Парадная наб. 3",
+        )
+        slugs = [item["slug"] for item in tg_medallions.resolve_event_medallions(event)]
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert slugs == ["tretyakovka-kaliningrad"]
+
+
+def test_tg_medallions_do_not_add_festival_badge_as_location_match(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="ROCK N ROLL CITY с программой Встречая закат",
+            description="Концерт проходит в рамках фестиваля искусств Симфония ветра.",
+            festival="Симфония ветра",
+            location_name="Янтарь холл",
+            location_address="Ленина 11",
+        )
+        slugs = [item["slug"] for item in tg_medallions.resolve_event_medallions(event)]
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    assert slugs == ["yantar-hall"]
 
 def test_tg_event_album_footer_uses_compact_social_gap():
     event = _event()

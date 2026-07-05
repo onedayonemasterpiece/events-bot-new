@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 
 - **Telegram event medallions**: require standalone token/phrase matches for medallion aliases so short acronyms such as `ММО` no longer trigger the Музей Мирового океана medallion inside ordinary words like `программой`, `Эммой` or `фильмом`.
 - **Telegram Afisha publishing**: restored the hard 10-minute execution gate for every `tg_event_publish` that may send a public message, while keeping no-post announcements ordered ahead of existing-message edit/reconciliation jobs; Premium/custom-emoji medallion enrichment stays delayed to avoid Telegram FloodWait bursts.
@@ -51,6 +52,7 @@
 - **Static site pages / event medallions design**: documented the event-detail medallion surface for organizer avatars, Pushkin-card, charity, kids/family and video/recording facts; clarified that medallions belong to concrete event pages, while listing cards only gain weekday labels and plain event types without `#`.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Visual guide digest Telegram captions now end with a blank-line social footer linking to the current Telegram target, Max and VK (`uhtykaliningrad`), matching the Afisha footer pattern.
 - **Incident / event 6045 static defect (INC-2026-07-03)**:
   Telegram Monitoring no longer treats vinyl/record metadata such as
@@ -612,6 +614,7 @@
 - **Guide Excursions / Hook + Region-Fit Enrichment**: added two server-side Gemma-only enrich passes for guide occurrences: `main_hook` and `audience_region_fit (locals|tourists|mixed)`, materialized into `fact_pack_json` and `GuideFactClaim` so digest copy can lead with a grounded hook while admin facts remain inspectable.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **CrumpleVideo / CherryFlash Story Fanout Blocking Rule**: the shared Kaggle `story_publish.py` helper now treats only the first ordered story target as the blocking gate for render/publish success; downstream repost/fanout targets are best-effort by default, so `BOOSTS_REQUIRED` or another target-local failure on `@lovekenig`/later channels no longer aborts video generation or prevents attempts on subsequent targets that can still accept the repost.
 - **CherryFlash / Telegram Story Media Profile**: the shared Kaggle story helper now prepares the exact `SendStoryRequest` video as a stricter Telegram-safe `720x1280 H.264/AAC` file (`b:v=900k`, `maxrate=1200k`, `bufsize=2400k`, `bf=0`, `avc1`, `+faststart`, `AAC 128k`) and writes media diagnostics into `story_publish_report.json`, after the `v16-story-native-720p` runs showed that a render can pass preflight but still fail with `MEDIA_FILE_INVALID` on media upload.
 - **Operations / Prod Disk Pressure Recovery**: production Fly volume `/data` was exhausted by accumulated sqlite backups plus runtime file logs, which made the bot fail during startup logging with `OSError: [Errno 28] No space left on device`. Old backup artifacts were cleaned from the volume, the bot was restarted successfully, and production `ENABLE_RUNTIME_FILE_LOGGING` is now disabled by default again to avoid another silent disk-pressure outage on the current volume budget.
@@ -660,6 +663,7 @@
 - **CrumpleVideo / Story Video Cover**: video stories now explicitly request `video_timestamp=0`, so the first frame of the rendered CrumpleVideo is used as the preview/cover frame.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Smart Event Update / Copy-Post Duplicate Guard**: Smart Update now converges same-day reposts with near-identical source text even when ticket URLs differ, and it bridges `doors/start` variants like `сбор гостей 19:00, начало 20:00` so one show no longer spawns parallel `19:00` and `20:00` cards across Telegram/VK copy posts.
 - **Video Afisha 2D / MoviePy 2.x Resize Compat**: `video_announce.video_afisha_2d.create_advanced_scene()` now uses `clip.resized(...)` when MoviePy 2.x exposes the renamed API and falls back to `clip.resize(...)` on older builds, and the selection regression suite now imports `SelectionContext` from `video_announce.custom_types` instead of the removed `video_announce.types` alias.
 - **CrumpleVideo / Story Target Ordering**: story fanout can now be pinned with explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, so production order no longer depends on the profile `main` channel and can be fixed to `@kenigevents` first, then `@lovekenig` with a `600s` delay.
@@ -790,6 +794,7 @@
 - **CrumpleVideo / `/v`**: Tomorrow-mode selection no longer treats fairs with inferred fallback `end_date` as ongoing multi-day events, and intro date range for confirmed long-running items now clamps to the selected target window instead of leaking the historical start date.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **VK Auto Queue / Crash Recovery + RAM Guard**: startup recovery now increments attempts only for `auto:*` locked rows and translates them to terminal `failed` after `VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS` instead of recycling the same crash-interrupted post forever; the queue also defaults to conservative row-by-row processing (`VK_AUTO_IMPORT_PREFETCH=0`) and caps live VK photo fetches via `VK_AUTO_IMPORT_MAX_PHOTOS=4` to reduce OOM pressure.
 - **Media / Upload Diagnostics**: managed poster uploads no longer log successful Yandex/Supabase writes under misleading `CATBOX ...` summary labels; runtime logs now use `poster_upload ...` and `storage_msg=...`, so `storage_primary` is clearly visible as managed storage success instead of a Catbox incident.
 - **CherryFlash / Live Runner No-Wait Guard**: `scripts/run_cherryflash_live.py` now rejects `--no-wait` because CherryFlash render startup continues in a background asyncio task after session creation; exiting the runner early created misleading local `RENDERING` sessions without any real visible Kaggle kernel run.
@@ -809,6 +814,7 @@
 - **Smart Update / Matching**: Added a narrow `copy_post_ticket_same_day` deterministic rescue plus `city_noise_copy_post_shortlist` expansion for multi-event repost families, so same-date child events can still converge on existing rows when one source injects noisy `city/location_name` but the repost keeps the same ticket link and near-identical source text.
 - Added `Smart Update ice-cream` `v2.16.1 iter3` dry-run duel artifacts with stricter anti-expansion guardrails, updated stage profiling, and new consultation synthesis for the `iter3` prompt-contract round.
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Telegram Monitoring / Exhibition Duplicates**: Telegram `default_location` no longer blindly overwrites an explicitly grounded off-site venue from the post text, and Smart Update now has an earlier deterministic `longrun exhibition exact-title` rescue for same-range exhibition reposts / multi-slot posts, preventing the live duplicate patterns seen on the March 2026 prod snapshot.
 - **Telegraph Month Pages**: `/pages_rebuild` month splitting now also splits oversized `Постоянные выставки` tails across continuation pages (instead of forcing every exhibition onto the final page), and the splitter can fall back all the way to `no ICS + no details` before publishing.
 - **Scheduler / Superadmin Chat Resolution**: scheduled and recovery admin reports now resolve the target chat from the registered superadmin in SQLite first, with `ADMIN_CHAT_ID` kept only as a legacy fallback; this removes the hidden dependency on a separate secret for `vk_auto_import`, `tg_monitoring`, `/parse`, `/3di` recovery, `general_stats`, and related scheduler notifications.
@@ -894,6 +900,7 @@
 - **Smart Update / Gemma Event Copy Retrospective**: Expanded the canonical `baseline -> v2.14` retrospective with attributed `Opus` and `Gemini` evaluation signals from existing consultation rounds, explicitly separating external-model judgments from the final local synthesis.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Guide Excursions / Materialized Digest Media**: guide Kaggle scan now exports per-post media files, server import persists them under `GUIDE_MEDIA_STORE_ROOT`/`guide_monitor_post.media_assets_json`, digest publish sends albums only from those materialized assets, and production Fly runtime keeps `GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED=0`; publish-time `forward -> file_id` / Telethon / web fallbacks are no longer used, and missing media now abort publication instead of silently degrading to text-only.
 - **Telegram Monitoring / Recovery + Statuses**: `tg_monitoring` now registers running Kaggle kernels in the shared `kaggle_registry`, `kaggle_recovery` can resume completed kernels after bot restarts and re-import their `telegram_results.json`, and interrupted runs no longer fall through to false `success` with zero metrics; completed empty reports are now marked `empty` instead.
 - **3D Preview / Kaggle Runtime Attachments**: Preview3D now follows the same Kaggle split-secrets flow as Telegram Monitoring: separate cipher/key datasets, longer dataset propagation wait, and shared `KaggleClient.push_kernel(...)` handling for `dataset_sources`, so manual/prod `/3di` runs no longer fail at notebook startup when Kaggle attaches runtime datasets slowly.
@@ -1011,6 +1018,7 @@
 - **Ops / Rebuild**: `/rebuild_event` now supports `--regen-desc` to regenerate fact-first descriptions from stored facts before enqueuing rebuild jobs.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Admin Assistant / Coverage**: `/a` allowlist is now synced with the registered slash-command surface (including `/rebuild_event`, `/telegraph_cache_stats`, `/telegraph_cache_sanitize`, `/ik_poster`, `/start`, `/register`, `/assist_cancel`, and stateful `/cancel`), and explicit command-like inputs such as `rebuild_event 123` or `/recent_imports 48` now route deterministically before Gemma fallback.
 - **Admin Assistant / Recent Imports Routing**: `/a` now recognizes source-origin list requests like “события из телеграм и вк за сутки” as `/recent_imports` instead of drifting into the calendar-day `/events` date picker; `/help` also exposes `/recent_imports` and `/popular_posts` for better report discoverability.
 - **Kaggle Polling / `/tg` + `/v`**: Kaggle-driven runs now confirm notebook metadata is bound to the expected temporary dataset(s) before polling and re-check the binding before consuming terminal output, preventing stale/foreign notebook runs from being mistaken for the current Telegram monitor or video session.
@@ -1248,15 +1256,18 @@
 
 ## [1.10.3] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Fixed logic in automatic generation to reliably detect and process events with missing previews ("gaps"), scanning the last 14 days.
 - **3D Preview**: Added an extra scheduled run at 17:15 to ensure previews are ready for the 18:00 pinned button update.
 
 ## [1.10.2] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Filtered out past events during parsing to prevent them from being announced.
 
 ## [1.10.1] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Fixed `TypeError` in parsing results summary when using date objects (Philharmonia parser).
 
 ## [1.10.0] - 2026-01-24
@@ -1268,6 +1279,7 @@
   - Proper date normalization to avoid parsing errors.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Source Parsing**: Updated `requirements.txt` to include `beautifulsoup4` and `lxml` for local parsing utilities if needed.
 
 ## [1.9.13] - 2026-01-24
@@ -1282,15 +1294,18 @@
 
 ## [1.9.11] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Scheduler**: Fixed `_job_wrapper` to accept `**kwargs`, resolving `ValueError` when registering jobs with keyword arguments (like `3di_scheduler` with `chat_id`).
 
 ## [1.9.10] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Scheduler**: Added `_register_job` wrapper to prevent scheduler startup crashes if a single job fails to register.
 - **Scheduler**: Added explicit "SCHED skipping" logs when optional jobs (source parsing, 3di) are disabled via env.
 
 ## [1.9.9] - 2026-01-24
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **CrumpleVideo**: Improved FFmpeg robustness with file existence checks, audio merge validation, and mpeg4 fallback.
 - **Video Announce**: Enhanced polling reliability with retry logic (3 attempts) and recursive file search in output directory.
 
@@ -1308,6 +1323,7 @@
 
 ## [1.9.6] - 2026-01-21
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Video Announce**: Improved random_order fallback and added notebook logging.
 - **Tests**: Fixed import error in `test_video_announce_selection.py`.
 
@@ -1327,6 +1343,7 @@
 - **Source Parsing**: Логи теперь сохраняются в Persistent Volume `/data/parse_debug`.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Source Parsing**: Улучшена обработка ошибок в боте и на сервере, предотвращены "молчаливые" падения.
 - **Source Parsing**: OCR отключен по умолчанию для источника `tretyakov` (`SOURCE_PARSING_DISABLE_OCR_SOURCES`) для стабильности.
 - **CrumpleVideo**: Test "Tomorrow" renders now use lower samples and resolution to speed up single-scene previews.
@@ -1335,6 +1352,7 @@
 
 ## [1.9.3] - 2026-01-20
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Source Parsing**: Исправлена нормализация локаций Третьяковки — теперь сохраняется информация о сцене (`Кинозал`/`Атриум`), что позволяет различать события в одном месте в одно время. Ранее события в разных залах ошибочно определялись как дубликаты.
 - **Source Parsing**: Добавлен label `🎨 Третьяковка` в отчёты `/parse`.
 - **Kaggle Assets**: Preserve existing Kaggle kernel dataset sources while appending new ones, and restore `generate_intro_image` in the CrumpleVideo notebook.
@@ -1343,12 +1361,15 @@
 
 ## [1.9.2] - 2026-01-20
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Kaggle Assets**: Fixed `ModuleNotFoundError` by moving assets and `pattern_preview.py` to a dedicated Kaggle Dataset (`video-announce-assets`) and mounting it in the kernel.
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - CrumpleVideo Kaggle kernel now loads `pattern_preview` via the `video-announce-assets` dataset instead of local files.
 
 ## [1.9.1] - 2026-01-20
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Kaggle Kernel ID**: Fixed a bug where `kaggle_client.py` was forcing the legacy `video-afisha` kernel ID, preventing `CrumpleVideo` updates.
 - **Intro Visuals**: Integrated verified `pattern_preview` logic into the `CrumpleVideo` kernel to ensure correct fonts and alignment in production.
 - **Outro Animation**: Disabled physics simulation (crumpling) for the Outro scene, ensuring it remains static/readable.
@@ -1364,11 +1385,13 @@
 ## [1.8.2] - 2026-01-07
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Channel Navigation Buttons**: Buttons ("Today", "Tomorrow" etc.) are now ONLY added if the post contains `#анонс`, `#анонсКалининград` or `#анонскалининград` hashtags. Fixes EVE-13 where buttons appeared in all channel posts.
 
 ## [1.8.1] - 2026-01-05
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Channel Navigation Buttons**: Исправлено получение постов канала — добавлен `channel_post` в `allowed_updates` webhook.
 - **Channel Navigation Buttons**: Исправлен доступ к `db` и `bot` в хэндлере — теперь берутся из модуля `main`.
 - **Channel Navigation Buttons**: Исправлен фильтр команд — проверка `/` вынесена внутрь хэндлера.
@@ -1404,6 +1427,7 @@
   - Верификация контента Telegraph страниц (проверка наличия 🎟, Билеты, руб.)
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Telegraph PAGE_ACCESS_DENIED Fallback**: При ошибке редактирования Telegraph страницы (PAGE_ACCESS_DENIED) теперь автоматически создаётся новая страница вместо сбоя.
 - **Telegraph Rebuild on Event Update**: Вызов `update_event_ticket_status` теперь триггерит перестройку Telegraph страницы, гарантируя актуальность данных о билетах.
 - **Dom Iskusstv Updated Events Links**: Ссылки на Telegraph отображаются для обновлённых событий (добавлено отслеживание `updated_event_ids`).
@@ -1427,6 +1451,7 @@
 ## [1.7.6] - 2026-01-02
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**:
   - **Notebook Cleanup**: Kaggle notebook now performs aggressive cleanup (`rm -rf`) of Blender binary and image directories before completion. This prevents the bot from downloading massive amount of data (hundreds of MBs) and ensures only the result JSON is retrieved, fixing "Result not applied" errors.
 
@@ -1436,6 +1461,7 @@
 - **Telegraph**: Для событий с длинным описанием (>500 символов) теперь отображается краткое описание (`search_digest`) над полным текстом, разделённое горизонтальной линией. Улучшает читаемость страниц событий.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Tretyakov Parser**: 
   - Исправлена навигация по календарю — теперь парсер корректно находит все даты через стрелку `.week-calendar-next`.
   - Исправлено извлечение времени — парсер теперь прокручивает календарь к нужной дате перед кликом, устраняя ошибки `00:00` для дат на других страницах календаря.
@@ -1458,6 +1484,7 @@
 ## [1.7.1] - 2026-01-02
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Fixed argument parsing in `/3di` command to support running from image captions and avoid errors when `message.text` is None (aiogram v3 compatibility).
 
 ## [1.7.0] - 2026-01-02
@@ -1474,6 +1501,7 @@
 ## [1.6.10] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Source Parsing**: Исправлено формирование `short_description` для событий из `/parse`. Усилен промпт LLM — добавлены подробные правила генерации `short_description` (REQUIRED поле, one-sentence summary с примерами). Убран fallback на `full_description` (многострочный текст), fallback на title используется только в крайнем случае с логированием warning.
 - **Special Pages**: Added support for 3D generated previews (`preview_3d_url`) in special pages. If available, the 3D preview is used as the main event image, prioritizing it over regular photos.
 
@@ -1496,6 +1524,7 @@
 ## [1.6.7] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Fixed critical bug where database session variable shadowed the user session dictionary, causing "AsyncSession object does not support item assignment" error.
 
 ## [1.6.6] - 2026-01-01
@@ -1508,6 +1537,7 @@
 ## [1.6.5] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**:
   - Increased output download retry limit to 10 attempts (50s total timeout).
   - Implemented automatic Month Page rebuild triggering after 3D preview application.
@@ -1516,21 +1546,25 @@
 ## [1.6.4] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Added 3 retry attempts for downloading output.json from Kaggle (handles API race conditions).
 
 ## [1.6.3] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Added 15s delay after dataset creation in handler (syncing pattern with video_announce) to ensure dataset availability before kernel start.
 
 ## [1.6.2] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**: Added 60s retry loop for payload detection in Kaggle notebook to handle dataset mounting latency.
 
 ## [1.6.1] - 2026-01-01
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **3D Preview**:
   - Fixed payload path detection in Kaggle notebook (now uses `rglob`).
   - Added "fail fast" logic in notebook if payload is missing.
@@ -1569,16 +1603,19 @@
 ## [1.4.5] – 2025-12-31
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Muzteatr Parser**: Fixed empty descriptions by extracting text from `og:description` meta tags (site structure changed).
 
 ## [1.4.4] - 2025-12-31
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Dramteatr Parser**: Fixed DOM traversal issue where date block was missed because it is a sibling of the link wrapper.
 
 ## [1.4.3] - 2025-12-31
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Dramteatr Parser**: Fixed date extraction (incomplete dates like "31 ДЕКАБР") using CSS selectors.
 - **Parsing**: Improved duplicate detection with fuzzy title matching (Codex).
 - **Video Announce**: Filter out "sold_out" events from video digests by default.
@@ -1593,6 +1630,7 @@
 ## [1.4.1] - 2025-12-31
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Source Parsing**: Раскомментированы блоки Драмтеатра и Музтеатра в ноутбуке `ParseTheatres`.
 
 ## [1.4.0] - 2025-12-31
@@ -1604,6 +1642,7 @@
 - **Source Parsing**: Улучшен Kaggle-ноутбук `ParsePyramida` для более надежного парсинга.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **System**: Исправлен конфликт `sys.modules` при запуске бота, вызывавший ошибку доступа к базе данных (`get_db() -> None`) в динамически загружаемых модулях.
 - **Month/Weekend Pages**: Исправлено отсутствие дат и времени на страницах месяцев и выходных в Telegraph. Теперь дата и время отображаются корректно в формате "_31 декабря 19:00, Место, Город_".
 ## [1.3.7] - 2025-12-31
@@ -1619,6 +1658,7 @@
 - **/parse rebuild**: Убрана автоматическая пересборка Telegraph страниц после `/parse` — теперь используется стандартная очередь отложенных задач.
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **/parse month_pages**: При добавлении событий через `/parse` теперь гарантированно создаются задачи `month_pages` для всех затронутых месяцев for deferred rebuild.
 - **Deferred Rebuilds**: Исправлен обход отложенности — `_drain_nav_tasks` больше не создаёт немедленные follow-up задачи если уже есть отложенная задача для event_id. Это предотвращает преждевременную пересборку страниц Telegraph.
 - **VK Inbox**: Исправлено отсутствие ссылки на Telegraph страницу в отчёте оператору ("✅ Telegraph — "). Теперь бот ожидает создания страницы перед отправкой ответа (до 10 секунд).
@@ -1636,17 +1676,20 @@
 ## [1.3.5] - 2025-12-29
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Pyramida**: Исправлен парсинг дат в формате `DD.MM.YYYY HH:MM` (например `21.03.2026 18:00`). Ранее такие даты не распознавались и события не добавлялись.
 
 ## [1.3.4] - 2025-12-29
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Pyramida**: Исправлена ошибка ("missing FSInputFile"), из-за которой не отправлялся JSON файл с результатом парсинга.
 - **Pyramida**: Включено OCR для событий, добавляемых через кнопку в VK Review (ранее работало только для `/parse`).
 
 ## [1.3.3] - 2025-12-29
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Pyramida**: Добавлено отображение статуса работы Kaggle (Running/Poling) в чате. Теперь пользователь видит прогресс выполнения ноутбука.
 
 ## [1.3.2] - 2025-12-29
@@ -1657,6 +1700,7 @@
 ## [1.3.1] - 2025-12-29
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **Pyramida**: Исправлен парсинг описания событий (корректный селектор для Playwright/BS4)
 - **Pyramida**: Добавлена отправка JSON файла с результатами парсинга в чат
 - **Docs**: Уточнено, что OCR для Pyramida не выполняется
@@ -1676,6 +1720,7 @@
 - **docs**: Документация `/parse` в `docs/pipelines/source-parsing.md`
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **source_parsing**: События из `/parse` теперь корректно появляются в ежедневном анонсе — исправлен подсчёт новых vs обновлённых событий
 - **source_parsing**: Отчёт теперь показывает 🔄 Обновлено для существующих событий (ранее не отображалось)
 - **source_parsing**: Добавлено debug-логирование в `find_existing_event` для диагностики
@@ -1685,6 +1730,7 @@
 ## [1.2.15] - 2025-12-28
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - **source_parsing**: Исправлено добавление событий — теперь используется `persist_event_and_pages` вместо несуществующего `persist_event_draft`
 - **source_parsing**: Добавлена отправка JSON файлов из Kaggle в ответ на `/parse`
 - **source_parsing**: Улучшено логирование создания событий
@@ -1700,20 +1746,24 @@
 ## [1.2.13] - 2025-12-28
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Улучшен промпт `about_fill_prompt` для видеоанонсов: теперь LLM явно включает title в about когда ocr_title пуст.
 - Синхронизированы правила about в `selection_prompt` и `about_fill_prompt`.
 
 ## [1.2.1] - 2025-12-27
 
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Исправлено дублирование заголовков выходных дней ("суббота/воскресенье") на месячных Telegraph-страницах при инкрем ентальном обновлении
 
 ## [1.2.0] - 2025-12-27
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Fixed critical `TypeError` in video announce generation caused by mismatched arguments in `about` text normalization calls across `scenario.py`, `selection.py`, and `finalize.py`.
 
 ## [1.1.1] - 2025-12-27
 ### Fixed
+- **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 - Fixed bug where `search_digest` was not saved to database during event creation via text import.
 - Updated `about_fill_prompt` to preserve proper nouns (e.g. "ОДИН ДОМА") in about text.
 - Removed anchor prepending logic in `about.py`, making LLM fully responsible for about text generation.
