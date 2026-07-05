@@ -2079,8 +2079,8 @@ async def test_schedule_event_update_tasks_allows_ticket_giveaway_without_altern
 
 
 def _medallion_test_config():
-    def ids(prefix):
-        return [[f"{prefix}{r}{c}" for c in range(1, 5)] for r in range(1, 5)]
+    def ids(prefix, *, rows=4, cols=4):
+        return [[f"{prefix}{r}{c}" for c in range(1, cols + 1)] for r in range(1, rows + 1)]
     return {
         "rows": 4,
         "cols": 4,
@@ -2097,6 +2097,14 @@ def _medallion_test_config():
                 "priority": 10,
                 "aliases": ["80 историй о главном"],
                 "emoji_ids": ids("k"),
+            },
+            "kgd80-znanie": {
+                "label": "80 историй + Знание",
+                "priority": 10,
+                "aliases": ["80 историй о главном", "kgd80.ru"],
+                "rows": 4,
+                "cols": 6,
+                "emoji_ids": ids("x", cols=6),
             },
             "znanie-russia": {
                 "label": "Знание",
@@ -2131,7 +2139,7 @@ def test_tg_event_announcement_places_medallions_before_details_footer(monkeypat
     finally:
         tg_medallions.reset_medallion_config_cache()
 
-    assert html_text.count('<tg-emoji emoji-id=') == 32
+    assert html_text.count('<tg-emoji emoji-id=') == 40
     medallion_pos = html_text.index('<tg-emoji emoji-id=')
     details_pos = html_text.index("🔎 Подробнее")
     assert medallion_pos < details_pos
@@ -2168,9 +2176,9 @@ def test_tg_promo_medallion_block_uses_custom_emoji_entities(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 32  # max 2 Telegram medallions x 4 x 4
-    assert {entity.custom_emoji_id[0] for entity in custom} == {"k", "z"}
-    assert text.count("🟧") == 32
+    assert len(custom) == 40  # combined 6x4 KGD80+Znanie + one 4x4 location medallion
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"x", "h"}
+    assert text.count("🟧") == 40
 
 
 def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_two(monkeypatch):
@@ -2192,9 +2200,9 @@ def test_tg_promo_medallion_block_prioritizes_pushkin_and_limits_two(monkeypatch
         tg_medallions.reset_medallion_config_cache()
 
     custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
-    assert len(custom) == 32
-    # Pushkin is mandatory; max two means only the top festival/program signal remains.
-    assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "k"}
+    assert len(custom) == 40
+    # Pushkin is mandatory; max two means only the combined festival/partner signal remains.
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"p", "x"}
 
 
 def test_tg_event_announcement_can_omit_medallions_for_bot_channel_send(monkeypatch):
@@ -2238,5 +2246,26 @@ def test_tg_medallion_selection_caps_at_two_for_telegram(monkeypatch):
         tg_medallions.reset_medallion_config_cache()
 
     medallion_lines = [line for line in html_text.splitlines() if "<tg-emoji" in line]
-    assert [line.count("<tg-emoji") for line in medallion_lines] == [8, 8, 8, 8]
+    assert [line.count("<tg-emoji") for line in medallion_lines] == [10, 10, 10, 10]
     assert "\u200a" in medallion_lines[0]
+
+
+def test_tg_medallion_keeps_standalone_znanie_outside_kgd80(monkeypatch):
+    import json
+    import tg_medallions
+
+    monkeypatch.setenv("TG_MEDALLION_CUSTOM_EMOJI_JSON", json.dumps(_medallion_test_config()))
+    tg_medallions.reset_medallion_config_cache()
+    try:
+        event = _event(
+            title="Лекторий общества Знание",
+            description="Встреча Российского общества «Знание».",
+        )
+        html_text = main.build_tg_event_announcement(event, "Описание.")
+        _, entities = main.telegram_event_html_to_text_entities(html_text)
+    finally:
+        tg_medallions.reset_medallion_config_cache()
+
+    custom = [entity for entity in entities if getattr(entity, "type", None) == "custom_emoji"]
+    assert len(custom) == 16
+    assert {entity.custom_emoji_id[0] for entity in custom} == {"z"}

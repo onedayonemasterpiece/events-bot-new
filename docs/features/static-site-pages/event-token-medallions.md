@@ -161,22 +161,24 @@ Asset pipeline:
 
 ## Telegram custom-emoji medallions
 
-The static-site medallion manifest is also used as the source semantics for Telegram custom-emoji medallions in `tg_event_publish` promo posts. Telegram rendering is deliberately configured separately from the static site because each visual medallion consumes a 4×4 grid of custom emoji documents.
+The static-site medallion manifest is also used as the source semantics for Telegram custom-emoji medallions in `tg_event_publish` promo posts. Telegram rendering is deliberately configured separately from the static site because each ordinary visual medallion consumes a 4×4 grid of custom emoji documents.
 
 Runtime contract:
 
-- custom emoji pack capacity is 200 stickers; one 4×4 medallion consumes 16 stickers, so one pack fits 12 full medallions with 8 spare slots;
+- custom emoji pack capacity is 200 stickers; one ordinary 4×4 medallion consumes 16 stickers, while the KGD80+Znanie composite consumes 24 stickers as a 6×4 unit;
 - production reads `TG_MEDALLION_CUSTOM_EMOJI_JSON` or `TG_MEDALLION_CUSTOM_EMOJI_PATH`; if no mapping is present, posts are rendered without medallions;
 - `TG_MEDALLIONS_ENABLED=0` disables the feature without changing campaign configuration;
-- no more than two medallions are rendered for one Telegram event; when more matches exist, festival/program and organizer/partner medallions win over venue/location medallions because the venue is already written in the post text above;
+- no more than two visual medallion units are rendered for one Telegram event; item-level dimensions are allowed so a 6×4 composite still counts as one unit;
 - in public channel event posts the bot sends a clean post without medallion placeholders first, because Bot API custom-emoji entities in channels require a bot with Fragment-purchased usernames; the delayed Premium Telethon editor then inserts the medallion mosaic as real custom emoji before the `Подробнее`/social footer;
 - no visible fallback grid such as `🟧🟧🟧` is published during the editor delay; until the editor runs, the post simply has no medallion block;
 - album/media-group captions use a compact 8-space visual gap between the `Подробнее` text link and the `Max`/VK social links; ordinary text/photo posts keep the wider 12-space footer gap;
 - `Пушкинская карта` is mandatory when `event.pushkin_card=true`;
-- events of «80 историй о главном» get the curated `kgd80` + `znanie-russia` pair when those documents are present; matching venue/location medallions are used only for events without two stronger festival/organizer signals;
+- events of «80 историй о главном» use the curated `kgd80-znanie` composite when present: `80 историй` is drawn on top and `Знание` is shifted behind it by two cells, making the pair six cells wide instead of two separate 4×4 medallions;
+- standalone `znanie-russia` remains available for non-KGD80 events, while standalone KGD80 is intentionally not kept in the Telegram pack/config;
+- because `kgd80-znanie` occupies only one visual slot, a matching venue/location medallion can be rendered as the second slot for KGD80 events without reintroducing the broken three-wide mobile layout;
 - disabled while on design/partner review: `rostec-arena`, `signal`, `locostandup`, `ruin-keepers`, `meow-afisha`, `kaliningrad-art-museum`.
 
-The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.
+The accepted Telegram mosaic calibration from July 2026 is 4×4 with a mobile source row step of `84.5px` and a `400×353.5` source canvas. Wider composites use the same row step and 100px columns (for example, `kgd80-znanie` is `600×353.5` before slicing into 6×4 cells). Earlier `79–80px` experiments render as vertically stretched ovals on current Telegram mobile clients.
 
 
 ## Static export data contract

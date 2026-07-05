@@ -58,16 +58,22 @@ def medallion_config() -> dict[str, Any]:
         slug = str(item.get("slug") or slug).strip()
         if not slug or slug in DISABLED_SLUGS:
             continue
+        item_rows = int(item.get("rows") or rows)
+        item_cols = int(item.get("cols") or cols)
+        if item_rows <= 0 or item_cols <= 0:
+            continue
         ids = item.get("emoji_ids") or item.get("document_ids") or []
         flat = [str(x) for row in ids for x in (row if isinstance(row, list) else [row])]
-        if len(flat) < rows * cols:
+        if len(flat) < item_rows * item_cols:
             continue
         aliases = item.get("aliases") or []
         alias_values = [item.get("name"), item.get("label"), item.get("short_name"), *aliases]
         clean_items[slug] = {
             **item,
             "slug": slug,
-            "emoji_ids_flat": flat[: rows * cols],
+            "rows": item_rows,
+            "cols": item_cols,
+            "emoji_ids_flat": flat[: item_rows * item_cols],
             "aliases_norm": sorted({_norm(a) for a in alias_values if _norm(a)}, key=len, reverse=True),
             "priority": int(item.get("priority") or 100),
         }
@@ -128,13 +134,18 @@ def resolve_event_medallions(event: Any, *, limit: int | None = None) -> list[di
         add("pushkin-card", "pushkin_card", -100)
 
     kgd80_signal = "80 истор" in haystack and "главн" in haystack
+    suppress_alias_slugs: set[str] = set()
     if kgd80_signal:
-        add("kgd80", "kgd80_curated", -40)
-        add("kgd80-80-stories", "kgd80_curated", -40)
-        add("znanie-russia", "kgd80_curated_partner", -35)
+        if "kgd80-znanie" in items:
+            add("kgd80-znanie", "kgd80_znanie_curated_pair", -40)
+            suppress_alias_slugs.update({"kgd80", "kgd80-80-stories", "znanie-russia"})
+        else:
+            add("kgd80", "kgd80_curated", -40)
+            add("kgd80-80-stories", "kgd80_curated", -40)
+            add("znanie-russia", "kgd80_curated_partner", -35)
 
     for slug, item in items.items():
-        if slug in selected:
+        if slug in selected or slug in suppress_alias_slugs:
             continue
         aliases = item.get("aliases_norm") or []
         if aliases and any(alias in haystack for alias in aliases):
@@ -151,8 +162,8 @@ def render_medallion_html_block(medallions: list[dict[str, Any]] | None = None) 
     cfg = medallion_config()
     if not cfg.get("enabled") or not medallions:
         return ""
-    rows = int(cfg.get("rows") or ROWS_DEFAULT)
-    cols = int(cfg.get("cols") or COLS_DEFAULT)
+    default_rows = int(cfg.get("rows") or ROWS_DEFAULT)
+    default_cols = int(cfg.get("cols") or COLS_DEFAULT)
     alt = html.escape(str(cfg.get("alt") or ALT_DEFAULT))
     sep = html.escape(str(cfg.get("separator") or SEP_DEFAULT))
     # A three-wide 4x4 row wraps on narrow Telegram mobile clients. Do not
@@ -164,11 +175,17 @@ def render_medallion_html_block(medallions: list[dict[str, Any]] | None = None) 
         groups = [medallions[:2], medallions[2:]]
     lines: list[str] = []
     for group in groups:
-        for row in range(rows):
+        group_rows = max((int(med.get("rows") or default_rows) for med in group), default=default_rows)
+        for row in range(group_rows):
             parts: list[str] = []
             for med in group:
                 ids = med.get("emoji_ids_flat") or []
+                rows = int(med.get("rows") or default_rows)
+                cols = int(med.get("cols") or default_cols)
                 cells: list[str] = []
+                if row >= rows:
+                    parts.append("")
+                    continue
                 for col in range(cols):
                     idx = row * cols + col
                     if idx >= len(ids):
