@@ -1,6 +1,6 @@
 # INC-2026-07-05 Telegram Afisha backlog blocked by VK sync dependency
 
-Status: mitigated
+Status: monitoring
 Severity: sev2
 Service: Telegram event publishing (`tg_event_publish`) / JobOutbox fanout
 Opened: 2026-07-05
@@ -94,10 +94,17 @@ On 2026-07-05 the operator noticed that Telegram Афиша (`@kldevents`) had n
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `5a24aac98ec3b249b4008a3b43c592fa24695a5e` (`origin/main`, Fly image `deployment-01KWRPSACFA3FXR3VVHQMT3XHX`)
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree `hotfix/tg-publish-decouple-vk` after pushing the same SHA to `origin/main`.
+- regression checks:
+  - `python3 -m py_compile main.py db.py main_part2.py` passed.
+  - `git diff --check` passed.
+  - targeted pytest could not complete in the local runner because a temporary venv install hit `OSError: [Errno 28] No space left on device`; without dependencies, pytest import failed on missing `aiogram`. The test expectations were updated in `tests/test_tg_event_publish.py` to assert that `tg_event_publish` dependencies exclude `vk_sync`.
+- post-deploy verification:
+  - `/healthz` OK after deploy, Fly machine version `1583`, image `deployment-01KWRPSACFA3FXR3VVHQMT3XHX`.
+  - Production DB backup table before mitigation: `codex_backup_20260705_tg_vk_dep_joboutbox_20260705_083912`.
+  - Backlog mitigation removed `vk_sync:*` from 83 pending active today/future `tg_event_publish` rows; remaining active today/future pending Telegram jobs with `depends_on LIKE '%vk_sync:%'` = `0`.
+  - Telegram posts resumed with dependencies excluding VK, e.g. event `6679` published at `2026-07-05 08:43:02 UTC` to `https://t.me/c/3954607218/1891` with deps `telegraph_build:6679,tg_ics_post:6679`.
 
 ## Prevention
 
