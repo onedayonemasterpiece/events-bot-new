@@ -155,36 +155,28 @@ def render_medallion_html_block(medallions: list[dict[str, Any]] | None = None) 
     cols = int(cfg.get("cols") or COLS_DEFAULT)
     alt = html.escape(str(cfg.get("alt") or ALT_DEFAULT))
     sep = html.escape(str(cfg.get("separator") or SEP_DEFAULT))
-    # Three 4x4 medallions are close to Telegram mobile line width on some
-    # clients; remove the one visible separator character between medallions
-    # only in that crowded case. One/two medallions keep the normal optical gap.
+    # A three-wide 4x4 row wraps on narrow Telegram mobile clients. Do not
+    # crop logos; keep each medallion full-size and split 3 medallions into
+    # two visual rows: 2 medallions above, 1 medallion below. Two-medallion
+    # posts keep the original one-row layout and separator.
+    groups = [medallions]
     if len(medallions) >= 3:
-        sep = ""
+        groups = [medallions[:2], medallions[2:]]
     lines: list[str] = []
-    compact_three = len(medallions) >= 3
-    for row in range(rows):
-        parts: list[str] = []
-        for med_index, med in enumerate(medallions):
-            ids = med.get("emoji_ids_flat") or []
-            cells: list[str] = []
-            column_range = range(cols)
-            if compact_three:
-                if med_index == 0:
-                    # Keep the left edge of the first medallion and drop its
-                    # inner-most column.
-                    column_range = range(0, max(0, cols - 1))
-                elif med_index == len(medallions) - 1:
-                    # Keep the right edge of the last medallion and drop its
-                    # inner-most column. The middle medallion stays full-size.
-                    column_range = range(1, cols)
-            for col in column_range:
-                idx = row * cols + col
-                if idx >= len(ids):
-                    continue
-                emoji_id = html.escape(str(ids[idx]), quote=True)
-                cells.append(f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>')
-            parts.append("".join(cells))
-        lines.append(sep.join(parts))
+    for group in groups:
+        for row in range(rows):
+            parts: list[str] = []
+            for med in group:
+                ids = med.get("emoji_ids_flat") or []
+                cells: list[str] = []
+                for col in range(cols):
+                    idx = row * cols + col
+                    if idx >= len(ids):
+                        continue
+                    emoji_id = html.escape(str(ids[idx]), quote=True)
+                    cells.append(f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>')
+                parts.append("".join(cells))
+            lines.append(sep.join(parts))
     return "\n".join(lines) + "\n⠀"
 
 
