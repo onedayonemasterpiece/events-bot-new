@@ -40,6 +40,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 - 2026-07-05 09:28 UTC — deployed `deployment-01KWRSK1P4H7R6NS6JA64E17T1`; `/healthz` ready and `/call?phone=79622555491` returned HTML with `tel:+79622555491` fallback.
 - 2026-07-05 09:29 UTC — Bot API `editMessageReplyMarkup` added inline button `📞 Позвонить: Школа юного альпаковеда` to both messages; user feedback identified this as product-overengineered and not the requested UX.
 - 2026-07-05 09:35 UTC — product correction: remove the button/redirect path and render phone-only Telegram visual digest contacts as a bare E.164 number in the digest line (`+79622555491`), while keeping VK human-formatted.
+- 2026-07-05 09:39 UTC — deployed `deployment-01KWRT9S3G3F4MCYY0262W9JQE` / SHA `4ce2f7b1c12272e4e45d6fcb2eafebfe45ebf10b`; Bot API edited `@wheretogo39/221` and `@youwillsee39/240` captions to `+79622555491` and removed the previous inline button. Public embeds confirm `e164=true`, `pretty=false`, `button_text=false`, `call_url=false`.
 
 ## Root Cause
 
@@ -103,11 +104,11 @@ Existing issue `148` Telegram captions were first edited to `+7 (962) 255-54-91`
 
 ## Release And Closure Evidence
 
-- deployed SHA: `445748011bbe671acac76e2c30da7e38c1ae05f8` (reachable from `origin/main`; includes earlier `dc624ddbf5ae78754c66d9a260610f011c3ab37e` caption phone formatting/entity fix)
+- deployed SHA: `4ce2f7b1c12272e4e45d6fcb2eafebfe45ebf10b` (reachable from `origin/main`; supersedes the overbuilt button/redirect workaround)
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree
-- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWRSK1P4H7R6NS6JA64E17T1`
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KWRT9S3G3F4MCYY0262W9JQE`
 - regression checks: `python3 -m py_compile main_part2.py guide_excursions/visual_digest.py markup.py`; `git diff --check`; manual helper smoke for Telegram `tel:` internal HTML, Bot API entity conversion, title `text_link` preservation, VK plain-phone output, and visual digest call-button URL generation. Full pytest was blocked locally by missing global `pytest` (`/usr/bin/python3: No module named pytest`).
-- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `guide_visual_digest=ok`; `/call?phone=79622555491` returned HTML containing `tel:+79622555491` and fallback `+7 (962) 255-54-91`; Bot API edit of `@wheretogo39/221` and `@youwillsee39/240` succeeded with visible `+7 (962) 255-54-91` and then returned inline button `📞 Позвонить: Школа юного альпаковеда` with URL `https://events-bot-new-wngqia.fly.dev/call?phone=79622555491`. Public embeds for both messages show the updated phone text but do not expose reply markup or `tel:` HTML, so Bot API response is the canonical evidence for the button.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `guide_visual_digest=ok`; `/call?phone=79622555491` now returns `404`, confirming the redirect workaround is removed; Bot API edit of `@wheretogo39/221` and `@youwillsee39/240` succeeded with `has_e164=true`, `has_pretty=false`; public embeds for both messages show `+79622555491` and no `Позвонить` button text or `/call` URL.
 
 ## Prevention
 
