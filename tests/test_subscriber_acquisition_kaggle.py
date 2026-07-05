@@ -357,6 +357,42 @@ def test_shadow_payload_applies_vk_seed_metadata_without_scan(monkeypatch):
     assert by_external["vk:vagonka39"]["reach"]["members"] == 4321
 
 
+def test_comment_retrieval_surface_inventory_includes_unscanned_event_sources(monkeypatch):
+    runtime = load_runtime()
+    monkeypatch.setenv("ACQ_TG_SEEDS_JSON", json.dumps([
+        "https://t.me/scanned_chat",
+        "https://t.me/event_source_waiting",
+    ], ensure_ascii=False))
+    monkeypatch.setenv("ACQ_TG_SEED_SURFACES_JSON", json.dumps([
+        {
+            "url": "https://t.me/event_source_waiting",
+            "handle": "event_source_waiting",
+            "external_id": "tg:event_source_waiting",
+            "surface_type": "unknown_public",
+            "source": "tg_monitoring_canonical",
+            "title": "Event Source Waiting",
+            "topic_hint": "canonical Telegram Monitoring source",
+        }
+    ], ensure_ascii=False))
+
+    inventory = runtime._surface_inventory_by_external([
+        {
+            "platform": "tg",
+            "surface_type": "group",
+            "url": "https://t.me/scanned_chat",
+            "handle": "scanned_chat",
+            "external_id": "tg:scanned_chat",
+            "status": "candidate",
+            "source": "linked_discussion",
+        }
+    ])
+
+    assert inventory["tg:scanned_chat"]["status"] == "candidate"
+    assert inventory["tg:event_source_waiting"]["source"] == "tg_monitoring_canonical"
+    assert inventory["tg:event_source_waiting"]["status"] == "needs_comment_resolve"
+    assert inventory["tg:event_source_waiting"]["title"] == "Event Source Waiting"
+
+
 def test_shadow_payload_exposes_opportunity_screening_counters(monkeypatch):
     runtime = load_runtime()
     for key in runtime.OPPORTUNITY_SCREENING_STATS:

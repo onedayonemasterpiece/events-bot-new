@@ -3023,6 +3023,21 @@ def build_shadow_payload(
     return payload
 
 
+def _surface_inventory_by_external(scanned_surfaces: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Return full seed+scanned surface inventory for reports/retrieval.
+
+    Comment semantic retrieval may only profile rows with collected comments,
+    but its XLSX `full_surface_list` / `surface_backlog` must also show
+    unscanned event-source publics and queued commentability-resolve channels.
+    """
+    payload = build_shadow_payload(scanned_surfaces=scanned_surfaces, scanned_opportunities=[], diagnostics=[])
+    return {
+        str(surface.get("external_id") or surface.get("url") or ""): surface
+        for surface in payload.get("surfaces") or []
+        if surface.get("external_id") or surface.get("url")
+    }
+
+
 def main() -> None:
     _load_kaggle_env()
     _status_event("kernel_started", phase="bootstrap", status="running", progress={"progress_percent": 1, "progress_label": "bootstrap"})
@@ -3058,7 +3073,7 @@ def main() -> None:
         except Exception as exc:
             diagnostics.append(f"vk shadow scan failed: {exc}")
             logger.exception("vk shadow scan failed")
-    surfaces_by_external = {str(s.get("external_id") or s.get("url") or ""): s for s in scanned_surfaces if s.get("external_id") or s.get("url")}
+    surfaces_by_external = _surface_inventory_by_external(scanned_surfaces)
     comment_retrieval_result = _run_comment_semantic_retrieval_stage(
         comment_records,
         surfaces_by_external=surfaces_by_external,
