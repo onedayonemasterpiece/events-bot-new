@@ -15,6 +15,12 @@
 
 ### Changed
 
+- Subscriber Acquisition semantic retrieval now applies a dedicated
+  Kaliningrad Oblast region gate before `goal_*`, `monitoring_targets` and
+  Gemma LLM-gate selection: it embeds surface metadata, source post, parent
+  comment and current comment/post against a region catalog, exposes
+  `region_confidence`/evidence columns in reports, and keeps `unknown` /
+  `out_of_region` rows diagnostic-only.
 - Subscriber Acquisition semantic retrieval now always ships/runs both required
   embedding models on Kaggle, caps the default Gemma top-N queue at 24, resolves
   discovered VK profile-wall names via `users.get`, and reorganizes the XLSX

@@ -59,6 +59,13 @@ frontier/monitoring groups instead of restarting from the same head of the seed
 list. The server also passes already analyzed `context_url` values into Kaggle
 (`ACQ_SEEN_CONTEXT_URLS_JSON`) so the runtime skips repeated comment/message
 analysis except for explicit retry/error cases.
+The semantic retrieval stage has a second, context-wide Kaliningrad Oblast gate:
+it embeds surface metadata + source post + parent comment + current
+comment/post against a dedicated region catalog and requires
+`region_confidence=confirmed|probable` before a row can reach `goal_*`,
+`monitoring_targets` or the Gemma LLM gate. Rows with `region_unknown` or
+`out_of_region` stay in diagnostics/reporting, but are not selected for event
+or route acquisition until later scans prove the Kaliningrad context.
 For the shared S22 Telegram auth bundle the launcher also keeps a local remote
 session marker/cooldown (`ACQ_REMOTE_SESSION_COOLDOWN_SECONDS`, default 600s)
 and directly checks the acquisition Kaggle kernel ref before a new live TG run.

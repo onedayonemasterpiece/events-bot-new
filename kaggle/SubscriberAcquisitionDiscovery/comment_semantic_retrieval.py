@@ -149,10 +149,38 @@ INTENT_SETS: dict[str, list[str]] = {
     ],
 }
 
+REGION_POSITIVE_PHRASES: list[str] = [
+    "площадка и комментарии относятся к Калининградской области",
+    "события проходят в Калининграде или городах Калининградской области",
+    "маршрут или поездка по Калининградской области",
+    "вопрос о том, куда съездить из Калининграда на один день",
+    "обсуждают Светлогорск, Зеленоградск, Балтийск, Янтарный или Куршскую косу",
+    "обсуждают форты, кирхи, замки, музеи и побережье Калининградской области",
+    "локальная афиша Калининграда, областные мероприятия и городские события",
+    "пост или комментарий организатора события в Калининградской области",
+]
+
+REGION_NEGATIVE_PHRASES: list[str] = [
+    "площадка относится к другому региону и не к Калининградской области",
+    "маршрут, событие или вопрос про Москву, Санкт-Петербург, Беларусь или другой регион",
+    "городская афиша другого города без связи с Калининградской областью",
+    "поездка или туристический совет по другому региону",
+    "пост о зарубежном или российском регионе вне Калининградской области",
+]
+
 POSITIVE_INTENT_SETS = [name for name in INTENT_SETS if name != "negative_intents"]
 ROUTE_INTENT_SETS = {"route_poi_far_context", "route_poi_medium_interest", "route_poi_close_actionable"}
 EVENT_INTENT_SETS = {"event_far_context", "event_close_question", "event_site_search_or_listing", "badge_filter_need"}
 ORGANIZER_INTENT_SETS = {"organizer_comment_fit", "organizer_event_post_context", "organizer_submission_or_partnership"}
+REGION_REQUIRED_ACTIONS = {
+    "trip_route_poi_recommendation",
+    "event_recommendation_reply",
+    "organizer_visibility_clarification",
+    "event_site_search_or_listing",
+    "organizer_submission_or_partnership",
+    "badge_filter_need",
+}
+REGION_ELIGIBLE_CONFIDENCES = {"confirmed", "probable"}
 
 _TOKEN_RE = re.compile(r"[\wА-Яа-яЁё]+", re.U)
 _HTML_RE = re.compile(r"<[^>]+>")
@@ -201,6 +229,28 @@ _MEDICINE_SCOPE_RE = re.compile(
 _SURFACE_MEDICINE_SCOPE_RE = re.compile(
     r"(?i)\b(врач\w*|клиник\w*|стоматолог\w*|педиатр\w*|здоровь\w*|симптом\w*|"
     r"грудн\w*\s+вскармливан\w*|гв\b|лечени\w*|психолог\w*|диет\w*|худе\w*)\b"
+)
+_KGD_REGION_HINT_RE = re.compile(
+    r"(?i)("
+    r"калининград\w*|к[её]ниг\w*|kenig\w*|koenig\w*|\bkgd\b|\bkld\w*|(?<!\d)39(?!\d)|"
+    r"светлогорск\w*|зеленоградск\w*|балтийск\w*|янтарн\w*|черняховск\w*|советск\w*|гусев\w*|"
+    r"гурьевск\w*|гвардейск\w*|пионерск\w*|полесск\w*|правдинск\w*|багратионовск\w*|"
+    r"мамоново|ладушкин\w*|неман\w*|славск\w*|краснознаменск\w*|оз[её]рск\w*|"
+    r"куршск\w*\s+кос\w*|балтийск\w*\s+кос\w*|остров\s+канта|\bкант(?:а|у|е)?\b|"
+    r"кафедральн\w*\s+собор|музе[йя]\s+янтар\w*|рыбн\w+\s+деревн\w*|"
+    r"форт\s*(?:№|#)?\s*(?:1|2|3|4|5|11)|форт\s+д[её]нхофф|д[её]нхофф|"
+    r"закхаймск\w*\s+ворот|фридландск\w*\s+ворот|железнодорожн\w*\s+ворот|"
+    r"бранденбургск\w*\s+ворот|инстербург|тапиау|пиллау|раушен|кранц"
+    r")"
+)
+_OUT_OF_REGION_HINT_RE = re.compile(
+    r"(?i)("
+    r"navahrudak|novogrud|новогруд\w*|минск\w*|беларус\w*|"
+    r"москв\w*|санкт[-\s]?петербург\w*|\bспб\b|ленинградск\w+\s+област\w*|"
+    r"нижн\w+\s+новгород\w*|казан\w*|соч\w*|краснодар\w*|ростов\w*|"
+    r"екатеринбург\w*|новосибирск\w*|самар\w*|владивосток\w*|перм\w*|"
+    r"турци\w*|грузи\w*"
+    r")"
 )
 
 
@@ -459,6 +509,171 @@ def _surface_out_of_scope_type(profile: dict[str, Any]) -> str:
     if _SURFACE_MEDICINE_SCOPE_RE.search(text):
         return "out_of_scope_medicine_surface"
     return ""
+
+
+def _first_match(pattern: re.Pattern[str], text: str) -> str:
+    match = pattern.search(text or "")
+    return match.group(0) if match else ""
+
+
+def _region_positive_min_score() -> float:
+    return _float_env("ACQ_COMMENT_RETRIEVAL_REGION_POSITIVE_MIN_SCORE", 0.12, min_value=0.0)
+
+
+def _region_margin_min_score() -> float:
+    return _float_env("ACQ_COMMENT_RETRIEVAL_REGION_MARGIN_MIN_SCORE", 0.06, min_value=0.0)
+
+
+def _record_surface_region_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(" ".join(
+        str(record.get(key) or "")
+        for key in [
+            "surface_title",
+            "title",
+            "source_context_title",
+            "surface_url",
+            "surface_key",
+            "surface_external_id",
+            "surface_type",
+            "platform",
+            "source",
+            "discovery_source_context",
+        ]
+    ))
+
+
+def _record_content_region_text(record: dict[str, Any]) -> str:
+    return normalize_comment_text(" ".join(
+        str(record.get(key) or "")
+        for key in [
+            "text",
+            "text_snapshot",
+            "source_post_text_snapshot",
+            "source_post_text",
+            "reply_parent_text_snapshot",
+            "reply_parent_text",
+            "analysis_text",
+        ]
+    ))
+
+
+def _record_region_text(record: dict[str, Any]) -> str:
+    """Text embedded by the dedicated region gate.
+
+    The region gate deliberately receives a wider context than the action-intent
+    scorer: platform title/URL/handle + current text + source post + reply
+    parent.  This lets a generic question like “куда съездить?” pass only when
+    the surrounding surface/thread proves Kaliningrad Oblast, and keeps the
+    action scorer itself free from a broad regex prefilter.
+    """
+    surface_text = _record_surface_region_text(record)
+    content_text = _record_content_region_text(record)
+    parts: list[str] = []
+    if surface_text:
+        parts.append(f"Площадка/метаданные: {surface_text[:500]}")
+    if content_text:
+        parts.append(f"Текст и контекст: {content_text[:1400]}")
+    return "\n".join(parts)[:1900]
+
+
+def _score_region_context(
+    region_vec: Any,
+    positive_vectors: list[Any],
+    negative_vectors: list[Any],
+) -> dict[str, Any]:
+    positive_scores = [_dot(region_vec, vec) for vec in positive_vectors]
+    negative_scores = [_dot(region_vec, vec) for vec in negative_vectors]
+    positive_score = max(positive_scores) if positive_scores else 0.0
+    negative_score = max(negative_scores) if negative_scores else 0.0
+    positive_idx = positive_scores.index(positive_score) if positive_scores else -1
+    negative_idx = negative_scores.index(negative_score) if negative_scores else -1
+    return {
+        "region_positive_score": float(positive_score),
+        "region_negative_score": float(negative_score),
+        "region_score": float(positive_score - negative_score),
+        "top_region_phrase": REGION_POSITIVE_PHRASES[positive_idx] if 0 <= positive_idx < len(REGION_POSITIVE_PHRASES) else "",
+        "top_negative_region_phrase": REGION_NEGATIVE_PHRASES[negative_idx] if 0 <= negative_idx < len(REGION_NEGATIVE_PHRASES) else "",
+    }
+
+
+def _assess_record_region(record: dict[str, Any], vector_scores: dict[str, Any] | None = None) -> dict[str, Any]:
+    vector_scores = dict(vector_scores or {})
+    surface_text = _record_surface_region_text(record)
+    content_text = _record_content_region_text(record)
+    all_text = normalize_comment_text(" ".join([surface_text, content_text]))
+    positive_surface_hint = _first_match(_KGD_REGION_HINT_RE, surface_text)
+    positive_content_hint = _first_match(_KGD_REGION_HINT_RE, content_text)
+    if re.fullmatch(r"(?i)(39|\bkld\w*)", positive_content_hint or ""):
+        # `39`/`kld*` are reliable in handles/URLs, but too noisy inside an
+        # arbitrary comment body (age, bus number, random code).
+        positive_content_hint = ""
+    negative_hint = _first_match(_OUT_OF_REGION_HINT_RE, all_text)
+    positive_hint = positive_surface_hint or positive_content_hint
+    pos_score = float(vector_scores.get("region_positive_score") or 0.0)
+    neg_score = float(vector_scores.get("region_negative_score") or 0.0)
+    margin = pos_score - neg_score
+    semantic_positive = pos_score >= _region_positive_min_score() and margin >= _region_margin_min_score()
+    semantic_negative = neg_score >= _region_positive_min_score() and (neg_score - pos_score) >= _region_margin_min_score()
+
+    if positive_hint:
+        confidence = "confirmed"
+        source = "surface_metadata_keyword" if positive_surface_hint else "comment_context_keyword"
+        evidence = f"есть явная зацепка Калининградской области: «{positive_hint}»"
+    elif negative_hint and not semantic_positive:
+        confidence = "out_of_region"
+        source = "out_of_region_keyword"
+        evidence = f"есть зацепка другого региона без Калининградского контекста: «{negative_hint}»"
+    elif semantic_positive:
+        confidence = "probable"
+        source = "semantic_region_vector"
+        evidence = f"регион вероятен по embedding-сходству: {vector_scores.get('top_region_phrase') or 'Калининградская область'}"
+    elif semantic_negative:
+        confidence = "out_of_region"
+        source = "semantic_out_of_region_vector"
+        evidence = f"похоже на другой регион по embedding-сходству: {vector_scores.get('top_negative_region_phrase') or 'другой регион'}"
+    else:
+        confidence = "unknown"
+        source = "no_region_signal"
+        evidence = "нет достаточной зацепки, что вопрос/пост относится к Калининградской области"
+
+    status = "region_ok" if confidence in REGION_ELIGIBLE_CONFIDENCES else f"region_{confidence}"
+    return {
+        **vector_scores,
+        "region_confidence": confidence,
+        "region_gate_status": status,
+        "region_signal_source": source,
+        "region_evidence_ru": evidence,
+        "region_positive_hint": positive_hint,
+        "region_out_of_region_hint": negative_hint if not positive_hint else "",
+    }
+
+
+def _candidate_region_required(row: dict[str, Any]) -> bool:
+    action = str(row.get("candidate_action_type") or _action_for_intent(str(row.get("intent_set") or "")))
+    return action in REGION_REQUIRED_ACTIONS
+
+
+def _candidate_region_eligible(row: dict[str, Any]) -> bool:
+    if not _candidate_region_required(row):
+        return True
+    return str(row.get("region_confidence") or "") in REGION_ELIGIBLE_CONFIDENCES
+
+
+def _region_catalog_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for catalog_type, phrases in [("positive_kaliningrad_oblast", REGION_POSITIVE_PHRASES), ("negative_other_region", REGION_NEGATIVE_PHRASES)]:
+        for idx, phrase in enumerate(phrases, start=1):
+            rows.append({
+                "region_catalog_type": catalog_type,
+                "phrase_order": idx,
+                "model_phrase": phrase,
+                "is_negative": catalog_type.startswith("negative"),
+                "note_ru": (
+                    "Отдельный региональный embedding-gate: площадка/пост/комментарий должны быть про Калининградскую область; "
+                    "unknown/out_of_region не попадают в monitoring/LLM-кандидаты."
+                ),
+            })
+    return rows
 
 
 def _intent_has_text_support(text: str, intent_set: str) -> bool:
@@ -815,6 +1030,8 @@ def _report_candidate_eligible(row: dict[str, Any], *, allow_source_posts: bool 
         return False
     if scope not in {"", "monitoring_candidate", "historical_calibration"}:
         return False
+    if not _candidate_region_eligible(row):
+        return False
     text = str(row.get("text_snapshot") or row.get("text") or "")
     features = _text_quality_features(text)
     intent = str(row.get("intent_set") or "")
@@ -853,6 +1070,30 @@ def _report_real_question_row(row: dict[str, Any], *, allow_historical: bool = T
 
 def _surface_key(record: dict[str, Any]) -> str:
     return str(record.get("surface_key") or record.get("surface_external_id") or record.get("surface_url") or "unknown")
+
+
+def _attach_surface_metadata_to_records(
+    records: list[dict[str, Any]],
+    surfaces_by_external: dict[str, dict[str, Any]] | None,
+) -> None:
+    if not surfaces_by_external:
+        return
+    for item in records:
+        key = _surface_key(item)
+        surface = surfaces_by_external.get(key)
+        if not surface:
+            continue
+        item.setdefault("surface_key", key)
+        if surface.get("title") and not item.get("surface_title"):
+            item["surface_title"] = str(surface.get("title") or "")
+        if surface.get("url") and not item.get("surface_url"):
+            item["surface_url"] = str(surface.get("url") or "")
+        if surface.get("source") and not item.get("source"):
+            item["source"] = str(surface.get("source") or "")
+        if surface.get("discovery_source_context") and not item.get("discovery_source_context"):
+            item["discovery_source_context"] = str(surface.get("discovery_source_context") or "")
+        if surface.get("topic_hint") and not item.get("topic_hint"):
+            item["topic_hint"] = str(surface.get("topic_hint") or "")
 
 
 def _dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -947,7 +1188,75 @@ def _rank_candidates(rows: list[dict[str, Any]], *, scoring_method: str) -> list
     return rows
 
 
-def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], rows: list[dict[str, Any]], *, scoring_method: str) -> dict[str, Any]:
+def _surface_region_summary(surface_key: str, surface_records: list[dict[str, Any]], region_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    surface_text = normalize_comment_text(" ".join(
+        str((surface_records[0] if surface_records else {}).get(key) or "")
+        for key in ["surface_title", "source_context_title", "surface_url", "surface_key", "surface_external_id", "surface_type", "platform", "source"]
+    ))
+    positive_surface_hint = _first_match(_KGD_REGION_HINT_RE, surface_text)
+    negative_surface_hint = _first_match(_OUT_OF_REGION_HINT_RE, surface_text)
+    unique_by_context = _best_context_rows(region_rows)
+    confidence_counts = Counter(str(row.get("region_confidence") or "unknown") for row in unique_by_context)
+    scores = [float(row.get("region_score") or 0.0) for row in unique_by_context if row.get("region_score") is not None]
+    positive_scores = [float(row.get("region_positive_score") or 0.0) for row in unique_by_context if row.get("region_positive_score") is not None]
+    negative_scores = [float(row.get("region_negative_score") or 0.0) for row in unique_by_context if row.get("region_negative_score") is not None]
+    evidence_row = next(
+        (
+            row for row in unique_by_context
+            if str(row.get("region_confidence") or "") in {"confirmed", "probable", "out_of_region"}
+        ),
+        None,
+    )
+    if positive_surface_hint:
+        confidence = "confirmed"
+        source = "surface_metadata_keyword"
+        evidence = f"площадка содержит явную зацепку Калининградской области: «{positive_surface_hint}»"
+    elif negative_surface_hint and not (confidence_counts.get("confirmed", 0) or confidence_counts.get("probable", 0)):
+        confidence = "out_of_region"
+        source = "surface_out_of_region_keyword"
+        evidence = f"площадка похожа на другой регион: «{negative_surface_hint}»"
+    elif confidence_counts.get("confirmed", 0) > 0:
+        confidence = "confirmed"
+        source = "comment_context_keyword"
+        evidence = str((evidence_row or {}).get("region_evidence_ru") or "в комментариях есть явная зацепка Калининградской области")
+    elif confidence_counts.get("probable", 0) > 0:
+        confidence = "probable"
+        source = "semantic_region_vector"
+        evidence = str((evidence_row or {}).get("region_evidence_ru") or "регион вероятен по embedding-сходству")
+    elif confidence_counts.get("out_of_region", 0) > 0:
+        confidence = "out_of_region"
+        source = "semantic_or_keyword_out_of_region"
+        evidence = str((evidence_row or {}).get("region_evidence_ru") or "есть признаки другого региона")
+    else:
+        confidence = "unknown"
+        source = "no_region_signal"
+        evidence = "нет достаточных доказательств, что площадка/комментарии относятся к Калининградской области"
+    return {
+        "region_confidence": confidence,
+        "region_gate_status": "region_ok" if confidence in REGION_ELIGIBLE_CONFIDENCES else f"region_{confidence}",
+        "region_signal_source": source,
+        "region_evidence_ru": evidence,
+        "region_confirmed_contexts": confidence_counts.get("confirmed", 0),
+        "region_probable_contexts": confidence_counts.get("probable", 0),
+        "region_unknown_contexts": confidence_counts.get("unknown", 0),
+        "region_out_of_region_contexts": confidence_counts.get("out_of_region", 0),
+        "region_score_max": max(scores) if scores else None,
+        "region_score_p95": _percentile(scores, 0.95) if scores else None,
+        "region_positive_score_max": max(positive_scores) if positive_scores else None,
+        "region_negative_score_max": max(negative_scores) if negative_scores else None,
+        "region_surface_hint": positive_surface_hint,
+        "region_out_of_region_hint": negative_surface_hint if not positive_surface_hint else "",
+    }
+
+
+def _surface_profile(
+    surface_key: str,
+    surface_records: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    *,
+    scoring_method: str,
+    region_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     by_intent: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         by_intent[str(row.get("intent_set"))].append(row)
@@ -1013,10 +1322,14 @@ def _surface_profile(surface_key: str, surface_records: list[dict[str, Any]], ro
         for r in surface_records
         if str(r.get("author_id") or "").strip()
     }
+    region_summary = _surface_region_summary(surface_key, surface_records, region_rows or rows)
     return {
         "surface_key": surface_key,
         "platform": surface_records[0].get("platform") if surface_records else None,
         "surface_type": surface_records[0].get("surface_type") if surface_records else None,
+        "surface_title": (surface_records[0].get("surface_title") or surface_records[0].get("source_context_title")) if surface_records else None,
+        "surface_url": surface_records[0].get("surface_url") if surface_records else None,
+        **region_summary,
         "comments_total": comments_total,
         "comments_embedded": comments_total,
         "eligible_question_candidates": eligible_questions,
@@ -1136,7 +1449,12 @@ def _surface_decision_summaries(
         else:
             recommendation = "reject_or_low_priority"
         surface_scope_noise = _surface_out_of_scope_type(profile)
-        if profile.get("monitoring_decision_hint") == "reject_stale_inactive":
+        region_confidence = str(profile.get("region_confidence") or "unknown")
+        if region_confidence == "out_of_region":
+            recommendation = "reject_out_of_region"
+        elif region_confidence not in REGION_ELIGIBLE_CONFIDENCES:
+            recommendation = "reject_region_unknown"
+        elif profile.get("monitoring_decision_hint") == "reject_stale_inactive":
             recommendation = "reject_stale_inactive"
         elif surface_scope_noise:
             recommendation = surface_scope_noise
@@ -1169,6 +1487,13 @@ def _surface_decision_summaries(
                 f"устаревшая активность: последний комментарий {profile.get('latest_comment_at') or 'неизвестно'}, "
                 f"{profile.get('days_since_latest_activity') or '?'} дней назад; не выбирать сейчас, только revival-watch"
             )
+        elif recommendation == "reject_out_of_region":
+            summary_ru = f"не Калининградская область: {profile.get('region_evidence_ru') or 'региональная проверка не пройдена'}"
+        elif recommendation == "reject_region_unknown":
+            summary_ru = (
+                "регион не доказан: для событий и маршрутов выбираем только площадки/стены с Калининградской областью; "
+                f"{profile.get('region_evidence_ru') or 'нет региональной зацепки'}"
+            )
         elif surface_scope_noise:
             summary_ru = f"площадка не по теме acquisition ({surface_scope_noise}); не выбирать для ответов/маршрутов/событий"
         increment_status = _surface_increment_status(profile, {
@@ -1197,6 +1522,18 @@ def _surface_decision_summaries(
             "discovery_source_context": profile.get("discovery_source_context"),
             "days_since_latest_activity": profile.get("days_since_latest_activity"),
             "freshness_status": profile.get("freshness_status"),
+            "region_confidence": profile.get("region_confidence"),
+            "region_gate_status": profile.get("region_gate_status"),
+            "region_signal_source": profile.get("region_signal_source"),
+            "region_evidence_ru": profile.get("region_evidence_ru"),
+            "region_confirmed_contexts": profile.get("region_confirmed_contexts"),
+            "region_probable_contexts": profile.get("region_probable_contexts"),
+            "region_unknown_contexts": profile.get("region_unknown_contexts"),
+            "region_out_of_region_contexts": profile.get("region_out_of_region_contexts"),
+            "region_score_max": profile.get("region_score_max"),
+            "region_score_p95": profile.get("region_score_p95"),
+            "region_positive_score_max": profile.get("region_positive_score_max"),
+            "region_negative_score_max": profile.get("region_negative_score_max"),
             "analysis_max_comment_age_days": profile.get("analysis_max_comment_age_days"),
             "stale_activity_days": profile.get("stale_activity_days"),
             "unique_commenters": profile.get("unique_commenters"),
@@ -1370,6 +1707,7 @@ def _scope_rows(
     surface_types = Counter(str(r.get("surface_type") or "unknown") for r in records)
     relations = Counter(str(r.get("relation") or "unknown") for r in records)
     usage_scopes = Counter(str(r.get("candidate_usage_scope") or _record_usage_scope(r)) for r in records)
+    profile_regions = Counter(str(p.get("region_confidence") or "unknown") for p in profiles)
     return [
         {"metric": "run_id", "value": run_id},
         {"metric": "report_generated_at", "value": datetime.now(timezone.utc).isoformat()},
@@ -1381,6 +1719,9 @@ def _scope_rows(
         {"metric": "models", "value": ", ".join(models)},
         {"metric": "gate_model_for_llm_budget", "value": gate_model},
         {"metric": "scoring_method", "value": scoring_method},
+        {"metric": "region_gate_required", "value": "true"},
+        {"metric": "region_gate_rule", "value": "monitoring/LLM/goals require confirmed/probable Kaliningrad Oblast evidence from surface metadata, post/comment context, or dedicated region vector"},
+        {"metric": "region_profile_confidence_json", "value": json.dumps(dict(profile_regions), ensure_ascii=False)},
         {"metric": "comments_after_filter", "value": len(records)},
         {"metric": "monitoring_window_comments", "value": usage_scopes.get("monitoring_candidate", 0)},
         {"metric": "historical_calibration_comments", "value": usage_scopes.get("historical_calibration", 0)},
@@ -1511,6 +1852,15 @@ def _surface_inventory_rows(
         summary = by_key.get(key) or {}
         reach = surface.get("reach") if isinstance(surface.get("reach"), dict) else {}
         recommendation = summary.get("recommendation") or "not_profiled_or_no_comment_signal"
+        metadata_region = _assess_record_region({
+            "surface_key": key,
+            "surface_external_id": key,
+            "surface_title": surface.get("title"),
+            "surface_url": surface.get("url"),
+            "surface_type": surface.get("surface_type"),
+            "platform": surface.get("platform"),
+            "source": surface.get("source"),
+        })
         selection_status = summary.get("selection_status") or _selection_status_from_recommendation(
             str(recommendation),
             surface_status=str(surface.get("status") or ""),
@@ -1543,6 +1893,14 @@ def _surface_inventory_rows(
             "latest_route_recommendation_at": summary.get("latest_route_recommendation_at"),
             "days_since_latest_activity": summary.get("days_since_latest_activity"),
             "freshness_status": summary.get("freshness_status") or ("unknown_no_profile" if not summary else ""),
+            "region_confidence": summary.get("region_confidence") or metadata_region.get("region_confidence"),
+            "region_gate_status": summary.get("region_gate_status") or metadata_region.get("region_gate_status"),
+            "region_signal_source": summary.get("region_signal_source") or metadata_region.get("region_signal_source"),
+            "region_evidence_ru": summary.get("region_evidence_ru") or metadata_region.get("region_evidence_ru"),
+            "region_confirmed_contexts": summary.get("region_confirmed_contexts"),
+            "region_probable_contexts": summary.get("region_probable_contexts"),
+            "region_unknown_contexts": summary.get("region_unknown_contexts"),
+            "region_out_of_region_contexts": summary.get("region_out_of_region_contexts"),
             "comments_embedded": summary.get("comments_embedded") or 0,
             "answerable_question_candidates": summary.get("answerable_question_candidates") or 0,
             "route_poi_questions": summary.get("route_poi_questions") or 0,
@@ -1605,6 +1963,8 @@ def _decision_delta_rows(surface_inventory: list[dict[str, Any]], *, scope_rows:
             "recommendation": row.get("recommendation"),
             "selection_status": row.get("selection_status"),
             "increment_status": row.get("increment_status"),
+            "region_confidence": row.get("region_confidence"),
+            "region_evidence_ru": row.get("region_evidence_ru"),
             "comments_embedded": row.get("comments_embedded"),
             "answerable_question_candidates": row.get("answerable_question_candidates"),
             "ask_clarification_contexts": row.get("ask_clarification_contexts"),
@@ -1699,6 +2059,9 @@ def _dashboard_summary_rows(
     )
     return [
         {"section": "Что это", "metric": "Назначение", "value": "Дашборд показывает, в каких TG/VK группах и обсуждениях есть вопросы для аккуратных ответов или места для уточняющих вопросов организаторам."},
+        {"section": "Региональный gate", "metric": "Обязательный регион", "value": "События, маршруты и organizer-вопросы выбираются только если площадка/пост/комментарий подтверждает Калининградскую область."},
+        {"section": "Региональный gate", "metric": "Как подтверждается", "value": "Отдельный region vector смотрит название/URL площадки, исходный пост, parent-комментарий и текущий комментарий; явные KGD-зацепки только усиливают evidence, но не заменяют embedding-оценку."},
+        {"section": "Региональный gate", "metric": "Что отсекается", "value": "region_unknown и out_of_region не попадают в goal-листы, monitoring_targets и top-N LLM-gate до появления Калининградской зацепки."},
         {"section": "Как читать сначала", "metric": "decision_deltas", "value": "Первый рабочий лист после summary_ru: только площадки, изменившиеся/обработанные в последнем подтверждённом запуске. С него начинается просмотр дельт."},
         {"section": "Как читать сначала", "metric": "processed_comments_last_run", "value": "Показывает последние обработанные комментарии/пост-контексты и колонку criteria_status_ru: прошёл ли контекст критерии отчёта или почему отфильтрован."},
         {"section": "Дельта последнего запуска", "metric": "Был ли новый запуск", "value": run_status_ru},
@@ -1815,6 +2178,26 @@ _RU_HEADERS = {
     "latest_route_recommendation_at": "Последняя route-рекомендация",
     "days_since_latest_activity": "Дней без активности",
     "freshness_status": "Свежесть",
+    "region_confidence": "Регион: уверенность",
+    "region_gate_status": "Региональный gate",
+    "region_signal_source": "Регион: источник сигнала",
+    "region_evidence_ru": "Регион: доказательство",
+    "region_score": "Регион score",
+    "region_positive_score": "Регион +",
+    "region_negative_score": "Регион −",
+    "top_region_phrase": "Региональная модельная фраза",
+    "top_negative_region_phrase": "Минус-регион фраза",
+    "region_positive_hint": "Регион + зацепка",
+    "region_out_of_region_hint": "Регион − зацепка",
+    "region_confirmed_contexts": "Регион confirmed",
+    "region_probable_contexts": "Регион probable",
+    "region_unknown_contexts": "Регион unknown",
+    "region_out_of_region_contexts": "Регион out",
+    "region_score_max": "Регион score max",
+    "region_score_p95": "Регион score p95",
+    "region_positive_score_max": "Регион + max",
+    "region_negative_score_max": "Регион − max",
+    "region_catalog_type": "Тип регионального эталона",
     "analysis_max_comment_age_days": "Окно анализа, дней",
     "stale_activity_days": "Порог неактивности, дней",
     "unique_commenters": "Уникальные авторы комментариев за период",
@@ -2064,6 +2447,10 @@ def _criteria_status(row: dict[str, Any]) -> tuple[str, str]:
         return "rejected_historical", "не fresh-дельта: исторический пример только для эталонов/QA"
     if scope and scope != "monitoring_candidate":
         return "rejected_wrong_scope", f"не в свежем окне мониторинга: {scope}"
+    if _candidate_region_required(row) and not _candidate_region_eligible(row):
+        confidence = str(row.get("region_confidence") or "unknown")
+        evidence = str(row.get("region_evidence_ru") or "нет доказательства Калининградской области")
+        return f"rejected_region:{confidence}", f"не прошёл региональный gate Калининградской области: {evidence}"
     noise = str(row.get("candidate_noise_type") or "").strip()
     if _is_source_post_context(row):
         return "rejected_source_post_context", "это исходный пост/контекст, не пользовательский комментарий для ответа"
@@ -2227,6 +2614,7 @@ def _write_xlsx(
     rejected_noise_rows: list[dict[str, Any]] | None = None,
     goal_candidate_rows: dict[str, list[dict[str, Any]]] | None = None,
     monitoring_target_rows: list[dict[str, Any]] | None = None,
+    region_catalog_rows: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         from openpyxl import Workbook
@@ -2242,11 +2630,12 @@ def _write_xlsx(
         "model_name", "intent_set", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
         "relation", "is_post", "evidence_type_ru", "author_id", "created_at", "comment_age_days", "candidate_usage_scope", "context_url",
         "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+        "region_confidence", "region_gate_status", "region_evidence_ru", "region_signal_source", "region_score",
         "top_intent_phrase", "positive_score", "negative_score", "funnel_bucket",
         "destination_hint", "transport_hint", "question_signal", "candidate_noise_type", "intent_text_supported",
         "is_in_llm_gate_queue", "llm_queue_status_ru", "llm_gate_selection_basis",
     ]
-    manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Площадка" for h in headers[10:20]} | {h: "Текст и контекст" for h in headers[20:25]} | {h: "Решение" for h in headers[25:]}
+    manual_groups = {h: "Разметка" for h in headers[:5]} | {h: "Скоринг" for h in headers[5:10]} | {h: "Площадка" for h in headers[10:20]} | {h: "Текст и контекст" for h in headers[20:25]} | {h: "Регион" for h in headers[25:30]} | {h: "Решение" for h in headers[30:]}
     _append_grouped_header(ws, headers, manual_groups)
     _append_data_rows(ws, rows, headers, hyperlink_field="context_url")
     for idx, width in enumerate([12, 28, 28, 24, 28, 34, 28, 12, 12, 16, 28, 10, 18, 18, 10, 28, 16, 18, 14, 28, 48, 80, 70, 90, 90, 54, 55, 14, 14, 14, 22, 16, 14, 24, 20, 24], start=1):
@@ -2267,7 +2656,7 @@ def _write_xlsx(
         delta_headers = [
             "delta_type", "decision_change_ru", "surface_key", "platform", "surface_type_ru", "surface_type",
             "surface_title", "surface_url", "status", "scan_state", "recommendation", "selection_status",
-            "increment_status", "comments_embedded", "answerable_question_candidates", "ask_clarification_contexts",
+            "increment_status", "region_confidence", "region_evidence_ru", "comments_embedded", "answerable_question_candidates", "ask_clarification_contexts",
             "latest_comment_at", "summary_ru",
         ]
         delta_groups = {h: "Что изменилось" for h in delta_headers[:2]} | {h: "Площадка" for h in delta_headers[2:8]} | {h: "Решение" for h in delta_headers[8:13]} | {h: "Сигналы" for h in delta_headers[13:]}
@@ -2282,7 +2671,7 @@ def _write_xlsx(
         run_delta = wb.create_sheet("run_delta_sources")
         run_delta_headers = [
             "decision_change_ru", "surface_title", "surface_url", "platform", "surface_type_ru",
-            "selection_status", "increment_status", "comments_embedded", "answerable_question_candidates",
+            "selection_status", "increment_status", "region_confidence", "region_evidence_ru", "comments_embedded", "answerable_question_candidates",
             "ask_clarification_contexts", "latest_comment_at", "summary_ru",
         ]
         run_delta_groups = {h: "Что изменилось в последнем запуске" for h in run_delta_headers[:3]} | {h: "Площадка" for h in run_delta_headers[3:5]} | {h: "Вердикт" for h in run_delta_headers[5:]}
@@ -2300,6 +2689,7 @@ def _write_xlsx(
             "selection_status", "recommendation", "surface_title", "surface_url", "platform", "surface_type_ru",
             "last_analyzed_run_id", "last_processed_at", "discovered_at", "discovered_in_run_id",
             "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at",
+            "region_confidence", "region_evidence_ru",
             "answerable_question_candidates", "route_poi_questions", "event_questions", "event_site_search_questions",
             "ask_clarification_contexts", "comments_embedded", "unique_commenters", "members_or_subscribers", "summary_ru",
         ]
@@ -2316,13 +2706,14 @@ def _write_xlsx(
         goal_headers = [
             "future_goal_ru", "llm_final_check_ru", "llm_queue_status_ru", "models_matched", "model_count", "best_score",
             "surface_title", "surface_key", "platform", "surface_type", "context_url", "created_at", "comment_age_days",
+            "region_confidence", "region_evidence_ru",
             "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
             "top_intent_phrase", "intent_set", "candidate_action_type", "processed_in_run_id", "last_processed_at",
         ]
         for sheet_name, spec in _GOAL_SHEET_SPECS.items():
             sheet_rows = goal_candidate_rows.get(sheet_name, [])
             goal = wb.create_sheet(sheet_name)
-            goal_groups = {h: "Кандидат по цели" for h in goal_headers[:6]} | {h: "Где найдено" for h in goal_headers[6:13]} | {h: "Текст и контекст" for h in goal_headers[13:18]} | {h: "Почему подходит" for h in goal_headers[18:]}
+            goal_groups = {h: "Кандидат по цели" for h in goal_headers[:6]} | {h: "Где найдено" for h in goal_headers[6:13]} | {h: "Регион" for h in goal_headers[13:15]} | {h: "Текст и контекст" for h in goal_headers[15:20]} | {h: "Почему подходит" for h in goal_headers[20:]}
             _append_grouped_header(goal, goal_headers, goal_groups)
             if not sheet_rows:
                 goal.append([f"Нет кандидатов: {spec.get('title')}", *[""] * (len(goal_headers) - 1)])
@@ -2338,11 +2729,11 @@ def _write_xlsx(
         "criteria_status_ru", "criteria_status", "analysis_kind", "model_name", "models_matched", "model_count", "score", "best_score", "rank_global",
         "surface_key", "platform", "surface_type", "relation", "is_post", "created_at", "comment_age_days",
         "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
-        "future_goal_ru", "top_intent_phrase", "intent_set",
+        "future_goal_ru", "region_confidence", "region_evidence_ru", "top_intent_phrase", "intent_set",
         "candidate_action_type", "question_signal", "candidate_noise_type", "intent_text_supported",
         "is_in_llm_gate_queue", "llm_queue_status_ru",
     ]
-        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:9]} | {h: "Где найдено" for h in processed_headers[9:16]} | {h: "Текст и контекст" for h in processed_headers[16:23]} | {h: "Почему принято/отклонено" for h in processed_headers[23:]}
+        processed_groups = {h: "Критерии" for h in processed_headers[:3]} | {h: "Скоринг" for h in processed_headers[3:9]} | {h: "Где найдено" for h in processed_headers[9:16]} | {h: "Текст и контекст" for h in processed_headers[16:23]} | {h: "Регион" for h in processed_headers[23:25]} | {h: "Почему принято/отклонено" for h in processed_headers[25:]}
         _append_grouped_header(processed, processed_headers, processed_groups)
         _append_data_rows(processed, processed_comment_rows, processed_headers, hyperlink_field="context_url")
         processed.freeze_panes = "A3"
@@ -2357,9 +2748,9 @@ def _write_xlsx(
         noise_headers = [
             "criteria_status_ru", "criteria_status", "analysis_kind", "surface_key", "platform", "surface_type",
             "relation", "created_at", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text",
-            "top_intent_phrase", "score", "positive_score", "negative_score", "candidate_noise_type",
+            "region_confidence", "region_evidence_ru", "top_intent_phrase", "score", "positive_score", "negative_score", "candidate_noise_type",
         ]
-        noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Текст и контекст" for h in noise_headers[9:14]} | {h: "Шум/диагностика" for h in noise_headers[14:]}
+        noise_groups = {h: "Почему это не кандидат" for h in noise_headers[:3]} | {h: "Где найдено" for h in noise_headers[3:9]} | {h: "Текст и контекст" for h in noise_headers[9:14]} | {h: "Регион" for h in noise_headers[14:16]} | {h: "Шум/диагностика" for h in noise_headers[16:]}
         _append_grouped_header(noise, noise_headers, noise_groups)
         _append_data_rows(noise, rejected_noise_rows, noise_headers, hyperlink_field="context_url")
         noise.freeze_panes = "A3"
@@ -2372,6 +2763,7 @@ def _write_xlsx(
             "recommendation", "selection_status", "surface_key", "platform", "surface_type_ru", "surface_type", "surface_title", "surface_url",
             "members_or_subscribers", "period_min_created_at", "period_max_created_at", "period_days",
             "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status", "unique_commenters",
+            "region_confidence", "region_gate_status", "region_evidence_ru", "region_confirmed_contexts", "region_probable_contexts", "region_unknown_contexts", "region_out_of_region_contexts",
             "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
             "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days",
             "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id", "discovery_source_context",
@@ -2382,9 +2774,10 @@ def _write_xlsx(
         ]
         surf_groups = {
             **{h: "Площадка" for h in surf_headers[:8]},
-            **{h: "Период, свежесть и объём" for h in surf_headers[8:25]},
-            **{h: "Потенциал" for h in surf_headers[25:39]},
-            **{h: "Пояснения" for h in surf_headers[35:]},
+            **{h: "Период, свежесть и объём" for h in surf_headers[8:18]},
+            **{h: "Регион" for h in surf_headers[18:25]},
+            **{h: "Потенциал" for h in surf_headers[25:46]},
+            **{h: "Пояснения" for h in surf_headers[42:]},
         }
         _append_grouped_header(surf, surf_headers, surf_groups)
         _append_data_rows(surf, surface_summaries, surf_headers, hyperlink_field="surface_url", style="surface")
@@ -2398,6 +2791,7 @@ def _write_xlsx(
             "surface_key", "platform", "surface_type_ru", "surface_type", "surface_title", "surface_url", "status", "scan_state", "source",
             "members_or_subscribers", "recommendation", "selection_status", "increment_status", "is_incremental_last_run",
             "discovered_at", "discovered_in_run_id", "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "days_since_latest_activity", "freshness_status",
+            "region_confidence", "region_gate_status", "region_evidence_ru",
             "comments_embedded", "answerable_question_candidates",
             "route_poi_questions", "event_questions", "event_site_search_questions", "ask_clarification_contexts", "summary_ru",
         ]
@@ -2435,10 +2829,10 @@ def _write_xlsx(
         ex_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "llm_gate_selection_basis", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+            "llm_gate_selection_basis", "region_confidence", "region_evidence_ru", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
             "top_intent_phrase", "destination_hint", "transport_hint",
         ]
-        ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Площадка" for h in ex_headers[4:13]} | {h: "Решение" for h in ex_headers[13:17]} | {h: "Текст и контекст" for h in ex_headers[17:24]} | {h: "Действие" for h in ex_headers[24:]}
+        ex_groups = {h: "Скоринг" for h in ex_headers[:4]} | {h: "Площадка" for h in ex_headers[4:12]} | {h: "Решение" for h in ex_headers[12:16]} | {h: "Регион" for h in ex_headers[16:18]} | {h: "Текст и контекст" for h in ex_headers[18:25]} | {h: "Действие" for h in ex_headers[25:]}
         _append_grouped_header(ex, ex_headers, ex_groups)
         if not example_rows:
             ex.append(["Нет успешных вопросов/сообщений, по которым можно доказать потенциальный ответ, в этом run."])
@@ -2459,10 +2853,10 @@ def _write_xlsx(
         ctx_headers = [
             "model_name", "score", "rank_global", "rank_within_surface", "surface_key", "platform", "surface_type",
             "relation", "is_post", "created_at", "comment_age_days", "candidate_usage_scope", "intent_set", "candidate_action_type", "candidate_noise_type",
-            "llm_gate_selection_basis", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
+            "llm_gate_selection_basis", "region_confidence", "region_evidence_ru", "context_url", "evidence_type_ru", "current_comment_text", "reply_parent_comment_text", "source_post_text", "current_post_text", "future_goal_ru",
             "top_intent_phrase", "destination_hint", "transport_hint",
         ]
-        ctx_groups = {h: "Скоринг" for h in ctx_headers[:4]} | {h: "Площадка" for h in ctx_headers[4:13]} | {h: "Решение" for h in ctx_headers[13:17]} | {h: "Это пост/контекст для вопроса, не user-comment reply" for h in ctx_headers[17:24]} | {h: "Действие" for h in ctx_headers[24:]}
+        ctx_groups = {h: "Скоринг" for h in ctx_headers[:4]} | {h: "Площадка" for h in ctx_headers[4:12]} | {h: "Решение" for h in ctx_headers[12:16]} | {h: "Регион" for h in ctx_headers[16:18]} | {h: "Это пост/контекст для вопроса, не user-comment reply" for h in ctx_headers[18:25]} | {h: "Действие" for h in ctx_headers[25:]}
         _append_grouped_header(ctx, ctx_headers, ctx_groups)
         if not context_rows:
             ctx.append(["Нет контекстов постов, по которым можно было бы самим задать уточняющий вопрос организатору, в этом run."])
@@ -2508,6 +2902,16 @@ def _write_xlsx(
         for idx, width in enumerate([32, 38, 8, 80, 34, 12, 90], start=1):
             cat.column_dimensions[get_column_letter(idx)].width = width
 
+    if region_catalog_rows:
+        reg = wb.create_sheet("region_catalog")
+        reg_headers = ["region_catalog_type", "phrase_order", "model_phrase", "is_negative", "note_ru"]
+        reg_groups = {h: "Региональный embedding-gate" for h in reg_headers}
+        _append_grouped_header(reg, reg_headers, reg_groups)
+        _append_data_rows(reg, region_catalog_rows, reg_headers)
+        reg.freeze_panes = "A3"
+        for idx, width in enumerate([34, 8, 90, 12, 110], start=1):
+            reg.column_dimensions[get_column_letter(idx)].width = width
+
     if scope_rows:
         scope = wb.create_sheet("scope")
         _append_grouped_header(scope, ["metric", "value"], {"metric": "Охват запуска", "value": "Охват запуска"})
@@ -2545,6 +2949,7 @@ def _write_xlsx(
         "question_patterns",
         "canonical_questions",
         "intent_catalog",
+        "region_catalog",
         "scope",
         "summary",
     ]
@@ -2661,6 +3066,7 @@ def run_comment_semantic_retrieval(
     models = _load_models_from_env()
     source_run_id = _source_run_id_from_env()
     records = _dedupe_records(comment_records)
+    _attach_surface_metadata_to_records(records, surfaces_by_external)
     backend = backend or SentenceTransformerBackend()
     progress_callback = progress_callback or (lambda _phase, _payload: None)
     progress_callback("loading_comments", {"comments_total": len(comment_records), "comments_after_filter": len(records), "progress_percent": 5})
@@ -2684,20 +3090,31 @@ def run_comment_semantic_retrieval(
         t0 = time.perf_counter()
         negative_vectors = _to_list_matrix(backend.encode(negative_phrases, model_name=model_name, is_query=True, batch_size=batch_size, max_length=max_length))
         intent_embed_sec += time.perf_counter() - t0
+        t0 = time.perf_counter()
+        region_positive_vectors = _to_list_matrix(backend.encode(REGION_POSITIVE_PHRASES, model_name=model_name, is_query=True, batch_size=batch_size, max_length=max_length))
+        region_negative_vectors = _to_list_matrix(backend.encode(REGION_NEGATIVE_PHRASES, model_name=model_name, is_query=True, batch_size=batch_size, max_length=max_length))
+        intent_embed_sec += time.perf_counter() - t0
 
         comments = [str(r.get("analysis_text") or r.get("text") or "") for r in records]
+        region_contexts = [_record_region_text(r) for r in records]
         progress_callback("embedding_comments", {"model_name": model_name, "comments_total": len(comments), "comments_processed": 0, "progress_percent": 20})
         t0 = time.perf_counter()
         comment_vectors = _to_list_matrix(backend.encode(comments, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if comments else []
         comment_embedding_sec = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        region_vectors = _to_list_matrix(backend.encode(region_contexts, model_name=model_name, is_query=False, batch_size=batch_size, max_length=max_length)) if region_contexts else []
+        region_embedding_sec = time.perf_counter() - t0
         progress_callback("scoring", {"model_name": model_name, "comments_processed": len(comments), "progress_percent": 60})
         t0 = time.perf_counter()
         model_rows: list[dict[str, Any]] = []
-        for rec, vec in zip(records, comment_vectors):
+        for rec, vec, region_vec in zip(records, comment_vectors, region_vectors):
+            region_scores = _score_region_context(region_vec, region_positive_vectors, region_negative_vectors)
+            region_assessment = _assess_record_region(rec, region_scores)
             scored = _score_comment(vec, intent_vectors, negative_vectors)
             for row in scored:
                 enriched = dict(rec)
                 enriched.update(row)
+                enriched.update(region_assessment)
                 enriched["model_name"] = model_name
                 enriched["max_length"] = max_length
                 enriched["batch_size"] = batch_size
@@ -2732,6 +3149,7 @@ def run_comment_semantic_retrieval(
             "comments_total": len(records),
             "intent_embedding_sec": round(intent_embed_sec, 4),
             "comment_embedding_sec": round(comment_embedding_sec, 4),
+            "region_embedding_sec": round(region_embedding_sec, 4),
             "scoring_sec": round(scoring_sec, 4),
             "total_sec": round(total_sec, 4),
             "comments_per_sec": round(comments_per_sec, 4),
@@ -2761,6 +3179,7 @@ def run_comment_semantic_retrieval(
         c for c in all_candidates
         if c.get("model_name") == gate_model
         and c.get("candidate_usage_scope") == "monitoring_candidate"
+        and _candidate_region_eligible(c)
     ]
     gate_candidates = _rank_candidates(gate_candidates, scoring_method=scoring_method)[:max_llm_candidates]
     gate_candidate_keys = {
@@ -2788,7 +3207,13 @@ def run_comment_semantic_retrieval(
     for rec in records:
         records_by_surface[str(rec.get("surface_key") or "unknown")].append(rec)
     for surface_key, surface_records in records_by_surface.items():
-        profile = _surface_profile(surface_key, surface_records, rows_by_surface.get(surface_key, []), scoring_method=scoring_method)
+        profile = _surface_profile(
+            surface_key,
+            surface_records,
+            rows_by_surface.get(surface_key, []),
+            scoring_method=scoring_method,
+            region_rows=all_gate_rows_by_surface.get(surface_key, []),
+        )
         if source_run_id:
             profile["last_analyzed_run_id"] = source_run_id
         if surfaces_by_external and surface_key in surfaces_by_external:
@@ -2834,6 +3259,7 @@ def run_comment_semantic_retrieval(
         limit=_int_env("ACQ_COMMENT_RETRIEVAL_REJECTED_NOISE_XLSX_ROWS", 300, min_value=20),
     )
     intent_catalog = _intent_catalog_rows()
+    region_catalog = _region_catalog_rows()
     run_id = source_run_id or "unknown_source_run"
     scope_rows = _scope_rows(
         run_id=run_id,
@@ -2882,6 +3308,8 @@ def run_comment_semantic_retrieval(
         "context_url", "comment_id", "post_id", "topic_id", "thread_id",
         "created_at", "comment_age_days", "candidate_usage_scope", "is_within_monitoring_window",
         "text_snapshot", "analysis_context_snapshot", "source_post_text_snapshot", "reply_parent_text_snapshot",
+        "region_confidence", "region_gate_status", "region_signal_source", "region_evidence_ru", "region_score",
+        "region_positive_score", "region_negative_score", "top_region_phrase", "top_negative_region_phrase",
         "model_name", "max_length", "batch_size", "intent_set", "score", "positive_score", "negative_score",
         "scoring_method", "raw_score", "question_boost", "noise_penalty", "top_intent_phrase", "top_intent_score", "rank_global", "rank_within_surface",
         "funnel_bucket", "candidate_action_type", "destination_hint", "transport_hint", "question_signal", "candidate_noise_type",
@@ -2893,6 +3321,9 @@ def run_comment_semantic_retrieval(
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "latest_comment_at",
         "latest_event_question_at", "latest_route_recommendation_at", "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id",
         "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days", "unique_commenters",
+        "region_confidence", "region_gate_status", "region_signal_source", "region_evidence_ru",
+        "region_confirmed_contexts", "region_probable_contexts", "region_unknown_contexts", "region_out_of_region_contexts",
+        "region_score_max", "region_score_p95", "region_positive_score_max", "region_negative_score_max",
         "comments_total", "comments_embedded", "comment_records", "source_post_records",
         "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
         "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
@@ -2903,6 +3334,9 @@ def run_comment_semantic_retrieval(
         "period_min_created_at", "period_max_created_at", "period_days", "period_label", "unique_commenters", "unique_commenters_note",
         "latest_comment_at", "latest_event_question_at", "latest_route_recommendation_at", "increment_status", "is_incremental_last_run", "discovered_at", "discovered_in_run_id",
         "days_since_latest_activity", "freshness_status", "analysis_max_comment_age_days", "stale_activity_days",
+        "region_confidence", "region_gate_status", "region_signal_source", "region_evidence_ru",
+        "region_confirmed_contexts", "region_probable_contexts", "region_unknown_contexts", "region_out_of_region_contexts",
+        "region_score_max", "region_score_p95", "region_positive_score_max", "region_negative_score_max",
         "comments_total", "comments_embedded", "comments_per_day", "comments_per_week", "comments_per_30d", "comments_per_90d",
         "latest_100_comments", "latest_100_min_created_at", "latest_100_max_created_at", "latest_100_period_days", "latest_100_period_label",
         "recommendation", "summary_ru", "answerable_question_candidates", "answerable_questions_per_30d",
@@ -2921,7 +3355,7 @@ def run_comment_semantic_retrieval(
         "example_questions", "example_urls", "source_note_ru",
     ])
     _write_csv(distributions_csv, distributions, ["model_name", "scoring_method", "count", "p50", "p90", "p95", "p99", "max"])
-    _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
+    _write_csv(speed_csv, speed_rows, ["model_name", "device", "batch_size", "max_length", "comments_total", "intent_embedding_sec", "comment_embedding_sec", "region_embedding_sec", "scoring_sec", "total_sec", "comments_per_sec", "comments_per_hour", "peak_ram_mb", "cpu"])
     manual_rows = _select_manual_rows(all_candidates, max_rows=max_manual_rows)
     _write_xlsx(
         manual_xlsx,
@@ -2936,6 +3370,7 @@ def run_comment_semantic_retrieval(
         summary_counts=summary_counts,
         dashboard_rows=dashboard_rows,
         intent_catalog_rows=intent_catalog,
+        region_catalog_rows=region_catalog,
         decision_delta_rows=decision_deltas,
         processed_comment_rows=processed_last_run,
         rejected_noise_rows=rejected_noise_examples,
@@ -2950,6 +3385,8 @@ def run_comment_semantic_retrieval(
         "models": models,
         "recommended_model": gate_model,
         "scoring_method": scoring_method,
+        "region_gate_required": True,
+        "region_gate_confidence_counts": dict(Counter(str(row.get("region_confidence") or "unknown") for row in surface_summaries)),
         "comments_total": len(comment_records),
         "comments_after_filter": len(records),
         "comments_embedded": len(records),

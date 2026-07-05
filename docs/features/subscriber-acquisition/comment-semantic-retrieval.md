@@ -45,6 +45,48 @@ examples. Therefore `answerable_*` sheets contain only fresh replyable user
 questions/messages, while `ask_contexts_*` sheets contain organizer/source-post
 contexts where the product may later draft its own clarification question.
 
+## Kaliningrad Oblast region gate
+
+Subscriber Acquisition is region-scoped: event replies, route/POI replies,
+organizer clarification questions, event-search replies, organizer submission
+replies and badge/filter replies are eligible only when the surface/thread
+proves **Kaliningrad Oblast**.
+
+The gate is intentionally separate from the acquisition-intent scorer:
+
+1. The action-intent vectors still decide whether a text is about routes,
+   events, organizers, site search, badges, etc.
+2. A dedicated region vector embeds a wider context:
+   surface title/URL/handle/source, source post/topic, parent comment and
+   current comment/post.
+3. Narrow deterministic KGD hints (for example `Калининград`, `39` in a
+   handle, `Светлогорск`, `Зеленоградск`, `Куршская коса`, known local
+   landmarks) are evidence boosts, not a broad replacement for semantic
+   scoring. `39`/`kld*` are trusted only in surface metadata/URLs, not inside
+   arbitrary comment bodies.
+4. Explicit other-region hints such as `visitNavahrudak`/`Новогрудок`,
+   `Минск`, `Москва`, `СПб` reject the row only when no Kaliningrad evidence is
+   present.
+
+Rows receive `region_confidence`:
+
+- `confirmed` — explicit Kaliningrad Oblast evidence in surface metadata or
+  comment/post context;
+- `probable` — dedicated region vector is sufficiently closer to the
+  Kaliningrad catalog than to the other-region catalog;
+- `unknown` — no safe evidence yet;
+- `out_of_region` — likely another region.
+
+Only `confirmed`/`probable` rows may enter `goal_*`, `monitoring_targets` and
+the top-N Gemma/LLM gate. `unknown` rows remain visible in diagnostics so future
+scans can prove the region through newer comments or better surface metadata.
+The XLSX includes `region_catalog` and region columns in surface/comment sheets
+so operators can audit why a place was selected or rejected.
+The semantic-only `probable` path is intentionally conservative: the default
+margin is `ACQ_COMMENT_RETRIEVAL_REGION_MARGIN_MIN_SCORE=0.06`, so a generic
+“куда съездить?” without local anchors should stay `unknown` rather than spend
+LLM budget.
+
 ## Sources and scope
 
 Use only current Subscriber Acquisition Discovery sources:
@@ -232,6 +274,10 @@ Every scanned surface should receive a `comment_semantic_profile` summary:
   "latest_100_comments": 100,
   "latest_100_period_days": 7.0,
   "unique_commenters": 0,
+  "region_confidence": "confirmed|probable|unknown|out_of_region",
+  "region_gate_status": "region_ok|region_unknown|region_out_of_region",
+  "region_signal_source": "surface_metadata_keyword|comment_context_keyword|semantic_region_vector|no_region_signal|...",
+  "region_evidence_ru": "human-readable reason",
   "relation_counts": {"vk_comment": 100, "vk_board_comment": 10, "vk_social_wall_post": 5},
   "semantic_presence": {
     "route_poi_far_context": {

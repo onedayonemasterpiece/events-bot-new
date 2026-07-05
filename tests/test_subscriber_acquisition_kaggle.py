@@ -451,6 +451,7 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert "rejected_noise_examples" in workbook.sheetnames
     assert "summary_counts" in workbook.sheetnames
     assert "intent_catalog" in workbook.sheetnames
+    assert "region_catalog" in workbook.sheetnames
     assert "full_surface_list" in workbook.sheetnames
     assert "question_patterns" in workbook.sheetnames
     assert "canonical_questions" in workbook.sheetnames
@@ -479,6 +480,8 @@ def test_comment_semantic_retrieval_writes_profiles_candidates_and_xlsx(monkeypa
     assert result["summary"]["artifacts"]["question_patterns_csv"].endswith("comment_retrieval_question_patterns.csv")
     assert result["summary"]["artifacts"]["canonical_questions_csv"].endswith("comment_retrieval_canonical_questions.csv")
     assert result["canonical_questions"]
+    assert result["summary"]["region_gate_required"] is True
+    assert any(p["region_confidence"] == "confirmed" for p in result["surface_profiles"])
 
 
 def test_comment_retrieval_xlsx_highlights_selected_and_increment(tmp_path):
@@ -741,6 +744,80 @@ def test_comment_semantic_retrieval_requires_two_models_even_if_env_single(monke
     assert retrieval._load_models_from_env() == ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 
+def test_comment_semantic_region_gate_uses_surface_and_context_evidence():
+    retrieval = load_retrieval()
+
+    by_surface = retrieval._assess_record_region({
+        "surface_title": "Калининград рекомендации",
+        "surface_url": "https://t.me/vKalinigrad_recomendations",
+        "text": "Куда съездить на один день?",
+    })
+    by_comment = retrieval._assess_record_region({
+        "surface_title": "Городские советы",
+        "text": "Куда съездить из Калининграда в Светлогорск на электричке?",
+    })
+    unknown = retrieval._assess_record_region({
+        "surface_title": "Городские советы",
+        "text": "Куда съездить на один день?",
+    })
+    out = retrieval._assess_record_region({
+        "surface_title": "Visit Navahrudak",
+        "surface_url": "https://t.me/visitNavahrudak",
+        "text": "Что посмотреть за день?",
+    })
+
+    assert by_surface["region_confidence"] == "confirmed"
+    assert by_surface["region_signal_source"] == "surface_metadata_keyword"
+    assert by_comment["region_confidence"] == "confirmed"
+    assert by_comment["region_signal_source"] == "comment_context_keyword"
+    assert unknown["region_confidence"] == "unknown"
+    assert out["region_confidence"] == "out_of_region"
+
+
+def test_comment_semantic_region_gate_blocks_report_and_surface_selection():
+    retrieval = load_retrieval()
+    row = {
+        "surface_key": "tg:unknown",
+        "platform": "tg",
+        "surface_type": "group",
+        "candidate_action_type": "trip_route_poi_recommendation",
+        "intent_set": "route_poi_close_actionable",
+        "text_snapshot": "Куда съездить на один день?",
+        "context_url": "https://t.me/unknown/1",
+        "candidate_usage_scope": "monitoring_candidate",
+        "question_signal": True,
+        "intent_text_supported": True,
+        "candidate_noise_type": "",
+        "score": 0.5,
+        "region_confidence": "unknown",
+        "region_evidence_ru": "нет Калининградской зацепки",
+    }
+
+    assert retrieval._report_candidate_eligible(row) is False
+    status, status_ru = retrieval._criteria_status(row)
+    assert status == "rejected_region:unknown"
+    assert "Калининградской области" in status_ru
+
+    profile = {
+        "surface_key": "tg:unknown",
+        "platform": "tg",
+        "surface_type": "group",
+        "surface_title": "Городские советы",
+        "surface_url": "https://t.me/unknown",
+        "monitoring_decision_hint": "monitor",
+        "region_confidence": "unknown",
+        "region_evidence_ru": "нет Калининградской зацепки",
+        "comments_embedded": 1,
+    }
+    summary = retrieval._surface_decision_summaries(
+        [profile],
+        eligible_rows_by_surface={"tg:unknown": [row]},
+        all_gate_rows_by_surface={"tg:unknown": [row]},
+    )[0]
+    assert summary["recommendation"] == "reject_region_unknown"
+    assert summary["selection_status"] == "rejected"
+
+
 def test_comment_semantic_legacy_deterministic_prefilter_is_explicit_opt_in(monkeypatch):
     retrieval = load_retrieval()
     monkeypatch.setenv("ACQ_COMMENT_RETRIEVAL_DETERMINISTIC_PREFILTER", "1")
@@ -775,6 +852,7 @@ def test_question_pattern_label_covers_route_event_and_badges():
             "intent_text_supported": True,
             "candidate_noise_type": "",
             "score": 0.05,
+            "region_confidence": "confirmed",
         },
         {
             "surface_key": "tg:test",
@@ -843,6 +921,7 @@ def test_report_quality_keeps_source_posts_as_ask_context_but_not_question_catal
         "score": 0.05,
         "relation": "vk_social_wall_post",
         "is_post": True,
+        "region_confidence": "confirmed",
         "pre_llm_candidate_eligible": True,
     }
 
@@ -870,6 +949,7 @@ def test_report_quality_allows_historical_real_questions_only_for_canonical_cata
         "intent_text_supported": True,
         "candidate_noise_type": "",
         "score": 0.05,
+        "region_confidence": "confirmed",
         "pre_llm_candidate_eligible": True,
     }
 
@@ -896,6 +976,7 @@ def test_model_answerable_examples_are_only_fresh_reply_questions():
         "intent_text_supported": True,
         "candidate_noise_type": "",
         "score": 0.05,
+        "region_confidence": "confirmed",
         "pre_llm_candidate_eligible": True,
     }
     source_post = {
@@ -981,6 +1062,7 @@ def test_surface_decision_summary_separates_reply_and_question_asking_modes():
         "dominant_detected_interests": ["route_poi", "event_questions"],
         "monitoring_decision_hint": "monitor",
         "monitoring_reason": "test",
+        "region_confidence": "confirmed",
     }
     rows = [
         {
@@ -1077,6 +1159,9 @@ def test_runtime_builds_route_opportunity_from_retrieval_candidate():
         "positive_score": 0.61,
         "negative_score": 0.19,
         "top_intent_phrase": "посоветуйте маршрут на один день из Калининграда",
+        "region_confidence": "confirmed",
+        "region_gate_status": "region_ok",
+        "region_evidence_ru": "есть явная зацепка Калининградской области",
         "rank_global": 1,
         "rank_within_surface": 1,
         "target_hint": {"route_target_status": "route_needed", "destination_hint": "", "event_ids": []},
@@ -1113,6 +1198,7 @@ def test_comment_retrieval_llm_gate_reviews_only_retrieved_candidates(monkeypatc
                 "candidate_action_type": "trip_route_poi_recommendation",
                 "intent_set": "route_poi_close_actionable",
                 "score": 0.7,
+                "region_confidence": "confirmed",
                 "target_hint": {"route_target_status": "route_needed"},
             },
             {
@@ -1125,6 +1211,7 @@ def test_comment_retrieval_llm_gate_reviews_only_retrieved_candidates(monkeypatc
                 "candidate_action_type": "event_recommendation_reply",
                 "intent_set": "event_far_context",
                 "score": 0.6,
+                "region_confidence": "confirmed",
             },
         ],
     }
@@ -1960,6 +2047,7 @@ def test_tg_comment_record_and_llm_prompt_preserve_context_chain():
         "intent_set": "event_close_question",
         "score": 0.9,
         "candidate_action_type": "event_recommendation_reply",
+        "region_confidence": "confirmed",
     }
     opp = runtime._build_opportunity_from_retrieval_candidate(candidate, default_target_url="https://t.me/kenigevents")
     prompt = runtime._llm_gate_prompt(opp, surface)

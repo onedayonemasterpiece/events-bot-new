@@ -1211,6 +1211,15 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
     if not context_url or not text:
         return None
     action = str(candidate.get("candidate_action_type") or "event_recommendation_reply")
+    if action in {
+        "trip_route_poi_recommendation",
+        "event_recommendation_reply",
+        "organizer_visibility_clarification",
+        "event_site_search_or_listing",
+        "organizer_submission_or_partnership",
+        "badge_filter_need",
+    } and str(candidate.get("region_confidence") or "") not in {"confirmed", "probable"}:
+        return None
     target_hint = candidate.get("target_hint") if isinstance(candidate.get("target_hint"), dict) else {}
     link_target = _retrieval_link_target_for_candidate(candidate, default_target_url=default_target_url)
     context_chain = {
@@ -1253,6 +1262,9 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
             "stage": COMMENT_RETRIEVAL_STAGE_NAME,
             "model_name": candidate.get("model_name"),
             "intent_set": candidate.get("intent_set"),
+            "region_confidence": candidate.get("region_confidence"),
+            "region_gate_status": candidate.get("region_gate_status"),
+            "region_evidence_ru": candidate.get("region_evidence_ru"),
             "scoring_method": os.getenv("ACQ_COMMENT_RETRIEVAL_SCORING_METHOD") or "positive_negative_margin",
             "score": candidate.get("score"),
             "positive_score": candidate.get("positive_score"),
@@ -1272,6 +1284,8 @@ def _build_opportunity_from_retrieval_candidate(candidate: dict[str, Any], *, de
                 "intent_set": candidate.get("intent_set"),
                 "score": candidate.get("score"),
                 "top_intent_phrase": candidate.get("top_intent_phrase"),
+                "region_confidence": candidate.get("region_confidence"),
+                "region_evidence_ru": candidate.get("region_evidence_ru"),
                 "rank_global": candidate.get("rank_global"),
                 "rank_within_surface": candidate.get("rank_within_surface"),
                 "funnel_bucket": candidate.get("funnel_bucket"),
@@ -1349,6 +1363,9 @@ def _attach_comment_semantic_profiles(scanned_surfaces: list[dict[str, Any]], re
             "monitoring_decision_hint": profile.get("monitoring_decision_hint"),
             "monitoring_reason": profile.get("monitoring_reason"),
             "dominant_detected_interests": dominant,
+            "region_confidence": profile.get("region_confidence"),
+            "region_gate_status": profile.get("region_gate_status"),
+            "region_evidence_ru": profile.get("region_evidence_ru"),
             "llm_budget_recommendation": profile.get("llm_budget_recommendation"),
         }
         surface["risk"] = risk
