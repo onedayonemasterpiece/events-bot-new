@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+import pytest
 
 
 def load_runtime():
@@ -2259,6 +2260,63 @@ def test_runtime_decode_tg_auth_prefers_discovery_bundle(monkeypatch):
     assert session == "discovery-session"
     assert device["device_model"] == "Discovery phone"
     assert "auth_bundle_env" not in device
+
+
+class _FakeSupabaseRpc:
+    def __init__(self, data):
+        self.data = data
+
+    def execute(self):
+        return SimpleNamespace(data=self.data)
+
+
+class _FakeSupabaseLeaseClient:
+    def __init__(self, acquire_data):
+        self.acquire_data = acquire_data
+        self.calls = []
+
+    def rpc(self, name, payload):
+        self.calls.append({"name": name, "payload": payload})
+        if name == "runtime_resource_acquire":
+            return _FakeSupabaseRpc(self.acquire_data)
+        if name == "runtime_resource_release":
+            return _FakeSupabaseRpc({"ok": True, "released": 1})
+        raise AssertionError(name)
+
+
+@pytest.mark.asyncio
+async def test_discovery_supabase_session_lease_acquire_and_release(monkeypatch):
+    from subscriber_acquisition import kaggle_runner
+
+    client = _FakeSupabaseLeaseClient({"ok": True, "expires_at": "2026-07-05T12:00:00Z"})
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "1")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY", "bundle")
+    monkeypatch.setattr(kaggle_runner, "_get_supabase_client_for_shared_limits", lambda: client)
+
+    lease = await kaggle_runner._acquire_supabase_session_lease(run_id="20260705-120000")
+    await kaggle_runner._release_supabase_session_lease(lease, status="released")
+
+    assert lease is not None
+    assert lease.resource_key == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+    assert [call["name"] for call in client.calls] == ["runtime_resource_acquire", "runtime_resource_release"]
+    assert client.calls[0]["payload"]["p_holder_id"] == "acq_discovery:20260705-120000"
+
+
+@pytest.mark.asyncio
+async def test_discovery_supabase_session_lease_blocks_busy_holder(monkeypatch):
+    from subscriber_acquisition import kaggle_runner
+
+    client = _FakeSupabaseLeaseClient({
+        "ok": False,
+        "holder_id": "acq_discovery:other",
+        "expires_at": "2026-07-05T12:30:00Z",
+    })
+    monkeypatch.setenv("ACQ_ENABLE_LIVE_TG_SCAN", "1")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY", "bundle")
+    monkeypatch.setattr(kaggle_runner, "_get_supabase_client_for_shared_limits", lambda: client)
+
+    with pytest.raises(RuntimeError, match="Telegram discovery session is busy"):
+        await kaggle_runner._acquire_supabase_session_lease(run_id="20260705-120000")
 
 
 def test_runtime_env_passes_seen_context_urls():

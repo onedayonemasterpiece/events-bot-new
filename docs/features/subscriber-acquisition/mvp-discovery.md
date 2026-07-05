@@ -92,7 +92,14 @@ contract:
 - `subscriber_acquisition_discovery` is registered as a heavy Kaggle job type and
   as a scoped remote Telegram session consumer; `/acq_run` checks the remote
   Telegram session-busy guard for the selected acquisition discovery auth bundle
-  before any live Telegram scan can start.
+  before any live Telegram scan can start;
+- live Telegram discovery also reserves the selected auth bundle in the shared
+  legacy Supabase control plane (`runtime_resource_acquire` /
+  `runtime_resource_release`), analogous to the Google AI quota limiter. This is
+  cross-host protection for `TELEGRAM_AUTH_BUNDLE_DISCOVERY` so a local launcher,
+  Fly command and another agent cannot start overlapping Kaggle scans with the
+  same human Telegram session. If the Supabase lease RPC is unavailable, live
+  Telegram discovery fails closed by default (`ACQ_SUPABASE_SESSION_LEASE_REQUIRED=1`).
 
 Live Telegram/VK scanning remains constrained to the Kaggle runtime path and must
 run in shadow mode first. The initial `kaggle/SubscriberAcquisitionDiscovery/`
@@ -656,6 +663,10 @@ new infrastructure:
   notebook="SubscriberAcquisitionDiscovery", resource_leases=["telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY"])`
   whenever Telegram scanning selects that bundle; derive the lease from the
   actual auth env scope. VK-only future runs may omit the Telegram lease;
+- shared Supabase lease before kernel push:
+  `runtime_resource_acquire(resource_key="telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY", holder_id="acq_discovery:<run_id>")`.
+  The launcher releases it with `runtime_resource_release` in `finally`; TTL is
+  `ACQ_SUPABASE_SESSION_LEASE_TTL_SECONDS` or Kaggle timeout + safety buffer.
 - `kaggle_status_client.py` progress events with business counters:
   `surfaces_done/surfaces_total`, `telegram_posts_scanned`,
   `vk_posts_scanned`, `comments_scanned`, `candidate_surfaces_found`,

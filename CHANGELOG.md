@@ -4,6 +4,9 @@
 
 ### Added
 
+- Added shared Supabase `runtime_resource_leases` migration/RPCs and wired
+  Subscriber Acquisition Discovery live Telegram launches to acquire/release the
+  `TELEGRAM_AUTH_BUNDLE_DISCOVERY` session lease before pushing Kaggle.
 - Added Subscriber Acquisition two-goal semantic-union report sheets
   (`semantic_union_candidates`, `reply_to_user_candidates`,
   `ask_organizer_candidates`, `model_comparison`, `historical_calibration`,

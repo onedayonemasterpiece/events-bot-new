@@ -195,6 +195,135 @@ async def _raise_if_acq_kernel_ref_or_cooldown_busy() -> None:
         raise RuntimeError(f"acquisition Kaggle kernel ref is still non-terminal: {ref} status={status}")
 
 
+
+
+@dataclass(frozen=True)
+class SupabaseResourceLease:
+    resource_key: str
+    holder_id: str
+    acquired: bool = False
+
+
+def _supabase_session_lease_enabled() -> bool:
+    if not live_telegram_scan_enabled():
+        return False
+    return (os.getenv("ACQ_ENABLE_SUPABASE_SESSION_LEASE") or "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _supabase_session_lease_required() -> bool:
+    return (os.getenv("ACQ_SUPABASE_SESSION_LEASE_REQUIRED") or "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _supabase_session_lease_ttl_seconds() -> int:
+    raw = (os.getenv("ACQ_SUPABASE_SESSION_LEASE_TTL_SECONDS") or "").strip()
+    if raw:
+        try:
+            return max(300, int(float(raw)))
+        except Exception:
+            pass
+    try:
+        return max(3600, int(os.getenv("ACQ_KAGGLE_TIMEOUT_SECONDS") or "9000") + 900)
+    except Exception:
+        return 10800
+
+
+def _get_supabase_client_for_shared_limits() -> Any | None:
+    try:
+        from runtime import require_main_attr
+
+        getter = require_main_attr("get_supabase_client")
+        if callable(getter):
+            return getter()
+    except Exception:
+        pass
+    try:
+        import main  # type: ignore
+
+        getter = getattr(main, "get_supabase_client", None)
+        if callable(getter):
+            return getter()
+    except Exception:
+        return None
+    return None
+
+
+def _supabase_rpc_data(result: Any) -> Any:
+    data = getattr(result, "data", result)
+    if isinstance(data, list) and data:
+        return data[0]
+    return data
+
+
+async def _call_supabase_resource_rpc(client: Any, fn_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    result = await asyncio.to_thread(lambda: client.rpc(fn_name, payload).execute())
+    data = _supabase_rpc_data(result)
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            data = {"raw": data}
+    if not isinstance(data, dict):
+        data = {"raw": data}
+    return data
+
+
+async def _acquire_supabase_session_lease(*, run_id: str, kernel_ref: str | None = None) -> SupabaseResourceLease | None:
+    if not _supabase_session_lease_enabled():
+        return None
+    resource_key = _discovery_resource_lease_key()
+    if not resource_key:
+        return None
+    client = _get_supabase_client_for_shared_limits()
+    if client is None:
+        if _supabase_session_lease_required():
+            raise RuntimeError("Supabase session lease is required for acquisition discovery, but Supabase client is unavailable")
+        return None
+    holder_id = f"acq_discovery:{run_id}"
+    payload = {
+        "p_resource_key": resource_key,
+        "p_holder_id": holder_id,
+        "p_holder_kind": "subscriber_acquisition_discovery",
+        "p_ttl_seconds": _supabase_session_lease_ttl_seconds(),
+        "p_metadata": {
+            "run_id": run_id,
+            "kernel_ref": kernel_ref,
+            "auth_scope": discovery_remote_auth_scope(),
+            "pid": os.getpid(),
+            "host": os.uname().nodename if hasattr(os, "uname") else "unknown",
+        },
+    }
+    try:
+        data = await _call_supabase_resource_rpc(client, "runtime_resource_acquire", payload)
+    except Exception as exc:
+        if _supabase_session_lease_required():
+            raise RuntimeError(f"Supabase session lease acquire failed: {type(exc).__name__}: {str(exc)[:240]}") from exc
+        return None
+    if not bool(data.get("ok")):
+        raise RuntimeError(
+            "Telegram discovery session is busy by Supabase lease: "
+            f"resource={resource_key} holder={data.get('holder_id') or data.get('holder_run_id')} "
+            f"expires_at={data.get('expires_at')}"
+        )
+    return SupabaseResourceLease(resource_key=resource_key, holder_id=holder_id, acquired=True)
+
+
+async def _release_supabase_session_lease(lease: SupabaseResourceLease | None, *, status: str) -> None:
+    if not lease or not lease.acquired:
+        return
+    client = _get_supabase_client_for_shared_limits()
+    if client is None:
+        return
+    try:
+        await _call_supabase_resource_rpc(client, "runtime_resource_release", {
+            "p_resource_key": lease.resource_key,
+            "p_holder_id": lease.holder_id,
+            "p_status": status,
+        })
+    except Exception:
+        # Expiry is the safety net if the launcher dies or release RPC is down.
+        pass
+
+
 @dataclass(frozen=True)
 class DiscoveryRuntimeResult:
     payload: dict[str, Any]
@@ -1053,6 +1182,7 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
 
     seed_payload = seed_payload or {}
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    supabase_lease: SupabaseResourceLease | None = None
     config_payload = _runtime_env_from_config(config, seed_payload)
     config_payload["KAGGLE_RUN_ID"] = run_id
     secrets_payload = _build_secrets_payload()
@@ -1060,6 +1190,7 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
     dataset_cipher = dataset_key = kernel_ref = ""
     registered = False
     try:
+        supabase_lease = await _acquire_supabase_session_lease(run_id=run_id)
         _write_remote_session_marker(state="preparing", run_id=run_id)
         dataset_cipher, dataset_key = await _prepare_kaggle_datasets(db, client, config_payload=config_payload, secrets_payload=secrets_payload, run_id=run_id)
         if int(os.getenv("ACQ_KAGGLE_DATASET_WAIT_SECONDS") or "0") > 0:
@@ -1105,3 +1236,4 @@ async def run_kaggle_discovery_runtime(db: Any, *, config: AcqConfig, seed_paylo
                 await remove_job("subscriber_acquisition_discovery", kernel_ref)
             except Exception:
                 pass
+        await _release_supabase_session_lease(supabase_lease, status="released")

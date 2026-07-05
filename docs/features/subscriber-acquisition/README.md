@@ -193,6 +193,13 @@ when the discovery bundle is absent; session guards and Kaggle status leases use
 the actual selected env scope, so discovery can run independently from Telegram
 Monitoring.
 
+Before pushing a live Telegram Kaggle run, the launcher must also acquire the
+shared Supabase resource lease for that selected session, using the same legacy
+Supabase control plane as Google AI limits. Default behavior is fail-closed:
+`ACQ_ENABLE_SUPABASE_SESSION_LEASE=1`,
+`ACQ_SUPABASE_SESSION_LEASE_REQUIRED=1`, and resource key
+`telegram_session:env:TELEGRAM_AUTH_BUNDLE_DISCOVERY`.
+
 As of 2026-07-05, discovery uses a temporary deep/night scan budget because the
 small MVP sample did not produce readable deltas: `ACQ_MAX_SURFACES_PER_RUN=40`,
 `ACQ_MAX_MESSAGES_PER_SURFACE=400`, `ACQ_MAX_THREADS_PER_SURFACE=80`,
