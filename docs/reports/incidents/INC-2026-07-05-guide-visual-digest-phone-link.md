@@ -60,7 +60,7 @@ Telegram visual guide digest issue `148` published to `@youwillsee39` as message
 
 ### Mandatory checks before closure or deploy
 
-- Targeted regression proving Telegram visual digest phone contacts render as `<a href="tel:+...">visible number</a>`.
+- Targeted regression proving Telegram visual digest phone contacts first render as `<a href="tel:+...">visible number</a>` internally and are converted to Bot API `phone_number` caption entities for sending.
 - Regression proving existing title/source links remain `<a href="https://...">title</a>` and are not double-linked.
 - Regression or manual check that VK visual digest text keeps phone contacts plain and does not call the VK shortener for phones.
 - `python3 -m py_compile guide_excursions/visual_digest.py markup.py`.
@@ -82,7 +82,7 @@ Pending code deploy, no safe user-facing workaround was applied manually because
 
 ## Corrective Actions
 
-- Apply `linkify_phones_for_telegram_html()` to generated Telegram visual digest captions after HTML link construction and compacting.
+- Apply `linkify_phones_for_telegram_html()` to generated Telegram visual digest captions after HTML link construction and compacting, then send captions through explicit Bot API `caption_entities` so phone contacts are `phone_number` entities rather than relying on Telegram HTML `tel:` parsing.
 - Add a guide visual digest regression test for phone contacts in Telegram captions.
 - Document the Telegram `tel:` contract in the guide excursions monitoring feature doc.
 

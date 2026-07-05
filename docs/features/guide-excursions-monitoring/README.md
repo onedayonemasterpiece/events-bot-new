@@ -368,8 +368,10 @@ Production contract:
   (`<a href="...">название</a>`), без отдельных URL рядом и без VK shortener;
   если запись/контакт представлен телефоном, Telegram caption обязан делать его
   кликабельным `tel:`-линком (`<a href="tel:+...">+7 ...</a>`), не трогая уже
-  готовые source/title ссылки; VK-текст при этом оставляет телефон обычным
-  видимым номером;
+  готовые source/title ссылки; при отправке в Bot API HTML caption
+  конвертируется в `caption_entities`, где телефон уходит как entity
+  `phone_number`, а title/footer ссылки — как `text_link`; VK-текст при этом
+  оставляет телефон обычным видимым номером;
   после хештегов caption добавляет пустую строку и социальный футер
   `Подписаться · Max · Вконтакте`: `Подписаться` ведёт на текущий Telegram target,
   Max — на `https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec`,

@@ -4,6 +4,7 @@ from markup import (
     simple_md_to_html,
     linkify_for_telegraph,
     linkify_phones_for_telegram_html,
+    telegram_html_to_text_entities,
     expose_links_for_vk,
     tel_href_for_phone_value,
 )
@@ -129,3 +130,30 @@ def test_linkify_phones_for_telegram_html_does_not_cross_numbered_list_lines():
         '1. Запись — <a href="tel:+79622555491">+7 962 255-54-91</a>\n'
         "2. Другая экскурсия"
     )
+
+
+def test_telegram_html_to_text_entities_preserves_links_and_phone_entities():
+    text, entities = telegram_html_to_text_entities(
+        '<b>Дайджест</b>\n'
+        '1. Запись — <a href="tel:+79622555491">+7 962 255-54-91</a>\n'
+        '2. <a href="https://vk.com/natakkaz">Домашняя прогулка</a>\n'
+        '#экскурсии'
+    )
+
+    assert text == (
+        "Дайджест\n"
+        "1. Запись — +7 962 255-54-91\n"
+        "2. Домашняя прогулка\n"
+        "#экскурсии"
+    )
+    assert {"type": "bold", "offset": 0, "length": 7} in entities
+    phone_start = len("Дайджест\n1. Запись — ")
+    assert {"type": "phone_number", "offset": phone_start, "length": len("+7 962 255-54-91")} in entities
+    link_start = text.index("Домашняя прогулка")
+    assert {
+        "type": "text_link",
+        "offset": link_start,
+        "length": len("Домашняя прогулка"),
+        "url": "https://vk.com/natakkaz",
+    } in entities
+    assert {"type": "hashtag", "offset": text.index("#экскурсии"), "length": len("#экскурсии")} in entities

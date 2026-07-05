@@ -1,5 +1,6 @@
 import html, re, logging
-from typing import List
+from html.parser import HTMLParser
+from typing import Any, List
 from functools import lru_cache
 
 MD_BOLD   = re.compile(r'(?<!\w)(\*\*|__)(.+?)\1(?!\w)')
@@ -326,6 +327,101 @@ def linkify_phones_for_telegram_html(text_or_html: str) -> str:
     for idx in range(0, len(parts), 2):
         parts[idx] = _PHONE_RE.sub(repl_phone, parts[idx])
     return "".join(parts)
+
+
+def telegram_html_to_text_entities(text_or_html: str) -> tuple[str, list[dict[str, Any]]]:
+    """Convert the small Telegram HTML subset we emit to Bot API entities.
+
+    ``tel:`` anchors are represented as explicit ``phone_number`` entities
+    instead of ``text_link``. Bot API HTML parsing may preserve the visible
+    phone text but Telegram clients/public embeds don't reliably expose a
+    callable phone CTA from ``<a href="tel:...">`` in long captions; entity
+    mode gives the caption an unambiguous phone entity while preserving title
+    links and bold text.
+    """
+
+    def utf16_len(value: str) -> int:
+        return len(value.encode("utf-16-le")) // 2
+
+    class Parser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.parts: list[str] = []
+            self.stack: list[tuple[str, int, str | None]] = []
+            self.entities: list[dict[str, Any]] = []
+
+        @property
+        def text(self) -> str:
+            return "".join(self.parts)
+
+        @property
+        def current_offset(self) -> int:
+            return utf16_len(self.text)
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            tag = tag.lower()
+            if tag in {"b", "strong"}:
+                self.stack.append(("bold", self.current_offset, None))
+                return
+            if tag == "a":
+                href = ""
+                for name, value in attrs:
+                    if name.lower() == "href" and value:
+                        href = value
+                        break
+                self.stack.append(("a", self.current_offset, href))
+                return
+            if tag == "br":
+                self.parts.append("\n")
+
+        def handle_endtag(self, tag: str) -> None:
+            tag = tag.lower()
+            expected = "bold" if tag in {"b", "strong"} else ("a" if tag == "a" else "")
+            if not expected:
+                return
+            for idx in range(len(self.stack) - 1, -1, -1):
+                kind, start, href = self.stack[idx]
+                if kind != expected:
+                    continue
+                del self.stack[idx]
+                length = self.current_offset - start
+                if length <= 0:
+                    return
+                if kind == "bold":
+                    self.entities.append({"type": "bold", "offset": start, "length": length})
+                elif href and href.lower().startswith("tel:"):
+                    self.entities.append({"type": "phone_number", "offset": start, "length": length})
+                elif href:
+                    self.entities.append({"type": "text_link", "offset": start, "length": length, "url": href})
+                return
+
+        def handle_data(self, data: str) -> None:
+            if data:
+                self.parts.append(data)
+
+    parser = Parser()
+    parser.feed(text_or_html or "")
+    parser.close()
+    text = parser.text
+    entities = list(parser.entities)
+
+    occupied: list[range] = [range(int(e["offset"]), int(e["offset"]) + int(e["length"])) for e in entities]
+
+    def is_occupied(offset: int, length: int) -> bool:
+        if length <= 0:
+            return False
+        span = range(offset, offset + length)
+        return any(span.start < other.stop and other.start < span.stop for other in occupied)
+
+    for match in re.finditer(r"(?<![\w/])#[0-9A-Za-zА-Яа-яЁё_]+", text):
+        start = utf16_len(text[: match.start()])
+        length = utf16_len(match.group(0))
+        if is_occupied(start, length):
+            continue
+        entities.append({"type": "hashtag", "offset": start, "length": length})
+        occupied.append(range(start, start + length))
+    entities.sort(key=lambda item: (int(item["offset"]), int(item["length"])))
+    return text, entities
 
 
 def expose_links_for_vk(text_or_html: str) -> str:

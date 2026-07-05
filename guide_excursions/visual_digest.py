@@ -28,7 +28,7 @@ from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from db import Database
-from markup import linkify_phones_for_telegram_html
+from markup import linkify_phones_for_telegram_html, telegram_html_to_text_entities
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
@@ -1433,11 +1433,17 @@ async def publish_visual_digest_to_telegram(
     primary_caption = ""
     for target in targets:
         caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id), target_chat=target)
+        caption_text, caption_entities = telegram_html_to_text_entities(caption)
         if not primary_caption:
             primary_caption = caption
         try:
             upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
-            msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
+            msg = await bot.send_photo(
+                target,
+                upload,
+                caption=caption_text,
+                caption_entities=caption_entities or None,
+            )
             message_id = int(getattr(msg, "message_id", 0) or 0)
             published_targets[_tg_public_target_key(target)] = {
                 "message_ids": [message_id] if message_id else [],
