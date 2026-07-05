@@ -11,6 +11,13 @@
 > - this is a separate daily video product and must not modify, replace, or destabilize the existing `CrumpleVideo` runtime;
 > - canonical docs and Kaggle runtime for this product now live under `CherryFlash`, not under historical `CrumpleVideo` naming.
 
+
+## Guide excursion promo scene
+
+The base CherryFlash profile may insert one guide-excursion promo scene per day when a future occurrence has at least one personal guide avatar and at least one free place. The renderer is locked to the approved `v7` avatar-led artifact: the 720×1280 scene uses the same avatar-centered massing, top label/icon, title below the avatar, date pill, CTA block, palette family, P0 reveal, P1 avatar fly-in/scale, P2 upward text/CTA cascade, and P3 delayed-depth exit. The first frames must not show a static final card; P0 starts from reveal/motion so the scene stays continuous inside CherryFlash.
+
+Selection is base-profile only: partner tracks and Eco never receive excursion promo scenes. Selection skips sold-out occurrences and avoids showing the same occurrence on consecutive days; insertion happens at a random position from slot 2 through slot 6, with a random approved palette.
+
 ## Canonical routes
 
 - Current `/v` feature: `docs/features/crumple-video/README.md`

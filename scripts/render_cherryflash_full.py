@@ -55,7 +55,7 @@ FPS = approval.FPS
 SPLIT_Y = approval.SPLIT_Y
 SCENE_TOTAL_LOCAL = approval.SCENE1_TOTAL_LOCAL
 SCENE_TEXT_START = approval.SCENE1_TEXT_START
-GUIDE_EXCURSION_TOTAL_LOCAL = 6.1
+GUIDE_EXCURSION_TOTAL_LOCAL = 6.14
 INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
@@ -764,178 +764,274 @@ def _guide_icon(kind: str, size: int, color: tuple[int, int, int], accent: tuple
     return _draw_walk_icon(size, color, accent)
 
 
-def _guide_avatar_state(local_t: float) -> tuple[float, float]:
-    # returns scale and center-y. P1 keeps the avatar on visual center, P2 moves
-    # it to the approved central-focus composition.
-    if local_t < 0.28:
-        return 0.35, H / 2
-    if local_t < 0.78:
-        p = approval.ease_out_cubic((local_t - 0.28) / 0.50)
-        return 0.38 + 0.52 * p, H / 2
-    if local_t < 1.90:
-        p = (local_t - 0.78) / 1.12
-        return 0.90 + 0.10 * p, H / 2
-    if local_t < 2.70:
-        p = approval.ease_in_out_cubic((local_t - 1.90) / 0.80)
-        return 1.0, (H / 2) + ((H * 0.37) - (H / 2)) * p
-    if local_t < 4.95:
-        return 1.0, H * 0.37
-    p = approval.ease_in_cubic(min(1.0, (local_t - 4.95) / 0.82))
-    return 1.0, H * 0.37 - H * 0.75 * p
 
-
-def _guide_exit_offset(local_t: float, start: float, distance: float) -> float:
-    if local_t < start:
-        return 0.0
-    return -distance * approval.ease_in_cubic(min(1.0, (local_t - start) / (GUIDE_EXCURSION_TOTAL_LOCAL - start)))
-
-
-def _fade_slide(local_t: float, start: float, duration: float, slide: float = 34.0) -> tuple[float, float]:
-    if local_t < start:
-        return 0.0, slide
-    p = min(1.0, (local_t - start) / duration)
-    e = approval.ease_out_cubic(p)
-    return e, slide * (1.0 - e)
-
-
+# V7-compatible guide excursion scene renderer.
+# This intentionally replaces the earlier prototype implementation.  The
+# approved v7 artifact (`artifacts/codex/excursion-promo-redo-20260705/render_scene_v7.py`)
+# is the source of truth: same scene timing, visual massing and no static first
+# frame.  Keep this function close to that artifact instead of reinterpreting it.
 def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.Image:
-    pal = _guide_pal(scene)
-    bg = _rgb(pal["bg"]); bg2 = _rgb(pal["bg2"]); ink = _rgb(pal["ink"]); muted = _rgb(pal["muted"])
-    accent = _rgb(pal["accent"]); accent2 = _rgb(pal["accent2"]); cta = _rgb(pal["cta"]); cta_text = _rgb(pal["cta_text"])
-    scale = W / 720
-    reveal = approval.ease_out_cubic(min(1.0, local_t / 0.28))
-    canvas = Image.new("RGBA", (W, H), (*_mix((0, 0, 0), bg, reveal), 255))
-    d = ImageDraw.Draw(canvas)
-    for y in range(H):
-        t = y / max(1, H - 1)
-        color = _mix(bg, bg2, t * 0.75)
-        d.line((0, y, W, y), fill=(*_mix(bg, color, reveal), 255))
-
-    # Far 3D bubbles: they participate in the fast+slow P1 zoom at ~30% depth,
-    # shift up less in P2 and exit later/slower in P3. Top orange strip remains
-    # visually in front, so bubbles never cross above it.
-    bubble_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bubble_layer)
-    if local_t < 0.78:
-        bp = approval.ease_out_cubic(max(0.0, (local_t - 0.28) / 0.50))
-        bscale = 0.86 + 0.105 * bp
-    elif local_t < 1.90:
-        bp = (local_t - 0.78) / 1.12
-        bscale = 0.965 + 0.035 * bp
-    else:
-        bscale = 1.0
-    bmove = 0.0
-    if local_t >= 1.90:
-        bmove = -46 * approval.ease_in_out_cubic(min(1.0, (local_t - 1.90) / 0.80))
-    bmove += _guide_exit_offset(local_t, 5.22, H * 0.25)
-    bubbles = [
-        (-78, 210, 250, pal["bubble1"], 54, -22),
-        (528, 190, 225, pal["bubble2"], 48, 18),
-        (486, 615, 300, pal["bubble3"], 35, 28),
-        (-120, 825, 270, pal["bubble2"], 30, -28),
-    ]
-    top_guard = round(112 * scale)
-    for x, y, size, color_hex, alpha, drift in bubbles:
-        cx = W / 2 + (x + size / 2 - W / 2) * bscale + drift * (bscale - 0.86) + _guide_exit_offset(local_t, 5.28, W * 0.04)
-        cy = H / 2 + (y + size / 2 - H / 2) * bscale + bmove
-        r = size * bscale / 2
-        cy = max(cy, top_guard + r)
-        bd.ellipse((cx-r, cy-r, cx+r, cy+r), fill=(*_rgb(color_hex), int(alpha * reveal)))
-    bubble_layer = bubble_layer.filter(ImageFilter.GaussianBlur(radius=max(0.6, 1.8 * scale)))
-    canvas.alpha_composite(bubble_layer)
-
-    # Top accent strip is frontmost for background composition.
-    strip_h = round(70 * scale)
-    strip_y = round(58 * scale) + _guide_exit_offset(local_t, 5.38, H * 0.10)
-    d.rounded_rectangle((-20, strip_y, W + 20, strip_y + strip_h), radius=round(18 * scale), fill=(*accent, int(255 * reveal)))
-
-    avatar_scale, avatar_cy = _guide_avatar_state(local_t)
-    avatar_paths = scene.image_paths or (scene.image_path,)
-    n = max(1, min(3, len(avatar_paths)))
-    base_size = round((360 if n == 1 else 258) * scale * avatar_scale)
-    overlap = base_size * (0.58 if n == 2 else 0.54)
-    group_w = base_size + (n - 1) * overlap
-    avatar_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ad = ImageDraw.Draw(avatar_layer)
-    ax0 = W / 2 - group_w / 2
-    ay = avatar_cy - base_size / 2
-    shadow_blur = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shadow_blur)
-    sd.ellipse((W/2 - group_w/2 - 18*scale, ay + 14*scale, W/2 + group_w/2 + 18*scale, ay + base_size + 32*scale), fill=(0,0,0,85))
-    shadow_blur = shadow_blur.filter(ImageFilter.GaussianBlur(radius=18*scale))
-    avatar_layer.alpha_composite(shadow_blur)
-    for i, path in enumerate(avatar_paths[:n]):
-        size_i = base_size
-        x = ax0 + i * overlap
-        if n > 1 and i % 2 == 0:
-            y = ay + 8 * scale
-        else:
-            y = ay - 4 * scale
-        ad.ellipse((x - 8*scale, y - 8*scale, x + size_i + 8*scale, y + size_i + 8*scale), fill=(*accent2, 255))
-        ad.ellipse((x - 3*scale, y - 3*scale, x + size_i + 3*scale, y + size_i + 3*scale), fill=(*ink, 255))
-        avatar = _crop_avatar_circle(path, size_i)
-        _paste_rgba_subpixel(avatar_layer, avatar, x, y)
-    canvas.alpha_composite(avatar_layer)
-
     promo = scene.guide_excursion or {}
-    # Kicker + icon appear during P2, then leave with a slight delay in P3.
-    k_alpha, k_slide = _fade_slide(local_t, 2.03, 0.45, 24 * scale)
-    k_y = round(165 * scale) + k_slide + _guide_exit_offset(local_t, 5.08, H * 0.52)
-    icon_size = round(84 * scale)
-    icon = _guide_icon(str(promo.get("icon_kind") or "walk"), icon_size, ink, accent2)
-    _paste_rgba_subpixel(canvas, _alpha_layer(icon, k_alpha), W - round(126 * scale), k_y - round(22 * scale))
-    k_font = approval.font(approval.AKROBAT_BLACK, max(24, round(29 * scale)))
-    kd = ImageDraw.Draw(canvas)
-    kicker = "СКОРО\nЭКСКУРСИЯ"
-    kk_layer = Image.new("RGBA", canvas.size, (0,0,0,0))
-    kld = ImageDraw.Draw(kk_layer)
-    for j, line in enumerate(kicker.split("\n")):
-        kld.text((round(72*scale), k_y + j*round(31*scale)), line, font=k_font, fill=(*muted, int(255*k_alpha)))
-    canvas.alpha_composite(kk_layer)
+    pal_name = str(promo.get("palette") or "prussian_cream")
+    v7_palettes = {
+        "prussian_cream": {"bg":"#0B2F49","cream":"#FFF1CF","accent":"#FF6833","ink":"#060708","pill":"#535A62","bubble":"#3F4654","line":"#718092","top":"#CB5D38"},
+        "deep_wine_ivory": {"bg":"#2A1024","cream":"#FFF0D3","accent":"#F46D43","ink":"#070607","pill":"#594853","bubble":"#4A3C4B","line":"#85717E","top":"#F46D43"},
+        "museum_green_ivory": {"bg":"#12352F","cream":"#FFF2D6","accent":"#F2A23A","ink":"#070807","pill":"#465D56","bubble":"#3C504C","line":"#789087","top":"#D9783D"},
+        "black_lime": {"bg":"#111416","cream":"#F4F3DF","accent":"#D6FF3F","ink":"#080909","pill":"#3F4548","bubble":"#33393E","line":"#6F777B","top":"#D6FF3F"},
+    }
+    vp = v7_palettes.get(pal_name, v7_palettes["prussian_cream"])
+    # The approved scene was authored at 720x1280 with 3x antialiasing.  The
+    # renderer may run in preview mode too, so author in canonical coordinates
+    # and scale down/up at the very end.
+    CW, CH, S = 720, 1280, 3
+    RW, RH = CW*S, CH*S
+    t = float(local_t)
+    P0_END = 0.36
+    T_ENTRY = 0.45
+    T_HOLD = 1.20
+    T_MOVE = 0.75
+    T_INFO = 2.50
+    T_EXIT = 0.58
+    P1_END = T_ENTRY + T_HOLD
+    P2_END = T_ENTRY + T_HOLD + T_MOVE
+    P3_START = P2_END + T_INFO
 
-    title_alpha, title_slide = _fade_slide(local_t, 2.32, 0.55, 50 * scale)
-    title_exit = _guide_exit_offset(local_t, 5.03, H * 0.68)
-    title_top = (avatar_cy + base_size/2 + round(48*scale)) + title_slide + title_exit
-    title_lines, title_font, _ = _wrap_text(scene.title, approval.DRUK_SUPER, round(W*0.84), max(54, round(70*scale)), max(34, round(42*scale)), 3)
-    _draw_centered_lines(canvas, [line.upper() for line in title_lines], title_font, center_x=W/2, top=title_top, fill=ink, line_gap=round(8*scale), alpha=title_alpha)
+    def c01(x: float) -> float:
+        return max(0.0, min(1.0, x))
+    def eo(t0: float) -> float:
+        t0 = c01(t0); return 1 - (1 - t0) ** 3
+    def ei(t0: float) -> float:
+        t0 = c01(t0); return t0 * t0 * t0
+    def eio(t0: float) -> float:
+        t0 = c01(t0); return 4*t0*t0*t0 if t0 < .5 else 1 - ((-2*t0 + 2) ** 3) / 2
+    def lerp(a: float, b: float, q: float) -> float:
+        return a + (b - a) * q
+    def xy(v: float) -> int:
+        return int(round(v*S))
+    def rgba(hex_color: str, alpha: float = 255) -> tuple[int, int, int, int]:
+        h = hex_color.lstrip('#')
+        return (int(h[:2],16), int(h[2:4],16), int(h[4:6],16), int(max(0, min(255, alpha))))
+    def ft(path: Path, size: float):
+        return approval.font(path, int(round(size*S)))
+    def down(im: Image.Image) -> Image.Image:
+        out = im.resize((CW, CH), Image.Resampling.LANCZOS).convert('RGBA')
+        if (W, H) != (CW, CH):
+            out = out.resize((W, H), Image.Resampling.LANCZOS)
+        return out
 
-    date_alpha, date_slide = _fade_slide(local_t, 2.82, 0.45, 34 * scale)
-    date_exit = _guide_exit_offset(local_t, 5.12, H * 0.62)
-    text_height_est = len(title_lines) * round(60*scale)
-    date_top = title_top + text_height_est + round(24*scale) + date_slide + date_exit
-    date_font, _ = _fit_font(approval.AKROBAT_BLACK, scene.date_line, round(W*0.76), max(36, round(44*scale)), max(26, round(30*scale)))
-    _draw_centered_lines(canvas, [scene.date_line], date_font, center_x=W/2, top=date_top, fill=accent2, line_gap=0, alpha=date_alpha)
+    def make_bg() -> Image.Image:
+        reveal = eo(t / P0_END)
+        mt = max(0.0, t - P0_END)
+        if mt < T_ENTRY:
+            p1 = 0.75 * eo(mt / T_ENTRY)
+        elif mt < P1_END:
+            p1 = 0.75 + 0.25 * ((mt - T_ENTRY) / T_HOLD)
+        else:
+            p1 = 1.0
+        p2 = eio((mt - P1_END) / T_MOVE) if mt >= P1_END else 0.0
+        bg_exit = ei((t - (P0_END + P3_START)) / T_EXIT) if t >= P0_END + P3_START else 0.0
+        fade = (1 - 0.72 * bg_exit) * reveal
+        im = Image.new('RGBA', (RW, RH), rgba(vp['bg'], 255 * fade))
+        d = ImageDraw.Draw(im, 'RGBA')
+        bs = lerp(.86, 1.0, p1)
+        bubble_p2 = -48 * p2
+        bubble_exit = -155 * bg_exit
+        bg_up = -55 * bg_exit
+        bubbles = [
+            ((200, 380), (104, 340), 245, '#3C4352', 126),
+            ((560, 1060), (665, 1130), 214, '#3C4352', 116),
+            ((642, 305), (780, 275), 145, '#263C52', 52),
+        ]
+        for st, en, r, col, a in bubbles:
+            cx = lerp(st[0], en[0], p1)
+            cy = lerp(st[1], en[1], p1) + bubble_p2 + bubble_exit + bg_up * .12
+            rr = r * bs
+            d.ellipse((xy(cx-rr), xy(cy-rr), xy(cx+rr), xy(cy+rr)), fill=rgba(col, a*fade))
+        # In v7 the orange stripe is the frontmost background surface.  The
+        # very first frame must not be a static final card; it fades in from black.
+        d.rectangle((0, 0, RW, xy(25)), fill=rgba(vp['top'], 245 * reveal * (1 - 0.25*bg_exit)))
+        if t < P0_END:
+            im.alpha_composite(Image.new('RGBA', (RW, RH), (0,0,0,int(255*(1-reveal)))))
+        return im
 
-    cta_alpha, cta_slide = _fade_slide(local_t, 3.20, 0.45, 34 * scale)
-    cta_exit = _guide_exit_offset(local_t, 5.20, H * 0.55)
-    contact = str(promo.get("contact") or "Полюбить Калининград").strip()
-    contact_label = str(promo.get("contact_label") or "запись").strip().upper()
-    cta_w = round(W * 0.78)
-    cta_h = round(104 * scale)
-    cta_x = (W - cta_w) / 2
-    cta_y = date_top + round(72 * scale) + cta_slide + cta_exit
-    halo_p = 0.0
-    if 3.78 <= local_t <= 4.38:
-        halo_p = math.sin((local_t - 3.78) / 0.60 * math.pi)
-    cta_layer = Image.new("RGBA", canvas.size, (0,0,0,0))
-    cd = ImageDraw.Draw(cta_layer)
-    if halo_p > 0:
-        cd.rounded_rectangle((cta_x-18*scale, cta_y-14*scale, cta_x+cta_w+18*scale, cta_y+cta_h+14*scale), radius=round(42*scale), fill=(*accent2, int(85*halo_p*cta_alpha)))
-        cta_layer = cta_layer.filter(ImageFilter.GaussianBlur(radius=12*scale))
-        cd = ImageDraw.Draw(cta_layer)
-    cd.rounded_rectangle((cta_x, cta_y, cta_x+cta_w, cta_y+cta_h), radius=round(32*scale), fill=(*cta, int(245*cta_alpha)))
-    label_font = approval.font(approval.AKROBAT_BOLD, max(20, round(24*scale)))
-    value_font, _ = _fit_font(approval.AKROBAT_BLACK, contact, round(cta_w - 70*scale), max(30, round(38*scale)), max(20, round(24*scale)))
-    cd.text((cta_x+round(34*scale), cta_y+round(18*scale)), contact_label, font=label_font, fill=(*_mix(cta_text, accent, 0.35), int(255*cta_alpha)))
-    cd.text((cta_x+round(34*scale), cta_y+round(52*scale)), contact, font=value_font, fill=(*cta_text, int(255*cta_alpha)))
-    canvas.alpha_composite(cta_layer)
+    def avatar_layer() -> Image.Image:
+        paths = scene.image_paths or (scene.image_path,)
+        n = max(1, min(3, len(paths)))
+        if n == 1:
+            size, overlap = 370, 0
+        else:
+            size, overlap = 270, 158
+        sizeS = xy(size)
+        group_w = size + (n-1)*overlap
+        layer = Image.new('RGBA', (xy(group_w+70), xy(size+72)), (0,0,0,0))
+        shadow = Image.new('RGBA', layer.size, (0,0,0,0))
+        sd = ImageDraw.Draw(shadow, 'RGBA')
+        sd.ellipse((xy(18), xy(28), xy(group_w+52), xy(size+58)), fill=(0,0,0,105))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(xy(16)))
+        layer.alpha_composite(shadow)
+        ld = ImageDraw.Draw(layer, 'RGBA')
+        for i, path in enumerate(paths[:n]):
+            x = xy(35 + i*overlap)
+            y = xy(24 + (8 if n > 1 and i == 0 else 0))
+            with Image.open(path).convert('RGB') as src:
+                w0,h0 = src.size
+                side = min(w0,h0)
+                left = (w0-side)//2
+                top = max(0, min((h0-side)//2, int(h0*0.06)))
+                src = src.crop((left, top, left+side, top+side)).resize((sizeS-xy(32), sizeS-xy(32)), Image.Resampling.LANCZOS)
+            mask = Image.new('L', src.size, 0)
+            ImageDraw.Draw(mask).ellipse((0,0,src.size[0]-1,src.size[1]-1), fill=255)
+            ld.ellipse((x, y, x+sizeS, y+sizeS), outline=rgba(vp['accent'],255), width=xy(16))
+            layer.paste(src.convert('RGBA'), (x+xy(16), y+xy(16)), mask)
+        return layer
 
-    if local_t >= 5.55:
-        fade = approval.ease_in_cubic(min(1.0, (local_t - 5.55) / 0.55))
-        overlay = Image.new("RGBA", (W, H), (*bg, int(255 * fade)))
-        canvas.alpha_composite(overlay)
-    return canvas
+    def wrap_title(raw: str) -> list[str]:
+        text = ' '.join(str(raw or '').split()).upper()
+        if not text:
+            return ['СКОРО', 'ЭКСКУРСИЯ']
+        words = text.split()
+        font = ft(approval.DRUK_SUPER, 74)
+        draw = ImageDraw.Draw(Image.new('RGB', (1,1)))
+        max_w = xy(650)
+        lines=[]; cur=''
+        for word in words:
+            test = (cur + ' ' + word).strip()
+            if draw.textlength(test, font=font) <= max_w or not cur:
+                cur = test
+            else:
+                lines.append(cur); cur = word
+        if cur: lines.append(cur)
+        if len(lines) > 3:
+            # Refit by using three balanced chunks; v7 never shrinks into weak typography.
+            best=None
+            for a in range(1, len(words)):
+                for b in range(a+1, len(words)+1):
+                    cand=[' '.join(words[:a]), ' '.join(words[a:b]), ' '.join(words[b:])]
+                    if all(cand) and all(draw.textlength(x, font=font) <= max_w for x in cand):
+                        score=max(draw.textlength(x,font=font) for x in cand)-min(draw.textlength(x,font=font) for x in cand)
+                        if best is None or score < best[0]: best=(score,cand)
+            lines = best[1] if best else lines[:3]
+        return lines[:3]
 
+    def label_icon_layer() -> Image.Image:
+        im = Image.new('RGBA', (RW, RH), (0,0,0,0)); d=ImageDraw.Draw(im,'RGBA')
+        x,y,w,h = 52,57,232,30
+        d.rounded_rectangle((xy(x),xy(y),xy(x+w),xy(y+h)), radius=xy(15), fill=rgba(vp['pill'],115), outline=rgba(vp['cream'],145), width=xy(1.5))
+        f=ft(approval.AKROBAT_BOLD,25); text='СКОРО ЭКСКУРСИЯ'; bb=d.textbbox((0,0),text,font=f)
+        d.text((xy(x+14), xy(y+h/2)-(bb[3]-bb[1])//2-bb[1]), text, font=f, fill=rgba(vp['cream'],255))
+        ix,iy,iw,ih = 590,50,80,80
+        d.rounded_rectangle((xy(ix),xy(iy),xy(ix+iw),xy(iy+ih)), radius=xy(18), fill=rgba(vp['accent'],255))
+        kind = str(promo.get('icon_kind') or 'walk')
+        icon = Image.new('RGBA', (xy(52), xy(52)), (0,0,0,0))
+        gd = ImageDraw.Draw(icon, 'RGBA')
+        if kind == 'water':
+            # v7-style simple functional glyph: three clear waves, no face-like arcs.
+            col = rgba(vp['ink'],255); width = xy(5)
+            for yy in (19, 28, 37):
+                gd.arc((xy(8), xy(yy-8), xy(28), xy(yy+8)), 180, 360, fill=col, width=width)
+                gd.arc((xy(25), xy(yy-8), xy(45), xy(yy+8)), 180, 360, fill=col, width=width)
+        else:
+            icon = _guide_icon(kind, xy(52), ImageColor.getrgb(vp['ink']), ImageColor.getrgb(vp['cream']))
+            icon = icon.resize((xy(52), xy(52)), Image.Resampling.LANCZOS)
+        im.alpha_composite(icon, (xy(ix+(iw-52)/2), xy(iy+(ih-52)/2)))
+        return im
+
+    def title_layer() -> Image.Image:
+        im=Image.new('RGBA',(RW,RH),(0,0,0,0)); d=ImageDraw.Draw(im,'RGBA')
+        f=ft(approval.DRUK_SUPER,74)
+        y=668
+        for line in wrap_title(scene.title):
+            bb=d.textbbox((0,0),line,font=f); tw=bb[2]-bb[0]
+            x=(RW-tw)//2 - bb[0]
+            d.text((x+xy(2),xy(y)+xy(2)),line,font=f,fill=(0,0,0,88))
+            d.text((x,xy(y)),line,font=f,fill=rgba(vp['cream'],255))
+            y += 75
+        return im
+
+    def date_layer() -> Image.Image:
+        im=Image.new('RGBA',(RW,RH),(0,0,0,0)); d=ImageDraw.Draw(im,'RGBA')
+        f=ft(approval.AKROBAT_BLACK,42)
+        text=scene.date_line
+        bb=d.textbbox((0,0),text,font=f); tw,th=bb[2]-bb[0],bb[3]-bb[1]
+        x=(RW-tw)//2-xy(24); y=xy(940); ww=tw+xy(48); hh=xy(52)
+        d.rounded_rectangle((x,y,x+ww,y+hh), radius=xy(18), fill=rgba(vp['accent'],255))
+        d.text((x+xy(24), y+hh//2-th//2-bb[1]), text, font=f, fill=rgba(vp['ink'],255))
+        return im
+
+    def cta_layer() -> Image.Image:
+        im=Image.new('RGBA',(RW,RH),(0,0,0,0)); d=ImageDraw.Draw(im,'RGBA')
+        x,y,w,h = 52,1068,616,94
+        d.rounded_rectangle((xy(x),xy(y),xy(x+w),xy(y+h)), radius=xy(20), fill=rgba('#56616A',74), outline=rgba(vp['cream'],172), width=xy(1.6))
+        contact = str(promo.get('contact') or '').strip() or 'kenigevents'
+        label = str(promo.get('contact_label') or 'ЗАПИСЬ').strip().upper()
+        if contact.startswith('@'):
+            label = 'ЗАПИСЬ В TELEGRAM'
+        lf=ft(approval.AKROBAT_BOLD,20)
+        # Fit contact inside v7 CTA without changing the CTA block mass.
+        size=52
+        while size>30:
+            hf=ft(approval.AKROBAT_BLACK,size)
+            if d.textlength(contact, font=hf) <= xy(w-60): break
+            size -= 2
+        bb=d.textbbox((0,0),label,font=lf)
+        d.text((xy(x+30),xy(y+12)-bb[1]), label, font=lf, fill=rgba(vp['cream'],252))
+        hb=d.textbbox((0,0),contact,font=hf)
+        d.text((xy(x+30),xy(y+30)-hb[1]), contact, font=hf, fill=rgba(vp['cream'],255))
+        ff=ft(approval.AKROBAT_BOLD,16)
+        d.text((xy(52),xy(1218)), 'kenigevents • guide promo', font=ff, fill=rgba(vp['cream'],245))
+        return im
+
+    def halo_layer() -> Image.Image | None:
+        start=P0_END+3.38; dur=.88; p0=c01((t-start)/dur)
+        if p0 <= 0 or p0 >= 1: return None
+        strength=math.sin(math.pi*p0)
+        im=Image.new('RGBA',(RW,RH),(0,0,0,0)); x,y,w,h=52,1068,616,94
+        glow=Image.new('RGBA',(RW,RH),(0,0,0,0)); gd=ImageDraw.Draw(glow,'RGBA')
+        gd.rounded_rectangle((xy(x-3),xy(y-3),xy(x+w+3),xy(y+h+3)), radius=xy(24), outline=rgba(vp['accent'],118*strength), width=xy(4))
+        im.alpha_composite(glow.filter(ImageFilter.GaussianBlur(xy(8))))
+        sheen=Image.new('RGBA',(RW,RH),(0,0,0,0)); sd=ImageDraw.Draw(sheen,'RGBA')
+        cx=lerp(x-120,x+w+120,p0); bw=58
+        sd.polygon([(xy(cx-bw),xy(y+h+12)),(xy(cx+bw),xy(y+h+12)),(xy(cx+bw+54),xy(y-12)),(xy(cx-bw+54),xy(y-12))], fill=rgba(vp['cream'],78))
+        mask=Image.new('L',(RW,RH),0); md=ImageDraw.Draw(mask); md.rounded_rectangle((xy(x),xy(y),xy(x+w),xy(y+h)), radius=xy(20), fill=255)
+        clipped=Image.eval(sheen.getchannel('A'), lambda a: int(a*strength)); clipped=Image.composite(clipped, Image.new('L',(RW,RH),0), mask); sheen.putalpha(clipped)
+        im.alpha_composite(sheen); return im
+
+    def paste_center(base: Image.Image, layer: Image.Image, cx: float, cy: float, scale: float, opacity: float) -> None:
+        if opacity <= 0 or scale <= 0: return
+        lw,lh=layer.size; nw=max(1,round(lw*scale)); nh=max(1,round(lh*scale))
+        im=layer.resize((nw,nh), Image.Resampling.LANCZOS) if (nw,nh)!=(lw,lh) else layer.copy()
+        if opacity < .999:
+            im.putalpha(im.getchannel('A').point(lambda v: int(v*opacity)))
+        base.alpha_composite(im, (round(xy(cx)-nw/2), round(xy(cy)-nh/2)))
+
+    def comp(base: Image.Image, layer: Image.Image | None, start: float, rise: float, exit_delay: float, exit_dist: float=560) -> None:
+        if layer is None or t < start: return
+        ap=eo((t-start)/.70); yoff=rise*(1-ap); op=min(1,(t-start)/.22)
+        if t >= P0_END + P3_START + exit_delay:
+            ep=ei((t-(P0_END+P3_START+exit_delay))/T_EXIT); yoff += -exit_dist*ep; op *= max(0,1-ep*1.12)
+        tmp=Image.new('RGBA',(RW,RH),(0,0,0,0)); tmp.alpha_composite(layer,(0,xy(yoff)))
+        if op < .999:
+            tmp.putalpha(tmp.getchannel('A').point(lambda v: int(v*op)))
+        base.alpha_composite(tmp)
+
+    im = make_bg()
+    mt = max(0.0, t - P0_END)
+    if mt < T_ENTRY:
+        sc=.4+.5*eo(mt/T_ENTRY); cx,cy=360,640
+    elif mt < P1_END:
+        sc=.9+.1*((mt-T_ENTRY)/T_HOLD); cx,cy=360,640
+    else:
+        sc=1.0; q=eio((mt-P1_END)/T_MOVE); cx,cy=360,lerp(640,450,q)
+    op=eo((t-P0_END)/.18)
+    if t >= P0_END + P3_START:
+        ep=ei((t-(P0_END+P3_START))/T_EXIT); cy += -610*ep; op *= max(0,1-ep*1.1)
+    paste_center(im, avatar_layer(), cx, cy, sc, op)
+    comp(im, label_icon_layer(), P0_END+1.80, 44, .04, 560)
+    comp(im, title_layer(), P0_END+1.96, 62, .09, 560)
+    comp(im, date_layer(), P0_END+2.18, 48, .14, 560)
+    comp(im, halo_layer(), P0_END+2.40, 52, .19, 560)
+    comp(im, cta_layer(), P0_END+2.40, 52, .19, 560)
+    return down(im)
 
 def _build_primary_blocks(scene: RenderScene):
     blocks: list = []

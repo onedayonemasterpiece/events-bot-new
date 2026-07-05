@@ -7,6 +7,7 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+- **CherryFlash / guide excursions**: corrected the integrated guide-excursion renderer to follow the approved v7 geometry/timing exactly, including the P0 reveal/motion start instead of a static first card.
 - **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
 
 - **Telegram event medallions**: require standalone token/phrase matches for medallion aliases so short acronyms such as `ММО` no longer trigger the Музей Мирового океана medallion inside ordinary words like `программой`, `Эммой` or `фильмом`.
