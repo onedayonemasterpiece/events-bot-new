@@ -250,19 +250,18 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
                 pass
         (folder / "region_talk_run_config.json").write_text(json.dumps({"run_id": run_id, "env": env_config, "seed_file": env_config["REGION_TALK_SEED_FILE"], "place_lexicon_file": env_config["REGION_TALK_PLACE_LEXICON_FILE"]}, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def write_secret(folder: Path) -> None:
+    def write_secret_bundle(folder: Path) -> None:
+        # Keep encrypted payload and Fernet key in the same Kaggle dataset version.
+        # Separate datasets can be cached/mounted out of sync by slug/version and
+        # produce InvalidToken before the notebook reaches business logic.
         (folder / "region_talk_secrets.enc").write_bytes(encrypted)
-
-    def write_key(folder: Path) -> None:
         (folder / "region_talk_fernet.key").write_bytes(key)
 
     config_ref = create_or_replace_dataset(client, username, f"region-talk-config-{safe_slug}", f"Region Talk config {safe_slug}", write_config)
-    secret_ref = create_or_replace_dataset(client, username, f"region-talk-secrets-{safe_slug}", f"Region Talk secrets {safe_slug}", write_secret)
-    key_ref = create_or_replace_dataset(client, username, f"region-talk-key-{safe_slug}", f"Region Talk key {safe_slug}", write_key)
+    secret_ref = create_or_replace_dataset(client, username, f"region-talk-secret-bundle-{safe_slug}", f"Region Talk secret bundle {safe_slug}", write_secret_bundle)
     wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json", "google_ai/__init__.py"])
-    wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc"])
-    wait_dataset_ready(client, key_ref, expected_files=["region_talk_fernet.key"])
-    return [config_ref, secret_ref, key_ref]
+    wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc", "region_talk_fernet.key"])
+    return [config_ref, secret_ref]
 
 
 def kernel_ref_from_meta(kernel_path: Path, *, kernel_slug: str | None = None) -> str:
