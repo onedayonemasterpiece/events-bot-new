@@ -137,5 +137,19 @@
     "bytes": 95076,
     "content_type": "image/jpeg",
     "profile_url": "https://t.me/katerinakostiugova"
+  },
+  {
+    "key": "hobbytur",
+    "kind": "vk_public_avatar",
+    "file": "hobbytur.jpg",
+    "title": "Хобби-тур",
+    "source": "VK public avatar exposed on the public Orgs.biz/VK mirror for vk.com/hobbytur; official tourism directory confirms the same Хобби-тур organization and contacts.",
+    "url": "https://vk.com/hobbytur",
+    "mirror_page": "https://hobbytur.orgs.biz/",
+    "official_directory": "https://visit-kaliningrad.ru/info/turfirmy/hobbytour/",
+    "image_url": "https://sun1-84.userapi.com/s/v1/ig1/9Ww5Fk9Hen5448-6k8vwspDU1B49Kj5Gwr8pHbGQtkNB2xVvPildbTr5y409EFUI28gTzoPB.jpg?quality=96&crop=186,148,568,568&as=32x32,48x48,72x72,108x108,160x160,240x240,360x360,480x480,540x540&ava=1&cs=200x200",
+    "retrieved_at": "2026-07-06",
+    "bytes": 27053,
+    "content_type": "image/jpeg"
   }
 ]

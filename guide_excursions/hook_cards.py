@@ -20,6 +20,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from .hook_card_render import CardPalette, load_palettes, main_fit_px, render_hook_card
@@ -72,6 +73,7 @@ class HookCard:
     theme: str
     palette: CardPalette
     main_px: int | None = None  # shared main type size across the publication
+    avatar_path: str | None = None
 
     def render_png(self) -> bytes:
         return render_hook_card(
@@ -79,6 +81,7 @@ class HookCard:
             sub_text=self.sub_text,
             palette=self.palette,
             main_px=self.main_px,
+            avatar_path=self.avatar_path,
         )
 
 
@@ -239,6 +242,20 @@ def _format_card_subline(row: Mapping[str, Any]) -> str | None:
     return " · ".join(parts) if parts else None
 
 
+def _avatar_path_for_row(row: Mapping[str, Any]) -> str | None:
+    """Return a committed guide/organization avatar path for hook-card medallions."""
+    try:
+        from .visual_digest import _AVATAR_DIR, _AVATAR_FILES, _avatar_key
+    except Exception:
+        return None
+    key = _avatar_key(row)
+    filename = _AVATAR_FILES.get(key or "")
+    if not filename:
+        return None
+    path = Path(_AVATAR_DIR) / filename
+    return str(path) if path.is_file() else None
+
+
 def _card_payload_row(row: Mapping[str, Any]) -> dict[str, Any]:
     fact_pack = row.get("fact_pack") if isinstance(row.get("fact_pack"), Mapping) else {}
     raw_guide_names = row.get("guide_names")
@@ -379,6 +396,7 @@ async def generate_hook_cards(
             continue
         # Footer is deterministic: date + guide (who leads it), not a slogan.
         sub = _format_card_subline(by_id[occ_id])
+        avatar_path = _avatar_path_for_row(by_id[occ_id])
         theme = _normalize_text(item.get("theme"))[:40]
         seen_occ.add(occ_id)
         seen_hooks.add(dedup_key)
@@ -389,6 +407,7 @@ async def generate_hook_cards(
                 sub_text=sub,
                 theme=theme,
                 palette=palette,
+                avatar_path=avatar_path,
             )
         )
 
@@ -407,6 +426,7 @@ async def generate_hook_cards(
             theme=c.theme,
             palette=c.palette,
             main_px=shared_main_px,
+            avatar_path=c.avatar_path,
         )
         for c in cards
     ]

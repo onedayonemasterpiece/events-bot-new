@@ -161,13 +161,13 @@ async def build_carousel_slides(
 
     # hooks for the plain-photo events (sorted by strength)
     photo_rows = [by_id[occ] for occ, _ in photo_media if occ in by_id]
-    photo_hooks: dict[int, tuple[str, str | None]] = {}
+    photo_hooks: dict[int, tuple[str, str | None, str | None]] = {}
     if photo_rows:
         cards = await generate_hook_cards(
             photo_rows, existing_image_count=0, max_cards=len(photo_rows), seed=seed, ask_fn=ask_fn
         )
         for c in cards:
-            photo_hooks[c.occurrence_id] = (c.main_text, c.sub_text)
+            photo_hooks[c.occurrence_id] = (c.main_text, c.sub_text, c.avatar_path)
         photo_strength_order = [c.occurrence_id for c in cards]
     else:
         photo_strength_order = []
@@ -207,9 +207,13 @@ async def build_carousel_slides(
     for idx, (kind, payload) in enumerate(specs, start=1):
         try:
             if kind == "photo":
-                hook, footer = photo_hooks[payload]
+                hook, footer, avatar_path = photo_hooks[payload]
                 png = render_carousel_slide(
-                    photo=data_by_occ[payload], hook=hook, footer=footer, palette=palette,
+                    photo=data_by_occ[payload],
+                    hook=hook,
+                    footer=footer,
+                    palette=palette,
+                    avatar_path=avatar_path,
                     swipe=True, index=idx, total=total, edge_seed=payload,
                 )
             elif kind == "afisha":
@@ -219,6 +223,7 @@ async def build_carousel_slides(
             else:  # text-only hook card
                 png = render_hook_only_slide(
                     hook=payload.main_text, footer=payload.sub_text, palette=palette,
+                    avatar_path=getattr(payload, "avatar_path", None),
                     swipe=True, index=idx, total=total,
                 )
             slides.append(_slide_jpeg(png))

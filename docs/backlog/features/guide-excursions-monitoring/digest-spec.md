@@ -97,6 +97,12 @@ Contract:
 
 - digest candidates in → preview/publish bundle out.
 
+### Guide avatar medallions for visual surfaces
+
+Visual schedule cards and VK hook-card/carousel slides use the committed avatar catalog in `guide_excursions/assets/visual_digest_avatars/`. The resolver maps stable source usernames, guide names and organization aliases to local files; missing matches fall back to initials rather than guessed logos.
+
+`hobbytur.jpg` is the curated Хобби-тур organization medallion: a VK public avatar from `vk.com/hobbytur` discovered through the public Orgs.biz mirror and cross-checked against the official Калининград tourism directory page for Хобби-тур. It should match aliases `hobbytur`, `Hobby Tur`, `Хобби-тур`, and `Хобби Тур` for future visual digests.
+
 ### `Media Bridge v1`
 
 Временный media-delivery слой до появления постоянной infra на Yandex Cloud.

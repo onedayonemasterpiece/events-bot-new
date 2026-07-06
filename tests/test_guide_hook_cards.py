@@ -103,6 +103,11 @@ def _rows():
          "summary_one_liner": "Сумерки", "city": "Калининград",
          "date": "2026-06-09", "guide_names": ["Мария П."],
          "fact_pack": {}},
+        {"occurrence_id": 105, "canonical_title": "Путешествие с Хобби-Тур",
+         "summary_one_liner": "Автобусный тур по области", "city": "Калининград",
+         "date": "2026-06-10", "organizer_names": ["Хобби-тур"],
+         "source_username": "hobbytur", "booking_url": "https://vk.com/hobbytur",
+         "fact_pack": {"main_hook": "малые города области"}},
     ]
 
 
@@ -218,6 +223,40 @@ def test_render_hook_card_smoke():
     img = Image.open(io.BytesIO(png))
     assert img.size == (CANVAS, CANVAS)
     assert img.mode == "RGB"
+
+
+def test_render_hook_card_accepts_centered_avatar_medallion():
+    avatar = hc._avatar_path_for_row({"source_username": "hobbytur", "organizer_names": ["Хобби-тур"]})
+    assert avatar
+    png = render_hook_card(
+        main_text="Какие истории ждут за городом?",
+        sub_text="10 июня · Хобби-тур",
+        palette=palette_by_id("deep_wine_ivory"),
+        avatar_path=avatar,
+    )
+    img = Image.open(io.BytesIO(png))
+    assert img.size == (CANVAS, CANVAS)
+
+
+@pytest.mark.asyncio
+async def test_generate_hook_cards_sets_known_avatar_path():
+    cards = await hc.generate_hook_cards(
+        _rows(),
+        existing_image_count=8,
+        seed=1,
+        ask_fn=_fake_ask_factory(
+            [
+                {
+                    "occurrence_id": 105,
+                    "hook": "Какие истории ждут за городом?",
+                    "theme": "область",
+                    "strength": 95,
+                }
+            ]
+        ),
+    )
+    assert len(cards) == 1
+    assert cards[0].avatar_path and cards[0].avatar_path.endswith("hobbytur.jpg")
 
 
 def test_render_every_palette_does_not_crash():

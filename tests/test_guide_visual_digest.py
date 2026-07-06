@@ -235,3 +235,14 @@ def test_visual_digest_katya_identity_uses_surname_and_avatar():
     }
     assert _source_name(row) == "Катя Костюгова"
     assert _avatar_key(row) == "katya_kostyugova"
+
+
+def test_visual_digest_hobbytur_uses_committed_social_avatar():
+    row = {
+        "organizer_names": ["Хобби-тур"],
+        "source_username": "hobbytur",
+        "source_title": "Хобби Тур | Экскурсии | Калининград",
+        "booking_url": "https://vk.com/hobbytur",
+    }
+    assert _source_name(row) == "Хобби-тур"
+    assert _avatar_key(row) == "hobbytur"

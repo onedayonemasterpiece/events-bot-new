@@ -53,6 +53,10 @@ SUB_LINE_HEIGHT = 1.06
 # height on every card — that keeps the main type size (and thus its apparent
 # weight/width) identical across all cards in a publication.
 SUB_AREA = 196
+HOOK_MEDALLION_SIZE = 96
+HOOK_MEDALLION_GAP = 26
+SLIDE_MEDALLION_SIZE = 116
+SLIDE_MEDALLION_GAP = 32
 
 
 @dataclass(frozen=True)
@@ -201,6 +205,45 @@ def _draw_centered_block(
     return int(round(top + step * (len(lines) - 1) + line_px))
 
 
+def _crop_circle(img: Image.Image, size: int) -> Image.Image:
+    src = ImageOps.fit(img.convert("RGB"), (size, size), Image.Resampling.LANCZOS)
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+    out.paste(src, (0, 0), mask)
+    return out
+
+
+def _avatar_layer(
+    canvas_size: tuple[int, int],
+    *,
+    avatar_path: str | Path,
+    center_x: int,
+    top: int,
+    size: int,
+    ring: tuple[int, int, int],
+    fill: tuple[int, int, int],
+) -> Image.Image | None:
+    path = Path(str(avatar_path))
+    if not path.is_file():
+        return None
+    layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    x = int(center_x - size / 2)
+    y = int(top)
+    draw.ellipse([x - 5, y + 6, x + size + 5, y + size + 14], fill=(0, 0, 0, 36))
+    draw.ellipse(
+        [x - 4, y - 4, x + size + 4, y + size + 4],
+        fill=fill + (255,),
+        outline=ring + (255,),
+        width=5,
+    )
+    avatar = _crop_circle(Image.open(path), size - 4)
+    layer.alpha_composite(avatar, (x + 2, y + 2))
+    draw.ellipse([x + 2, y + 2, x + size - 2, y + size - 2], outline=(255, 255, 255, 235), width=4)
+    return layer
+
+
 _SCRATCH_DRAW = ImageDraw.Draw(Image.new("RGB", (CANVAS, CANVAS)))
 
 
@@ -233,6 +276,7 @@ def render_hook_card(
     sub_text: str | None,
     palette: CardPalette,
     main_px: int | None = None,
+    avatar_path: str | Path | None = None,
 ) -> bytes:
     """Render a single hook card and return PNG bytes.
 
@@ -243,6 +287,7 @@ def render_hook_card(
     if not main_text:
         raise ValueError("hook card requires non-empty main_text")
     sub_text = (sub_text or "").strip() or None
+    avatar_path = avatar_path if avatar_path and Path(str(avatar_path)).is_file() else None
 
     bg = _hex_to_rgb(palette.background)
     fg = _hex_to_rgb(palette.text)
@@ -262,6 +307,7 @@ def render_hook_card(
         sub_font = _font(str(_SUB_FONT_PATH), SUB_FIXED_PX)
         sub_lines = _wrap(draw, sub_text, sub_font, SAFE_W)[:SUB_MAX_LINES]
         sub_reserved = _block_height(sub_lines, sub_font, SUB_LINE_HEIGHT) + rule_gap + rule_h + rule_gap
+    avatar_reserved = HOOK_MEDALLION_SIZE + HOOK_MEDALLION_GAP if avatar_path else 0
 
     # Main hook: shared size across the post when main_px is given; the layout
     # box is the same on every card so the size — and apparent weight/width — match.
@@ -270,13 +316,14 @@ def render_hook_card(
     main_lines = _wrap(draw, main_text, main_font, SAFE_W)[:MAIN_MAX_LINES]
 
     main_h = _block_height(main_lines, main_font, MAIN_LINE_HEIGHT)
-    total_h = main_h + sub_reserved
+    total_h = main_h + sub_reserved + avatar_reserved
     top = SAFE_Y0 + max(0, (SAFE_H - total_h) // 2)
 
     bottom = _draw_centered_block(
         draw, main_lines, main_font, top=top, fill=fg, line_height=MAIN_LINE_HEIGHT
     )
 
+    medallion_top = bottom + HOOK_MEDALLION_GAP
     if sub_text and sub_font is not None:
         rule_y = bottom + rule_gap
         rule_x0 = SAFE_X0 + (SAFE_W - rule_w) / 2
@@ -293,6 +340,26 @@ def render_hook_card(
             fill=fg,
             line_height=SUB_LINE_HEIGHT,
         )
+        medallion_top = int(
+            rule_y
+            + rule_h
+            + rule_gap
+            + _block_height(sub_lines, sub_font, SUB_LINE_HEIGHT)
+            + HOOK_MEDALLION_GAP
+        )
+
+    if avatar_path:
+        layer = _avatar_layer(
+            image.size,
+            avatar_path=avatar_path,
+            center_x=CANVAS // 2,
+            top=medallion_top,
+            size=HOOK_MEDALLION_SIZE,
+            ring=accent,
+            fill=bg,
+        )
+        if layer is not None:
+            image = Image.alpha_composite(image.convert("RGBA"), layer).convert("RGB")
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
@@ -563,6 +630,7 @@ def render_carousel_slide(
     hook: str,
     footer: str | None,
     palette: CardPalette,
+    avatar_path: str | Path | None = None,
     swipe: bool = True,
     index: int | None = None,
     total: int | None = None,
@@ -571,6 +639,7 @@ def render_carousel_slide(
     """Vertical 4:5 slide: photo band on top, dynamic-height angular text block below."""
     hook = (hook or "").strip()
     footer = (footer or "").strip() or None
+    avatar_path = avatar_path if avatar_path and Path(str(avatar_path)).is_file() else None
 
     bg = _hex_to_rgb(palette.background)
     fg = _hex_to_rgb(palette.text)
@@ -587,7 +656,8 @@ def render_carousel_slide(
     hook_h = _block_height(hook_lines, hook_font, SLIDE_HOOK_LH)
     foot_font = _font(str(_SUB_FONT_PATH), SLIDE_FOOTER_PX)
     fa, fd = foot_font.getmetrics()
-    footer_h = fa + fd
+    footer_h = fa + fd if footer else 0
+    avatar_h = SLIDE_MEDALLION_SIZE + SLIDE_MEDALLION_GAP if avatar_path else 0
     listai_h = (fa + fd) if swipe else 0      # "листай" row sits above the hook
 
     pad_top = 64          # below the slash to the "листай"/hook
@@ -596,7 +666,15 @@ def render_carousel_slide(
     pad_bottom = 84
     # taller block when the hook needs more lines (covers more photo), shorter
     # when there's little text — the dynamic "golden middle".
-    block_h = pad_top + listai_h + (listai_gap if swipe else 0) + hook_h + pad_gap + footer_h + pad_bottom
+    block_h = (
+        pad_top
+        + listai_h
+        + (listai_gap if swipe else 0)
+        + hook_h
+        + (pad_gap + footer_h if footer else 0)
+        + avatar_h
+        + pad_bottom
+    )
     y_base = SLIDE_H - block_h
     y_base = max(int(SLIDE_H * 0.40), min(y_base, int(SLIDE_H * 0.72)))
 
@@ -630,8 +708,24 @@ def render_carousel_slide(
         draw.text((text_x, y), line, font=hook_font, fill=fg)
         y += step
 
+    after_hook_y = hook_top + hook_h
     if footer:
-        draw.text((text_x, hook_top + hook_h + pad_gap), footer, font=foot_font, fill=accent)
+        draw.text((text_x, after_hook_y + pad_gap), footer, font=foot_font, fill=accent)
+        after_hook_y += pad_gap + footer_h
+
+    if avatar_path:
+        layer = _avatar_layer(
+            image.size,
+            avatar_path=avatar_path,
+            center_x=SLIDE_W // 2,
+            top=int(after_hook_y + SLIDE_MEDALLION_GAP),
+            size=SLIDE_MEDALLION_SIZE,
+            ring=accent,
+            fill=bg,
+        )
+        if layer is not None:
+            image = Image.alpha_composite(image.convert("RGBA"), layer).convert("RGB")
+            draw = ImageDraw.Draw(image)
 
     if index and total:
         _draw_counter(draw, index, total, palette)
@@ -760,6 +854,7 @@ def render_hook_only_slide(
     hook: str,
     footer: str | None,
     palette: CardPalette,
+    avatar_path: str | Path | None = None,
     index: int | None = None,
     total: int | None = None,
     swipe: bool = True,
@@ -769,6 +864,7 @@ def render_hook_only_slide(
     counter and a 'листай →' swipe cue."""
     hook = (hook or "").strip()
     footer = (footer or "").strip() or None
+    avatar_path = avatar_path if avatar_path and Path(str(avatar_path)).is_file() else None
     bg = _hex_to_rgb(palette.background)
     fg = _hex_to_rgb(palette.text)
     accent = _hex_to_rgb(palette.accent)
@@ -787,7 +883,8 @@ def render_hook_only_slide(
     fo_a, fo_d = foot_font.getmetrics()
     footer_h = (fo_a + fo_d) if footer else 0
     rule_gap = 36
-    total_h = head_h + (rule_gap + 7 + rule_gap + footer_h if footer else 0)
+    avatar_h = SLIDE_MEDALLION_SIZE + SLIDE_MEDALLION_GAP if avatar_path else 0
+    total_h = head_h + (rule_gap + 7 + rule_gap + footer_h if footer else 0) + avatar_h
     top = (SLIDE_H - total_h) // 2
 
     ha, hd = head_font.getmetrics()
@@ -797,11 +894,27 @@ def render_hook_only_slide(
         w = draw.textlength(line, font=head_font)
         draw.text((SLIDE_MX + (inner_w - w) / 2, y), line, font=head_font, fill=fg)
         y += hstep
+    after_hook_y = top + head_h
     if footer:
         ry = top + head_h + rule_gap
         draw.rounded_rectangle([SLIDE_W / 2 - 70, ry, SLIDE_W / 2 + 70, ry + 7], radius=3.5, fill=accent)
         fw = draw.textlength(footer, font=foot_font)
         draw.text((SLIDE_MX + (inner_w - fw) / 2, ry + 7 + rule_gap), footer, font=foot_font, fill=accent)
+        after_hook_y = ry + 7 + rule_gap + footer_h
+
+    if avatar_path:
+        layer = _avatar_layer(
+            image.size,
+            avatar_path=avatar_path,
+            center_x=SLIDE_W // 2,
+            top=int(after_hook_y + SLIDE_MEDALLION_GAP),
+            size=SLIDE_MEDALLION_SIZE,
+            ring=accent,
+            fill=bg,
+        )
+        if layer is not None:
+            image = Image.alpha_composite(image.convert("RGBA"), layer).convert("RGB")
+            draw = ImageDraw.Draw(image)
 
     if swipe:
         f = _font(str(_SUB_FONT_PATH), 36)
