@@ -86,6 +86,29 @@ When a monitored source posts about Kaliningrad, inspect linked/mentioned author
 
 From a good source, discover nearby/related catalog entries, but keep them `candidate` until scored.
 
+### 7. Public travel blogger catalog import
+
+The operator-provided workbook `public_travel_blogger_channel_links.xlsx` is a discovery input, not an allowlist and not a monitored-source switch. The Kaggle launcher copies it into the private input dataset when present, and the runner can also read it from `REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE`. Rows are normalized from columns such as `Platform`, `Handle`, `URL`, `Type`, `Category`, `Source`, `Source page`, `Collected on`, `Notes` and exported as source-frontier candidates with `edge_type=public_travel_blogger_catalog`.
+
+Rules:
+
+- import Telegram/VK/VKVideo/web links into the source frontier only;
+- do not fetch posts from catalog rows in the same run unless the source is also selected by seed/monitoring policy;
+- keep the original public catalog evidence (`source_page`, `catalog_source`, notes) but never add private Telegram ids/access hashes to XLSX;
+- de-dupe catalog rows against seeds, graph edges and similar-channel recommendations in `12a_source_frontier_unique`.
+
+### 8. Telegram Similar Channels expansion
+
+For already resolved Telegram seed/monitor sources, the runner may call Telegram's similar/recommended channel API (`channels.getChannelRecommendations`) through Telethon when the installed Telethon version supports it. Similar-channel results are source-discovery edges only:
+
+- `edge_type=telegram_similar_channel`;
+- `discovery_type=telegram_similar_channels`;
+- `frontier_action=add_to_source_frontier`;
+- no auto-subscribe, no auto-join, no participant scraping, no private/invite-only channels;
+- recommendation results become `candidate` frontier rows and require later scoring/manual acceptance before monitoring.
+
+If Telethon does not expose the request class, the run must report `telegram_similar_channels_status=not_supported_by_telethon_version` instead of failing or emulating it with scraping.
+
 Every discovered source must include:
 
 - `discovered_from`;
@@ -150,11 +173,34 @@ Store every link/mention/repost/catalog-neighbor relationship in `region_talk_so
 
 ## Safety and rate limits
 
+Telegram discovery must be human-like in the P0 sense: conservative, cache-first and rate-aware. This means avoiding wasteful API calls and respecting Telegram limits; it does **not** mean evasion.
+
 - Crawl only allowlisted catalogs/seeds and accepted candidates.
 - Keep `last_checked_at`, `next_fetch_after`, `consecutive_errors` and `status`.
 - Broken/private/forbidden source does not fail the run.
 - Do not use role-scoped Telegram auth bundles outside their intended context.
-- Do not borrow E2E/human-session auth for Kaggle discovery.
+- Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
+- Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `3`).
+- Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `8`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `20`).
+- Large `FloodWait` values (default threshold `300` seconds) are not slept through: record a cooldown/degraded mode, skip later resolves/history that would hit the same method/source, and still write the XLSX report.
+- Keep the private entity cache/cooldown ledger in state/artifacts only; public XLSX sheets may contain `private_state_key`, but never raw `channel_id`, `access_hash`, session strings or tokens.
+- Forbidden: multi-account/proxy rotation, automatic joins/subscriptions, participant scraping, private/invite-only source traversal, or any publication from this MVP report.
+
+Default live/Kaggle Telegram discovery limits:
+
+```bash
+REGION_TALK_TG_GOVERNOR_ENABLED=1
+REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
+REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
+REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
+REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
+REGION_TALK_TG_SIMILAR_ENABLED=1
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=3
+REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=25
+```
 
 ## MVP-1.x forwarded/repost/comment discovery hardening
 

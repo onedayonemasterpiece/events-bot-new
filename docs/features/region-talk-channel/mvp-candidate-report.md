@@ -94,6 +94,7 @@ Columns:
 - `llm_calls`, `image_model_calls`, `errors_count`, `artifact_paths`.
 - `increment_state_loaded`, `previous_run_id`, `previous_seen_post_count`, `new_posts_this_run`, `changed_posts_this_run`, `unchanged_posts_this_run`, `state_write_status`.
 - `source_count_selected`, `source_count_attempted`, `source_count_ok`, `source_count_skipped`, `source_count_error`, `vk_wall_probe_status`.
+- `telegram_governor_enabled`, request/cache/FloodWait counters, `telegram_cooldown_active`, `telegram_degraded_mode`, `telegram_similar_channels_status`, `telegram_similar_channels_*`, `source_frontier_unique_count`, `git_sha`, `git_branch`, `git_dirty`.
 
 ### `02_increment`
 
@@ -139,6 +140,16 @@ Columns:
 - `total_cumulative`
 - `top_rejection_reasons`
 - `notes`
+
+### `04a_final_shortlist`
+
+Product-facing shortlist for human eye review. It should stay compact: source, date, post URL, short summary, why it is about Kaliningrad Oblast, why it is useful/interesting, image readiness and the main reject/blocking reason. Full engineering/debug columns remain in `04_review_queue` and `04a_final_shortlist_raw`.
+
+Rows may enter this sheet only when the semantic gate accepted the post and image state is honestly labelled. A row with weak media can be useful for review but must not be labelled `reviewable_image`.
+
+### `04a_final_shortlist_raw`
+
+Uncompacted raw rows behind `04a_final_shortlist`, kept for debugging score/gate details without making the main review screen unreadable.
 
 ### `04_review_queue`
 
@@ -200,7 +211,11 @@ All current and historical candidates from YDB state, including candidates that 
 
 ### `07_new_posts_this_run`
 
-All posts first seen in this run, before later filters remove some of them.
+Only posts whose stable `post_id` was first seen in this run, before later filters remove some of them. Repeated posts from the current fetch do not belong here.
+
+### `07_current_run_posts`
+
+All posts fetched/observed in the current run, including repeats already known from previous state.
 
 ### `08_dropped_posts`
 
@@ -257,7 +272,15 @@ All rows loaded from [`seed-sources-v1.csv`](seed-sources-v1.csv), with normaliz
 
 ### `12_sources_discovered`
 
-New source candidates discovered from links, mentions, forwards, repost attribution, catalogs and source descriptions.
+New source candidates discovered from links, mentions, forwards, repost attribution, catalogs, source descriptions, public travel-blogger workbooks and Telegram similar-channel recommendations.
+
+### `12a_source_frontier_unique`
+
+De-duplicated source frontier across seeds, link graph, public travel-blogger workbook imports and Telegram similar-channel recommendations. This is the main place to inspect what could be added to monitoring next. Public fields may include `private_state_key` for matching back to private state, but must not include Telegram `channel_id`, `access_hash`, session strings or tokens.
+
+### `12b_telegram_similar_channels`
+
+Raw Telegram similar/recommended-channel evidence for the current run: seed channel, recommendation rank, public username/title/url when available, method status, errors and whether the row was added to the frontier. If Telethon lacks the required API request, this sheet must still exist with `method_status=not_supported_by_telethon_version`.
 
 ### `13_sources_monitored`
 
@@ -283,6 +306,10 @@ Per-run image model/runtime summary:
 - `rows`
 - `actual_image_bytes_required`
 - `fallback_note`
+
+### `20_telegram_rate_observability`
+
+Per-run Telegram request-governor summary: resolve cache hits/network resolves, history requests, media downloads, recommendation requests, FloodWait counts/max seconds, cooldown/degraded-mode flags, configured caps and ledger path. The P0 requirement name `20_telegram_rate_limit_observability` is longer than Excel's 31-character sheet limit, so the implemented workbook uses the Excel-safe `20_telegram_rate_observability`.
 
 ### `15_manual_decisions`
 
@@ -333,14 +360,17 @@ Main favorites require strong photos. Without strong photos a post may be shown 
 
 `08_dropped_posts` includes `drop_gate`, `rejection_reason`, `is_ad_or_promo`, `post_age_days`, `text_substance_score`, and `image_scoring_skipped`.
 
-`12_sources_discovered` includes explicit links, forwarded/repost origins, normalized URL, platform guess, edge type, source status and confidence.
+`12_sources_discovered` includes explicit links, forwarded/repost origins, normalized URL, platform guess, edge type, source status and confidence. `12a_source_frontier_unique` deduplicates next-source candidates and `12b_telegram_similar_channels` isolates the Telegram recommendation evidence.
 
 `13_sources_monitored` includes source profile probe fields: sampled post count, Kaliningrad hit count, ad/news/trash ratios, original-media score, link/forward richness and monitor priority score.
 
 New sheets:
 
+- `12a_source_frontier_unique`;
+- `12b_telegram_similar_channels`;
 - `17_source_graph_edges`;
-- `18_place_lexicon_matches`.
+- `18_place_lexicon_matches`;
+- `20_telegram_rate_observability` (Excel-safe name for the longer P0 rate-limit observability sheet).
 
 ## MVP-1.y LLM-first review queue update
 
@@ -370,3 +400,12 @@ Image gating is split into `image_reviewable=true` vs `image_publication_ready=t
 - Product-facing reject reasons should be concrete: `reject_old_post`, `reject_not_kaliningrad_oblast_only`, `reject_ad_or_promo`, `reject_multi_region_roundup`, `reject_low_substance`, `reject_news_or_trash`, `reject_source_boilerplate`.
 - `03_funnel` is the sequential funnel; independent evidence counts belong in `03b_gate_counts`.
 - Ambiguous place names that require context may become region evidence only when nearby context contains strong Kaliningrad-oblast anchors such as `Куршская коса`, `Калининградская область`, municipality/district wording, or route/trip context.
+
+
+## MVP-1.z3 human-like Telegram discovery + source frontier update
+
+- The runner imports `public_travel_blogger_channel_links.xlsx` as source-frontier evidence only; catalog rows are not automatically monitored or published.
+- Telegram fetch/discovery uses a cache-first request governor with conservative defaults: at most 3 network username resolves, 8 history sources and 20 media downloads per run unless explicitly changed. Large FloodWait values create cooldown/degraded-mode evidence instead of long sleeps.
+- Similar channels are discovered through Telegram recommendations for already-resolved seed channels and are written as `telegram_similar_channel` graph/frontier rows. Unsupported Telethon versions must be reported as `not_supported_by_telethon_version`, not silently replaced by scraping.
+- Product review starts from `00_product_summary`, compact `04a_final_shortlist`, `12a_source_frontier_unique`, `12b_telegram_similar_channels` and `20_telegram_rate_observability`.
+- Workbook and companion artifacts include git provenance so Kaggle results can be traced back to the exact runner code.

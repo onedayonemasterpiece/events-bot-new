@@ -44,9 +44,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("15_manual_decisions", workbook)
             self.assertIn("17_source_graph_edges", workbook)
             self.assertIn("18_place_lexicon_matches", workbook)
+            self.assertIn("12a_source_frontier_unique", workbook)
+            self.assertIn("12b_telegram_similar_channels", workbook)
+            self.assertIn("20_telegram_rate_observability", workbook)
             summary = json.loads((tmp_path / "region-talk-candidates-unit-run.json").read_text(encoding="utf-8"))["summary"]
             self.assertEqual(summary["source_count_seeded"], 30)
             self.assertEqual(summary["posts_fetched"], 0)
+            self.assertIn("telegram_similar_channels_status", summary)
 
     def test_text_and_media_scoring_strong_region_media(self) -> None:
         mod = load_module()
@@ -206,6 +210,46 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(inc["new_this_run"], "no")
         self.assertEqual(inc["seen_run_count"], 2)
         self.assertEqual(inc["previous_run_id"], "r1")
+
+    def test_public_blogger_links_imports_frontier_only_and_dedupes(self) -> None:
+        mod = load_module()
+        from openpyxl import Workbook
+        with tempfile.TemporaryDirectory() as td:
+            x = Path(td) / "bloggers.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Links"
+            ws.append(["Platform", "Handle", "URL", "Type", "Category", "Source", "Source page", "Collected on", "Notes"])
+            ws.append(["Telegram", "@travel_one", "https://t.me/travel_one", "channel", "Путешествия", "test", "https://example.test", "2026-07-06", ""])
+            ws.append(["Telegram", "@travel_one", "https://t.me/travel_one", "channel", "Путешествия", "test", "https://example.test", "2026-07-06", "duplicate"])
+            ws.append(["VK", "@vk_travel", "https://vk.com/vk_travel", "community", "Путешествия", "test", "https://example.test", "2026-07-06", ""])
+            wb.save(x)
+            old = os.environ.get("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE")
+            os.environ["REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE"] = str(x)
+            try:
+                rows = mod.load_public_blogger_links({})
+            finally:
+                if old is None:
+                    os.environ.pop("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", None)
+                else:
+                    os.environ["REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE"] = old
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r["candidate_source_status"] == "source_frontier" for r in rows))
+        self.assertEqual({r["edge_type"] for r in rows}, {"public_travel_blogger_catalog"})
+
+    def test_source_frontier_unique_dedupes_and_keeps_private_fields_out(self) -> None:
+        mod = load_module()
+        rows = [
+            {"source_candidate_id":"src_cand_x", "normalized_url":"https://t.me/foo", "platform_guess":"telegram", "edge_type":"post_text_link", "discovery_type":"post_text", "confidence":0.55, "discovered_from_source":"A"},
+            {"source_candidate_id":"src_cand_x", "normalized_url":"https://t.me/foo", "platform_guess":"telegram", "edge_type":"telegram_similar_channel", "discovery_type":"telegram_similar_channels", "confidence":0.85, "recommended_title":"Foo Travel", "recommended_username":"foo", "discovered_from_source":"B", "private_state_key":"telegram:username:foo"},
+        ]
+        frontier = mod.build_source_frontier_unique(rows, {}, "run1")
+        self.assertEqual(len(frontier), 1)
+        row = frontier[0]
+        self.assertIn("telegram_similar_channel", row["edge_types_all"])
+        self.assertGreaterEqual(row["source_candidate_score"], 0.75)
+        self.assertNotIn("access_hash", json.dumps(row).lower())
+        self.assertNotIn("channel_id_private", json.dumps(row).lower())
 
 
 if __name__ == "__main__":

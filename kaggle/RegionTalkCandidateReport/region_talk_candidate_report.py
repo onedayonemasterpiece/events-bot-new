@@ -33,6 +33,7 @@ _REGION_TALK_GOOGLE_CLIENT: Any | None = None
 _REGION_TALK_CLIP_MODEL: Any | None = None
 _REGION_TALK_CLIP_PROCESSOR: Any | None = None
 _REGION_TALK_CLIP_DEVICE: str | None = None
+_REGION_TALK_TELEGRAM_RUNTIME: dict[str, Any] = {}
 
 
 
@@ -322,6 +323,21 @@ def state_file_candidates(output_dir: Path) -> list[Path]:
     return unique
 
 
+def parse_iso_datetime(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def iso_after_seconds(seconds: int) -> str:
+    return datetime.fromtimestamp(time.time() + max(0, seconds), timezone.utc).isoformat()
+
+
 def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     for path in state_file_candidates(output_dir):
         try:
@@ -332,6 +348,79 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
         except Exception as exc:
             return {}, {"increment_state_loaded": "false", "increment_state_path": str(path), "increment_state_error": f"{type(exc).__name__}: {str(exc)[:180]}", "previous_run_id": "", "previous_seen_post_count": 0}
     return {}, {"increment_state_loaded": "false", "increment_state_path": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0}
+
+
+def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    candidates = []
+    for raw in [
+        os.getenv("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE"),
+        (config or {}).get("public_blogger_links_file") if config else None,
+        "public_travel_blogger_channel_links.xlsx",
+        "artifacts/public_travel_blogger_channel_links.xlsx",
+        "/home/dev/projects/events-bot-new/artifacts/public_travel_blogger_channel_links.xlsx",
+    ]:
+        if raw:
+            candidates.append(Path(str(raw)))
+    for root in [Path.cwd(), Path(__file__).resolve().parent, Path("/kaggle/input")]:
+        if root.exists():
+            candidates.extend(root.rglob("public_travel_blogger_channel_links.xlsx"))
+    path = next((p for p in candidates if p.exists()), None)
+    if not path:
+        return []
+    try:
+        from openpyxl import load_workbook  # type: ignore
+    except Exception:
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openpyxl"])
+            from openpyxl import load_workbook  # type: ignore
+        else:
+            return []
+    wb = load_workbook(path, read_only=True, data_only=True)
+    if "Links" not in wb.sheetnames:
+        return []
+    ws = wb["Links"]
+    rows_iter = ws.iter_rows(values_only=True)
+    headers = [str(x or "").strip() for x in next(rows_iter, [])]
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows_iter:
+        rec = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
+        platform = str(rec.get("Platform") or "").strip().lower()
+        url = str(rec.get("URL") or "").strip()
+        handle = canonical_handle(str(rec.get("Handle") or "").strip())
+        if not platform or not url:
+            continue
+        key = (platform, canonical_source_url(platform, handle, url))
+        if key in seen:
+            continue
+        seen.add(key)
+        canonical = key[1]
+        cand_id = "src_cand_" + stable_hash(platform, canonical)
+        out.append({
+            "source_candidate_id": cand_id,
+            "frontier_source_id": cand_id,
+            "platform": platform,
+            "platform_guess": platform,
+            "canonical_url": canonical,
+            "normalized_url": canonical,
+            "username_or_handle": handle,
+            "title_guess": str(rec.get("Handle") or handle or canonical).strip(),
+            "source_title": str(rec.get("Handle") or handle or canonical).strip(),
+            "category": str(rec.get("Category") or ""),
+            "source_catalog": str(rec.get("Source") or ""),
+            "source_page": str(rec.get("Source page") or ""),
+            "discovery_type": "public_travel_blogger_catalog",
+            "edge_type": "public_travel_blogger_catalog",
+            "candidate_source_status": "source_frontier",
+            "frontier_status": "queued_unresolved",
+            "confidence": 0.45 if platform == "telegram" else 0.35,
+            "frontier_priority": 0.55 if platform == "telegram" else 0.40,
+            "frontier_reason": "public travel/blogger catalog import; do not auto-fetch without frontier scoring",
+            "discovered_from_source": str(rec.get("Source") or "public_travel_blogger_channel_links.xlsx"),
+            "discovered_from_post_url": "",
+            "raw_url": url,
+        })
+    return out
 
 
 def save_region_talk_state(output_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
@@ -359,6 +448,198 @@ def classify_pre_llm_reject_reason(fresh: dict[str, Any], scope: dict[str, Any],
     if float(substance.get("text_substance_score") or 0) < 0.18:
         return "reject_low_substance"
     return "reject_source_boilerplate"
+
+
+def git_provenance() -> dict[str, str]:
+    out = {"git_sha": os.getenv("GIT_SHA", ""), "git_sha_short": "", "branch": os.getenv("GIT_BRANCH", "")}
+    try:
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+        out["git_sha"] = out["git_sha"] or sha
+        out["git_sha_short"] = sha[:8]
+    except Exception:
+        out["git_sha_short"] = (out.get("git_sha") or "")[:8]
+    try:
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+        out["branch"] = out["branch"] or branch
+    except Exception:
+        pass
+    return out
+
+
+class TelegramRequestGovernor:
+    def __init__(self, run_id: str, output_dir: Path, state: dict[str, Any]) -> None:
+        self.run_id = run_id
+        self.output_dir = output_dir
+        self.state = state if isinstance(state, dict) else {}
+        self.entity_cache: dict[str, Any] = dict(self.state.get("telegram_entity_cache") or {})
+        self.cooldowns: dict[str, Any] = dict(self.state.get("telegram_cooldowns") or {})
+        self.ledger: list[dict[str, Any]] = []
+        self.requests_by_method: dict[str, int] = {}
+        self.total_attempted = 0
+        self.total_ok = 0
+        self.total_error = 0
+        self.resolve_cache_hits = 0
+        self.resolve_network_attempts = 0
+        self.resolve_network_ok = 0
+        self.resolve_network_floodwait = 0
+        self.resolve_skipped_by_cooldown = 0
+        self.recommendation_calls_attempted = 0
+        self.recommendation_calls_ok = 0
+        self.recommendation_channels_returned = 0
+        self.recommendation_channels_added_to_frontier = 0
+        self.history_sources_attempted = 0
+        self.history_sources_ok = 0
+        self.history_posts_fetched = 0
+        self.media_downloads_attempted = 0
+        self.media_downloads_ok = 0
+        self.max_floodwait_seconds = 0
+        self.floodwait_method = ""
+        self.floodwait_cooldown_until = ""
+        self.telegram_phase_status = "ok"
+        self.degraded = False
+        self.max_total_requests = getenv_int("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", 120)
+        self.max_network_resolves = getenv_int("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", 3)
+        self.max_history_sources = getenv_int("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", 8)
+        self.max_media_downloads = getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 20)
+        self.max_recommendation_calls = getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 3)
+        self.floodwait_abort_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", 300)
+        self.floodwait_margin = getenv_int("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", 1800)
+
+    def cache_key(self, handle_or_url: str) -> str:
+        raw = canonical_handle(str(handle_or_url or "").strip()).lstrip("@").lower()
+        raw = re.sub(r"^https?://t\.me/", "", raw, flags=re.I).split("/", 1)[0].lower()
+        return "telegram:username:" + raw
+
+    def cooldown_active(self, key: str) -> tuple[bool, str]:
+        rec = self.cooldowns.get(key) or {}
+        until = str(rec.get("cooldown_until") or "")
+        dt = parse_iso_datetime(until)
+        if dt and dt > datetime.now(timezone.utc):
+            return True, until
+        return False, until
+
+    def log(self, method_name: str, method_class: str, source_id: str, canonical_url: str, decision: str, **extra: Any) -> None:
+        rec = {
+            "ts": utc_now_iso(), "run_id": self.run_id, "method_name": method_name, "method_class": method_class,
+            "source_id": source_id, "canonical_url": canonical_url, "decision": decision, **extra,
+        }
+        self.ledger.append(rec)
+
+    def mark_floodwait(self, method_name: str, source_id: str, canonical_url: str, seconds: int) -> str:
+        cooldown_until = iso_after_seconds(seconds + self.floodwait_margin)
+        self.max_floodwait_seconds = max(self.max_floodwait_seconds, seconds)
+        self.floodwait_method = method_name
+        self.floodwait_cooldown_until = cooldown_until
+        self.telegram_phase_status = "degraded_floodwait"
+        self.degraded = True
+        self.cooldowns[f"method:{method_name}"] = {"cooldown_until": cooldown_until, "last_error_seconds": seconds, "last_error_run_id": self.run_id}
+        if canonical_url:
+            self.cooldowns[f"source:{canonical_url}"] = {"cooldown_until": cooldown_until, "reason": "telegram_floodwait", "last_error_seconds": seconds}
+        self.log(method_name, "entity_resolve_expensive", source_id, canonical_url, "error_floodwait", ok=False, floodwait_seconds=seconds, cooldown_until=cooldown_until)
+        return cooldown_until
+
+    async def resolve_entity(self, client: Any, seed: Seed) -> tuple[Any | None, dict[str, Any]]:
+        canonical_url = seed.canonical_url
+        source_id = seed.source_id
+        handle = seed.handle.lstrip("@")
+        key = self.cache_key(seed.handle or seed.url)
+        source_cd, source_until = self.cooldown_active(f"source:{canonical_url}")
+        method_cd, method_until = self.cooldown_active("method:ResolveUsernameRequest")
+        if self.degraded or source_cd or method_cd:
+            self.resolve_skipped_by_cooldown += 1
+            status = "skipped_telegram_global_cooldown" if self.degraded or method_cd else "skipped_telegram_resolve_cooldown"
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=method_until or source_until)
+            return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": method_until or source_until}
+        cached = self.entity_cache.get(key) or {}
+        if cached.get("channel_id_private") and cached.get("access_hash_private"):
+            try:
+                from telethon.tl.types import InputPeerChannel  # type: ignore
+                entity = InputPeerChannel(int(cached["channel_id_private"]), int(cached["access_hash_private"]))
+                self.resolve_cache_hits += 1
+                self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
+                return entity, {"telegram_resolve_status": "resolved_from_private_cache", "resolved_title": cached.get("title_last_seen", "")}
+            except Exception:
+                pass
+        if self.resolve_network_attempts >= self.max_network_resolves:
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
+            return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
+        self.resolve_network_attempts += 1
+        self.total_attempted += 1
+        self.requests_by_method["ResolveUsernameRequest"] = self.requests_by_method.get("ResolveUsernameRequest", 0) + 1
+        try:
+            entity = await client.get_entity(handle)
+            self.total_ok += 1
+            self.resolve_network_ok += 1
+            self.entity_cache[key] = {
+                "canonical_url": canonical_url,
+                "username": handle,
+                "title_last_seen": str(getattr(entity, "title", None) or seed.source_title),
+                "entity_kind": "channel",
+                "channel_id_private": str(getattr(entity, "id", "") or ""),
+                "access_hash_private": str(getattr(entity, "access_hash", "") or ""),
+                "resolved_at": utc_now_iso(),
+                "last_used_at": utc_now_iso(),
+                "last_success_at": utc_now_iso(),
+                "last_error_at": None,
+                "last_error_code": None,
+                "resolve_attempt_count": int((cached or {}).get("resolve_attempt_count") or 0) + 1,
+                "resolve_network_count": int((cached or {}).get("resolve_network_count") or 0) + 1,
+                "resolve_cache_hit_count": int((cached or {}).get("resolve_cache_hit_count") or 0),
+            }
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "allowed", cache_hit=False, network_call=True, ok=True)
+            return entity, {"telegram_resolve_status": "resolved_network", "resolved_title": str(getattr(entity, "title", None) or seed.source_title)}
+        except Exception as exc:
+            self.total_error += 1
+            seconds = int(getattr(exc, "seconds", 0) or 0)
+            if type(exc).__name__ == "FloodWaitError" or seconds:
+                self.resolve_network_floodwait += 1
+                cooldown_until = self.mark_floodwait("ResolveUsernameRequest", source_id, canonical_url, seconds)
+                return None, {"fetch_status": "error_floodwait_resolve", "telegram_resolve_status": "error_floodwait", "fetch_error_code": "FloodWaitError", "fetch_error_message": str(exc)[:180], "next_allowed_resolve_at": cooldown_until}
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "error", ok=False, error_code=type(exc).__name__, error_message=str(exc)[:180])
+            return None, {"fetch_status": "error_telegram_rpc", "telegram_resolve_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}
+
+    def write_ledger(self) -> None:
+        try:
+            path = self.output_dir.parent.parent / "logs" / "telegram-request-ledger.jsonl"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                for rec in self.ledger:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+    def observability_row(self, started_at: str, finished_at: str) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id, "started_at": started_at, "finished_at": finished_at,
+            "telegram_phase_status": self.telegram_phase_status,
+            "telethon_version": _REGION_TALK_TELEGRAM_RUNTIME.get("telethon_version", ""),
+            "session_cache_loaded": "true",
+            "entity_cache_loaded": str(bool(self.state.get("telegram_entity_cache"))).lower(),
+            "entity_cache_entries": len(self.entity_cache),
+            "telegram_total_requests_attempted": self.total_attempted,
+            "telegram_total_requests_ok": self.total_ok,
+            "telegram_total_requests_error": self.total_error,
+            "telegram_requests_by_method_json": json.dumps(self.requests_by_method, ensure_ascii=False),
+            "resolve_cache_hits": self.resolve_cache_hits,
+            "resolve_network_attempts": self.resolve_network_attempts,
+            "resolve_network_ok": self.resolve_network_ok,
+            "resolve_network_floodwait": self.resolve_network_floodwait,
+            "resolve_skipped_by_cache": self.resolve_cache_hits,
+            "resolve_skipped_by_cooldown": self.resolve_skipped_by_cooldown,
+            "max_floodwait_seconds": self.max_floodwait_seconds,
+            "floodwait_method": self.floodwait_method,
+            "floodwait_cooldown_until": self.floodwait_cooldown_until,
+            "recommendation_calls_attempted": self.recommendation_calls_attempted,
+            "recommendation_calls_ok": self.recommendation_calls_ok,
+            "recommendation_channels_returned": self.recommendation_channels_returned,
+            "recommendation_channels_added_to_frontier": self.recommendation_channels_added_to_frontier,
+            "history_sources_attempted": self.history_sources_attempted,
+            "history_sources_ok": self.history_sources_ok,
+            "history_posts_fetched": self.history_posts_fetched,
+            "media_downloads_attempted": self.media_downloads_attempted,
+            "media_downloads_ok": self.media_downloads_ok,
+            "telegram_governor_decisions_json": json.dumps({"max_network_resolves": self.max_network_resolves, "max_history_sources": self.max_history_sources, "max_recommendation_calls": self.max_recommendation_calls}, ensure_ascii=False),
+        }
 
 
 def normalize_geo_text(value: str) -> str:
@@ -651,6 +932,261 @@ def discover_links_for_post(post: dict[str, Any], run_id: str) -> tuple[list[dic
     return rows, edges
 
 
+def source_candidate_score(row: dict[str, Any]) -> float:
+    title = normalize_geo_text(str(row.get("recommended_title") or row.get("title_guess") or row.get("to_source_title") or row.get("normalized_url") or ""))
+    positive = ["путешеств", "travel", "места", "росси", "маршрут", "город", "прогул", "балтик", "калининград", "блог"]
+    negative = ["скидк", "авиабил", "турфирм", "турагент", "казино", "crypto", "крипт", "ваканси", "работа", "новости", "полит"]
+    score = float(row.get("confidence") or 0.45)
+    score += min(0.20, 0.04 * sum(1 for w in positive if w in title))
+    score -= min(0.35, 0.08 * sum(1 for w in negative if w in title))
+    if row.get("edge_type") == "telegram_similar_channel":
+        score += 0.12
+    if row.get("platform_guess") in {"telegram", "telegram_channel"}:
+        score += 0.05
+    return round(max(0.0, min(0.95, score)), 3)
+
+
+def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered: dict[str, Any], run_id: str) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        cid = str(row.get("source_candidate_id") or "src_cand_" + stable_hash(row.get("platform_guess"), row.get("normalized_url")))
+        prev = previous_discovered.get(cid) or {}
+        g = grouped.setdefault(cid, {
+            "frontier_source_id": cid,
+            "source_candidate_id": cid,
+            "platform": row.get("platform") or row.get("platform_guess") or prev.get("platform_guess", ""),
+            "platform_guess": row.get("platform_guess") or prev.get("platform_guess", ""),
+            "canonical_url": row.get("canonical_url") or row.get("normalized_url") or prev.get("normalized_url", ""),
+            "normalized_url": row.get("normalized_url") or row.get("canonical_url") or prev.get("normalized_url", ""),
+            "username_or_handle": row.get("recommended_username") or row.get("username_or_handle") or "",
+            "title_guess": row.get("recommended_title") or row.get("title_guess") or row.get("to_source_title") or "",
+            "discovery_first_run_id": prev.get("first_seen_run_id") or run_id,
+            "discovery_last_run_id": run_id,
+            "discovery_count": int(prev.get("seen_run_count") or 0),
+            "edge_types_all": set(),
+            "discovery_types": set(),
+            "seed_sources": set(),
+            "best_confidence": 0.0,
+            "frontier_priority": 0.0,
+            "frontier_status": row.get("frontier_status") or row.get("candidate_source_status") or "source_frontier",
+            "resolve_status": row.get("resolve_status") or "",
+            "resolve_attempt_count": row.get("resolve_attempt_count") or "",
+            "last_resolve_error_code": row.get("last_resolve_error_code") or "",
+            "last_resolve_error_message_short": row.get("last_resolve_error_message_short") or "",
+            "next_allowed_resolve_at": row.get("next_allowed_resolve_at") or "",
+            "probe_status": row.get("probe_status") or "probe_later",
+            "monitor_decision": row.get("monitor_decision") or "",
+            "monitor_decision_reason": row.get("monitor_decision_reason") or "",
+            "private_state_key": row.get("private_state_key") or "",
+        })
+        g["discovery_count"] = int(g.get("discovery_count") or 0) + 1
+        if row.get("edge_type"): g["edge_types_all"].add(str(row.get("edge_type")))
+        if row.get("discovery_type"): g["discovery_types"].add(str(row.get("discovery_type")))
+        if row.get("discovered_from_source"): g["seed_sources"].add(str(row.get("discovered_from_source")))
+        confidence = float(row.get("confidence") or 0)
+        if confidence >= float(g.get("best_confidence") or 0):
+            g["best_confidence"] = confidence
+            g["best_edge_type"] = row.get("edge_type") or ""
+            g["best_discovered_from_source"] = row.get("discovered_from_source") or row.get("recommendation_source_channel_title") or ""
+            g["best_discovered_from_post_url"] = row.get("discovered_from_post_url") or ""
+            g["telegram_similar_seed_channel"] = row.get("recommendation_source_channel_url") or ""
+            g["telegram_similar_rank"] = row.get("recommendation_rank") or ""
+        g["frontier_priority"] = max(float(g.get("frontier_priority") or 0), source_candidate_score(row))
+    out: list[dict[str, Any]] = []
+    for g in grouped.values():
+        edge_types = sorted(g.pop("edge_types_all") or [])
+        discovery_types = sorted(g.pop("discovery_types") or [])
+        seed_sources = sorted(g.pop("seed_sources") or [])
+        priority = float(g.get("frontier_priority") or 0)
+        if priority >= 0.75:
+            status = "resolve_later_high"
+        elif priority >= 0.55:
+            status = g.get("frontier_status") or "keep_frontier"
+        elif priority >= 0.35:
+            status = "low_priority_defer"
+        else:
+            status = "rejected_low_relevance"
+        g.update({
+            "edge_types_all": "; ".join(edge_types),
+            "discovery_types": "; ".join(discovery_types),
+            "seed_sources_evidence_count": len(seed_sources),
+            "candidate_source_status": "source_frontier" if status != "rejected_low_relevance" else "rejected_low_relevance",
+            "frontier_status": status,
+            "source_candidate_score": round(priority, 3),
+            "next_action": "probe_later" if priority >= 0.55 else "keep_in_frontier",
+            "rejection_or_skip_reason": "" if priority >= 0.35 else "low source candidate score",
+        })
+        out.append(g)
+    return sorted(out, key=lambda r: (-float(r.get("source_candidate_score") or 0), str(r.get("normalized_url") or "")))
+
+
+def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rank": r.get("human_shortlist_rank") or r.get("rank"),
+        "decision_bucket": r.get("decision_bucket"),
+        "next_action": r.get("next_action"),
+        "post_url": r.get("post_url"),
+        "source_title": r.get("source_title"),
+        "platform": r.get("platform"),
+        "post_date": r.get("post_date"),
+        "short_summary": r.get("short_summary"),
+        "why_relevant": r.get("why_this_is_about_kaliningrad"),
+        "matched_place_names": r.get("matched_place_names"),
+        "content_type": r.get("content_type") or r.get("llm_content_type"),
+        "candidate_score": r.get("candidate_score"),
+        "text_substance_score": r.get("text_substance_score"),
+        "visit_impression_score": r.get("visit_impression_score"),
+        "useful_route_score": r.get("useful_route_score"),
+        "emotion_observation_score": r.get("emotion_observation_score"),
+        "llm_gate_status": r.get("llm_gate_status"),
+        "llm_model": r.get("llm_model"),
+        "llm_decision": r.get("llm_decision"),
+        "llm_reason_short": str(r.get("llm_reason") or "")[:260],
+        "image_model_id": r.get("model_id"),
+        "image_model_type": r.get("image_model_type"),
+        "image_model_runtime": r.get("image_model_runtime"),
+        "image_model_input_type": r.get("image_model_input_type"),
+        "image_model_device": r.get("image_model_device"),
+        "postcardness_score": r.get("postcardness_score"),
+        "aesthetic_score": r.get("aesthetic_score"),
+        "region_visual_relevance_score": r.get("region_visual_relevance_score"),
+        "publication_safety_score": r.get("publication_safety_score"),
+        "overall_media_score": r.get("overall_media_score"),
+        "image_reviewable": r.get("image_reviewable"),
+        "image_publication_ready": r.get("image_publication_ready"),
+        "image_model_explanation": r.get("model_short_explanation"),
+        "risk_flags": r.get("risk_flags"),
+    }
+
+
+async def discover_telegram_similar_channels(client: Any, source_rows: list[dict[str, Any]], entity_by_source: dict[str, Any], governor: TelegramRequestGovernor, run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not getenv_bool("REGION_TALK_TG_SIMILAR_ENABLED", getenv_bool("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", True)):
+        _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "disabled"})
+        return [], []
+    max_seed_channels = getenv_int("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", 3))
+    max_per_seed = getenv_int("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", 10))
+    max_frontier = getenv_int("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", 25))
+    rows: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    try:
+        from telethon.tl import functions  # type: ignore
+    except Exception as exc:
+        _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "not_supported_by_telethon_version", "telegram_similar_channels_error": type(exc).__name__})
+        return rows, edges
+    request_cls = getattr(getattr(functions, "channels", None), "GetChannelRecommendationsRequest", None)
+    if request_cls is None:
+        _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "not_supported_by_telethon_version"})
+        return rows, edges
+    seeds = [r for r in source_rows if r.get("fetch_status") == "ok" and r.get("source_id") in entity_by_source]
+    seeds = sorted(seeds, key=lambda r: (-float(r.get("monitor_priority_score") or 0), int(r.get("priority") or 999)))[:max_seed_channels]
+    raw_count = 0
+    errors = 0
+    floodwait = 0
+    seen: set[str] = set()
+    for seed_idx, srow in enumerate(seeds, start=1):
+        if governor.recommendation_calls_attempted >= governor.max_recommendation_calls:
+            break
+        source_id = str(srow.get("source_id") or "")
+        canonical = str(srow.get("canonical_url") or "")
+        entity = entity_by_source.get(source_id)
+        governor.recommendation_calls_attempted += 1
+        governor.total_attempted += 1
+        governor.requests_by_method["channels.getChannelRecommendations"] = governor.requests_by_method.get("channels.getChannelRecommendations", 0) + 1
+        try:
+            result = await client(request_cls(channel=entity))
+            governor.total_ok += 1
+            governor.recommendation_calls_ok += 1
+            chats = list(getattr(result, "chats", None) or [])
+            raw_count += len(chats)
+            governor.recommendation_channels_returned += len(chats)
+            for rank, ch in enumerate(chats[:max_per_seed], start=1):
+                username = str(getattr(ch, "username", None) or "").strip()
+                title = str(getattr(ch, "title", None) or "").strip()
+                if not username:
+                    continue
+                rec_url = "https://t.me/" + username
+                cand_id = "src_cand_" + stable_hash("telegram", rec_url)
+                if cand_id in seen:
+                    continue
+                seen.add(cand_id)
+                confidence = round(max(0.35, 0.85 - 0.025 * (rank - 1)), 3)
+                row = {
+                    "run_id": run_id,
+                    "source_candidate_id": cand_id,
+                    "discovered_from_source": srow.get("source_title") or srow.get("resolved_title"),
+                    "discovered_from_post_url": "",
+                    "discovery_type": "telegram_similar_channels",
+                    "edge_type": "telegram_similar_channel",
+                    "raw_url": rec_url,
+                    "normalized_url": rec_url,
+                    "platform_guess": "telegram",
+                    "candidate_source_status": "source_frontier",
+                    "frontier_status": "queued_unresolved",
+                    "confidence": confidence,
+                    "recommendation_rank": rank,
+                    "recommendation_count_for_seed": len(chats),
+                    "recommendation_source_channel_url": canonical,
+                    "recommendation_source_channel_title": srow.get("source_title") or srow.get("resolved_title"),
+                    "recommended_title": title,
+                    "recommended_username": username,
+                    "recommended_canonical_url": rec_url,
+                    "recommended_is_channel": str(bool(getattr(ch, "broadcast", False))).lower(),
+                    "recommended_is_megagroup": str(bool(getattr(ch, "megagroup", False))).lower(),
+                    "recommended_verified": str(bool(getattr(ch, "verified", False))).lower(),
+                    "similarity_seed_source_id": source_id,
+                    "similarity_edge_confidence": confidence,
+                    "frontier_action": "queued_resolve_later",
+                    "frontier_reason": "Telegram channels.getChannelRecommendations; stored as frontier only, no auto-join/no auto-monitor",
+                    "private_state_key": "telegram:username:" + username.lower(),
+                }
+                row["frontier_priority"] = source_candidate_score(row)
+                rows.append(row)
+                edge_id = "edge_" + stable_hash(source_id, cand_id, "telegram_similar_channel")
+                edges.append({
+                    "edge_id": edge_id, "from_source_id": source_id, "from_source_title": srow.get("source_title") or srow.get("resolved_title"),
+                    "from_post_id": "", "to_source_candidate_id": cand_id, "to_source_title": title or username,
+                    "edge_type": "telegram_similar_channel", "evidence_url": rec_url,
+                    "evidence_context_short": f"Similar channel recommendation rank {rank} from {srow.get('source_title')}",
+                    "confidence": confidence, "discovery_depth": 1, "run_id": run_id,
+                })
+                governor.entity_cache["telegram:username:" + username.lower()] = {
+                    "canonical_url": rec_url, "username": username, "title_last_seen": title, "entity_kind": "channel",
+                    "channel_id_private": str(getattr(ch, "id", "") or ""),
+                    "access_hash_private": str(getattr(ch, "access_hash", "") or ""),
+                    "resolved_at": utc_now_iso(), "last_used_at": "", "last_success_at": "", "source": "telegram_similar_channels",
+                }
+                if len(rows) >= max_frontier:
+                    break
+            if len(rows) >= max_frontier:
+                break
+        except Exception as exc:
+            errors += 1
+            seconds = int(getattr(exc, "seconds", 0) or 0)
+            if type(exc).__name__ == "FloodWaitError" or seconds:
+                floodwait += 1
+                governor.mark_floodwait("channels.getChannelRecommendations", source_id, canonical, seconds)
+                break
+            governor.total_error += 1
+            rows.append({
+                "run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical,
+                "seed_channel_title": srow.get("source_title"), "method_status": "error",
+                "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180],
+                "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "recommendation call failed",
+            })
+    governor.recommendation_channels_added_to_frontier = len([r for r in rows if r.get("candidate_source_status") == "source_frontier"])
+    status = "ok" if rows or not errors else "error"
+    _REGION_TALK_TELEGRAM_RUNTIME.update({
+        "telegram_similar_channels_status": status,
+        "telegram_similar_channels_seed_count": len(seeds),
+        "telegram_similar_channels_raw_count": raw_count,
+        "telegram_similar_channels_unique_count": len({r.get("source_candidate_id") for r in rows if r.get("source_candidate_id")}),
+        "telegram_similar_channels_added_to_frontier": governor.recommendation_channels_added_to_frontier,
+        "telegram_similar_channels_fetch_errors": errors,
+        "telegram_similar_channels_floodwait_count": floodwait,
+    })
+    return rows, edges
+
+
 def score_text(text: str) -> dict[str, Any]:
     low = (text or "").lower()
     anchor_hits = [a for a in DEFAULT_ANCHORS if a.lower() in low]
@@ -829,10 +1365,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     max_sources = getenv_int("REGION_TALK_MAX_SOURCES", 5)
     max_posts = getenv_int("REGION_TALK_MAX_POSTS_PER_SOURCE", 20)
     fetch_enabled = getenv_bool("REGION_TALK_FETCH_TELEGRAM", True)
+    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
+    previous_state, _state_meta = load_region_talk_state(output_dir)
+    governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
     selected = selected_sources_for_run(seeds, max_sources)
     monitored = [s for s in selected if s.platform == "telegram" and (s.handle or "t.me/" in s.url.lower())]
     source_rows: list[dict[str, Any]] = []
     posts: list[dict[str, Any]] = []
+    entity_by_source: dict[str, Any] = {}
     for seed in selected:
         if seed.platform == "telegram":
             continue
@@ -850,11 +1390,15 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     try:
         from telethon import TelegramClient  # type: ignore
         from telethon.sessions import StringSession  # type: ignore
+        import telethon  # type: ignore
+        _REGION_TALK_TELEGRAM_RUNTIME["telethon_version"] = str(getattr(telethon, "__version__", ""))
     except Exception:
         if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
             subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "telethon"])
             from telethon import TelegramClient  # type: ignore
             from telethon.sessions import StringSession  # type: ignore
+            import telethon  # type: ignore
+            _REGION_TALK_TELEGRAM_RUNTIME["telethon_version"] = str(getattr(telethon, "__version__", ""))
         else:
             for s in monitored:
                 source_rows.append(source_status_row(s, "skipped_telethon_not_installed"))
@@ -872,6 +1416,10 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             source_rows.append(source_status_row(s, "skipped_missing_telethon_credentials"))
         return source_rows, posts
     client = TelegramClient(StringSession(session), api_id, api_hash, device_model=str(bundle.get("device_model") or "Region Talk Discovery"), system_version=str(bundle.get("system_version") or "Linux"), app_version=str(bundle.get("app_version") or "1.0"), lang_code=str(bundle.get("lang_code") or "ru"), system_lang_code=str(bundle.get("system_lang_code") or "ru"))
+    try:
+        client.flood_sleep_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS", 60)
+    except Exception:
+        pass
     await client.connect()
     if not await client.is_user_authorized():
         await client.disconnect()
@@ -883,15 +1431,29 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             if not handle or "/" in handle or handle.startswith("http"):
                 source_rows.append(source_status_row(seed, "skipped_telegram_handle_not_configured", vk_wall_probe_status="not_applicable"))
                 continue
-            src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable")
+            src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
+            entity, resolve_meta = await governor.resolve_entity(client, seed)
+            src_row.update(resolve_meta)
+            if entity is None:
+                src_row.setdefault("fetch_status", resolve_meta.get("fetch_status") or "skipped_telegram_unresolved_deferred")
+                source_rows.append(src_row)
+                continue
+            if governor.history_sources_attempted >= governor.max_history_sources:
+                src_row.update({"fetch_status": "skipped_telegram_budget_exhausted", "fetch_attempted": "false", "source_probe_reason": "history source budget exhausted"})
+                source_rows.append(src_row)
+                continue
+            entity_by_source[seed.source_id] = entity
+            governor.history_sources_attempted += 1
+            src_row["fetch_attempted"] = "true"
             try:
-                entity = await client.get_entity(handle)
-                title = str(getattr(entity, "title", None) or seed.source_title)
+                title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
                 src_row["resolved_title"] = title
                 seen: set[int] = set()
                 queries = [None] + DEFAULT_ANCHORS[:5]
                 for q in queries:
-                    per_query = max(3, max_posts // len(queries) + 1)
+                    per_query = max(3, min(max_posts, getenv_int("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", max_posts)) // len(queries) + 1)
+                    governor.total_attempted += 1
+                    governor.requests_by_method["iter_messages"] = governor.requests_by_method.get("iter_messages", 0) + 1
                     async for msg in client.iter_messages(entity, limit=per_query, search=q):
                         mid = int(getattr(msg, "id", 0) or 0)
                         if not mid or mid in seen:
@@ -904,13 +1466,15 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         post_url = f"https://t.me/{handle}/{mid}"
                         has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
                         primary_media_path = ""
-                        if has_media and getenv_bool("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", True):
+                        if has_media and getenv_bool("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", True) and governor.media_downloads_attempted < governor.max_media_downloads:
+                            governor.media_downloads_attempted += 1
                             try:
                                 media_dir = output_dir / "media" / stable_hash("telegram", handle)
                                 media_dir.mkdir(parents=True, exist_ok=True)
                                 downloaded = await client.download_media(msg, file=str(media_dir / f"{mid}"))
                                 if downloaded:
                                     primary_media_path = str(downloaded)
+                                    governor.media_downloads_ok += 1
                             except Exception:
                                 primary_media_path = ""
                         fwd = getattr(msg, "fwd_from", None) or getattr(msg, "forward", None)
@@ -938,13 +1502,29 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                             break
                     if len(seen) >= max_posts:
                         break
+                governor.total_ok += 1
+                governor.history_sources_ok += 1
+                governor.history_posts_fetched += len(seen)
                 src_row["posts_scanned"] = len(seen)
             except Exception as exc:
-                src_row["fetch_status"] = "error"
+                seconds = int(getattr(exc, "seconds", 0) or 0)
+                if type(exc).__name__ == "FloodWaitError" or seconds:
+                    cooldown_until = governor.mark_floodwait("iter_messages", seed.source_id, seed.canonical_url, seconds)
+                    src_row["fetch_status"] = "error_floodwait_history"
+                    src_row["next_allowed_resolve_at"] = cooldown_until
+                else:
+                    src_row["fetch_status"] = "error_telegram_rpc"
                 src_row["fetch_error_code"] = type(exc).__name__
                 src_row["fetch_error_message"] = str(exc)[:180]
             source_rows.append(src_row)
+        similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
+        _REGION_TALK_TELEGRAM_RUNTIME["similar_rows"] = similar_rows
+        _REGION_TALK_TELEGRAM_RUNTIME["similar_edges"] = similar_edges
     finally:
+        governor.write_ledger()
+        _REGION_TALK_TELEGRAM_RUNTIME["entity_cache"] = governor.entity_cache
+        _REGION_TALK_TELEGRAM_RUNTIME["cooldowns"] = governor.cooldowns
+        _REGION_TALK_TELEGRAM_RUNTIME["observability"] = governor.observability_row(RUN_STARTED_AT.isoformat(), utc_now_iso())
         await client.disconnect()
     return source_rows, posts
 
@@ -1504,6 +2084,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         else:
             dropped.append(row)
 
+    similar_channel_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows") or [])
+    similar_channel_edges = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_edges") or [])
+    public_blogger_rows = load_public_blogger_links({})
+    discovered_rows.extend(similar_channel_rows)
+    discovered_rows.extend(public_blogger_rows)
+    graph_edges.extend(similar_channel_edges)
+
     review_queue = sorted(candidates + pre_candidates, key=lambda r: (r.get("current_stage") not in {"favorite", "semantic_candidate"}, -float(r.get("candidate_score") or 0), int(r.get("post_age_days") or 9999)))
     for i, r in enumerate(review_queue, start=1):
         r["rank"] = i
@@ -1548,10 +2135,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "source_candidate_id": did,
             "normalized_url": drow.get("normalized_url"),
             "platform_guess": drow.get("platform_guess"),
+            "title_guess": drow.get("recommended_title") or drow.get("title_guess") or drow.get("to_source_title") or prev.get("title_guess", ""),
+            "edge_types_all": "; ".join(sorted(set(str(x) for x in ((str(prev.get("edge_types_all") or "").split("; ") if prev.get("edge_types_all") else []) + [str(drow.get("edge_type") or "")]) if x))),
+            "discovery_types": "; ".join(sorted(set(str(x) for x in ((str(prev.get("discovery_types") or "").split("; ") if prev.get("discovery_types") else []) + [str(drow.get("discovery_type") or "")]) if x))),
             "first_seen_run_id": prev.get("first_seen_run_id") or run_id,
             "last_seen_run_id": run_id,
             "seen_run_count": int(prev.get("seen_run_count") or 0) + 1,
             "candidate_source_status": drow.get("candidate_source_status") or prev.get("candidate_source_status") or "source_frontier",
+            "frontier_priority": max(float(prev.get("frontier_priority") or 0), source_candidate_score(drow)),
         }
     source_cursors: dict[str, Any] = {}
     for srow in source_rows:
@@ -1566,12 +2157,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "last_run_id": run_id,
             "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
         }
+    source_frontier_unique = build_source_frontier_unique(discovered_rows, updated_discovered_state, run_id)
     state_to_write = {
         "run_id": run_id,
         "updated_at": run_now,
         "posts": updated_posts_state,
         "discovered_sources": updated_discovered_state,
         "source_cursors": source_cursors,
+        "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
+        "telegram_entity_cache": _REGION_TALK_TELEGRAM_RUNTIME.get("entity_cache") or previous_state.get("telegram_entity_cache") or {},
+        "telegram_cooldowns": _REGION_TALK_TELEGRAM_RUNTIME.get("cooldowns") or previous_state.get("telegram_cooldowns") or {},
     }
     state_write_meta = save_region_talk_state(output_dir, state_to_write)
 
@@ -1581,16 +2176,30 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     llm_reviewed_rows = [r for r in new_posts if r.get("llm_gate_status") == "ok"]
     llm_accepted_rows = [r for r in llm_reviewed_rows if r.get("llm_decision") == "accept"]
     reviewable_rows = [r for r in review_queue if r.get("current_stage") in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "low_substance_but_region_relevant", "semantic_candidate", "favorite", "pre_candidate_debug_deterministic"}]
+    git_info = git_provenance()
+    tg_obs = _REGION_TALK_TELEGRAM_RUNTIME.get("observability") or {"telegram_phase_status": "not_configured"}
+    tg_similar_metrics = {
+        "telegram_similar_channels_enabled": str(getenv_bool("REGION_TALK_TG_SIMILAR_ENABLED", getenv_bool("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", True))).lower(),
+        "telegram_similar_channels_status": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_status", "not_run"),
+        "telegram_similar_channels_seed_count": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_seed_count", 0),
+        "telegram_similar_channels_raw_count": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_raw_count", 0),
+        "telegram_similar_channels_unique_count": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_unique_count", 0),
+        "telegram_similar_channels_added_to_frontier": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_added_to_frontier", 0),
+        "telegram_similar_channels_fetch_errors": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_fetch_errors", 0),
+        "telegram_similar_channels_floodwait_count": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_floodwait_count", 0),
+    }
     summary_row = {
-        "run_id":run_id,"started_at":RUN_STARTED_AT.isoformat(),"finished_at":run_now,"git_sha":os.getenv("GIT_SHA", ""),"branch":"",
+        "run_id":run_id,"started_at":RUN_STARTED_AT.isoformat(),"finished_at":run_now,"git_sha":git_info.get("git_sha", ""),"git_sha_short":git_info.get("git_sha_short", ""),"branch":git_info.get("branch", ""),
         "config_profile":"mvp1.x_llm_first_review_queue","dry_run":"1","ydb_namespace":os.getenv("REGION_TALK_YDB_NAMESPACE") or "dry-run-json",
         "seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible",
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
-        "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("ok") or s.get("platform") == "telegram"),
+        "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true" or str(s.get("fetch_status") or "").startswith(("ok", "error"))),
         "source_count_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
         "source_count_skipped":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("skipped")),
-        "source_count_error":sum(1 for s in source_rows if s.get("fetch_status") == "error"),
+        "source_count_error":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("error")),
+        "source_count_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
+        "source_count_deferred_unresolved":sum(1 for s in source_rows if "unresolved" in str(s.get("fetch_status") or "")),
         "vk_wall_probe_status":"configured_not_implemented" if any(s.get("platform") == "vk" for s in source_rows) and (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else ("not_configured" if any(s.get("platform") == "vk" for s in source_rows) else "not_selected"),
         "posts_region_relevant":sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
         "fresh_posts":len(fresh_rows),"fresh_posts_with_place_evidence":len(fresh_with_place_evidence),
@@ -1610,7 +2219,22 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "dropped_low_substance":sum(1 for r in dropped if r["rejection_reason"]=="reject_low_substance"),
         "dropped_weak_media":sum(1 for r in dropped if "media" in str(r.get("rejection_reason"))),"dropped_duplicate":0,"dropped_rights":0,
         "image_model_calls":len(media_rows),"image_scoring_skipped_by_text_gate":sum(1 for r in new_posts if r.get("image_scoring_skipped") == "true"),
-        "discovered_links":len(discovered_rows),"source_graph_edges":len(graph_edges),"errors_count":sum(1 for s in source_rows if s.get("fetch_status") == "error"),
+        "discovered_links":len(discovered_rows),"source_graph_edges":len(graph_edges),"errors_count":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("error")),
+        "source_frontier_unique_total":len(source_frontier_unique),
+        "source_frontier_new_this_run":sum(1 for r in source_frontier_unique if r.get("discovery_first_run_id") == run_id),
+        "source_frontier_ready_to_probe":sum(1 for r in source_frontier_unique if str(r.get("frontier_status") or "") in {"resolve_later_high", "keep_frontier", "queued_unresolved"}),
+        "source_frontier_deferred":sum(1 for r in source_frontier_unique if "defer" in str(r.get("frontier_status") or "")),
+        "telegram_phase_status":tg_obs.get("telegram_phase_status"),
+        "telegram_floodwait_count":tg_obs.get("resolve_network_floodwait", 0),
+        "telegram_max_floodwait_seconds":tg_obs.get("max_floodwait_seconds", 0),
+        "telegram_floodwait_method":tg_obs.get("floodwait_method", ""),
+        "telegram_cooldown_until":tg_obs.get("floodwait_cooldown_until", ""),
+        "telegram_resolve_cache_hits":tg_obs.get("resolve_cache_hits", 0),
+        "telegram_resolve_network_attempts":tg_obs.get("resolve_network_attempts", 0),
+        "telegram_resolve_network_budget":tg_obs.get("telegram_governor_decisions_json", ""),
+        "telegram_sources_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
+        "telegram_sources_deferred_unresolved":sum(1 for s in source_rows if "unresolved" in str(s.get("fetch_status") or "")),
+        **tg_similar_metrics,
         "new_posts_this_run":sum(1 for r in increment if r.get("new_this_run") == "yes"),
         "changed_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "true"),
         "unchanged_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "false"),
@@ -1716,6 +2340,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         image_model_observability.append({"image_scoring_mode":current_image_scoring_mode(),"image_model_id":"","image_model_type":"","image_model_runtime":"","image_model_input_type":"","image_model_device":"","rows":0,"actual_image_bytes_required":"true","fallback_note":"no image rows reached scoring"})
     product_summary = [
         {"metric":"run_id","value":run_id},
+        {"metric":"git_sha_short","value":git_info.get("git_sha_short")},
+        {"metric":"branch","value":git_info.get("branch")},
         {"metric":"increment_status","value":"real increment" if state_meta.get("increment_state_loaded") == "true" else "baseline run, not real increment"},
         {"metric":"previous_run_id","value":state_meta.get("previous_run_id", "")},
         {"metric":"posts_fetched","value":len(posts)},
@@ -1740,12 +2366,42 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"why_zero_candidates_or_favorites","value":"Image gate did not produce publication_ready rows; review 04a_final_shortlist and 10_good_text_weak_media." if not candidates and not favorites else ""},
         {"metric":"source_coverage","value":f"selected={summary_row.get('source_count_selected')}, ok={summary_row.get('source_count_ok')}, skipped={summary_row.get('source_count_skipped')}, errors={summary_row.get('source_count_error')}"},
         {"metric":"vk_wall_probe_status","value":summary_row.get("vk_wall_probe_status")},
+        {"metric":"telegram_phase_status","value":summary_row.get("telegram_phase_status")},
+        {"metric":"telegram_floodwait_count","value":summary_row.get("telegram_floodwait_count")},
+        {"metric":"telegram_max_floodwait_seconds","value":summary_row.get("telegram_max_floodwait_seconds")},
+        {"metric":"telegram_floodwait_method","value":summary_row.get("telegram_floodwait_method")},
+        {"metric":"telegram_cooldown_until","value":summary_row.get("telegram_cooldown_until")},
+        {"metric":"telegram_resolve_cache_hits","value":summary_row.get("telegram_resolve_cache_hits")},
+        {"metric":"telegram_resolve_network_attempts","value":summary_row.get("telegram_resolve_network_attempts")},
+        {"metric":"telegram_sources_deferred_by_cooldown","value":summary_row.get("telegram_sources_deferred_by_cooldown")},
+        {"metric":"telegram_sources_deferred_unresolved","value":summary_row.get("telegram_sources_deferred_unresolved")},
+        {"metric":"telegram_similar_channels_status","value":summary_row.get("telegram_similar_channels_status")},
+        {"metric":"telegram_similar_channels_seed_count","value":summary_row.get("telegram_similar_channels_seed_count")},
+        {"metric":"telegram_similar_channels_raw_count","value":summary_row.get("telegram_similar_channels_raw_count")},
+        {"metric":"telegram_similar_channels_unique_count","value":summary_row.get("telegram_similar_channels_unique_count")},
+        {"metric":"telegram_similar_channels_added_to_frontier","value":summary_row.get("telegram_similar_channels_added_to_frontier")},
+        {"metric":"source_frontier_unique_total","value":summary_row.get("source_frontier_unique_total")},
+        {"metric":"source_frontier_new_this_run","value":summary_row.get("source_frontier_new_this_run")},
+        {"metric":"source_frontier_ready_to_probe","value":summary_row.get("source_frontier_ready_to_probe")},
+        {"metric":"source_frontier_deferred","value":summary_row.get("source_frontier_deferred")},
         {"metric":"llm_limit_source","value":llm_limit_snapshot.get("llm_limit_source")},
         {"metric":"llm_model","value":llm_model},
         {"metric":"llm_default_env_var_name","value":llm_default_env_var_name},
         {"metric":"image_scoring_mode","value":current_image_scoring_mode()},
     ]
 
+    compact_final_shortlist = [compact_shortlist_row(r) for r in final_shortlist]
+    favorites_sheet = favorites or [{"favorite_id":"","candidate_id":"","first_seen_run_id":"","last_seen_run_id":"","seen_run_count":"","source_title":"","post_url":"","short_summary":"","why_selected":"","best_image_preview":"","candidate_score":"","review_status":"","manual_decision":"","publication_readiness":"","notes":""}]
+    candidates_sheet = candidates or [{"candidate_id":"","current_stage":"","source_title":"","post_url":"","short_summary":"","candidate_score":"","image_reviewable":"","image_publication_ready":"","llm_decision":"","manual_decision":"","notes":""}]
+    telegram_observability_rows = [tg_obs] if tg_obs else [{"run_id":run_id,"telegram_phase_status":"not_configured"}]
+    similar_sheet_rows = similar_channel_rows or [{
+        "run_id": run_id, "seed_source_id": "", "seed_channel_url": "", "seed_channel_title": "",
+        "method_status": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_status", "not_run"),
+        "method_error_code": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_error", ""),
+        "method_error_message_short": "", "recommendation_rank": "", "recommended_title": "",
+        "recommended_username": "", "recommended_canonical_url": "", "edge_type": "telegram_similar_channel",
+        "frontier_action": "none", "frontier_reason": "no Telegram similar channel rows in this run",
+    }]
     sheets = {
         "00_product_summary":product_summary,
         "00_readme":[{"field":"what","value":"Region Talk MVP-1.x Candidate Report Only; LLM final semantic gate via Supabase google_ai limiter; image scoring only after LLM accept; no Telegram/VK publishing."},{"field":"run_id","value":run_id},{"field":"generated_at","value":run_now}],
@@ -1754,17 +2410,21 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "03_funnel":funnel,
         "03b_gate_counts":independent_gate_counts,
         "04_review_queue":review_queue,
-        "04a_final_shortlist":final_shortlist,
+        "04a_final_shortlist":compact_final_shortlist,
+        "04a_final_shortlist_raw":final_shortlist,
         "04b_needs_llm_retry":llm_error_sheet_rows,
         "04c_debug_rejects":debug_rejects,
-        "05_favorites":favorites,
-        "06_candidates_all":candidates,
-        "07_new_posts_this_run":new_posts,
+        "05_favorites":favorites_sheet,
+        "06_candidates_all":candidates_sheet,
+        "07_new_posts_this_run":[r for r in new_posts if any(inc.get("entity_id") == r.get("post_id") and inc.get("new_this_run") == "yes" for inc in increment)],
+        "07_current_run_posts":new_posts,
         "08_dropped_posts":dropped,
         "09_image_quality":media_rows,
         "10_good_text_weak_media":[r for r in dropped if r.get("current_stage") == "good_text_weak_media"],
         "11_sources_seed":source_seed_rows,
         "12_sources_discovered":discovered_rows,
+        "12a_source_frontier_unique":source_frontier_unique,
+        "12b_telegram_similar_channels":similar_sheet_rows,
         "13_sources_monitored":source_rows,
         "14_verifier_reports":[],
         "14b_pre_candidates_needing_llm":[r for r in pre_candidates if r.get("current_stage") == "pre_candidate_needs_llm"],
@@ -1774,6 +2434,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "17_source_graph_edges":graph_edges,
         "18_place_lexicon_matches":place_match_rows,
         "19_image_model_observability":image_model_observability,
+        "20_telegram_rate_observability":telegram_observability_rows,
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)

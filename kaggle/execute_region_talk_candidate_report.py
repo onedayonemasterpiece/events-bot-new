@@ -152,6 +152,19 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "20"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
+        "REGION_TALK_TG_GOVERNOR_ENABLED": os.environ.get("REGION_TALK_TG_GOVERNOR_ENABLED", "1"),
+        "REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "120"),
+        "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "3"),
+        "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "8"),
+        "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "25"),
+        "REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "20"),
+        "REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS", "60"),
+        "REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", "300"),
+        "REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", "1800"),
+        "REGION_TALK_TG_SIMILAR_ENABLED": os.environ.get("REGION_TALK_TG_SIMILAR_ENABLED", os.environ.get("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", "1")),
+        "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", "3")),
+        "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", "10")),
+        "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", "25")),
         "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip"),
         "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
@@ -163,6 +176,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": "0",
         "REGION_TALK_SEED_FILE": os.environ.get("REGION_TALK_SEED_FILE", "seed-sources-v2.csv"),
         "REGION_TALK_PLACE_LEXICON_FILE": os.environ.get("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv"),
+        "REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE": os.environ.get("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx"),
         "REGION_TALK_MIN_POST_DATE": os.environ.get("REGION_TALK_MIN_POST_DATE", "2026-01-01"),
         "REGION_TALK_FRESHNESS_HALF_LIFE_DAYS": os.environ.get("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
@@ -182,6 +196,9 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         shutil.copy2(feature_dir / "seed-sources-v1.csv", folder / "seed-sources-v1.csv")
         shutil.copy2(feature_dir / "seed-sources-v2.csv", folder / "seed-sources-v2.csv")
         shutil.copy2(feature_dir / "kaliningrad-place-lexicon-v1.csv", folder / "kaliningrad-place-lexicon-v1.csv")
+        blogger_links = PROJECT_ROOT / "artifacts" / "public_travel_blogger_channel_links.xlsx"
+        if blogger_links.exists():
+            shutil.copy2(blogger_links, folder / "public_travel_blogger_channel_links.xlsx")
         shutil.copytree(PROJECT_ROOT / "google_ai", folder / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         state_candidates = [
             Path(os.environ["REGION_TALK_STATE_FILE"]) if os.environ.get("REGION_TALK_STATE_FILE") else None,
@@ -278,6 +295,15 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "20")
     os.environ.setdefault("REGION_TALK_MAX_IMAGES_PER_POST", "8")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
+    os.environ.setdefault("REGION_TALK_TG_GOVERNOR_ENABLED", "1")
+    os.environ.setdefault("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "3")
+    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "8")
+    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "25")
+    os.environ.setdefault("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "20")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_ENABLED", "1")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", "3")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", "10")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", "25")
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip")
     os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1")
     os.environ.setdefault("REGION_TALK_SEMANTIC_GATE_MODE", "llm_required")
@@ -288,6 +314,7 @@ def main() -> int:
     os.environ.setdefault("GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR", "0")
     os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
     os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
+    os.environ.setdefault("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
     os.environ.setdefault("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30")
     kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)

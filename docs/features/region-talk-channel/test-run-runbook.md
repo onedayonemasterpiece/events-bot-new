@@ -55,6 +55,7 @@ REGION_TALK_DRY_RUN=1
 REGION_TALK_DISABLE_PUBLISH=1
 REGION_TALK_SEED_FILE=docs/features/region-talk-channel/seed-sources-v2.csv
 REGION_TALK_PLACE_LEXICON_FILE=docs/features/region-talk-channel/kaliningrad-place-lexicon-v1.csv
+REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE=public_travel_blogger_channel_links.xlsx
 REGION_TALK_OUTPUT_DIR=artifacts/region-talk/runs/${RUN_ID}
 REGION_TALK_MAX_SOURCES=30
 REGION_TALK_MAX_POSTS_PER_SOURCE=50
@@ -75,7 +76,29 @@ REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
 REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
 REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
 REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
+REGION_TALK_TG_GOVERNOR_ENABLED=1
+REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=120
+REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
+REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
+REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS=60
+REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
+REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
+REGION_TALK_TG_SIMILAR_ENABLED=1
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=3
+REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=25
 ```
+
+
+## Telegram session and human-like discovery constraints
+
+Telegram monitoring/discovery is Telethon-based. Use the feature's discovery/Kaggle auth bundle by default; use `TELEGRAM_AUTH_BUNDLE_E2E` for a Kaggle run only when the operator explicitly tells this run to avoid the Discovery/S22 session because another agent/job owns it. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts.
+
+The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
+
+`public_travel_blogger_channel_links.xlsx` is copied into the Kaggle private input dataset by the launcher when present under `artifacts/`. It is imported into source frontier only and deduped in `12a_source_frontier_unique`.
 
 `REGION_TALK_MAX_LLM_CALLS` is intentionally not part of the authoritative config. The run must reserve/finalize calls through Supabase `google_ai`; local/env counters may not be used as a substitute for the shared limiter.
 
@@ -143,6 +166,9 @@ The XLSX has:
 - `04c_debug_rejects` — obvious non-region/ad/low-substance rejects;
 - `14b_pre_candidates_needing_llm` — reviewable rows waiting for semantic model/manual review.
 - `19_image_model_observability` — model id/type/runtime/input/device and fallback honesty for image scoring.
+- `12a_source_frontier_unique` — deduped next-source frontier from seeds, public blogger workbook, links and Telegram similar-channel recommendations.
+- `12b_telegram_similar_channels` — raw Telegram recommendations/status/errors.
+- `20_telegram_rate_observability` — Excel-safe request-governor/FloodWait sheet name for the longer P0 `20_telegram_rate_limit_observability`.
 
 ## MVP-1.z2 validation checklist
 
@@ -153,3 +179,12 @@ The XLSX has:
 - LLM-accepted rows with weak media go to `10_good_text_weak_media`.
 - `04b_needs_llm_retry` and `14c_llm_errors` keep useful headers even when there are no retry rows.
 - `09_image_quality` and `19_image_model_observability` must show whether scoring was actual-image local CLIP or metadata fallback.
+
+
+## MVP-1.z3 validation checklist
+
+- `00_product_summary` exposes git provenance, Telegram governor metrics, similar-channel counts and source-frontier counts.
+- `12a_source_frontier_unique` contains public blogger workbook rows and any Telegram similar-channel rows, deduped by normalized URL/source id.
+- `12b_telegram_similar_channels` exists even if the run has no recommendations or Telethon reports `not_supported_by_telethon_version`.
+- `20_telegram_rate_observability` exists and shows request caps, cache/network resolve counts, FloodWait/cooldown/degraded-mode state and private ledger path.
+- Public XLSX sheets contain no Telegram `channel_id`, `access_hash`, auth bundles, tokens or raw private payloads.
