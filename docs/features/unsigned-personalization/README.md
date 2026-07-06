@@ -25,6 +25,7 @@ Authorized event search / pgvector RPC contract: `docs/features/unsigned-persona
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
+Personal email announcements / batch recommendation channel: `docs/features/personal-email-announcements/README.md`.
 
 Дополнительные проектные артефакты:
 

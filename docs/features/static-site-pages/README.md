@@ -164,6 +164,7 @@ Runtime policy: `ocr_text`/`unknown` stay `contain`/natural-ratio no-crop; `visu
 - Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
 - CDN asset delivery: `docs/features/static-site-pages/cdn-asset-delivery.md`.
 - Listing personal feed: `docs/features/static-site-pages/listing-personal-feed.md`.
+- Personal email announcements: `docs/features/personal-email-announcements/README.md`.
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
 - MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.
