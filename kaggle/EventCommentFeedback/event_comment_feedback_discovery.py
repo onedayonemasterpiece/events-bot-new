@@ -250,9 +250,10 @@ def classify_comment_role(text: str) -> tuple[str, str | None]:
     if re.search(r'(?i)(питух|бойцовск\w*\s+птиц|ахах|лол\b|кек\b|мем)', t):
         return 'offtopic_meme_or_noise', 'meme_or_noise'
     official_greeting = re.search(r'(?i)^(здравствуйте|добрый\s+день|добрый\s+вечер)[!.:,\s]+', st)
-    official_answer = re.search(r'(?i)\b(да|нет|можно|нельзя|будет|не\s+будет|опубликован[аы]?|предусмотрен[аы]?|приносим\s+извинения|благодарим\s+за\s+обращение|следите(?:,?\s+пожалуйста,?)?\s+за\s+новостями|можете\s+ознакомиться|информация\s+размещена)\b', st)
-    official_like = re.search(r'(?i)(при\s+прохождении\s+входного\s+контроля\s+сотрудники|территори[яи]\s+стадиона|предусмотрены\s+точки\s+питания|вход[^.!?]{0,80}запрещен|будут\s+опубликованы\s+еще\s+билеты|благодарим\s+за\s+обращение|следите(?:,?\s+пожалуйста,?)?\s+за\s+новостями|в\s+последнем\s+посте[^.!?]{0,80}ссылк)', st)
-    if (official_greeting and official_answer and not has_explicit_problem_report(st)) or official_like:
+    user_question_like = has_direct_question_marker(st) or re.search(r'(?i)\b(как\s+можно|где|подскажите|можно\s+ли|будет\s+ли|есть\s+ли|когда|во\s+сколько|сколько)\b', st)
+    explicit_official_marker = re.search(r'(?i)(держим\s+вопрос\s+на\s+контроле|информация\s+будет\s+опубликована|информация\s+размещена|обратитесь\s+по\s+ссылке|подробности\s+у\s+организатора|регистрация\s+закрыта|запись\s+закрыта|приносим\s+извинения|благодарим\s+за\s+обращение|следите(?:,?\s+пожалуйста,?)?\s+за\s+новостями|можете\s+ознакомиться)', st)
+    operational_official_context = re.search(r'(?i)(при\s+прохождении\s+входного\s+контроля\s+сотрудники|территори[яи]\s+стадиона|предусмотрены\s+точки\s+питания|вход[^.!?]{0,80}запрещен|будут\s+опубликованы\s+еще\s+билеты|в\s+последнем\s+посте[^.!?]{0,80}ссылк)', st)
+    if ((official_greeting and explicit_official_marker) or operational_official_context) and not has_explicit_problem_report(st):
         return 'official_reply', 'official_or_admin_answer'
     if is_probable_source_copy(t): return 'source_copy_or_announcement', 'source_like_text'
     return 'user_feedback', None
@@ -309,14 +310,18 @@ def write_fetch_error_summary(errors: list[dict[str, Any]], skipped: list[dict[s
 def derive_comments_capability(item: dict[str, Any]) -> tuple[str, str | None]:
     status=str(item.get('status') or item.get('skip_reason') or '')
     code=str(item.get('code') or item.get('error_type') or '')
-    if status == 'not_accessible_or_deleted': return 'forbidden_or_deleted', 'ttl_30d'
-    if status in {'telegram_missing_username_or_chat_id','vk_missing_owner_or_post_id'}: return 'entity_resolution_failed', 'ttl_30d'
-    if status == 'flood_wait': return 'rate_limited', 'ttl_floodwait'
+    if status in {'capability_no_comments', 'no_comments'}: return 'no_comments', 'ttl_7d'
+    if status in {'capability_no_discussion_or_deleted', 'no_discussion_or_deleted'}: return 'no_discussion_or_deleted', 'ttl_14d'
+    if status in {'capability_entity_resolution_failed', 'telegram_missing_username_or_chat_id','vk_missing_owner_or_post_id'}: return 'entity_resolution_failed', 'ttl_30d'
+    if status in {'capability_forbidden_or_deleted', 'not_accessible_or_deleted'}: return 'forbidden_or_deleted', 'ttl_30d'
+    if status in {'capability_rate_limited', 'flood_wait'}: return 'rate_limited', 'ttl_floodwait'
     if code in {'MsgIdInvalidError','BadRequestError'}: return 'no_discussion_or_deleted', 'ttl_14d'
-    if status in {'missing_token'}: return 'unknown', None
+    if code == 'ValueError' or re.search(r'(?i)(no\s+username|could\s+not\s+find\s+entity|cannot\s+find\s+any\s+entity)', str(item.get('message') or '')):
+        return 'entity_resolution_failed', 'ttl_30d'
+    if status in {'missing_token'}: return 'unknown_retryable', None
     if int(item.get('fetched') or 0) > 0: return 'available', None
     if item.get('total_available') == 0 or (item.get('scanned') == 0 and item.get('fetched') == 0): return 'no_comments', 'ttl_7d'
-    return 'unknown', None
+    return 'unknown_retryable', None
 
 def write_source_capability_cache(errors: list[dict[str, Any]], skipped: list[dict[str, Any]], source_diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
     now=dt.datetime.now(dt.timezone.utc)
@@ -386,6 +391,39 @@ def load_source_capability_cache_optional() -> dict[str, Any]:
         return load_json_any(find_input_file('source_capability_cache.json'))
     except FileNotFoundError:
         return {'schema_version':'event-comment-feedback-source-capability-cache-v1','sources':[]}
+
+def load_previous_state_optional() -> dict[str, Any]:
+    try:
+        return load_json_any(find_input_file('event_comment_feedback_state.json'))
+    except FileNotFoundError:
+        return {'schema_version':'event-comment-feedback-state-v1','comments':{},'source_capabilities':{}}
+
+def build_state_payload(comments: list[dict[str, Any]], source_capability_cache: dict[str, Any], previous_state: dict[str, Any] | None, state_mode: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    now=dt.datetime.now(dt.timezone.utc).isoformat()
+    prev_comments=dict((previous_state or {}).get('comments') or {})
+    before=len(prev_comments)
+    reused=0; new_count=0
+    for c in comments:
+        key=str(c.get('comment_key') or '')
+        if not key: continue
+        event_ids=sorted({int(l['event_id']) for l in (c.get('links') or []) if l.get('event_id') is not None})
+        text_hash=short_hash(low(c.get('text') or ''), 24)
+        if key in prev_comments:
+            reused += 1
+            first_seen=prev_comments[key].get('first_seen_at') or now
+        else:
+            new_count += 1
+            first_seen=now
+        prev_comments[key]={'text_hash':text_hash,'event_ids':event_ids,'platform_post_key':c.get('platform_post_key'),'first_seen_at':first_seen,'last_seen_at':now}
+    source_caps={}
+    for row in (source_capability_cache or {}).get('sources') or []:
+        k=row.get('platform_post_key')
+        if not k: continue
+        source_caps[str(k)]={'comments_capability':row.get('comments_capability') or 'unknown_retryable','last_checked_at':row.get('last_checked_at'),'next_check_after':row.get('next_check_after')}
+    payload={'schema_version':'event-comment-feedback-state-v1','generated_at':now,'state_mode':state_mode,'comments':prev_comments,'source_capabilities':source_caps}
+    (WORK/'event_comment_feedback_state.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    stats={'state_mode':state_mode,'comments_known_before':before,'comments_known_after':len(prev_comments),'new_comments_this_run':new_count,'comments_reused_from_cache':reused,'source_capabilities_loaded':len((previous_state or {}).get('source_capabilities') or {}),'source_capabilities_updated':len(source_caps)}
+    return payload, stats
 
 def capability_skip_reason(row: dict[str, Any], now: dt.datetime | None = None) -> str | None:
     cap=str(row.get('comments_capability') or '')
@@ -754,23 +792,38 @@ def score(comments, manifest, phrases):
             public_comments=[c for c in g['comments'] if c.get('candidate',{}).get('public_gate_pass') and c.get('comment_role') == 'user_feedback']
             public_authors={c.get('author_hash') or '' for c in public_comments if c.get('comment_role') == 'user_feedback'}
             pev=len(public_comments); pau=len(public_authors)
-            if pev>=min_ev and pau>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low': status='public_ready_dual_kaggle'
-            elif p.get('singular_safe') and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}: status='public_ready_singular_dual_kaggle'
-            elif ev>=min_ev and au>=min_au: status='needs_review_dual_kaggle'
-            else: status='suppressed_weak_dual_kaggle'
+            if pev>=min_ev and pau>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low':
+                status='semantic_public_ready_dual_kaggle'; semantic_status='semantic_public_gate_pass'
+            elif p.get('singular_safe') and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}:
+                status='semantic_public_ready_singular_dual_kaggle'; semantic_status='semantic_public_gate_pass'
+            elif ev>=min_ev and au>=min_au:
+                status='needs_review_dual_kaggle'; semantic_status='semantic_needs_review'
+            else:
+                status='suppressed_weak_dual_kaggle'; semantic_status='semantic_suppressed_weak'
             all_cs=sorted(g['comments'], key=lambda x:x['candidate']['ensemble_score'], reverse=True)
-            public_status=status.startswith('public_ready')
+            public_status=semantic_status == 'semantic_public_gate_pass'
             cs=sorted(public_comments, key=lambda x:x['candidate']['ensemble_score'], reverse=True) if public_status else all_cs
             display_ev=pev if public_status else ev
             display_au=pau if public_status else au
             feedback_scope='event_series' if max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]) > 1 else 'event_instance'
-            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'user_evidence_count':pev if public_status else ev,'user_unique_authors_count':pau if public_status else au,'official_context_count':len(official_context),'evidence_count':display_ev,'unique_authors_count':display_au,'raw_group_evidence_count':ev+len(official_context),'raw_group_unique_authors_count':au,'sources_count':len(g['sources']),'feedback_scope':feedback_scope,'source_post_event_link_count':max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'text_snippet':c['text'][:220]} for c in cs[:4]]}
-            for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,**c['candidate'],'comment_key':c['comment_key'],'comment_type':c.get('comment_type'),'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'text_snippet':c['text'][:220]})
-            (accepted if status.startswith('public_ready') else other).append(rec)
+            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'user_evidence_count':pev if public_status else ev,'user_unique_authors_count':pau if public_status else au,'official_context_count':len(official_context),'evidence_count':display_ev,'unique_authors_count':display_au,'raw_group_evidence_count':ev+len(official_context),'raw_group_unique_authors_count':au,'sources_count':len(g['sources']),'feedback_scope':feedback_scope,'source_post_event_link_count':max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]),'status':status,'semantic_status':semantic_status,'site_export_status':None,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'text_snippet':c['text'][:220]} for c in cs[:4]]}
+            for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,'semantic_status':semantic_status,'site_export_status':None,**c['candidate'],'comment_key':c['comment_key'],'comment_type':c.get('comment_type'),'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'text_snippet':c['text'][:220]})
+            (accepted if semantic_status == 'semantic_public_gate_pass' else other).append(rec)
         event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other,'official_context_count':sum(len(v) for (event_id,_src),v in context_by_event_source.items() if event_id==eid),'suppressed_internal_samples':suppressed_internal[:20]}
     return event_results,evidence,filter_payload
 
-def write_reports(manifest, comments, errors, event_results, evidence, fetch_error_summary=None, comment_filter_summary=None, source_capability_cache=None):
+def site_export_status_for(semantic_status: str, flags: dict[str, Any]) -> tuple[str, str]:
+    if semantic_status == 'semantic_public_gate_pass':
+        if flags.get('eligible_for_site_export') and not flags.get('is_past_event'):
+            return 'site_public_ready', 'site_public_ready_dual_kaggle'
+        if flags.get('is_past_event'):
+            return 'site_ineligible_past_event', 'site_ineligible_past_gate_pass'
+        return 'site_ineligible_not_site_event', 'site_ineligible_not_site_event'
+    if semantic_status == 'semantic_needs_review': return 'site_ineligible_review_required', 'needs_review_dual_kaggle'
+    if semantic_status == 'semantic_filtered_internal': return 'site_ineligible_weak', 'filtered_internal'
+    return 'site_ineligible_weak', 'suppressed_weak_dual_kaggle'
+
+def write_reports(manifest, comments, errors, event_results, evidence, fetch_error_summary=None, comment_filter_summary=None, source_capability_cache=None, state_stats=None):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     generated_at=dt.datetime.now(dt.timezone.utc)
@@ -780,32 +833,37 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
         for it in (res.get('accepted_items') or []) + (res.get('review_or_suppressed_items') or []):
             it['is_site_eligible_event']=flags['eligible_for_site_export']
             it['run_date']=flags['run_date']; it['run_datetime']=flags['run_datetime']; it['is_past_event']=flags['is_past_event']
-            if not flags['eligible_for_site_export'] and it.get('status','').startswith('public_ready'):
-                it['status']='site_ineligible_past_event_probe_only'
+            site_status, public_status = site_export_status_for(str(it.get('semantic_status') or ''), flags)
+            it['site_export_status']=site_status; it['status']=public_status
     for e in evidence:
         flags=event_site_flags((manifest.get('events') or {}).get(str(e.get('event_id')), {}), generated_at)
-        e.update({'run_date':flags['run_date'],'run_datetime':flags['run_datetime'],'is_past_event':flags['is_past_event'],'eligible_for_site_export':flags['eligible_for_site_export'],'is_site_eligible_event':flags['eligible_for_site_export']})
+        site_status, public_status = site_export_status_for(str(e.get('semantic_status') or ''), flags)
+        e.update({'run_date':flags['run_date'],'run_datetime':flags['run_datetime'],'is_past_event':flags['is_past_event'],'eligible_for_site_export':flags['eligible_for_site_export'],'is_site_eligible_event':flags['eligible_for_site_export'],'site_export_status':site_status,'status':public_status})
     filtered_total=sum(int(v.get('count') or 0) for v in ((comment_filter_summary or {}).get('buckets') or {}).values()) if isinstance(comment_filter_summary, dict) else 0
     candidate_rows_total=len(evidence)
-    public_gate_pass=sum(1 for e in evidence if e.get('public_gate_pass'))
-    public_ready_evidence=[e for e in evidence if str(e.get('status') or '').startswith('public_ready') and e.get('is_user_evidence') and e.get('eligible_for_site_export')]
-    non_public_gate_pass=[e for e in evidence if e.get('public_gate_pass') and not str(e.get('status') or '').startswith('public_ready')]
+    semantic_public_gate_pass_rows_total=sum(1 for e in evidence if e.get('public_gate_pass'))
+    semantic_public_ready=[e for e in evidence if e.get('semantic_status') == 'semantic_public_gate_pass']
+    site_public_ready=[e for e in evidence if e.get('site_export_status') == 'site_public_ready' and e.get('is_user_evidence') and not e.get('is_official_context') and e.get('model_agreement')]
+    non_public_gate_pass=[e for e in evidence if e.get('public_gate_pass') and e.get('site_export_status') != 'site_public_ready']
+    past_public_gate=[e for e in evidence if e.get('public_gate_pass') and e.get('is_past_event')]
+    low_risk_suppressed=[e for e in evidence if e.get('eligible_for_site_export') and not e.get('is_past_event') and e.get('model_agreement') and int(e.get('e5_rank') or 999)==1 and int(e.get('bge_rank') or 999)==1 and not e.get('is_official_context') and e.get('risk_class')=='low' and e.get('site_export_status')!='site_public_ready']
     official_context_rows=sum(int(r.get('official_context_count') or 0) for r in event_results.values())
     user_evidence_rows=sum(1 for e in evidence if e.get('is_user_evidence'))
-    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':generated_at.isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'comments_fetched_this_run':len(comments),'comments_known_total':None,'new_comments_this_run':None,'comments_reused_from_cache':0,'source_posts_known_total':manifest.get('source_post_count'),'source_posts_checked_this_run':manifest.get('source_post_count'),'source_posts_skipped_by_capability':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('kind')=='skipped' and str(r.get('last_status') or '').startswith('capability_')),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':sum(1 for r in event_results.values() if any(str(i.get('status') or '').startswith('public_ready') and i.get('is_site_eligible_event') for i in r.get('accepted_items',[]))),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['status']=='needs_review_dual_kaggle' for i in r.get('review_or_suppressed_items',[]))),'candidate_rows_total':candidate_rows_total,'candidate_rows_public_gate_pass':public_gate_pass,'public_ready_evidence_rows':len(public_ready_evidence),'public_ready_events':len({e.get('event_id') for e in public_ready_evidence}),'non_public_rows_with_public_gate_pass':len(non_public_gate_pass),'filtered_comments_total':filtered_total,'scored_comments_total':len(comments)-filtered_total,'official_context_rows':official_context_rows,'user_evidence_rows':user_evidence_rows,'source_capability_rows':len((source_capability_cache or {}).get('sources') or [])}
+    state_stats=state_stats or {'state_mode':'one_off_non_cumulative','comments_known_before':0,'comments_known_after':len(comments),'new_comments_this_run':len(comments),'comments_reused_from_cache':0,'source_capabilities_loaded':0,'source_capabilities_updated':len((source_capability_cache or {}).get('sources') or [])}
+    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':generated_at.isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'comments_fetched_this_run':len(comments),'comments_known_total':state_stats.get('comments_known_after'),'new_comments_this_run':state_stats.get('new_comments_this_run'),'comments_reused_from_cache':state_stats.get('comments_reused_from_cache'),'source_posts_known_total':manifest.get('source_post_count'),'source_posts_checked_this_run':manifest.get('source_post_count'),'source_posts_skipped_by_capability':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('kind')=='skipped' and str(r.get('last_status') or '').startswith('capability_')),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':len({e.get('event_id') for e in site_public_ready}),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['site_export_status']=='site_ineligible_review_required' for i in r.get('review_or_suppressed_items',[]))),'candidate_rows_total':candidate_rows_total,'candidate_rows_public_gate_pass':semantic_public_gate_pass_rows_total,'public_ready_evidence_rows':len(site_public_ready),'public_ready_events':len({e.get('event_id') for e in site_public_ready}),'semantic_public_gate_pass_rows_total':semantic_public_gate_pass_rows_total,'semantic_public_ready_rows_all_events':len(semantic_public_ready),'site_export_public_ready_rows':len(site_public_ready),'site_export_public_ready_events':len({e.get('event_id') for e in site_public_ready}),'past_public_gate_pass_rows':len(past_public_gate),'site_ineligible_public_gate_pass_rows':len(non_public_gate_pass),'non_public_rows_with_public_gate_pass':len(non_public_gate_pass),'low_risk_site_eligible_suppressed_rows':len(low_risk_suppressed),'filtered_comments_total':filtered_total,'scored_comments_total':len(comments)-filtered_total,'official_context_rows':official_context_rows,'user_evidence_rows':user_evidence_rows,'source_capability_rows':len((source_capability_cache or {}).get('sources') or []),**state_stats}
     (WORK/'event_comment_feedback_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     (WORK/'event_comment_feedback_probe.json').write_text(json.dumps({**summary,'events':event_results}, ensure_ascii=False, indent=2), encoding='utf-8')
     rows=[]
     for eid,res in sorted(event_results.items(), key=lambda kv:((kv[1]['event'].get('date') or ''), int(kv[0]))):
         ev=res['event']; items=res['accepted_items']+res['review_or_suppressed_items']
-        def join(status_prefix,tone=None):
+        def join(site_status,tone=None):
             vals=[]
             for it in items:
-                if not it['status'].startswith(status_prefix): continue
+                if it.get('site_export_status') != site_status: continue
                 if tone and it.get('tone')!=tone: continue
                 vals.append(f"{it.get('card_title') or it.get('public_sentence')} — {it.get('card_text') or ''} ({it['evidence_count']}/{it['unique_authors_count']}; {it.get('feedback_scope','event_instance')})")
             return '\n'.join(vals[:6])
-        rows.append({'event_id':int(eid),'date':ev.get('date'),'time':ev.get('time'),'run_date':res.get('run_date'),'run_datetime':res.get('run_datetime'),'is_past_event':res.get('is_past_event'),'eligible_for_site_export':res.get('eligible_for_site_export'),'title':ev.get('title'),'venue':ev.get('location_name'),'comments_seen':res['comments_seen_count'],'dedup_comments':res['dedup_comments_count'],'official_context_count':res.get('official_context_count',0),'public_positive':join('public_ready','positive'),'public_neutral':join('public_ready','neutral'),'public_negative':join('public_ready','concern'),'review_positive':join('needs_review','positive'),'review_neutral':join('needs_review','neutral'),'review_negative':join('needs_review','concern'),'suppressed_weak_top':join('suppressed_weak'),'evidence_snippets':'\n---\n'.join([sn for it in items[:6] for sn in it.get('evidence_snippets',[])][:6]),'note':'Kaggle dual local prototype ensemble: intfloat/multilingual-e5-base + BAAI/bge-m3; embedding API disabled; official replies are context, not public evidence'})
+        rows.append({'event_id':int(eid),'date':ev.get('date'),'time':ev.get('time'),'run_date':res.get('run_date'),'run_datetime':res.get('run_datetime'),'is_past_event':res.get('is_past_event'),'eligible_for_site_export':res.get('eligible_for_site_export'),'title':ev.get('title'),'venue':ev.get('location_name'),'comments_seen':res['comments_seen_count'],'dedup_comments':res['dedup_comments_count'],'official_context_count':res.get('official_context_count',0),'public_positive':join('site_public_ready','positive'),'public_neutral':join('site_public_ready','neutral'),'public_negative':join('site_public_ready','concern'),'review_positive':join('site_ineligible_review_required','positive'),'review_neutral':join('site_ineligible_review_required','neutral'),'review_negative':join('site_ineligible_review_required','concern'),'suppressed_weak_top':join('site_ineligible_weak'),'evidence_snippets':'\n---\n'.join([sn for it in items[:6] for sn in it.get('evidence_snippets',[])][:6]),'note':'Kaggle dual local prototype ensemble: intfloat/multilingual-e5-base + BAAI/bge-m3; embedding API disabled; status is site-aware; official replies are context, not public evidence'})
     headers=list(rows[0].keys()) if rows else ['note']
     with (WORK/'event_comment_feedback_full_table.csv').open('w',encoding='utf-8-sig',newline='') as f:
         w=csv.DictWriter(f,fieldnames=headers); w.writeheader(); w.writerows(rows or [{'note':'No rows'}])
@@ -828,8 +886,9 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
         sh.freeze_panes='A2'
         return sh
     add_sheet('evidence_samples', evidence[:2000])
-    add_sheet('public_ready_evidence_only', public_ready_evidence[:2000])
+    add_sheet('public_ready_evidence_only', site_public_ready[:2000])
     add_sheet('public_gate_pass_not_published', non_public_gate_pass[:2000])
+    add_sheet('low_risk_site_eligible_suppressed', low_risk_suppressed[:2000])
     if fetch_error_summary:
         add_sheet('fetch_error_buckets', (fetch_error_summary.get('buckets') or [])[:1000])
     if comment_filter_summary:
@@ -859,7 +918,7 @@ def main():
         except FileNotFoundError:
             phrase_path=find_input_file('phrase-bank-v1.md')
         emit('input_files_found', run_config=str(config_path), manifest=str(manifest_path), phrase_bank=str(phrase_path), progress_percent=4, progress_label='payload найден')
-        config=load_json_any(config_path); manifest=load_json_any(manifest_path); phrases=parse_phrase_bank(phrase_path); prior_source_capability_cache=load_source_capability_cache_optional()
+        config=load_json_any(config_path); manifest=load_json_any(manifest_path); phrases=parse_phrase_bank(phrase_path); prior_source_capability_cache=load_source_capability_cache_optional(); previous_state=load_previous_state_optional(); state_mode=str(config.get('state_mode') or 'one_off_non_cumulative')
         max_comments=int(config.get('max_comments_per_source') or 60); sleep_s=float(config.get('request_sleep') or 0.18)
         selected, skipped=build_fetch_posts(manifest, prior_source_capability_cache); tg=[p for p in selected if p['platform']=='telegram']; vk=[p for p in selected if p['platform']=='vk']
         emit('preflight_ok', events=manifest.get('event_count'), source_posts=manifest.get('source_post_count'), selected=len(selected), tg=len(tg), vk=len(vk), skipped=len(skipped), models=REQUIRED_MODELS, embedding_api_allowed=False, read_mode=READ_MODE, request_sleep=sleep_s, progress_percent=8, progress_label=f'источники: TG {len(tg)} / VK {len(vk)}')
@@ -868,10 +927,11 @@ def main():
         comments=tg_comments+vk_comments; errors=tg_errors+vk_errors; source_diagnostics=tg_diag+vk_diag
         fetch_summary=write_fetch_error_summary(errors, skipped, source_diagnostics)
         source_capability_cache=write_source_capability_cache(errors, skipped, source_diagnostics)
+        _state_payload,state_stats=build_state_payload(comments, source_capability_cache, previous_state, state_mode)
         (WORK/'comments_raw_redacted.json').write_text(json.dumps({'comments':comments,'errors':errors,'source_diagnostics':source_diagnostics,'telegram_account':tg_account}, ensure_ascii=False, indent=2), encoding='utf-8')
         emit('fetch_done', comments=len(comments), errors=len(errors), tg_comments=len(tg_comments), vk_comments=len(vk_comments), progress_percent=40, progress_label=f'комментарии: {len(comments)}')
         event_results,evidence,filter_summary=score(comments, manifest, phrases) if comments else ({}, [], {'buckets': {}})
-        write_reports(manifest, comments, errors, event_results, evidence, fetch_summary, filter_summary, source_capability_cache)
+        write_reports(manifest, comments, errors, event_results, evidence, fetch_summary, filter_summary, source_capability_cache, state_stats)
         emit('kernel_done', progress_percent=100, progress_label='готово')
     except Exception as exc:
         emit('kernel_failed', error_type=type(exc).__name__, message=str(exc)[:1000], progress_label='ошибка')

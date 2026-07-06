@@ -418,6 +418,22 @@ The second probe revision addresses the first-run quality gaps before any static
 
 
 
+
+
+### MVP-5 P1.6 report/status/state semantics
+
+P1.6 keeps P1.5 precision behavior and cleans up report/state semantics before any UI work:
+
+- scoring now separates `semantic_status` from `site_export_status`; generic `status` is site-aware, so past events no longer appear as `public_ready_*` in `evidence_samples`;
+- `public_ready_evidence_rows` / `public_ready_events` mean site-export-ready rows/events only and mirror `site_export_public_ready_rows` / `site_export_public_ready_events`;
+- summary also reports semantic vs site counters: `semantic_public_gate_pass_rows_total`, `semantic_public_ready_rows_all_events`, `past_public_gate_pass_rows`, `site_ineligible_public_gate_pass_rows`, and `low_risk_site_eligible_suppressed_rows`;
+- official/admin text fallback no longer treats a greeting plus a user question as official; explicit official markers such as `следите за новостями`, `информация будет опубликована`, `благодарим за обращение`, `регистрация закрыта` are required unless source-role metadata is added later;
+- `question_phrase_without_direct_question_or_problem` remains limited to practical question/problem phrase ids and is not applied to intent/praise/anticipation classes;
+- XLSX adds `low_risk_site_eligible_suppressed` for useful low-risk candidates that are not auto-public due to evidence/min-policy constraints;
+- optional file-backed state is available through `--previous-state-json` and `--state-mode file_incremental`, producing `event_comment_feedback_state.json` and non-null state counters (`comments_known_before/after`, `new_comments_this_run`, `comments_reused_from_cache`);
+- source capability enum is normalized to `available`, `no_comments`, `no_discussion_or_deleted`, `entity_resolution_failed`, `forbidden_or_deleted`, `rate_limited`, `unknown_retryable`;
+- event-series duplication policy for MVP: keep event-level export on each linked date, but mark shared evidence with `feedback_scope=event_series`, `source_post_event_link_count`, and `shared_source_evidence=true`; global reviewers must not count these shared rows as independent user signals.
+
 ### MVP-4 P1.5 role-aware precision hardening
 
 P1.5 incorporates the critical P1 review before any static-site export:

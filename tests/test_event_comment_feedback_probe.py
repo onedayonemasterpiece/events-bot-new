@@ -121,3 +121,54 @@ def test_p15_site_flags_and_capability_cache(tmp_path, monkeypatch):
     assert caps["vk:-1:2"] == "forbidden_or_deleted"
     assert caps["tgid:1:2"] == "entity_resolution_failed"
     assert caps["vk:-1:3"] == "available"
+
+
+def test_p16_official_question_false_positive_is_user(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    assert mod.classify_comment_type("Добрый день, как можно связаться с музыкантами?")[0] == "user_feedback"
+    assert mod.classify_comment_type("Здравствуйте! Сейчас нет информации, когда будет следующий тираж. Следите за новостями")[0] == "official_reply"
+
+
+def test_p16_non_question_phrases_do_not_get_question_guard(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    assert "question_phrase_without_direct_question_or_problem" not in mod.guard("Блин. Надо идтить...", "intent_to_attend")
+    assert "question_phrase_without_direct_question_or_problem" in mod.guard("Да, вход с любыми напитками запрещен", "admission_rules_question")
+
+
+def test_p16_capability_enum_mapping(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    cases = [
+        ({"skip_reason": "capability_no_comments"}, "no_comments"),
+        ({"skip_reason": "capability_no_discussion_or_deleted"}, "no_discussion_or_deleted"),
+        ({"status": "error", "error_type": "ValueError", "message": "could not find entity"}, "entity_resolution_failed"),
+        ({"status": "not_accessible_or_deleted", "code": 15}, "forbidden_or_deleted"),
+    ]
+    for item, expected in cases:
+        assert mod.derive_comments_capability(item)[0] == expected
+
+
+def test_p16_state_payload_counts(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    comments = [
+        {"comment_key": "vk:1", "text": "Отлично", "platform_post_key": "vk:p", "links": [{"event_id": 1}]},
+        {"comment_key": "vk:2", "text": "Вопрос?", "platform_post_key": "vk:p", "links": [{"event_id": 2}]},
+    ]
+    prev = {"comments": {"vk:1": {"first_seen_at": "2026-07-01T00:00:00+00:00"}}, "source_capabilities": {"old": {}}}
+    cache = {"sources": [{"platform_post_key": "vk:p", "comments_capability": "available", "last_checked_at": "now", "next_check_after": None}]}
+    payload, stats = mod.build_state_payload(comments, cache, prev, "file_incremental")
+    assert stats["state_mode"] == "file_incremental"
+    assert stats["comments_known_before"] == 1
+    assert stats["comments_known_after"] == 2
+    assert stats["new_comments_this_run"] == 1
+    assert stats["comments_reused_from_cache"] == 1
+    assert payload["source_capabilities"]["vk:p"]["comments_capability"] == "available"
+
+
+def test_p16_site_status_for_past_gate_pass(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    site_status, public_status = mod.site_export_status_for("semantic_public_gate_pass", {"eligible_for_site_export": False, "is_past_event": True})
+    assert site_status == "site_ineligible_past_event"
+    assert not public_status.startswith("public_ready")
+    site_status, public_status = mod.site_export_status_for("semantic_public_gate_pass", {"eligible_for_site_export": True, "is_past_event": False})
+    assert site_status == "site_public_ready"
+    assert public_status == "site_public_ready_dual_kaggle"

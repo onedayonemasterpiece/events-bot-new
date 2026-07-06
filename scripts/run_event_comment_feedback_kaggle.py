@@ -290,18 +290,30 @@ def build_manifest_from_sqlite(db_path: Path, *, run_date: str) -> dict[str, Any
     con = sqlite3.connect(str(db_path))
     con.row_factory = sqlite3.Row
     quick = con.execute("pragma quick_check").fetchone()[0]
+    event_cols = {row[1] for row in con.execute('PRAGMA table_info(event)').fetchall()}
+    def sel_col(name: str, default: str = 'NULL') -> str:
+        return name if name in event_cols else f'{default} AS {name}'
+    where = []
+    params: list[Any] = []
+    if 'lifecycle_status' in event_cols:
+        where.append("COALESCE(lifecycle_status,'active')='active'")
+    if 'silent' in event_cols:
+        where.append('COALESCE(silent,0)=0')
+    if 'end_date' in event_cols:
+        where.append('(COALESCE(end_date, date) >= ?)'); params.append(run_date)
+    else:
+        where.append('(date >= ?)'); params.append(run_date)
+    where_sql = ' AND '.join(where) if where else '1=1'
     event_rows = con.execute(
-        """
-        SELECT id, title, date, time, end_date, location_name, city, event_type, ticket_status,
-               lifecycle_status, telegraph_url, source_post_url, source_vk_post_url,
-               source_chat_id, source_message_id, added_at
+        f"""
+        SELECT id, title, date, time, {sel_col('end_date')}, location_name, city, {sel_col('event_type')}, {sel_col('ticket_status')},
+               {sel_col('lifecycle_status', "'active'")}, {sel_col('telegraph_url')}, {sel_col('source_post_url')}, {sel_col('source_vk_post_url')},
+               {sel_col('source_chat_id')}, {sel_col('source_message_id')}, {sel_col('added_at')}
         FROM event
-        WHERE COALESCE(lifecycle_status,'active')='active'
-          AND COALESCE(silent,0)=0
-          AND (COALESCE(end_date, date) >= ?)
+        WHERE {where_sql}
         ORDER BY date ASC, time ASC, id ASC
         """,
-        (run_date,),
+        params,
     ).fetchall()
     event_ids = [int(r["id"]) for r in event_rows]
     source_rows: list[sqlite3.Row] = []
@@ -427,6 +439,7 @@ def create_input_datasets(
     manifest: dict[str, Any],
     run_config: dict[str, Any],
     source_capability_cache: Path | None = None,
+    previous_state_json: Path | None = None,
 ) -> list[str]:
     from cryptography.fernet import Fernet
 
@@ -446,6 +459,8 @@ def create_input_datasets(
     (payload_content / "run_config.json").write_text(json.dumps(run_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if source_capability_cache and source_capability_cache.exists():
         shutil.copy2(source_capability_cache, payload_content / "source_capability_cache.json")
+    if previous_state_json and previous_state_json.exists():
+        shutil.copy2(previous_state_json, payload_content / "event_comment_feedback_state.json")
     archive_path = bundle / "event_comment_feedback_payload.tarball"
     with tarfile.open(archive_path, "w:gz") as tf:
         for item in sorted(payload_content.iterdir()):
@@ -557,6 +572,7 @@ def prepare_manifest_and_config(args: argparse.Namespace, *, run_id: str) -> tup
         "embedding_api_allowed": False,
         "llm_api_allowed_for_final_polish_only": True,
         "read_mode": "api_read_paced_v1",
+        "state_mode": args.state_mode,
     }
     return manifest, config
 
@@ -575,6 +591,8 @@ def main() -> int:
     parser.add_argument("--status-db", default=os.getenv("EVENT_COMMENT_FEEDBACK_STATUS_DB", ""))
     parser.add_argument("--status-callback-url", default=os.getenv("KAGGLE_STATUS_CALLBACK_URL", ""))
     parser.add_argument("--source-capability-cache", default=os.getenv("EVENT_COMMENT_FEEDBACK_SOURCE_CAPABILITY_CACHE", ""), help="Optional previous source_capability_cache.json for TTL skips")
+    parser.add_argument("--previous-state-json", default=os.getenv("EVENT_COMMENT_FEEDBACK_PREVIOUS_STATE_JSON", ""), help="Optional previous event_comment_feedback_state.json")
+    parser.add_argument("--state-mode", choices=["one_off_non_cumulative", "file_incremental"], default=os.getenv("EVENT_COMMENT_FEEDBACK_STATE_MODE", "one_off_non_cumulative"))
     parser.add_argument("--download-output", action="store_true", default=True)
     parser.add_argument("--no-wait", action="store_true")
     parser.add_argument("--keep-temp-datasets", action="store_true", default=(os.getenv("EVENT_COMMENT_FEEDBACK_KEEP_TEMP_DATASETS", "").lower() in {"1", "true", "yes", "on"}))
@@ -604,6 +622,7 @@ def main() -> int:
             manifest=manifest,
             run_config=run_config,
             source_capability_cache=Path(args.source_capability_cache).resolve() if args.source_capability_cache else None,
+            previous_state_json=Path(args.previous_state_json).resolve() if args.previous_state_json else None,
         )
         temp_dataset_refs.extend(dataset_sources)
         kernel_ref = f"{env_user}/event-comment-feedback-discovery"
