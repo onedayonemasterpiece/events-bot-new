@@ -143,7 +143,7 @@ def wait_dataset_ready(client: Any, dataset_ref: str, *, expected_files: list[st
 
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
-    safe_slug = slugify(run_id, max_len=32)
+    safe_slug = slugify(run_id, max_len=28)
     env_config = {
         "REGION_TALK_RUN_ID": run_id,
         "REGION_TALK_DRY_RUN": "1",
