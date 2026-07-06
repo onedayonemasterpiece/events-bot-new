@@ -98,6 +98,26 @@ REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
 REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=150
 ```
 
+z7 growth-run override:
+
+```bash
+REGION_TALK_DISCOVERY_MODE=mixed
+REGION_TALK_HISTORY_SCAN_MODE=primary_and_delta
+REGION_TALK_MAX_SOURCES=120
+REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=800
+REGION_TALK_HISTORY_SOURCES_TARGET=100
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=100
+REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN=100
+REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN=100
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=100
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=1000
+REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY=1
+REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES=30
+REGION_TALK_MEDIA_SCORING_MODE=retry_queue_first
+REGION_TALK_ACTUAL_IMAGE_TARGET=30
+REGION_TALK_REQUIRE_PREVIOUS_STATE=1
+```
+
 
 ## Telegram session and human-like discovery constraints
 
@@ -176,6 +196,8 @@ The XLSX has:
 - `12a_source_frontier_unique` — deduped next-source frontier from seeds, public blogger workbook, links and Telegram similar-channel recommendations.
 - `12b_telegram_similar_channels` — raw Telegram recommendations/status/errors.
 - `12d_similar_seed_queue` — persistent recursive seed queue for the next similar-channel pass.
+- `12e_telegram_keyword_discovery` — source candidates found by bounded Telegram keyword search over Kaliningrad toponyms.
+- `12f_source_classification` — local/provisional source geo/topic/value classes.
 - `13b_source_delta_scan` — per-source cursor/delta audit.
 - `20_telegram_rate_observability` — Excel-safe request-governor/FloodWait sheet name for the longer P0 `20_telegram_rate_limit_observability`.
 - `24_source_yield_metrics` — yield per 1000 scanned sources.
@@ -206,6 +228,17 @@ The XLSX has:
 - `01_run_summary` exposes `history_sources_target`, attempted/ok/new/cached/network counts, `history_fetch_runtime_seconds`, `posts_per_source_distribution`, `similar_seed_queue_total` and `similar_seed_queue_ready`.
 - `12d_similar_seed_queue`, `13b_source_delta_scan` and `24_source_yield_metrics` exist even when empty.
 - `09b_image_fetch_retry_queue` is the active retry queue for metadata-only/image-fetch-pending rows; actual visual quality claims require actual-image local model rows in `09_image_quality`.
+
+## MVP-1.z7 validation checklist
+
+- `01_run_summary.previous_state_loaded=true`, `previous_state_hash` and `latest_state_hash` are visible.
+- All-time metrics exist: `sources_primary_scanned_total_all_time`, `telegram_sources_primary_scanned_total_all_time`, `sources_delta_scanned_total_all_time`, `frontier_pending_primary_scan_total`, `posts_memory_total`, `publication_ready_total_all_time`.
+- `similar_seed_queue_used_total` is consistent with `telegram_similar_channels_seed_count`; used seeds no longer stay at `similar_seed_use_count=0`.
+- `keyword_search_queries_processed >= 30` unless FloodWait/cooldown/error is explicit.
+- `12e_telegram_keyword_discovery` and `12f_source_classification` exist even when empty/error.
+- `source_geo_class`, `source_topic_class`, `has_firsthand_visit_evidence`, `visit_evidence_type`, `publication_story_score` are populated for shortlist/candidate-memory rows.
+- `favorites_candidates_consistency_status=ok`; blank `_sheet_note` placeholders are not counted as favorites/candidates.
+- `run_events.jsonl`, `candidate_found.jsonl`, and `stage_status.json` are present in Kaggle output.
 
 
 ## MVP-1.z4 validation checklist

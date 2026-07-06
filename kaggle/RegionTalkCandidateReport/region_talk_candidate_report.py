@@ -23,6 +23,19 @@ from xml.sax.saxutils import escape
 
 RUN_STARTED_AT = datetime.now(timezone.utc)
 DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг", "Краснолесье", "Виштынец", "Роминтенская пуща", "Балтийская коса", "Янтарный", "Балтийск", "Советск", "Неман", "Правдинск", "Черняховск"]
+TELEGRAM_KEYWORD_DISCOVERY_TERMS = [
+    "Калининград", "Кёнигсберг", "Зеленоградск", "Светлогорск", "Янтарный", "Балтийск", "Пионерский",
+    "Светлый", "Приморск", "Советск", "Черняховск", "Гусев", "Неман", "Полесск", "Правдинск",
+    "Багратионовск", "Мамоново", "Нестеров", "Гвардейск", "Гурьевск", "Славск", "Озёрск",
+    "Краснознаменск", "Ладушкин", "Краснолесье", "Донское", "Куликово", "Отрадное", "Морское",
+    "Рыбачий", "Лесной", "Куршская коса", "Балтийская коса", "Виштынецкое озеро", "Роминтенская пуща",
+    "Роминта", "Танцующий лес", "Высота Эфа", "Королевский бор", "Балтийское море", "Куршский залив",
+    "Вислинский залив", "Филинская бухта", "Янтарный карьер", "Амалиенау", "Ратсхоф", "Рыбная деревня",
+    "Остров Канта", "Кафедральный собор", "Музей Мирового океана", "Форт №5", "Фридрихсбургские ворота",
+    "Закхаймские ворота", "Королевские ворота", "Верхнее озеро", "Нижнее озеро", "кирха Арнау",
+    "Дом Советов", "Готическое кольцо", "замок Нессельбек", "замок Шаакен", "замок Тапиау",
+    "Тильзит", "Инстербург", "Рагнит", "маяк Заливино", "маяк Балтийск",
+]
 NEWS_WORDS = ["происшеств", "дтп", "авар", "полици", "суд", "задерж", "штраф", "войн", "полит", "скандал", "убий", "пожар"]
 AD_WORDS = ["скидк", "промокод", "купить", "заказать", "реклама", "партнёр", "партнер", "оплат", "бронь", "регистрация", "анонс", "конкурс", "диктант", "географический диктант", "билеты", "забронировать"]
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
@@ -80,7 +93,19 @@ def seed_sort_number(value: Any) -> int:
 
 def canonical_source_url(platform: str, handle: str, url: str) -> str:
     if url:
-        return url.strip()
+        raw = url.strip()
+        if platform == "telegram":
+            m = re.search(r"(?:t\.me|telegram\.me)/(@?[A-Za-z0-9_]{4,})(?:/)?(?:\?.*)?$", raw, re.I)
+            if m:
+                return "https://t.me/" + m.group(1).lstrip("@")
+        if platform in {"vk", "vkvideo"}:
+            m = re.search(r"vk\.com/(?:club|public)?([A-Za-z0-9_.-]+)", raw, re.I)
+            if m:
+                ident = m.group(1)
+                if ident.isdigit():
+                    return "https://vk.com/club" + ident
+                return "https://vk.com/" + ident
+        return raw.rstrip("/")
     h = canonical_handle(handle).lstrip("@")
     if not h:
         return ""
@@ -89,6 +114,18 @@ def canonical_source_url(platform: str, handle: str, url: str) -> str:
     if platform in {"vk", "vkvideo"}:
         return f"https://vk.com/{h}"
     return h
+
+
+def canonical_source_key(platform: str, handle: str = "", url: str = "") -> str:
+    p = (platform or "").strip().lower()
+    cu = canonical_source_url(p, handle, url).lower().rstrip("/")
+    if p == "telegram":
+        h = canonical_handle(handle or cu).lstrip("@").lower()
+        if h:
+            return "telegram:" + h
+    if p.startswith("vk"):
+        return "vk:" + re.sub(r"^https://vk\.com/", "", cu)
+    return (p or "unknown") + ":" + (cu or canonical_handle(handle).lower())
 
 
 def load_dotenv(path: Path) -> None:
@@ -348,6 +385,7 @@ def source_status_row(seed: Seed, status_value: str, **extra: Any) -> dict[str, 
         **asdict(seed),
         "source_id": seed.source_id,
         "canonical_url": seed.canonical_url,
+        "canonical_source_key": canonical_source_key(seed.platform, seed.handle, seed.canonical_url),
         "fetch_status": status_value,
         "posts_scanned": 0,
         "source_selected_this_run": "true",
@@ -402,13 +440,28 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
     for path in state_file_candidates(output_dir):
         try:
             if path.exists():
-                data = json.loads(path.read_text(encoding="utf-8"))
+                raw = path.read_bytes()
+                data = json.loads(raw.decode("utf-8"))
                 if isinstance(data, dict):
                     data["_loaded_from_path"] = str(path)
-                    return data, {"increment_state_loaded": "true", "increment_state_path": str(path), "previous_run_id": data.get("run_id", ""), "previous_seen_post_count": len(data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {})}
+                    state_hash = hashlib.sha256(raw).hexdigest()
+                    return data, {
+                        "increment_state_loaded": "true",
+                        "increment_state_path": str(path),
+                        "previous_state_loaded": "true",
+                        "previous_state_source": str(path),
+                        "previous_state_run_id": data.get("run_id", ""),
+                        "previous_state_hash": state_hash,
+                        "previous_run_id": data.get("run_id", ""),
+                        "state_schema_version_previous": data.get("state_schema_version", ""),
+                        "previous_seen_post_count": len(data.get("posts") or {}),
+                        "previous_candidate_memory_count": len(data.get("candidate_memory") or {}),
+                    }
         except Exception as exc:
-            return {}, {"increment_state_loaded": "false", "increment_state_path": str(path), "increment_state_error": f"{type(exc).__name__}: {str(exc)[:180]}", "previous_run_id": "", "previous_seen_post_count": 0}
-    return {}, {"increment_state_loaded": "false", "increment_state_path": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0, "previous_candidate_memory_count": 0}
+            return {}, {"increment_state_loaded": "false", "increment_state_path": str(path), "previous_state_loaded": "false", "previous_state_source": str(path), "previous_state_hash": "", "increment_state_error": f"{type(exc).__name__}: {str(exc)[:180]}", "previous_run_id": "", "previous_seen_post_count": 0}
+    if getenv_bool("REGION_TALK_REQUIRE_PREVIOUS_STATE", False):
+        raise RuntimeError("REGION_TALK_REQUIRE_PREVIOUS_STATE=1 but no previous Region Talk state was found")
+    return {}, {"increment_state_loaded": "false", "increment_state_path": "", "previous_state_loaded": "false", "previous_state_source": "", "previous_state_hash": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0, "previous_candidate_memory_count": 0}
 
 
 def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -488,11 +541,15 @@ def save_region_talk_state(output_dir: Path, state: dict[str, Any]) -> dict[str,
     target = state_file_candidates(output_dir)[0]
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = json.dumps(state, ensure_ascii=False, indent=2)
+        state_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        target.write_text(payload, encoding="utf-8")
         run_copy = output_dir / STATE_FILE_NAME
         if run_copy.resolve() != target.resolve():
-            run_copy.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"state_write_status": "ok", "state_write_path": str(target)}
+            run_copy.write_text(payload, encoding="utf-8")
+        latest_pointer = target.parent / "latest-region-talk-state.json"
+        latest_pointer.write_text(json.dumps({"latest_state_run_id": state.get("run_id"), "latest_state_uri": str(target), "latest_state_hash": state_hash, "updated_at": state.get("updated_at")}, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"state_write_status": "ok", "state_write_path": str(target), "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": str(target), "latest_state_hash": state_hash, "latest_state_pointer_path": str(latest_pointer)}
     except Exception as exc:
         return {"state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:240]}", "state_write_path": str(target)}
 
@@ -559,11 +616,11 @@ class TelegramRequestGovernor:
         self.floodwait_cooldown_until = ""
         self.telegram_phase_status = "ok"
         self.degraded = False
-        self.max_total_requests = getenv_int("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", 300)
+        self.max_total_requests = getenv_int("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", 800)
         self.max_network_resolves = getenv_int("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", 8)
-        self.max_history_sources = getenv_int("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", 40)
-        self.max_media_downloads = getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 60)
-        self.max_recommendation_calls = getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 20)
+        self.max_history_sources = getenv_int("REGION_TALK_HISTORY_SOURCES_TARGET", getenv_int("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", 100))
+        self.max_media_downloads = getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 120)
+        self.max_recommendation_calls = getenv_int("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 100))
         self.floodwait_abort_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", 300)
         self.floodwait_margin = getenv_int("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", 1800)
 
@@ -1106,6 +1163,13 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
             "next_action": "probe_later" if stage in {"unresolved", "probe_due"} else ("fetch_history_when_selected" if stage == "history_due" else ("configure_vk_wall_reader" if stage == "vk_not_configured" else "keep_in_low_quality_pool")),
             "rejection_or_skip_reason": "" if priority >= 0.35 else "low source candidate score; retained as inactive low-quality pool, not a blocking status",
         })
+        g.update(classify_source_profile({
+            "source_title": g.get("title_guess"),
+            "resolved_title": g.get("title_guess"),
+            "source_kind": g.get("edge_types_all"),
+            "source_type": g.get("discovery_types"),
+            "canonical_url": g.get("canonical_url"),
+        }, []))
         out.append(g)
     return sorted(out, key=lambda r: (-float(r.get("source_candidate_score") or 0), str(r.get("normalized_url") or "")))
 
@@ -1127,7 +1191,13 @@ ORIGINAL_PHOTO_PATTERN = re.compile(r"\b(мои фото|наши фото|фо�
 def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: dict[str, Any], post: dict[str, Any] | None = None) -> dict[str, Any]:
     low = (text or "").lower()
     llm_type = str(llm_gate.get("content_type") or llm_gate.get("llm_content_type") or "").strip()
-    has_firsthand = bool(VISIT_EVIDENCE_PATTERN.search(text or "")) or llm_type == "visit_impression_candidate" or float(substance.get("visit_impression_score") or 0) >= 0.25
+    positive_markers = [
+        "мы приехали", "я был", "я была", "мы были", "нам понравилось", "советую", "делюсь маршрутом",
+        "нашли место", "зашли", "прогулялись", "поехали на выходные", "мой отзыв", "впечатлило",
+        "запомнилось", "вот что посмотреть", "наш маршрут", "первым делом", "вернулись из калининграда",
+    ]
+    marker_hits = [m for m in positive_markers if m in low]
+    has_firsthand = bool(marker_hits) or bool(VISIT_EVIDENCE_PATTERN.search(text or "")) or llm_type == "visit_impression_candidate" or float(substance.get("visit_impression_score") or 0) >= 0.25
     has_emotion = bool(EMOTION_PATTERN.search(text or "")) or float(substance.get("emotion_observation_score") or 0) >= 0.20
     has_original_photo = bool(ORIGINAL_PHOTO_PATTERN.search(text or "")) or bool((post or {}).get("is_forwarded_or_repost"))
     if has_firsthand:
@@ -1148,11 +1218,59 @@ def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: 
     return {
         "has_firsthand_visit_evidence": str(has_firsthand).lower(),
         "visit_evidence_type": visit_type,
+        "first_person_markers": "; ".join(marker_hits),
         "emotion_or_impression_evidence": str(has_emotion).lower(),
         "review_or_opinion_evidence": str(has_firsthand or has_emotion).lower(),
+        "useful_route_evidence": str(float(substance.get("useful_route_score") or 0) >= 0.18 or "маршрут" in low or "что посмотреть" in low).lower(),
         "memorable_detail_evidence": str(float(substance.get("memorable_details_score") or 0) >= 0.20 or "запом" in low).lower(),
         "original_photo_evidence": str(has_original_photo or bool((post or {}).get("primary_media_path"))).lower(),
+        "nonlocal_blogger_visit_score": round((0.45 if has_firsthand else 0.0) + (0.20 if has_emotion else 0.0) + (0.15 if marker_hits else 0.0) + (0.10 if (post or {}).get("has_media") else 0.0), 3),
+        "publication_story_score": round((0.35 if has_firsthand else 0.0) + (0.25 if has_emotion else 0.0) + (0.20 if float(substance.get("useful_route_score") or 0) >= 0.18 else 0.0) + (0.10 if has_original_photo else 0.0), 3),
         "text_bucket": text_bucket,
+    }
+
+
+def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]]) -> dict[str, Any]:
+    title = str(srow.get("source_title") or srow.get("resolved_title") or "").lower()
+    kind = str(srow.get("source_kind") or srow.get("source_type") or "").lower()
+    joined = " ".join([title, kind, str(srow.get("canonical_url") or "").lower()])
+    n = max(1, len(sampled))
+    ko_hits = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
+    ad_hits = sum(1 for r in sampled if r.get("is_ad_or_promo"))
+    news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
+    personal_hits = sum(1 for r in sampled if str(r.get("has_firsthand_visit_evidence") or "").lower() == "true" or str(r.get("first_person_markers") or ""))
+    ko_ratio = round(ko_hits / n, 3)
+    if any(w in joined for w in ["калининград", "кёнигсберг", "kenig", "kgd", "39"]):
+        geo = "kaliningrad_local"
+    elif sampled and 0 < ko_ratio < 0.7:
+        geo = "nonlocal_russia"
+    elif ko_ratio >= 0.7:
+        geo = "kaliningrad_local"
+    else:
+        geo = "unknown"
+    if any(w in joined for w in ["новост", "сми", "инфо", "афиша"]):
+        topic = "local_news" if geo == "kaliningrad_local" else "federal_media"
+    elif any(w in joined for w in ["тур", "экскурс", "бронь"]):
+        topic = "ads_tours"
+    elif any(w in joined for w in ["travel", "trip", "путеше", "маршрут", "around", "vokrug"]):
+        topic = "travel_blogger" if personal_hits else "travel_media"
+    elif personal_hits:
+        topic = "personal_blog"
+    elif news_hits / n > 0.5:
+        topic = "local_news" if geo == "kaliningrad_local" else "federal_media"
+    else:
+        topic = "unknown"
+    travel_score = round(min(1.0, (0.25 if "travel" in joined or "путеше" in joined else 0.0) + (personal_hits / n) * 0.35 + max(0, 1 - news_hits / n) * 0.20 + max(0, 1 - ad_hits / n) * 0.20), 3)
+    personal_score = round(min(1.0, personal_hits / n + (0.2 if topic == "personal_blog" else 0.0)), 3)
+    nonlocal_value = round(min(1.0, (0.45 if geo == "nonlocal_russia" else 0.10 if geo == "unknown" else 0.0) + travel_score * 0.35 + (0.20 if 0 < ko_ratio < 0.5 else 0.0)), 3)
+    return {
+        "source_geo_class": geo,
+        "source_topic_class": topic,
+        "ko_mention_ratio_recent": ko_ratio,
+        "travel_blogger_score": travel_score,
+        "personal_voice_score": personal_score,
+        "nonlocal_value_score": nonlocal_value,
+        "source_priority_reason": f"geo={geo}; topic={topic}; ko_ratio={ko_ratio}; personal_hits={personal_hits}/{len(sampled)}",
     }
 
 
@@ -1292,6 +1410,13 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "content_type": row.get("content_type", prev.get("content_type", "")),
             "llm_content_type": row.get("llm_content_type", prev.get("llm_content_type", "")),
             "vector_content_type": row.get("vector_content_type", prev.get("vector_content_type", "")),
+            "source_geo_class": row.get("source_geo_class", prev.get("source_geo_class", "")),
+            "source_topic_class": row.get("source_topic_class", prev.get("source_topic_class", "")),
+            "ko_mention_ratio_recent": row.get("ko_mention_ratio_recent", prev.get("ko_mention_ratio_recent", "")),
+            "travel_blogger_score": row.get("travel_blogger_score", prev.get("travel_blogger_score", "")),
+            "personal_voice_score": row.get("personal_voice_score", prev.get("personal_voice_score", "")),
+            "nonlocal_value_score": row.get("nonlocal_value_score", prev.get("nonlocal_value_score", "")),
+            "source_priority_reason": row.get("source_priority_reason", prev.get("source_priority_reason", "")),
             "text_bucket": row.get("text_bucket", ""), "image_bucket": row.get("image_bucket", ""), "image_status": row.get("image_status", ""),
             "image_model_input_type": row.get("image_model_input_type", ""), "image_model_type": row.get("image_model_type", ""),
             "image_publication_ready": row.get("image_publication_ready", "false"), "image_reviewable": row.get("image_reviewable", "false"),
@@ -1299,7 +1424,11 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "llm_status": row.get("llm_status", ""), "llm_stage": row.get("llm_stage", ""), "needs_llm_final_verify": row.get("needs_llm_final_verify", ""),
             "vector_gate_status": row.get("vector_gate_status", ""), "vector_positive_score": row.get("vector_positive_score", ""),
             "has_firsthand_visit_evidence": row.get("has_firsthand_visit_evidence", ""), "visit_evidence_type": row.get("visit_evidence_type", ""),
+            "first_person_markers": row.get("first_person_markers", prev.get("first_person_markers", "")),
             "emotion_or_impression_evidence": row.get("emotion_or_impression_evidence", ""), "review_or_opinion_evidence": row.get("review_or_opinion_evidence", ""),
+            "useful_route_evidence": row.get("useful_route_evidence", prev.get("useful_route_evidence", "")),
+            "nonlocal_blogger_visit_score": row.get("nonlocal_blogger_visit_score", prev.get("nonlocal_blogger_visit_score", "")),
+            "publication_story_score": row.get("publication_story_score", prev.get("publication_story_score", "")),
             "original_photo_evidence": row.get("original_photo_evidence", ""), "manual_decision": row.get("manual_decision") or prev.get("manual_decision", ""),
             "manual_decision_at": prev.get("manual_decision_at", ""), "next_action": row.get("next_action") or row.get("suggested_action") or "manual_review",
             "why_keep_in_memory": "LLM/text/image gate reached research candidate status", "why_not_publication_ready": row.get("why_not_publication_ready") or row.get("rejection_reason") or "",
@@ -1419,6 +1548,16 @@ def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
         "content_type": r.get("content_type") or r.get("llm_content_type"),
         "candidate_score": r.get("candidate_score"),
         "text_substance_score": r.get("text_substance_score"),
+        "source_geo_class": r.get("source_geo_class"),
+        "source_topic_class": r.get("source_topic_class"),
+        "nonlocal_value_score": r.get("nonlocal_value_score"),
+        "has_firsthand_visit_evidence": r.get("has_firsthand_visit_evidence"),
+        "visit_evidence_type": r.get("visit_evidence_type"),
+        "first_person_markers": r.get("first_person_markers"),
+        "emotion_or_impression_evidence": r.get("emotion_or_impression_evidence"),
+        "review_or_opinion_evidence": r.get("review_or_opinion_evidence"),
+        "useful_route_evidence": r.get("useful_route_evidence"),
+        "publication_story_score": r.get("publication_story_score"),
         "visit_impression_score": r.get("visit_impression_score"),
         "useful_route_score": r.get("useful_route_score"),
         "emotion_observation_score": r.get("emotion_observation_score"),
@@ -1470,6 +1609,16 @@ def candidate_memory_shortlist_row(r: dict[str, Any], rank: int) -> dict[str, An
         "why_relevant": r.get("why_keep_in_memory"),
         "matched_place_names": r.get("matched_place_names"),
         "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
+        "source_geo_class": r.get("source_geo_class"),
+        "source_topic_class": r.get("source_topic_class"),
+        "nonlocal_value_score": r.get("nonlocal_value_score"),
+        "has_firsthand_visit_evidence": r.get("has_firsthand_visit_evidence"),
+        "visit_evidence_type": r.get("visit_evidence_type"),
+        "first_person_markers": r.get("first_person_markers"),
+        "emotion_or_impression_evidence": r.get("emotion_or_impression_evidence"),
+        "review_or_opinion_evidence": r.get("review_or_opinion_evidence"),
+        "useful_route_evidence": r.get("useful_route_evidence"),
+        "publication_story_score": r.get("publication_story_score"),
         "candidate_score": r.get("candidate_score_current") or r.get("best_candidate_score_ever"),
         "overall_media_score": r.get("media_score_current") or r.get("best_media_score_ever"),
         "image_status": r.get("image_status"),
@@ -1486,9 +1635,9 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     if not getenv_bool("REGION_TALK_TG_SIMILAR_ENABLED", getenv_bool("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", True)):
         _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "disabled"})
         return [], []
-    max_seed_channels = getenv_int("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", 20))
+    max_seed_channels = getenv_int("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", getenv_int("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", 100)))
     max_per_seed = getenv_int("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", 10))
-    max_frontier = getenv_int("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", 150))
+    max_frontier = getenv_int("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", 1000)))
     rows: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     try:
@@ -1500,18 +1649,26 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     if request_cls is None:
         _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "not_supported_by_telethon_version"})
         return rows, edges
-    seeds = [r for r in source_rows if r.get("fetch_status") == "ok" and r.get("source_id") in entity_by_source]
-    seed_pool = sorted(seeds, key=lambda r: (-float(r.get("monitor_priority_score") or 0), int(r.get("priority") or 999), str(r.get("canonical_url") or "")))[:max(max_seed_channels * 4, max_seed_channels)]
-    seeds = sorted(seed_pool, key=lambda r: (stable_hash(run_id, r.get("source_id"), r.get("canonical_url")), -float(r.get("monitor_priority_score") or 0)))[:max_seed_channels]
+    seeds = [r for r in source_rows if (r.get("fetch_status") == "ok" or str(r.get("fetch_status") or "").startswith("profile_resolved")) and r.get("source_id") in entity_by_source]
+    seed_pool = sorted(seeds, key=lambda r: (
+        bool(str(r.get("similar_next_allowed_at") or "") and str(r.get("similar_next_allowed_at")) > utc_now_iso()),
+        str(r.get("similar_last_scanned_at") or ""),
+        -float(r.get("monitor_priority_score") or 0),
+        int(r.get("priority") or 999),
+        str(r.get("canonical_url") or ""),
+    ))[:max(max_seed_channels * 4, max_seed_channels)]
+    seeds = seed_pool[:max_seed_channels]
     raw_count = 0
     errors = 0
     floodwait = 0
     seen: set[str] = set()
+    seed_updates: dict[str, dict[str, Any]] = {}
     for seed_idx, srow in enumerate(seeds, start=1):
         if governor.recommendation_calls_attempted >= governor.max_recommendation_calls or not governor.has_total_request_budget("channels.getChannelRecommendations", str(srow.get("source_id") or ""), str(srow.get("canonical_url") or "")):
             break
         source_id = str(srow.get("source_id") or "")
         canonical = str(srow.get("canonical_url") or "")
+        similar_seed_id = "similar_seed_" + stable_hash(canonical)
         entity = entity_by_source.get(source_id)
         governor.recommendation_calls_attempted += 1
         governor.total_attempted += 1
@@ -1522,6 +1679,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
             governor.recommendation_calls_ok += 1
             chats = list(getattr(result, "chats", None) or [])
             raw_count += len(chats)
+            unique_for_seed = 0
             governor.recommendation_channels_returned += len(chats)
             for rank, ch in enumerate(chats[:max_per_seed], start=1):
                 username = str(getattr(ch, "username", None) or "").strip()
@@ -1530,9 +1688,13 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                     continue
                 rec_url = "https://t.me/" + username
                 cand_id = "src_cand_" + stable_hash("telegram", rec_url)
+                if canonical_source_key("telegram", username, rec_url) == canonical_source_key("telegram", srow.get("handle", ""), canonical):
+                    rows.append({"run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical, "recommended_canonical_url": rec_url, "method_status": "debug_self_loop_rejected", "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "self-loop rejected"})
+                    continue
                 if cand_id in seen:
                     continue
                 seen.add(cand_id)
+                unique_for_seed += 1
                 confidence = round(max(0.35, 0.85 - 0.025 * (rank - 1)), 3)
                 row = {
                     "run_id": run_id,
@@ -1581,6 +1743,17 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 }
                 if len(rows) >= max_frontier:
                     break
+            seed_updates[similar_seed_id] = {
+                "similar_seed_id": similar_seed_id,
+                "canonical_url": canonical,
+                "similar_last_scanned_at": utc_now_iso(),
+                "similar_last_used_at": utc_now_iso(),
+                "similar_use_count_increment": 1,
+                "similar_last_result_count": len(chats),
+                "similar_last_unique_count": unique_for_seed,
+                "similar_next_allowed_at": iso_after_seconds(getenv_int("REGION_TALK_SIMILAR_SEED_TTL_SECONDS", 7 * 86400)),
+                "similar_error_count_increment": 0,
+            }
             if len(rows) >= max_frontier:
                 break
         except Exception as exc:
@@ -1591,6 +1764,17 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 governor.mark_floodwait("channels.getChannelRecommendations", source_id, canonical, seconds)
                 break
             governor.total_error += 1
+            seed_updates[similar_seed_id] = {
+                "similar_seed_id": similar_seed_id,
+                "canonical_url": canonical,
+                "similar_last_scanned_at": utc_now_iso(),
+                "similar_last_used_at": utc_now_iso(),
+                "similar_use_count_increment": 1,
+                "similar_last_result_count": 0,
+                "similar_last_unique_count": 0,
+                "similar_next_allowed_at": iso_after_seconds(getenv_int("REGION_TALK_SIMILAR_ERROR_BACKOFF_SECONDS", 86400)),
+                "similar_error_count_increment": 1,
+            }
             rows.append({
                 "run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical,
                 "seed_channel_title": srow.get("source_title"), "method_status": "error",
@@ -1607,7 +1791,109 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
         "telegram_similar_channels_added_to_frontier": governor.recommendation_channels_added_to_frontier,
         "telegram_similar_channels_fetch_errors": errors,
         "telegram_similar_channels_floodwait_count": floodwait,
+        "similar_seed_updates": seed_updates,
     })
+    return rows, edges
+
+
+async def discover_telegram_keyword_sources(client: Any, governor: TelegramRequestGovernor, run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    mode = (os.getenv("REGION_TALK_DISCOVERY_MODE") or "mixed").strip().lower()
+    if mode in {"off", "similar_only"} or not getenv_bool("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", mode in {"mixed", "keyword_only"}):
+        _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "disabled"
+        return [], []
+    terms_raw = os.getenv("REGION_TALK_TELEGRAM_KEYWORD_QUERIES") or ""
+    terms = [x.strip() for x in re.split(r"[;\n|]+", terms_raw) if x.strip()] or TELEGRAM_KEYWORD_DISCOVERY_TERMS
+    max_queries = getenv_int("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", 30)
+    per_query = getenv_int("REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY", 20)
+    max_frontier = getenv_int("REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN", 300)
+    rows: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    processed = 0
+    errors = 0
+    try:
+        for query in terms[:max(0, max_queries)]:
+            if not governor.has_total_request_budget("messages.searchGlobal", "keyword_discovery", query):
+                break
+            processed += 1
+            governor.total_attempted += 1
+            governor.requests_by_method["messages.searchGlobal"] = governor.requests_by_method.get("messages.searchGlobal", 0) + 1
+            try:
+                async for msg in client.iter_messages(None, search=query, limit=per_query):
+                    chat = None
+                    try:
+                        chat = await msg.get_chat()
+                    except Exception:
+                        chat = getattr(msg, "chat", None)
+                    username = str(getattr(chat, "username", None) or "").strip()
+                    title = str(getattr(chat, "title", None) or getattr(chat, "first_name", None) or "").strip()
+                    if not username:
+                        continue
+                    url = "https://t.me/" + username
+                    key = canonical_source_key("telegram", username, url)
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    cand_id = "src_cand_" + stable_hash("telegram", url)
+                    row = {
+                        "run_id": run_id,
+                        "source_candidate_id": cand_id,
+                        "discovered_from_source": "telegram_keyword_search",
+                        "discovered_from_post_url": f"https://t.me/{username}/{getattr(msg, 'id', '')}",
+                        "discovery_type": "telegram_keyword_search",
+                        "edge_type": "telegram_keyword_search",
+                        "matched_query": query,
+                        "raw_url": url,
+                        "normalized_url": url,
+                        "platform_guess": "telegram",
+                        "canonical_source_key": key,
+                        "candidate_source_status": "source_frontier",
+                        "frontier_status": "queued_unresolved",
+                        "confidence": 0.62,
+                        "recommended_title": title,
+                        "recommended_username": username,
+                        "recommended_canonical_url": url,
+                        "frontier_action": "queued_resolve_later",
+                        "frontier_reason": "Telegram keyword search by Kaliningrad toponym; source candidate only, post is not accepted here",
+                        "keyword_evidence_excerpt": "",
+                        "private_state_key": "telegram:username:" + username.lower(),
+                    }
+                    row["frontier_priority"] = source_candidate_score(row)
+                    rows.append(row)
+                    edges.append({
+                        "edge_id": "edge_" + stable_hash("keyword", query, cand_id),
+                        "from_source_id": "telegram_keyword_search",
+                        "from_source_title": query,
+                        "from_post_id": "",
+                        "to_source_candidate_id": cand_id,
+                        "to_source_title": title or username,
+                        "edge_type": "telegram_keyword_search",
+                        "evidence_url": row["discovered_from_post_url"],
+                        "evidence_context_short": f"Keyword '{query}' matched a public Telegram result; source only",
+                        "confidence": row["confidence"],
+                        "discovery_depth": 0,
+                        "run_id": run_id,
+                    })
+                    if len(rows) >= max_frontier:
+                        break
+                governor.total_ok += 1
+            except Exception as exc:
+                errors += 1
+                seconds = int(getattr(exc, "seconds", 0) or 0)
+                if type(exc).__name__ == "FloodWaitError" or seconds:
+                    governor.mark_floodwait("messages.searchGlobal", "keyword_discovery", query, seconds)
+                    break
+                governor.total_error += 1
+                rows.append({"run_id": run_id, "discovery_type": "telegram_keyword_search", "edge_type": "telegram_keyword_search", "matched_query": query, "method_status": "error", "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180], "frontier_action": "none"})
+            if len(rows) >= max_frontier:
+                break
+    finally:
+        _REGION_TALK_TELEGRAM_RUNTIME.update({
+            "telegram_keyword_discovery_status": "ok" if rows or not errors else "error",
+            "keyword_search_queries_processed": processed,
+            "keyword_discovered_sources_unique": len({r.get("source_candidate_id") for r in rows if r.get("source_candidate_id")}),
+            "keyword_discovery_errors": errors,
+        })
     return rows, edges
 
 
@@ -1787,6 +2073,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     max_sources = getenv_int("REGION_TALK_MAX_SOURCES", 5)
     max_posts = getenv_int("REGION_TALK_MAX_POSTS_PER_SOURCE", 20)
     fetch_enabled = getenv_bool("REGION_TALK_FETCH_TELEGRAM", True)
+    discovery_mode = (os.getenv("REGION_TALK_DISCOVERY_MODE") or "mixed").strip().lower()
+    history_scan_mode = (os.getenv("REGION_TALK_HISTORY_SCAN_MODE") or "primary_and_delta").strip().lower()
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     previous_state, _state_meta = load_region_talk_state(output_dir)
     governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
@@ -1868,6 +2156,11 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             if entity is None:
                 src_row.setdefault("fetch_status", resolve_meta.get("fetch_status") or "skipped_telegram_unresolved_deferred")
                 source_rows.append(src_row)
+                continue
+            if history_scan_mode == "off" or discovery_mode in {"similar_only", "keyword_only"}:
+                src_row.update({"fetch_status": "profile_resolved_history_disabled", "fetch_attempted": "false", "source_probe_reason": f"history scan disabled by discovery_mode={discovery_mode} history_scan_mode={history_scan_mode}", "history_fetch_mode": "history_disabled_discovery_only", "posts_scanned": 0})
+                source_rows.append(src_row)
+                entity_by_source[seed.source_id] = entity
                 continue
             if governor.history_sources_attempted >= governor.max_history_sources:
                 src_row.update({"fetch_status": "skipped_telegram_budget_exhausted", "fetch_attempted": "false", "source_probe_reason": "history source budget exhausted"})
@@ -1964,8 +2257,11 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 src_row["fetch_error_message"] = str(exc)[:180]
             source_rows.append(src_row)
         similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
+        keyword_rows, keyword_edges = await discover_telegram_keyword_sources(client, governor, run_id)
         _REGION_TALK_TELEGRAM_RUNTIME["similar_rows"] = similar_rows
         _REGION_TALK_TELEGRAM_RUNTIME["similar_edges"] = similar_edges
+        _REGION_TALK_TELEGRAM_RUNTIME["keyword_rows"] = keyword_rows
+        _REGION_TALK_TELEGRAM_RUNTIME["keyword_edges"] = keyword_edges
     finally:
         governor.write_ledger()
         _REGION_TALK_TELEGRAM_RUNTIME["entity_cache"] = governor.entity_cache
@@ -2366,6 +2662,7 @@ def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_ga
 
 def build_similar_seed_queue(previous_state: dict[str, Any], source_rows: list[dict[str, Any]], candidate_memory_rows: list[dict[str, Any]], run_id: str, run_now: str) -> list[dict[str, Any]]:
     prev = previous_state.get("similar_seed_queue") if isinstance(previous_state.get("similar_seed_queue"), dict) else {}
+    updates = _REGION_TALK_TELEGRAM_RUNTIME.get("similar_seed_updates") if isinstance(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_seed_updates"), dict) else {}
     candidate_source_ids = {str(r.get("source_id") or "") for r in candidate_memory_rows if r.get("source_id")}
     out: dict[str, dict[str, Any]] = {str(k): dict(v) for k, v in (prev or {}).items() if isinstance(v, dict)}
     for s in source_rows:
@@ -2383,6 +2680,7 @@ def build_similar_seed_queue(previous_state: dict[str, Any], source_rows: list[d
             priority += 0.35
         if str(s.get("source_kind") or "").lower().find("travel") >= 0 or str(s.get("source_type") or "").lower().find("travel") >= 0:
             priority += 0.10
+        upd = updates.get(key) or updates.get(url) or {}
         out[key] = {
             **old,
             "similar_seed_id": key,
@@ -2392,10 +2690,13 @@ def build_similar_seed_queue(previous_state: dict[str, Any], source_rows: list[d
             "similar_seed_status": "ready",
             "similar_seed_first_seen_at": old.get("similar_seed_first_seen_at") or run_now,
             "similar_seed_last_seen_at": run_now,
-            "similar_seed_last_used_at": old.get("similar_seed_last_used_at", ""),
-            "similar_seed_use_count": int(old.get("similar_seed_use_count") or 0),
-            "similar_seed_error_count": int(old.get("similar_seed_error_count") or 0),
-            "similar_seed_next_allowed_at": old.get("similar_seed_next_allowed_at", ""),
+            "similar_seed_last_used_at": upd.get("similar_last_used_at") or old.get("similar_seed_last_used_at", ""),
+            "similar_seed_use_count": int(old.get("similar_seed_use_count") or 0) + int(upd.get("similar_use_count_increment") or 0),
+            "similar_seed_error_count": int(old.get("similar_seed_error_count") or 0) + int(upd.get("similar_error_count_increment") or 0),
+            "similar_seed_last_result_count": upd.get("similar_last_result_count", old.get("similar_seed_last_result_count", "")),
+            "similar_seed_last_unique_count": upd.get("similar_last_unique_count", old.get("similar_seed_last_unique_count", "")),
+            "similar_last_scanned_at": upd.get("similar_last_scanned_at") or old.get("similar_last_scanned_at", ""),
+            "similar_seed_next_allowed_at": upd.get("similar_next_allowed_at") or old.get("similar_seed_next_allowed_at", ""),
             "similar_seed_priority": round(min(1.0, priority), 3),
             "last_run_id": run_id,
             "no_auto_join": "true",
@@ -2450,6 +2751,36 @@ def build_source_yield_metrics(source_rows: list[dict[str, Any]], posts_by_sourc
         count = len(vals)
         out.append({"metric": metric, "count": count, "per_1000_scanned_sources": round(count / denom * 1000, 2), "denominator_scanned_sources": len(scanned), "sample_bias_note": "biased by priority/frontier queue; not a random 1000-source sample"})
     return out
+
+
+def build_all_time_metrics(state_to_write: dict[str, Any], source_frontier_unique: list[dict[str, Any]], candidate_memory_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    cursors = state_to_write.get("source_cursors") if isinstance(state_to_write.get("source_cursors"), dict) else {}
+    posts_mem = state_to_write.get("posts") if isinstance(state_to_write.get("posts"), dict) else {}
+    frontier_by_platform: dict[str, int] = {}
+    for r in source_frontier_unique:
+        p = str(r.get("platform") or r.get("platform_guess") or "unknown")
+        frontier_by_platform[p] = frontier_by_platform.get(p, 0) + 1
+    primary = [v for v in cursors.values() if isinstance(v, dict) and (v.get("primary_scan_completed_at") or int(v.get("posts_seen_total") or 0) > 0)]
+    delta = [v for v in cursors.values() if isinstance(v, dict) and int(v.get("delta_scan_count_total") or 0) > 0]
+    telegram_primary = [v for v in primary if str(v.get("platform") or v.get("source_id") or "").startswith("telegram") or str(v.get("source_id") or "").startswith("src_telegram")]
+    vk_primary = [v for v in primary if str(v.get("platform") or "").startswith("vk")]
+    scanned_keys = {str(v.get("source_id") or "") for v in primary}
+    pending_primary = sum(1 for r in source_frontier_unique if str(r.get("frontier_source_id") or r.get("source_id") or "") not in scanned_keys and str(r.get("frontier_stage") or "") in {"history_due", "probe_due", "unresolved"})
+    pending_similar = sum(1 for r in source_frontier_unique if not r.get("similar_last_scanned_at") and str(r.get("platform") or r.get("platform_guess") or "").startswith("telegram"))
+    return {
+        "sources_primary_scanned_total_all_time": len(primary),
+        "telegram_sources_primary_scanned_total_all_time": len(telegram_primary),
+        "vk_sources_primary_scanned_total_all_time": len(vk_primary),
+        "sources_delta_scanned_total_all_time": len(delta),
+        "sources_never_scanned_total": pending_primary,
+        "frontier_total_by_platform": json.dumps(frontier_by_platform, ensure_ascii=False, sort_keys=True),
+        "frontier_pending_primary_scan_total": pending_primary,
+        "frontier_pending_similar_scan_total": pending_similar,
+        "posts_memory_total": len(posts_mem),
+        "candidates_memory_total": len(candidate_memory_rows),
+        "publication_ready_total_all_time": sum(1 for r in candidate_memory_rows if str(r.get("image_publication_ready") or "") == "true"),
+    }
+
 
 def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: list[dict[str, Any]], run_id: str, output_dir: Path) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2772,10 +3103,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
     similar_channel_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows") or [])
     similar_channel_edges = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_edges") or [])
+    keyword_discovery_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_rows") or [])
+    keyword_discovery_edges = list(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_edges") or [])
     public_blogger_rows = load_public_blogger_links({})
     discovered_rows.extend(similar_channel_rows)
+    discovered_rows.extend(keyword_discovery_rows)
     discovered_rows.extend(public_blogger_rows)
     graph_edges.extend(similar_channel_edges)
+    graph_edges.extend(keyword_discovery_edges)
 
     review_queue = sorted(candidates + pre_candidates, key=lambda r: (r.get("current_stage") not in {"favorite", "semantic_candidate"}, -float(r.get("candidate_score") or 0), int(r.get("post_age_days") or 9999)))
     for i, r in enumerate(review_queue, start=1):
@@ -2845,6 +3180,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         link_richness = sum(int(r.get("discovery_edges_count") or 0) for r in sampled)
         monitor_score = round((kal_hits / max(1, n))*0.35 + (original_media/max(1,n))*0.20 + min(1, link_richness/10)*0.15 + max(0, 1-ad_hits/max(1,n))*0.15 + max(0, 1-news_hits/max(1,n))*0.10, 3) if n else 0.0
         status = "probed" if n else ("profile_resolved" if srow.get("fetch_status") == "ok" else "blocked")
+        source_class = classify_source_profile(srow, sampled)
         enriched_source_rows.append({**srow,
             "source_probe_status": status, "sampled_post_count": n, "kaliningrad_hit_count": kal_hits,
             "russia_travel_score": round(kal_hits/max(1,n),3), "authorial_voice_score": 0.5,
@@ -2853,9 +3189,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "image_prevalence": round(original_media/max(1,n),3), "link_richness_score": round(min(1, link_richness/10),3),
             "forwarded_origin_richness_score": round(sum(1 for r in sampled if r.get("is_forwarded_or_repost"))/max(1,n),3),
             "source_graph_value_score": round(min(1, link_richness/10),3), "monitor_priority_score": monitor_score,
+            **source_class,
             "source_probe_reason": "derived from recent fetched posts; no automatic monitoring without manual/probe acceptance",
         })
     source_rows = enriched_source_rows
+    source_class_by_id = {str(s.get("source_id") or ""): {k: s.get(k) for k in ["source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]} for s in source_rows}
+    for r in new_posts:
+        r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})
 
     for drow in discovered_rows:
         did = str(drow.get("source_candidate_id") or stable_hash(drow.get("normalized_url")))
@@ -2874,24 +3214,38 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "candidate_source_status": drow.get("candidate_source_status") or prev.get("candidate_source_status") or "source_frontier",
             "frontier_priority": max(float(prev.get("frontier_priority") or 0), source_candidate_score(drow)),
         }
-    source_cursors: dict[str, Any] = {}
+    previous_source_cursors = previous_state.get("source_cursors") if isinstance(previous_state.get("source_cursors"), dict) else {}
+    source_cursors: dict[str, Any] = {str(k): dict(v) for k, v in (previous_source_cursors or {}).items() if isinstance(v, dict)}
     for srow in source_rows:
         sid = str(srow.get("source_id") or "")
         sampled = posts_by_source.get(sid, [])
         newest = max([str(r.get("post_date") or "") for r in sampled] or [""])
+        prev_cursor = source_cursors.get(sid, {})
+        scanned_ok = srow.get("fetch_status") == "ok"
+        is_new_source = str(srow.get("is_new_source_this_run") or "").lower() == "true" or not prev_cursor.get("primary_scan_completed_at")
         source_cursors[sid] = {
+            **prev_cursor,
             "source_id": sid,
             "source_title": srow.get("source_title") or srow.get("resolved_title"),
+            "platform": srow.get("platform"),
             "fetch_status": srow.get("fetch_status"),
-            "last_history_fetch_run_id": run_id if srow.get("fetch_status") == "ok" else "",
-            "last_history_fetch_at": run_now if srow.get("fetch_status") == "ok" else "",
-            "last_seen_post_key": max([str(r.get("platform_post_key") or "") for r in sampled] or [""]),
-            "last_seen_post_date": newest,
-            "last_seen_post_published_at": newest,
-            "posts_seen_total": int(srow.get("posts_scanned") or 0),
-            "kaliningrad_posts_seen_total": sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope")),
-            "candidate_posts_seen_total": sum(1 for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES),
-            "last_candidate_seen_at": max([str(r.get("post_date") or "") for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES] or [""]),
+            "last_history_fetch_run_id": run_id if scanned_ok else prev_cursor.get("last_history_fetch_run_id", ""),
+            "last_history_fetch_at": run_now if scanned_ok else prev_cursor.get("last_history_fetch_at", ""),
+            "last_seen_post_key": max([str(r.get("platform_post_key") or "") for r in sampled] or [str(prev_cursor.get("last_seen_post_key") or "")]),
+            "last_seen_post_date": newest or prev_cursor.get("last_seen_post_date", ""),
+            "last_seen_post_published_at": newest or prev_cursor.get("last_seen_post_published_at", ""),
+            "posts_seen_total": int(prev_cursor.get("posts_seen_total") or 0) + int(srow.get("posts_scanned") or 0),
+            "kaliningrad_posts_seen_total": int(prev_cursor.get("kaliningrad_posts_seen_total") or 0) + sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope")),
+            "candidate_posts_seen_total": int(prev_cursor.get("candidate_posts_seen_total") or 0) + sum(1 for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES),
+            "last_candidate_seen_at": max([str(r.get("post_date") or "") for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES] or [str(prev_cursor.get("last_candidate_seen_at") or "")]),
+            "primary_scan_completed_at": (prev_cursor.get("primary_scan_completed_at") or (run_now if scanned_ok and is_new_source else "")),
+            "primary_scan_post_count": int(prev_cursor.get("primary_scan_post_count") or 0) or (int(srow.get("posts_scanned") or 0) if scanned_ok and is_new_source else 0),
+            "last_successful_delta_scan_at": run_now if scanned_ok and not is_new_source else prev_cursor.get("last_successful_delta_scan_at", ""),
+            "delta_scan_count_total": int(prev_cursor.get("delta_scan_count_total") or 0) + (1 if scanned_ok and not is_new_source else 0),
+            "source_scan_tier": srow.get("source_scan_tier") or ("high_daily" if float(srow.get("monitor_priority_score") or 0) >= 0.5 else "medium_weekly" if sampled else "keyword_probe"),
+            "next_history_scan_at": iso_after_seconds(86400 if float(srow.get("monitor_priority_score") or 0) >= 0.5 else 7 * 86400),
+            "delta_scan_window_days": getenv_int("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", 14),
+            "delta_overlap_posts": getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10),
             "last_run_id": run_id,
             "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
         }
@@ -2899,12 +3253,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
-    candidate_memory_top = sorted(candidate_memory_active_rows, key=lambda r: (str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), -float(r.get("best_media_score_ever") or 0)))[:100]
+    candidate_memory_top = sorted(candidate_memory_active_rows, key=lambda r: (str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("publication_story_score") or 0), -float(r.get("nonlocal_value_score") or 0), -float(r.get("best_candidate_score_ever") or 0), -float(r.get("best_media_score_ever") or 0)))[:100]
     similar_seed_queue = build_similar_seed_queue(previous_state, source_rows, candidate_memory_rows, run_id, run_now)
     source_delta_scan_sheet = build_source_delta_scan_sheet(source_rows, previous_state, run_id)
     source_yield_metrics_sheet = build_source_yield_metrics(source_rows, posts_by_source, new_posts)
     state_to_write = {
         "run_id": run_id,
+        "state_schema_version": "region-talk-state-v2",
         "updated_at": run_now,
         "posts": updated_posts_state,
         "discovered_sources": updated_discovered_state,
@@ -2916,6 +3271,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "telegram_entity_cache": _REGION_TALK_TELEGRAM_RUNTIME.get("entity_cache") or previous_state.get("telegram_entity_cache") or {},
         "telegram_cooldowns": _REGION_TALK_TELEGRAM_RUNTIME.get("cooldowns") or previous_state.get("telegram_cooldowns") or {},
     }
+    all_time_metrics = build_all_time_metrics(state_to_write, source_frontier_unique, candidate_memory_rows)
+    state_to_write["all_time_metrics"] = all_time_metrics
     state_write_meta = save_region_talk_state(output_dir, state_to_write)
 
     stage_counts = {stage: sum(1 for r in new_posts if r.get("current_stage") == stage) for stage in sorted({str(r.get("current_stage") or "") for r in new_posts})}
@@ -2945,6 +3302,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     summary_row = {
         "run_id":run_id,"started_at":RUN_STARTED_AT.isoformat(),"finished_at":run_now,"git_sha":git_info.get("git_sha", ""),"git_sha_short":git_info.get("git_sha_short", ""),"branch":git_info.get("branch", ""),
         "config_profile":"mvp1.x_llm_first_review_queue","dry_run":"1","ydb_namespace":os.getenv("REGION_TALK_YDB_NAMESPACE") or "dry-run-json",
+        "REGION_TALK_DISCOVERY_MODE":os.getenv("REGION_TALK_DISCOVERY_MODE") or "mixed",
+        "REGION_TALK_HISTORY_SCAN_MODE":os.getenv("REGION_TALK_HISTORY_SCAN_MODE") or "primary_and_delta",
+        "REGION_TALK_MEDIA_SCORING_MODE":os.getenv("REGION_TALK_MEDIA_SCORING_MODE") or current_image_scoring_mode(),
+        "REGION_TALK_ACTUAL_IMAGE_TARGET":getenv_int("REGION_TALK_ACTUAL_IMAGE_TARGET", 30),
         "seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible",
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
@@ -2988,6 +3349,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "vector_rejected_low_substance_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_low_substance"),
         "vector_ambiguous_kept_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_ambiguous_keep_for_ranking"),
         "actual_image_scored_before_llm_count":actual_image_scored_before_llm_count,
+        "actual_image_target_met":str(actual_image_scored_before_llm_count >= getenv_int("REGION_TALK_ACTUAL_IMAGE_TARGET", 30)).lower(),
         "llm_final_verify_queue_count":final_verify_queue_count_estimate,
         "llm_budget_preserved_count":max(0, len(vector_scored_rows) - llm_calls_used),
         "REGION_TALK_ENABLE_EARLY_LLM":str(early_llm_enabled_summary).lower(),
@@ -3030,7 +3392,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_frontier_inactive_low_quality":sum(1 for r in source_frontier_unique if str(r.get("frontier_stage") or "") == "inactive_low_quality"),
         "similar_seed_queue_total":len(similar_seed_queue),
         "similar_seed_queue_ready":sum(1 for r in similar_seed_queue if str(r.get("similar_seed_status") or "") == "ready"),
+        "similar_seed_queue_used_total":sum(1 for r in similar_seed_queue if int(r.get("similar_seed_use_count") or 0) > 0),
         "dynamic_frontier_seed_count":_REGION_TALK_TELEGRAM_RUNTIME.get("dynamic_frontier_seed_count", 0),
+        "telegram_keyword_discovery_status":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_keyword_discovery_status", "not_run"),
+        "keyword_search_queries_processed":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_search_queries_processed", 0),
+        "keyword_discovered_sources_unique":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique", 0),
+        "keyword_discovery_errors":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovery_errors", 0),
         "telegram_phase_status":tg_obs.get("telegram_phase_status"),
         "telegram_floodwait_count":tg_obs.get("resolve_network_floodwait", 0),
         "telegram_max_floodwait_seconds":tg_obs.get("max_floodwait_seconds", 0),
@@ -3052,6 +3419,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "unchanged_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "false"),
         **state_meta,
         **state_write_meta,
+        **all_time_metrics,
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]
@@ -3095,6 +3463,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
          and r.get("fresh_enough") and r.get("kaliningrad_oblast_only_scope") and not r.get("is_ad_or_promo")],
         key=lambda r: (
             0 if r.get("current_stage") in {"favorite", "semantic_candidate"} else 1 if r.get("current_stage") == "needs_image_review" else 2 if r.get("current_stage") == "needs_llm_retry" else 3,
+            -float(r.get("publication_story_score") or 0),
+            -float(r.get("nonlocal_value_score") or 0),
             -float(r.get("candidate_score") or 0),
             int(r.get("post_age_days") or 9999),
         ),
@@ -3195,6 +3565,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"llm_retry_rows","value":len(llm_error_rows)},
         {"metric":"image_scored_rows","value":len(media_rows)},
         {"metric":"actual_image_neural_rows","value":sum(1 for r in media_rows if r.get("image_model_input_type") == "actual_image")},
+        {"metric":"actual_image_target_met","value":summary_row.get("actual_image_target_met")},
         {"metric":"human_final_shortlist_rows","value":len(final_shortlist)},
         {"metric":"good_text_weak_media_rows","value":sum(1 for r in dropped if r.get("current_stage") == "good_text_weak_media")},
         {"metric":"publication_ready_rows","value":sum(1 for r in new_posts if str(r.get("image_publication_ready")) == "true")},
@@ -3230,6 +3601,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"telegram_similar_channels_added_to_frontier","value":summary_row.get("telegram_similar_channels_added_to_frontier")},
         {"metric":"similar_seed_queue_total","value":summary_row.get("similar_seed_queue_total")},
         {"metric":"similar_seed_queue_ready","value":summary_row.get("similar_seed_queue_ready")},
+        {"metric":"similar_seed_queue_used_total","value":summary_row.get("similar_seed_queue_used_total")},
+        {"metric":"telegram_keyword_discovery_status","value":summary_row.get("telegram_keyword_discovery_status")},
+        {"metric":"keyword_search_queries_processed","value":summary_row.get("keyword_search_queries_processed")},
+        {"metric":"keyword_discovered_sources_unique","value":summary_row.get("keyword_discovered_sources_unique")},
         {"metric":"dynamic_frontier_seed_count","value":summary_row.get("dynamic_frontier_seed_count")},
         {"metric":"source_frontier_unique_total","value":summary_row.get("source_frontier_unique_total")},
         {"metric":"source_frontier_new_this_run","value":summary_row.get("source_frontier_new_this_run")},
@@ -3237,6 +3612,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"source_frontier_promoted_this_run","value":summary_row.get("source_frontier_promoted_this_run")},
         {"metric":"source_frontier_ready_next_run","value":summary_row.get("source_frontier_ready_next_run")},
         {"metric":"source_frontier_deferred","value":summary_row.get("source_frontier_deferred")},
+        {"metric":"sources_primary_scanned_total_all_time","value":summary_row.get("sources_primary_scanned_total_all_time")},
+        {"metric":"telegram_sources_primary_scanned_total_all_time","value":summary_row.get("telegram_sources_primary_scanned_total_all_time")},
+        {"metric":"vk_sources_primary_scanned_total_all_time","value":summary_row.get("vk_sources_primary_scanned_total_all_time")},
+        {"metric":"sources_delta_scanned_total_all_time","value":summary_row.get("sources_delta_scanned_total_all_time")},
+        {"metric":"sources_never_scanned_total","value":summary_row.get("sources_never_scanned_total")},
+        {"metric":"frontier_total_by_platform","value":summary_row.get("frontier_total_by_platform")},
+        {"metric":"frontier_pending_primary_scan_total","value":summary_row.get("frontier_pending_primary_scan_total")},
+        {"metric":"frontier_pending_similar_scan_total","value":summary_row.get("frontier_pending_similar_scan_total")},
+        {"metric":"posts_memory_total","value":summary_row.get("posts_memory_total")},
+        {"metric":"candidates_memory_total","value":summary_row.get("candidates_memory_total")},
+        {"metric":"publication_ready_total_all_time","value":summary_row.get("publication_ready_total_all_time")},
         {"metric":"llm_limit_source","value":llm_limit_snapshot.get("llm_limit_source")},
         {"metric":"llm_model","value":llm_model},
         {"metric":"llm_default_env_var_name","value":llm_default_env_var_name},
@@ -3272,8 +3658,20 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "frontier_vk_rows": sum(1 for r in source_frontier_unique if str(r.get("platform") or "") == "vk"),
         "next_action": "configure read-only VK wall token or keep explicit blocker",
     }]
-    favorites_sheet = favorites or [{"favorite_id":"","candidate_id":"","first_seen_run_id":"","last_seen_run_id":"","seen_run_count":"","source_title":"","post_url":"","short_summary":"","why_selected":"","best_image_preview":"","candidate_score":"","review_status":"","manual_decision":"","publication_readiness":"","notes":""}]
-    candidates_sheet = candidates or [{"candidate_id":"","current_stage":"","source_title":"","post_url":"","short_summary":"","candidate_score":"","image_reviewable":"","image_publication_ready":"","llm_decision":"","manual_decision":"","notes":""}]
+    favorites_sheet = [
+        {"favorite_id": "fav_" + stable_hash(r.get("candidate_id"), r.get("post_url")), "why_selected": "favorite stage from vector/image ranking", "publication_readiness": r.get("image_publication_ready"), **r}
+        for r in favorites
+    ] or [{"_sheet_note":"no favorites in this run"}]
+    candidates_sheet = candidates or [{"_sheet_note":"no final candidates in this run"}]
+    favorites_non_placeholder = [r for r in favorites_sheet if r.get("post_url") and not r.get("_sheet_note")]
+    candidates_non_placeholder = [r for r in candidates_sheet if r.get("post_url") and not r.get("_sheet_note")]
+    consistency_errors = []
+    if len(favorites) != len(favorites_non_placeholder):
+        consistency_errors.append(f"favorites summary={len(favorites)} sheet={len(favorites_non_placeholder)}")
+    if len(candidates) != len(candidates_non_placeholder):
+        consistency_errors.append(f"candidates summary={len(candidates)} sheet={len(candidates_non_placeholder)}")
+    summary_row["favorites_candidates_consistency_status"] = "ok" if not consistency_errors else "error: " + "; ".join(consistency_errors)
+    product_summary.append({"metric":"favorites_candidates_consistency_status","value":summary_row["favorites_candidates_consistency_status"]})
     telegram_observability_rows = [tg_obs] if tg_obs else [{"run_id":run_id,"telegram_phase_status":"not_configured"}]
     similar_sheet_rows = similar_channel_rows or [{
         "run_id": run_id, "seed_source_id": "", "seed_channel_url": "", "seed_channel_title": "",
@@ -3284,6 +3682,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "frontier_action": "none", "frontier_reason": "no Telegram similar channel rows in this run",
     }]
     similar_seed_queue_sheet = similar_seed_queue or [{"_sheet_note":"no persistent similar-channel seeds yet"}]
+    keyword_discovery_sheet = keyword_discovery_rows or [{"_sheet_note":"no Telegram keyword discovery rows in this run", "method_status": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_keyword_discovery_status", "not_run")}]
+    source_classification_sheet = [
+        {k: r.get(k, "") for k in ["source_id", "source_title", "canonical_url", "platform", "fetch_status", "source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]}
+        for r in source_rows
+    ] or [{"_sheet_note":"no source classification rows"}]
     sheets = {
         "00_product_summary":product_summary,
         "00_readme":[{"field":"what","value":"Region Talk MVP-1.x Candidate Report Only; vector/local gates first, image scoring for non-ad Kaliningrad rows, optional final LLM verifier via Supabase google_ai limiter; no Telegram/VK publishing."},{"field":"run_id","value":run_id},{"field":"generated_at","value":run_now}],
@@ -3314,6 +3717,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "12b_telegram_similar_channels":similar_sheet_rows,
         "12c_source_frontier_queue_next":source_frontier_queue_sheet,
         "12d_similar_seed_queue":similar_seed_queue_sheet,
+        "12e_telegram_keyword_discovery":keyword_discovery_sheet,
+        "12f_source_classification":source_classification_sheet,
         "13_sources_monitored":source_rows,
         "13b_source_delta_scan":source_delta_scan_sheet,
         "14_verifier_reports":[],
@@ -3333,12 +3738,36 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)
+    candidate_event_rows = []
+    for r in (candidate_memory_top or final_shortlist)[:100]:
+        candidate_event_rows.append({
+            "event_type": "candidate_found",
+            "run_id": run_id,
+            "created_at": run_now,
+            "candidate_stage": r.get("current_stage") or r.get("decision_bucket"),
+            "post_url": r.get("post_url"),
+            "source_title": r.get("source_title"),
+            "source_geo_class": r.get("source_geo_class", ""),
+            "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
+            "candidate_score": r.get("candidate_score_current") or r.get("candidate_score") or r.get("best_candidate_score_ever"),
+            "overall_media_score": r.get("media_score_current") or r.get("overall_media_score") or r.get("best_media_score_ever"),
+            "has_firsthand_visit_evidence": r.get("has_firsthand_visit_evidence"),
+            "why_relevant": r.get("why_keep_in_memory") or r.get("why_this_is_about_kaliningrad") or r.get("short_summary"),
+            "next_action": r.get("next_action") or r.get("suggested_action"),
+        })
+    (output_dir / "candidate_found.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in candidate_event_rows) + ("\n" if candidate_event_rows else ""), encoding="utf-8")
+    run_event_rows = [
+        {"event_type":"run_started","run_id":run_id,"created_at":RUN_STARTED_AT.isoformat()},
+        {"event_type":"report_written","run_id":run_id,"created_at":run_now,"xlsx_path":str(xlsx),"posts_fetched":len(posts),"candidate_events":len(candidate_event_rows)},
+    ]
+    (output_dir / "run_events.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in run_event_rows) + "\n", encoding="utf-8")
+    (output_dir / "stage_status.json").write_text(json.dumps({"run_id":run_id,"generated_at":run_now,"stage_counts":stage_counts,"summary":summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
     write_csv(output_dir / f"region-talk-candidates-{run_id}.csv", review_queue)
     payload = {"ok": True, "run_id": run_id, "generated_at": run_now, "summary": run_summary[0], "sheets": sheets, "xlsx_path": str(xlsx)}
     (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.md").write_text(render_md(payload), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.html").write_text(render_html(payload), encoding="utf-8")
-    for p in [xlsx, output_dir / f"region-talk-candidates-{run_id}.json", output_dir / f"region-talk-candidates-{run_id}.md", output_dir / f"region-talk-candidates-{run_id}.html", output_dir / f"region-talk-candidates-{run_id}.csv"]:
+    for p in [xlsx, output_dir / f"region-talk-candidates-{run_id}.json", output_dir / f"region-talk-candidates-{run_id}.md", output_dir / f"region-talk-candidates-{run_id}.html", output_dir / f"region-talk-candidates-{run_id}.csv", output_dir / "candidate_found.jsonl", output_dir / "run_events.jsonl", output_dir / "stage_status.json"]:
         target = Path.cwd() / p.name
         if target.resolve() != p.resolve():
             target.write_bytes(p.read_bytes())

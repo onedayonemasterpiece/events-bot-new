@@ -458,3 +458,23 @@ The default Telegram governor is raised for the next MVP run: `REGION_TALK_TG_MA
 Every resolved Telegram channel can be persisted in `12d_similar_seed_queue`; previous frontier rows can be promoted into dynamic seeds for shallow probe/history scan, and `13b_source_delta_scan` records source-level cursor/delta state. The product acceptance target for the next real run is `sources_history_fetched_ok >= 25`; if the run cannot hit it, `00_product_summary`/`20_telegram_rate_observability` must explain the governor/FloodWait/cache blocker.
 
 Hard Kaliningrad-only region scope now runs before candidate memory and `04a_final_shortlist`: multi-region/non-Kaliningrad posts are rejected as `reject_not_kaliningrad_oblast_only` and cannot leak into product shortlist unless manually overridden with explicit region evidence. Image scoring remains only for selected non-ad Kaliningrad rows; broad LLM stays disabled (`wide_funnel_llm_calls=0`) and the optional LLM verifier is limited to top-N final rows through the Supabase limiter.
+
+## MVP-1.z7 growth discovery / honest increment update
+
+The runner now has explicit process modes:
+
+- `REGION_TALK_DISCOVERY_MODE=mixed|similar_only|keyword_only|off`;
+- `REGION_TALK_HISTORY_SCAN_MODE=primary_and_delta|delta_only|primary_only|off`;
+- `REGION_TALK_MEDIA_SCORING_MODE=retry_queue_first|top_text_candidates|off`.
+
+Kaggle state is still JSON-sidecar in MVP, but it is versioned as `region-talk-state-v2`, exposes `previous_state_loaded`, `previous_state_source`, `previous_state_run_id`, `previous_state_hash`, and writes a `latest-region-talk-state.json` pointer with `latest_state_hash`. If `REGION_TALK_REQUIRE_PREVIOUS_STATE=1`, a missing previous state fails instead of silently becoming a baseline run.
+
+Similar-channel discovery is cursor-like rather than recursive: processed seeds get `similar_seed_last_used_at`, `similar_seed_use_count`, result/unique counts and `similar_seed_next_allowed_at`; self-loops are rejected. z7 defaults target 100 similar seeds/run, 1000 new frontier rows/run and 100 history sources/run when FloodWait/cooldown allows.
+
+Telegram keyword discovery adds source candidates only, never accepted posts. It searches bounded Kaliningrad toponyms and writes `12e_telegram_keyword_discovery` rows with `edge_type=telegram_keyword_search`; public post text is not retained in the keyword sheet.
+
+Source classification is visible in `12f_source_classification`, `13_sources_monitored`, candidate memory and shortlists: `source_geo_class`, `source_topic_class`, `ko_mention_ratio_recent`, `travel_blogger_score`, `personal_voice_score`, `nonlocal_value_score`, `source_priority_reason`. Current-run/cumulative shortlists are sorted higher for nonlocal blogger visit/impression evidence.
+
+The local/vector-first visit classifier now fills `has_firsthand_visit_evidence`, `visit_evidence_type`, `first_person_markers`, `emotion_or_impression_evidence`, `review_or_opinion_evidence`, `useful_route_evidence`, `nonlocal_blogger_visit_score`, and `publication_story_score` before any final LLM verifier. Metadata-only media is still never publication-ready.
+
+Incremental run-event artifacts are written next to the XLSX: `run_events.jsonl`, `candidate_found.jsonl`, and `stage_status.json`. `05_favorites` and `06_candidates_all` now use `_sheet_note` placeholders and expose `favorites_candidates_consistency_status` so placeholder rows are not confused with real candidates.

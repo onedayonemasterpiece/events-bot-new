@@ -55,6 +55,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("07b_prev_candidates_not_refetch", workbook)
             self.assertIn("12c_source_frontier_queue_next", workbook)
             self.assertIn("13b_source_delta_scan", workbook)
+            self.assertIn("12e_telegram_keyword_discovery", workbook)
+            self.assertIn("12f_source_classification", workbook)
             self.assertIn("21_manual_review_queue", workbook)
             self.assertIn("22_candidate_deltas", workbook)
             self.assertIn("14d_llm_usage_by_stage", workbook)
@@ -66,6 +68,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("telegram_similar_channels_status", summary)
         self.assertIn("history_sources_target", summary)
         self.assertIn("similar_seed_queue_total", summary)
+        self.assertIn("previous_state_loaded", summary)
+        self.assertIn("sources_primary_scanned_total_all_time", summary)
+        self.assertIn("keyword_search_queries_processed", summary)
+        self.assertEqual(summary["favorites_candidates_consistency_status"], "ok")
 
     def test_text_and_media_scoring_strong_region_media(self) -> None:
         mod = load_module()
@@ -95,6 +101,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         bad = mod.kaliningrad_oblast_only_scope_gate("Куда поехать летом: Байкал, Дагестан, Калининград и Сочи — 10 мест России", lexicon)
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
+
+    def test_visit_classifier_populates_story_fields(self) -> None:
+        mod = load_module()
+        fields = mod.infer_visit_semantic_fields(
+            "Мы приехали в Калининград на выходные, прогулялись по Амалиенау, нам понравилось море и вот наш маршрут.",
+            {"content_type":"visit_impression_candidate"},
+            {"visit_impression_score":0.4, "emotion_observation_score":0.3, "useful_route_score":0.3},
+            {"has_media": True},
+        )
+        self.assertEqual(fields["has_firsthand_visit_evidence"], "true")
+        self.assertIn("мы приехали", fields["first_person_markers"])
+        self.assertEqual(fields["useful_route_evidence"], "true")
+        self.assertGreater(float(fields["publication_story_score"]), 0.5)
+
+    def test_similar_seed_queue_usage_is_merged(self) -> None:
+        mod = load_module()
+        mod._REGION_TALK_TELEGRAM_RUNTIME["similar_seed_updates"] = {
+            "similar_seed_" + mod.stable_hash("https://t.me/source_a"): {
+                "similar_last_used_at": "2026-07-06T00:00:00+00:00",
+                "similar_last_scanned_at": "2026-07-06T00:00:00+00:00",
+                "similar_use_count_increment": 1,
+                "similar_last_result_count": 50,
+                "similar_last_unique_count": 12,
+                "similar_next_allowed_at": "2026-07-13T00:00:00+00:00",
+            }
+        }
+        rows = mod.build_similar_seed_queue({}, [{
+            "platform": "telegram", "fetch_status": "ok", "source_id": "src_a",
+            "canonical_url": "https://t.me/source_a", "source_title": "A",
+            "monitor_priority_score": 0.5, "source_kind": "travel",
+        }], [], "run-usage", "2026-07-06T00:01:00+00:00")
+        self.assertEqual(rows[0]["similar_seed_use_count"], 1)
+        self.assertEqual(rows[0]["similar_seed_last_result_count"], 50)
+        self.assertEqual(rows[0]["similar_seed_last_unique_count"], 12)
 
     def test_hard_region_gate_blocks_non_ko_rows_before_memory_and_shortlist(self) -> None:
         mod = load_module()

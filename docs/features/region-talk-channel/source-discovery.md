@@ -188,24 +188,34 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Keep the private entity cache/cooldown ledger in state/artifacts only; public XLSX sheets may contain `private_state_key`, but never raw `channel_id`, `access_hash`, session strings or tokens.
 - Forbidden: multi-account/proxy rotation, automatic joins/subscriptions, participant scraping, private/invite-only source traversal, or any publication from this MVP report.
 
-Default live/Kaggle Telegram discovery limits:
+Default live/Kaggle Telegram discovery limits for z7 growth runs:
 
 ```bash
 REGION_TALK_TG_GOVERNOR_ENABLED=1
-REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=300
+REGION_TALK_DISCOVERY_MODE=mixed
+REGION_TALK_HISTORY_SCAN_MODE=primary_and_delta
+REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=800
 REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=8
-REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=40
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=100
+REGION_TALK_HISTORY_SOURCES_TARGET=100
 REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
-REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=60
-REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN=20
+REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=120
+REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN=100
+REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN=100
 REGION_TALK_MAX_NEW_SOURCE_PROBES=30
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_SIMILAR_ENABLED=1
-REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=20
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=100
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
-REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=150
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=1000
+REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY=1
+REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES=30
+REGION_TALK_MEDIA_SCORING_MODE=retry_queue_first
+REGION_TALK_ACTUAL_IMAGE_TARGET=30
 ```
+
+Keyword discovery is source discovery only. It may record `matched_query`, public channel title/username/url and a source-candidate edge, but it must not store raw personal/comment data or treat the matched post as a content candidate outside the normal Region Talk funnel.
 
 ## MVP-1.x forwarded/repost/comment discovery hardening
 
