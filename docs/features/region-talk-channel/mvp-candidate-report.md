@@ -409,3 +409,24 @@ Image gating is split into `image_reviewable=true` vs `image_publication_ready=t
 - Similar channels are discovered through Telegram recommendations for already-resolved seed channels and are written as `telegram_similar_channel` graph/frontier rows. Unsupported Telethon versions must be reported as `not_supported_by_telethon_version`, not silently replaced by scraping.
 - Product review starts from `00_product_summary`, compact `04a_final_shortlist`, `12a_source_frontier_unique`, `12b_telegram_similar_channels` and `20_telegram_rate_observability`.
 - Workbook and companion artifacts include git provenance so Kaggle results can be traced back to the exact runner code.
+
+
+## MVP-1.z4 cumulative memory and honest increment update
+
+Region Talk is a cumulative discovery/research process, not a single-run-only report. A previously found candidate must not disappear only because its source was not refetched in the current run. The dry-run state now persists `candidate_memory` next to post/source/frontier state.
+
+New/clarified workbook sheets:
+
+- `04a_current_run_shortlist` — compact shortlist from the current run only; `04a_final_shortlist` remains as a compatibility alias for now.
+- `06a_candidate_memory` — all accumulated candidate-memory rows, including text-accepted/image-pending/good-text-weak-media/publication-ready/manual-keep rows.
+- `06b_candidate_memory_top` — active cumulative candidate memory for human review.
+- `07b_prev_candidates_not_refetch` — Excel-safe name for previous candidates not refetched this run; the longer requested name does not fit Excel's 31-character sheet limit.
+- `12c_source_frontier_queue_next` — ranked next-source queue with P0/P1/P2/P3 promotion class and planned action.
+- `21_manual_review_queue` — cumulative human-readable queue across active memory buckets.
+- `22_candidate_deltas` — candidate-level delta buckets such as `new_to_system`, `re_seen`, `not_refetched_this_run`, `stage_upgraded`, `stage_downgraded`, `became_candidate`, `expired_by_policy`.
+
+Summary metrics include post memory totals, candidate memory totals/active/new/retained/not-refetched/upgraded/downgraded/expired, source frontier promoted/ready-next/deferred, and cache-first Telegram entity metrics. If `04a_current_run_shortlist` is empty but active candidate memory exists, `00_product_summary` points the reviewer to `06b`/`21`.
+
+Image gate correction: metadata-only image fallback is never a final visual accept/reject. It becomes `image_fetch_retry_needed` / `needs_actual_image_fetch` / `visual_decision=pending` with `next_action=retry_media_download_or_manual_open`.
+
+Semantic bucket correction: the LLM prompt/schema separates multi-region roundup from `single_location_photo_card`. A fresh Kaliningrad-only single-location card may be a research/image-pending candidate even when it is weaker than a firsthand visit impression.

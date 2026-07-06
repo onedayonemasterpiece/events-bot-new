@@ -47,6 +47,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("12a_source_frontier_unique", workbook)
             self.assertIn("12b_telegram_similar_channels", workbook)
             self.assertIn("20_telegram_rate_observability", workbook)
+            self.assertIn("04a_current_run_shortlist", workbook)
+            self.assertIn("06a_candidate_memory", workbook)
+            self.assertIn("06b_candidate_memory_top", workbook)
+            self.assertIn("07b_prev_candidates_not_refetch", workbook)
+            self.assertIn("12c_source_frontier_queue_next", workbook)
+            self.assertIn("21_manual_review_queue", workbook)
+            self.assertIn("22_candidate_deltas", workbook)
             summary = json.loads((tmp_path / "region-talk-candidates-unit-run.json").read_text(encoding="utf-8"))["summary"]
             self.assertEqual(summary["source_count_seeded"], 30)
             self.assertEqual(summary["posts_fetched"], 0)
@@ -210,6 +217,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(inc["new_this_run"], "no")
         self.assertEqual(inc["seen_run_count"], 2)
         self.assertEqual(inc["previous_run_id"], "r1")
+
+
+    def test_candidate_memory_persists_when_not_refetched_and_metadata_pending(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_region_roundup":"false", "is_multi_topic_digest":"false", "is_single_location_card":"true", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"single_location_photo_card", "content_type":"single_location_photo_card", "visit_evidence_type":"single_location_photo_card", "has_firsthand_visit_evidence":"false", "emotion_or_impression_evidence":"false", "review_or_opinion_evidence":"false", "original_photo_evidence":"true", "llm_reason":"single place card"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_memory", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/77", "platform_post_key":"tg:src:77", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград, Светлогорск и Куршская коса: красивая прогулка, личные впечатления, маршрут, море, дюны, полезные детали и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            first = mod.build_report(seeds, [], posts, "mem-r1", Path(td) / "runs" / "mem-r1")
+            second = mod.build_report(seeds, [], [], "mem-r2", Path(td) / "runs" / "mem-r2")
+        row = first["sheets"]["06a_candidate_memory"][0]
+        self.assertEqual(row["current_stage"], "image_fetch_retry_needed")
+        self.assertEqual(row["image_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["visual_decision"], "pending")
+        self.assertEqual(first["summary"]["candidate_memory_total"], 1)
+        self.assertEqual(second["summary"]["candidate_memory_not_refetched_this_run"], 1)
+        self.assertEqual(second["sheets"]["07b_prev_candidates_not_refetch"][0]["post_url"], "https://t.me/src/77")
+        self.assertEqual(second["sheets"]["22_candidate_deltas"][0]["delta_bucket"], "not_refetched_this_run")
+
+    def test_single_location_guardrail_not_roundup_reject(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"reject", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"true", "is_multi_region_roundup":"true", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"reject", "content_type":"reject", "llm_reason":"Это дайджест красивых мест России"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_tihoe", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"Красивые места России", "platform":"telegram", "handle":"@viewrussia", "post_url":"https://t.me/viewrussia/30742", "platform_post_key":"tg:viewrussia:30742", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград, Светлогорск, Озеро Тихое и Куршская коса. Тихая вода, прогулка вокруг озера, красивые виды, маршрут, личные впечатления и что особенно запомнилось.", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/viewrussia"}]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "single-card-run", Path(td))
+        self.assertFalse([r for r in payload["sheets"]["08_dropped_posts"] if r.get("post_id") == "post_tihoe" and r.get("rejection_reason") == "llm_reject"])
+        self.assertTrue(payload["sheets"]["06a_candidate_memory"])
+        self.assertIn(payload["sheets"]["06a_candidate_memory"][0]["current_stage"], {"image_fetch_retry_needed", "needs_image_review", "good_text_weak_media"})
 
     def test_public_blogger_links_imports_frontier_only_and_dedupes(self) -> None:
         mod = load_module()

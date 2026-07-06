@@ -344,10 +344,11 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
             if path.exists():
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    return data, {"increment_state_loaded": "true", "increment_state_path": str(path), "previous_run_id": data.get("run_id", ""), "previous_seen_post_count": len(data.get("posts") or {})}
+                    data["_loaded_from_path"] = str(path)
+                    return data, {"increment_state_loaded": "true", "increment_state_path": str(path), "previous_run_id": data.get("run_id", ""), "previous_seen_post_count": len(data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {})}
         except Exception as exc:
             return {}, {"increment_state_loaded": "false", "increment_state_path": str(path), "increment_state_error": f"{type(exc).__name__}: {str(exc)[:180]}", "previous_run_id": "", "previous_seen_post_count": 0}
-    return {}, {"increment_state_loaded": "false", "increment_state_path": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0}
+    return {}, {"increment_state_loaded": "false", "increment_state_path": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0, "previous_candidate_memory_count": 0}
 
 
 def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -472,6 +473,7 @@ class TelegramRequestGovernor:
         self.output_dir = output_dir
         self.state = state if isinstance(state, dict) else {}
         self.entity_cache: dict[str, Any] = dict(self.state.get("telegram_entity_cache") or {})
+        self.entity_cache_loaded_from_path = str((self.state.get("_loaded_from_path") or self.state.get("state_path") or ""))
         self.cooldowns: dict[str, Any] = dict(self.state.get("telegram_cooldowns") or {})
         self.ledger: list[dict[str, Any]] = []
         self.requests_by_method: dict[str, int] = {}
@@ -615,7 +617,12 @@ class TelegramRequestGovernor:
             "telethon_version": _REGION_TALK_TELEGRAM_RUNTIME.get("telethon_version", ""),
             "session_cache_loaded": "true",
             "entity_cache_loaded": str(bool(self.state.get("telegram_entity_cache"))).lower(),
+            "entity_cache_loaded_from_path": self.entity_cache_loaded_from_path,
+            "entity_cache_write_path": str((self.output_dir.parent.parent / "state" / "region-talk-state.json")),
             "entity_cache_entries": len(self.entity_cache),
+            "entity_cache_hit_rate": round(self.resolve_cache_hits / max(1, self.resolve_cache_hits + self.resolve_network_attempts), 3),
+            "resolved_sources_available_for_history_fetch": sum(1 for v in self.entity_cache.values() if isinstance(v, dict) and v.get("channel_id_private") and v.get("access_hash_private")),
+            "resolved_sources_used_without_network_resolve": self.resolve_cache_hits,
             "telegram_total_requests_attempted": self.total_attempted,
             "telegram_total_requests_ok": self.total_ok,
             "telegram_total_requests_error": self.total_error,
@@ -1019,6 +1026,249 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
         out.append(g)
     return sorted(out, key=lambda r: (-float(r.get("source_candidate_score") or 0), str(r.get("normalized_url") or "")))
 
+
+
+CANDIDATE_MEMORY_STAGES = {
+    "favorite", "semantic_candidate", "needs_image_review", "image_fetch_retry_needed",
+    "good_text_weak_media", "low_substance_but_region_relevant", "manual_keep",
+}
+ACTIVE_CANDIDATE_MEMORY_STATUSES = {
+    "text_candidate_pending_image", "image_fetch_retry_needed", "image_reviewable",
+    "good_text_weak_media", "publication_ready_candidate", "manual_keep", "source_not_refetched_this_run",
+}
+VISIT_EVIDENCE_PATTERN = re.compile(r"\b(были|ездили|поехали|вернулись|посетили|гуляли|увидели|понравил|впечатлил|запомнил|ощущени|эмоци|отзыв|фотоотч[её]т)\b", re.I)
+EMOTION_PATTERN = re.compile(r"\b(понравил|впечатлил|запомнил|атмосфер|красив|удивил|эмоци|ощущени|восторг|любов|спокойн|магия)\b", re.I)
+ORIGINAL_PHOTO_PATTERN = re.compile(r"\b(мои фото|наши фото|фотоотч[её]т|снял[аи]?|снимали|кадры|фотографи[ия]|подписчик|читател)\b", re.I)
+
+
+def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: dict[str, Any], post: dict[str, Any] | None = None) -> dict[str, Any]:
+    low = (text or "").lower()
+    llm_type = str(llm_gate.get("content_type") or llm_gate.get("llm_content_type") or "").strip()
+    has_firsthand = bool(VISIT_EVIDENCE_PATTERN.search(text or "")) or llm_type == "visit_impression_candidate" or float(substance.get("visit_impression_score") or 0) >= 0.25
+    has_emotion = bool(EMOTION_PATTERN.search(text or "")) or float(substance.get("emotion_observation_score") or 0) >= 0.20
+    has_original_photo = bool(ORIGINAL_PHOTO_PATTERN.search(text or "")) or bool((post or {}).get("is_forwarded_or_repost"))
+    if has_firsthand:
+        visit_type = "firsthand_author_visit"
+    elif "подписчик" in low or "читател" in low or "фотоотчет" in low or "фотоотчёт" in low:
+        visit_type = "subscriber_photo_report"
+    elif llm_type == "route_useful_candidate" or float(substance.get("useful_route_score") or 0) >= 0.18:
+        visit_type = "route_guide"
+    elif llm_type in {"single_location_photo_card", "encyclopedic_card_candidate"} or (post or {}).get("has_media"):
+        visit_type = "single_location_photo_card"
+    elif llm_type == "news_or_event":
+        visit_type = "news_or_event"
+    elif "рго" in str((post or {}).get("source_title") or "").lower() or "проект" in low:
+        visit_type = "official_project_material"
+    else:
+        visit_type = "unknown"
+    text_bucket = "publication_candidate_text" if has_firsthand and has_emotion else ("research_candidate" if visit_type in {"route_guide", "single_location_photo_card", "subscriber_photo_report"} else "low_priority_research")
+    return {
+        "has_firsthand_visit_evidence": str(has_firsthand).lower(),
+        "visit_evidence_type": visit_type,
+        "emotion_or_impression_evidence": str(has_emotion).lower(),
+        "review_or_opinion_evidence": str(has_firsthand or has_emotion).lower(),
+        "memorable_detail_evidence": str(float(substance.get("memorable_details_score") or 0) >= 0.20 or "запом" in low).lower(),
+        "original_photo_evidence": str(has_original_photo or bool((post or {}).get("primary_media_path"))).lower(),
+        "text_bucket": text_bucket,
+    }
+
+
+def normalize_image_status(stage: str, ms: dict[str, Any]) -> dict[str, Any]:
+    input_type = str(ms.get("image_model_input_type") or "")
+    has_media_fallback = input_type == "metadata_only" and str(ms.get("image_download_status") or "") == "actual_image_missing_or_fallback"
+    if has_media_fallback:
+        return {
+            "current_stage": "image_fetch_retry_needed",
+            "image_status": "needs_actual_image_fetch",
+            "image_bucket": "text_accepted_metadata_only",
+            "visual_decision": "pending",
+            "next_action": "retry_media_download_or_manual_open",
+            "why_not_publication_ready": "metadata-only image fallback; actual image bytes were not scored",
+        }
+    if str(ms.get("image_publication_ready")) == "true":
+        return {"image_status": "publication_ready", "image_bucket": "text_accepted_image_publication_ready", "visual_decision": "accept", "next_action": "human_final_check", "why_not_publication_ready": ""}
+    if str(ms.get("image_reviewable")) == "true":
+        return {"image_status": "image_reviewable", "image_bucket": "text_accepted_image_reviewable", "visual_decision": "review", "next_action": "human_image_review", "why_not_publication_ready": "image reviewable but below publication-ready threshold"}
+    if input_type == "actual_image":
+        return {"image_status": "actual_image_weak", "image_bucket": "text_accepted_image_weak", "visual_decision": "reject_visual", "next_action": "manual_open_if_text_is_strong", "why_not_publication_ready": str(ms.get("failure_reason") or "actual image below threshold")}
+    return {"image_status": "text_rejected_no_image_spend" if stage in {"dropped_text_gate", "debug_reject"} else "not_scored", "image_bucket": "text_rejected_no_image_spend", "visual_decision": "not_run", "next_action": "", "why_not_publication_ready": str(ms.get("failure_reason") or "")}
+
+
+def candidate_lifecycle_status(row: dict[str, Any]) -> str:
+    manual = str(row.get("manual_decision") or "").strip().lower()
+    if manual == "reject":
+        return "manual_reject"
+    if manual in {"keep", "manual_keep", "favorite", "approve_for_preview", "approve_for_queue"}:
+        return "manual_keep"
+    if str(row.get("image_publication_ready")) == "true" or row.get("current_stage") in {"favorite", "semantic_candidate"}:
+        return "publication_ready_candidate" if str(row.get("image_publication_ready")) == "true" else "image_reviewable"
+    if row.get("current_stage") == "image_fetch_retry_needed" or row.get("image_status") == "needs_actual_image_fetch":
+        return "image_fetch_retry_needed"
+    if row.get("current_stage") == "needs_image_review" or str(row.get("image_reviewable")) == "true":
+        return "image_reviewable"
+    if row.get("current_stage") == "good_text_weak_media":
+        return "good_text_weak_media"
+    if row.get("llm_decision") == "accept" or row.get("text_bucket") in {"research_candidate", "publication_candidate_text"}:
+        return "text_candidate_pending_image"
+    if row.get("current_stage") == "source_not_refetched_this_run":
+        return "source_not_refetched_this_run"
+    return "research_candidate"
+
+
+def is_candidate_memory_row(row: dict[str, Any]) -> bool:
+    return row.get("current_stage") in CANDIDATE_MEMORY_STAGES or row.get("llm_decision") == "accept" or row.get("manual_decision") in {"manual_keep", "keep", "favorite"}
+
+
+def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], run_id: str, run_now: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    previous_memory = previous_state.get("candidate_memory") if isinstance(previous_state.get("candidate_memory"), dict) else {}
+    previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    memory: dict[str, dict[str, Any]] = {str(k): dict(v) for k, v in previous_memory.items() if isinstance(v, dict)}
+    # Bootstrap legacy candidate memory from pre-z4 post state.
+    for pid, prev in previous_posts.items():
+        if not isinstance(prev, dict):
+            continue
+        if str(prev.get("current_stage") or "") in CANDIDATE_MEMORY_STAGES:
+            mid = "cmem_" + stable_hash(str(pid))
+            memory.setdefault(mid, {
+                "candidate_memory_id": mid, "post_id": pid, "post_url": prev.get("post_url", ""),
+                "platform_post_key": prev.get("platform_post_key", ""), "source_id": prev.get("source_id", ""),
+                "source_title": prev.get("source_title", ""), "post_date": prev.get("post_date", ""),
+                "first_seen_run_id": prev.get("first_seen_run_id", ""), "first_candidate_run_id": prev.get("first_seen_run_id", ""),
+                "last_seen_run_id": prev.get("last_seen_run_id", ""), "last_refetched_run_id": prev.get("last_seen_run_id", ""),
+                "seen_run_count": prev.get("seen_run_count", 1), "current_lifecycle_status": candidate_lifecycle_status(prev),
+                "current_stage": prev.get("current_stage", ""), "best_stage_ever": prev.get("current_stage", ""),
+                "best_candidate_score_ever": prev.get("candidate_score_current", ""), "candidate_score_current": prev.get("candidate_score_current", ""),
+                "best_media_score_ever": prev.get("media_score_current", ""), "media_score_current": prev.get("media_score_current", ""),
+                "manual_decision": prev.get("manual_decision", ""), "next_action": "keep_in_memory_or_refetch_source_later",
+                "why_keep_in_memory": "legacy candidate from previous post state", "why_not_publication_ready": "not refetched in this run yet",
+            })
+    current_by_id = {str(r.get("post_id")): r for r in current_rows if r.get("post_id")}
+    for row in current_rows:
+        if not is_candidate_memory_row(row):
+            continue
+        pid = str(row.get("post_id") or stable_hash(row.get("post_url")))
+        mid = "cmem_" + stable_hash(pid)
+        prev = memory.get(mid) or {}
+        status = candidate_lifecycle_status(row)
+        prev_score = prev.get("candidate_score_current", "")
+        prev_media = prev.get("media_score_current", "")
+        best_score = max([float(x) for x in [prev.get("best_candidate_score_ever"), row.get("candidate_score")] if str(x) not in {"", "None"}], default=float(row.get("candidate_score") or 0))
+        best_media = max([float(x) for x in [prev.get("best_media_score_ever"), row.get("overall_media_score")] if str(x) not in {"", "None"}], default=float(row.get("overall_media_score") or 0))
+        try:
+            score_delta = round(float(row.get("candidate_score") or 0) - float(prev_score), 3) if prev_score != "" else ""
+        except Exception:
+            score_delta = ""
+        try:
+            media_delta = round(float(row.get("overall_media_score") or 0) - float(prev_media), 3) if prev_media != "" else ""
+        except Exception:
+            media_delta = ""
+        memory[mid] = {
+            **prev,
+            "candidate_memory_id": mid, "post_id": pid, "post_url": row.get("post_url", prev.get("post_url", "")),
+            "platform_post_key": row.get("platform_post_key", prev.get("platform_post_key", "")), "source_id": row.get("source_id", prev.get("source_id", "")),
+            "source_title": row.get("source_title", prev.get("source_title", "")), "post_date": row.get("post_date", prev.get("post_date", "")),
+            "first_seen_run_id": prev.get("first_seen_run_id") or row.get("first_seen_run_id") or run_id,
+            "first_candidate_run_id": prev.get("first_candidate_run_id") or run_id,
+            "last_seen_run_id": run_id, "last_refetched_run_id": run_id, "not_refetched_this_run": "false",
+            "seen_run_count": int(prev.get("seen_run_count") or 0) + (0 if prev.get("last_refetched_run_id") == run_id else 1),
+            "previous_lifecycle_status": prev.get("current_lifecycle_status", ""), "current_lifecycle_status": status,
+            "best_lifecycle_status_ever": prev.get("best_lifecycle_status_ever") or status,
+            "previous_stage": prev.get("current_stage", ""), "current_stage": row.get("current_stage", ""),
+            "best_stage_ever": prev.get("best_stage_ever") or row.get("current_stage", ""),
+            "best_candidate_score_ever": round(best_score, 3), "candidate_score_current": row.get("candidate_score", ""), "candidate_score_delta": score_delta,
+            "best_media_score_ever": round(best_media, 3), "media_score_current": row.get("overall_media_score", ""), "media_score_delta": media_delta,
+            "text_bucket": row.get("text_bucket", ""), "image_bucket": row.get("image_bucket", ""), "image_status": row.get("image_status", ""),
+            "image_model_input_type": row.get("image_model_input_type", ""), "image_model_type": row.get("image_model_type", ""),
+            "visual_decision": row.get("visual_decision", ""),
+            "has_firsthand_visit_evidence": row.get("has_firsthand_visit_evidence", ""), "visit_evidence_type": row.get("visit_evidence_type", ""),
+            "emotion_or_impression_evidence": row.get("emotion_or_impression_evidence", ""), "review_or_opinion_evidence": row.get("review_or_opinion_evidence", ""),
+            "original_photo_evidence": row.get("original_photo_evidence", ""), "manual_decision": row.get("manual_decision") or prev.get("manual_decision", ""),
+            "manual_decision_at": prev.get("manual_decision_at", ""), "next_action": row.get("next_action") or row.get("suggested_action") or "manual_review",
+            "why_keep_in_memory": "LLM/text/image gate reached research candidate status", "why_not_publication_ready": row.get("why_not_publication_ready") or row.get("rejection_reason") or "",
+            "expires_at": prev.get("expires_at", ""),
+        }
+    source_status = {str(s.get("source_id") or ""): s for s in source_rows}
+    for mid, rec in list(memory.items()):
+        if rec.get("post_id") in current_by_id:
+            continue
+        sid = str(rec.get("source_id") or "")
+        srow = source_status.get(sid) or {}
+        rec["not_refetched_this_run"] = "true"
+        rec["current_lifecycle_status"] = "source_not_refetched_this_run" if rec.get("current_lifecycle_status") not in {"manual_reject", "expired"} else rec.get("current_lifecycle_status")
+        rec["visibility_status"] = "not_refetched_this_run"
+        rec["source_fetch_status_this_run"] = srow.get("fetch_status", "source_not_selected_this_run")
+        rec["next_action"] = "keep_in_memory_or_refetch_source_later"
+        rec["why_keep_in_memory"] = rec.get("why_keep_in_memory") or "previous candidate retained despite source not being refetched"
+        rec["why_not_publication_ready"] = rec.get("why_not_publication_ready") or "source not refetched this run"
+    rows = sorted(memory.values(), key=lambda r: (str(r.get("manual_decision") or "") == "reject", str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), str(r.get("post_date") or "")))
+    not_refetched = [r for r in rows if str(r.get("not_refetched_this_run")) == "true" and r.get("current_lifecycle_status") != "manual_reject"]
+    deltas = []
+    for r in rows:
+        prev_stage = str(r.get("previous_stage") or "")
+        cur_stage = str(r.get("current_stage") or "")
+        if str(r.get("not_refetched_this_run")) == "true":
+            bucket = "not_refetched_this_run"
+        elif not prev_stage:
+            bucket = "new_to_system"
+        elif prev_stage == cur_stage:
+            bucket = "stage_unchanged"
+        elif cur_stage in {"favorite", "semantic_candidate", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media"} and prev_stage not in CANDIDATE_MEMORY_STAGES:
+            bucket = "became_candidate"
+        elif float(r.get("candidate_score_delta") or 0) > 0.02:
+            bucket = "stage_upgraded"
+        elif float(r.get("candidate_score_delta") or 0) < -0.02:
+            bucket = "stage_downgraded"
+        else:
+            bucket = "re_seen"
+        deltas.append({**r, "delta_bucket": bucket, "current_run_id": run_id})
+    return rows, not_refetched, deltas
+
+
+def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], candidate_memory: list[dict[str, Any]], run_id: str) -> list[dict[str, Any]]:
+    candidate_source_ids = {str(r.get("source_id") or "") for r in candidate_memory if r.get("source_id")}
+    resolved = {str(s.get("canonical_url") or "") for s in source_rows if s.get("telegram_resolve_status") in {"resolved_network", "resolved_from_private_cache"} or s.get("fetch_status") == "ok"}
+    out = []
+    for row in frontier_rows:
+        url = str(row.get("canonical_url") or row.get("normalized_url") or "")
+        platform = str(row.get("platform") or row.get("platform_guess") or "")
+        edge_types = str(row.get("edge_types_all") or row.get("best_edge_type") or "")
+        discovery = str(row.get("discovery_types") or "")
+        score = float(row.get("source_candidate_score") or row.get("frontier_priority") or 0)
+        pclass = "P3"
+        why = "low priority/generic backlog"
+        if str(row.get("source_candidate_id") or "") in candidate_source_ids or url in resolved:
+            pclass, why, score = "P0", "previous candidate or already resolved source", score + 0.35
+        elif "telegram_similar_channel" in edge_types:
+            pclass, why, score = "P1", "Telegram similar-channel edge", score + 0.20
+        elif any(w in (url + " " + str(row.get("title_guess") or "")).lower() for w in ["travel", "trip", "photo", "путеше", "блог", "фото", "route", "туризм"]):
+            pclass, why, score = "P1", "author/travel/photo/catalog signal", score + 0.12
+        elif "public_travel_blogger_catalog" in discovery or "public_travel_blogger_catalog" in edge_types:
+            pclass, why, score = "P2", "sample public travel blogger catalog", score + 0.05
+        planned = "probe_telegram_entity_then_history" if platform.startswith("telegram") else ("probe_vk_wall_when_configured" if platform == "vk" else "keep_frontier")
+        out.append({
+            "queue_rank": 0, "canonical_url": url, "platform": platform, "title_guess": row.get("title_guess") or row.get("username_or_handle") or url,
+            "frontier_priority": round(score, 3), "frontier_status": row.get("frontier_status", ""), "why_next": why,
+            "discovery_types": discovery, "best_edge_type": row.get("best_edge_type") or edge_types,
+            "source_quality_score": round(min(1.0, score), 3), "kaliningrad_prior_score": row.get("best_confidence", ""),
+            "authorial_voice_score": 0.65 if pclass in {"P0", "P1"} else 0.35,
+            "original_photo_prior_score": 0.60 if pclass in {"P0", "P1"} else 0.30,
+            "ad_risk_score": 0.20 if pclass in {"P0", "P1", "P2"} else 0.45,
+            "resolve_status": row.get("resolve_status", ""), "next_allowed_resolve_at": row.get("next_allowed_resolve_at", ""),
+            "probe_status": row.get("probe_status", "probe_later"), "planned_action": planned, "planned_after_run_id": run_id,
+            "promotion_class": pclass,
+        })
+    selected = []
+    for pclass, limit in [("P0", 20), ("P1", 20), ("P2", 15), ("P3", 5)]:
+        selected.extend(sorted([r for r in out if r["promotion_class"] == pclass], key=lambda r: (-float(r.get("frontier_priority") or 0), r.get("canonical_url") or ""))[:limit])
+    seen = set(); final = []
+    for row in selected:
+        key = row.get("canonical_url")
+        if key in seen:
+            continue
+        seen.add(key); final.append(row)
+    for i, row in enumerate(final[:50], start=1):
+        row["queue_rank"] = i
+    return final[:50]
 
 def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -1538,7 +1788,8 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "Accept only if the main subject is Kaliningrad Oblast, not one item in a multi-region/country digest.",
             "Reject ads, promos, registrations, contests, paid/service CTAs, app-download promos, event announcements, and news digests.",
             "Prefer visit impressions, route/useful observations, emotional or memorable details about visiting the region.",
-            "Encyclopedic cards may be reviewable but weaker; pure visual dumps or passing mentions are not candidates.",
+            "A single-location Kaliningrad Oblast card is NOT a multi-region roundup even if it belongs to a source rubric; classify it as single_location_photo_card or encyclopedic_card_candidate, not reject_multi_region_roundup.",
+            "Encyclopedic/single-location cards may be research candidates but weaker than firsthand visit impressions; pure visual dumps or passing mentions are not publication candidates.",
             "Return JSON only.",
         ],
         "evidence_hints_not_decisions": evidence,
@@ -1553,10 +1804,21 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "whole_post_about_kaliningrad_oblast_score": "0..1",
             "kaliningrad_mention_role": "main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear",
             "is_digest_or_roundup": "boolean",
+            "is_multi_region_roundup": "boolean",
             "is_multi_topic_digest": "boolean",
+            "is_single_location_card": "boolean",
+            "is_author_visit_impression": "boolean",
+            "is_official_route_material": "boolean",
+            "is_photo_card_from_subscriber": "boolean",
             "is_ad_or_promo": "boolean",
             "is_news_or_trash": "boolean",
-            "content_type": "visit_impression_candidate|route_useful_candidate|encyclopedic_card_candidate|low_substance|reject",
+            "content_type": "visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject",
+            "visit_evidence_type": "firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown",
+            "has_firsthand_visit_evidence": "boolean",
+            "emotion_or_impression_evidence": "boolean",
+            "review_or_opinion_evidence": "boolean",
+            "memorable_detail_evidence": "boolean",
+            "original_photo_evidence": "boolean",
             "reason": "short Russian explanation",
         },
     }
@@ -1792,11 +2054,22 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             "whole_post_about_kaliningrad_oblast_score": data.get("whole_post_about_kaliningrad_oblast_score", ""),
             "kaliningrad_mention_role": str(data.get("kaliningrad_mention_role") or "unclear"),
             "is_digest_or_roundup": str(bool(data.get("is_digest_or_roundup"))).lower(),
+            "is_multi_region_roundup": str(bool(data.get("is_multi_region_roundup"))).lower(),
             "is_multi_topic_digest": str(bool(data.get("is_multi_topic_digest"))).lower(),
+            "is_single_location_card": str(bool(data.get("is_single_location_card"))).lower(),
+            "is_author_visit_impression": str(bool(data.get("is_author_visit_impression"))).lower(),
+            "is_official_route_material": str(bool(data.get("is_official_route_material"))).lower(),
+            "is_photo_card_from_subscriber": str(bool(data.get("is_photo_card_from_subscriber"))).lower(),
             "llm_is_ad_or_promo": str(bool(data.get("is_ad_or_promo"))).lower(),
             "llm_is_news_or_trash": str(bool(data.get("is_news_or_trash"))).lower(),
             "llm_content_type": str(data.get("content_type") or ""),
             "content_type": str(data.get("content_type") or ""),
+            "visit_evidence_type": str(data.get("visit_evidence_type") or ""),
+            "has_firsthand_visit_evidence": str(bool(data.get("has_firsthand_visit_evidence"))).lower(),
+            "emotion_or_impression_evidence": str(bool(data.get("emotion_or_impression_evidence"))).lower(),
+            "review_or_opinion_evidence": str(bool(data.get("review_or_opinion_evidence"))).lower(),
+            "memorable_detail_evidence": str(bool(data.get("memorable_detail_evidence"))).lower(),
+            "original_photo_evidence": str(bool(data.get("original_photo_evidence"))).lower(),
             "llm_reason": str(data.get("reason") or "")[:500],
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
@@ -1912,10 +2185,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "whole_post_about_kaliningrad_oblast_score": round(0.65 if scope.get("kaliningrad_oblast_only_scope") else 0.15, 2),
             "kaliningrad_mention_role": "main_subject" if scope.get("kaliningrad_oblast_only_scope") else ("one_item" if scope.get("matched_place_names") else "unclear"),
             "is_digest_or_roundup": str(float(ts.get("newsiness_score") or 0) >= 0.45 or bool(scope.get("external_geo_mentions"))).lower(),
+            "is_multi_region_roundup": str(bool(scope.get("external_geo_mentions"))).lower(),
             "is_multi_topic_digest": str(bool(scope.get("external_geo_mentions"))).lower(),
+            "is_single_location_card": str(bool(scope.get("matched_place_names")) and not bool(scope.get("external_geo_mentions"))).lower(),
+            "is_author_visit_impression": str(float(substance.get("visit_impression_score") or 0) >= 0.25).lower(),
+            "is_official_route_material": "false", "is_photo_card_from_subscriber": "false",
             "llm_is_ad_or_promo": "", "llm_is_news_or_trash": "",
             "llm_content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "low_substance"),
-            "content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "low_substance"),
+            "content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "single_location_photo_card" if scope.get("matched_place_names") else "low_substance"),
+            "visit_evidence_type": "", "has_firsthand_visit_evidence": "", "emotion_or_impression_evidence": "",
+            "review_or_opinion_evidence": "", "memorable_detail_evidence": "", "original_photo_evidence": "",
             "llm_reason": "",
             "llm_usage_input_tokens": "", "llm_usage_output_tokens": "", "llm_usage_total_tokens": "",
             "rejection_reason_primary": "", "rejection_reason_details": "",
@@ -1947,6 +2226,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
             if llm_gate.get("llm_gate_status") == "ok":
                 decision = str(llm_gate.get("llm_decision") or "needs_review")
+                # Guardrail for the observed z3b regression: a single-location Kaliningrad Oblast card is not a multi-region roundup.
+                if decision == "reject" and scope.get("kaliningrad_oblast_only_scope") and not scope.get("external_geo_mentions"):
+                    reason_l = str(llm_gate.get("llm_reason") or "").lower()
+                    if "дайджест" in reason_l or "roundup" in reason_l or "подбор" in reason_l:
+                        decision = "accept"
+                        llm_gate["llm_decision"] = "accept"
+                        llm_gate["content_type"] = llm_gate.get("content_type") or "single_location_photo_card"
+                        llm_gate["llm_content_type"] = llm_gate.get("llm_content_type") or "single_location_photo_card"
+                        llm_gate["is_single_location_card"] = "true"
+                        llm_gate["is_multi_region_roundup"] = "false"
+                        llm_gate["llm_reason"] = "Guardrail: single-location Kaliningrad Oblast card kept for research/manual review; not a multi-region roundup. " + str(llm_gate.get("llm_reason") or "")[:400]
                 if decision == "reject":
                     drop_gate, rejection = "llm_semantic_gate", "llm_reject"
                     visual_skip_reason = str(llm_gate.get("llm_reason") or "LLM rejected semantic fit")
@@ -1989,7 +2279,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             ms = media_scores(bool(p.get("has_media")), ts, p)
             media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": p.get("primary_media_path") or ((p.get("post_url") + "#media") if p.get("has_media") else ""), "thumbnail":"", **ms})
             score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
-            if not ms["is_selected_for_publication"]:
+            image_status_fields = normalize_image_status(current_stage, ms)
+            if image_status_fields.get("current_stage") == "image_fetch_retry_needed":
+                current_stage, rejection, drop_gate = "image_fetch_retry_needed", "needs_actual_image_fetch", "image_fetch_gate"
+                gate_trace.append("image_fetch_gate:metadata_only_pending")
+            elif not ms["is_selected_for_publication"]:
                 if str(ms.get("image_reviewable")) == "true":
                     current_stage, rejection, drop_gate = "needs_image_review", ms["failure_reason"], "image_postcardness_gate"
                     gate_trace.append("image_postcardness_gate:reviewable")
@@ -2014,8 +2308,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 "match_context_short": m.get("match_context_short"),
             })
 
+        semantic_visit_fields = infer_visit_semantic_fields(text, llm_gate, substance, p)
+        image_status_fields = normalize_image_status(current_stage, ms)
         row = {
-            **p, **ts, **scope, **fresh, **ad_gate, **substance, **ms,
+            **p, **ts, **scope, **fresh, **ad_gate, **substance, **ms, **semantic_visit_fields, **image_status_fields,
             "candidate_id": cid, "candidate_score": score, "current_stage": current_stage,
             "drop_gate": drop_gate, "rejection_reason": rejection,
             "short_summary": make_summary(text),
@@ -2025,7 +2321,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "what_concern": rejection or "text gates passed; image checked",
             "image_model_report_short": ms["model_short_explanation"],
             "risk_flags": "; ".join([rejection] if rejection else ([] if p.get("rights_policy") != "unknown" else ["rights_unknown"])),
-            "suggested_action": "manual_review" if current_stage in {"favorite","semantic_candidate", "pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"} else "reject",
+            "suggested_action": (image_status_fields.get("next_action") or ("manual_review" if current_stage in {"favorite","semantic_candidate", "pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "image_fetch_retry_needed", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"} else "reject")),
             "manual_decision":"", "reviewer_comment":"",
             "region_scope_gate": "pass" if scope["kaliningrad_oblast_only_scope"] else "fail",
             "visual_scoring_stage": visual_stage,
@@ -2079,7 +2375,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         }
         if current_stage in {"favorite", "semantic_candidate"}:
             candidates.append(row)
-        elif current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"}:
+        elif current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "image_fetch_retry_needed", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"}:
             pre_candidates.append(row)
         else:
             dropped.append(row)
@@ -2158,6 +2454,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
         }
     source_frontier_unique = build_source_frontier_unique(discovered_rows, updated_discovered_state, run_id)
+    candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
+    source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
+    candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
+    candidate_memory_top = sorted(candidate_memory_active_rows, key=lambda r: (str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), -float(r.get("best_media_score_ever") or 0)))[:100]
     state_to_write = {
         "run_id": run_id,
         "updated_at": run_now,
@@ -2165,6 +2465,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "discovered_sources": updated_discovered_state,
         "source_cursors": source_cursors,
         "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
+        "source_frontier_queue_next": {str(r.get("canonical_url") or r.get("queue_rank")): r for r in source_frontier_queue_next},
+        "candidate_memory": {str(r.get("candidate_memory_id")): r for r in candidate_memory_rows if r.get("candidate_memory_id")},
         "telegram_entity_cache": _REGION_TALK_TELEGRAM_RUNTIME.get("entity_cache") or previous_state.get("telegram_entity_cache") or {},
         "telegram_cooldowns": _REGION_TALK_TELEGRAM_RUNTIME.get("cooldowns") or previous_state.get("telegram_cooldowns") or {},
     }
@@ -2200,6 +2502,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_count_error":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("error")),
         "source_count_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
         "source_count_deferred_unresolved":sum(1 for s in source_rows if "unresolved" in str(s.get("fetch_status") or "")),
+        "sources_selected_for_planning":len(source_rows),
+        "sources_resolved_available":sum(1 for s in source_rows if s.get("telegram_resolve_status") in {"resolved_network", "resolved_from_private_cache"} or s.get("fetch_status") == "ok"),
+        "sources_fetch_attempted":sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true"),
+        "sources_history_fetched_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
+        "sources_skipped_due_resolve_budget":sum(1 for s in source_rows if "budget" in str(s.get("fetch_status") or "")),
+        "sources_skipped_due_platform_not_configured":sum(1 for s in source_rows if "not_configured" in str(s.get("fetch_status") or "")),
+        "sources_skipped_due_low_priority_defer":sum(1 for s in source_rows if "low_priority" in str(s.get("fetch_status") or "")),
         "vk_wall_probe_status":"configured_not_implemented" if any(s.get("platform") == "vk" for s in source_rows) and (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else ("not_configured" if any(s.get("platform") == "vk" for s in source_rows) else "not_selected"),
         "posts_region_relevant":sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
         "fresh_posts":len(fresh_rows),"fresh_posts_with_place_evidence":len(fresh_with_place_evidence),
@@ -2220,8 +2529,23 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "dropped_weak_media":sum(1 for r in dropped if "media" in str(r.get("rejection_reason"))),"dropped_duplicate":0,"dropped_rights":0,
         "image_model_calls":len(media_rows),"image_scoring_skipped_by_text_gate":sum(1 for r in new_posts if r.get("image_scoring_skipped") == "true"),
         "discovered_links":len(discovered_rows),"source_graph_edges":len(graph_edges),"errors_count":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("error")),
+        "post_memory_total":len(updated_posts_state),
+        "previous_seen_post_count":len(previous_posts),
+        "current_fetched_post_count":len(new_posts),
+        "previous_posts_not_refetched_this_run":len(set(str(k) for k in previous_posts.keys()) - {str(r.get("post_id")) for r in new_posts}),
+        "candidate_memory_total":len(candidate_memory_rows),
+        "candidate_memory_active":len(candidate_memory_active_rows),
+        "candidate_memory_new_this_run":sum(1 for r in candidate_memory_rows if r.get("first_candidate_run_id") == run_id),
+        "candidate_memory_retained_from_previous":sum(1 for r in candidate_memory_rows if r.get("first_candidate_run_id") != run_id),
+        "candidate_memory_not_refetched_this_run":len(previous_candidates_not_refetched),
+        "candidate_memory_upgraded_this_run":sum(1 for r in candidate_deltas if r.get("delta_bucket") == "stage_upgraded"),
+        "candidate_memory_downgraded_this_run":sum(1 for r in candidate_deltas if r.get("delta_bucket") == "stage_downgraded"),
+        "candidate_memory_expired_this_run":sum(1 for r in candidate_deltas if r.get("delta_bucket") == "expired_by_policy"),
         "source_frontier_unique_total":len(source_frontier_unique),
+        "source_frontier_total":len(source_frontier_unique),
         "source_frontier_new_this_run":sum(1 for r in source_frontier_unique if r.get("discovery_first_run_id") == run_id),
+        "source_frontier_promoted_this_run":len(source_frontier_queue_next),
+        "source_frontier_ready_next_run":len(source_frontier_queue_next),
         "source_frontier_ready_to_probe":sum(1 for r in source_frontier_unique if str(r.get("frontier_status") or "") in {"resolve_later_high", "keep_frontier", "queued_unresolved"}),
         "source_frontier_deferred":sum(1 for r in source_frontier_unique if "defer" in str(r.get("frontier_status") or "")),
         "telegram_phase_status":tg_obs.get("telegram_phase_status"),
@@ -2232,6 +2556,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "telegram_resolve_cache_hits":tg_obs.get("resolve_cache_hits", 0),
         "telegram_resolve_network_attempts":tg_obs.get("resolve_network_attempts", 0),
         "telegram_resolve_network_budget":tg_obs.get("telegram_governor_decisions_json", ""),
+        "entity_cache_loaded_from_path":tg_obs.get("entity_cache_loaded_from_path", ""),
+        "entity_cache_write_path":tg_obs.get("entity_cache_write_path", ""),
+        "entity_cache_hit_rate":tg_obs.get("entity_cache_hit_rate", ""),
+        "resolved_sources_available_for_history_fetch":tg_obs.get("resolved_sources_available_for_history_fetch", ""),
+        "resolved_sources_used_without_network_resolve":tg_obs.get("resolved_sources_used_without_network_resolve", ""),
         "telegram_sources_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
         "telegram_sources_deferred_unresolved":sum(1 for s in source_rows if "unresolved" in str(s.get("fetch_status") or "")),
         **tg_similar_metrics,
@@ -2344,6 +2673,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"branch","value":git_info.get("branch")},
         {"metric":"increment_status","value":"real increment" if state_meta.get("increment_state_loaded") == "true" else "baseline run, not real increment"},
         {"metric":"previous_run_id","value":state_meta.get("previous_run_id", "")},
+        {"metric":"post_memory_total","value":summary_row.get("post_memory_total")},
+        {"metric":"previous_posts_not_refetched_this_run","value":summary_row.get("previous_posts_not_refetched_this_run")},
+        {"metric":"candidate_memory_total","value":summary_row.get("candidate_memory_total")},
+        {"metric":"candidate_memory_active","value":summary_row.get("candidate_memory_active")},
+        {"metric":"candidate_memory_new_this_run","value":summary_row.get("candidate_memory_new_this_run")},
+        {"metric":"candidate_memory_not_refetched_this_run","value":summary_row.get("candidate_memory_not_refetched_this_run")},
+        {"metric":"candidate_memory_note","value":("Current run shortlist is empty, but candidate_memory has %s active candidates; see 06b/21." % summary_row.get("candidate_memory_active")) if not final_shortlist and summary_row.get("candidate_memory_active") else ""},
         {"metric":"posts_fetched","value":len(posts)},
         {"metric":"fresh_posts","value":len(fresh_rows)},
         {"metric":"kaliningrad_oblast_only","value":sum(1 for r in fresh_rows if r.get("kaliningrad_oblast_only_scope"))},
@@ -2373,6 +2709,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"telegram_cooldown_until","value":summary_row.get("telegram_cooldown_until")},
         {"metric":"telegram_resolve_cache_hits","value":summary_row.get("telegram_resolve_cache_hits")},
         {"metric":"telegram_resolve_network_attempts","value":summary_row.get("telegram_resolve_network_attempts")},
+        {"metric":"entity_cache_loaded_from_path","value":summary_row.get("entity_cache_loaded_from_path")},
+        {"metric":"entity_cache_hit_rate","value":summary_row.get("entity_cache_hit_rate")},
+        {"metric":"resolved_sources_available_for_history_fetch","value":summary_row.get("resolved_sources_available_for_history_fetch")},
         {"metric":"telegram_sources_deferred_by_cooldown","value":summary_row.get("telegram_sources_deferred_by_cooldown")},
         {"metric":"telegram_sources_deferred_unresolved","value":summary_row.get("telegram_sources_deferred_unresolved")},
         {"metric":"telegram_similar_channels_status","value":summary_row.get("telegram_similar_channels_status")},
@@ -2383,6 +2722,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"source_frontier_unique_total","value":summary_row.get("source_frontier_unique_total")},
         {"metric":"source_frontier_new_this_run","value":summary_row.get("source_frontier_new_this_run")},
         {"metric":"source_frontier_ready_to_probe","value":summary_row.get("source_frontier_ready_to_probe")},
+        {"metric":"source_frontier_promoted_this_run","value":summary_row.get("source_frontier_promoted_this_run")},
+        {"metric":"source_frontier_ready_next_run","value":summary_row.get("source_frontier_ready_next_run")},
         {"metric":"source_frontier_deferred","value":summary_row.get("source_frontier_deferred")},
         {"metric":"llm_limit_source","value":llm_limit_snapshot.get("llm_limit_source")},
         {"metric":"llm_model","value":llm_model},
@@ -2391,6 +2732,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     ]
 
     compact_final_shortlist = [compact_shortlist_row(r) for r in final_shortlist]
+    manual_review_queue = candidate_memory_top or compact_final_shortlist or [{"_sheet_note":"no active candidate memory/manual review rows yet"}]
+    candidate_memory_sheet = candidate_memory_rows or [{"_sheet_note":"candidate memory is empty; no current or previous candidate rows reached memory criteria"}]
+    candidate_memory_top_sheet = candidate_memory_top or [{"_sheet_note":"no active candidate memory rows"}]
+    previous_not_refetched_sheet = previous_candidates_not_refetched or [{"_sheet_note":"no previous active candidates missed by this run"}]
+    candidate_deltas_sheet = candidate_deltas or [{"_sheet_note":"no candidate deltas yet"}]
+    source_frontier_queue_sheet = source_frontier_queue_next or [{"_sheet_note":"no source frontier queue rows"}]
     favorites_sheet = favorites or [{"favorite_id":"","candidate_id":"","first_seen_run_id":"","last_seen_run_id":"","seen_run_count":"","source_title":"","post_url":"","short_summary":"","why_selected":"","best_image_preview":"","candidate_score":"","review_status":"","manual_decision":"","publication_readiness":"","notes":""}]
     candidates_sheet = candidates or [{"candidate_id":"","current_stage":"","source_title":"","post_url":"","short_summary":"","candidate_score":"","image_reviewable":"","image_publication_ready":"","llm_decision":"","manual_decision":"","notes":""}]
     telegram_observability_rows = [tg_obs] if tg_obs else [{"run_id":run_id,"telegram_phase_status":"not_configured"}]
@@ -2411,13 +2758,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "03b_gate_counts":independent_gate_counts,
         "04_review_queue":review_queue,
         "04a_final_shortlist":compact_final_shortlist,
+        "04a_current_run_shortlist":compact_final_shortlist,
         "04a_final_shortlist_raw":final_shortlist,
         "04b_needs_llm_retry":llm_error_sheet_rows,
         "04c_debug_rejects":debug_rejects,
         "05_favorites":favorites_sheet,
         "06_candidates_all":candidates_sheet,
+        "06a_candidate_memory":candidate_memory_sheet,
+        "06b_candidate_memory_top":candidate_memory_top_sheet,
         "07_new_posts_this_run":[r for r in new_posts if any(inc.get("entity_id") == r.get("post_id") and inc.get("new_this_run") == "yes" for inc in increment)],
         "07_current_run_posts":new_posts,
+        "07b_prev_candidates_not_refetch":previous_not_refetched_sheet,
         "08_dropped_posts":dropped,
         "09_image_quality":media_rows,
         "10_good_text_weak_media":[r for r in dropped if r.get("current_stage") == "good_text_weak_media"],
@@ -2425,6 +2776,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "12_sources_discovered":discovered_rows,
         "12a_source_frontier_unique":source_frontier_unique,
         "12b_telegram_similar_channels":similar_sheet_rows,
+        "12c_source_frontier_queue_next":source_frontier_queue_sheet,
         "13_sources_monitored":source_rows,
         "14_verifier_reports":[],
         "14b_pre_candidates_needing_llm":[r for r in pre_candidates if r.get("current_stage") == "pre_candidate_needs_llm"],
@@ -2435,6 +2787,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "18_place_lexicon_matches":place_match_rows,
         "19_image_model_observability":image_model_observability,
         "20_telegram_rate_observability":telegram_observability_rows,
+        "21_manual_review_queue":manual_review_queue,
+        "22_candidate_deltas":candidate_deltas_sheet,
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)

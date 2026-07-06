@@ -188,3 +188,15 @@ The XLSX has:
 - `12b_telegram_similar_channels` exists even if the run has no recommendations or Telethon reports `not_supported_by_telethon_version`.
 - `20_telegram_rate_observability` exists and shows request caps, cache/network resolve counts, FloodWait/cooldown/degraded-mode state and private ledger path.
 - Public XLSX sheets contain no Telegram `channel_id`, `access_hash`, auth bundles, tokens or raw private payloads.
+
+
+## MVP-1.z4 validation checklist
+
+- `06a_candidate_memory` exists and keeps previous candidates even when their source is not refetched.
+- `06b_candidate_memory_top`, `21_manual_review_queue` and `22_candidate_deltas` make cumulative review possible even if `04a_current_run_shortlist` is empty.
+- `07b_prev_candidates_not_refetch` shows retained previous candidates skipped by budget/cooldown/not-configured source status.
+- `12c_source_frontier_queue_next` contains a small but nonzero actionable queue from P0/P1/P2 frontier rows; 500+ catalog rows must not be invisible.
+- Entity-cache observability includes loaded path/write path/hit rate/resolved-source counts.
+- Metadata-only image rows are `needs_actual_image_fetch`, not final weak/strong image decisions.
+- Single-location Kaliningrad cards are not rejected as multi-region roundups.
+- Supabase `google_ai` limiter remains authoritative; no direct `GOOGLE KEY2` bypass; no publishing; no secrets in XLSX.
