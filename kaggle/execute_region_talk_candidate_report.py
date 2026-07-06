@@ -144,7 +144,15 @@ def wait_dataset_ready(client: Any, dataset_ref: str, *, expected_files: list[st
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
     safe_slug = slugify(run_id, max_len=28)
+    try:
+        git_sha = os.popen("git rev-parse HEAD 2>/dev/null").read().strip()
+        git_branch = os.popen("git rev-parse --abbrev-ref HEAD 2>/dev/null").read().strip()
+    except Exception:
+        git_sha = ""
+        git_branch = ""
     env_config = {
+        "GIT_SHA": os.environ.get("GIT_SHA", git_sha),
+        "GIT_BRANCH": os.environ.get("GIT_BRANCH", git_branch),
         "REGION_TALK_RUN_ID": run_id,
         "REGION_TALK_DRY_RUN": "1",
         "REGION_TALK_DISABLE_PUBLISH": "1",
