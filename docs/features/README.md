@@ -41,7 +41,7 @@
 
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
 - `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: MVP-0 `event_detail_related`, localStorage + Supabase telemetry/profile без auth
-- `docs/features/personal-email-announcements/README.md` — personal email announcements: weekly recommendation email + private static recommendation page + feedback/LLM correction loop (design only)
+- `docs/features/personal-email-announcements/README.md` — personal email announcements: weekly recommendation email + secret-link/static recommendation page + YDB-owned feedback/metrics/LLM correction loop (design only)
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
 
 ## Как добавлять новую фичу

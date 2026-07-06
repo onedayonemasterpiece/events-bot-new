@@ -1,6 +1,6 @@
 # Personal email announcements
 
-> **Status:** architecture/design only (2026-07-06). No schema migration, sender, static-page generator or production send is implemented in this document.
+> **Status:** architecture/design only (2026-07-06). No YDB schema, sender, static-page generator or production send is implemented in this document.
 >
 > **Product goal:** возвращать пользователя на `kenigevents.ru` и повышать точность рекомендаций через регулярное письмо + персональную статическую страницу + явную обратную связь.
 
@@ -10,126 +10,214 @@
 
 - письмо раз в выбранный период, базовый MVP cadence — **weekly**;
 - в письме: один hero-event и три compact recommendations;
-- ссылка на заранее собранную приватную статическую страницу с несколькими десятками личных рекомендаций;
+- ссылка на заранее собранную secret-link/static-gated страницу с несколькими десятками личных рекомендаций;
 - на странице — продуктовая обратная связь по точности: `всё интересно`, `частично`, `неточная рекомендация`, плюс per-item feedback;
 - обратная связь агрегируется и анализируется LLM offline, чтобы корректировать профиль персонализации и будущие рекомендации.
 
-Это **не** transactional reminder about a followed event. Transactional calendar/follow reminders and cancellation/reschedule notices are a separate feature class. Personal email announcements are subscription/marketing-like recommendations and therefore require stricter opt-in, unsubscribe, frequency caps and deliverability gates.
+Это **не** transactional reminder about a followed event. Transactional calendar/follow reminders and cancellation/reschedule notices are a separate feature class. Personal email announcements are subscription/marketing-like recommendations and therefore require stricter opt-in, unsubscribe, frequency caps, proof-of-consent and deliverability gates.
 
 ## Requirement traceability
 
 | ID | Requirement | Decision / coverage |
 | --- | --- | --- |
-| R01 | Static site launch context | Static-first: site remains crawlable and useful without this feature; email pages are generated as static artifacts. |
-| R02 | Personalization from authenticated and unauthenticated actions | Reuse `unsigned-personalization` profile horizons; auth identity is an optional merge layer, not a prerequisite. |
-| R03 | Authenticated user gives email and may receive mail | Use Supabase Auth/Yandex email or verified manual notification email, only after explicit personal-announcement opt-in. |
-| R04 | Anonymous user may provide email and receive mail | Allow anonymous subscription only after explicit email capture + double opt-in; link to current `anon_id` cautiously and never assume cross-device identity. |
-| R05 | Increase return visits and recommendation accuracy | Primary metrics are return visits from email/static page and feedback-corrected recommendation accuracy, not raw send volume. |
+| R01 | Static site launch context | Static-first: site remains crawlable and useful without this feature; personal recommendation pages are generated as static artifacts or served through a thin token gate. |
+| R02 | Personalization from authenticated and unauthenticated actions | Reuse static-site profile horizons/signals; auth identity is an optional merge layer, not a prerequisite. Feature-owned state is in YDB. |
+| R03 | Authenticated user gives email and may receive mail | Supabase/Yandex Auth may provide an external identity/email source, but the verified email, consent and subscription state must be materialized in YDB before any send. |
+| R04 | Anonymous user may provide email and receive mail | Allow anonymous subscription only after explicit email capture + double opt-in; bind to current `anon_id` cautiously and never assume cross-device identity. |
+| R05 | Increase return visits and recommendation accuracy | Primary metrics are email-link return, personal-page activity and feedback-corrected recommendation accuracy, not raw send/open volume. |
 | R06 | Recommend genuinely interesting events | Ranking uses multi-horizon profile + hard freshness/status filters + diversity/fatigue + explicit feedback corrections. |
 | R07 | Periodic email, for example weekly | MVP default weekly; no-send if recommendation quality/freshness is below threshold; user preference can later change cadence. |
 | R08 | Email has hero and 3 recommendations | MVP renders **hero = rank #1** plus three compact cards = four visible ranked items. Analytics records ranks 1–4; A/B may later test hero counted as one of three. |
-| R09 | Link to pre-generated personal static page with dozens of recs | Generate private, unindexed static pages/manifests before outbox send; email links point to the already published artifact. |
-| R10 | Product feedback + LLM analysis for personalization correction | Feedback is stored as explicit labels; LLM runs offline to classify causes/corrections, with deterministic guardrails before profile updates. |
+| R09 | Link to pre-generated personal static page with dozens of recs | Generate unindexed pages/manifests before outbox send; email links point only to already published artifacts or a thin token gate for those artifacts. |
+| R10 | Product feedback + LLM analysis for personalization correction | Feedback is stored as explicit labels in YDB; LLM runs offline to classify causes/corrections, with deterministic guardrails before profile updates. |
+| R11 | YDB ownership blocker from review | All feature-owned subscriptions, consent proof, recommendation issues, outbox, feedback, metrics and LLM evidence are YDB-owned; Object Storage is artifact-only; Supabase/Auth is identity-only when used. |
+| R12 | Production-quality gates | Consent evidence, outbox state machine, page-token threat model, YDB retention/TTL, metrics schema, deliverability and phased rollout gates are explicit before implementation. |
 
 ## User and consent model
 
 ### Authenticated users
 
-Source of email:
+Possible source of email:
 
-1. Supabase Auth email from Yandex OAuth/custom provider when present and verified enough for notification use.
+1. External auth provider email, for example Supabase Auth backed by Yandex OAuth/custom provider, when present and suitable for notification use.
 2. Manual fallback email entered on the static site.
 
 Required state before sending:
 
-- `personal_announcement_subscribed_at` is set;
-- current email is present, valid, and not suppressed;
-- user accepted this recommendation-email channel separately from event-follow transactional notifications;
+- YDB `pa_subscription` is active for `channel = personal_email_announcement`;
+- current verified/manual email and `email_hash` are present in YDB;
+- no active YDB `pa_suppression` row exists for the email hash;
+- separate YDB consent evidence exists for personal-data/email processing and recommendation-email/ad-like subscription;
 - unsubscribe/preference URL is available for the issue.
+
+Supabase/Auth, if used by another part of the site, is only an external identity/email source. It is not the source of truth for this feature, and a valid auth email alone is not permission to send.
 
 ### Anonymous users
 
-Anonymous subscription is allowed, but it is not the same as account ownership.
+Anonymous subscription is allowed, but it is not the same as account ownership and is **not** part of the first public beta.
 
 Required state before sending:
 
 - browser has consented personalization profile (`anon_id`, `session_id`) compatible with the static-site contract;
 - user enters an email on site;
 - system sends double-opt-in confirmation; no recommendation issue is sent before confirmation;
-- subscription row records the source `anon_id`, consent version, signup page/surface and confirmation timestamp;
-- if the anonymous user later authenticates, merge is explicit and auditable.
+- YDB consent evidence records the source `anon_id`/subject hash, consent versions, signup surface/path and confirmation timestamp;
+- if the anonymous user later authenticates, merge is explicit and auditable in YDB.
 
 Guardrail: do not leak the user profile through predictable URLs, public Data API reads, search indexing or email forwarding metadata.
+
+### Consent evidence
+
+Production design must store consent proof as its own YDB entity, not only booleans on a subscription row. Minimum consent evidence fields:
+
+| Field | Purpose |
+| --- | --- |
+| `consent_id` | Stable evidence id. |
+| `subscription_id` | Subscription linked to the consent event. |
+| `email_hash` | Recipient join/suppression key without exposing raw email in metrics. |
+| `subject_type` | `auth_user` or `anonymous`. |
+| `subject_id_hash` | Auth user id hash or anonymous id hash. |
+| `channel` | `personal_email_announcement`. |
+| `consent_kind` | `personal_data_processing`, `advertising_email`, `recommendation_email`, `unsubscribe`, `revocation`. |
+| `consent_text_version` | Exact text/version shown to the user. |
+| `privacy_policy_version` | Privacy policy version accepted at signup. |
+| `signup_surface` / `signup_url_path` | Site surface and path where consent was given. |
+| `ip_hash` / `user_agent_hash` | Minimal abuse/proof metadata, never raw by default. |
+| `double_opt_in_token_hash` | Confirmation token hash, not token plaintext. |
+| `double_opt_in_sent_at` / `double_opt_in_confirmed_at` | Double-opt-in evidence. |
+| `revoked_at` / `created_at` | Revocation and creation timestamps. |
+
+MVP UI must use at least two separate checkbox/consent events: (1) processing the email/personal data for recommendations and (2) receiving regular personal email announcements.
 
 ## Architecture overview
 
 ```text
 Static site interactions
   -> local profile + compact telemetry/feedback
-  -> personalization Supabase/Postgres (profiles, subscriptions, outbox, feedback)
+  -> same-origin API endpoint
+  -> YDB (subscriptions, consent evidence, metrics, feedback, LLM evidence)
 
 Batch recommendation job (weekly or operator-triggered)
   -> reads future event catalog snapshot from Fly SQLite/static export
-  -> reads compact profile/subscription snapshots from personalization DB
+  -> reads compact subscription/profile/feedback snapshots from YDB
   -> ranks candidates and applies freshness/diversity/fatigue/suppression gates
-  -> writes recommendation issue rows
-  -> renders private static recommendation pages/manifests to kenigevents.ru storage
-  -> enqueues email_outbox rows only after static artifacts are published
+  -> writes recommendation issue/card rows to YDB
+  -> renders secret-link/static-gated recommendation pages/manifests to object storage
+  -> enqueues YDB outbox rows only after static artifacts are published
 
 Email worker
-  -> rate-limit/suppression/dry-run gates
-  -> sends through approved provider
-  -> records provider/delivery events
+  -> polls YDB outbox with due-shards and leases
+  -> rechecks subscription, consent, suppression, artifact and event validity in YDB/Fly export
+  -> sends through approved provider after rate-limit/dry-run gates
+  -> records provider ids, delivery webhooks and suppressions in YDB
 
 Feedback page
-  -> captures issue-level and recommendation-level feedback
-  -> updates local profile immediately when safe
+  -> captures issue-level and recommendation-level feedback through same-origin endpoint
+  -> writes labels/metrics to YDB
+  -> may update local profile immediately when safe
   -> queues offline LLM feedback analysis
-  -> accepted corrections feed future profile/ranking snapshots
+  -> accepted corrections feed future profile/ranking snapshots with audit/revert rows
 ```
 
 ## Storage and database ownership
 
-Follow the project dual-DB boundary:
+Follow the feature boundary below:
 
-- **Fly SQLite** remains source of truth for canonical events, source imports, lifecycle, public page generation state and scheduler state tied to the event catalog.
-- **Personalization Supabase/Postgres** owns visitor/user profiles, email subscription state, recommendation issues, static personal-page metadata, email outbox/delivery state, feedback and LLM correction evidence.
-- **Object Storage/CDN** owns static HTML/JSON artifacts for personal pages. Do not store large rendered pages in either DB.
+- **Fly SQLite** remains the source of truth for canonical events, source imports, lifecycle/status, public static event-page generation state and scheduler state tied to the event catalog.
+- **YDB** owns all feature-owned data for personal email announcements: subscriptions, consent evidence, verified/manual emails, suppressions, recommendation issues, ranked recommendation cards, static personal-page metadata, email outbox, provider delivery events, feedback, clicks, page opens, attribution events, daily/weekly aggregates, quality metrics, LLM review evidence and accepted/reverted correction audit.
+- **Object Storage/CDN** owns only rendered static HTML/JSON artifacts for personal pages. Do not store large rendered pages in YDB. Do not treat object storage as authoritative subscription, consent, feedback, outbox or metrics storage.
+- **Supabase/Auth provider**, if used elsewhere in the project, is only an external identity/email source. It is not the source of truth for this feature. Before any send, the verified email, subscription state, consent evidence and suppression checks must pass in YDB.
 
-Browser-exposed code may use only publishable personalization keys. Backend/batch/worker paths may use direct Postgres or secret keys. Public direct table writes/reads for profiles, subscriptions, outbox and feedback are forbidden; use same-origin endpoints or tightly reviewed RPCs with explicit grants/RLS.
+Browser-exposed code must not receive YDB credentials and must not write to YDB directly. Public interactions use same-origin endpoints with rate limits, idempotency keys, bot/preview guards, least-privilege service accounts and service-side validation. YDB tokens stay server-side; prefer token-rotation-capable service-account/metadata flows over fixed long-lived access tokens.
 
-Current Supabase platform direction makes explicit grants part of the contract: Data API reachability is controlled by Postgres grants first, then RLS. Personalization tables/views exposed to browser roles must include explicit `GRANT` statements plus RLS policies. RPC/functions need explicit `EXECUTE` grants, safe implementation/review, and RLS on underlying tables where applicable.
+YDB design choices for MVP:
 
-## Draft entities
+- use **row-oriented tables** for subscription/outbox/feedback/metrics OLTP point/range workloads;
+- design primary keys for access patterns and avoid hot monotonically increasing keys;
+- use due-shards for outbox polling instead of one hot `status = ready` partition;
+- use TTL for short-lived raw metrics and debug evidence where supported/configured;
+- do not use column-oriented tables for critical subscription/outbox state in MVP; keep columnar/OLAP experiments outside the send-critical path.
 
-Names are architecture placeholders; apply only after migration review.
+## YDB entity groups
+
+Names are architecture placeholders; apply only after YDB schema review.
+
+| Group | YDB tables | Primary access pattern |
+| --- | --- | --- |
+| Subscription | `pa_subscription`, `pa_subscription_by_identity`, `pa_subscription_by_email_hash` | send eligibility, preference center, dedupe |
+| Consent | `pa_consent_evidence` | prove opt-in/revocation |
+| Suppression | `pa_suppression` | immediate no-send by email hash |
+| Issue | `pa_recommendation_issue`, `pa_recommendation_card` | render email/page, debug ranking |
+| Static page | `pa_static_page` | token validation, expiry, artifact state |
+| Outbox | `pa_email_outbox`, `pa_email_outbox_by_due_shard` | worker polling with leases |
+| Delivery | `pa_delivery_event`, `pa_provider_webhook_dedupe` | bounces/complaints/provider evidence |
+| Feedback | `pa_feedback`, `pa_feedback_by_subscription` | learning loop, quality metrics |
+| Metrics | `pa_metric_event_raw`, `pa_metric_daily`, `pa_metric_by_issue`, `pa_quality_guardrail_daily` | return/quality/ops dashboards |
+| LLM review | `pa_llm_review`, `pa_profile_correction_audit` | bounded offline correction loop |
+
+### Draft entities
 
 | Entity | DB | Purpose | Public access |
 | --- | --- | --- | --- |
-| `personal_announcement_subscription` | personalization Postgres | email, hash, auth user id or anon id, consent, cadence, locale, unsubscribe state | no direct table access |
-| `personal_announcement_preference` | personalization Postgres | cadence, topics/cities/date windows, pause state, email channel settings | own-user read/update only through safe endpoint/RPC |
-| `personal_announcement_issue` | personalization Postgres | one planned/sent digest instance per subscription and period | service only |
-| `personal_announcement_recommendation` | personalization Postgres | ranked event ids, score bands, reason masks, hero flag, freshness/fatigue metadata | service only |
-| `personal_static_page` | personalization Postgres | opaque page token/hash, storage key, expiry, build id, noindex flag, issue id | service only; page served from storage |
-| `personal_announcement_feedback` | personalization Postgres | issue-level and per-card labels from user | append through safe endpoint/RPC |
-| `personal_feedback_llm_review` | personalization Postgres | offline LLM classification of why recommendation was right/wrong and proposed corrections | service only |
-| `email_outbox` / delivery events | personalization Postgres | durable send queue and provider evidence | service only |
+| `pa_subscription` | YDB row table | email channel subscription, cadence, locale, auth/anon linkage, active/pause/unsub state | no direct browser access |
+| `pa_consent_evidence` | YDB row table | auditable proof of personal-data/recommendation-email consent, double opt-in and revocation | service only |
+| `pa_suppression` | YDB row table | email hash suppression for unsubscribe, bounce, complaint, abuse/manual block | service only |
+| `pa_recommendation_issue` | YDB row table | one planned/sent digest instance per subscription and period | service only |
+| `pa_recommendation_card` | YDB row table | ranked event ids, score bands, reason masks, hero flag, freshness/fatigue metadata | service only |
+| `pa_static_page` | YDB row table | page token hash, storage key, expiry, build id, noindex flag, issue id, publish state | token-gated endpoint only |
+| `pa_email_outbox` | YDB row table | durable send queue, idempotency, leases, retries and provider message ids | service only |
+| `pa_delivery_event` | YDB row table | provider webhook evidence, bounce/complaint/delivery state | service only |
+| `pa_feedback` | YDB row table | issue-level and per-card labels/free text after PII stripping | append through same-origin endpoint |
+| `pa_metric_event_raw` | YDB row table with TTL | short-lived raw opens/clicks/feedback/delivery events | service only |
+| `pa_metric_daily` | YDB row table | long-lived daily aggregates for product/quality/ops dashboards | service/admin only |
+| `pa_llm_review` | YDB row table | offline LLM classification packet/result and bounded correction proposal | service only |
+| `pa_profile_correction_audit` | YDB row table | accepted/rejected/reverted profile correction audit | service only |
 
 Email addresses should be encrypted or stored only where strictly needed for sending; hashes are used for joins, rate limits and suppression checks. Suppression records must outlive ordinary profile retention enough to prevent accidental resubscribe sends.
 
-## Static personal page contract
+### Key-shape notes
 
-Personal page URL requirements:
+Outbox polling must avoid a single hot partition:
 
-- unguessable token/path, for example `/personal/r/<token>/` or preview-prefixed equivalent;
-- `noindex, nofollow`, omitted from sitemap and internal crawlable navigation;
-- expires or becomes stale after the recommendation window;
-- does not embed raw profile vectors, hidden tags, email address or internal score details;
-- contains enough rendered HTML to work without client-side ranking;
-- feedback controls use POST/same-origin endpoint or safe RPC, not direct public table writes;
-- page works if telemetry write fails: user can still open event cards.
+```text
+pa_email_outbox_by_due_shard
+PK: (status, due_shard, next_attempt_at, message_id)
+due_shard = hash(message_id) % 64
+```
 
-Recommended content blocks:
+Raw metrics should be short-lived and shardable:
+
+```text
+pa_metric_event_raw
+PK: (event_date, shard, occurred_at, event_id)
+TTL target: 30-90 days on occurred_at, according to actual YDB table capabilities/configuration
+```
+
+Long-lived analytics should live in aggregate tables (`pa_metric_daily`, `pa_metric_by_issue`, `pa_metric_by_subscription_week`, `pa_quality_guardrail_daily`) rather than keeping raw click/open rows forever.
+
+## Static personal page contract and token threat model
+
+The MVP page is not truly private if it is only an object-storage file behind an unguessable URL. It is a **secret-link static artifact**. This is acceptable for MVP only with explicit limitations and controls:
+
+- token has at least 128 bits of randomness;
+- URL contains no `anon_id`, `user_id`, `email_hash`, sequential `issue_id` or internal score id;
+- YDB stores only `token_hash`, never token plaintext;
+- page token, unsubscribe token and feedback token are separate;
+- artifact contains no email address, raw profile vectors, hidden tags or internal score details;
+- artifact is `noindex, nofollow`, omitted from sitemap and not linked from public navigation;
+- expiry/revocation are explicit in YDB;
+- pure static expiry is best-effort through object deletion/manifest removal, not instant access revocation.
+
+If stronger privacy is required, use a thin dynamic gate:
+
+```text
+GET /personal/r/{token}
+  -> hash token
+  -> check YDB pa_static_page state, expiry, revoked/suppressed flags
+  -> stream static artifact or 302 to a short-lived signed object URL
+```
+
+Recommended page content blocks:
 
 1. Hero recommendation with clear reason text and CTA.
 2. `Подобрали ещё` grid/feed with 20–60 future events.
@@ -148,7 +236,7 @@ Hard gates before ranking:
 - suppress events already strongly negative for the user;
 - suppress recently emailed events unless resurfacing is justified by explicit feedback or upcoming deadline;
 - cap one venue/organizer/category dominance;
-- avoid sending if fewer than a minimum number of fresh, acceptable recommendations exist.
+- avoid sending if fewer than 4 visible valid email recommendations or fewer than the configured page minimum exist.
 
 Scoring inputs:
 
@@ -165,6 +253,8 @@ LLM is not in the per-recipient hot path. It may run offline for:
 - feedback reason classification;
 - weekly quality audit of sample issues;
 - wording/reason generation after deterministic facts are already chosen.
+
+Deterministic reason text is required in first sends. Do not let LLM invent event facts, dates, prices, source URLs or hidden profile explanations in email/static artifacts.
 
 ## Feedback and LLM correction loop
 
@@ -204,7 +294,7 @@ Deterministic guards own the final write:
 - cap correction deltas;
 - no profile update from crawler/preview/automation feedback;
 - no correction from a single ambiguous free-text note without explicit label;
-- keep audit rows so a bad correction batch can be reverted.
+- keep YDB audit rows so a bad correction batch can be reverted.
 
 ## Email content contract
 
@@ -214,11 +304,46 @@ MVP layout:
 2. Preheader: one-line value proposition.
 3. Hero card: top-ranked event, large image if safe, date/place/CTA/reason.
 4. Three compact cards: ranks 2–4 with concise reasons.
-5. Link: `Открыть мою подборку` to the pre-generated static page.
+5. Link: `Открыть мою подборку` to the pre-generated static/gated page.
 6. Feedback micro-CTA: `Подборка попала в интересы?` linking to the same page feedback anchor.
 7. Preference/unsubscribe footer.
 
 The hero is rank #1 in the recommendation issue, but the email still shows three additional compact cards to give enough choice. This keeps analytics simple while preserving the user's proposed `hero + 3` format.
+
+## Outbox state machine
+
+The outbox is not just a table of rows; it is a leased state machine in YDB:
+
+```text
+planned
+  -> page_building
+  -> page_published
+  -> ready_to_send
+  -> sending_locked
+  -> sent | failed_retryable | failed_permanent | suppressed | cancelled
+```
+
+Required fields:
+
+| Field | Purpose |
+| --- | --- |
+| `idempotency_key` | `subscription_id + period_start + channel + issue_version`; unique no-duplicate send guard. |
+| `lease_owner` / `lease_until` | Worker lock. |
+| `attempt_count` / `next_attempt_at` | Retry control. |
+| `provider` / `provider_message_id` | Provider correlation. |
+| `last_error_code` / `last_error_class` | Retry/suppression decision. |
+| `created_at` / `updated_at` / `sent_at` | Audit and latency metrics. |
+
+Before every send, the worker must recheck in YDB and the current event snapshot/export:
+
+- subscription active and not paused/unsubscribed;
+- consent not revoked;
+- email hash not suppressed;
+- issue is still valid and idempotency key has not sent;
+- static artifact is published;
+- visible events are not cancelled/past;
+- at least 4 visible valid recommendations remain;
+- sender/recipient/provider rate limits allow send.
 
 ## Deliverability, compliance and safety gates
 
@@ -226,31 +351,58 @@ Treat these emails as promotional/subscription messages:
 
 - explicit opt-in per channel;
 - visible unsubscribe in the email body;
-- RFC 8058-style one-click `List-Unsubscribe` / `List-Unsubscribe-Post` headers for marketing/promotional sends;
-- suppression list checked before enqueue and immediately before send;
+- idempotent one-click unsubscribe that does not require auth;
+- RFC 8058-style `List-Unsubscribe` / `List-Unsubscribe-Post` headers for marketing/promotional sends;
+- suppression checked before enqueue and immediately before send;
 - accurate sender/from/reply-to/subject;
 - physical mailing address or legally approved sender identity block before production;
 - frequency caps per recipient and sender;
-- bounce/complaint ingestion before scale-up;
+- provider webhook ingestion for delivery/deferred/bounce/complaint before scale-up;
 - dry-run/canary gates before real weekly sends.
+
+Production deliverability gates:
+
+- SPF and DKIM configured and verified;
+- DMARC configured and aligned for the sending domain before public beta;
+- TLS supported by the provider path;
+- PTR/reverse DNS/provider reputation checked when applicable to the sending setup;
+- Postmaster Tools or equivalent spam-rate monitoring configured before scale;
+- marketing/recommendation From domain/stream is separated from transactional reminders where provider supports it;
+- domain warmup and send caps defined;
+- complaint/bounce webhooks dedupe into `pa_provider_webhook_dedupe` and suppress affected hashes in YDB.
+
+Russian compliance gates for this design stage:
+
+- email recommendation messages are treated as ad/information subscription unless counsel classifies otherwise;
+- consent to receive advertising/recommendation emails is separate from consent to process the email/personal data;
+- YDB keeps evidence sufficient to prove prior consent and revocation;
+- unsubscribe/revocation must stop further sends immediately in product behavior, even if another jurisdiction allows a longer handling window;
+- privacy/consent text versions are immutable and linked from every consent evidence row.
 
 Implementation source checks for this design stage:
 
+- [YDB architecture](https://ydb.tech/docs/en/concepts/architecture) documents strong-consistency/multi-row transaction use cases and primary-key physical sorting/partitioning behavior.
+- [YDB table model](https://ydb.tech/docs/en/concepts/datamodel/table) distinguishes row-oriented vs column-oriented tables; [CDC](https://ydb.tech/docs/en/concepts/cdc) and [secondary-index docs](https://ydb.tech/docs/en/yql/reference/syntax/alter_table/indexes) currently emphasize row-oriented support for these operational features.
+- [YDB row primary-key guidance](https://ydb.tech/docs/en/dev/primary-key/row-oriented) warns against monotonically increasing hot keys; [TTL docs](https://ydb.tech/docs/en/concepts/ttl) describe TTL-driven deletion/eviction.
+- [YDB authentication docs](https://ydb.tech/docs/en/security/authentication) state that token privacy is central and token-rotation modes are safer than fixed access-token mode; [Yandex Cloud IAM token docs](https://yandex.cloud/en/docs/iam/concepts/authorization/iam-token) describe short-lived IAM tokens.
 - [Gmail sender FAQ](https://support.google.com/mail/answer/14229414?hl=en) says one-click unsubscribe is required for marketing/promotional messages, not transactional ones.
-- [FTC CAN-SPAM compliance guide](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business) treats commercial email as requiring truthful headers/subjects and a working opt-out path.
-- [Supabase securing your API](https://supabase.com/docs/guides/api/securing-your-api) and [RLS docs](https://supabase.com/docs/guides/database/postgres/row-level-security) require explicit grants + RLS for Data API access control.
+- [FTC CAN-SPAM compliance guide](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business) is a useful international baseline for truthful headers/subjects and working opt-out.
+- [Russian advertising law Article 18](https://www.consultant.ru/document/cons_doc_LAW_58968/f892dec1383709792452f18d36e7043306e2be0a/) requires prior consent for advertising over telecommunication networks and puts proof burden on the sender/distributor.
+- [Russian personal-data law Article 9](https://www.consultant.ru/document/cons_doc_LAW_61801/6c94959bc017ac80140621762d2ac59f6006b08c/) requires personal-data consent to be specific, informed, conscious and unambiguous, and documented separately from other information/documents.
 
 ## Metrics
 
-Primary:
+Primary success metrics:
 
-- email-to-site return rate;
-- personal page open rate;
-- recommendation click/ticket/share/save rate;
+- email link click rate;
+- personal page server open rate;
+- event detail click rate;
+- ticket click / save / share rate from the personal page;
 - `all_interesting` / `partially_interesting` / `inaccurate` split;
 - per-item negative feedback rate;
-- unsubscribe/complaint rate;
 - repeat return after receiving a digest.
+
+Open rate is diagnostic only; it is not a primary success metric.
 
 Quality guardrails:
 
@@ -258,51 +410,118 @@ Quality guardrails:
 - stale/past/cancelled event leakage count = 0;
 - diversity cap violations = 0;
 - LLM correction accepted/rejected/reverted counts;
-- feedback-to-profile-latency for accepted corrections.
+- feedback-to-profile-latency for accepted corrections;
+- unsubscribe and complaint rates.
 
 Operational:
 
 - static page build success before email enqueue;
 - outbox pending/sent/failed/suppressed counts;
-- provider bounce/complaint rates;
-- Postgres storage growth and retention job success.
+- provider bounce/complaint/defer rates;
+- YDB read/write latency, throttling/overload count, table storage growth, TTL cleanup health and aggregate-build lag;
+- object-storage artifact publish/delete success.
+
+Schema-first metric events in YDB:
+
+| Metric event | Purpose |
+| --- | --- |
+| `issue_created` | Recommendation issue generated. |
+| `page_published` | Static/gated page artifact ready before enqueue. |
+| `email_enqueued` / `email_sent` / `email_suppressed` | Outbox funnel. |
+| `provider_delivered` / `provider_deferred` / `provider_bounced` / `provider_complained` | Provider feedback. |
+| `email_link_click` | Return attribution from email. |
+| `personal_page_open` | Server-side page open. |
+| `event_card_click` / `ticket_click` / `save` / `share` | Recommendation outcome. |
+| `feedback_issue_quality` / `feedback_item_label` | Explicit quality labels. |
+| `unsubscribe` | Channel stop event. |
+| `no_send_low_quality` | Quality gate prevented send. |
+
+Retention policy:
+
+| Data | Retention target |
+| --- | ---: |
+| `pa_metric_event_raw` | 30-90 days via TTL, then aggregates only. |
+| `pa_delivery_event` | 180+ days or longer if provider disputes/compliance require. |
+| `pa_feedback` | Longer-lived because it trains personalization; PII-stripped where possible. |
+| `pa_consent_evidence` / `pa_suppression` | Long-lived/audit retention; do not TTL like raw metrics. |
+| `pa_llm_review` | Keep packet/result/audit until correction is superseded/reverted and policy allows deletion. |
 
 ## MVP phases
 
 ### Phase 0 — docs and contracts
 
 - This document.
-- Product decisions for consent/cadence/hero format/private page/feedback labels.
-- Data model draft and migration review checklist.
+- Product decisions for consent/cadence/hero format/token model/private page/feedback labels.
+- YDB entity groups, consent evidence schema, outbox state machine, retention/TTL and acceptance gates.
 
-### Phase 1 — dry-run generator
+### Phase 1 — YDB dry-run only
 
-- Offline job builds recommendation issues for internal test subscribers only.
-- Static pages render to preview prefix with no emails sent.
-- Human QA verifies recommendation quality and feedback UX.
+- Generate issues/cards/static artifacts for internal test subscriptions.
+- Store all issues, page metadata, QA labels and dry-run metrics in YDB.
+- No emails are sent.
 
-### Phase 2 — internal email canary
+### Phase 2 — authenticated internal canary
 
-- Durable outbox dry-run first, then real sends to operators only.
-- Unsubscribe/preference links verified.
-- Delivery events and feedback rows verified.
+- Real email only to operators/internal authenticated test subscriptions.
+- Validate unsubscribe, suppression, delivery webhooks, page token expiry and bounce/complaint ingestion.
+- Postbox/provider dry-run must pass before any real send.
 
-### Phase 3 — limited opt-in beta
+### Phase 3 — limited authenticated opt-in beta
 
 - Allow authenticated users to subscribe.
-- Anonymous email capture remains behind double opt-in and rate limits.
+- Anonymous email capture remains disabled.
+- Preference center supports unsubscribe/pause/reset at minimum.
 - Weekly send cap and no-send quality threshold enabled.
 
-### Phase 4 — learning loop
+### Phase 4 — anonymous double opt-in beta
 
-- LLM feedback analysis runs offline on beta feedback.
-- Accepted corrections update profile snapshots with audit/revert support.
+- Add anonymous subscriptions only after abuse/rate-limit/legal proof is stable.
+- Double opt-in and consent evidence are mandatory.
+- Merge into authenticated identity is explicit and auditable.
+
+### Phase 5 — learning loop
+
+- LLM feedback analysis runs offline only after enough real feedback exists.
+- Deterministic corrections first; LLM suggestions are bounded, auditable and reversible.
 - Ranking experiments compare baseline vs feedback-corrected issues.
+
+## Acceptance gates
+
+### Before implementation starts
+
+- this spec keeps YDB as the only feature-state owner;
+- `docs/routes.yml` says `ydb_and_static_object_storage`;
+- YDB consent evidence schema exists;
+- outbox state machine and lease/idempotency fields exist;
+- YDB retention/TTL policy exists;
+- private/secret-link page token threat model exists.
+
+### Before first real email
+
+- SPF/DKIM/DMARC configured and verified;
+- one-click unsubscribe POST is idempotent and does not require auth;
+- unsubscribe body link works;
+- suppression checked before enqueue and immediately before send;
+- provider webhook dedupe works;
+- bounced/complained address is suppressed in YDB;
+- no email is sent unless static artifact is published;
+- no email is sent if issue has fewer than 4 visible valid recommendations;
+- no email is sent if any visible event is past/cancelled.
+
+### Recommendation quality
+
+- at least 4 visible valid recs for email;
+- at least 12-24 valid recs for personal page, depending on chosen page size;
+- rank #1 is hero and ranks 2-4 are compact cards;
+- max venue/category dominance enforced;
+- recently emailed event fatigue enforced;
+- deterministic reason text only; no LLM-invented facts;
+- no raw profile or internal score details in HTML/JSON artifacts.
 
 ## Open decisions
 
 1. Provider/runtime: reuse future project email outbox/Postbox worker if already merged, or create a dedicated announcement sender with the same suppression/rate-limit primitives.
-2. Whether anonymous email subscriptions should be available in the first public beta or delayed until authenticated beta proves value.
-3. Exact default recommendation count on the static page: 24, 36 or 60.
-4. Whether preference center supports topic/date/city controls in MVP or only unsubscribe/pause/reset.
-5. How long private static pages remain accessible after the issue window.
+2. Exact default recommendation count on the static page: 24, 36 or 60.
+3. Whether preference center supports topic/date/city controls in MVP or only unsubscribe/pause/reset.
+4. Whether MVP stays pure secret-link static or uses the stronger thin dynamic gate for `/personal/r/{token}`.
+5. How long static personal artifacts remain accessible after the issue window.
