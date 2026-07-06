@@ -270,6 +270,53 @@ def write_fetch_error_summary(errors: list[dict[str, Any]], skipped: list[dict[s
     emit('fetch_error_summary_written', errors=len(errors), skipped=len(skipped), buckets=len(summary['buckets']), progress_label=f"ошибки источников: {len(errors)} / skipped {len(skipped)}")
     return summary
 
+def classify_comment_type(text: str) -> tuple[str, str | None]:
+    t=low(text)
+    letters=len(re.findall(r'[a-zа-яё]', t, re.I))
+    if not t or letters < 2: return 'empty_or_emoji', 'too_few_letters'
+    if is_probable_private_ticket_request(t): return 'ticket_resale_or_private_ticket_request', 'private_ticket_request'
+    if re.search(r'(?i)(подработк|заработ|оплат[аы]\s+от|\b[0-9]{3,6}\s*(?:₽|руб|р\b).*день|график\s+[0-9-]+\s*час)', t):
+        return 'job_spam_or_earnings_ad', 'job_or_earnings_ad'
+    if re.search(r'(?i)(участвую\s+в\s+розыгрыш|розыгрыш|хочу\s+выиграть|победител|отмеч[ау].*друз|репост)', t):
+        return 'giveaway_participation', 'giveaway_or_contest'
+    if len(t) <= 28 and re.fullmatch(r'(?i)(такой\s+же\s+вопрос|и\s+мне|мне\s+тоже|а\s+где\??|подскажите\s+тоже|спасибо|благодарю|\+1|тоже\s+интересно)', t):
+        return 'contextless_short_reply', 'needs_parent_context'
+    if len(t) <= 80 and re.fullmatch(r'[«»"\'\sа-яa-z0-9:;,.!?—–-]+', t, re.I) and len(re.findall(r'[?!]', t)) == 0 and len(t.split()) <= 8 and re.search(r'[«"]', t):
+        return 'title_only_or_entity_only', 'title_or_entity_without_predicate'
+    if re.search(r'(?i)(администрац|дорог[аиу]|тротуар|грунт|ремонтир|ремонт\s+дорог)', t) and not re.search(r'(?i)(парковк|где\s+парков|оставить\s+машин|как\s+добраться|общественн\w*\s+транспорт|автобус)', t):
+        return 'municipal_road_complaint_offtopic', 'road_or_municipal_complaint'
+    if re.search(r'(?i)(афиш|постер|анонс|картинк|фото\s+анонс)', t) and not re.search(r'(?i)(постановк|спектакл|сцен|мюзикл|выставк|представлен|концерт)', t):
+        return 'poster_or_announcement_reaction', 'poster_not_event_experience'
+    if re.search(r'(?i)(питух|бойцовск\w*\s+птиц|ахах|лол\b|кек\b|мем)', t):
+        return 'offtopic_meme_or_noise', 'meme_or_noise'
+    if is_probable_source_copy(t): return 'source_copy_or_announcement', 'source_like_text'
+    if re.search(r'(?i)^(добрый\s+день|здравствуйте|добрый\s+вечер)[!.:,\s]+', t) and re.search(r'(?i)(в\s+последнем\s+посте|подробн|информац|можете\s+ознаком|ссылк[аи]\s+на|с\s+уважением|администрац)', t) and not re.search(r'(?i)(не\s+могу|не\s+получается|не\s+открывается|ошибк)', t):
+        return 'official_reply', 'official_or_admin_answer'
+    return 'user_feedback', None
+
+def record_filter_sample(summary: dict[str, Any], comment: dict[str, Any], comment_type: str, reason: str | None) -> None:
+    bucket=summary.setdefault(comment_type, {'count':0,'reason':reason,'examples':[]})
+    bucket['count']+=1
+    if len(bucket['examples'])<8:
+        bucket['examples'].append({'comment_key':comment.get('comment_key'),'platform':comment.get('platform'),'platform_post_key':comment.get('platform_post_key'),'reason':reason,'text_snippet':str(comment.get('text') or '')[:220]})
+
+def write_comment_filter_summary(filter_summary: dict[str, Any]) -> dict[str, Any]:
+    payload={'schema_version':'event-comment-feedback-comment-filter-summary-v1','generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'buckets':filter_summary}
+    (WORK/'comment_filter_summary.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    return payload
+
+def phrase_min_sparse(p: dict[str, Any]) -> float:
+    if p.get('singular_safe'): return 0.08
+    if p.get('tone') == 'positive': return 0.12
+    return 0.10
+
+def public_candidate_gate(p: dict[str, Any], cand: dict[str, Any]) -> bool:
+    if not cand.get('model_agreement'): return False
+    if int(cand.get('e5_rank') or 999) > 2: return False
+    if int(cand.get('bge_rank') or 999) > (3 if p.get('singular_safe') else 2): return False
+    if float(cand.get('sparse_score') or 0.0) < phrase_min_sparse(p): return False
+    return True
+
 def build_fetch_posts(manifest: dict[str,Any]):
     events=manifest['events']; grouped={}
     for link in sorted(manifest['source_links'], key=lambda s:(-int(s.get('metric_comments') or 0), events.get(str(s['event_id']),{}).get('date') or '', int(s['event_id']), s['platform_post_key'])):
@@ -464,8 +511,36 @@ def cos_counter(a,b):
 QUESTION_IDS={'ticket_availability_question','time_questions','duration_questions','children_questions','location_questions','pushkin_card_questions','accessibility_questions','parking_questions','payment_questions','age_limit_questions','online_recording_questions','registration_interest','extra_places_question','extra_date_request','refund_exchange_questions','barcode_or_eticket_question','late_entry_question','admission_rules_question','food_drinks_question','security_rules_question','sector_or_seat_question','stroller_question','wheelchair_accessibility_question'}
 RESALE_RE=re.compile(r'(?i)(\b(?:продам|продаю|куплю|ищу|нужен|нужны)\b[^\n]{0,50}\b(?:билет|проходк)|\b(?:билет|проходк)[^\n]{0,50}\b(?:продам|продаю|куплю|ищу|нужен|нужны)|есть\s+у\s+кого|у\s+кого(?:-то)?\s+есть|лишн\w*\s+билет|приму\s+в\s+дар[^\n]{0,40}\bбилет|дайте[^\n]{0,40}\bбилет|напишите\s+(?:пожалуйста\s+)?(?:в\s+)?(?:личк|лс))')
 QUESTION_RE=re.compile(r'(?i)(\?|подскаж\w*|можно\s+ли|есть\s+ли|будет\s+ли|остал\w*|где\b|когда\b|во\s+сколько|сколько\b|как\b|нужн\w*\s+ли|регистрац\w*|пустят|вход|проход)')
-TICKET_TOPIC=[r'билет',r'мест',r'регистрац',r'попасть',r'разобрал',r'законч',r'проходк',r'qr',r'штрих',r'ссылк',r'купить']
-GUARDS={'children_questions':[r'дет',r'реб[её]н',r'школь',r'возраст'],'accessibility_questions':[r'пандус',r'маломобиль',r'инвалид',r'коляск',r'лифт'],'weather_concern':[r'дожд',r'погод',r'ливн',r'гр[оа]з',r'ветер'],'ticket_availability_question':TICKET_TOPIC,'ticket_interest_high':TICKET_TOPIC,'sold_out_discussion':TICKET_TOPIC,'sold_out_disappointment':TICKET_TOPIC,'high_demand_from_ticket_friction':TICKET_TOPIC,'ticket_purchase_technical_problem':[r'ссылк',r'куп',r'оплат',r'не\s+работ',r'ошибк',r'vpn',r'сайт'],'ticket_link_broken':[r'ссылк',r'не\s+откры',r'не\s+работ',r'ошибк',r'сайт'],'registration_closed':[r'регистрац',r'мест',r'билет',r'законч',r'закрыт'],'time_questions':[r'во сколько',r'время',r'начал',r'вход',r'длит'],'stroller_question':[r'детск.*коляск|коляск.*детск|с\s+коляск'],'wheelchair_accessibility_question':[r'инвалид|маломобиль|пандус|лифт|коляск.*инвалид'],'food_drinks_question':[r'вод|напит|ед|пронос'],'security_rules_question':[r'досмотр|нельзя|сумк|безопас|пронос'],'sector_or_seat_question':[r'сектор|мест|ряд|танцпол|сидяч'],'crowd_management_concern':[r'толп|очеред|много\s+люд|вход']}
+TICKET_TOPIC=[r'билет',r'билеты',r'места?',r'регистрац',r'попасть',r'проходк']
+GUARDS={
+    'children_questions':[r'дет',r'реб[её]н',r'школь',r'возраст'],
+    'accessibility_questions':[r'пандус',r'маломобиль',r'инвалид',r'коляск',r'лифт'],
+    'weather_concern':[r'дожд',r'погод',r'ливн',r'гр[оа]з',r'ветер'],
+    'ticket_availability_question':TICKET_TOPIC,
+    'ticket_interest_high':TICKET_TOPIC,
+    'sold_out_discussion':[r'билет',r'мест',r'регистрац',r'законч',r'разобрал',r'нет\s+мест',r'нет\s+билет'],
+    'sold_out_disappointment':[r'билет',r'мест',r'регистрац',r'законч',r'разобрал',r'не\s+успел',r'нет\s+мест',r'нет\s+билет'],
+    'high_demand_from_ticket_friction':[r'билет',r'мест',r'регистрац',r'попасть',r'тираж',r'успева',r'очеред'],
+    'ticket_purchase_technical_problem':[r'ссылк',r'куп',r'оплат',r'не\s+работ',r'ошибк',r'vpn',r'сайт',r'не\s+получ'],
+    'ticket_link_broken':[r'ссылк',r'не\s+откры',r'не\s+работ',r'ошибк',r'сайт',r'не\s+груз'],
+    'registration_closed':[r'регистрац',r'мест',r'билет',r'законч',r'закрыт'],
+    'barcode_or_eticket_question':[r'штрих',r'qr',r'электронн\w*\s+билет',r'номер\s+билет',r'почт',r'не\s+приш[её]л\s+билет'],
+    'late_entry_question':[r'после\s+начала',r'опозда',r'прийти\s+позже',r'пустят'],
+    'admission_rules_question':[r'вход',r'проход',r'пустят',r'паспорт',r'правил',r'можно\s+взять|можно\s+с'],
+    'parking_questions':[r'парковк',r'где\s+парков',r'оставить\s+машин',r'как\s+добраться',r'общественн\w*\s+транспорт',r'автобус'],
+    'location_questions':[r'адрес',r'где\s+это',r'как\s+добраться',r'откуда\s+вход',r'как\s+пройти'],
+    'time_questions':[r'во сколько',r'время',r'начал',r'вход',r'длит'],
+    'visual_quality_positive':[r'постановк',r'спектакл',r'сцен',r'мюзикл',r'выставк',r'представлен',r'концерт',r'атмосфер'],
+    'recommendation_from_past_visit':[r'посетил',r'сходил',r'понрав',r'рекоменд',r'совет',r'стоит\s+сход'],
+    'performance_praised':[r'постановк',r'исполнен',r'артист',r'спектакл',r'игра',r'сцен'],
+    'stroller_question':[r'детск.*коляск|коляск.*детск|с\s+коляск'],
+    'wheelchair_accessibility_question':[r'инвалид|маломобиль|пандус|лифт|коляск.*инвалид'],
+    'food_drinks_question':[r'вод|напит|ед|снек|перекус|трибун|пронос'],
+    'food_at_venue_question':[r'снек|ед|перекус|трибун|купить\s+.*(?:ед|снек|напит)'],
+    'security_rules_question':[r'досмотр|нельзя|сумк|безопас|пронос'],
+    'sector_or_seat_question':[r'сектор|мест|ряд|танцпол|сидяч'],
+    'crowd_management_concern':[r'толп|очеред|много\s+люд|вход'],
+}
 def guard(text,pid):
     t=low(text); reasons=[]
     if pid in QUESTION_IDS:
@@ -505,14 +580,18 @@ def model_phrase_scores(comment_vec, proto_vecs, proto_meta, neg_vecs, neg_meta)
 
 def score(comments, manifest, phrases):
     runtime=[p for p in phrases if p.get('runtime_enabled', True)]
-    public_by_id={p['id']:p for p in runtime if p.get('publishable') and p.get('public_sentence')}
-    unique={}; event_comments=defaultdict(list)
+    unique={}; event_comments=defaultdict(list); filter_summary={}
     for c in comments:
+        ctype, reason = classify_comment_type(str(c.get('text') or ''))
+        if ctype != 'user_feedback':
+            record_filter_sample(filter_summary, c, ctype, reason)
+            continue
         for link in c.get('links') or []:
-            item=dict(c); item['event_id']=int(link['event_id']); event_comments[item['event_id']].append(item)
+            item=dict(c); item['event_id']=int(link['event_id']); item['comment_type']=ctype; event_comments[item['event_id']].append(item)
             th=short_hash(low(c['text']),24); unique.setdefault(th, {'text_hash':th,'text':c['text']})
+    filter_payload=write_comment_filter_summary(filter_summary)
     ulist=list(unique.values()); texts=[u['text'] for u in ulist]
-    if not texts: return {}, []
+    if not texts: return {}, [], filter_payload
     proto_meta=[]; proto_docs=[]; neg_meta=[]; neg_texts=[]
     for p in runtime:
         for doc in phrase_docs(p):
@@ -562,6 +641,7 @@ def score(comments, manifest, phrases):
                     reasons.append('dual_rank_weak')
                 ensemble=0.40*e5_score+0.40*bge_score+0.10*(1.0/max(e5_rank,1)+1.0/max(bge_rank,1))+0.10*ss-0.15*max(0.0,neg-max(e5_score,bge_score))
                 cand={'phrase_id':pid,'e5_score':round(e5_score,4),'bge_score':round(bge_score,4),'e5_rank':e5_rank,'bge_rank':bge_rank,'sparse_score':round(ss,4),'negative_score':round(neg,4),'ensemble_score':round(ensemble,4),'e5_prototype':e5_row.get('prototype'),'bge_prototype':bge_row.get('prototype'),'model_agreement':e5.get('top_phrase_id')==bge.get('top_phrase_id')}
+                cand['public_gate_pass']=public_candidate_gate(p, cand)
                 if reasons: continue
                 if best is None or ensemble > best[0]: best=(ensemble,pid,p,cand)
             if best is None: continue
@@ -573,21 +653,24 @@ def score(comments, manifest, phrases):
         accepted=[]; other=[]
         for pid,g in groups.items():
             p=g['phrase']; ev=len(g['comments']); au=len(g['authors']); min_ev=int(p.get('min_evidence_count') or 2); min_au=int(p.get('min_unique_authors') or 2)
-            if ev>=min_ev and au>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low': status='public_ready_dual_kaggle'
-            elif p.get('singular_safe') and ev>=1 and au>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}: status='public_ready_singular_dual_kaggle'
+            public_comments=[c for c in g['comments'] if c.get('candidate',{}).get('public_gate_pass')]
+            public_authors={c.get('author_hash') or '' for c in public_comments}
+            pev=len(public_comments); pau=len(public_authors)
+            if pev>=min_ev and pau>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low': status='public_ready_dual_kaggle'
+            elif p.get('singular_safe') and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}: status='public_ready_singular_dual_kaggle'
             elif ev>=min_ev and au>=min_au: status='needs_review_dual_kaggle'
             else: status='suppressed_weak_dual_kaggle'
             cs=sorted(g['comments'], key=lambda x:x['candidate']['ensemble_score'], reverse=True)
-            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'evidence_count':ev,'unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
+            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'evidence_count':ev,'unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
             for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]})
             (accepted if status.startswith('public_ready') else other).append(rec)
         event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other,'suppressed_internal_samples':suppressed_internal[:20]}
-    return event_results,evidence
+    return event_results,evidence,filter_payload
 
 def write_reports(manifest, comments, errors, event_results, evidence, fetch_error_summary=None):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
-    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':sum(1 for r in event_results.values() if r['accepted_items']),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['status']=='needs_review_dual_kaggle' for i in r['review_or_suppressed_items']))}
+    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'comments_fetched_this_run':len(comments),'comments_known_total':None,'new_comments_this_run':None,'comments_reused_from_cache':0,'source_posts_known_total':manifest.get('source_post_count'),'source_posts_checked_this_run':manifest.get('source_post_count'),'source_posts_skipped_by_capability':None,'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':sum(1 for r in event_results.values() if r['accepted_items']),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['status']=='needs_review_dual_kaggle' for i in r['review_or_suppressed_items']))}
     (WORK/'event_comment_feedback_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     (WORK/'event_comment_feedback_probe.json').write_text(json.dumps({**summary,'events':event_results}, ensure_ascii=False, indent=2), encoding='utf-8')
     rows=[]
@@ -645,7 +728,7 @@ def main():
         fetch_summary=write_fetch_error_summary(errors, skipped, source_diagnostics)
         (WORK/'comments_raw_redacted.json').write_text(json.dumps({'comments':comments,'errors':errors,'source_diagnostics':source_diagnostics,'telegram_account':tg_account}, ensure_ascii=False, indent=2), encoding='utf-8')
         emit('fetch_done', comments=len(comments), errors=len(errors), tg_comments=len(tg_comments), vk_comments=len(vk_comments), progress_percent=40, progress_label=f'комментарии: {len(comments)}')
-        event_results,evidence=score(comments, manifest, phrases) if comments else ({}, [])
+        event_results,evidence,filter_summary=score(comments, manifest, phrases) if comments else ({}, [], {'buckets': {}})
         write_reports(manifest, comments, errors, event_results, evidence, fetch_summary)
         emit('kernel_done', progress_percent=100, progress_label='готово')
     except Exception as exc:

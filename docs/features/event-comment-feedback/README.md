@@ -415,3 +415,13 @@ The second probe revision addresses the first-run quality gaps before any static
 - added practical classes for ticket purchase/link problems, closed registration, entry rules, water/security/seat questions, stroller vs wheelchair, performance praise and giveaway/tag suppression;
 - VK fetch uses pagination/thread items and adaptive per-source caps; Telegram no longer drops all `chat_id/message_id` sources before fetch;
 - every run writes `fetch_error_summary.json` so access/rate/deleted/comment-thread failures are visible without reading raw comments.
+
+### MVP-3 P1 precision hardening
+
+P1 keeps the P0 recall improvements but makes public-ready stricter before any site UI:
+
+- `public_ready_*` now requires strict public gate evidence: model agreement, top ranks from both models, and phrase-specific sparse/topic anchors;
+- noisy comments are filtered before embeddings (`job_spam_or_earnings_ad`, `contextless_short_reply`, `official_reply`, `source_copy_or_announcement`, `poster_or_announcement_reaction`, `offtopic_meme_or_noise`, `municipal_road_complaint_offtopic`, `ticket_resale_or_private_ticket_request`, `giveaway_participation`, `title_only_or_entity_only`);
+- official/source replies may be useful context later but do not count as independent public evidence in the vector-only probe;
+- practical classes have phrase-specific anchors, for example ticket classes require ticket/registration/place anchors, e-ticket requires QR/barcode/e-ticket anchors, parking requires parking/transport anchors, and visual praise requires event/scene/performance anchors;
+- the summary separates per-run metrics from future persistent-state metrics: `comments_fetched_this_run`, `comments_known_total`, `new_comments_this_run`, `comments_reused_from_cache`, `source_posts_checked_this_run`, and `source_posts_skipped_by_capability`; currently persistent totals are `null` until the YDB state layer exists.

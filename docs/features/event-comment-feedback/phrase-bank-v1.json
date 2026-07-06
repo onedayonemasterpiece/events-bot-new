@@ -2426,6 +2426,69 @@
       ],
       "hard_negatives": [],
       "singular_safe": false
+    },
+    {
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "runtime_enabled": true,
+      "risk": "low",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "hard_negatives": [
+        "где купить билеты",
+        "купить билет"
+      ],
+      "singular_safe": true,
+      "id": "food_at_venue_question",
+      "category": "Площадка и правила",
+      "signal_type": "food_at_venue_question",
+      "tone": "neutral",
+      "icon": "🍿",
+      "public_sentence": "В обсуждении спрашивают про еду на площадке",
+      "card_title": "Спрашивают про еду на площадке",
+      "card_text": "Уточняют, можно ли купить снеки, еду или напитки на месте",
+      "family": "Площадка и правила",
+      "positive_prototypes": [
+        "можно купить снеки на трибунах",
+        "есть ли еда на площадке",
+        "где перекусить на стадионе",
+        "можно купить напитки на месте",
+        "будет ли еда во время концерта"
+      ],
+      "num": 80
+    },
+    {
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "runtime_enabled": true,
+      "risk": "low",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "hard_negatives": [
+        "электронный билет",
+        "qr код билета",
+        "штрих код"
+      ],
+      "singular_safe": true,
+      "id": "admission_items_question",
+      "category": "Площадка и правила",
+      "signal_type": "admission_items_question",
+      "tone": "neutral",
+      "icon": "🎒",
+      "public_sentence": "В обсуждении спрашивают, что можно взять с собой",
+      "card_title": "Уточняют, что можно взять с собой",
+      "card_text": "Спрашивают про устройства, сумки и другие предметы на входе",
+      "family": "Площадка и правила",
+      "positive_prototypes": [
+        "можно взять с собой планшет",
+        "можно ли пронести рюкзак",
+        "пустят с ноутбуком",
+        "можно с пауэрбанком",
+        "что можно взять на стадион"
+      ],
+      "num": 81
     }
   ]
 }

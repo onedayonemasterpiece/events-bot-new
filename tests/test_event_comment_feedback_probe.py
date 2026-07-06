@@ -60,3 +60,36 @@ def test_fetch_error_summary_buckets(tmp_path, monkeypatch):
     assert "secret" not in text
     buckets = json.loads(text)["buckets"]
     assert any(b["code"] == 15 for b in buckets)
+
+
+def test_p1_prefilter_false_positive_examples(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    cases = {
+        "Есть подработка на лето,оплата от 8000 в день": "job_spam_or_earnings_ad",
+        "Такой же вопрос": "contextless_short_reply",
+        "Администрация, а что помешало убрать грунт с дороги и тротуара?": "municipal_road_complaint_offtopic",
+        "блин как круто выглядит саша петров на афише": "poster_or_announcement_reaction",
+        "Питухи крутые бойцовские птицы": "offtopic_meme_or_noise",
+        "Благодарю за подсказку 🙏🙏🙏": "contextless_short_reply",
+        "Добрый день! В последнем посте с благодарностями есть ссылки на них.": "official_reply",
+    }
+    for text, expected in cases.items():
+        assert mod.classify_comment_type(text)[0] == expected
+
+
+def test_p1_phrase_specific_anchors(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    assert "phrase_lexical_guard" in mod.guard("Там есть купить какие-то снеки, еда, чтобы на трибунах перекусить?", "ticket_availability_question")
+    assert "phrase_lexical_guard" in mod.guard("Здравствуйте! Можно взять с собой планшет?", "barcode_or_eticket_question")
+    assert "phrase_lexical_guard" in mod.guard("Вместо бесплатного концерта можно нам дороги отремонтировать?", "parking_questions")
+    assert mod.guard("А бутылку воды можно взять?", "food_drinks_question") == []
+    assert mod.guard("Здравствуйте. Есть штрих-код билетов и номера билетов", "barcode_or_eticket_question") == []
+
+
+def test_p1_public_candidate_gate_is_strict(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    phrase = {"tone": "neutral", "singular_safe": False}
+    assert mod.public_candidate_gate(phrase, {"model_agreement": False, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.9}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 3, "bge_rank": 1, "sparse_score": 0.9}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.05}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 2, "sparse_score": 0.12}) is True
