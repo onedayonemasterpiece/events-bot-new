@@ -45,8 +45,8 @@ Possible source of email:
 Required state before sending:
 
 - YDB `pa_subscription` is active for `channel = personal_email_announcement`;
-- current verified/manual email and `email_hash` are present in YDB;
-- no active YDB `pa_suppression` row exists for the email hash;
+- current verified/manual email and `email_hmac` are present in YDB;
+- no active YDB `pa_suppression` row exists for the email HMAC;
 - separate YDB consent evidence exists for personal-data/email processing and recommendation-email/ad-like subscription;
 - unsubscribe/preference URL is available for the issue.
 
@@ -64,7 +64,7 @@ Required state before sending:
 - YDB consent evidence records the source `anon_id`/subject hash, consent versions, signup surface/path and confirmation timestamp;
 - if the anonymous user later authenticates, merge is explicit and auditable in YDB.
 
-Guardrail: do not leak the user profile through predictable URLs, public Data API reads, search indexing or email forwarding metadata.
+Guardrail: do not leak the user profile through predictable URLs, public DB/API reads, search indexing or email forwarding metadata.
 
 ### Consent evidence
 
@@ -74,9 +74,9 @@ Production design must store consent proof as its own YDB entity, not only boole
 | --- | --- |
 | `consent_id` | Stable evidence id. |
 | `subscription_id` | Subscription linked to the consent event. |
-| `email_hash` | Recipient join/suppression key without exposing raw email in metrics. |
+| `email_hmac` | Recipient join/suppression key without exposing raw email in metrics. |
 | `subject_type` | `auth_user` or `anonymous`. |
-| `subject_id_hash` | Auth user id hash or anonymous id hash. |
+| `subject_id_hmac` | Auth user id hash or anonymous id hash. |
 | `channel` | `personal_email_announcement`. |
 | `consent_kind` | `personal_data_processing`, `advertising_email`, `recommendation_email`, `unsubscribe`, `revocation`. |
 | `consent_text_version` | Exact text/version shown to the user. |
@@ -124,7 +124,7 @@ Feedback page
 Follow the feature boundary below:
 
 - **Fly SQLite** remains the source of truth for canonical events, source imports, lifecycle/status, public static event-page generation state and scheduler state tied to the event catalog.
-- **YDB** owns all feature-owned data for personal email announcements: subscriptions, consent evidence, verified/manual emails, suppressions, recommendation issues, ranked recommendation cards, static personal-page metadata, email outbox, provider delivery events, feedback, clicks, page opens, attribution events, daily/weekly aggregates, quality metrics, LLM review evidence and accepted/reverted correction audit.
+- **YDB** owns all feature-owned data for personal email announcements: subscriptions, consent evidence, verified/manual emails, suppressions, profile snapshots/signals, recommendation issues, ranked recommendation cards, static personal-page metadata, email outbox, provider delivery events, feedback, clicks, page opens, attribution events, daily/weekly aggregates, quality metrics, LLM review evidence and accepted/reverted correction audit.
 - **Object Storage/CDN** owns only rendered static HTML/JSON artifacts for personal pages. Do not store large rendered pages in YDB. Do not treat object storage as authoritative subscription, consent, feedback, outbox or metrics storage.
 - **Supabase/Auth provider**, if used elsewhere in the project, is only an external identity/email source. It is not the source of truth for this feature. Before any send, the verified email, subscription state, consent evidence and suppression checks must pass in YDB.
 
@@ -144,14 +144,15 @@ Names are architecture placeholders; apply only after YDB schema review.
 
 | Group | YDB tables | Primary access pattern |
 | --- | --- | --- |
-| Subscription | `pa_subscription`, `pa_subscription_by_identity`, `pa_subscription_by_email_hash` | send eligibility, preference center, dedupe |
+| Subscription | `pa_subscription`, `pa_subscription_by_identity`, `pa_subscription_by_email_hmac` | send eligibility, preference center, dedupe |
 | Consent | `pa_consent_evidence` | prove opt-in/revocation |
-| Suppression | `pa_suppression` | immediate no-send by email hash |
+| Suppression | `pa_suppression` | immediate no-send by email HMAC |
 | Issue | `pa_recommendation_issue`, `pa_recommendation_card` | render email/page, debug ranking |
 | Static page | `pa_static_page` | token validation, expiry, artifact state |
 | Outbox | `pa_email_outbox`, `pa_email_outbox_by_due_shard` | worker polling with leases |
 | Delivery | `pa_delivery_event`, `pa_provider_webhook_dedupe` | bounces/complaints/provider evidence |
 | Feedback | `pa_feedback`, `pa_feedback_by_subscription` | learning loop, quality metrics |
+| Profile snapshot | `pa_profile_snapshot`, optional `pa_profile_signal_raw` | consented compact profile used by the email ranker |
 | Metrics | `pa_metric_event_raw`, `pa_metric_daily`, `pa_metric_by_issue`, `pa_quality_guardrail_daily` | return/quality/ops dashboards |
 | LLM review | `pa_llm_review`, `pa_profile_correction_audit` | bounded offline correction loop |
 
@@ -161,46 +162,129 @@ Names are architecture placeholders; apply only after YDB schema review.
 | --- | --- | --- | --- |
 | `pa_subscription` | YDB row table | email channel subscription, cadence, locale, auth/anon linkage, active/pause/unsub state | no direct browser access |
 | `pa_consent_evidence` | YDB row table | auditable proof of personal-data/recommendation-email consent, double opt-in and revocation | service only |
-| `pa_suppression` | YDB row table | email hash suppression for unsubscribe, bounce, complaint, abuse/manual block | service only |
+| `pa_suppression` | YDB row table | email HMAC suppression for unsubscribe, bounce, complaint, abuse/manual block | service only |
 | `pa_recommendation_issue` | YDB row table | one planned/sent digest instance per subscription and period | service only |
 | `pa_recommendation_card` | YDB row table | ranked event ids, score bands, reason masks, hero flag, freshness/fatigue metadata | service only |
 | `pa_static_page` | YDB row table | page token hash, storage key, expiry, build id, noindex flag, issue id, publish state | token-gated endpoint only |
 | `pa_email_outbox` | YDB row table | durable send queue, idempotency, leases, retries and provider message ids | service only |
 | `pa_delivery_event` | YDB row table | provider webhook evidence, bounce/complaint/delivery state | service only |
 | `pa_feedback` | YDB row table | issue-level and per-card labels/free text after PII stripping | append through same-origin endpoint |
+| `pa_profile_snapshot` | YDB row table | compact consent-compatible feature snapshot consumed by the weekly email ranker | service only |
+| `pa_profile_signal_raw` | YDB row table with TTL | optional short-lived raw profile-signal materialization before compaction | service only |
 | `pa_metric_event_raw` | YDB row table with TTL | short-lived raw opens/clicks/feedback/delivery events | service only |
 | `pa_metric_daily` | YDB row table | long-lived daily aggregates for product/quality/ops dashboards | service/admin only |
 | `pa_llm_review` | YDB row table | offline LLM classification packet/result and bounded correction proposal | service only |
 | `pa_profile_correction_audit` | YDB row table | accepted/rejected/reverted profile correction audit | service only |
 
-Email addresses should be encrypted or stored only where strictly needed for sending; hashes are used for joins, rate limits and suppression checks. Suppression records must outlive ordinary profile retention enough to prevent accidental resubscribe sends.
+Email addresses should be encrypted or stored only where strictly needed for sending; HMACes are used for joins, rate limits and suppression checks. Suppression records must outlive ordinary profile retention enough to prevent accidental resubscribe sends.
 
-### Key-shape notes
+### Hashing and identifier policy
 
-Outbox polling must avoid a single hot partition:
+Never use plain/unsalted SHA for email addresses, subject identifiers or bearer tokens. These values are low-entropy or security-sensitive enough to require keyed hashing:
+
+- `email_hmac = HMAC-SHA256(email_hash_key_version, normalized_email)`;
+- `subject_id_hmac = HMAC-SHA256(subject_hash_key_version, stable_subject_id)`;
+- `token_hash = HMAC-SHA256(token_hash_key_version, raw_random_token)`;
+- keep key-version columns so HMAC keys can be rotated;
+- raw email, if needed for sending, is encrypted and never copied into metrics, LLM packets, rendered artifacts or logs.
+
+Email normalization is intentionally conservative: trim whitespace, normalize Unicode/IDNA domain handling and lowercase the domain. Do not globally strip Gmail dots or plus tags unless provider-specific behavior is explicitly documented and tested for this product.
+
+### Primary key sketches
+
+These sketches are not migrations; they exist to force schema review around YDB access patterns and hot-key avoidance. YDB row tables are sorted by primary key, so first key components must match point/range reads without concentrating all writes on one partition.
 
 ```text
+pa_subscription
+  PK: (subscription_id)
+
+pa_subscription_by_identity
+  PK: (subject_type, subject_id_hmac, channel, subscription_id)
+
+pa_subscription_by_email_hmac
+  PK: (email_hmac, channel, subscription_id)
+
+pa_suppression
+  PK: (email_hmac, channel)
+
+pa_consent_evidence
+  PK: (subscription_id, created_at, consent_id)
+  optional lookup: (email_hmac, channel, created_at, consent_id)
+
+pa_profile_snapshot
+  PK: (subject_type, subject_id_hmac, snapshot_version)
+  latest pointer/update strategy decided in schema review
+
+pa_profile_signal_raw
+  PK: (event_date, shard, occurred_at, signal_id)
+  TTL target: 30-90 days before compaction
+
+pa_recommendation_issue
+  PK: (issue_id)
+  lookup: (subscription_id, period_start, channel, issue_id)
+
+pa_recommendation_card
+  PK: (issue_id, rank)
+
+pa_static_page
+  PK: (token_hash)
+
+pa_feedback
+  PK: (issue_id, created_at, feedback_id)
+  lookup: (subscription_id, created_at, feedback_id)
+
+pa_email_outbox
+  PK: (message_id)
+  unique/send guard: (send_idempotency_key) must reject duplicate sends for the same subscription+period+channel
+
 pa_email_outbox_by_due_shard
-PK: (status, due_shard, next_attempt_at, message_id)
-due_shard = hash(message_id) % 64
-```
+  PK: (status, due_shard, next_attempt_at, message_id)
+  due_shard = hash(message_id) % 64
 
-Raw metrics should be short-lived and shardable:
+pa_delivery_event
+  PK: (message_id, created_at, delivery_event_id)
+  lookup: (provider, provider_message_id, created_at, delivery_event_id)
 
-```text
+pa_provider_webhook_dedupe
+  PK: (provider, provider_event_id)
+
 pa_metric_event_raw
-PK: (event_date, shard, occurred_at, event_id)
-TTL target: 30-90 days on occurred_at, according to actual YDB table capabilities/configuration
+  PK: (event_date, shard, occurred_at, metric_event_id)
+  TTL target: 30-90 days on occurred_at, according to actual YDB table capabilities/configuration
+
+pa_metric_daily
+  PK: (metric_date, metric_name, dimension_key)
+
+pa_metric_by_issue
+  PK: (issue_id, metric_name, dimension_key)
+
+pa_metric_by_subscription_week
+  PK: (subscription_id, period_start, metric_name)
+
+pa_quality_guardrail_daily
+  PK: (metric_date, guardrail_name, dimension_key)
+
+pa_llm_review
+  PK: (review_id)
+  lookup: (issue_id, created_at, review_id)
+
+pa_profile_correction_audit
+  PK: (subject_type, subject_id_hmac, created_at, correction_id)
+  lookup: (review_id, correction_id)
 ```
 
 Long-lived analytics should live in aggregate tables (`pa_metric_daily`, `pa_metric_by_issue`, `pa_metric_by_subscription_week`, `pa_quality_guardrail_daily`) rather than keeping raw click/open rows forever.
 
+### Profile materialization boundary
+
+The personal email ranker must not read live Supabase/PostgREST profile tables. If static-site anonymous personalization continues to use localStorage/Supabase for other surfaces, this feature consumes only YDB-materialized, consent-compatible `pa_profile_snapshot` rows. Optional `pa_profile_signal_raw` rows are short-lived and compacted into snapshots; `pa_profile_snapshot` is the compact ranked-feature input for weekly generation.
+
 ## Static personal page contract and token threat model
 
-The MVP page is not truly private if it is only an object-storage file behind an unguessable URL. It is a **secret-link static artifact**. This is acceptable for MVP only with explicit limitations and controls:
+The MVP implementation default for all real emails is the **thin dynamic gate** (`/personal/r/{token}`) backed by YDB checks. A pure object-storage URL behind an unguessable token is only a **secret-link static artifact**, not a truly private page; it is allowed only for preview/internal dry-run or as an explicit release-owner fallback. Any secret-link mode must follow these limitations and controls:
 
 - token has at least 128 bits of randomness;
-- URL contains no `anon_id`, `user_id`, `email_hash`, sequential `issue_id` or internal score id;
+- URL contains no `anon_id`, `user_id`, `email_hmac`, sequential `issue_id` or internal score id;
 - YDB stores only `token_hash`, never token plaintext;
 - page token, unsubscribe token and feedback token are separate;
 - artifact contains no email address, raw profile vectors, hidden tags or internal score details;
@@ -208,14 +292,23 @@ The MVP page is not truly private if it is only an object-storage file behind an
 - expiry/revocation are explicit in YDB;
 - pure static expiry is best-effort through object deletion/manifest removal, not instant access revocation.
 
-If stronger privacy is required, use a thin dynamic gate:
+Real-email access gate:
 
 ```text
 GET /personal/r/{token}
-  -> hash token
+  -> HMAC token
   -> check YDB pa_static_page state, expiry, revoked/suppressed flags
   -> stream static artifact or 302 to a short-lived signed object URL
 ```
+
+YDB TTL is a cleanup mechanism, not access control: expired/revoked pages must be rejected by query-level filtering/access checks even if TTL deletion has not yet physically removed old rows.
+
+Every token-bearing personal page response, including the thin dynamic gate and any secret-link fallback, must prevent bearer-token leakage through outbound navigation:
+
+- send `Referrer-Policy: no-referrer` where headers are controllable;
+- include `<meta name="referrer" content="no-referrer">` in static HTML;
+- external links use `rel="noreferrer noopener"`;
+- preferred ticket/register click flow is same-origin click recording followed by redirect to the external URL without the page token in the destination URL.
 
 Recommended page content blocks:
 
@@ -327,19 +420,23 @@ Required fields:
 
 | Field | Purpose |
 | --- | --- |
-| `idempotency_key` | `subscription_id + period_start + channel + issue_version`; unique no-duplicate send guard. |
+| `send_idempotency_key` | `subscription_id + cadence_period_start + channel`; unique no-duplicate send guard. |
+| `content_version` | Issue/content version; recomputing before send may update content behind the same send key. |
+| `intentional_resend_key` | Explicit operator/campaign resend id; absent by default. |
 | `lease_owner` / `lease_until` | Worker lock. |
 | `attempt_count` / `next_attempt_at` | Retry control. |
 | `provider` / `provider_message_id` | Provider correlation. |
 | `last_error_code` / `last_error_class` | Retry/suppression decision. |
 | `created_at` / `updated_at` / `sent_at` | Audit and latency metrics. |
 
+Recomputing an issue before send may update the issue/content version behind the same `send_idempotency_key`. Sending more than once for the same subscription, period and channel requires an explicit `intentional_resend_key`; changing `content_version` alone must never create a second send.
+
 Before every send, the worker must recheck in YDB and the current event snapshot/export:
 
 - subscription active and not paused/unsubscribed;
 - consent not revoked;
-- email hash not suppressed;
-- issue is still valid and idempotency key has not sent;
+- email HMAC not suppressed;
+- issue is still valid and `send_idempotency_key` has not sent;
 - static artifact is published;
 - visible events are not cancelled/past;
 - at least 4 visible valid recommendations remain;
@@ -436,6 +533,23 @@ Schema-first metric events in YDB:
 | `unsubscribe` | Channel stop event. |
 | `no_send_low_quality` | Quality gate prevented send. |
 
+All `pa_metric_event_raw` rows use a minimal envelope:
+
+| Field | Notes |
+| --- | --- |
+| `metric_event_id` | Unique event id. |
+| `occurred_at` | Server-side event time where possible. |
+| `event_type` | One of the schema-first event names above. |
+| `channel` | `personal_email_announcement`. |
+| `issue_id` | Recommendation issue id when applicable. |
+| `subscription_id_hmac` or `subject_id_hmac` | HMAC only, never raw identity. |
+| `event_id` / `rank` | Present for card/event interactions. |
+| `surface` | `email`, `personal_page`, or `preference_center`. |
+| `token_id_hash` | HMAC-SHA256 of token id when applicable, never raw token and never plain hash. |
+| `user_agent_class` | `human`, `bot`, `preview`, or `unknown`. |
+| `request_id` | Trace id for endpoint/provider correlation. |
+| `provider` / `provider_message_id` | Present for delivery events. |
+
 Retention policy:
 
 | Data | Retention target |
@@ -452,7 +566,7 @@ Retention policy:
 
 - This document.
 - Product decisions for consent/cadence/hero format/token model/private page/feedback labels.
-- YDB entity groups, consent evidence schema, outbox state machine, retention/TTL and acceptance gates.
+- YDB entity groups, profile snapshot materialization, HMAC policy, consent evidence schema, outbox state machine, token-gated page model, retention/TTL and acceptance gates.
 
 ### Phase 1 — YDB dry-run only
 
@@ -492,9 +606,11 @@ Retention policy:
 - this spec keeps YDB as the only feature-state owner;
 - `docs/routes.yml` says `ydb_and_static_object_storage`;
 - YDB consent evidence schema exists;
+- YDB `pa_profile_snapshot` materialization boundary exists;
+- HMAC/hash policy for email/subject/token identifiers exists;
 - outbox state machine and lease/idempotency fields exist;
 - YDB retention/TTL policy exists;
-- private/secret-link page token threat model exists.
+- thin dynamic gate is the default for real emails; secret-link fallback has a token/referrer threat model.
 
 ### Before first real email
 
@@ -503,9 +619,10 @@ Retention policy:
 - unsubscribe body link works;
 - suppression checked before enqueue and immediately before send;
 - provider webhook dedupe works;
-- bounced/complained address is suppressed in YDB;
+- complaints and permanent/hard bounces suppress in YDB; temporary/deferred failures retry and suppress only by threshold/permanent provider code;
 - no email is sent unless static artifact is published;
 - no email is sent if issue has fewer than 4 visible valid recommendations;
+- recomputing `content_version` cannot bypass `send_idempotency_key`;
 - no email is sent if any visible event is past/cancelled.
 
 ### Recommendation quality
@@ -516,12 +633,12 @@ Retention policy:
 - max venue/category dominance enforced;
 - recently emailed event fatigue enforced;
 - deterministic reason text only; no LLM-invented facts;
-- no raw profile or internal score details in HTML/JSON artifacts.
+- no raw profile, token, identifier HMAC or internal score details in HTML/JSON artifacts;
+- outbound links cannot leak page tokens via Referer headers or URL parameters.
 
 ## Open decisions
 
 1. Provider/runtime: reuse future project email outbox/Postbox worker if already merged, or create a dedicated announcement sender with the same suppression/rate-limit primitives.
 2. Exact default recommendation count on the static page: 24, 36 or 60.
 3. Whether preference center supports topic/date/city controls in MVP or only unsubscribe/pause/reset.
-4. Whether MVP stays pure secret-link static or uses the stronger thin dynamic gate for `/personal/r/{token}`.
-5. How long static personal artifacts remain accessible after the issue window.
+4. How long static personal artifacts remain accessible after the issue window.

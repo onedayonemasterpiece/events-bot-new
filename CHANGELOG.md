@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-- **Personal email announcements / architecture design**: added the docs-first `personal-email-announcements` feature spec for weekly personalized recommendation emails, secret-link/static-gated recommendation pages, authenticated/anonymous email consent, YDB-owned subscriptions/recommendation issues/outbox/feedback/metrics/LLM evidence, static object-storage artifacts, deliverability/unsubscribe gates and MVP rollout phases; no schema, sender or production sends are implemented yet.
+- **Personal email announcements / architecture design**: added the docs-first `personal-email-announcements` feature spec for weekly personalized recommendation emails, secret-link/static-gated recommendation pages, authenticated/anonymous email consent, YDB-owned subscriptions/profile snapshots/recommendation issues/outbox/feedback/metrics/LLM evidence, HMAC identifiers, static object-storage artifacts behind a thin token gate, deliverability/unsubscribe gates and MVP rollout phases; no schema, sender or production sends are implemented yet.
 
 ### Changed
 - CherryFlash guide-excursion promo now uses the v4 Blender-style depth background treatment in the production renderer and formats guide promo dates as `10 июля 16:00` instead of numeric `10.07 16:00`.
