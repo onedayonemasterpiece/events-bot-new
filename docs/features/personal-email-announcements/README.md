@@ -36,8 +36,9 @@ issue_created
   -> email_enqueued
   -> provider_accepted | provider_rejected
   -> provider_delivered | provider_deferred | provider_bounced | provider_complained
-  -> email_announcement_cta_click  # click on the email CTA/button that opens the personal announcement
+  -> direct navigation to /personal/r/{page_token}
   -> personal_page_open
+  -> email_announcement_cta_click  # best-effort JS beacon after page starts loading
   -> event_card_click | ticket_click | save | share | feedback
 ```
 
@@ -45,20 +46,23 @@ The product-critical email click is the button/link that says, for example, `ÐžÑ
 
 If a tracking pixel is ever used, it is recorded as `email_open_pixel_loaded` and stays diagnostic-only because mail clients, proxies and bots make opens noisy. It must not replace CTA-click or page-open metrics.
 
-A clean technical split is preferred:
+CTA attribution must not sit in the critical navigation path. The email button opens the personal page directly; click attribution is recorded after the page starts loading by non-blocking JavaScript:
 
 ```text
-GET /e/paw/{email_click_token}
-  -> HMAC token
-  -> check YDB message/issue/subscription state
-  -> write email_announcement_cta_click
-  -> 302 /personal/r/{page_token}
+Email href: /personal/r/{page_token}#ec={email_click_token}
 
 GET /personal/r/{page_token}
-  -> write personal_page_open after YDB page checks
+  -> check YDB page state and stream the page immediately
+  -> write personal_page_open server-side
+
+page JS after first paint / DOMContentLoaded
+  -> read email_click_token from URL fragment
+  -> navigator.sendBeacon(...) or fetch(..., {keepalive:true}) to same-origin endpoint
+  -> endpoint HMAC-checks token and writes email_announcement_cta_click to YDB
+  -> history.replaceState(...) removes the fragment
 ```
 
-`email_click_token`, `page_token`, `unsubscribe_token` and `feedback_token` are separate bearer tokens.
+The beacon is best-effort and must never block rendering, CTA navigation, image loading or event-card clicks. If JavaScript, storage or the beacon endpoint is unavailable, the user still sees the page; `personal_page_open` remains the reliable server-side fallback. `email_click_token`, `page_token`, `unsubscribe_token` and `feedback_token` are separate bearer tokens.
 
 ## Requirement traceability
 
@@ -747,10 +751,10 @@ Schema-first metric events in YDB:
 | `email_enqueued` / `email_send_attempted` / `email_sent` / `email_suppressed` | Outbox/send worker funnel. |
 | `provider_accepted` / `provider_rejected` | Provider accepted/rejected the send request before downstream delivery webhooks. |
 | `provider_delivered` / `provider_deferred` / `provider_bounced` / `provider_complained` | Provider feedback. |
-| `email_announcement_cta_click` | Click on the email CTA/button that opens the personal announcement page; product-critical CTA metric. |
+| `email_announcement_cta_click` | Non-blocking JS beacon after the email CTA opens the personal page; product-critical CTA metric but best-effort. |
 | `email_open_pixel_loaded` | Optional diagnostic-only tracking pixel event; never a primary success metric. |
 | `email_link_click` | Other return attribution from email. |
-| `personal_page_open` | Server-side personal page gate/open after CTA click. |
+| `personal_page_open` | Server-side personal page gate/open; reliable fallback when CTA beacon is blocked. |
 | `event_card_click` / `ticket_click` / `save` / `share` | Recommendation outcome. |
 | `email_capture_promo_exposed` / `email_capture_promo_clicked` / `email_capture_promo_dismissed` | Cross-site signup promo performance. |
 | `double_opt_in_sent` / `double_opt_in_confirmed` | Email signup conversion and verification. |
@@ -887,7 +891,7 @@ Retention policy:
 - no email is sent if Kaggle generation status is missing, partial without complete per-subscription artifacts, or resource-failed;
 - no email is sent if issue has fewer than 4 visible valid recommendations;
 - recomputing `content_version` cannot bypass `send_idempotency_key`;
-- distinct `/e/paw/{email_click_token}` -> `email_announcement_cta_click` and `/personal/r/{page_token}` -> `personal_page_open` metrics are recorded before beta;
+- direct `/personal/r/{page_token}` load records `personal_page_open`, and non-blocking page JS records `email_announcement_cta_click` via same-origin beacon before beta;
 - no email is sent if any visible event is past/cancelled.
 
 ### Recommendation quality
