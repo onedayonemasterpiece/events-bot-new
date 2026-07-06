@@ -34,14 +34,31 @@ The core success funnel is explicit:
 issue_created
   -> page_published
   -> email_enqueued
-  -> provider_accepted/sent
+  -> provider_accepted | provider_rejected
   -> provider_delivered | provider_deferred | provider_bounced | provider_complained
-  -> email_open_announcement_click  # click on the email button that opens the personal announcement
+  -> email_announcement_cta_click  # click on the email CTA/button that opens the personal announcement
   -> personal_page_open
   -> event_card_click | ticket_click | save | share | feedback
 ```
 
 The product-critical email click is the button/link that says, for example, `Открыть мою подборку` / `Показать персональный анонс`. This click is measured separately from generic email opens and from downstream event-card clicks.
+
+If a tracking pixel is ever used, it is recorded as `email_open_pixel_loaded` and stays diagnostic-only because mail clients, proxies and bots make opens noisy. It must not replace CTA-click or page-open metrics.
+
+A clean technical split is preferred:
+
+```text
+GET /e/paw/{email_click_token}
+  -> HMAC token
+  -> check YDB message/issue/subscription state
+  -> write email_announcement_cta_click
+  -> 302 /personal/r/{page_token}
+
+GET /personal/r/{page_token}
+  -> write personal_page_open after YDB page checks
+```
+
+`email_click_token`, `page_token`, `unsubscribe_token` and `feedback_token` are separate bearer tokens.
 
 ## Requirement traceability
 
@@ -59,7 +76,7 @@ The product-critical email click is the button/link that says, for example, `О�
 | R10 | Product feedback + LLM analysis for personalization correction | Feedback is stored as explicit labels in YDB; LLM runs offline to classify causes/corrections, with deterministic guardrails before profile updates. |
 | R11 | YDB ownership blocker from review | All feature-owned subscriptions, consent proof, recommendation issues, outbox, feedback, metrics and LLM evidence are YDB-owned; Object Storage is artifact-only; Supabase/Auth is identity-only when used. |
 | R12 | Production-quality gates | Consent evidence, outbox state machine, page-token threat model, YDB retention/TTL, metrics schema, deliverability and phased rollout gates are explicit before implementation. |
-| R13 | Separate email type and full statistics from deliverability to CTA click | Use `email_kind=personal_announcement_weekly`; metric funnel tracks generation, delivery, `email_open_announcement_click`, page open and downstream clicks. |
+| R13 | Separate email type and full statistics from deliverability to CTA click | Use `email_kind=personal_announcement_weekly`; metric funnel tracks generation, delivery, `email_announcement_cta_click`, page open and downstream clicks. |
 | R14 | Personal page uses same card style as similar events | Personal pages reuse the static-site event-card / related-event visual grammar; they are not a separate editorial template. |
 | R15 | Honest motivation to provide email | Email-capture copy says plainly that the user can leave email to receive a weekly selection based on watched/clicked events. |
 | R16 | Cross-site promo campaign for email capture | Model as an internal promo campaign with related-feed placements, caps and exposure/click metrics. |
@@ -156,6 +173,14 @@ Placement rules for `related_feed_email_capture_card`:
 
 The placement is treated as a promo activity for reporting: `promo_exposure`, `promo_click`, `email_signup_started`, `double_opt_in_sent`, `double_opt_in_confirmed`, `email_signup_dismissed`. If a future implementation mirrors this into the existing core `promo_campaign` admin UI, it must not move personal subscription state out of YDB.
 
+Placement randomness must be stable within a view/session/day, not rerolled on every hydration or reload:
+
+```text
+position_seed = HMAC(campaign_key, page_event_id, anon_or_session_bucket, local_date)
+```
+
+Static pages expose only eligible insertion slots/config. Client-side insertion decides show/hide after bot/preview/subscription/dismissal checks and records exposure only when the card is actually visible in the viewport.
+
 ## Architecture overview
 
 ```text
@@ -226,12 +251,12 @@ Names are architecture placeholders; apply only after YDB schema review.
 | Suppression | `pa_suppression` | immediate no-send by email HMAC |
 | Issue | `pa_recommendation_issue`, `pa_recommendation_card` | render email/page, debug ranking |
 | Static page | `pa_static_page` | token validation, expiry, artifact state |
-| Outbox | `pa_email_outbox`, `pa_email_outbox_by_due_shard` | worker polling with leases |
+| Outbox | `pa_email_outbox`, `pa_email_outbox_by_due_shard`, `pa_email_send_guard` | worker polling with leases and no-duplicate send guard |
 | Generation jobs | `pa_generation_job`, `pa_generation_artifact`, `pa_generation_job_by_due_shard` | planner/build/publish queue and artifact handoff |
 | Delivery | `pa_delivery_event`, `pa_provider_webhook_dedupe` | bounces/complaints/provider evidence |
 | Feedback | `pa_feedback`, `pa_feedback_by_subscription` | learning loop, quality metrics |
 | Profile snapshot | `pa_profile_snapshot`, optional `pa_profile_signal_raw` | consented compact profile used by the email ranker |
-| Metrics | `pa_metric_event_raw`, `pa_metric_daily`, `pa_metric_by_issue`, `pa_quality_guardrail_daily` | return/quality/ops dashboards |
+| Metrics | `pa_metric_event_raw`, `pa_metric_daily`, `pa_metric_by_issue`, `pa_quality_guardrail_daily`, `pa_pipeline_health_daily` | return/quality/ops dashboards and pipeline health |
 | LLM review | `pa_llm_review`, `pa_profile_correction_audit` | bounded offline correction loop |
 
 ### Draft entities
@@ -248,14 +273,16 @@ Names are architecture placeholders; apply only after YDB schema review.
 | `pa_recommendation_card` | YDB row table | ranked event ids, score bands, reason masks, hero flag, freshness/fatigue metadata | service only |
 | `pa_static_page` | YDB row table | page token hash, storage key, expiry, build id, noindex flag, issue id, publish state | token-gated endpoint only |
 | `pa_email_outbox` | YDB row table | durable send queue, idempotency, leases, retries and provider message ids | service only |
+| `pa_email_send_guard` | YDB row table | guard-row preventing duplicate sends for subscription+period+channel/email kind | service only |
 | `pa_generation_job` | YDB row table | leased planner/Kaggle/publish queue for issue and page generation | service only |
 | `pa_generation_artifact` | YDB row table | Kaggle output manifest/archive/object-storage handoff evidence | service only |
-| `pa_delivery_event` | YDB row table | provider webhook evidence, bounce/complaint/delivery state | service only |
+| `pa_delivery_event` | YDB row table | provider webhook evidence, bounce/complaint/delivery state; carries `email_kind`, `channel`, optional `campaign_key`, `message_id` and provider ids for direct attribution | service only |
 | `pa_feedback` | YDB row table | issue-level and per-card labels/free text after PII stripping | append through same-origin endpoint |
 | `pa_profile_snapshot` | YDB row table | compact consent-compatible feature snapshot consumed by the weekly email ranker | service only |
 | `pa_profile_signal_raw` | YDB row table with TTL | optional short-lived raw profile-signal materialization before compaction | service only |
 | `pa_metric_event_raw` | YDB row table with TTL | short-lived raw opens/clicks/feedback/delivery events | service only |
 | `pa_metric_daily` | YDB row table | long-lived daily aggregates for product/quality/ops dashboards | service/admin only |
+| `pa_pipeline_health_daily` | YDB row table | daily health rollup and alert inputs for generation/send/delivery/CTA funnel | service/admin only |
 | `pa_llm_review` | YDB row table | offline LLM classification packet/result and bounded correction proposal | service only |
 | `pa_profile_correction_audit` | YDB row table | accepted/rejected/reverted profile correction audit | service only |
 
@@ -334,9 +361,13 @@ pa_generation_job_by_due_shard
 pa_generation_artifact
   PK: (generation_job_id, artifact_kind, artifact_id)
 
+pa_email_send_guard
+  PK: (effective_send_guard_key)
+  fields: message_id, subscription_id, cadence_period_start, channel, email_kind, intentional_resend_key, created_at
+
 pa_email_outbox
   PK: (message_id)
-  unique/send guard: (send_idempotency_key) must reject duplicate sends for the same subscription+period+channel
+  references: send_idempotency_key/effective_send_guard_key inserted in the same YDB transaction
 
 pa_email_outbox_by_due_shard
   PK: (status, due_shard, next_attempt_at, message_id)
@@ -345,6 +376,7 @@ pa_email_outbox_by_due_shard
 pa_delivery_event
   PK: (message_id, created_at, delivery_event_id)
   lookup: (provider, provider_message_id, created_at, delivery_event_id)
+  required attribution fields: email_kind, channel, campaign_key(optional), issue_id, subscription_id_hmac or subject_id_hmac
 
 pa_provider_webhook_dedupe
   PK: (provider, provider_event_id)
@@ -364,6 +396,9 @@ pa_metric_by_subscription_week
 
 pa_quality_guardrail_daily
   PK: (metric_date, guardrail_name, dimension_key)
+
+pa_pipeline_health_daily
+  PK: (metric_date, channel, email_kind)
 
 pa_llm_review
   PK: (review_id)
@@ -387,7 +422,7 @@ The MVP implementation default for all real emails is the **thin dynamic gate** 
 - token has at least 128 bits of randomness;
 - URL contains no `anon_id`, `user_id`, `email_hmac`, sequential `issue_id` or internal score id;
 - YDB stores only `token_hash`, never token plaintext;
-- page token, unsubscribe token and feedback token are separate;
+- page token, email click token, unsubscribe token and feedback token are separate;
 - artifact contains no email address, raw profile vectors, hidden tags or internal score details;
 - artifact is `noindex, nofollow`, omitted from sitemap and not linked from public navigation;
 - expiry/revocation are explicit in YDB;
@@ -526,7 +561,7 @@ Heavy recommendation/page generation should be offloaded to Kaggle when possible
 | --- | --- | --- | --- | --- |
 | `pa_due_subscription_scan` | YDB `pa_generation_job` | Fly scheduler / lightweight worker | due generation batches | Coalesced by cadence period; skips sparse profiles and suppressed/unsubscribed recipients. |
 | `pa_profile_snapshot_materialize` | YDB `pa_profile_snapshot` | lightweight worker or batch | compact ranker inputs | May run before Kaggle so Kaggle reads compact inputs only. |
-| `pa_kaggle_generation_launch` | YDB job + Fly `kaggle_run_ledger` | Fly coordinator | Kaggle run id/status dataset | Uses existing `KaggleClient.push_kernel(...)` and `kaggle_status_client`. |
+| `pa_kaggle_generation_launch` | YDB `pa_generation_job` + compatibility Fly `kaggle_run_ledger` | Fly coordinator | Kaggle run id/status dataset | YDB is canonical; existing Fly ledger mechanics are launcher compatibility/cache only. |
 | `pa_kaggle_generate_pages` | Kaggle output manifest | Kaggle CPU | pages archive, issue/card manifest, QA report | Renders card-style static/gated pages and email preview data. |
 | `pa_generation_ingest_publish` | YDB `pa_generation_artifact`, `pa_static_page` | Fly/worker | object-storage artifacts + page metadata | Validates archive, uploads artifacts, writes token hashes and publish state. |
 | `pa_email_enqueue` | YDB `pa_email_outbox` | Fly/worker | send-ready rows | Only after `page_published` and quality gates. |
@@ -543,7 +578,20 @@ The personal-announcement generator should follow the StaticSiteBuilder/Kaggle s
 - create a status dataset with `create_kaggle_run_config(...)` / `create_kaggle_status_dataset(...)` for production runs;
 - include `kaggle_status_client.py` and emit `kernel_started`, `preflight_ok`, `alive`, `report_written` and terminal failure events;
 - output only a compact archive/manifest/QA report, not a full repo or large dependency tree;
-- use encrypted split private datasets for any short-lived service credentials if direct YDB/object-storage writes are explicitly selected, but the preferred MVP handoff is Kaggle output -> server validation/ingestion so Kaggle does not need long-lived YDB write credentials.
+- use encrypted split private datasets for any short-lived service credentials if direct YDB/object-storage writes are explicitly selected, but the first beta must use Kaggle output -> server validation/ingestion so Kaggle does not need long-lived YDB write credentials.
+
+### Kaggle privacy and run-ledger boundary
+
+Kaggle input must be privacy-minimized:
+
+- no raw email, auth provider id, `anon_id`, IP/user-agent, page token, unsubscribe token or feedback free text unless PII-stripped;
+- Kaggle receives `generation_subject_id`, a per-run surrogate id generated by the coordinator;
+- mapping `generation_subject_id -> subscription_id/subject_id_hmac` stays only in YDB;
+- profile input is compact feature/facet weights and recent safe event ids only;
+- output manifest references `generation_subject_id`, not raw email/subscription/auth ids;
+- server ingestion maps back to YDB subscription/issue rows after validation.
+
+The canonical personal-announcement Kaggle run ledger is YDB-owned: `pa_generation_job` stores `kaggle_run_id`, `status_dataset_ref`, `input_dataset_ref`, `output_ref`, `launcher_fencing_token`, `lease_owner`, `lease_until`, `last_status_at`, terminal status, progress counters and failure class. Existing Fly/Kaggle ledger code may be reused as a launcher compatibility layer/cache only, not as the source of truth.
 
 ### Resource and session constraints
 
@@ -584,9 +632,13 @@ Required fields:
 
 | Field | Purpose |
 | --- | --- |
-| `send_idempotency_key` | `subscription_id + cadence_period_start + channel`; unique no-duplicate send guard. |
+| `email_kind` | `personal_announcement_weekly`; never reuse transactional kinds. |
+| `channel` | `personal_email_announcement`. |
+| `campaign_key` | Optional attribution key; required for signup-promo-driven sends when applicable. |
+| `send_idempotency_key` | `subscription_id + cadence_period_start + channel + email_kind`; base no-duplicate send key. |
 | `content_version` | Issue/content version; recomputing before send may update content behind the same send key. |
 | `intentional_resend_key` | Explicit operator/campaign resend id; absent by default. |
+| `effective_send_guard_key` | `send_idempotency_key` normally, or `send_idempotency_key + intentional_resend_key` for approved resends. |
 | `lease_owner` / `lease_until` | Worker lock. |
 | `attempt_count` / `next_attempt_at` | Retry control. |
 | `provider` / `provider_message_id` | Provider correlation. |
@@ -594,6 +646,10 @@ Required fields:
 | `created_at` / `updated_at` / `sent_at` | Audit and latency metrics. |
 
 Recomputing an issue before send may update the issue/content version behind the same `send_idempotency_key`. Sending more than once for the same subscription, period and channel requires an explicit `intentional_resend_key`; changing `content_version` alone must never create a second send.
+
+No-duplicate sends use a guard row, not an assumed unique secondary index. In one YDB transaction, insert `pa_email_send_guard(effective_send_guard_key)` and then `pa_email_outbox(message_id, send_idempotency_key, ...)`. If the guard row already exists, do not create another outbox message.
+
+Attribution fields are denormalized deliberately: `pa_email_outbox`, `pa_delivery_event` and every related raw metric must carry `email_kind` and `channel`; `campaign_key` is present when the row is tied to signup-promo attribution or an intentional campaign send. Delivery dashboards may join back by `message_id`, but they must not require a join merely to split transactional vs personal-announcement mail.
 
 Before every send, the worker must recheck in YDB and the current event snapshot/export:
 
@@ -688,9 +744,11 @@ Schema-first metric events in YDB:
 | --- | --- |
 | `issue_created` | Recommendation issue generated. |
 | `page_published` | Static/gated page artifact ready before enqueue. |
-| `email_enqueued` / `email_sent` / `email_suppressed` | Outbox funnel. |
+| `email_enqueued` / `email_send_attempted` / `email_sent` / `email_suppressed` | Outbox/send worker funnel. |
+| `provider_accepted` / `provider_rejected` | Provider accepted/rejected the send request before downstream delivery webhooks. |
 | `provider_delivered` / `provider_deferred` / `provider_bounced` / `provider_complained` | Provider feedback. |
-| `email_open_announcement_click` | Click on the email button/link that opens the personal announcement page; product-critical CTA metric. |
+| `email_announcement_cta_click` | Click on the email CTA/button that opens the personal announcement page; product-critical CTA metric. |
+| `email_open_pixel_loaded` | Optional diagnostic-only tracking pixel event; never a primary success metric. |
 | `email_link_click` | Other return attribution from email. |
 | `personal_page_open` | Server-side personal page gate/open after CTA click. |
 | `event_card_click` / `ticket_click` / `save` / `share` | Recommendation outcome. |
@@ -710,6 +768,8 @@ All `pa_metric_event_raw` rows use a minimal envelope:
 | `occurred_at` | Server-side event time where possible. |
 | `event_type` | One of the schema-first event names above. |
 | `channel` | `personal_email_announcement`. |
+| `email_kind` | Required for every outbox, provider, click, page-open and unsubscribe metric tied to this type: `personal_announcement_weekly`. |
+| `campaign_key` | Present for signup-promo attribution and optional for email-send attribution. |
 | `issue_id` | Recommendation issue id when applicable. |
 | `subscription_id_hmac` or `subject_id_hmac` | HMAC only, never raw identity. |
 | `event_id` / `rank` | Present for card/event interactions. |
@@ -718,6 +778,35 @@ All `pa_metric_event_raw` rows use a minimal envelope:
 | `user_agent_class` | `human`, `bot`, `preview`, or `unknown`. |
 | `request_id` | Trace id for endpoint/provider correlation. |
 | `provider` / `provider_message_id` | Present for delivery events. |
+
+### Pipeline health dashboard / alert contract
+
+YDB aggregates must make it obvious which stage is broken. `pa_pipeline_health_daily` and/or the operator dashboard should expose at least:
+
+- `due_subscriptions`;
+- `generation_jobs_started`, `generation_jobs_completed`, `generation_jobs_failed`;
+- `no_send_resource_unavailable`;
+- `pages_published`;
+- `emails_enqueued`;
+- `email_send_attempted`;
+- `provider_accepted`, `provider_rejected`;
+- `provider_delivered`, `provider_deferred`, `provider_bounced`, `provider_complained`;
+- `email_announcement_cta_click`;
+- `personal_page_open`;
+- `webhook_lag_p95`;
+- `oldest_ready_to_send_age`;
+- `oldest_generation_job_age`.
+
+Canary/beta alerts:
+
+- `due_subscriptions > 0` and `emails_enqueued = 0`;
+- `emails_enqueued > 0` and `provider_accepted = 0`;
+- `provider_accepted > 0` and no delivery webhook after provider SLA window;
+- complaint rate above threshold;
+- permanent-bounce spike;
+- oldest `ready_to_send` row age above threshold;
+- `generation_jobs_failed / generation_jobs_started` above threshold;
+- delivered sample above threshold but `email_announcement_cta_click = 0`.
 
 Retention policy:
 
@@ -775,15 +864,15 @@ Retention policy:
 ### Before implementation starts
 
 - this spec keeps YDB as the only feature-state owner;
-- `email_kind=personal_announcement_weekly` is separate from transactional email kinds;
+- `email_kind=personal_announcement_weekly` is separate from transactional email kinds and present in outbox/delivery/metric rows;
 - `docs/routes.yml` says `ydb_and_static_object_storage`;
 - YDB consent evidence schema exists;
 - YDB `pa_profile_snapshot` materialization boundary exists;
 - HMAC/hash policy for email/subject/token identifiers exists;
-- outbox state machine and lease/idempotency fields exist;
+- outbox state machine, lease fields and `pa_email_send_guard` idempotency table exist;
 - YDB retention/TTL policy exists;
 - email-capture promo campaign, placement caps and related-feed insertion rules exist;
-- Kaggle generation/resource lease plan exists;
+- Kaggle generation/resource lease plan and YDB-owned canonical Kaggle run ledger exist;
 - thin dynamic gate is the default for real emails; secret-link fallback has a token/referrer threat model.
 
 ### Before first real email
@@ -798,7 +887,7 @@ Retention policy:
 - no email is sent if Kaggle generation status is missing, partial without complete per-subscription artifacts, or resource-failed;
 - no email is sent if issue has fewer than 4 visible valid recommendations;
 - recomputing `content_version` cannot bypass `send_idempotency_key`;
-- `email_open_announcement_click` and `personal_page_open` metrics are recorded before beta;
+- distinct `/e/paw/{email_click_token}` -> `email_announcement_cta_click` and `/personal/r/{page_token}` -> `personal_page_open` metrics are recorded before beta;
 - no email is sent if any visible event is past/cancelled.
 
 ### Recommendation quality
