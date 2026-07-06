@@ -880,7 +880,7 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
             return json.dumps(value, ensure_ascii=False)
         return value
     def add_sheet(name, rows_list):
-        sh=wb.create_sheet(name[:31]); hh=sorted({k for row in rows_list for k in row.keys()}) if rows_list else ['note']; sh.append(hh)
+        sh=wb.create_sheet(name); hh=sorted({k for row in rows_list for k in row.keys()}) if rows_list else ['note']; sh.append(hh)
         for row in rows_list or [{'note':'No rows'}]: sh.append([excel_value(row.get(h,'')) for h in hh])
         for cell in sh[1]: cell.font=Font(bold=True); cell.fill=PatternFill('solid', fgColor='D9EAD3')
         sh.freeze_panes='A2'
