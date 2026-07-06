@@ -817,9 +817,13 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
     for r in rows: evs.append([r.get(h,'') for h in headers])
     evs.freeze_panes='A2'
     for col,w in {'A':10,'B':12,'C':12,'D':28,'H':46,'I':30,'M':52,'N':52,'O':52,'P':52,'Q':52,'R':52,'S':52,'T':70,'U':60}.items(): evs.column_dimensions[col].width=w
+    def excel_value(value):
+        if isinstance(value, (dict, list, tuple, bool)):
+            return json.dumps(value, ensure_ascii=False)
+        return value
     def add_sheet(name, rows_list):
         sh=wb.create_sheet(name[:31]); hh=sorted({k for row in rows_list for k in row.keys()}) if rows_list else ['note']; sh.append(hh)
-        for row in rows_list or [{'note':'No rows'}]: sh.append([row.get(h,'') for h in hh])
+        for row in rows_list or [{'note':'No rows'}]: sh.append([excel_value(row.get(h,'')) for h in hh])
         for cell in sh[1]: cell.font=Font(bold=True); cell.fill=PatternFill('solid', fgColor='D9EAD3')
         sh.freeze_panes='A2'
         return sh
