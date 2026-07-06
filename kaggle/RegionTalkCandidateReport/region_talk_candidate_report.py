@@ -1318,14 +1318,17 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         rec["next_action"] = "keep_in_memory_or_refetch_source_later"
         rec["why_keep_in_memory"] = rec.get("why_keep_in_memory") or "previous candidate retained despite source not being refetched"
         rec["why_not_publication_ready"] = rec.get("why_not_publication_ready") or "source not refetched this run"
-    for rec in memory.values():
+    region_excluded: list[dict[str, Any]] = []
+    for mid, rec in list(memory.items()):
         if rec.get("manual_decision") in {"manual_keep", "keep", "favorite"}:
             continue
-        if str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"}:
+        if str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} or str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject"}:
             rec["current_lifecycle_status"] = "region_evidence_missing_needs_refetch"
-            rec["visibility_status"] = "excluded_from_product_shortlist_until_region_refetch"
+            rec["visibility_status"] = "excluded_from_candidate_memory_by_hard_region_gate"
             rec["next_action"] = "refetch_source_or_manual_region_override"
             rec["why_not_publication_ready"] = "hard region evidence missing in candidate memory"
+            region_excluded.append({**rec, "candidate_memory_id": mid})
+            memory.pop(mid, None)
     rows = sorted(memory.values(), key=lambda r: (str(r.get("manual_decision") or "") == "reject", str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), str(r.get("post_date") or "")))
     not_refetched = [r for r in rows if str(r.get("not_refetched_this_run")) == "true" and r.get("current_lifecycle_status") != "manual_reject"]
     deltas = []
@@ -1347,6 +1350,8 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
         else:
             bucket = "re_seen"
         deltas.append({**r, "delta_bucket": bucket, "current_run_id": run_id})
+    for r in region_excluded:
+        deltas.append({**r, "delta_bucket": "excluded_by_hard_region_gate", "current_run_id": run_id})
     return rows, not_refetched, deltas
 
 
