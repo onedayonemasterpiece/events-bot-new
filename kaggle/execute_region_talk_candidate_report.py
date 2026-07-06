@@ -210,9 +210,9 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         shutil.copytree(PROJECT_ROOT / "google_ai", folder / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         state_candidates = [
             Path(os.environ["REGION_TALK_STATE_FILE"]) if os.environ.get("REGION_TALK_STATE_FILE") else None,
-            PROJECT_ROOT / "artifacts" / "region-talk" / "state" / "region-talk-state.json",
         ]
         state_candidates.extend(sorted((PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-candidate-report").glob("*/artifacts/region-talk/state/region-talk-state.json"), reverse=True))
+        state_candidates.append(PROJECT_ROOT / "artifacts" / "region-talk" / "state" / "region-talk-state.json")
         for state_path in [p for p in state_candidates if p]:
             try:
                 if state_path.exists():
