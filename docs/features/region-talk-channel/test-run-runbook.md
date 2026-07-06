@@ -69,7 +69,12 @@ REGION_TALK_IMAGE_SCORING_MODE=cv_aesthetic_clip
 REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=1
 REGION_TALK_MIN_POST_DATE=2026-01-01
 REGION_TALK_FRESHNESS_HALF_LIFE_DAYS=30
-REGION_TALK_SEMANTIC_GATE_MODE=llm_required
+REGION_TALK_SEMANTIC_GATE_MODE=vector_first_final_llm
+REGION_TALK_ENABLE_EARLY_LLM=0
+REGION_TALK_ENABLE_VECTOR_GATES=1
+REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS=1
+REGION_TALK_TARGET_LLM_CALLS=10
+REGION_TALK_MAX_LLM_FINAL_VERIFY=10
 # Debug-only, never for final quality claims:
 # REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES=0
 REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
@@ -79,16 +84,16 @@ REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
 REGION_TALK_TG_GOVERNOR_ENABLED=1
 REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=120
 REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
-REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=20
 REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
 REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
 REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS=60
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_SIMILAR_ENABLED=1
-REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=3
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=5
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
-REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=25
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=50
 ```
 
 
@@ -129,15 +134,13 @@ The reviewer should be able to answer from XLSX alone:
 7. Which image model reports explain the selected photos?
 8. Which candidates need manual review/favorite/reject decisions?
 
-## MVP-1.x filtering order
+## MVP-1.x/z5 filtering order
 
-`post fetched → freshness gate → cheap pre-LLM cost guard for obvious non-region/ad/low-substance rows → LLM final semantic gate through Supabase google_ai limiter → Kaggle-local actual-image scoring → reviewable/publication-ready split → candidate/favorite`.
+`post fetched → freshness gate → Kaliningrad-only scope → deterministic ad/event evidence → local/prototype vector gate → Kaggle-local actual-image scoring → cumulative candidate memory/manual shortlist → optional small final LLM verifier`.
 
-The deterministic scope/ad/substance/news checks are evidence and cost guards only. They may prevent spending Supabase quota on obvious rejects, but accepted/reviewable semantic fit for publication is owned by the LLM final gate. Image scoring is skipped until `llm_decision=accept`, and skipped rows must expose `visual_scoring_stage`, `visual_scoring_skip_reason`, and `image_scoring_cost_saved=true`.
+The broad funnel must be local/vector-first: `REGION_TALK_ENABLE_EARLY_LLM=0` by default, so fetched posts, current-run posts and wide review queues are not mass-classified by LLM. Obvious ads/events/news/roundups are rejected before LLM through deterministic/vector gates. Actual-image scoring may run before the optional final verifier so expensive LLM calls are saved for top/ambiguous finalists only. Acceptance evidence is `wide_funnel_llm_calls=0`, `14d_llm_usage_by_stage`, vector reject counts and image rows scored before LLM.
 
 Comments are only for source discovery/link evidence and never publication material. Forwarded/reposted origins become source-frontier graph edges, not automatically monitored sources.
-
-LLM-first note: deterministic checks are evidence only. Do not close a run as quality-screened if it produced `semantic_review_required` rows because the LLM semantic gate was not configured.
 
 ## MVP-1.y reviewable pre-candidate policy
 

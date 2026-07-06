@@ -41,6 +41,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("docProps/app.xml", names)
             self.assertIn("04_review_queue", workbook)
             self.assertIn("09_image_quality", workbook)
+            self.assertIn("09b_image_fetch_retry_queue", workbook)
             self.assertIn("15_manual_decisions", workbook)
             self.assertIn("17_source_graph_edges", workbook)
             self.assertIn("18_place_lexicon_matches", workbook)
@@ -54,6 +55,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("12c_source_frontier_queue_next", workbook)
             self.assertIn("21_manual_review_queue", workbook)
             self.assertIn("22_candidate_deltas", workbook)
+            self.assertIn("14d_llm_usage_by_stage", workbook)
+            self.assertIn("23_vk_wall_setup", workbook)
             summary = json.loads((tmp_path / "region-talk-candidates-unit-run.json").read_text(encoding="utf-8"))["summary"]
             self.assertEqual(summary["source_count_seeded"], 30)
             self.assertEqual(summary["posts_fetched"], 0)
@@ -65,7 +68,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         media = mod.media_scores(True, text_score)
         self.assertGreater(text_score["region_relevance_score"], 0)
         self.assertGreaterEqual(media["postcardness_score"], 0.72)
-        self.assertTrue(media["is_selected_for_publication"])
+        self.assertFalse(media["is_selected_for_publication"])
+        self.assertEqual(media["image_publication_ready"], "false")
+        self.assertEqual(media["image_reviewable"], "false")
+        self.assertEqual(media["failure_reason"], "needs_actual_image_fetch")
 
     def test_seed_v2_and_place_lexicon_contract(self) -> None:
         mod = load_module()
@@ -123,9 +129,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         posts = [{"post_id":"post_ok", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/3", "platform_post_key":"tg:src:3", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, личные впечатления, море, дюны и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "llm-accept-run", Path(td))
-        self.assertEqual(payload["summary"]["llm_calls"], 1)
+        self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
+        self.assertEqual(payload["summary"]["llm_calls"], 0)
         self.assertEqual(payload["summary"]["llm_limit_source"], "supabase_google_ai")
         self.assertEqual(payload["summary"]["image_model_calls"], 1)
+        self.assertEqual(payload["summary"]["text_vector_rows_scored"], 1)
         self.assertTrue(payload["sheets"]["09_image_quality"])
 
     def test_llm_error_has_retry_sheet(self) -> None:
@@ -136,9 +144,27 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         posts = [{"post_id":"post_retry", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/4", "platform_post_key":"tg:src:4", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны, Светлогорск и полезные впечатления от поездки", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "llm-retry-run", Path(td))
-        self.assertEqual(payload["summary"]["llm_retry_rows"], 1)
-        self.assertEqual(len(payload["sheets"]["04b_needs_llm_retry"]), 1)
-        self.assertEqual(payload["sheets"]["04b_needs_llm_retry"][0]["current_stage"], "needs_llm_retry")
+        self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
+        self.assertEqual(payload["summary"]["llm_retry_rows"], 0)
+        self.assertEqual(payload["sheets"]["14d_llm_usage_by_stage"][0]["llm_calls"], 0)
+
+    def test_obvious_news_event_rejected_before_llm(self) -> None:
+        mod = load_module()
+        calls = {"n": 0}
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        def fake_llm(*args, **kwargs):
+            calls["n"] += 1
+            return {"llm_gate_status":"ok", "llm_decision":"accept"}
+        mod.call_region_talk_semantic_llm = fake_llm
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_news_event", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/41", "platform_post_key":"tg:src:41", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград: официальный анонс мероприятия, регистрация, билеты, расписание и программа конкурса", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "news-vector-run", Path(td))
+        row = payload["sheets"]["08_dropped_posts"][0]
+        self.assertEqual(calls["n"], 0)
+        self.assertIn(row["rejection_reason"], {"reject_ad_or_promo", "vector_reject_news_event"})
+        self.assertIn(row["llm_status"], {"not_called_vector_reject", "not_called_until_final_verifier"})
+        self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
 
     def test_llm_sync_wrapper_works_inside_active_event_loop(self) -> None:
         mod = load_module()
@@ -196,7 +222,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         posts = [{"post_id":"post_weak_media", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/5", "platform_post_key":"tg:src:5", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны и что особенно запомнилось в поездке", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "weak-image-run", Path(td))
-        self.assertFalse(payload["sheets"]["04a_final_shortlist"])
+        self.assertTrue(payload["sheets"]["04a_final_shortlist"])
+        self.assertFalse(payload["sheets"]["04a_current_run_shortlist"])
+        self.assertEqual(payload["sheets"]["04a_final_shortlist"][0]["decision_bucket"], "good_text_weak_actual_image")
         self.assertEqual(len(payload["sheets"]["10_good_text_weak_media"]), 1)
         self.assertEqual(payload["sheets"]["10_good_text_weak_media"][0]["current_stage"], "good_text_weak_media")
 
@@ -232,6 +260,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["current_stage"], "image_fetch_retry_needed")
         self.assertEqual(row["image_status"], "needs_actual_image_fetch")
         self.assertEqual(row["visual_decision"], "pending")
+        self.assertEqual(row["image_publication_ready"], "false")
+        self.assertEqual(first["sheets"]["09b_image_fetch_retry_queue"][0]["post_url"], "https://t.me/src/77")
+        self.assertEqual(first["sheets"]["04a_final_shortlist"][0]["post_url"], "https://t.me/src/77")
         self.assertEqual(first["summary"]["candidate_memory_total"], 1)
         self.assertEqual(second["summary"]["candidate_memory_not_refetched_this_run"], 1)
         self.assertEqual(second["sheets"]["07b_prev_candidates_not_refetch"][0]["post_url"], "https://t.me/src/77")

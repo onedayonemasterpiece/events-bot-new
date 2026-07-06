@@ -501,9 +501,9 @@ class TelegramRequestGovernor:
         self.degraded = False
         self.max_total_requests = getenv_int("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", 120)
         self.max_network_resolves = getenv_int("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", 3)
-        self.max_history_sources = getenv_int("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", 8)
+        self.max_history_sources = getenv_int("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", 20)
         self.max_media_downloads = getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 20)
-        self.max_recommendation_calls = getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 3)
+        self.max_recommendation_calls = getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 8)
         self.floodwait_abort_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", 300)
         self.floodwait_margin = getenv_int("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", 1800)
 
@@ -540,6 +540,14 @@ class TelegramRequestGovernor:
         self.log(method_name, "entity_resolve_expensive", source_id, canonical_url, "error_floodwait", ok=False, floodwait_seconds=seconds, cooldown_until=cooldown_until)
         return cooldown_until
 
+    def has_total_request_budget(self, method_name: str, source_id: str = "", canonical_url: str = "") -> bool:
+        if self.total_attempted >= self.max_total_requests:
+            self.telegram_phase_status = "degraded_request_budget_exhausted"
+            self.degraded = True
+            self.log(method_name, "rate_budget", source_id, canonical_url, "skipped_total_request_budget", ok=False, max_total_requests=self.max_total_requests)
+            return False
+        return True
+
     async def resolve_entity(self, client: Any, seed: Seed) -> tuple[Any | None, dict[str, Any]]:
         canonical_url = seed.canonical_url
         source_id = seed.source_id
@@ -562,7 +570,7 @@ class TelegramRequestGovernor:
                 return entity, {"telegram_resolve_status": "resolved_from_private_cache", "resolved_title": cached.get("title_last_seen", "")}
             except Exception:
                 pass
-        if self.resolve_network_attempts >= self.max_network_resolves:
+        if self.resolve_network_attempts >= self.max_network_resolves or not self.has_total_request_budget("ResolveUsernameRequest", source_id, canonical_url):
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
             return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
         self.resolve_network_attempts += 1
@@ -1005,23 +1013,37 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
         discovery_types = sorted(g.pop("discovery_types") or [])
         seed_sources = sorted(g.pop("seed_sources") or [])
         priority = float(g.get("frontier_priority") or 0)
-        if priority >= 0.75:
-            status = "resolve_later_high"
-        elif priority >= 0.55:
-            status = g.get("frontier_status") or "keep_frontier"
+        platform = str(g.get("platform") or g.get("platform_guess") or "").lower()
+        resolve_status = str(g.get("resolve_status") or "")
+        prev_status = str(g.get("frontier_status") or "")
+        if platform == "vk":
+            stage = "vk_not_configured"
+            status = "vk_wall_setup_required"
+        elif platform and not platform.startswith("telegram"):
+            stage = "unsupported"
+            status = "unsupported_probe_backlog"
+        elif resolve_status in {"resolved_network", "resolved_from_private_cache"} or prev_status in {"history_due", "resolved", "source_frontier"} and priority >= 0.55:
+            stage = "history_due"
+            status = "history_due"
+        elif priority >= 0.75:
+            stage = "probe_due"
+            status = "probe_due"
         elif priority >= 0.35:
-            status = "low_priority_defer"
+            stage = "unresolved"
+            status = "unresolved_frontier"
         else:
-            status = "rejected_low_relevance"
+            stage = "inactive_low_quality"
+            status = "inactive_low_quality"
         g.update({
             "edge_types_all": "; ".join(edge_types),
             "discovery_types": "; ".join(discovery_types),
             "seed_sources_evidence_count": len(seed_sources),
-            "candidate_source_status": "source_frontier" if status != "rejected_low_relevance" else "rejected_low_relevance",
+            "candidate_source_status": "source_frontier" if stage != "inactive_low_quality" else "inactive_low_quality",
+            "frontier_stage": stage,
             "frontier_status": status,
             "source_candidate_score": round(priority, 3),
-            "next_action": "probe_later" if priority >= 0.55 else "keep_in_frontier",
-            "rejection_or_skip_reason": "" if priority >= 0.35 else "low source candidate score",
+            "next_action": "probe_later" if stage in {"unresolved", "probe_due"} else ("fetch_history_when_selected" if stage == "history_due" else ("configure_vk_wall_reader" if stage == "vk_not_configured" else "keep_in_low_quality_pool")),
+            "rejection_or_skip_reason": "" if priority >= 0.35 else "low source candidate score; retained as inactive low-quality pool, not a blocking status",
         })
         out.append(g)
     return sorted(out, key=lambda r: (-float(r.get("source_candidate_score") or 0), str(r.get("normalized_url") or "")))
@@ -1075,7 +1097,7 @@ def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: 
 
 def normalize_image_status(stage: str, ms: dict[str, Any]) -> dict[str, Any]:
     input_type = str(ms.get("image_model_input_type") or "")
-    has_media_fallback = input_type == "metadata_only" and str(ms.get("image_download_status") or "") == "actual_image_missing_or_fallback"
+    has_media_fallback = input_type != "actual_image" and str(ms.get("image_download_status") or "") in {"actual_image_missing_or_fallback", "download_failed_or_missing"}
     if has_media_fallback:
         return {
             "current_stage": "image_fetch_retry_needed",
@@ -1084,6 +1106,25 @@ def normalize_image_status(stage: str, ms: dict[str, Any]) -> dict[str, Any]:
             "visual_decision": "pending",
             "next_action": "retry_media_download_or_manual_open",
             "why_not_publication_ready": "metadata-only image fallback; actual image bytes were not scored",
+            "is_selected_for_publication": False,
+            "image_publication_ready": "false",
+            "image_reviewable": "false",
+            "image_quality_bucket": "metadata_pending_actual_image",
+            "failure_reason": "needs_actual_image_fetch",
+        }
+    if input_type != "actual_image" and str(ms.get("image_publication_ready")) == "true":
+        return {
+            "current_stage": "image_fetch_retry_needed",
+            "image_status": "needs_actual_image_fetch",
+            "image_bucket": "text_accepted_metadata_only",
+            "visual_decision": "pending",
+            "next_action": "retry_media_download_or_manual_open",
+            "why_not_publication_ready": "non-actual image scoring cannot mark a row publication-ready",
+            "is_selected_for_publication": False,
+            "image_publication_ready": "false",
+            "image_reviewable": "false",
+            "image_quality_bucket": "metadata_pending_actual_image",
+            "failure_reason": "needs_actual_image_fetch",
         }
     if str(ms.get("image_publication_ready")) == "true":
         return {"image_status": "publication_ready", "image_bucket": "text_accepted_image_publication_ready", "visual_decision": "accept", "next_action": "human_final_check", "why_not_publication_ready": ""}
@@ -1177,9 +1218,16 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "best_stage_ever": prev.get("best_stage_ever") or row.get("current_stage", ""),
             "best_candidate_score_ever": round(best_score, 3), "candidate_score_current": row.get("candidate_score", ""), "candidate_score_delta": score_delta,
             "best_media_score_ever": round(best_media, 3), "media_score_current": row.get("overall_media_score", ""), "media_score_delta": media_delta,
+            "short_summary": row.get("short_summary", prev.get("short_summary", "")),
+            "content_type": row.get("content_type", prev.get("content_type", "")),
+            "llm_content_type": row.get("llm_content_type", prev.get("llm_content_type", "")),
+            "vector_content_type": row.get("vector_content_type", prev.get("vector_content_type", "")),
             "text_bucket": row.get("text_bucket", ""), "image_bucket": row.get("image_bucket", ""), "image_status": row.get("image_status", ""),
             "image_model_input_type": row.get("image_model_input_type", ""), "image_model_type": row.get("image_model_type", ""),
+            "image_publication_ready": row.get("image_publication_ready", "false"), "image_reviewable": row.get("image_reviewable", "false"),
             "visual_decision": row.get("visual_decision", ""),
+            "llm_status": row.get("llm_status", ""), "llm_stage": row.get("llm_stage", ""), "needs_llm_final_verify": row.get("needs_llm_final_verify", ""),
+            "vector_gate_status": row.get("vector_gate_status", ""), "vector_positive_score": row.get("vector_positive_score", ""),
             "has_firsthand_visit_evidence": row.get("has_firsthand_visit_evidence", ""), "visit_evidence_type": row.get("visit_evidence_type", ""),
             "emotion_or_impression_evidence": row.get("emotion_or_impression_evidence", ""), "review_or_opinion_evidence": row.get("review_or_opinion_evidence", ""),
             "original_photo_evidence": row.get("original_photo_evidence", ""), "manual_decision": row.get("manual_decision") or prev.get("manual_decision", ""),
@@ -1244,21 +1292,24 @@ def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source
             pclass, why, score = "P1", "author/travel/photo/catalog signal", score + 0.12
         elif "public_travel_blogger_catalog" in discovery or "public_travel_blogger_catalog" in edge_types:
             pclass, why, score = "P2", "sample public travel blogger catalog", score + 0.05
-        planned = "probe_telegram_entity_then_history" if platform.startswith("telegram") else ("probe_vk_wall_when_configured" if platform == "vk" else "keep_frontier")
+        frontier_stage = str(row.get("frontier_stage") or ("vk_not_configured" if platform == "vk" else ("unsupported" if platform and not platform.startswith("telegram") else "unresolved")))
+        planned = "fetch_cached_entity_history" if frontier_stage == "history_due" else ("probe_telegram_entity_then_history" if platform.startswith("telegram") else ("probe_vk_wall_when_configured" if platform == "vk" else "keep_frontier"))
+        blocked_reason = "vk_wall_not_configured" if platform == "vk" and not (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else ""
         out.append({
             "queue_rank": 0, "canonical_url": url, "platform": platform, "title_guess": row.get("title_guess") or row.get("username_or_handle") or url,
-            "frontier_priority": round(score, 3), "frontier_status": row.get("frontier_status", ""), "why_next": why,
+            "frontier_priority": round(score, 3), "frontier_stage": frontier_stage, "frontier_status": row.get("frontier_status", ""), "why_next": why,
             "discovery_types": discovery, "best_edge_type": row.get("best_edge_type") or edge_types,
             "source_quality_score": round(min(1.0, score), 3), "kaliningrad_prior_score": row.get("best_confidence", ""),
             "authorial_voice_score": 0.65 if pclass in {"P0", "P1"} else 0.35,
             "original_photo_prior_score": 0.60 if pclass in {"P0", "P1"} else 0.30,
+            "blogger_source_score": 0.70 if any(w in (url + " " + str(row.get("title_guess") or "")).lower() for w in ["travel", "путеше", "блог", "trip"]) else 0.35,
             "ad_risk_score": 0.20 if pclass in {"P0", "P1", "P2"} else 0.45,
             "resolve_status": row.get("resolve_status", ""), "next_allowed_resolve_at": row.get("next_allowed_resolve_at", ""),
             "probe_status": row.get("probe_status", "probe_later"), "planned_action": planned, "planned_after_run_id": run_id,
-            "promotion_class": pclass,
+            "blocked_reason": blocked_reason, "promotion_class": pclass,
         })
     selected = []
-    for pclass, limit in [("P0", 20), ("P1", 20), ("P2", 15), ("P3", 5)]:
+    for pclass, limit in [("P0", 25), ("P1", 40), ("P2", 25), ("P3", 10)]:
         selected.extend(sorted([r for r in out if r["promotion_class"] == pclass], key=lambda r: (-float(r.get("frontier_priority") or 0), r.get("canonical_url") or ""))[:limit])
     seen = set(); final = []
     for row in selected:
@@ -1266,9 +1317,9 @@ def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source
         if key in seen:
             continue
         seen.add(key); final.append(row)
-    for i, row in enumerate(final[:50], start=1):
+    for i, row in enumerate(final[:100], start=1):
         row["queue_rank"] = i
-    return final[:50]
+    return final[:100]
 
 def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -1309,13 +1360,52 @@ def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def candidate_memory_shortlist_row(r: dict[str, Any], rank: int) -> dict[str, Any]:
+    input_type = str(r.get("image_model_input_type") or "")
+    stage = str(r.get("current_stage") or "")
+    if str(r.get("image_publication_ready") or "") == "true" and input_type == "actual_image":
+        bucket = "publication_ready_actual_image"
+        action = "human_final_check"
+    elif stage == "image_fetch_retry_needed" or r.get("image_status") == "needs_actual_image_fetch":
+        bucket = "needs_actual_image_retry"
+        action = "retry_media_download_or_manual_open"
+    elif stage == "good_text_weak_media":
+        bucket = "good_text_weak_actual_image" if input_type == "actual_image" else "manual_open_promising_text"
+        action = "manual_open_if_text_is_strong"
+    else:
+        bucket = "manual_open_promising_text"
+        action = r.get("next_action") or "human_review_without_llm"
+    return {
+        "rank": rank,
+        "decision_bucket": bucket,
+        "next_action": action,
+        "post_url": r.get("post_url"),
+        "source_title": r.get("source_title"),
+        "platform": r.get("platform"),
+        "post_date": r.get("post_date"),
+        "short_summary": r.get("short_summary"),
+        "why_relevant": r.get("why_keep_in_memory"),
+        "matched_place_names": r.get("matched_place_names"),
+        "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
+        "candidate_score": r.get("candidate_score_current") or r.get("best_candidate_score_ever"),
+        "overall_media_score": r.get("media_score_current") or r.get("best_media_score_ever"),
+        "image_status": r.get("image_status"),
+        "image_model_input_type": r.get("image_model_input_type"),
+        "image_reviewable": r.get("image_reviewable"),
+        "image_publication_ready": r.get("image_publication_ready"),
+        "llm_status": r.get("llm_status") or "not_called_or_previous",
+        "current_lifecycle_status": r.get("current_lifecycle_status"),
+        "not_refetched_this_run": r.get("not_refetched_this_run"),
+    }
+
+
 async def discover_telegram_similar_channels(client: Any, source_rows: list[dict[str, Any]], entity_by_source: dict[str, Any], governor: TelegramRequestGovernor, run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not getenv_bool("REGION_TALK_TG_SIMILAR_ENABLED", getenv_bool("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", True)):
         _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "disabled"})
         return [], []
-    max_seed_channels = getenv_int("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", 3))
+    max_seed_channels = getenv_int("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", 5))
     max_per_seed = getenv_int("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", getenv_int("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", 10))
-    max_frontier = getenv_int("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", 25))
+    max_frontier = getenv_int("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", getenv_int("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", 50))
     rows: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     try:
@@ -1328,13 +1418,14 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
         _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "not_supported_by_telethon_version"})
         return rows, edges
     seeds = [r for r in source_rows if r.get("fetch_status") == "ok" and r.get("source_id") in entity_by_source]
-    seeds = sorted(seeds, key=lambda r: (-float(r.get("monitor_priority_score") or 0), int(r.get("priority") or 999)))[:max_seed_channels]
+    seed_pool = sorted(seeds, key=lambda r: (-float(r.get("monitor_priority_score") or 0), int(r.get("priority") or 999), str(r.get("canonical_url") or "")))[:max(max_seed_channels * 4, max_seed_channels)]
+    seeds = sorted(seed_pool, key=lambda r: (stable_hash(run_id, r.get("source_id"), r.get("canonical_url")), -float(r.get("monitor_priority_score") or 0)))[:max_seed_channels]
     raw_count = 0
     errors = 0
     floodwait = 0
     seen: set[str] = set()
     for seed_idx, srow in enumerate(seeds, start=1):
-        if governor.recommendation_calls_attempted >= governor.max_recommendation_calls:
+        if governor.recommendation_calls_attempted >= governor.max_recommendation_calls or not governor.has_total_request_budget("channels.getChannelRecommendations", str(srow.get("source_id") or ""), str(srow.get("canonical_url") or "")):
             break
         source_id = str(srow.get("source_id") or "")
         canonical = str(srow.get("canonical_url") or "")
@@ -1481,8 +1572,6 @@ def _metadata_media_scores(has_media: bool, text_score: dict[str, Any], *, reaso
     safety = 0.98 if not text_score.get("news_hits") and not text_score.get("trash_hits") else 0.78
     low_noise = 0.82
     overall = round((technical+aesthetic+postcard+region_visual+safety+low_noise)/6,3)
-    reviewable = technical>=0.55 and postcard>=0.60 and safety>=0.80 and overall>=0.62
-    selected = technical>=0.65 and aesthetic>=0.70 and postcard>=0.72 and safety>=0.95 and low_noise>=0.80 and overall>=0.75
     elements = []
     low = " ".join(anchors + positives).lower()
     if "море" in low or "балтий" in low: elements.append("sea/coast")
@@ -1490,7 +1579,7 @@ def _metadata_media_scores(has_media: bool, text_score: dict[str, Any], *, reaso
     if "архитект" in low or "кёниг" in low or "калининград" in low: elements.append("city/architecture")
     if not elements: elements.append("travel visual candidate")
     prefix = (reason_prefix + "; ") if reason_prefix else ""
-    return {"technical_quality_score":round(technical,3),"aesthetic_score":round(aesthetic,3),"postcardness_score":round(postcard,3),"region_visual_relevance_score":round(region_visual,3),"publication_safety_score":round(safety,3),"low_noise_score":round(low_noise,3),"overall_media_score":overall,"is_selected_for_publication":selected,"image_publication_ready":str(selected).lower(),"image_reviewable":str(reviewable).lower(),"image_quality_bucket":"publication_ready" if selected else ("reviewable_image" if reviewable else "weak_image"),"recognized_visual_elements":"; ".join(elements),"model_short_explanation":prefix + f"cv_only metadata fallback: media present; region anchors={len(anchors)}, travel/visual cues={len(positives)}; safety={'ok' if safety>=0.95 else 'blocked by news/trash cues'}.","failure_reason":"" if selected else ("reviewable_below_publication_threshold" if reviewable else "below_reviewable_image_threshold"),"model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode(),"image_model_device":"cpu","image_download_status":"actual_image_missing_or_fallback"}
+    return {"technical_quality_score":round(technical,3),"aesthetic_score":round(aesthetic,3),"postcardness_score":round(postcard,3),"region_visual_relevance_score":round(region_visual,3),"publication_safety_score":round(safety,3),"low_noise_score":round(low_noise,3),"overall_media_score":overall,"is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false","image_quality_bucket":"metadata_pending_actual_image","recognized_visual_elements":"; ".join(elements),"model_short_explanation":prefix + f"cv_only metadata fallback: media present; region anchors={len(anchors)}, travel/visual cues={len(positives)}; safety={'ok' if safety>=0.95 else 'blocked by news/trash cues'}. Actual image bytes are required before reviewable/publication-ready.","failure_reason":"needs_actual_image_fetch","model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode(),"image_model_device":"cpu","image_download_status":"actual_image_missing_or_fallback"}
 
 
 def _local_image_stats(path: str) -> dict[str, float]:
@@ -1699,8 +1788,12 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
                 src_row["resolved_title"] = title
                 seen: set[int] = set()
-                queries = [None] + DEFAULT_ANCHORS[:5]
+                anchor_cap = getenv_int("REGION_TALK_TG_MAX_ANCHOR_QUERIES_PER_SOURCE", 3)
+                queries = [None] + DEFAULT_ANCHORS[:max(0, anchor_cap)]
                 for q in queries:
+                    if not governor.has_total_request_budget("iter_messages", seed.source_id, seed.canonical_url):
+                        src_row.update({"fetch_status": "skipped_telegram_total_request_budget_exhausted", "source_probe_reason": "total Telegram request budget exhausted"})
+                        break
                     per_query = max(3, min(max_posts, getenv_int("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", max_posts)) // len(queries) + 1)
                     governor.total_attempted += 1
                     governor.requests_by_method["iter_messages"] = governor.requests_by_method.get("iter_messages", 0) + 1
@@ -1756,6 +1849,9 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 governor.history_sources_ok += 1
                 governor.history_posts_fetched += len(seen)
                 src_row["posts_scanned"] = len(seen)
+                jitter = float(os.getenv("REGION_TALK_TG_HISTORY_SOURCE_JITTER_SECONDS") or "0.5")
+                if jitter > 0:
+                    await asyncio.sleep(random.uniform(0, jitter))
             except Exception as exc:
                 seconds = int(getattr(exc, "seconds", 0) or 0)
                 if type(exc).__name__ == "FloodWaitError" or seconds:
@@ -2105,6 +2201,68 @@ def should_send_to_llm(fresh: dict[str, Any], scope: dict[str, Any], post: dict[
         return False
     return True
 
+
+def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any]) -> dict[str, Any]:
+    """Local-first text gate.
+
+    MVP implementation uses deterministic/prototype score fusion and records the
+    dual-model embedding target. Kaggle can later replace the prototype fallback
+    with real intfloat/multilingual-e5-base + BAAI/bge-m3 embeddings without
+    changing the row contract.
+    """
+    low = (text or "").lower()
+    positive = max(float(substance.get("visit_impression_score") or 0), float(substance.get("useful_route_score") or 0), float(substance.get("emotion_observation_score") or 0))
+    if scope.get("kaliningrad_oblast_only_scope"):
+        positive += 0.25
+    if scope.get("matched_place_names"):
+        positive += 0.10
+    news_event = float(ts.get("newsiness_score") or 0)
+    if any(w in low for w in ["анонс", "мероприят", "конкурс", "диктант", "регистрац", "заявк", "афиша", "билет", "расписан"]):
+        news_event += 0.45
+    ad_promo = float(ts.get("ad_score") or 0)
+    if bool(ad_gate.get("is_ad_or_promo")):
+        ad_promo += 0.50
+    roundup = 0.60 if scope.get("external_geo_mentions") else 0.0
+    if any(w in low for w in ["подборка", "топ-", "топ ", "куда поехать", "мест россии", "регионов россии", "направлений"]):
+        roundup += 0.25
+    low_substance = max(0.0, 0.65 - float(substance.get("text_substance_score") or 0))
+    negative = max(news_event, ad_promo, roundup, low_substance)
+    margin = round(max(0.0, min(1.0, positive)) - max(0.0, min(1.0, negative)), 3)
+    status = "vector_ambiguous_keep_for_ranking"
+    reason = ""
+    content_type = "visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) >= 0.20 else ("route_useful_candidate" if float(substance.get("useful_route_score") or 0) >= 0.18 else "single_location_photo_card" if scope.get("matched_place_names") else "low_substance")
+    if news_event >= 0.55 and positive < 0.55:
+        status, reason, content_type = "vector_reject_news_event", "news/event/announcement prototype score dominates", "news_or_event"
+    elif ad_promo >= 0.55 and positive < 0.60:
+        status, reason, content_type = "vector_reject_ad_promo", "ad/promo prototype score dominates", "ad_or_promo"
+    elif roundup >= 0.60 and positive < 0.60:
+        status, reason, content_type = "vector_reject_roundup", "multi-region/SEO roundup prototype score dominates", "multi_region_roundup"
+    elif low_substance >= 0.55 and positive < 0.40:
+        status, reason, content_type = "vector_reject_low_substance", "low-substance prototype score dominates", "low_substance"
+    elif positive >= 0.55 and margin >= -0.15:
+        status, reason = "vector_accept_candidate", "positive visit/route/Kaliningrad signal kept for local image ranking"
+    return {
+        "text_embedding_model_id": "dual_model_target:intfloat/multilingual-e5-base+BAAI/bge-m3;prototype_fallback_v1",
+        "text_embedding_runtime": "kaggle_local_prototype_vector_gate",
+        "vector_gate_status": status,
+        "vector_content_type": content_type,
+        "vector_positive_score": round(max(0.0, min(1.0, positive)), 3),
+        "vector_news_event_score": round(max(0.0, min(1.0, news_event)), 3),
+        "vector_ad_promo_score": round(max(0.0, min(1.0, ad_promo)), 3),
+        "vector_roundup_score": round(max(0.0, min(1.0, roundup)), 3),
+        "vector_low_substance_score": round(max(0.0, min(1.0, low_substance)), 3),
+        "vector_visit_impression_score": round(float(substance.get("visit_impression_score") or 0), 3),
+        "vector_route_useful_score": round(float(substance.get("useful_route_score") or 0), 3),
+        "vector_emotion_observation_score": round(float(substance.get("emotion_observation_score") or 0), 3),
+        "vector_margin_positive_vs_negative": margin,
+        "vector_rejection_reason": reason if status.startswith("vector_reject") else "",
+        "vector_gate_confidence": round(abs(margin), 3),
+        "needs_llm_final_verify": str(status in {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"}).lower(),
+        "llm_not_called_reason": "wide_funnel_vector_gate_only",
+        "llm_stage": "",
+        "llm_status": "not_called_until_final_verifier" if status in {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"} else "not_called_vector_reject",
+    }
+
 def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: list[dict[str, Any]], run_id: str, output_dir: Path) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     run_now = utc_now_iso()
@@ -2154,7 +2312,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         current_stage = ""
         gate_trace: list[str] = []
 
-        semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "llm_required").strip().lower()
+        semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "vector_first_final_llm").strip().lower()
+        early_llm_enabled = getenv_bool("REGION_TALK_ENABLE_EARLY_LLM", False)
+        vector_gates_enabled = getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
         deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
         if not fresh["fresh_enough"]:
             drop_gate, rejection = "freshness_gate", "reject_stale_or_missing_date"
@@ -2179,6 +2339,15 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         gate_trace.append("ad_promo_announcement_gate:evidence_only")
         gate_trace.append("content_substance_visit_impression_gate:evidence_only")
         gate_trace.append("not_news_not_trash_gate:evidence_only")
+        vector_gate = text_vector_gate(text, ts, scope, ad_gate, substance) if vector_gates_enabled else {
+            "text_embedding_model_id": "", "text_embedding_runtime": "disabled", "vector_gate_status": "disabled",
+            "vector_content_type": "", "vector_positive_score": "", "vector_news_event_score": "", "vector_ad_promo_score": "",
+            "vector_roundup_score": "", "vector_low_substance_score": "", "vector_visit_impression_score": "",
+            "vector_route_useful_score": "", "vector_emotion_observation_score": "", "vector_margin_positive_vs_negative": "",
+            "vector_rejection_reason": "", "vector_gate_confidence": "", "needs_llm_final_verify": "false",
+            "llm_not_called_reason": "vector_gates_disabled", "llm_stage": "", "llm_status": "not_called_vector_disabled",
+        }
+        gate_trace.append("news_event_vector_gate:" + str(vector_gate.get("vector_gate_status") or "not_run"))
 
         llm_gate = {
             "llm_gate_status": "not_run", "llm_provider": "google_gemini", "llm_model": llm_model, "llm_default_env_var_name": llm_default_env_var_name, "llm_limit_source": llm_limit_snapshot.get("llm_limit_source", "supabase_google_ai"), "llm_decision": "",
@@ -2191,15 +2360,25 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "is_author_visit_impression": str(float(substance.get("visit_impression_score") or 0) >= 0.25).lower(),
             "is_official_route_material": "false", "is_photo_card_from_subscriber": "false",
             "llm_is_ad_or_promo": "", "llm_is_news_or_trash": "",
-            "llm_content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "low_substance"),
-            "content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "single_location_photo_card" if scope.get("matched_place_names") else "low_substance"),
+            "llm_content_type": str(vector_gate.get("vector_content_type") or ""),
+            "content_type": str(vector_gate.get("vector_content_type") or ("single_location_photo_card" if scope.get("matched_place_names") else "low_substance")),
             "visit_evidence_type": "", "has_firsthand_visit_evidence": "", "emotion_or_impression_evidence": "",
             "review_or_opinion_evidence": "", "memorable_detail_evidence": "", "original_photo_evidence": "",
             "llm_reason": "",
             "llm_usage_input_tokens": "", "llm_usage_output_tokens": "", "llm_usage_total_tokens": "",
             "rejection_reason_primary": "", "rejection_reason_details": "",
         }
-        llm_required = semantic_gate_mode in {"llm_required", "llm", "semantic_required"} and not deterministic_override
+        if not rejection and bool(ad_gate.get("is_ad_or_promo")) and float(substance.get("visit_impression_score") or 0) < 0.25:
+            drop_gate = "ad_promo_announcement_gate"
+            rejection = "reject_ad_or_promo"
+            visual_skip_reason = str(ad_gate.get("ad_promo_hits") or "ad/promo/event deterministic evidence")
+            current_stage = "dropped_text_gate"
+        elif not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject"):
+            drop_gate = "news_event_vector_gate"
+            rejection = str(vector_gate.get("vector_gate_status") or "vector_reject")
+            visual_skip_reason = str(vector_gate.get("vector_rejection_reason") or rejection)
+            current_stage = "dropped_text_gate"
+        llm_required = early_llm_enabled and semantic_gate_mode in {"llm_required", "llm", "semantic_required", "early_llm"} and not deterministic_override
         if not rejection and llm_required:
             if llm_supabase_unavailable:
                 llm_gate["llm_gate_status"] = "not_run_supabase_limiter_unavailable"
@@ -2241,6 +2420,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                     drop_gate, rejection = "llm_semantic_gate", "llm_reject"
                     visual_skip_reason = str(llm_gate.get("llm_reason") or "LLM rejected semantic fit")
                     current_stage = "dropped_text_gate"
+                elif str(llm_gate.get("llm_content_type") or llm_gate.get("content_type") or "") == "news_or_event" or str(llm_gate.get("llm_is_news_or_trash") or "").lower() == "true":
+                    drop_gate, rejection = "llm_semantic_gate", "reject_news_or_event"
+                    visual_skip_reason = str(llm_gate.get("llm_reason") or "LLM classified this as news/event rather than a visit/impression post")
+                    current_stage = "dropped_text_gate"
+                    llm_gate["llm_decision"] = "reject"
+                    gate_trace.append("llm_semantic_gate:reject_news_or_event")
                 elif decision == "needs_review":
                     drop_gate, rejection = "llm_semantic_gate", "llm_needs_review"
                     visual_skip_reason = str(llm_gate.get("llm_reason") or "LLM requested manual semantic review before image scoring")
@@ -2263,6 +2448,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         elif not rejection and deterministic_override:
             current_stage = "pre_candidate_debug_deterministic"
             gate_trace.append("deterministic_semantic_override:pre_candidate_only")
+        elif not rejection:
+            llm_gate["llm_gate_status"] = "not_run_vector_first"
+            llm_gate["llm_reason"] = "Early/broad LLM disabled; vector/local gates and image scoring run before optional final verifier"
+            gate_trace.append("early_llm:disabled_vector_first")
 
         if rejection and current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "pre_candidate_debug_deterministic"}:
             ms = image_scores_skipped(visual_skip_reason or rejection)
@@ -2272,12 +2461,15 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             score = 0.0
             current_stage = "dropped_text_gate"
         else:
-            gate_trace.append("semantic_dual_model_enrichment:llm_semantic_gate_passed")
-            visual_stage = "scored_after_llm_text_gates"
+            gate_trace.append("semantic_dual_model_enrichment:vector_gate_passed")
+            visual_stage = "scored_after_vector_text_gates_before_final_llm"
             visual_skip_reason = ""
             image_cost_saved = False
             ms = media_scores(bool(p.get("has_media")), ts, p)
-            media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": p.get("primary_media_path") or ((p.get("post_url") + "#media") if p.get("has_media") else ""), "thumbnail":"", **ms})
+            initial_image_status_fields = normalize_image_status(current_stage, ms)
+            if initial_image_status_fields.get("image_status") == "needs_actual_image_fetch":
+                ms = {**ms, **initial_image_status_fields}
+            media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": p.get("primary_media_path") or ((p.get("post_url") + "#media") if p.get("has_media") else ""), "thumbnail":"", **ms, **initial_image_status_fields})
             score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
             image_status_fields = normalize_image_status(current_stage, ms)
             if image_status_fields.get("current_stage") == "image_fetch_retry_needed":
@@ -2331,12 +2523,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "discovery_edges_count": len(edge_rows),
             "gate_order_trace": " → ".join(gate_trace),
             "semantic_evidence_flags": "; ".join(semantic_evidence_flags),
+            **vector_gate,
             **llm_gate,
             "rejection_reason_primary": rejection or "",
             "rejection_reason_details": visual_skip_reason or str(llm_gate.get("llm_reason") or ""),
             "semantic_gate_mode": semantic_gate_mode,
             "deterministic_semantic_gate_override": str(deterministic_override).lower(),
-            "semantic_enrichment_stage": "llm_semantic_gate_pending" if current_stage == "pre_candidate_needs_llm" else ("dual_model_vector_enrichment_pending" if current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate"),
+            "semantic_enrichment_stage": "final_llm_verifier_pending" if str(vector_gate.get("needs_llm_final_verify")) == "true" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media", "low_substance_but_region_relevant"} else ("dual_model_vector_enrichment_pending" if current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate"),
         }
         row.pop("place_matches", None)
         new_posts.append(row)
@@ -2477,6 +2670,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     fresh_with_place_evidence = [r for r in fresh_rows if r.get("matched_place_names")]
     llm_reviewed_rows = [r for r in new_posts if r.get("llm_gate_status") == "ok"]
     llm_accepted_rows = [r for r in llm_reviewed_rows if r.get("llm_decision") == "accept"]
+    vector_scored_rows = [r for r in new_posts if r.get("vector_gate_status")]
+    vector_rejected_rows = [r for r in vector_scored_rows if str(r.get("vector_gate_status") or "").startswith("vector_reject")]
+    actual_image_scored_before_llm_count = sum(1 for r in media_rows if r.get("image_model_input_type") == "actual_image")
+    final_verify_queue_count_estimate = sum(1 for r in new_posts if str(r.get("needs_llm_final_verify") or "") == "true" and r.get("current_stage") in {"favorite", "semantic_candidate", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media", "low_substance_but_region_relevant"})
+    early_llm_enabled_summary = getenv_bool("REGION_TALK_ENABLE_EARLY_LLM", False)
+    max_llm_final_verify = getenv_int("REGION_TALK_MAX_LLM_FINAL_VERIFY", 10)
     reviewable_rows = [r for r in review_queue if r.get("current_stage") in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "low_substance_but_region_relevant", "semantic_candidate", "favorite", "pre_candidate_debug_deterministic"}]
     git_info = git_provenance()
     tg_obs = _REGION_TALK_TELEGRAM_RUNTIME.get("observability") or {"telegram_phase_status": "not_configured"}
@@ -2516,6 +2715,25 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         **llm_limit_snapshot,
         "llm_calls":llm_calls_used,"llm_max_calls":"supabase_reserve_controlled","llm_reviewed":len(llm_reviewed_rows),"llm_accepted":len(llm_accepted_rows),
         "llm_calls_attempted":llm_calls_used,"llm_calls_ok":len(llm_reviewed_rows),"llm_calls_error":sum(1 for r in new_posts if r.get("llm_gate_status") == "error"),"llm_quota_errors":sum(1 for r in new_posts if r.get("llm_gate_status") == "rate_limited"),"llm_retry_rows":sum(1 for r in new_posts if r.get("current_stage") == "needs_llm_retry"),
+        "wide_funnel_llm_calls":llm_calls_used if early_llm_enabled_summary else 0,
+        "final_verifier_llm_calls":0,
+        "llm_calls_saved_by_vector_gate":len(vector_rejected_rows),
+        "llm_calls_saved_by_deterministic_gate":sum(1 for r in new_posts if r.get("image_scoring_skipped") == "true" and not r.get("vector_gate_status")),
+        "text_vector_model_id":"dual_model_target:intfloat/multilingual-e5-base+BAAI/bge-m3;prototype_fallback_v1",
+        "text_vector_rows_scored":len(vector_scored_rows),
+        "vector_rejected_news_event_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_news_event"),
+        "vector_rejected_ad_promo_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_ad_promo"),
+        "vector_rejected_roundup_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_roundup"),
+        "vector_rejected_low_substance_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_low_substance"),
+        "vector_ambiguous_kept_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_ambiguous_keep_for_ranking"),
+        "actual_image_scored_before_llm_count":actual_image_scored_before_llm_count,
+        "llm_final_verify_queue_count":final_verify_queue_count_estimate,
+        "llm_budget_preserved_count":max(0, len(vector_scored_rows) - llm_calls_used),
+        "REGION_TALK_ENABLE_EARLY_LLM":str(early_llm_enabled_summary).lower(),
+        "REGION_TALK_ENABLE_VECTOR_GATES":str(getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)).lower(),
+        "REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS":str(getenv_bool("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", True)).lower(),
+        "REGION_TALK_TARGET_LLM_CALLS":getenv_int("REGION_TALK_TARGET_LLM_CALLS", 10),
+        "REGION_TALK_MAX_LLM_FINAL_VERIFY":max_llm_final_verify,
         "llm_timeout_errors":sum(1 for r in new_posts if "timeout" in str(r.get("llm_reason") or "").lower()),
         "llm_malformed_json_errors":sum(1 for r in new_posts if "json" in str(r.get("llm_reason") or "").lower() and r.get("llm_gate_status") == "error"),
         "llm_cache_hits":0,"llm_budget_remaining":"supabase_controlled",
@@ -2546,8 +2764,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_frontier_new_this_run":sum(1 for r in source_frontier_unique if r.get("discovery_first_run_id") == run_id),
         "source_frontier_promoted_this_run":len(source_frontier_queue_next),
         "source_frontier_ready_next_run":len(source_frontier_queue_next),
-        "source_frontier_ready_to_probe":sum(1 for r in source_frontier_unique if str(r.get("frontier_status") or "") in {"resolve_later_high", "keep_frontier", "queued_unresolved"}),
+        "source_frontier_ready_to_probe":sum(1 for r in source_frontier_unique if str(r.get("frontier_stage") or "") in {"probe_due", "history_due", "unresolved"}),
         "source_frontier_deferred":sum(1 for r in source_frontier_unique if "defer" in str(r.get("frontier_status") or "")),
+        "source_frontier_inactive_low_quality":sum(1 for r in source_frontier_unique if str(r.get("frontier_stage") or "") == "inactive_low_quality"),
         "telegram_phase_status":tg_obs.get("telegram_phase_status"),
         "telegram_floodwait_count":tg_obs.get("resolve_network_floodwait", 0),
         "telegram_max_floodwait_seconds":tg_obs.get("max_floodwait_seconds", 0),
@@ -2690,6 +2909,20 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"low_substance_rejected","value":summary_row.get("dropped_low_substance")},
         {"metric":"fresh_posts_with_place_evidence","value":len(fresh_with_place_evidence)},
         {"metric":"llm_calls_supabase_reserved","value":llm_calls_used},
+        {"metric":"wide_funnel_llm_calls","value":summary_row.get("wide_funnel_llm_calls")},
+        {"metric":"final_verifier_llm_calls","value":summary_row.get("final_verifier_llm_calls")},
+        {"metric":"llm_calls_saved_by_vector_gate","value":summary_row.get("llm_calls_saved_by_vector_gate")},
+        {"metric":"llm_calls_saved_by_deterministic_gate","value":summary_row.get("llm_calls_saved_by_deterministic_gate")},
+        {"metric":"text_vector_model_id","value":summary_row.get("text_vector_model_id")},
+        {"metric":"text_vector_rows_scored","value":summary_row.get("text_vector_rows_scored")},
+        {"metric":"vector_rejected_news_event_count","value":summary_row.get("vector_rejected_news_event_count")},
+        {"metric":"vector_rejected_ad_promo_count","value":summary_row.get("vector_rejected_ad_promo_count")},
+        {"metric":"vector_rejected_roundup_count","value":summary_row.get("vector_rejected_roundup_count")},
+        {"metric":"vector_rejected_low_substance_count","value":summary_row.get("vector_rejected_low_substance_count")},
+        {"metric":"vector_ambiguous_kept_count","value":summary_row.get("vector_ambiguous_kept_count")},
+        {"metric":"actual_image_scored_before_llm_count","value":summary_row.get("actual_image_scored_before_llm_count")},
+        {"metric":"llm_final_verify_queue_count","value":summary_row.get("llm_final_verify_queue_count")},
+        {"metric":"llm_budget_preserved_count","value":summary_row.get("llm_budget_preserved_count")},
         {"metric":"llm_calls_ok","value":len(llm_reviewed_rows)},
         {"metric":"llm_retry_rows","value":len(llm_error_rows)},
         {"metric":"image_scored_rows","value":len(media_rows)},
@@ -2731,13 +2964,35 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"image_scoring_mode","value":current_image_scoring_mode()},
     ]
 
-    compact_final_shortlist = [compact_shortlist_row(r) for r in final_shortlist]
-    manual_review_queue = candidate_memory_top or compact_final_shortlist or [{"_sheet_note":"no active candidate memory/manual review rows yet"}]
+    compact_current_run_shortlist = [compact_shortlist_row(r) for r in final_shortlist]
+    compact_final_shortlist = [candidate_memory_shortlist_row(r, i) for i, r in enumerate(candidate_memory_top, start=1)] or compact_current_run_shortlist
+    manual_review_queue = candidate_memory_top or compact_current_run_shortlist or [{"_sheet_note":"no active candidate memory/manual review rows yet"}]
     candidate_memory_sheet = candidate_memory_rows or [{"_sheet_note":"candidate memory is empty; no current or previous candidate rows reached memory criteria"}]
     candidate_memory_top_sheet = candidate_memory_top or [{"_sheet_note":"no active candidate memory rows"}]
     previous_not_refetched_sheet = previous_candidates_not_refetched or [{"_sheet_note":"no previous active candidates missed by this run"}]
     candidate_deltas_sheet = candidate_deltas or [{"_sheet_note":"no candidate deltas yet"}]
     source_frontier_queue_sheet = source_frontier_queue_next or [{"_sheet_note":"no source frontier queue rows"}]
+    image_retry_queue = [r for r in new_posts if r.get("current_stage") == "image_fetch_retry_needed" or r.get("image_status") == "needs_actual_image_fetch"]
+    seen_retry = {str(r.get("post_url") or r.get("candidate_memory_id") or "") for r in image_retry_queue}
+    for r in candidate_memory_top:
+        key = str(r.get("post_url") or r.get("candidate_memory_id") or "")
+        if key not in seen_retry and (r.get("current_stage") == "image_fetch_retry_needed" or r.get("image_status") == "needs_actual_image_fetch"):
+            image_retry_queue.append(r)
+            seen_retry.add(key)
+    image_retry_queue_sheet = image_retry_queue or [{"_sheet_note":"no metadata-only/image-fetch retry rows"}]
+    llm_usage_by_stage = [
+        {"stage":"broad_fetched_posts","rows_considered":len(new_posts),"llm_calls":summary_row.get("wide_funnel_llm_calls"),"allowed":"false","reason":"vector/deterministic only before compact shortlist","budget_cap":0},
+        {"stage":"review_queue","rows_considered":len(review_queue),"llm_calls":0,"allowed":"false","reason":"wide review queue remains vector/local; no broad LLM classifier","budget_cap":0},
+        {"stage":"candidate_memory_active","rows_considered":len(candidate_memory_active_rows),"llm_calls":0,"allowed":"true","reason":"eligible for future final verifier only; previous rows may lack text in MVP state","budget_cap":max_llm_final_verify},
+        {"stage":"final_shortlist_top_n","rows_considered":len(compact_final_shortlist),"llm_calls":summary_row.get("final_verifier_llm_calls"),"allowed":"true","reason":"final verifier/tie-breaker only","budget_cap":max_llm_final_verify},
+    ]
+    vk_wall_setup_sheet = [{
+        "status": summary_row.get("vk_wall_probe_status"),
+        "needed_env": "VK_SERVICE_TOKEN or VK_ACCESS_TOKEN with wall read access",
+        "publish_blocker": "VK publishing remains disabled in MVP; read-only wall probe is separate",
+        "frontier_vk_rows": sum(1 for r in source_frontier_unique if str(r.get("platform") or "") == "vk"),
+        "next_action": "configure read-only VK wall token or keep explicit blocker",
+    }]
     favorites_sheet = favorites or [{"favorite_id":"","candidate_id":"","first_seen_run_id":"","last_seen_run_id":"","seen_run_count":"","source_title":"","post_url":"","short_summary":"","why_selected":"","best_image_preview":"","candidate_score":"","review_status":"","manual_decision":"","publication_readiness":"","notes":""}]
     candidates_sheet = candidates or [{"candidate_id":"","current_stage":"","source_title":"","post_url":"","short_summary":"","candidate_score":"","image_reviewable":"","image_publication_ready":"","llm_decision":"","manual_decision":"","notes":""}]
     telegram_observability_rows = [tg_obs] if tg_obs else [{"run_id":run_id,"telegram_phase_status":"not_configured"}]
@@ -2758,8 +3013,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "03b_gate_counts":independent_gate_counts,
         "04_review_queue":review_queue,
         "04a_final_shortlist":compact_final_shortlist,
-        "04a_current_run_shortlist":compact_final_shortlist,
-        "04a_final_shortlist_raw":final_shortlist,
+        "04a_current_run_shortlist":compact_current_run_shortlist,
+        "04a_final_shortlist_raw":candidate_memory_top or final_shortlist,
         "04b_needs_llm_retry":llm_error_sheet_rows,
         "04c_debug_rejects":debug_rejects,
         "05_favorites":favorites_sheet,
@@ -2771,6 +3026,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "07b_prev_candidates_not_refetch":previous_not_refetched_sheet,
         "08_dropped_posts":dropped,
         "09_image_quality":media_rows,
+        "09b_image_fetch_retry_queue":image_retry_queue_sheet,
         "10_good_text_weak_media":[r for r in dropped if r.get("current_stage") == "good_text_weak_media"],
         "11_sources_seed":source_seed_rows,
         "12_sources_discovered":discovered_rows,
@@ -2781,6 +3037,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "14_verifier_reports":[],
         "14b_pre_candidates_needing_llm":[r for r in pre_candidates if r.get("current_stage") == "pre_candidate_needs_llm"],
         "14c_llm_errors":llm_error_sheet_rows,
+        "14d_llm_usage_by_stage":llm_usage_by_stage,
         "15_manual_decisions":[{"candidate_id":"","manual_decision":"favorite|reject|approve_for_preview|approve_for_queue|block_source","reviewer":"","reviewed_at":"","reviewer_comment":"","rights_override":"","source_status_override":""}],
         "16_publish_preview_future":[{"note":"Future only. REGION_TALK_DISABLE_PUBLISH=1; no real publishing in MVP-1.x."}],
         "17_source_graph_edges":graph_edges,
@@ -2789,6 +3046,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "20_telegram_rate_observability":telegram_observability_rows,
         "21_manual_review_queue":manual_review_queue,
         "22_candidate_deltas":candidate_deltas_sheet,
+        "23_vk_wall_setup":vk_wall_setup_sheet,
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)

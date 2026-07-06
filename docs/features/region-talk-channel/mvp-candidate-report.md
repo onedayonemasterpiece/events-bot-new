@@ -417,7 +417,7 @@ Region Talk is a cumulative discovery/research process, not a single-run-only re
 
 New/clarified workbook sheets:
 
-- `04a_current_run_shortlist` — compact shortlist from the current run only; `04a_final_shortlist` remains as a compatibility alias for now.
+- `04a_current_run_shortlist` — compact shortlist from the current run only; `04a_final_shortlist` is the cumulative active candidate-memory shortlist.
 - `06a_candidate_memory` — all accumulated candidate-memory rows, including text-accepted/image-pending/good-text-weak-media/publication-ready/manual-keep rows.
 - `06b_candidate_memory_top` — active cumulative candidate memory for human review.
 - `07b_prev_candidates_not_refetch` — Excel-safe name for previous candidates not refetched this run; the longer requested name does not fit Excel's 31-character sheet limit.
@@ -430,3 +430,11 @@ Summary metrics include post memory totals, candidate memory totals/active/new/r
 Image gate correction: metadata-only image fallback is never a final visual accept/reject. It becomes `image_fetch_retry_needed` / `needs_actual_image_fetch` / `visual_decision=pending` with `next_action=retry_media_download_or_manual_open`.
 
 Semantic bucket correction: the LLM prompt/schema separates multi-region roundup from `single_location_photo_card`. A fresh Kaliningrad-only single-location card may be a research/image-pending candidate even when it is weaker than a firsthand visit impression.
+
+## MVP-1.z5 vector-first / final-LLM correction
+
+Region Talk text quality is now **local/vector-first**. Broad fetched/current-run/review-queue rows must not be classified by LLM. The wide funnel uses freshness, Kaliningrad-only scope, deterministic ad/event evidence and `news_event_vector_gate` / prototype-vector fields; actual image scoring can run locally before any final LLM verifier.
+
+LLM usage is allowed only for compact final verifier/tie-breaker stages (`final_publication_verifier`, `final_human_review_explainer`, `ambiguous_final_tiebreaker`, retry of a previous final verifier) and must remain Supabase-limiter controlled. Default config is `REGION_TALK_ENABLE_EARLY_LLM=0`, `REGION_TALK_ENABLE_VECTOR_GATES=1`, `REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS=1`, `REGION_TALK_MAX_LLM_FINAL_VERIFY=10`. XLSX observability exposes `wide_funnel_llm_calls`, `final_verifier_llm_calls`, vector reject counts, `actual_image_scored_before_llm_count`, and `14d_llm_usage_by_stage`; acceptance requires `wide_funnel_llm_calls=0`.
+
+`04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.

@@ -181,7 +181,7 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
 - Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `3`).
-- Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `8`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `20`).
+- Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `20`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `20`).
 - Large `FloodWait` values (default threshold `300` seconds) are not slept through: record a cooldown/degraded mode, skip later resolves/history that would hit the same method/source, and still write the XLSX report.
 - Keep the private entity cache/cooldown ledger in state/artifacts only; public XLSX sheets may contain `private_state_key`, but never raw `channel_id`, `access_hash`, session strings or tokens.
 - Forbidden: multi-account/proxy rotation, automatic joins/subscriptions, participant scraping, private/invite-only source traversal, or any publication from this MVP report.
@@ -191,15 +191,15 @@ Default live/Kaggle Telegram discovery limits:
 ```bash
 REGION_TALK_TG_GOVERNOR_ENABLED=1
 REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
-REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=20
 REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
 REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_SIMILAR_ENABLED=1
-REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=3
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=5
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
-REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=25
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=50
 ```
 
 ## MVP-1.x forwarded/repost/comment discovery hardening
