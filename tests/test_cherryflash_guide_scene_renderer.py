@@ -17,7 +17,7 @@ def test_guide_excursion_scene_starts_with_reveal_not_static_card(tmp_path) -> N
         index=1,
         variant="guide_excursion_promo",
         title="История в переплётах: экскурсия по библиотеке БФУ",
-        date_line="10.07 16:00",
+        date_line="10 июля 16:00",
         location_line="",
         description="",
         image_path=avatar,

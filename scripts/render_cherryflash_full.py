@@ -244,6 +244,21 @@ def _extract_city_from_location(raw_location: str | None) -> str:
     return ""
 
 
+
+def _format_guide_promo_date(raw_date: str | None, raw_time: str | None = None) -> str:
+    date_line = _normalize_text(raw_date)
+    if date_line:
+        try:
+            dt = date.fromisoformat(date_line)
+        except ValueError:
+            dt = None
+        if dt is not None:
+            date_line = f"{dt.day} {approval.MONTHS_GENITIVE[dt.month].lower()}"
+    time_line = _normalize_text(raw_time)
+    if time_line and time_line != "00:00" and time_line not in date_line:
+        date_line = f"{date_line} {time_line}" if date_line else time_line
+    return date_line
+
 def _format_display_location(
     *,
     location_name: str | None = None,
@@ -450,7 +465,7 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                     variant=scene_variant,
                     title=str(raw_scene.get("title") or "").strip(),
                     festival_line="СКОРО ЭКСКУРСИЯ",
-                    date_line=_format_display_date(
+                    date_line=_format_guide_promo_date(
                         raw_scene.get("date_iso") or raw_scene.get("date"),
                         raw_scene.get("time"),
                     ),
@@ -854,7 +869,9 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         return out
 
     def make_bg() -> Image.Image:
-        reveal = eo(t / P0_END)
+        # Productionized v4 Blender-style depth template: matte tilted coins with
+        # a darker side/rim, camera-like approach and no black static first card.
+        reveal = .16 + .84 * eo((t + 1.0 / FPS) / P0_END)
         mt = max(0.0, t - P0_END)
         if mt < T_ENTRY:
             p1 = 0.75 * eo(mt / T_ENTRY)
@@ -866,26 +883,31 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         p2_drift = c01((mt - P2_END) / T_INFO) if mt >= P2_END else 0.0
         bg_exit = ei((t - (P0_END + P3_START)) / T_EXIT) if t >= P0_END + P3_START else 0.0
         fade = (1 - 0.72 * bg_exit) * reveal
-        im = Image.new('RGBA', (RW, RH), rgba(vp['bg'], 255 * fade))
+        im = Image.new('RGBA', (RW, RH), rgba(vp['bg'], 255))
         d = ImageDraw.Draw(im, 'RGBA')
         bs = lerp(.86, 1.0, p1)
         bubble_p2 = -48 * p2 - 16 * p2_drift
         bg_up = -55 * bg_exit
-        bubbles = [
-            ((200, 380), (104, 340), 245, '#3C4352', 126, 1.00),
-            ((560, 1060), (665, 1130), 214, '#3C4352', 116, 0.72),
-            ((642, 305), (780, 275), 145, '#263C52', 52, 0.48),
-        ]
-        for st, en, r, col, a, depth in bubbles:
+
+        def coin(st, en, r, face, side, alpha, depth, *, sx=1.0, sy=.62, dx=42, dy=34):
             cx = lerp(st[0], en[0], p1)
             cy = lerp(st[1], en[1], p1) + bubble_p2 * depth + (-210 * bg_exit * depth) + bg_up * .12
             rr = r * bs
-            d.ellipse((xy(cx-rr), xy(cy-rr), xy(cx+rr), xy(cy+rr)), fill=rgba(col, a*fade))
-        # In v7 the orange stripe is the frontmost background surface.  The
-        # very first frame must not be a static final card; it fades in from black.
-        d.rectangle((0, 0, RW, xy(25)), fill=rgba(vp['top'], 245 * reveal * (1 - 0.25*bg_exit)))
-        if t < P0_END:
-            im.alpha_composite(Image.new('RGBA', (RW, RH), (0,0,0,int(255*(1-reveal)))))
+            ww = rr * sx
+            hh = rr * sy
+            a = alpha * fade
+            # darker offset side first, then cap; this is the accepted v4 Blender
+            # silhouette distilled into the deterministic Kaggle/PIL renderer.
+            d.ellipse((xy(cx-ww+dx), xy(cy-hh+dy), xy(cx+ww+dx), xy(cy+hh+dy)), fill=rgba(side, a*.78))
+            d.ellipse((xy(cx-ww), xy(cy-hh), xy(cx+ww), xy(cy+hh)), fill=rgba(face, a))
+            d.ellipse((xy(cx-ww*.98), xy(cy-hh*.98), xy(cx+ww*.98), xy(cy+hh*.98)), outline=rgba('#FFFFFF', a*.10), width=xy(2))
+
+        coin((52,156), (92,252), 190, '#74828D', '#273D51', 216, 1.0, sx=1.04, sy=.60, dx=54, dy=44)
+        coin((548,1062), (665,1120), 178, '#5B6A78', '#293D50', 132, .72, sx=1.02, sy=.67, dx=36, dy=30)
+        coin((652,300), (772,280), 136, '#405B70', '#1F3448', 62, .48, sx=.96, sy=.70, dx=26, dy=22)
+        # In the v4 template the orange stripe is a front surface and stays above
+        # all background geometry. Keep it visible from frame 1.
+        d.rectangle((0, 0, RW, xy(32)), fill=rgba(vp['top'], 255 * reveal * (1 - 0.25*bg_exit)))
         return im
 
     def avatar_layer() -> Image.Image:
@@ -900,8 +922,8 @@ def _render_guide_excursion_frame(scene: RenderScene, local_t: float) -> Image.I
         layer = Image.new('RGBA', (xy(group_w+70), xy(size+72)), (0,0,0,0))
         shadow = Image.new('RGBA', layer.size, (0,0,0,0))
         sd = ImageDraw.Draw(shadow, 'RGBA')
-        sd.ellipse((xy(18), xy(28), xy(group_w+52), xy(size+58)), fill=(0,0,0,105))
-        shadow = shadow.filter(ImageFilter.GaussianBlur(xy(16)))
+        sd.ellipse((xy(18), xy(28), xy(group_w+52), xy(size+58)), fill=(0,0,0,26))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(xy(18)))
         layer.alpha_composite(shadow)
         ld = ImageDraw.Draw(layer, 'RGBA')
         for i, path in enumerate(paths[:n]):

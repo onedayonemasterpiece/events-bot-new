@@ -145,6 +145,6 @@ def test_payload_as_json_inserts_guide_excursion_promo_scene() -> None:
     data = json.loads(selection.payload_as_json(payload, timezone.utc))
 
     assert data["scenes"][2]["scene_variant"] == "guide_excursion_promo"
-    assert data["scenes"][2]["date"] == "10.07 11:00"
+    assert data["scenes"][2]["date"] == "10 июля 11:00"
     assert data["scenes"][2]["guide_excursion"]["occurrence_id"] == 42
     assert data["scenes"][2]["images"] == ["assets/guide_avatars/amber_fringilla.jpg"]

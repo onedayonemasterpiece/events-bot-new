@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- CherryFlash guide-excursion promo now uses the v4 Blender-style depth background treatment in the production renderer and formats guide promo dates as `10 июля 16:00` instead of numeric `10.07 16:00`.
+
 ### Added
 
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
