@@ -194,8 +194,10 @@ def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
                 key_file = key_by_parent.get(secret_file.parent.resolve())
                 if key_file and (secret_file, key_file) not in pairs:
                     pairs.append((secret_file, key_file))
-            if not pairs and len(secret_files) == 1 and len(key_files) == 1:
-                pairs.append((secret_files[0], key_files[0]))
+            for secret_file in secret_files:
+                for key_file in key_files:
+                    if (secret_file, key_file) not in pairs:
+                        pairs.append((secret_file, key_file))
             failures: list[str] = []
             loaded = False
             for secret_file, key_file in pairs:
