@@ -47,20 +47,25 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("18_place_lexicon_matches", workbook)
             self.assertIn("12a_source_frontier_unique", workbook)
             self.assertIn("12b_telegram_similar_channels", workbook)
+            self.assertIn("12d_similar_seed_queue", workbook)
             self.assertIn("20_telegram_rate_observability", workbook)
             self.assertIn("04a_current_run_shortlist", workbook)
             self.assertIn("06a_candidate_memory", workbook)
             self.assertIn("06b_candidate_memory_top", workbook)
             self.assertIn("07b_prev_candidates_not_refetch", workbook)
             self.assertIn("12c_source_frontier_queue_next", workbook)
+            self.assertIn("13b_source_delta_scan", workbook)
             self.assertIn("21_manual_review_queue", workbook)
             self.assertIn("22_candidate_deltas", workbook)
             self.assertIn("14d_llm_usage_by_stage", workbook)
             self.assertIn("23_vk_wall_setup", workbook)
+            self.assertIn("24_source_yield_metrics", workbook)
             summary = json.loads((tmp_path / "region-talk-candidates-unit-run.json").read_text(encoding="utf-8"))["summary"]
             self.assertEqual(summary["source_count_seeded"], 30)
             self.assertEqual(summary["posts_fetched"], 0)
-            self.assertIn("telegram_similar_channels_status", summary)
+        self.assertIn("telegram_similar_channels_status", summary)
+        self.assertIn("history_sources_target", summary)
+        self.assertIn("similar_seed_queue_total", summary)
 
     def test_text_and_media_scoring_strong_region_media(self) -> None:
         mod = load_module()
@@ -90,6 +95,34 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         bad = mod.kaliningrad_oblast_only_scope_gate("Куда поехать летом: Байкал, Дагестан, Калининград и Сочи — 10 мест России", lexicon)
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
+
+    def test_hard_region_gate_blocks_non_ko_rows_before_memory_and_shortlist(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        calls = {"n": 0}
+        def fake_llm(*args, **kwargs):
+            calls["n"] += 1
+            return {"llm_gate_status":"ok", "llm_decision":"accept", "llm_reason":"should not be called for hard region rejects"}
+        mod.call_region_talk_semantic_llm = fake_llm
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        base = {"source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_date":"2026-06-01T12:00:00+00:00", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}
+        posts = [
+            {**base, "post_id":"ko_ok", "post_url":"https://t.me/src/ko", "platform_post_key":"tg:src:ko", "text":"Калининград, Зеленоградск и Куршская коса: личные впечатления от поездки, море, дюны, маршрут и что особенно запомнилось."},
+        ]
+        for idx, place in enumerate(["Санкт-Петербург", "Москва", "Самара", "Челябинск", "Якутия", "Владимир"], start=1):
+            posts.append({**base, "post_id":f"not_ko_{idx}", "post_url":f"https://t.me/src/nonko{idx}", "platform_post_key":f"tg:src:nonko{idx}", "text":f"{place} и Калининград: подборка поездок по России, впечатления, красивые места, маршруты и что посмотреть летом."})
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "hard-region-run", Path(td))
+        false_urls = {f"https://t.me/src/nonko{i}" for i in range(1, 7)}
+        for sheet_name in ("06a_candidate_memory", "04a_final_shortlist", "21_manual_review_queue"):
+            urls = {r.get("post_url") for r in payload["sheets"][sheet_name] if isinstance(r, dict)}
+            self.assertFalse(false_urls & urls, sheet_name)
+        dropped = {r.get("post_url"): r for r in payload["sheets"]["08_dropped_posts"]}
+        self.assertEqual({dropped[u]["rejection_reason"] for u in false_urls}, {"reject_not_kaliningrad_oblast_only"})
+        self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
+        self.assertEqual(calls["n"], 0)
+        memory_urls = {r.get("post_url") for r in payload["sheets"]["06a_candidate_memory"] if isinstance(r, dict)}
+        self.assertIn("https://t.me/src/ko", memory_urls)
 
     def test_semantic_meaning_requires_llm_not_regex_rejection(self) -> None:
         mod = load_module()

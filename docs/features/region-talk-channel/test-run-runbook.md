@@ -82,18 +82,20 @@ REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
 REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
 REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
 REGION_TALK_TG_GOVERNOR_ENABLED=1
-REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=120
-REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
-REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=20
+REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=300
+REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=40
 REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
-REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
+REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=60
+REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN=20
+REGION_TALK_MAX_NEW_SOURCE_PROBES=30
 REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS=60
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_SIMILAR_ENABLED=1
-REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=5
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=20
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
-REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=50
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=150
 ```
 
 
@@ -102,6 +104,8 @@ REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=50
 Telegram monitoring/discovery is Telethon-based. Use the feature's discovery/Kaggle auth bundle by default; use `TELEGRAM_AUTH_BUNDLE_E2E` for a Kaggle run only when the operator explicitly tells this run to avoid the Discovery/S22 session because another agent/job owns it. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts.
 
 The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
+
+For z6 throughput validation, the next real run should target at least `sources_history_fetched_ok >= 25` without bypassing FloodWait/cooldown evidence. If it misses, `00_product_summary` and `20_telegram_rate_observability` must show whether the blocker was network resolve budget, history source budget, cached entity coverage, FloodWait or Telegram errors.
 
 `public_travel_blogger_channel_links.xlsx` is copied into the Kaggle private input dataset by the launcher when present under `artifacts/`. It is imported into source frontier only and deduped in `12a_source_frontier_unique`.
 
@@ -171,7 +175,10 @@ The XLSX has:
 - `19_image_model_observability` — model id/type/runtime/input/device and fallback honesty for image scoring.
 - `12a_source_frontier_unique` — deduped next-source frontier from seeds, public blogger workbook, links and Telegram similar-channel recommendations.
 - `12b_telegram_similar_channels` — raw Telegram recommendations/status/errors.
+- `12d_similar_seed_queue` — persistent recursive seed queue for the next similar-channel pass.
+- `13b_source_delta_scan` — per-source cursor/delta audit.
 - `20_telegram_rate_observability` — Excel-safe request-governor/FloodWait sheet name for the longer P0 `20_telegram_rate_limit_observability`.
+- `24_source_yield_metrics` — yield per 1000 scanned sources.
 
 ## MVP-1.z2 validation checklist
 
@@ -191,6 +198,14 @@ The XLSX has:
 - `12b_telegram_similar_channels` exists even if the run has no recommendations or Telethon reports `not_supported_by_telethon_version`.
 - `20_telegram_rate_observability` exists and shows request caps, cache/network resolve counts, FloodWait/cooldown/degraded-mode state and private ledger path.
 - Public XLSX sheets contain no Telegram `channel_id`, `access_hash`, auth bundles, tokens or raw private payloads.
+
+## MVP-1.z6 validation checklist
+
+- `01_run_summary.wide_funnel_llm_calls=0`; any LLM use is only `final_verifier_llm_calls` for top-N rows and remains Supabase-limiter controlled.
+- Non-Kaliningrad/multi-region rows do not appear in `06a_candidate_memory`, `04a_final_shortlist` or `21_manual_review_queue`.
+- `01_run_summary` exposes `history_sources_target`, attempted/ok/new/cached/network counts, `history_fetch_runtime_seconds`, `posts_per_source_distribution`, `similar_seed_queue_total` and `similar_seed_queue_ready`.
+- `12d_similar_seed_queue`, `13b_source_delta_scan` and `24_source_yield_metrics` exist even when empty.
+- `09b_image_fetch_retry_queue` is the active retry queue for metadata-only/image-fetch-pending rows; actual visual quality claims require actual-image local model rows in `09_image_quality`.
 
 
 ## MVP-1.z4 validation checklist

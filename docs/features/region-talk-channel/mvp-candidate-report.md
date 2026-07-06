@@ -282,6 +282,14 @@ De-duplicated source frontier across seeds, link graph, public travel-blogger wo
 
 Raw Telegram similar/recommended-channel evidence for the current run: seed channel, recommendation rank, public username/title/url when available, method status, errors and whether the row was added to the frontier. If Telethon lacks the required API request, this sheet must still exist with `method_status=not_supported_by_telethon_version`.
 
+### `12d_similar_seed_queue`
+
+Persistent queue of resolved Telegram channels that can become seeds for the next similar-channel discovery pass. It is fed by every resolved/fetched Telegram source, prioritizes sources that yielded candidate-memory rows, and must stay read-only/no-auto-join in MVP.
+
+### `13b_source_delta_scan`
+
+Per-source delta/cursor sheet: previous/current history fetch run, fetch mode, new-source flag, last seen post date and per-run scanned counts. This is the visible audit trail for frontier→scan promotion and cached-history reuse.
+
 ### `13_sources_monitored`
 
 Actually scanned sources, cursors, fetch status, errors and next fetch timestamps.
@@ -310,6 +318,10 @@ Per-run image model/runtime summary:
 ### `20_telegram_rate_observability`
 
 Per-run Telegram request-governor summary: resolve cache hits/network resolves, history requests, media downloads, recommendation requests, FloodWait counts/max seconds, cooldown/degraded-mode flags, configured caps and ledger path. The P0 requirement name `20_telegram_rate_limit_observability` is longer than Excel's 31-character sheet limit, so the implemented workbook uses the Excel-safe `20_telegram_rate_observability`.
+
+### `24_source_yield_metrics`
+
+Yield per scanned source, normalized as `per_1000_scanned_sources`: sources scanned, new sources scanned, sources with fresh Kaliningrad posts, non-ad Kaliningrad posts, candidate-memory posts, actual-image candidates and publication-ready candidates. These metrics are directional because the source sample is priority/frontier-biased, not random.
 
 ### `15_manual_decisions`
 
@@ -438,3 +450,11 @@ Region Talk text quality is now **local/vector-first**. Broad fetched/current-ru
 LLM usage is allowed only for compact final verifier/tie-breaker stages (`final_publication_verifier`, `final_human_review_explainer`, `ambiguous_final_tiebreaker`, retry of a previous final verifier) and must remain Supabase-limiter controlled. Default config is `REGION_TALK_ENABLE_EARLY_LLM=0`, `REGION_TALK_ENABLE_VECTOR_GATES=1`, `REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS=1`, `REGION_TALK_MAX_LLM_FINAL_VERIFY=10`. XLSX observability exposes `wide_funnel_llm_calls`, `final_verifier_llm_calls`, vector reject counts, `actual_image_scored_before_llm_count`, and `14d_llm_usage_by_stage`; acceptance requires `wide_funnel_llm_calls=0`.
 
 `04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.
+
+## MVP-1.z6 throughput / hard-region / recursive discovery correction
+
+The default Telegram governor is raised for the next MVP run: `REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=300`, network resolves `8`, history sources `40`, media downloads `60`, recommendation calls `20`, similar-channel seed channels `20`, similar frontier cap `150`, and dynamic frontier probes `30`. The XLSX exposes `history_sources_target`, attempted/ok/new/cached/network counts, runtime seconds and posts-per-source distribution.
+
+Every resolved Telegram channel can be persisted in `12d_similar_seed_queue`; previous frontier rows can be promoted into dynamic seeds for shallow probe/history scan, and `13b_source_delta_scan` records source-level cursor/delta state. The product acceptance target for the next real run is `sources_history_fetched_ok >= 25`; if the run cannot hit it, `00_product_summary`/`20_telegram_rate_observability` must explain the governor/FloodWait/cache blocker.
+
+Hard Kaliningrad-only region scope now runs before candidate memory and `04a_final_shortlist`: multi-region/non-Kaliningrad posts are rejected as `reject_not_kaliningrad_oblast_only` and cannot leak into product shortlist unless manually overridden with explicit region evidence. Image scoring remains only for selected non-ad Kaliningrad rows; broad LLM stays disabled (`wide_funnel_llm_calls=0`) and the optional LLM verifier is limited to top-N final rows through the Supabase limiter.

@@ -107,6 +107,8 @@ For already resolved Telegram seed/monitor sources, the runner may call Telegram
 - no auto-subscribe, no auto-join, no participant scraping, no private/invite-only channels;
 - recommendation results become `candidate` frontier rows and require later scoring/manual acceptance before monitoring.
 
+MVP-1.z6 adds recursive but bounded seed accumulation: every resolved/fetched Telegram channel can be written to `12d_similar_seed_queue` and used as a seed in later recommendation passes. Frontier rows from previous state may be promoted to dynamic shallow probes (`REGION_TALK_MAX_NEW_SOURCE_PROBES`) and the per-source cursor evidence is visible in `13b_source_delta_scan`.
+
 If Telethon does not expose the request class, the run must report `telegram_similar_channels_status=not_supported_by_telethon_version` instead of failing or emulating it with scraping.
 
 Every discovered source must include:
@@ -180,8 +182,8 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Broken/private/forbidden source does not fail the run.
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
-- Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `3`).
-- Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `20`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `20`).
+- Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `8`).
+- Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `40`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `60`).
 - Large `FloodWait` values (default threshold `300` seconds) are not slept through: record a cooldown/degraded mode, skip later resolves/history that would hit the same method/source, and still write the XLSX report.
 - Keep the private entity cache/cooldown ledger in state/artifacts only; public XLSX sheets may contain `private_state_key`, but never raw `channel_id`, `access_hash`, session strings or tokens.
 - Forbidden: multi-account/proxy rotation, automatic joins/subscriptions, participant scraping, private/invite-only source traversal, or any publication from this MVP report.
@@ -190,16 +192,19 @@ Default live/Kaggle Telegram discovery limits:
 
 ```bash
 REGION_TALK_TG_GOVERNOR_ENABLED=1
-REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=3
-REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=20
+REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN=300
+REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=8
+REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN=40
 REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE=25
-REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=20
+REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN=60
+REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN=20
+REGION_TALK_MAX_NEW_SOURCE_PROBES=30
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_SIMILAR_ENABLED=1
-REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=5
+REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=20
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
-REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=50
+REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=150
 ```
 
 ## MVP-1.x forwarded/repost/comment discovery hardening
