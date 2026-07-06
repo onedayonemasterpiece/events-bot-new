@@ -416,6 +416,23 @@ The second probe revision addresses the first-run quality gaps before any static
 - VK fetch uses pagination/thread items and adaptive per-source caps; Telegram no longer drops all `chat_id/message_id` sources before fetch;
 - every run writes `fetch_error_summary.json` so access/rate/deleted/comment-thread failures are visible without reading raw comments.
 
+
+
+### MVP-4 P1.5 role-aware precision hardening
+
+P1.5 incorporates the critical P1 review before any static-site export:
+
+- VK addressed replies are normalized with `strip_vk_mention_prefix(...)`, so `[id...|...], здравствуйте! ...` official/admin answers are classified as `official_reply` instead of independent user feedback;
+- public-ready evidence is role-aware: `user_evidence_count` / `user_unique_authors_count` decide publication, while `official_context_count` is retained only as context/debug material;
+- practical question phrases now require a direct question marker or explicit user problem report (`не открывается`, `не работает`, `не получается купить`, etc.); topic words like `вход`, `проход`, `билет`, `места` are anchors only;
+- reports include `run_date`, `run_datetime`, `is_past_event`, `eligible_for_site_export`; past events may remain visible in probe sheets but are not counted in site-eligible `public_ready` export metrics;
+- `positive_margin = max(e5_score, bge_score) - negative_score` is written to evidence rows and required by the public gate with stricter thresholds for positive/concern classes;
+- repeated/multi-event source posts get `feedback_scope=event_series` and `source_post_event_link_count`, so shared production feedback is not presented as a date-specific review;
+- XLSX now separates `public_ready_evidence_only` from `public_gate_pass_not_published` and exposes `comment_role`, `filter_reason`, `guard_reasons`, `is_user_evidence`, `is_official_context`, `is_site_eligible_event`;
+- a lightweight `source_capability_cache.json` can be passed back into the launcher via `--source-capability-cache` / `EVENT_COMMENT_FEEDBACK_SOURCE_CAPABILITY_CACHE` so deleted/forbidden/no-discussion/rate-limited posts are deferred by TTL instead of rechecked every run.
+
+Human-like Telegram constraints from the Region Talk review apply here as safety boundaries too: API reads must remain cache/state-aware, low-and-slow, single-session, no auto-join, no private/participant scraping, no multi-account/proxy rotation, and no publication from the discovery runner. The ECF runner still uses API reads rather than UI/browser emulation.
+
 ### MVP-3 P1 precision hardening
 
 P1 keeps the P0 recall improvements but makes public-ready stricter before any site UI:

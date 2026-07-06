@@ -83,13 +83,41 @@ def test_p1_phrase_specific_anchors(tmp_path, monkeypatch):
     assert "phrase_lexical_guard" in mod.guard("Здравствуйте! Можно взять с собой планшет?", "barcode_or_eticket_question")
     assert "phrase_lexical_guard" in mod.guard("Вместо бесплатного концерта можно нам дороги отремонтировать?", "parking_questions")
     assert mod.guard("А бутылку воды можно взять?", "food_drinks_question") == []
-    assert mod.guard("Здравствуйте. Есть штрих-код билетов и номера билетов", "barcode_or_eticket_question") == []
+    assert "question_phrase_without_direct_question_or_problem" in mod.guard("Здравствуйте. Есть штрих-код билетов и номера билетов", "barcode_or_eticket_question")
+    assert mod.guard("Есть ли штрих-код билетов и номера билетов?", "barcode_or_eticket_question") == []
 
 
 def test_p1_public_candidate_gate_is_strict(tmp_path, monkeypatch):
     mod = load_module(tmp_path, monkeypatch)
     phrase = {"tone": "neutral", "singular_safe": False}
-    assert mod.public_candidate_gate(phrase, {"model_agreement": False, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.9}) is False
-    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 3, "bge_rank": 1, "sparse_score": 0.9}) is False
-    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.05}) is False
-    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 2, "sparse_score": 0.12}) is True
+    assert mod.public_candidate_gate(phrase, {"model_agreement": False, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.9, "positive_margin": 0.2}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 3, "bge_rank": 1, "sparse_score": 0.9, "positive_margin": 0.2}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 1, "sparse_score": 0.05, "positive_margin": 0.2}) is False
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 2, "sparse_score": 0.12, "positive_margin": 0.08}) is True
+    assert mod.public_candidate_gate(phrase, {"model_agreement": True, "e5_rank": 1, "bge_rank": 2, "sparse_score": 0.12, "positive_margin": 0.01}) is False
+
+
+def test_p15_official_reply_prefix_and_question_gate(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    assert mod.strip_vk_mention_prefix("[id123|Мария], здравствуйте! Да, вход с водой запрещен") == "здравствуйте! Да, вход с водой запрещен"
+    assert mod.classify_comment_type("[id123|Мария], здравствуйте! Да, на территории стадиона предусмотрены точки питания")[0] == "official_reply"
+    assert "question_phrase_without_direct_question_or_problem" in mod.guard("Да, вход с любыми напитками запрещен", "admission_rules_question")
+    assert mod.guard("Можно ли взять воду?", "food_drinks_question") == []
+    assert mod.guard("Не открывается регистрация", "registration_interest") == []
+
+
+def test_p15_site_flags_and_capability_cache(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    import datetime as dt
+    now = dt.datetime(2026, 7, 6, tzinfo=dt.timezone.utc)
+    assert mod.event_site_flags({"date": "2026-07-04"}, now)["eligible_for_site_export"] is False
+    assert mod.event_site_flags({"date": "2026-07-06"}, now)["eligible_for_site_export"] is True
+    payload = mod.write_source_capability_cache(
+        [{"platform":"vk","platform_post_key":"vk:-1:2","status":"not_accessible_or_deleted","code":15}],
+        [{"platform":"telegram","platform_post_key":"tgid:1:2","skip_reason":"telegram_missing_username_or_chat_id"}],
+        [{"platform":"vk","platform_post_key":"vk:-1:3","fetched":2,"scanned":2}],
+    )
+    caps = {r["platform_post_key"]: r["comments_capability"] for r in payload["sources"]}
+    assert caps["vk:-1:2"] == "forbidden_or_deleted"
+    assert caps["tgid:1:2"] == "entity_resolution_failed"
+    assert caps["vk:-1:3"] == "available"

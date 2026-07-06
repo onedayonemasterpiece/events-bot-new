@@ -426,6 +426,7 @@ def create_input_datasets(
     bundle_env: str,
     manifest: dict[str, Any],
     run_config: dict[str, Any],
+    source_capability_cache: Path | None = None,
 ) -> list[str]:
     from cryptography.fernet import Fernet
 
@@ -443,6 +444,8 @@ def create_input_datasets(
     if PHRASE_BANK_JSON.exists():
         shutil.copy2(PHRASE_BANK_JSON, payload_content / "phrase-bank-v1.json")
     (payload_content / "run_config.json").write_text(json.dumps(run_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if source_capability_cache and source_capability_cache.exists():
+        shutil.copy2(source_capability_cache, payload_content / "source_capability_cache.json")
     archive_path = bundle / "event_comment_feedback_payload.tarball"
     with tarfile.open(archive_path, "w:gz") as tf:
         for item in sorted(payload_content.iterdir()):
@@ -571,6 +574,7 @@ def main() -> int:
     parser.add_argument("--poll-interval", type=int, default=int(os.getenv("EVENT_COMMENT_FEEDBACK_KAGGLE_POLL_INTERVAL", "30")))
     parser.add_argument("--status-db", default=os.getenv("EVENT_COMMENT_FEEDBACK_STATUS_DB", ""))
     parser.add_argument("--status-callback-url", default=os.getenv("KAGGLE_STATUS_CALLBACK_URL", ""))
+    parser.add_argument("--source-capability-cache", default=os.getenv("EVENT_COMMENT_FEEDBACK_SOURCE_CAPABILITY_CACHE", ""), help="Optional previous source_capability_cache.json for TTL skips")
     parser.add_argument("--download-output", action="store_true", default=True)
     parser.add_argument("--no-wait", action="store_true")
     parser.add_argument("--keep-temp-datasets", action="store_true", default=(os.getenv("EVENT_COMMENT_FEEDBACK_KEEP_TEMP_DATASETS", "").lower() in {"1", "true", "yes", "on"}))
@@ -599,6 +603,7 @@ def main() -> int:
             bundle_env=args.telegram_bundle_env,
             manifest=manifest,
             run_config=run_config,
+            source_capability_cache=Path(args.source_capability_cache).resolve() if args.source_capability_cache else None,
         )
         temp_dataset_refs.extend(dataset_sources)
         kernel_ref = f"{env_user}/event-comment-feedback-discovery"
