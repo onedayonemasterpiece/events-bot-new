@@ -177,10 +177,10 @@ Verification:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending until `agent/e6691-prevention` is merged/deployed.
-- deploy path: clean worktree `.worktrees/incident-e6691-prevention` from `origin/main`; production deploy pending.
+- deployed SHA: `4f27e88f` (reachable from `origin/main` and `origin/agent/e6691-prevention`).
+- deploy path: clean worktree `.worktrees/incident-e6691-prevention` from `origin/main`; `flyctl deploy --app events-bot-new-wngqia --remote-only`; Fly image `deployment-01KWWGVJT0GKTZ541C6W98ED4K`, machine `2860d45f312248` version `1611` healthy (`1 passing`).
 - regression checks: `python3 -m py_compile smart_event_update.py`; targeted pytest replay for E6691/grounded-future controls passed (`4 passed`). Full local file run still has pre-existing unrelated `test_zero_ticket_price_without_explicit_free_evidence_stays_not_free` failure caused by LLM-disabled date-provenance review, not this guard.
-- post-deploy verification: pending.
+- post-deploy verification: Fly SSH smoke on deployed container returned `retrospective_future_teaser_skip=True` and `eventness_review_route=True` for the `wall-127107743_14691` replay shape.
 
 ## Prevention
 
