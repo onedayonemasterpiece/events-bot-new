@@ -1253,19 +1253,6 @@ class GoogleAIClient:
                             attempt_no=attempt_no,
                             reserve=overflow_result,
                         )
-                        await self._notify_incident(
-                            "reserve_overflow_used",
-                            ctx=ctx,
-                            severity="warning",
-                            message=(
-                                f"Scoped lane out of daily budget ({blocked}); "
-                                f"borrowed spare key {overflow_result.env_var_name}"
-                            ),
-                            details={
-                                "blocked_reason": blocked,
-                                "overflow_env_var_name": overflow_result.env_var_name,
-                            },
-                        )
                         return overflow_result
                     # Overflow pool also exhausted: surface the overflow verdict.
                     return overflow_result

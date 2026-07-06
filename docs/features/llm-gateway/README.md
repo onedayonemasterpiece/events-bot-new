@@ -154,7 +154,9 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 *   **Emergency overflow keys**: `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS` может дать scoped consumer запасные ключи только при
     daily-budget отказах (`rpd`/`no_keys`). Per-minute (`rpm`/`tpm`) не расширяется, чтобы параллельные задачи не пробивали
     минутные лимиты. Каждый env в этом списке должен существовать и как runtime secret, и как активная строка
-    `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC.
+    `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC. Успешный borrow запасного ключа
+    пишет `google_ai.reserve_overflow_used` в structured log, но не отправляет operator-facing LLM incident: алерт нужен
+    только когда рабочий ключ/модель не найдены или provider call реально завершился ошибкой.
 *   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
     переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
     incident kill-switch, не steady-state policy.

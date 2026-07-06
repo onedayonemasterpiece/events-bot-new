@@ -479,6 +479,30 @@ async def test_reserve_overflow_borrows_spare_key_on_rpd(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_reserve_overflow_success_does_not_notify_incident(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    incidents: list[tuple[str, dict]] = []
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(
+        supabase,
+        monkeypatch,
+        reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2",
+        incident_notifier=lambda kind, payload: incidents.append((kind, payload)),
+    )
+
+    reserve = await client._reserve(
+        _overflow_ctx("req-overflow-no-alert"),
+        attempt_no=1,
+        candidate_key_ids=None,
+    )
+
+    assert reserve.ok is True
+    assert reserve.env_var_name == "GOOGLE_API_KEY3"
+    assert incidents == []
+
+
+@pytest.mark.asyncio
 async def test_reserve_no_overflow_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
     client = _overflow_client(supabase, monkeypatch)  # no overflow envs
