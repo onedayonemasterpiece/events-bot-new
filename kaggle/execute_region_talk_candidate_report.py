@@ -258,7 +258,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         (folder / "region_talk_fernet.key").write_bytes(key)
 
     config_ref = create_or_replace_dataset(client, username, f"region-talk-config-{safe_slug}", f"Region Talk config {safe_slug}", write_config)
-    secret_ref = create_or_replace_dataset(client, username, f"region-talk-secret-bundle-{safe_slug}", f"Region Talk secret bundle {safe_slug}", write_secret_bundle)
+    secret_ref = create_or_replace_dataset(client, username, f"rt-secret-bundle-{safe_slug}", f"Region Talk sec {safe_slug}", write_secret_bundle)
     wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json", "google_ai/__init__.py"])
     wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc", "region_talk_fernet.key"])
     return [config_ref, secret_ref]
