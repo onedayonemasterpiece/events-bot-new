@@ -176,10 +176,30 @@ def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
     if secret_files and key_files:
         try:
             from cryptography.fernet import Fernet
-            secrets = json.loads(Fernet(key_files[0].read_bytes().strip()).decrypt(secret_files[0].read_bytes()).decode("utf-8"))
-            for k, v in secrets.items():
-                if v is not None and str(v).strip():
-                    os.environ.setdefault(str(k), str(v))
+            key_by_parent = {k.parent.resolve(): k for k in key_files}
+            pairs = []
+            for secret_file in secret_files:
+                parent = secret_file.parent.resolve()
+                key_file = key_by_parent.get(parent)
+                if key_file:
+                    pairs.append((secret_file, key_file))
+            if not pairs and len(secret_files) == 1 and len(key_files) == 1:
+                pairs.append((secret_files[0], key_files[0]))
+            last_error = None
+            loaded = False
+            for secret_file, key_file in pairs:
+                try:
+                    secrets = json.loads(Fernet(key_file.read_bytes().strip()).decrypt(secret_file.read_bytes()).decode("utf-8"))
+                    for k, v in secrets.items():
+                        if v is not None and str(v).strip():
+                            os.environ.setdefault(str(k), str(v))
+                    loaded = True
+                    break
+                except Exception as pair_exc:
+                    last_error = pair_exc
+                    continue
+            if not loaded:
+                raise last_error or RuntimeError("no matching region_talk_secrets.enc/region_talk_fernet.key pair")
         except Exception as exc:
             raise RuntimeError(f"failed to load encrypted Region Talk secrets: {type(exc).__name__}") from exc
     return config
