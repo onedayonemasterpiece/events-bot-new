@@ -338,6 +338,7 @@ features:
     docs: docs/features/personal-email-announcements/README.md
     related_personalization: docs/features/unsigned-personalization/README.md
     related_static_site: docs/features/static-site-pages/README.md
+    related_promo_campaigns: docs/features/promo-campaigns/README.md
     storage: ydb_and_static_object_storage
 
   telegram_monitoring:

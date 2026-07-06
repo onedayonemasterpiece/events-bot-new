@@ -16,6 +16,33 @@
 
 Это **не** transactional reminder about a followed event. Transactional calendar/follow reminders and cancellation/reschedule notices are a separate feature class. Personal email announcements are subscription/marketing-like recommendations and therefore require stricter opt-in, unsubscribe, frequency caps, proof-of-consent and deliverability gates.
 
+## Email message type and funnel
+
+This feature introduces a separate email type:
+
+```text
+email_kind = personal_announcement_weekly
+channel    = personal_email_announcement
+message purpose = weekly personalized event recommendations
+```
+
+It must not reuse transactional kinds such as `calendar_confirmation`, `event_reminder_24h`, `event_rescheduled` or `event_cancelled`. Provider streams, suppression rules, unsubscribe text, statistics and dashboards must be able to split this kind from transactional mail.
+
+The core success funnel is explicit:
+
+```text
+issue_created
+  -> page_published
+  -> email_enqueued
+  -> provider_accepted/sent
+  -> provider_delivered | provider_deferred | provider_bounced | provider_complained
+  -> email_open_announcement_click  # click on the email button that opens the personal announcement
+  -> personal_page_open
+  -> event_card_click | ticket_click | save | share | feedback
+```
+
+The product-critical email click is the button/link that says, for example, `Открыть мою подборку` / `Показать персональный анонс`. This click is measured separately from generic email opens and from downstream event-card clicks.
+
 ## Requirement traceability
 
 | ID | Requirement | Decision / coverage |
@@ -32,6 +59,14 @@
 | R10 | Product feedback + LLM analysis for personalization correction | Feedback is stored as explicit labels in YDB; LLM runs offline to classify causes/corrections, with deterministic guardrails before profile updates. |
 | R11 | YDB ownership blocker from review | All feature-owned subscriptions, consent proof, recommendation issues, outbox, feedback, metrics and LLM evidence are YDB-owned; Object Storage is artifact-only; Supabase/Auth is identity-only when used. |
 | R12 | Production-quality gates | Consent evidence, outbox state machine, page-token threat model, YDB retention/TTL, metrics schema, deliverability and phased rollout gates are explicit before implementation. |
+| R13 | Separate email type and full statistics from deliverability to CTA click | Use `email_kind=personal_announcement_weekly`; metric funnel tracks generation, delivery, `email_open_announcement_click`, page open and downstream clicks. |
+| R14 | Personal page uses same card style as similar events | Personal pages reuse the static-site event-card / related-event visual grammar; they are not a separate editorial template. |
+| R15 | Honest motivation to provide email | Email-capture copy says plainly that the user can leave email to receive a weekly selection based on watched/clicked events. |
+| R16 | Cross-site promo campaign for email capture | Model as an internal promo campaign with related-feed placements, caps and exposure/click metrics. |
+| R17 | Promo placement in related-event feed | Optional single card, not always shown, random-tail placement no earlier than the 5th related item or at the list end. |
+| R18 | Jobs/queue for offer formation, page generation and send | YDB generation jobs + Kaggle build/offload + page publish + send outbox are separate leased steps. |
+| R19 | Reuse Kaggle mechanisms and respect resource competition | Reuse StaticSiteBuilder/Kaggle status patterns, private datasets, callbacks, resource leases, no Telegram session borrowing, low-priority/coalesced runs. |
+| R20 | Operational stats must show whether sending works | Delivery, provider webhook, CTA-click and page-open dashboards are first-class YDB metrics with lag/failure counters. |
 
 ## User and consent model
 
@@ -89,6 +124,38 @@ Production design must store consent proof as its own YDB entity, not only boole
 
 MVP UI must use at least two separate checkbox/consent events: (1) processing the email/personal data for recommendations and (2) receiving regular personal email announcements.
 
+## Email-capture promo campaign
+
+This feature includes a cross-site product promo campaign whose goal is to motivate a user to provide an email for weekly personalized announcements. It is not a partner/sponsored ad; it is an internal product campaign tied to the static site and must still be measurable and capped like other promo surfaces.
+
+Canonical honest copy direction:
+
+> Укажите email — раз в неделю мы пришлём подборку событий, которые реально подходят вам по тому, что вы смотрели и открывали на сайте.
+
+Allowed variants may be shorter, but they must preserve the promise: weekly, personalized, based on site behavior, optional, and unsubscribeable. Do not imply that the user already has a ready high-quality profile if the profile is too sparse; in that case the CTA should say that the selection improves as the user uses the site.
+
+Logical campaign definition:
+
+```text
+campaign_key = personal_email_announcement_signup
+campaign_kind = internal_product_promo
+goal = collect explicit opt-in emails for weekly personal announcements
+primary_activity = related_feed_email_capture_card
+owner_storage = YDB (`pa_email_capture_campaign`, `pa_email_capture_placement`, metrics)
+```
+
+Placement rules for `related_feed_email_capture_card`:
+
+- eligible surfaces: event-detail related/continuation feed, listing personal-feed continuation, and other static-site recommendation rails after they have at least 5 organic cards;
+- never insert before the 5th related item; use a pseudo-random position from item 5 onward or append at the end;
+- not mandatory and not always shown: cap by session, day, page type and campaign budget;
+- at most one email-capture card per page/view;
+- hide for users already subscribed, recently dismissed, unsubscribed/suppressed, or in bot/preview/crawler class;
+- label as a product suggestion such as `Персональная подборка`, not as an organic event;
+- if placed among cards, it must use the same card dimensions and interaction affordances as event cards while clearly being a signup CTA.
+
+The placement is treated as a promo activity for reporting: `promo_exposure`, `promo_click`, `email_signup_started`, `double_opt_in_sent`, `double_opt_in_confirmed`, `email_signup_dismissed`. If a future implementation mirrors this into the existing core `promo_campaign` admin UI, it must not move personal subscription state out of YDB.
+
 ## Architecture overview
 
 ```text
@@ -97,12 +164,21 @@ Static site interactions
   -> same-origin API endpoint
   -> YDB (subscriptions, consent evidence, metrics, feedback, LLM evidence)
 
-Batch recommendation job (weekly or operator-triggered)
+Planner job (weekly/daily)
+  -> creates YDB pa_generation_job batches for due subscriptions
+  -> coalesces work by cadence period and quality/resource gates
+
+Kaggle generation job (preferred heavy path)
   -> reads future event catalog snapshot from Fly SQLite/static export
-  -> reads compact subscription/profile/feedback snapshots from YDB
+  -> reads compact subscription/profile/feedback snapshots from YDB export/input
   -> ranks candidates and applies freshness/diversity/fatigue/suppression gates
-  -> writes recommendation issue/card rows to YDB
-  -> renders secret-link/static-gated recommendation pages/manifests to object storage
+  -> renders personal pages with static-site card templates
+  -> writes checked output manifest/archive for server ingestion
+
+Server ingestion/publish job
+  -> validates Kaggle output, writes recommendation issue/card rows to YDB
+  -> uploads static/gated page artifacts to object storage
+  -> marks pa_static_page as page_published
   -> enqueues YDB outbox rows only after static artifacts are published
 
 Email worker
@@ -145,11 +221,13 @@ Names are architecture placeholders; apply only after YDB schema review.
 | Group | YDB tables | Primary access pattern |
 | --- | --- | --- |
 | Subscription | `pa_subscription`, `pa_subscription_by_identity`, `pa_subscription_by_email_hmac` | send eligibility, preference center, dedupe |
+| Email-capture promo | `pa_email_capture_campaign`, `pa_email_capture_placement`, `pa_email_capture_exposure` | cross-site signup CTA campaign, placement, exposure/click/dismiss metrics |
 | Consent | `pa_consent_evidence` | prove opt-in/revocation |
 | Suppression | `pa_suppression` | immediate no-send by email HMAC |
 | Issue | `pa_recommendation_issue`, `pa_recommendation_card` | render email/page, debug ranking |
 | Static page | `pa_static_page` | token validation, expiry, artifact state |
 | Outbox | `pa_email_outbox`, `pa_email_outbox_by_due_shard` | worker polling with leases |
+| Generation jobs | `pa_generation_job`, `pa_generation_artifact`, `pa_generation_job_by_due_shard` | planner/build/publish queue and artifact handoff |
 | Delivery | `pa_delivery_event`, `pa_provider_webhook_dedupe` | bounces/complaints/provider evidence |
 | Feedback | `pa_feedback`, `pa_feedback_by_subscription` | learning loop, quality metrics |
 | Profile snapshot | `pa_profile_snapshot`, optional `pa_profile_signal_raw` | consented compact profile used by the email ranker |
@@ -161,12 +239,17 @@ Names are architecture placeholders; apply only after YDB schema review.
 | Entity | DB | Purpose | Public access |
 | --- | --- | --- | --- |
 | `pa_subscription` | YDB row table | email channel subscription, cadence, locale, auth/anon linkage, active/pause/unsub state | no direct browser access |
+| `pa_email_capture_campaign` | YDB row table | internal promo campaign for collecting explicit weekly-announcement opt-ins | service/admin only |
+| `pa_email_capture_placement` | YDB row table | eligible surfaces, random-tail placement rules, caps and copy versions | service/static build input only |
+| `pa_email_capture_exposure` | YDB row table with TTL/aggregation | signup CTA exposures, clicks, dismissals and conversions | service only |
 | `pa_consent_evidence` | YDB row table | auditable proof of personal-data/recommendation-email consent, double opt-in and revocation | service only |
 | `pa_suppression` | YDB row table | email HMAC suppression for unsubscribe, bounce, complaint, abuse/manual block | service only |
 | `pa_recommendation_issue` | YDB row table | one planned/sent digest instance per subscription and period | service only |
 | `pa_recommendation_card` | YDB row table | ranked event ids, score bands, reason masks, hero flag, freshness/fatigue metadata | service only |
 | `pa_static_page` | YDB row table | page token hash, storage key, expiry, build id, noindex flag, issue id, publish state | token-gated endpoint only |
 | `pa_email_outbox` | YDB row table | durable send queue, idempotency, leases, retries and provider message ids | service only |
+| `pa_generation_job` | YDB row table | leased planner/Kaggle/publish queue for issue and page generation | service only |
+| `pa_generation_artifact` | YDB row table | Kaggle output manifest/archive/object-storage handoff evidence | service only |
 | `pa_delivery_event` | YDB row table | provider webhook evidence, bounce/complaint/delivery state | service only |
 | `pa_feedback` | YDB row table | issue-level and per-card labels/free text after PII stripping | append through same-origin endpoint |
 | `pa_profile_snapshot` | YDB row table | compact consent-compatible feature snapshot consumed by the weekly email ranker | service only |
@@ -204,6 +287,15 @@ pa_subscription_by_identity
 pa_subscription_by_email_hmac
   PK: (email_hmac, channel, subscription_id)
 
+pa_email_capture_campaign
+  PK: (campaign_id)
+
+pa_email_capture_placement
+  PK: (campaign_id, surface, placement_id)
+
+pa_email_capture_exposure
+  PK: (event_date, shard, occurred_at, exposure_id)
+
 pa_suppression
   PK: (email_hmac, channel)
 
@@ -232,6 +324,15 @@ pa_static_page
 pa_feedback
   PK: (issue_id, created_at, feedback_id)
   lookup: (subscription_id, created_at, feedback_id)
+
+pa_generation_job
+  PK: (generation_job_id)
+
+pa_generation_job_by_due_shard
+  PK: (status, due_shard, next_attempt_at, generation_job_id)
+
+pa_generation_artifact
+  PK: (generation_job_id, artifact_kind, artifact_id)
 
 pa_email_outbox
   PK: (message_id)
@@ -319,6 +420,18 @@ Recommended page content blocks:
 5. Per-card actions: `интересно`, `не подходит`, `уже видел(а)`, `не моя тема`, `слишком далеко/не то время`.
 6. Unsubscribe/preferences/reset personalization links.
 
+### Personal page card/template contract
+
+The personal page must look like a natural continuation of the static-site recommendation UI. It reuses the same card grammar as `Похожие события` / continuation feed cards:
+
+- same event-card proportions, image treatment, date/place/price facts and CTA hierarchy;
+- same disclosure for non-event cards: the email-capture promo card is a product CTA, not an event;
+- same mobile-first vertical feed behavior and desktop grid/list adaptation as static recommendations;
+- same source-safe CTA policy (`ticket/register`, event detail, save/share) and no hidden score/profile internals;
+- same medallions/badges only when already available in static event card data.
+
+The generated page should be built from card projections, not from raw event rows or source texts. `pa_recommendation_card` stores rank, reason masks and public card fields sufficient to render the page and email.
+
 ## Recommendation generation
 
 Hard gates before ranking:
@@ -403,6 +516,57 @@ MVP layout:
 
 The hero is rank #1 in the recommendation issue, but the email still shows three additional compact cards to give enough choice. This keeps analytics simple while preserving the user's proposed `hero + 3` format.
 
+## Jobs, queues and Kaggle offload
+
+Heavy recommendation/page generation should be offloaded to Kaggle when possible, reusing the existing events-bot Kaggle mechanics instead of adding load to the Fly web/runtime process. The Fly process remains a coordinator, thin token gate and sender worker; it does not render dozens of personal pages or run ranking loops inline with user requests.
+
+### Queue/state model
+
+| Step | Owner state | Executor | Output | Notes |
+| --- | --- | --- | --- | --- |
+| `pa_due_subscription_scan` | YDB `pa_generation_job` | Fly scheduler / lightweight worker | due generation batches | Coalesced by cadence period; skips sparse profiles and suppressed/unsubscribed recipients. |
+| `pa_profile_snapshot_materialize` | YDB `pa_profile_snapshot` | lightweight worker or batch | compact ranker inputs | May run before Kaggle so Kaggle reads compact inputs only. |
+| `pa_kaggle_generation_launch` | YDB job + Fly `kaggle_run_ledger` | Fly coordinator | Kaggle run id/status dataset | Uses existing `KaggleClient.push_kernel(...)` and `kaggle_status_client`. |
+| `pa_kaggle_generate_pages` | Kaggle output manifest | Kaggle CPU | pages archive, issue/card manifest, QA report | Renders card-style static/gated pages and email preview data. |
+| `pa_generation_ingest_publish` | YDB `pa_generation_artifact`, `pa_static_page` | Fly/worker | object-storage artifacts + page metadata | Validates archive, uploads artifacts, writes token hashes and publish state. |
+| `pa_email_enqueue` | YDB `pa_email_outbox` | Fly/worker | send-ready rows | Only after `page_published` and quality gates. |
+| `pa_email_send_worker` | YDB `pa_email_outbox`, `pa_delivery_event` | Fly/worker | provider sends/events | Small, leased, rate-limited; no page generation here. |
+| `pa_delivery_webhook_ingest` | YDB `pa_provider_webhook_dedupe`, `pa_suppression` | Fly endpoint/worker | bounce/complaint/delivery metrics | Idempotent webhook handling. |
+
+### Kaggle reuse contract
+
+The personal-announcement generator should follow the StaticSiteBuilder/Kaggle status pattern:
+
+- create a unique private input dataset per run, never a fixed mutable dataset;
+- ship a compact event snapshot, card renderer/static-site source slice, YDB-exported subscription/profile/feedback snapshot, and campaign config;
+- push with `video_announce.kaggle_client.KaggleClient.push_kernel(...)`;
+- create a status dataset with `create_kaggle_run_config(...)` / `create_kaggle_status_dataset(...)` for production runs;
+- include `kaggle_status_client.py` and emit `kernel_started`, `preflight_ok`, `alive`, `report_written` and terminal failure events;
+- output only a compact archive/manifest/QA report, not a full repo or large dependency tree;
+- use encrypted split private datasets for any short-lived service credentials if direct YDB/object-storage writes are explicitly selected, but the preferred MVP handoff is Kaggle output -> server validation/ingestion so Kaggle does not need long-lived YDB write credentials.
+
+### Resource and session constraints
+
+This job competes for Kaggle account CPU/runtime quota with StaticSiteBuilder, Telegram Monitoring, guide monitoring, CherryFlash/CrumpleVideo and other notebooks. It must be lower priority than production monitoring and scheduled public social/video publications.
+
+Required coordination:
+
+- use resource lease key `personal_email:builder`;
+- also respect a shared static-generation/CPU lease such as `kaggle_cpu:static_generation` before launching large batches;
+- do not use or borrow Telegram auth bundles; this job should not require `telegram_session:s22` or E2E sessions;
+- do not run concurrently with `static_site:builder` if both need the same site source/package cache or if Kaggle quota is near exhaustion;
+- coalesce weekly generation into batches and skip/carry over low-priority batches when Kaggle is saturated;
+- cap batch size by estimated output pages, profile count and timeout; split into multiple due-shards rather than one huge kernel;
+- include business progress counters: `subscriptions_done/total`, `pages_rendered/total`, `issues_written/total`, `skipped_low_quality`, `artifact_bytes`, `progress_label`;
+- if Kaggle fails after producing a partial manifest, server ingestion accepts only explicitly complete per-subscription artifacts and marks the rest retryable.
+
+### Failure policy
+
+- If page generation fails, do not enqueue email.
+- If page publish succeeds but email enqueue fails, keep `pa_static_page` and retry enqueue through the YDB generation job.
+- If send fails, do not rebuild the page unless the issue expires or visible events become invalid.
+- If Kaggle is unavailable or quota-blocked, skip the weekly send window rather than rendering in the Fly web process; record `no_send_resource_unavailable`.
+
 ## Outbox state machine
 
 The outbox is not just a table of rows; it is a leased state machine in YDB:
@@ -466,7 +630,7 @@ Production deliverability gates:
 - Postmaster Tools or equivalent spam-rate monitoring configured before scale;
 - marketing/recommendation From domain/stream is separated from transactional reminders where provider supports it;
 - domain warmup and send caps defined;
-- complaint/bounce webhooks dedupe into `pa_provider_webhook_dedupe` and suppress affected hashes in YDB.
+- provider webhooks dedupe into `pa_provider_webhook_dedupe`; complaints and permanent/hard bounces suppress affected HMACes in YDB, while deferred/temporary failures retry according to provider classification and suppress only after a configured threshold or permanent provider code.
 
 Russian compliance gates for this design stage:
 
@@ -526,9 +690,14 @@ Schema-first metric events in YDB:
 | `page_published` | Static/gated page artifact ready before enqueue. |
 | `email_enqueued` / `email_sent` / `email_suppressed` | Outbox funnel. |
 | `provider_delivered` / `provider_deferred` / `provider_bounced` / `provider_complained` | Provider feedback. |
-| `email_link_click` | Return attribution from email. |
-| `personal_page_open` | Server-side page open. |
+| `email_open_announcement_click` | Click on the email button/link that opens the personal announcement page; product-critical CTA metric. |
+| `email_link_click` | Other return attribution from email. |
+| `personal_page_open` | Server-side personal page gate/open after CTA click. |
 | `event_card_click` / `ticket_click` / `save` / `share` | Recommendation outcome. |
+| `email_capture_promo_exposed` / `email_capture_promo_clicked` / `email_capture_promo_dismissed` | Cross-site signup promo performance. |
+| `double_opt_in_sent` / `double_opt_in_confirmed` | Email signup conversion and verification. |
+| `generation_job_started` / `generation_job_completed` / `generation_job_failed` | Kaggle/batch generation observability. |
+| `no_send_resource_unavailable` | Kaggle/quota/resource lease prevented a safe send window. |
 | `feedback_issue_quality` / `feedback_item_label` | Explicit quality labels. |
 | `unsubscribe` | Channel stop event. |
 | `no_send_low_quality` | Quality gate prevented send. |
@@ -544,7 +713,7 @@ All `pa_metric_event_raw` rows use a minimal envelope:
 | `issue_id` | Recommendation issue id when applicable. |
 | `subscription_id_hmac` or `subject_id_hmac` | HMAC only, never raw identity. |
 | `event_id` / `rank` | Present for card/event interactions. |
-| `surface` | `email`, `personal_page`, or `preference_center`. |
+| `surface` | `email`, `personal_page`, `preference_center`, or `related_feed_promo`. |
 | `token_id_hash` | HMAC-SHA256 of token id when applicable, never raw token and never plain hash. |
 | `user_agent_class` | `human`, `bot`, `preview`, or `unknown`. |
 | `request_id` | Trace id for endpoint/provider correlation. |
@@ -555,6 +724,8 @@ Retention policy:
 | Data | Retention target |
 | --- | ---: |
 | `pa_metric_event_raw` | 30-90 days via TTL, then aggregates only. |
+| `pa_email_capture_exposure` | 30-90 days raw, then campaign aggregates. |
+| `pa_generation_job` / `pa_generation_artifact` | Keep until send window closes + operational audit window; retain compact terminal report longer. |
 | `pa_delivery_event` | 180+ days or longer if provider disputes/compliance require. |
 | `pa_feedback` | Longer-lived because it trains personalization; PII-stripped where possible. |
 | `pa_consent_evidence` / `pa_suppression` | Long-lived/audit retention; do not TTL like raw metrics. |
@@ -604,12 +775,15 @@ Retention policy:
 ### Before implementation starts
 
 - this spec keeps YDB as the only feature-state owner;
+- `email_kind=personal_announcement_weekly` is separate from transactional email kinds;
 - `docs/routes.yml` says `ydb_and_static_object_storage`;
 - YDB consent evidence schema exists;
 - YDB `pa_profile_snapshot` materialization boundary exists;
 - HMAC/hash policy for email/subject/token identifiers exists;
 - outbox state machine and lease/idempotency fields exist;
 - YDB retention/TTL policy exists;
+- email-capture promo campaign, placement caps and related-feed insertion rules exist;
+- Kaggle generation/resource lease plan exists;
 - thin dynamic gate is the default for real emails; secret-link fallback has a token/referrer threat model.
 
 ### Before first real email
@@ -621,14 +795,17 @@ Retention policy:
 - provider webhook dedupe works;
 - complaints and permanent/hard bounces suppress in YDB; temporary/deferred failures retry and suppress only by threshold/permanent provider code;
 - no email is sent unless static artifact is published;
+- no email is sent if Kaggle generation status is missing, partial without complete per-subscription artifacts, or resource-failed;
 - no email is sent if issue has fewer than 4 visible valid recommendations;
 - recomputing `content_version` cannot bypass `send_idempotency_key`;
+- `email_open_announcement_click` and `personal_page_open` metrics are recorded before beta;
 - no email is sent if any visible event is past/cancelled.
 
 ### Recommendation quality
 
 - at least 4 visible valid recs for email;
 - at least 12-24 valid recs for personal page, depending on chosen page size;
+- personal page cards reuse static-site related-event card style;
 - rank #1 is hero and ranks 2-4 are compact cards;
 - max venue/category dominance enforced;
 - recently emailed event fatigue enforced;
@@ -642,3 +819,5 @@ Retention policy:
 2. Exact default recommendation count on the static page: 24, 36 or 60.
 3. Whether preference center supports topic/date/city controls in MVP or only unsubscribe/pause/reset.
 4. How long static personal artifacts remain accessible after the issue window.
+5. Exact email-capture promo caps: per session/day/week and per related-feed surface.
+6. Kaggle batch size and timeout defaults for the first internal canary.

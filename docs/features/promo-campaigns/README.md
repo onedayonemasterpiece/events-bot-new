@@ -17,6 +17,26 @@ shared `/promo` management menu, the upcoming KONB-CherryFlash auto-promote
 rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 [partner-promo.md](partner-promo.md).
 
+## Static-site email capture promo (design-only cross-link)
+
+> **Status:** design-only / future integration. This subsection is not part of the currently implemented promo runtime; it records the planned integration point and points to the canonical design spec.
+
+Personal email announcements define an internal product promo campaign for the
+static site: `personal_email_announcement_signup`. Its canonical architecture is
+`docs/features/personal-email-announcements/README.md`. Unlike event/festival
+promo campaigns stored in the existing core promo tables, this campaign's
+subscription, placement, exposure, click, consent and conversion state is
+YDB-owned because it is personal-email feature state.
+
+The planned campaign activity is `related_feed_email_capture_card`: an optional card in
+static-site related/continuation feeds that honestly asks the user to provide an
+email to receive a weekly personalized selection based on what they viewed and
+opened on the site. Placement is capped, not always shown, and never inserted
+before the 5th related item; it may appear in a pseudo-random tail position or
+at the end of the list. If this campaign is later surfaced in `/promo` reports,
+that UI is only a reporting/control mirror and must not move personal state out
+of YDB.
+
 ## Data Model
 
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,
