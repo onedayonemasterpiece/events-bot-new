@@ -183,6 +183,18 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         shutil.copy2(feature_dir / "seed-sources-v2.csv", folder / "seed-sources-v2.csv")
         shutil.copy2(feature_dir / "kaliningrad-place-lexicon-v1.csv", folder / "kaliningrad-place-lexicon-v1.csv")
         shutil.copytree(PROJECT_ROOT / "google_ai", folder / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        state_candidates = [
+            Path(os.environ["REGION_TALK_STATE_FILE"]) if os.environ.get("REGION_TALK_STATE_FILE") else None,
+            PROJECT_ROOT / "artifacts" / "region-talk" / "state" / "region-talk-state.json",
+        ]
+        state_candidates.extend(sorted((PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-candidate-report").glob("*/artifacts/region-talk/state/region-talk-state.json"), reverse=True))
+        for state_path in [p for p in state_candidates if p]:
+            try:
+                if state_path.exists():
+                    shutil.copy2(state_path, folder / "region-talk-state.json")
+                    break
+            except Exception:
+                pass
         (folder / "region_talk_run_config.json").write_text(json.dumps({"run_id": run_id, "env": env_config, "seed_file": env_config["REGION_TALK_SEED_FILE"], "place_lexicon_file": env_config["REGION_TALK_PLACE_LEXICON_FILE"]}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def write_secret(folder: Path) -> None:

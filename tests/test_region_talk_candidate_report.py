@@ -88,7 +88,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         review = payload["sheets"]["04_review_queue"]
         dropped_reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
         self.assertEqual(dropped_reasons["post_old"], "reject_stale_or_missing_date")
-        self.assertEqual(dropped_reasons["post_ad"], "debug_reject_pre_llm_guard")
+        self.assertEqual(dropped_reasons["post_ad"], "reject_ad_or_promo")
         by_dropped_id = {r["post_id"]: r for r in dropped}
         self.assertIn("deterministic_ad_promo_evidence", by_dropped_id["post_ad"]["semantic_evidence_flags"])
         self.assertEqual(payload["summary"]["image_model_calls"], 0)
@@ -144,6 +144,68 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         result = __import__('asyncio').run(inner())
         self.assertEqual(result["llm_gate_status"], "ok")
         self.assertEqual(result["llm_decision"], "accept")
+
+    def test_ad_promo_rubrika_is_not_ruble_price(self) -> None:
+        mod = load_module()
+        gate = mod.ad_promo_gate("В рубрике про Зеленоградск — прогулка, море и красивые детали маршрута")
+        self.assertFalse(gate["is_ad_or_promo"])
+        self.assertEqual(gate["ad_promo_hits"], "")
+        hard = mod.ad_promo_gate("Экскурсия по Калининграду: цена 1500 руб., регистрация обязательна")
+        self.assertTrue(hard["is_ad_or_promo"])
+        self.assertIn("price_rub", hard["ad_promo_hits"])
+
+    def test_source_coverage_reports_vk_and_more_than_telegram_enabled(self) -> None:
+        mod = load_module()
+        seeds = [
+            mod.Seed("tg1", "telegram", "TG1", "@viewrussia", "https://t.me/viewrussia", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
+            mod.Seed("tg2", "telegram", "TG2", "@moya_planeta", "https://t.me/moya_planeta", "travel", "", 2, "", "", "", "", "", "", False, "unknown", ""),
+            mod.Seed("vk1", "vk", "VK1", "@places", "https://vk.com/places", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
+            mod.Seed("vv1", "vkvideo", "VV1", "@rgoclub", "https://vk.com/rgoclub", "travel", "", 1, "", "", "", "", "", "", True, "unknown", ""),
+        ]
+        os.environ["REGION_TALK_MAX_SOURCES"] = "4"
+        os.environ["REGION_TALK_FETCH_TELEGRAM"] = "0"
+        try:
+            rows, posts = __import__("asyncio").run(mod.fetch_telegram_posts(seeds, mod.Status(), Path(tempfile.mkdtemp())))
+        finally:
+            os.environ.pop("REGION_TALK_MAX_SOURCES", None)
+            os.environ.pop("REGION_TALK_FETCH_TELEGRAM", None)
+        self.assertFalse(posts)
+        statuses = {r["source_seed_id"]: r["fetch_status"] for r in rows}
+        self.assertEqual(statuses["tg1"], "skipped_fetch_disabled")
+        self.assertEqual(statuses["tg2"], "skipped_fetch_disabled")
+        self.assertIn(statuses["vk1"], {"skipped_vk_wall_not_configured", "skipped_vk_wall_not_implemented"})
+        self.assertEqual(statuses["vv1"], "skipped_vkvideo_auxiliary_not_implemented")
+
+    def test_weak_image_not_marked_reviewable_in_final_shortlist(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"encyclopedic_card_candidate", "content_type":"encyclopedic_card_candidate", "llm_reason":"ok"}
+        mod.media_scores = lambda has_media, text_score, post=None: {"technical_quality_score":0.4,"aesthetic_score":0.4,"postcardness_score":0.4,"region_visual_relevance_score":0.5,"publication_safety_score":0.9,"low_noise_score":0.8,"overall_media_score":0.55,"is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false","image_quality_bucket":"weak_image","recognized_visual_elements":"","model_short_explanation":"weak","failure_reason":"below_reviewable_image_threshold","model_id":"fake","model_version":"test","image_model_type":"clip","image_model_runtime":"kaggle_local","image_model_input_type":"actual_image","image_scoring_mode":"cv_aesthetic_clip","image_model_device":"cpu","image_download_status":"downloaded_actual_image"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_weak_media", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/5", "platform_post_key":"tg:src:5", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны и что особенно запомнилось в поездке", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "weak-image-run", Path(td))
+        self.assertFalse(payload["sheets"]["04a_final_shortlist"])
+        self.assertEqual(len(payload["sheets"]["10_good_text_weak_media"]), 1)
+        self.assertEqual(payload["sheets"]["10_good_text_weak_media"][0]["current_stage"], "good_text_weak_media")
+
+    def test_increment_state_second_run_is_not_baseline(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"reject", "llm_reason":"not enough"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"post_seen", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/6", "platform_post_key":"tg:src:6", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: маршрут, море, дюны и впечатления от поездки", "text_excerpt":"", "has_media":False, "media_count":0, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td) / "runs" / "r1"
+            second = Path(td) / "runs" / "r2"
+            first = mod.build_report(seeds, [], posts, "r1", base)
+            again = mod.build_report(seeds, [], posts, "r2", second)
+        self.assertEqual(first["summary"]["increment_state_loaded"], "false")
+        self.assertEqual(again["summary"]["increment_state_loaded"], "true")
+        inc = again["sheets"]["02_increment"][0]
+        self.assertEqual(inc["new_this_run"], "no")
+        self.assertEqual(inc["seen_run_count"], 2)
+        self.assertEqual(inc["previous_run_id"], "r1")
 
 
 if __name__ == "__main__":

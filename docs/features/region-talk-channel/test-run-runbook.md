@@ -56,8 +56,8 @@ REGION_TALK_DISABLE_PUBLISH=1
 REGION_TALK_SEED_FILE=docs/features/region-talk-channel/seed-sources-v2.csv
 REGION_TALK_PLACE_LEXICON_FILE=docs/features/region-talk-channel/kaliningrad-place-lexicon-v1.csv
 REGION_TALK_OUTPUT_DIR=artifacts/region-talk/runs/${RUN_ID}
-REGION_TALK_MAX_SOURCES=5
-REGION_TALK_MAX_POSTS_PER_SOURCE=20
+REGION_TALK_MAX_SOURCES=30
+REGION_TALK_MAX_POSTS_PER_SOURCE=50
 REGION_TALK_MAX_IMAGES_PER_POST=8
 # LLM call/key/rate limits are strict Supabase google_ai limiter state, not env counters.
 # Required for live/Kaggle quality runs: SUPABASE_URL + SUPABASE_KEY/SUPABASE_SERVICE_KEY.
@@ -76,6 +76,8 @@ REGION_TALK_MAX_NEW_SOURCE_CANDIDATES_PER_RUN=800
 REGION_TALK_MAX_COMMENTS_PER_POST_FOR_LINKS=50
 REGION_TALK_MAX_DISCOVERY_DEPTH_PER_RUN=2
 ```
+
+`REGION_TALK_MAX_LLM_CALLS` is intentionally not part of the authoritative config. The run must reserve/finalize calls through Supabase `google_ai`; local/env counters may not be used as a substitute for the shared limiter.
 
 YDB mode must be one of:
 
@@ -140,3 +142,14 @@ The XLSX has:
 - `04b_needs_llm_retry` / `14c_llm_errors` — rows blocked by Supabase/provider quota/errors;
 - `04c_debug_rejects` — obvious non-region/ad/low-substance rejects;
 - `14b_pre_candidates_needing_llm` — reviewable rows waiting for semantic model/manual review.
+- `19_image_model_observability` — model id/type/runtime/input/device and fallback honesty for image scoring.
+
+## MVP-1.z2 validation checklist
+
+- `01_run_summary.increment_state_loaded=true` means a real previous dry-run state was loaded; `false` must be explained as `baseline run, not real increment`.
+- `13_sources_monitored` includes every selected source, including VK/VKVideo/web rows as `skipped_*` when no fetcher/token exists.
+- `vk_wall_probe_status` is visible in summary/source rows.
+- `04a_final_shortlist` must not label rows as `reviewable_image` unless `image_reviewable=true`.
+- LLM-accepted rows with weak media go to `10_good_text_weak_media`.
+- `04b_needs_llm_retry` and `14c_llm_errors` keep useful headers even when there are no retry rows.
+- `09_image_quality` and `19_image_model_observability` must show whether scoring was actual-image local CLIP or metadata fallback.

@@ -249,12 +249,116 @@ AD_PROMO_WORDS = [
     "регистрация", "зарегистр", "анонс", "приглашаем", "приходите", "участвуйте", "географический диктант",
     "диктант", "тур ", "туры", "экскурсия", "экскурсии", "программа мероприятия", "мероприятие состоится",
 ]
+AD_PROMO_HARD_PATTERNS = [
+    ("ad_label", r"(?<![а-яa-z])(?:реклама|на правах рекламы|партнерск(?:ий|ая|ое|ие)|партн[её]рский материал)(?![а-яa-z])"),
+    ("promo_code", r"(?<![а-яa-z])(?:промокод|скидк[аиуой]?|акци[ияю]|розыгрыш|конкурс)(?![а-яa-z])"),
+    ("price_rub", r"(?:\b\d[\d\s]*(?:₽|руб(?:\.|лей|ля|ль)?\b)|(?:стоимость|цена|оплата|оплатить)\b)"),
+    ("booking_tickets", r"(?<![а-яa-z])(?:купить|заказать|забронировать|бронь|билеты?|регистраци[яию]|зарегистр(?:ироваться|ируйтесь|ируйся)|приходите|участвуйте)(?![а-яa-z])"),
+    ("paid_tour_service", r"(?<![а-яa-z])(?:туры?|экскурси[яию]|гид|туроператор|пут[её]вк[аиу]|программа мероприятия|мероприятие состоится|географический диктант|диктант)(?![а-яa-z])"),
+    ("app_download", r"(?:скачайте|установите|приложени[ея]|app store|google play)"),
+]
+AD_PROMO_POSSIBLE_PATTERNS = [
+    ("announcement_tone", r"(?<![а-яa-z])(?:анонс|приглашаем|афиша|состоится)(?![а-яa-z])"),
+    ("service_context", r"(?<![а-яa-z])(?:маршрут от|проект|сервис|официальный портал)(?![а-яa-z])"),
+]
 SUBSTANCE_WORDS = ["маршрут", "дорога", "путь", "добраться", "совет", "полезн", "истори", "место", "что посмотреть", "где", "когда", "почему"]
 VISIT_WORDS = ["побывал", "побывали", "посетил", "посетили", "ездили", "поехали", "приехали", "гуляли", "увидели", "запомнил", "запомнилось", "впечатлен", "впечатления"]
 EMOTION_WORDS = ["красив", "впечатля", "атмосфер", "удивител", "люблю", "очар", "запомни", "магия", "спокойн", "вдохнов", "вау", "эмоци"]
 MEMORABLE_WORDS = ["больше всего", "особенно", "запомни", "неожиданно", "удивило", "главное", "лучшее", "самое", "деталь", "история"]
 URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|\bt\.me/[A-Za-z0-9_+/.-]+|\bvk\.com/[A-Za-z0-9_./-]+")
 HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,}")
+STATE_FILE_NAME = "region-talk-state.json"
+
+
+def selected_sources_for_run(seeds: list[Seed], max_sources: int) -> list[Seed]:
+    enabled = [s for s in seeds if s.monitoring_enabled]
+    fallback = [s for s in seeds if not s.monitoring_enabled]
+    ordered = sorted(enabled, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id)))
+    seen = {s.source_seed_id for s in ordered}
+    for seed in sorted(fallback, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id))):
+        if seed.source_seed_id not in seen:
+            ordered.append(seed)
+            seen.add(seed.source_seed_id)
+    return ordered[:max(0, max_sources)]
+
+
+def source_status_row(seed: Seed, status_value: str, **extra: Any) -> dict[str, Any]:
+    return {
+        **asdict(seed),
+        "source_id": seed.source_id,
+        "canonical_url": seed.canonical_url,
+        "fetch_status": status_value,
+        "posts_scanned": 0,
+        "source_selected_this_run": "true",
+        "source_cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
+        **extra,
+    }
+
+
+def state_file_candidates(output_dir: Path) -> list[Path]:
+    out: list[Path] = []
+    if os.getenv("REGION_TALK_STATE_FILE"):
+        out.append(Path(str(os.getenv("REGION_TALK_STATE_FILE"))))
+    cwd = Path.cwd()
+    out.extend([
+        output_dir.parent.parent / "state" / STATE_FILE_NAME if len(output_dir.parents) >= 2 else output_dir.parent / STATE_FILE_NAME,
+        output_dir.parent / STATE_FILE_NAME,
+    ])
+    try:
+        if output_dir.resolve().is_relative_to(cwd.resolve()):
+            out.append(cwd / "artifacts" / "region-talk" / "state" / STATE_FILE_NAME)
+    except Exception:
+        pass
+    inp = Path("/kaggle/input")
+    if inp.exists():
+        out.extend(inp.rglob(STATE_FILE_NAME))
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for p in out:
+        key = str(p)
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return unique
+
+
+def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    for path in state_file_candidates(output_dir):
+        try:
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data, {"increment_state_loaded": "true", "increment_state_path": str(path), "previous_run_id": data.get("run_id", ""), "previous_seen_post_count": len(data.get("posts") or {})}
+        except Exception as exc:
+            return {}, {"increment_state_loaded": "false", "increment_state_path": str(path), "increment_state_error": f"{type(exc).__name__}: {str(exc)[:180]}", "previous_run_id": "", "previous_seen_post_count": 0}
+    return {}, {"increment_state_loaded": "false", "increment_state_path": "", "increment_state_note": "baseline run, not real increment: no previous dry-run state file found", "previous_run_id": "", "previous_seen_post_count": 0}
+
+
+def save_region_talk_state(output_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
+    target = state_file_candidates(output_dir)[0]
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        run_copy = output_dir / STATE_FILE_NAME
+        if run_copy.resolve() != target.resolve():
+            run_copy.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"state_write_status": "ok", "state_write_path": str(target)}
+    except Exception as exc:
+        return {"state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:240]}", "state_write_path": str(target)}
+
+
+def classify_pre_llm_reject_reason(fresh: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any], ts: dict[str, Any]) -> str:
+    if not fresh.get("fresh_enough"):
+        return "reject_old_post"
+    if not scope.get("kaliningrad_oblast_only_scope"):
+        return "reject_not_kaliningrad_oblast_only"
+    if ad_gate.get("is_ad_or_promo"):
+        return "reject_ad_or_promo"
+    if float(ts.get("newsiness_score") or 0) >= 0.70 or float(ts.get("trash_score") or 0) >= 0.70:
+        return "reject_news_or_trash"
+    if float(substance.get("text_substance_score") or 0) < 0.18:
+        return "reject_low_substance"
+    return "reject_source_boilerplate"
 
 
 def normalize_geo_text(value: str) -> str:
@@ -327,6 +431,11 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
     norm = normalize_geo_text(text)
     matches: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
+    strong_context_terms = [normalize_geo_text(x) for x in DEFAULT_ANCHORS[:8]] + [
+        "калининградская область", "калининградской области", "зеленоградский", "светлогорский",
+        "балтийский район", "куршская коса", "балтийская коса", "пос.", "поселок", "поселке",
+        "маршрут", "поездка", "путешествие",
+    ]
     for place in lexicon:
         if str(place.get("allowed_for_kaliningrad_scope") or "").lower() != "true":
             continue
@@ -341,6 +450,8 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
                 idx = norm.find(norm_term)
                 raw_text = text or ""
                 requires_context = str(place.get("requires_context") or "").lower() == "true"
+                context_norm = normalize_geo_text(raw_text[max(0, idx-120):idx+len(term)+120]) if idx >= 0 else norm
+                accepted_context = (not requires_context) or any(t and t in context_norm for t in strong_context_terms)
                 matches.append({
                     "place_id": place.get("place_id", ""),
                     "matched_place_name": term,
@@ -351,7 +462,8 @@ def match_kaliningrad_places(text: str, lexicon: list[dict[str, Any]]) -> list[d
                     "alias_used": term if kind != "canonical_name" else "",
                     "match_context": re.sub(r"\s+", " ", raw_text[max(0, idx-80):idx+len(term)+80])[:240] if idx >= 0 else "",
                     "requires_context": str(requires_context).lower(),
-                    "accepted_as_region_evidence": "false" if requires_context else "true",
+                    "accepted_as_region_evidence": str(bool(accepted_context)).lower(),
+                    "match_context_short": re.sub(r"\s+", " ", raw_text[max(0, idx-80):idx+len(term)+80])[:180] if idx >= 0 else "",
                 })
     return matches
 
@@ -385,6 +497,10 @@ def kaliningrad_oblast_only_scope_gate(text: str, lexicon: list[dict[str, Any]])
         "matched_place_aliases": "; ".join(sorted({m["alias_used"] for m in matches if m.get("alias_used")})),
         "ambiguous_place_names": "; ".join(sorted({m["canonical_name"] for m in ambiguous_matches})),
         "requires_context_place_names": "; ".join(sorted({m["canonical_name"] for m in ambiguous_matches})),
+        "matched_place_requires_context": "; ".join(sorted({m["canonical_name"] for m in matches if m.get("requires_context") == "true"})),
+        "matched_place_accepted_as_region_evidence": "; ".join(sorted({m["canonical_name"] for m in strong_matches})),
+        "matched_place_rejected_as_ambiguous": "; ".join(sorted({m["canonical_name"] for m in ambiguous_matches})),
+        "match_context_short": "; ".join([str(m.get("match_context_short") or "") for m in matches[:3] if m.get("match_context_short")]),
         "mentioned_kaliningrad_places": "; ".join(sorted({m["canonical_name"] for m in matches})),
         "mentioned_external_regions": "; ".join(external_regions),
         "mentioned_external_countries": "; ".join(external_countries),
@@ -444,9 +560,31 @@ def score_substance(text: str) -> dict[str, Any]:
 
 def ad_promo_gate(text: str) -> dict[str, Any]:
     low = normalize_geo_text(text)
-    hits = [w.strip() for w in AD_PROMO_WORDS if w.strip() and w in low]
-    is_ad = bool(hits)
-    return {"is_ad_or_promo": is_ad, "ad_promo_hits": "; ".join(sorted(set(hits))), "ad_promo_reason": "reject: ad/promo/announcement cues: " + "; ".join(sorted(set(hits))) if is_ad else "accepted: no hard ad/promo cues"}
+    hard_hits: list[str] = []
+    possible_hits: list[str] = []
+    for label, pattern in AD_PROMO_HARD_PATTERNS:
+        if re.search(pattern, low, flags=re.I):
+            hard_hits.append(label)
+    for label, pattern in AD_PROMO_POSSIBLE_PATTERNS:
+        if re.search(pattern, low, flags=re.I):
+            possible_hits.append(label)
+    is_hard = bool(hard_hits)
+    is_possible = bool(possible_hits)
+    reason = (
+        "reject: hard ad/promo/announcement cues: " + "; ".join(sorted(set(hard_hits)))
+        if is_hard else (
+            "possible promo cues, send to LLM if content is strong: " + "; ".join(sorted(set(possible_hits)))
+            if is_possible else "accepted: no hard ad/promo cues"
+        )
+    )
+    return {
+        "is_ad_or_promo": is_hard,
+        "is_ad_or_promo_hard": str(is_hard).lower(),
+        "is_ad_or_promo_possible": str(is_possible).lower(),
+        "ad_promo_hits": "; ".join(sorted(set(hard_hits))),
+        "ad_promo_possible_hits": "; ".join(sorted(set(possible_hits))),
+        "ad_promo_reason": reason,
+    }
 
 
 def extract_urls_and_handles(text: str) -> list[dict[str, Any]]:
@@ -537,6 +675,7 @@ def image_scores_skipped(reason: str) -> dict[str, Any]:
         "recognized_visual_elements":"","model_short_explanation":"Image scoring skipped by text gate: " + reason,
         "failure_reason":"image_scoring_skipped_by_text_gate","model_id":"not_run_text_gate","model_version":"2026-07-05",
         "image_model_type":"not_run","image_model_runtime":"not_run","image_model_input_type":"none","image_scoring_mode": current_image_scoring_mode(),
+        "image_model_device":"not_run","image_download_status":"not_needed_text_gate",
     }
 
 
@@ -546,7 +685,7 @@ def current_image_scoring_mode() -> str:
 
 def _metadata_media_scores(has_media: bool, text_score: dict[str, Any], *, reason_prefix: str = "") -> dict[str, Any]:
     if not has_media:
-        return {"technical_quality_score":0.0,"aesthetic_score":0.0,"postcardness_score":0.0,"region_visual_relevance_score":0.0,"publication_safety_score":1.0,"low_noise_score":0.0,"overall_media_score":0.0,"is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false","image_quality_bucket":"no_media","recognized_visual_elements":"","model_short_explanation":"No media detected; image gate failed.","failure_reason":"no_media","model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode()}
+        return {"technical_quality_score":0.0,"aesthetic_score":0.0,"postcardness_score":0.0,"region_visual_relevance_score":0.0,"publication_safety_score":1.0,"low_noise_score":0.0,"overall_media_score":0.0,"is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false","image_quality_bucket":"no_media","recognized_visual_elements":"","model_short_explanation":"No media detected; image gate failed.","failure_reason":"no_media","model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode(),"image_model_device":"cpu","image_download_status":"no_media"}
     anchors = text_score.get("anchor_hits") or []
     positives = text_score.get("positive_hits") or []
     technical = 0.72
@@ -565,7 +704,7 @@ def _metadata_media_scores(has_media: bool, text_score: dict[str, Any], *, reaso
     if "архитект" in low or "кёниг" in low or "калининград" in low: elements.append("city/architecture")
     if not elements: elements.append("travel visual candidate")
     prefix = (reason_prefix + "; ") if reason_prefix else ""
-    return {"technical_quality_score":round(technical,3),"aesthetic_score":round(aesthetic,3),"postcardness_score":round(postcard,3),"region_visual_relevance_score":round(region_visual,3),"publication_safety_score":round(safety,3),"low_noise_score":round(low_noise,3),"overall_media_score":overall,"is_selected_for_publication":selected,"image_publication_ready":str(selected).lower(),"image_reviewable":str(reviewable).lower(),"image_quality_bucket":"publication_ready" if selected else ("reviewable_image" if reviewable else "weak_image"),"recognized_visual_elements":"; ".join(elements),"model_short_explanation":prefix + f"cv_only metadata fallback: media present; region anchors={len(anchors)}, travel/visual cues={len(positives)}; safety={'ok' if safety>=0.95 else 'blocked by news/trash cues'}.","failure_reason":"" if selected else ("reviewable_below_publication_threshold" if reviewable else "below_reviewable_image_threshold"),"model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode()}
+    return {"technical_quality_score":round(technical,3),"aesthetic_score":round(aesthetic,3),"postcardness_score":round(postcard,3),"region_visual_relevance_score":round(region_visual,3),"publication_safety_score":round(safety,3),"low_noise_score":round(low_noise,3),"overall_media_score":overall,"is_selected_for_publication":selected,"image_publication_ready":str(selected).lower(),"image_reviewable":str(reviewable).lower(),"image_quality_bucket":"publication_ready" if selected else ("reviewable_image" if reviewable else "weak_image"),"recognized_visual_elements":"; ".join(elements),"model_short_explanation":prefix + f"cv_only metadata fallback: media present; region anchors={len(anchors)}, travel/visual cues={len(positives)}; safety={'ok' if safety>=0.95 else 'blocked by news/trash cues'}.","failure_reason":"" if selected else ("reviewable_below_publication_threshold" if reviewable else "below_reviewable_image_threshold"),"model_id":"cv_only_metadata_v1","model_version":"2026-07-05","image_model_type":"cv_only","image_model_runtime":"kaggle_local","image_model_input_type":"metadata_only","image_scoring_mode": current_image_scoring_mode(),"image_model_device":"cpu","image_download_status":"actual_image_missing_or_fallback"}
 
 
 def _local_image_stats(path: str) -> dict[str, float]:
@@ -661,6 +800,7 @@ def _clip_image_scores(image_path: str, text_score: dict[str, Any]) -> dict[str,
         "failure_reason":"" if selected else ("reviewable_below_publication_threshold" if reviewable else "below_reviewable_image_threshold"),
         "model_id":"clip_local_" + re.sub(r"[^A-Za-z0-9_.-]+", "_", model_id),"model_version":"2026-07-05",
         "image_model_type":"clip","image_model_runtime":"kaggle_local","image_model_input_type":"actual_image","image_scoring_mode": current_image_scoring_mode(),
+        "image_model_device":device,"image_download_status":"downloaded_actual_image",
     }
 
 
@@ -689,13 +829,23 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     max_sources = getenv_int("REGION_TALK_MAX_SOURCES", 5)
     max_posts = getenv_int("REGION_TALK_MAX_POSTS_PER_SOURCE", 20)
     fetch_enabled = getenv_bool("REGION_TALK_FETCH_TELEGRAM", True)
-    monitored = [s for s in seeds if s.platform == "telegram" and s.monitoring_enabled]
-    monitored = sorted(monitored, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id)))[:max_sources]
+    selected = selected_sources_for_run(seeds, max_sources)
+    monitored = [s for s in selected if s.platform == "telegram" and (s.handle or "t.me/" in s.url.lower())]
     source_rows: list[dict[str, Any]] = []
     posts: list[dict[str, Any]] = []
+    for seed in selected:
+        if seed.platform == "telegram":
+            continue
+        if seed.platform == "vk":
+            status_value = "skipped_vk_wall_not_configured" if not (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else "skipped_vk_wall_not_implemented"
+            source_rows.append(source_status_row(seed, status_value, vk_wall_probe_status=status_value, source_probe_reason="VK wall probing is visible in coverage but not fetched in this MVP run."))
+        elif seed.platform == "vkvideo":
+            source_rows.append(source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."))
+        else:
+            source_rows.append(source_status_row(seed, "skipped_unsupported_platform", vk_wall_probe_status="not_applicable", source_probe_reason="Non-Telegram source is tracked for coverage/discovery, not fetched in this MVP run."))
     if not fetch_enabled:
         for s in monitored:
-            source_rows.append({**asdict(s), "source_id": s.source_id, "canonical_url": s.canonical_url, "fetch_status":"skipped_fetch_disabled"})
+            source_rows.append(source_status_row(s, "skipped_fetch_disabled"))
         return source_rows, posts
     try:
         from telethon import TelegramClient  # type: ignore
@@ -707,7 +857,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             from telethon.sessions import StringSession  # type: ignore
         else:
             for s in monitored:
-                source_rows.append({**asdict(s), "source_id": s.source_id, "canonical_url": s.canonical_url, "fetch_status":"skipped_telethon_not_installed"})
+                source_rows.append(source_status_row(s, "skipped_telethon_not_installed"))
             return source_rows, posts
     bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
     raw = (os.getenv(bundle_env) or "").strip()
@@ -719,7 +869,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     session = str(bundle.get("session") or os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip()
     if not session or not api_id or not api_hash:
         for s in monitored:
-            source_rows.append({**asdict(s), "source_id": s.source_id, "canonical_url": s.canonical_url, "fetch_status":"skipped_missing_telethon_credentials"})
+            source_rows.append(source_status_row(s, "skipped_missing_telethon_credentials"))
         return source_rows, posts
     client = TelegramClient(StringSession(session), api_id, api_hash, device_model=str(bundle.get("device_model") or "Region Talk Discovery"), system_version=str(bundle.get("system_version") or "Linux"), app_version=str(bundle.get("app_version") or "1.0"), lang_code=str(bundle.get("lang_code") or "ru"), system_lang_code=str(bundle.get("system_lang_code") or "ru"))
     await client.connect()
@@ -730,7 +880,10 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         for idx, seed in enumerate(monitored, start=1):
             status.event("alive", phase="fetch", progress_label=f"источники {idx}/{len(monitored)}", sources_done=idx-1, sources_total=len(monitored))
             handle = seed.handle.lstrip("@")
-            src_row = {**asdict(seed), "source_id": seed.source_id, "canonical_url": seed.canonical_url, "fetch_status":"ok", "posts_scanned":0}
+            if not handle or "/" in handle or handle.startswith("http"):
+                source_rows.append(source_status_row(seed, "skipped_telegram_handle_not_configured", vk_wall_probe_status="not_applicable"))
+                continue
+            src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable")
             try:
                 entity = await client.get_entity(handle)
                 title = str(getattr(entity, "title", None) or seed.source_title)
@@ -1063,6 +1216,7 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             "llm_is_ad_or_promo": str(bool(data.get("is_ad_or_promo"))).lower(),
             "llm_is_news_or_trash": str(bool(data.get("is_news_or_trash"))).lower(),
             "llm_content_type": str(data.get("content_type") or ""),
+            "content_type": str(data.get("content_type") or ""),
             "llm_reason": str(data.get("reason") or "")[:500],
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
@@ -1119,6 +1273,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     llm_limit_snapshot = load_llm_limit_snapshot(llm_model, llm_default_env_var_name)
     llm_calls_used = 0
     llm_supabase_unavailable = llm_limit_snapshot.get("llm_limit_source") == "supabase_required_unavailable"
+    previous_state, state_meta = load_region_talk_state(output_dir)
+    previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    previous_discovered = previous_state.get("discovered_sources") if isinstance(previous_state.get("discovered_sources"), dict) else {}
+    updated_posts_state: dict[str, Any] = dict(previous_posts)
+    updated_discovered_state: dict[str, Any] = dict(previous_discovered)
 
     for p in posts:
         seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or '')) or (seeds[0] if seeds else None)
@@ -1170,10 +1329,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
         llm_gate = {
             "llm_gate_status": "not_run", "llm_provider": "google_gemini", "llm_model": llm_model, "llm_default_env_var_name": llm_default_env_var_name, "llm_limit_source": llm_limit_snapshot.get("llm_limit_source", "supabase_google_ai"), "llm_decision": "",
-            "whole_post_about_kaliningrad_oblast_score": "", "kaliningrad_mention_role": "",
-            "is_digest_or_roundup": "", "is_multi_topic_digest": "", "llm_is_ad_or_promo": "",
-            "llm_is_news_or_trash": "", "llm_content_type": "", "llm_reason": "",
+            "whole_post_about_kaliningrad_oblast_score": round(0.65 if scope.get("kaliningrad_oblast_only_scope") else 0.15, 2),
+            "kaliningrad_mention_role": "main_subject" if scope.get("kaliningrad_oblast_only_scope") else ("one_item" if scope.get("matched_place_names") else "unclear"),
+            "is_digest_or_roundup": str(float(ts.get("newsiness_score") or 0) >= 0.45 or bool(scope.get("external_geo_mentions"))).lower(),
+            "is_multi_topic_digest": str(bool(scope.get("external_geo_mentions"))).lower(),
+            "llm_is_ad_or_promo": "", "llm_is_news_or_trash": "",
+            "llm_content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "low_substance"),
+            "content_type": "route_useful_candidate" if float(substance.get("useful_route_score") or 0) > 0 else ("visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) > 0 else "low_substance"),
+            "llm_reason": "",
             "llm_usage_input_tokens": "", "llm_usage_output_tokens": "", "llm_usage_total_tokens": "",
+            "rejection_reason_primary": "", "rejection_reason_details": "",
         }
         llm_required = semantic_gate_mode in {"llm_required", "llm", "semantic_required"} and not deterministic_override
         if not rejection and llm_required:
@@ -1217,7 +1382,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 visual_skip_reason = str(llm_gate.get("llm_reason") or "LLM failed/rate-limited; retry required before image scoring")
                 current_stage = "needs_llm_retry"
             elif llm_gate.get("llm_gate_status") == "not_run_pre_llm_cost_guard":
-                drop_gate, rejection = "pre_llm_cost_guard", "debug_reject_pre_llm_guard"
+                precise_reason = classify_pre_llm_reject_reason(fresh, scope, ad_gate, substance, ts)
+                drop_gate, rejection = "pre_llm_cost_guard", precise_reason
                 visual_skip_reason = "Skipped before LLM to avoid spending Supabase quota on obvious non-region/ad/low-substance rows"
                 current_stage = "debug_reject"
             else:
@@ -1244,8 +1410,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": p.get("primary_media_path") or ((p.get("post_url") + "#media") if p.get("has_media") else ""), "thumbnail":"", **ms})
             score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
             if not ms["is_selected_for_publication"]:
-                current_stage, rejection, drop_gate = "needs_image_review", ms["failure_reason"], "image_postcardness_gate"
-                gate_trace.append("image_postcardness_gate:reviewable" if str(ms.get("image_reviewable")) == "true" else "image_postcardness_gate:weak")
+                if str(ms.get("image_reviewable")) == "true":
+                    current_stage, rejection, drop_gate = "needs_image_review", ms["failure_reason"], "image_postcardness_gate"
+                    gate_trace.append("image_postcardness_gate:reviewable")
+                else:
+                    current_stage, rejection, drop_gate = "good_text_weak_media", ms["failure_reason"], "image_postcardness_gate"
+                    gate_trace.append("image_postcardness_gate:weak")
             elif score >= 0.45:
                 current_stage = "favorite" if score >= 0.62 else "semantic_candidate"
                 gate_trace.append("image_postcardness_gate:pass")
@@ -1261,6 +1431,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 "priority_tier": m.get("priority_tier"), "alias_used": m.get("alias_used"),
                 "match_context": m.get("match_context"), "requires_context": m.get("requires_context"),
                 "accepted_as_region_evidence": m.get("accepted_as_region_evidence"),
+                "match_context_short": m.get("match_context_short"),
             })
 
         row = {
@@ -1285,13 +1456,47 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "gate_order_trace": " → ".join(gate_trace),
             "semantic_evidence_flags": "; ".join(semantic_evidence_flags),
             **llm_gate,
+            "rejection_reason_primary": rejection or "",
+            "rejection_reason_details": visual_skip_reason or str(llm_gate.get("llm_reason") or ""),
             "semantic_gate_mode": semantic_gate_mode,
             "deterministic_semantic_gate_override": str(deterministic_override).lower(),
             "semantic_enrichment_stage": "llm_semantic_gate_pending" if current_stage == "pre_candidate_needs_llm" else ("dual_model_vector_enrichment_pending" if current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate"),
         }
         row.pop("place_matches", None)
         new_posts.append(row)
-        increment.append({"entity_type":"post", "entity_id":p["post_id"], "source_title":p.get("source_title"), "post_url":p.get("post_url"), "first_seen_run_id":run_id, "previous_run_id":"", "current_run_id":run_id, "first_seen_at":run_now, "last_seen_at":run_now, "seen_run_count":1, "previous_stage":"", "current_stage":current_stage, "stage_transition":"new→"+current_stage, "new_this_run":"yes", "changed_this_run":"yes", "change_reason":rejection or "first_seen", "candidate_score_previous":"", "candidate_score_current":score, "candidate_score_delta":"", "media_score_previous":"", "media_score_current":ms["overall_media_score"], "media_score_delta":"", "manual_review_status":"unreviewed", "next_action":row["suggested_action"]})
+        previous_post = previous_posts.get(str(p["post_id"])) if isinstance(previous_posts, dict) else None
+        previous_stage = str((previous_post or {}).get("current_stage") or "")
+        previous_score = (previous_post or {}).get("candidate_score_current", "")
+        previous_media = (previous_post or {}).get("media_score_current", "")
+        seen_count = int((previous_post or {}).get("seen_run_count") or 0) + 1
+        first_seen_run = str((previous_post or {}).get("first_seen_run_id") or run_id)
+        changed = (not previous_post) or previous_stage != current_stage or str(previous_score) != str(score) or str(previous_media) != str(ms["overall_media_score"])
+        score_delta = ""
+        media_delta = ""
+        try:
+            score_delta = round(float(score) - float(previous_score), 3) if previous_score != "" else ""
+        except Exception:
+            score_delta = ""
+        try:
+            media_delta = round(float(ms["overall_media_score"]) - float(previous_media), 3) if previous_media != "" else ""
+        except Exception:
+            media_delta = ""
+        increment.append({"entity_type":"post", "entity_id":p["post_id"], "source_title":p.get("source_title"), "post_url":p.get("post_url"), "first_seen_run_id":first_seen_run, "previous_run_id":str((previous_post or {}).get("last_seen_run_id") or ""), "current_run_id":run_id, "first_seen_at":str((previous_post or {}).get("first_seen_at") or run_now), "last_seen_at":run_now, "seen_run_count":seen_count, "previous_stage":previous_stage, "current_stage":current_stage, "stage_transition":("new→"+current_stage if not previous_post else previous_stage+"→"+current_stage), "new_this_run":"yes" if not previous_post else "no", "changed_this_run":str(changed).lower(), "change_reason":rejection or ("first_seen" if not previous_post else ("stage_or_score_changed" if changed else "unchanged")), "candidate_score_previous":previous_score, "candidate_score_current":score, "candidate_score_delta":score_delta, "media_score_previous":previous_media, "media_score_current":ms["overall_media_score"], "media_score_delta":media_delta, "manual_review_status":"unreviewed", "next_action":row["suggested_action"]})
+        updated_posts_state[str(p["post_id"])] = {
+            "first_seen_run_id": first_seen_run,
+            "first_seen_at": str((previous_post or {}).get("first_seen_at") or run_now),
+            "last_seen_run_id": run_id,
+            "last_seen_at": run_now,
+            "seen_run_count": seen_count,
+            "current_stage": current_stage,
+            "candidate_score_current": score,
+            "media_score_current": ms["overall_media_score"],
+            "post_url": p.get("post_url"),
+            "source_id": p.get("source_id"),
+            "source_title": p.get("source_title"),
+            "platform_post_key": p.get("platform_post_key"),
+            "post_date": p.get("post_date"),
+        }
         if current_stage in {"favorite", "semantic_candidate"}:
             candidates.append(row)
         elif current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"}:
@@ -1335,6 +1540,41 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         })
     source_rows = enriched_source_rows
 
+    for drow in discovered_rows:
+        did = str(drow.get("source_candidate_id") or stable_hash(drow.get("normalized_url")))
+        prev = updated_discovered_state.get(did) or {}
+        updated_discovered_state[did] = {
+            **prev,
+            "source_candidate_id": did,
+            "normalized_url": drow.get("normalized_url"),
+            "platform_guess": drow.get("platform_guess"),
+            "first_seen_run_id": prev.get("first_seen_run_id") or run_id,
+            "last_seen_run_id": run_id,
+            "seen_run_count": int(prev.get("seen_run_count") or 0) + 1,
+            "candidate_source_status": drow.get("candidate_source_status") or prev.get("candidate_source_status") or "source_frontier",
+        }
+    source_cursors: dict[str, Any] = {}
+    for srow in source_rows:
+        sid = str(srow.get("source_id") or "")
+        sampled = posts_by_source.get(sid, [])
+        newest = max([str(r.get("post_date") or "") for r in sampled] or [""])
+        source_cursors[sid] = {
+            "source_id": sid,
+            "source_title": srow.get("source_title") or srow.get("resolved_title"),
+            "fetch_status": srow.get("fetch_status"),
+            "last_seen_post_published_at": newest,
+            "last_run_id": run_id,
+            "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
+        }
+    state_to_write = {
+        "run_id": run_id,
+        "updated_at": run_now,
+        "posts": updated_posts_state,
+        "discovered_sources": updated_discovered_state,
+        "source_cursors": source_cursors,
+    }
+    state_write_meta = save_region_talk_state(output_dir, state_to_write)
+
     stage_counts = {stage: sum(1 for r in new_posts if r.get("current_stage") == stage) for stage in sorted({str(r.get("current_stage") or "") for r in new_posts})}
     fresh_rows = [r for r in new_posts if r.get("fresh_enough")]
     fresh_with_place_evidence = [r for r in fresh_rows if r.get("matched_place_names")]
@@ -1347,12 +1587,20 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible",
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
+        "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("ok") or s.get("platform") == "telegram"),
+        "source_count_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
+        "source_count_skipped":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("skipped")),
+        "source_count_error":sum(1 for s in source_rows if s.get("fetch_status") == "error"),
+        "vk_wall_probe_status":"configured_not_implemented" if any(s.get("platform") == "vk" for s in source_rows) and (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else ("not_configured" if any(s.get("platform") == "vk" for s in source_rows) else "not_selected"),
         "posts_region_relevant":sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
         "fresh_posts":len(fresh_rows),"fresh_posts_with_place_evidence":len(fresh_with_place_evidence),
         "review_queue_rows":len(review_queue),"pre_candidates_created":len(pre_candidates),
         **llm_limit_snapshot,
         "llm_calls":llm_calls_used,"llm_max_calls":"supabase_reserve_controlled","llm_reviewed":len(llm_reviewed_rows),"llm_accepted":len(llm_accepted_rows),
         "llm_calls_attempted":llm_calls_used,"llm_calls_ok":len(llm_reviewed_rows),"llm_calls_error":sum(1 for r in new_posts if r.get("llm_gate_status") == "error"),"llm_quota_errors":sum(1 for r in new_posts if r.get("llm_gate_status") == "rate_limited"),"llm_retry_rows":sum(1 for r in new_posts if r.get("current_stage") == "needs_llm_retry"),
+        "llm_timeout_errors":sum(1 for r in new_posts if "timeout" in str(r.get("llm_reason") or "").lower()),
+        "llm_malformed_json_errors":sum(1 for r in new_posts if "json" in str(r.get("llm_reason") or "").lower() and r.get("llm_gate_status") == "error"),
+        "llm_cache_hits":0,"llm_budget_remaining":"supabase_controlled",
         "posts_with_strong_media":sum(1 for r in new_posts if r.get("is_selected_for_publication")),
         "candidates_created":len(candidates),"favorites_created":len(favorites),
         "dropped_news":sum(1 for r in dropped if r["rejection_reason"]=="newsiness"),"dropped_trash":sum(1 for r in dropped if r["rejection_reason"]=="trash"),
@@ -1363,18 +1611,36 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "dropped_weak_media":sum(1 for r in dropped if "media" in str(r.get("rejection_reason"))),"dropped_duplicate":0,"dropped_rights":0,
         "image_model_calls":len(media_rows),"image_scoring_skipped_by_text_gate":sum(1 for r in new_posts if r.get("image_scoring_skipped") == "true"),
         "discovered_links":len(discovered_rows),"source_graph_edges":len(graph_edges),"errors_count":sum(1 for s in source_rows if s.get("fetch_status") == "error"),
+        "new_posts_this_run":sum(1 for r in increment if r.get("new_this_run") == "yes"),
+        "changed_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "true"),
+        "unchanged_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "false"),
+        **state_meta,
+        **state_write_meta,
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]
+    seq_fresh = [r for r in new_posts if r.get("fresh_enough")]
+    seq_region = [r for r in seq_fresh if r.get("kaliningrad_oblast_only_scope")]
+    seq_non_ad = [r for r in seq_region if not r.get("is_ad_or_promo")]
+    seq_substantive = [r for r in seq_non_ad if float(r.get("text_substance_score") or 0) >= 0.18]
+    seq_llm_reviewed = [r for r in seq_substantive if r.get("llm_gate_status") == "ok"]
+    seq_llm_accepted = [r for r in seq_llm_reviewed if r.get("llm_decision") == "accept"]
+    seq_image_actual = [r for r in media_rows if r.get("image_model_input_type") == "actual_image"]
+    seq_reviewable_image = [r for r in new_posts if str(r.get("image_reviewable")) == "true"]
+    seq_publication_ready = [r for r in new_posts if str(r.get("image_publication_ready")) == "true"]
     funnel = [
         {"stage":"post_fetched","current_run_count":len(new_posts),"notes":"all fetched posts"},
-        {"stage":"fresh","current_run_count":len(fresh_rows),"notes":"freshness gate only; deterministic date gate"},
-        {"stage":"fresh_with_place_evidence","current_run_count":len(fresh_with_place_evidence),"notes":"lexicon/anchor evidence only, not final semantic decision"},
-        {"stage":"sent_to_llm_semantic_gate","current_run_count":llm_calls_used,"notes":"Google Gemini calls through Supabase google_ai_reserve; no direct env max/key2 bypass"},
-        {"stage":"llm_accepted_for_image","current_run_count":len(llm_accepted_rows),"notes":"LLM semantic accept"},
-        {"stage":"image_scored","current_run_count":len(media_rows),"notes":"only after LLM semantic accept"},
-        {"stage":"review_queue","current_run_count":len(review_queue),"notes":"candidates + pre-candidates visible to human"},
-        {"stage":"candidate","current_run_count":len(candidates),"notes":"image-scored candidate/favorite rows"},
+        {"stage":"fresh","current_run_count":len(seq_fresh),"notes":"sequential freshness gate"},
+        {"stage":"kaliningrad_oblast_only","current_run_count":len(seq_region),"notes":"sequential region-scope evidence; final semantics still LLM-owned"},
+        {"stage":"non_ad","current_run_count":len(seq_non_ad),"notes":"hard promo/ad excluded; possible promo may continue to LLM"},
+        {"stage":"substantive","current_run_count":len(seq_substantive),"notes":"basic substance cost guard"},
+        {"stage":"semantic_pre_candidate","current_run_count":sum(1 for r in seq_substantive if r.get("llm_gate_status") != "not_run_pre_llm_cost_guard"),"notes":"eligible for Supabase-limited final LLM semantic gate"},
+        {"stage":"llm_reviewed","current_run_count":len(seq_llm_reviewed),"notes":"Google Gemini calls through Supabase google_ai_reserve; no direct env max/key2 bypass"},
+        {"stage":"llm_accepted","current_run_count":len(seq_llm_accepted),"notes":"LLM semantic accept"},
+        {"stage":"image_scored_actual","current_run_count":len(seq_image_actual),"notes":"Kaggle-local neural actual-image rows"},
+        {"stage":"reviewable_image","current_run_count":len(seq_reviewable_image),"notes":"accepted text + image reviewable but not necessarily publication-ready"},
+        {"stage":"publication_ready_image","current_run_count":len(seq_publication_ready),"notes":"strong image gate passed"},
+        {"stage":"final_shortlist","current_run_count":len(final_shortlist) if 'final_shortlist' in locals() else 0,"notes":"filled after shortlist construction; see 04a"},
         {"stage":"favorite","current_run_count":len(favorites),"notes":"top auto-favorite rows"},
     ]
     independent_gate_counts = [
@@ -1399,14 +1665,67 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     )
     for i, r in enumerate(final_shortlist, start=1):
         r["human_shortlist_rank"] = i
-        r["decision_bucket"] = "publication_ready" if r.get("current_stage") in {"favorite", "semantic_candidate"} else ("reviewable_image" if r.get("current_stage") == "needs_image_review" else ("needs_llm_retry" if r.get("current_stage") == "needs_llm_retry" else "needs_llm"))
-        r["next_action"] = "look_at_images" if r.get("current_stage") == "needs_image_review" else ("retry_llm" if r.get("current_stage") == "needs_llm_retry" else "manual_review")
+        if r.get("current_stage") in {"favorite", "semantic_candidate"} and str(r.get("image_publication_ready")) == "true":
+            r["decision_bucket"] = "publication_ready_candidate"
+            r["next_action"] = "human_final_check"
+        elif r.get("current_stage") == "needs_image_review" and str(r.get("image_reviewable")) == "true":
+            r["decision_bucket"] = "reviewable_image"
+            r["next_action"] = "human_image_review"
+        elif r.get("current_stage") == "needs_llm_retry":
+            r["decision_bucket"] = "needs_llm_retry"
+            r["next_action"] = "retry_llm"
+        else:
+            r["decision_bucket"] = "needs_llm"
+            r["next_action"] = "manual_review"
+    for item in funnel:
+        if item.get("stage") == "final_shortlist":
+            item["current_run_count"] = len(final_shortlist)
     llm_error_rows = [r for r in new_posts if r.get("current_stage") == "needs_llm_retry" or r.get("llm_gate_status") in {"rate_limited", "error"}]
     debug_rejects = [r for r in dropped if r.get("current_stage") in {"debug_reject", "dropped_text_gate"} or str(r.get("rejection_reason") or "").startswith("debug_reject")]
+    llm_error_sheet_rows = llm_error_rows or [{
+        "post_url":"","current_stage":"","llm_gate_status":"","llm_provider":"","llm_model":"","llm_default_env_var_name":"",
+        "llm_reason":"","retry_action":"","_sheet_note":"no LLM retry/error rows in this run",
+    }]
+    image_model_observability = []
+    if media_rows:
+        grouped: dict[tuple[str, str, str, str, str], int] = {}
+        for mr in media_rows:
+            key = (
+                str(mr.get("image_scoring_mode") or ""),
+                str(mr.get("model_id") or ""),
+                str(mr.get("image_model_type") or ""),
+                str(mr.get("image_model_runtime") or ""),
+                str(mr.get("image_model_input_type") or ""),
+            )
+            grouped[key] = grouped.get(key, 0) + 1
+        for (mode, model_id, model_type, runtime, input_type), count in sorted(grouped.items()):
+            devices = sorted({str(r.get("image_model_device") or "") for r in media_rows if str(r.get("model_id") or "") == model_id})
+            image_model_observability.append({
+                "image_scoring_mode": mode,
+                "image_model_id": model_id,
+                "image_model_version": next((r.get("model_version") for r in media_rows if str(r.get("model_id") or "") == model_id), ""),
+                "image_model_type": model_type,
+                "image_model_runtime": runtime,
+                "image_model_input_type": input_type,
+                "image_model_device": "; ".join(d for d in devices if d),
+                "rows": count,
+                "actual_image_bytes_required": str(input_type == "actual_image").lower(),
+                "fallback_note": "metadata fallback; not neural image understanding" if input_type == "metadata_only" else ("local CLIP actual-image scoring; CLIP is not a VLM" if model_type == "clip" else ""),
+            })
+    else:
+        image_model_observability.append({"image_scoring_mode":current_image_scoring_mode(),"image_model_id":"","image_model_type":"","image_model_runtime":"","image_model_input_type":"","image_model_device":"","rows":0,"actual_image_bytes_required":"true","fallback_note":"no image rows reached scoring"})
     product_summary = [
         {"metric":"run_id","value":run_id},
+        {"metric":"increment_status","value":"real increment" if state_meta.get("increment_state_loaded") == "true" else "baseline run, not real increment"},
+        {"metric":"previous_run_id","value":state_meta.get("previous_run_id", "")},
         {"metric":"posts_fetched","value":len(posts)},
         {"metric":"fresh_posts","value":len(fresh_rows)},
+        {"metric":"kaliningrad_oblast_only","value":sum(1 for r in fresh_rows if r.get("kaliningrad_oblast_only_scope"))},
+        {"metric":"old_rejected","value":summary_row.get("dropped_stale")},
+        {"metric":"ad_rejected","value":summary_row.get("dropped_ad_or_promo")},
+        {"metric":"multi_region_or_not_region_rejected","value":summary_row.get("dropped_not_region")},
+        {"metric":"news_trash_rejected","value":summary_row.get("dropped_news", 0) + summary_row.get("dropped_trash", 0)},
+        {"metric":"low_substance_rejected","value":summary_row.get("dropped_low_substance")},
         {"metric":"fresh_posts_with_place_evidence","value":len(fresh_with_place_evidence)},
         {"metric":"llm_calls_supabase_reserved","value":llm_calls_used},
         {"metric":"llm_calls_ok","value":len(llm_reviewed_rows)},
@@ -1414,8 +1733,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"image_scored_rows","value":len(media_rows)},
         {"metric":"actual_image_neural_rows","value":sum(1 for r in media_rows if r.get("image_model_input_type") == "actual_image")},
         {"metric":"human_final_shortlist_rows","value":len(final_shortlist)},
+        {"metric":"good_text_weak_media_rows","value":sum(1 for r in dropped if r.get("current_stage") == "good_text_weak_media")},
+        {"metric":"publication_ready_rows","value":sum(1 for r in new_posts if str(r.get("image_publication_ready")) == "true")},
         {"metric":"final_candidates","value":len(candidates)},
         {"metric":"favorites","value":len(favorites)},
+        {"metric":"why_zero_candidates_or_favorites","value":"Image gate did not produce publication_ready rows; review 04a_final_shortlist and 10_good_text_weak_media." if not candidates and not favorites else ""},
+        {"metric":"source_coverage","value":f"selected={summary_row.get('source_count_selected')}, ok={summary_row.get('source_count_ok')}, skipped={summary_row.get('source_count_skipped')}, errors={summary_row.get('source_count_error')}"},
+        {"metric":"vk_wall_probe_status","value":summary_row.get("vk_wall_probe_status")},
         {"metric":"llm_limit_source","value":llm_limit_snapshot.get("llm_limit_source")},
         {"metric":"llm_model","value":llm_model},
         {"metric":"llm_default_env_var_name","value":llm_default_env_var_name},
@@ -1431,7 +1755,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "03b_gate_counts":independent_gate_counts,
         "04_review_queue":review_queue,
         "04a_final_shortlist":final_shortlist,
-        "04b_needs_llm_retry":llm_error_rows,
+        "04b_needs_llm_retry":llm_error_sheet_rows,
         "04c_debug_rejects":debug_rejects,
         "05_favorites":favorites,
         "06_candidates_all":candidates,
@@ -1444,11 +1768,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "13_sources_monitored":source_rows,
         "14_verifier_reports":[],
         "14b_pre_candidates_needing_llm":[r for r in pre_candidates if r.get("current_stage") == "pre_candidate_needs_llm"],
-        "14c_llm_errors":llm_error_rows,
+        "14c_llm_errors":llm_error_sheet_rows,
         "15_manual_decisions":[{"candidate_id":"","manual_decision":"favorite|reject|approve_for_preview|approve_for_queue|block_source","reviewer":"","reviewed_at":"","reviewer_comment":"","rights_override":"","source_status_override":""}],
         "16_publish_preview_future":[{"note":"Future only. REGION_TALK_DISABLE_PUBLISH=1; no real publishing in MVP-1.x."}],
         "17_source_graph_edges":graph_edges,
         "18_place_lexicon_matches":place_match_rows,
+        "19_image_model_observability":image_model_observability,
     }
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)

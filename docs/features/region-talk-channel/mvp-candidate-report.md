@@ -4,7 +4,7 @@ Status: MVP-1 target. Canonical export name: `region_talk_candidates_report`. Th
 
 ## Storage principle
 
-YDB is the source of truth. The XLSX is generated from cumulative YDB state plus the current run delta. The workbook must never be the only persistent storage and must not contain secrets, raw tokens or private raw payloads.
+YDB is the target source of truth. Until the YDB sidecar is wired, the runner uses an explicit dry-run JSON state file (`artifacts/region-talk/state/region-talk-state.json`, or `REGION_TALK_STATE_FILE`) and marks the workbook as `baseline run, not real increment` when that state is absent. The XLSX is generated from persisted state plus the current run delta. The workbook must never be the only persistent storage and must not contain secrets, raw tokens or private raw payloads.
 
 ## Artifact paths
 
@@ -92,6 +92,8 @@ Columns:
 - `candidates_created`, `favorites_created`;
 - `dropped_news`, `dropped_trash`, `dropped_not_region`, `dropped_weak_media`, `dropped_duplicate`, `dropped_rights`;
 - `llm_calls`, `image_model_calls`, `errors_count`, `artifact_paths`.
+- `increment_state_loaded`, `previous_run_id`, `previous_seen_post_count`, `new_posts_this_run`, `changed_posts_this_run`, `unchanged_posts_this_run`, `state_write_status`.
+- `source_count_selected`, `source_count_attempted`, `source_count_ok`, `source_count_skipped`, `source_count_error`, `vk_wall_probe_status`.
 
 ### `02_increment`
 
@@ -261,9 +263,26 @@ New source candidates discovered from links, mentions, forwards, repost attribut
 
 Actually scanned sources, cursors, fetch status, errors and next fetch timestamps.
 
+For MVP-1.z this sheet must also include selected-but-not-fetched rows with explicit statuses such as `skipped_vk_wall_not_configured`, `skipped_vk_wall_not_implemented`, `skipped_vkvideo_auxiliary_not_implemented`, or `skipped_unsupported_platform`; enabled non-Telegram sources must not silently disappear from coverage.
+
 ### `14_verifier_reports`
 
 Gemini/VLM structured decisions, policy version, model id and cache key.
+
+### `19_image_model_observability`
+
+Per-run image model/runtime summary:
+
+- `image_scoring_mode`
+- `image_model_id`
+- `image_model_version`
+- `image_model_type`
+- `image_model_runtime`
+- `image_model_input_type`
+- `image_model_device`
+- `rows`
+- `actual_image_bytes_required`
+- `fallback_note`
 
 ### `15_manual_decisions`
 
@@ -342,4 +361,12 @@ Image quality claims must distinguish:
 - `image_model_input_type=actual_image`, `image_model_runtime=kaggle_local`, `image_model_type=clip` — real Kaggle-local neural scoring;
 - `image_model_input_type=metadata_only`, `image_model_type=cv_only` — fallback/debug only, not proof of image-quality model success.
 
-Image gating is split into `image_reviewable=true` vs `image_publication_ready=true`; a row can be useful for human review without being auto-ready for publication.
+Image gating is split into `image_reviewable=true` vs `image_publication_ready=true`; a row can be useful for human review without being auto-ready for publication. Rows with LLM-accepted text but `image_reviewable=false` must not be labelled `reviewable_image` in `04a_final_shortlist`; they go to `10_good_text_weak_media`.
+
+## MVP-1.z2 coverage/increment/gating tightening
+
+- `REGION_TALK_MAX_SOURCES=30` should select up to 30 seed sources by priority, not only the 7 `monitoring_enabled=true` Telegram rows. Telegram sources can be fetched; VK/VKVideo/web rows must appear with honest skipped/not-configured/not-implemented statuses until real fetchers are implemented.
+- The ad/promo detector must use bounded/contextual patterns. Examples: `руб` must not match `рубрика/рубрике`, and `тур` must not match `туризм/культура/архитектура`. Hard promo rejects are explicit prices, tickets, registrations, contests, paid tours/services, app downloads and advertising labels. Possible promo rows with strong content can still be sent to the LLM final semantic gate.
+- Product-facing reject reasons should be concrete: `reject_old_post`, `reject_not_kaliningrad_oblast_only`, `reject_ad_or_promo`, `reject_multi_region_roundup`, `reject_low_substance`, `reject_news_or_trash`, `reject_source_boilerplate`.
+- `03_funnel` is the sequential funnel; independent evidence counts belong in `03b_gate_counts`.
+- Ambiguous place names that require context may become region evidence only when nearby context contains strong Kaliningrad-oblast anchors such as `Куршская коса`, `Калининградская область`, municipality/district wording, or route/trip context.
