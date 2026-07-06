@@ -660,8 +660,12 @@ def score(comments, manifest, phrases):
             elif p.get('singular_safe') and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}: status='public_ready_singular_dual_kaggle'
             elif ev>=min_ev and au>=min_au: status='needs_review_dual_kaggle'
             else: status='suppressed_weak_dual_kaggle'
-            cs=sorted(g['comments'], key=lambda x:x['candidate']['ensemble_score'], reverse=True)
-            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'evidence_count':ev,'unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
+            all_cs=sorted(g['comments'], key=lambda x:x['candidate']['ensemble_score'], reverse=True)
+            public_status=status.startswith('public_ready')
+            cs=sorted(public_comments, key=lambda x:x['candidate']['ensemble_score'], reverse=True) if public_status else all_cs
+            display_ev=pev if public_status else ev
+            display_au=pau if public_status else au
+            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'evidence_count':display_ev,'unique_authors_count':display_au,'raw_group_evidence_count':ev,'raw_group_unique_authors_count':au,'sources_count':len(g['sources']),'status':status,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]} for c in cs[:4]]}
             for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,**c['candidate'],'comment_key':c['comment_key'],'text_snippet':c['text'][:220]})
             (accepted if status.startswith('public_ready') else other).append(rec)
         event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other,'suppressed_internal_samples':suppressed_internal[:20]}
