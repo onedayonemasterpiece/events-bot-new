@@ -191,6 +191,107 @@ def test_completed_festival_recap_with_unconfirmed_next_location_is_non_event() 
     )
 
 
+def _e6691_retrocar_recap_source() -> str:
+    return (
+        "Прошедшая в День города Калининграда выставка ретроавтомобилей стала машиной времени.\n"
+        "Несмотря на пугающий прогноз дождя, атмосфера на мероприятии была невероятно тëплой "
+        "и ностальгической.\n"
+        "На празднике были вручены заслуженные кубки в номинациях «Автомобили-юбиляры», "
+        "«Вклад в советский кинематограф», «Автомобиль детской мечты» и «Приз зрительских симпатий».\n"
+        "Огромную благодарность за помощь в организации праздника выражаем Калининградскому "
+        "областному историко-художественному музею за предоставленную отличную площадку.\n"
+        "Если вы не успели рассмотреть автомобили, не огорчайтесь. Мы ждём вас на нашей следующей "
+        "выставке 11 июля в городе Светлом на праздновании Дня города и Дня рыбака!\n"
+        "Спасибо всем участникам выставки!"
+    )
+
+
+def test_retrocar_recap_with_ungrounded_next_venue_is_non_event() -> None:
+    source_text = _e6691_retrocar_recap_source()
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-127107743_14691",
+        source_text=source_text,
+        title="Выставка ретроавтомобилей",
+        date="2026-07-11",
+        end_date="2026-08-11",
+        end_date_is_inferred=True,
+        location_name="Калининград Сити Джаз Клуб",
+        location_address="Мира 33-35",
+        city="Калининград",
+        event_type="выставка",
+    )
+
+    assert (
+        su._looks_like_retrospective_future_teaser_not_event(
+            "Выставка ретроавтомобилей",
+            source_text,
+            candidate=candidate,
+        )
+        is True
+    )
+    assert su._candidate_needs_llm_eventness_review(candidate, source_text) is True
+
+
+@pytest.mark.asyncio
+async def test_retrocar_recap_replay_skips_before_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = _e6691_retrocar_recap_source()
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-127107743_14691",
+            source_text=source_text,
+            title="Выставка ретроавтомобилей",
+            date="2026-07-11",
+            end_date="2026-08-11",
+            end_date_is_inferred=True,
+            location_name="Калининград Сити Джаз Клуб",
+            location_address="Мира 33-35",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "retrospective_future_teaser"
+    finally:
+        await db.close()
+
+
+def test_grounded_future_exhibition_announcement_is_not_retrocar_recap_skip() -> None:
+    source_text = (
+        "Следующая выставка ретроавтомобилей пройдёт 11 июля в Светлом на площади у Дома культуры.\n"
+        "Ждём гостей на праздновании Дня города и Дня рыбака. Адрес: ул. Советская 9."
+    )
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-127107743_14692",
+        source_text=source_text,
+        title="Выставка ретроавтомобилей",
+        date="2026-07-11",
+        location_name="Дом культуры",
+        location_address="Советская 9",
+        city="Светлый",
+        event_type="выставка",
+    )
+
+    assert (
+        su._looks_like_retrospective_future_teaser_not_event(
+            "Выставка ретроавтомобилей",
+            source_text,
+            candidate=candidate,
+        )
+        is False
+    )
+
+
 @pytest.mark.asyncio
 async def test_garazhka_recap_replay_skips_before_create(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))

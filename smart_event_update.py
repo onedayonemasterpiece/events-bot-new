@@ -4288,6 +4288,23 @@ _COMPLETED_FESTIVAL_TEASER_UNCONFIRMED_RE = re.compile(
     r"(?ius)\bследующ\w+\s+фестивал\w*[:\s\S]{0,180}"
     r"\b(?:локаци\w*|место|площадк\w*|адрес)\s+уточня\w*"
 )
+_RETROSPECTIVE_RECAP_MARKERS = (
+    re.compile(r"(?iu)\bпрошедш\w+\s+(?:выставк\w*|ярмарк\w*|фестивал\w*|праздник\w*|мероприяти\w*)\b"),
+    re.compile(r"(?iu)\b(?:выставк\w*|ярмарк\w*|фестивал\w*|праздник\w*|мероприяти\w*)\s+(?:прош(?:ел|ла|ло|ли)|состоял(?:ся|ась|ось|ись))\b"),
+    re.compile(r"(?iu)\b(?:атмосфер\w*|праздник\w*|мероприяти\w*)[^.!?\n]{0,120}\bбыл(?:а|о|и)?\b"),
+    re.compile(r"(?iu)\b(?:были\s+вручены|получили\s+памятн\w+\s+наград\w*|награждены\s+кубк\w*)\b"),
+    re.compile(r"(?iu)\b(?:выражаем|выражают|выражаем\s+огромн\w*)\s+благодарност\w*\b"),
+    re.compile(r"(?iu)\bспасибо\s+всем\s+участник\w*\b"),
+)
+_RETROSPECTIVE_NEXT_TEASER_RE = re.compile(
+    r"(?ius)\b("
+    r"если\s+вы\s+не\s+успели[^.!?\n]{0,220}\bжд[её]м\s+вас\s+на\s+(?:нашей\s+)?следующ\w+\s+"
+    r"(?:выставк\w*|ярмарк\w*|фестивал\w*|показ\w*|встреч\w*|праздник\w*)|"
+    r"жд[её]м\s+вас\s+на\s+(?:нашей\s+)?следующ\w+\s+"
+    r"(?:выставк\w*|ярмарк\w*|фестивал\w*|показ\w*|встреч\w*|праздник\w*)|"
+    r"следующ\w+\s+(?:выставк\w*|ярмарк\w*|фестивал\w*|показ\w*|встреч\w*|праздник\w*)"
+    r")\b"
+)
 _COMPLETED_EVENT_REPORT_MARKERS = (
     re.compile(r"(?iu)\b(?:встреча|игра|урок|лекция|концерт|экскурсия|мероприятие|мастер-?класс)\s+прош(?:ел|ла|ло|ли)\b"),
     re.compile(r"(?iu)\b(?:прош(?:ел|ла|ло|ли)|состоял(?:ся|ась|ось|ись))\b"),
@@ -4310,6 +4327,38 @@ _COMPLETED_EVENT_REPORT_MARKERS = (
     ),
     re.compile(r"(?iu)\b(?:итоги|результаты)\b"),
 )
+
+
+def _norm_text_for_grounding(value: str | None) -> str:
+    raw = str(value or "").casefold().replace("ё", "е")
+    raw = re.sub(r"[«»\"'`.,;:!?()\[\]{}#№]+", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
+def _source_supports_location_value(text: str | None, value: str | None) -> bool:
+    probe = _norm_text_for_grounding(value)
+    if len(probe) < 4:
+        return False
+    haystack = _norm_text_for_grounding(text)
+    if not haystack:
+        return False
+    if probe in haystack:
+        return True
+    # Addresses often differ only by spaces around dashes/slashes.
+    probe_compact = re.sub(r"[\s\-–—/]+", "", probe)
+    haystack_compact = re.sub(r"[\s\-–—/]+", "", haystack)
+    return len(probe_compact) >= 5 and probe_compact in haystack_compact
+
+
+def _has_retrospective_future_teaser_shape(title: str | None, text: str | None) -> bool:
+    combined = "\n".join([str(title or ""), str(text or "")]).strip()
+    if not combined:
+        return False
+    if not _RETROSPECTIVE_NEXT_TEASER_RE.search(combined):
+        return False
+    hits = sum(1 for pattern in _RETROSPECTIVE_RECAP_MARKERS if pattern.search(combined))
+    return hits >= 2
 
 
 def _looks_like_too_soon_notice(title: str | None, text: str | None) -> bool:
@@ -4636,6 +4685,57 @@ def _looks_like_completed_event_report_not_event(
         return False
     hits = sum(1 for pattern in _COMPLETED_EVENT_REPORT_MARKERS if pattern.search(combined))
     return hits >= 2
+
+
+def _looks_like_retrospective_future_teaser_not_event(
+    title: str | None,
+    text: str | None,
+    *,
+    candidate: EventCandidate | None = None,
+) -> bool:
+    """Fail-close recap posts where a thin future teaser gained hallucinated anchors.
+
+    This is a narrow regression guard for social imports like INC-2026-07-02/E6691:
+    most of the source recaps a finished event, while one closing sentence says
+    "ждём вас на следующей выставке ...".  The semantic decision remains LLM-first
+    for normal announcements; this guard only blocks automatic publication when
+    the extracted candidate venue/address are not grounded in the source text.
+    """
+
+    combined = "\n".join([str(title or ""), str(text or "")]).strip()
+    if not combined:
+        return False
+    if not _has_retrospective_future_teaser_shape(title, combined):
+        return False
+    if candidate is None:
+        return True
+
+    time_raw = str(getattr(candidate, "time", "") or "").strip().replace(".", ":")
+    if time_raw and time_raw not in {"00:00", "0:00"}:
+        return False
+    if str(getattr(candidate, "ticket_link", "") or "").strip():
+        return False
+    if (
+        getattr(candidate, "ticket_price_min", None) is not None
+        or getattr(candidate, "ticket_price_max", None) is not None
+    ):
+        return False
+
+    location_name = str(getattr(candidate, "location_name", "") or "").strip()
+    location_address = str(getattr(candidate, "location_address", "") or "").strip()
+    has_location = bool(location_name or location_address)
+    if not has_location:
+        return True
+
+    name_supported = _source_supports_location_value(combined, location_name)
+    address_supported = _source_supports_location_value(combined, location_address)
+    if not name_supported and not address_supported:
+        return True
+
+    # A city-only mention is not enough to auto-publish a recap teaser; it still
+    # needs LLM review, but it is no longer this deterministic hallucinated-venue
+    # failure mode.
+    return False
 
 
 def _has_price_evidence(text: str | None, *values: int | None) -> bool:
@@ -10972,6 +11072,11 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # attached dates. Do not skip here; require LLM confirmation below.
     if len(raw) <= 220 and re.search(r"(?iu)\b(дайджест|афиша|подборка)\b", raw):
         return True
+    # Recap posts with a closing "next event" teaser are semantic: require the
+    # LLM to confirm there is one concrete attendable future event unless the
+    # narrower hallucinated-location guard has already skipped them earlier.
+    if _has_retrospective_future_teaser_shape(title, raw):
+        return True
     # Campaign/discount/action posts are semantic: do not skip by regex, but
     # require the LLM to confirm that the source announces one concrete
     # attendable event rather than an entitlement/promo mechanic.
@@ -11018,6 +11123,7 @@ async def _llm_review_candidate_eventness(
         "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
         "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
+        "- Пост-отчёт о прошедшем событии с коротким хвостом вроде 'ждём вас на следующей выставке/ярмарке ...' — non_event/uncertain, если будущие дата, площадка, адрес и программа не подтверждены явно в источнике.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"
         "- Если сомневаешься для такого слабого кандидата, верни uncertain.\n\n"
@@ -13647,6 +13753,14 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="photo_day")
+        if _looks_like_retrospective_future_teaser_not_event(clean_title, combined_text, candidate=candidate):
+            logger.info(
+                "smart_update.skip reason=retrospective_future_teaser source_type=%s source_url=%s title=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+            )
+            return SmartUpdateResult(status="skipped_non_event", reason="retrospective_future_teaser")
         if _looks_like_completed_event_report_not_event(clean_title, combined_text, candidate=candidate):
             logger.info(
                 "smart_update.skip reason=completed_event_report source_type=%s source_url=%s title=%s",

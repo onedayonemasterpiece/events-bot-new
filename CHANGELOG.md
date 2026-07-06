@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- **Incident / retrospective future teaser guard (INC-2026-07-02 / E6691)**: Smart Update now fail-closes recap posts that mostly describe a finished event but only thinly tease a next exhibition/market while the extracted venue/address is not present in the source text; the shape is also routed through the LLM-first eventness review.
 - **LLM gateway / reserve overflow alert noise**: stopped sending operator-facing `reserve_overflow_used` incidents when the scoped Google lane is out of RPD but a configured spare key is successfully borrowed; successful borrows remain in structured logs.
 - **Guide visual digest links**: demote stale source-internal VK wall links from preliminary multi-event schedules so repeated-route titles fall back to the current source post instead of sending Telegram/VK digest readers to an old occurrence.
 - **CherryFlash / guide excursions**: improved the guide promo scene after Kaggle video review: higher supersampling for sharper object edges, first-frame trimming to avoid an abrupt static start, continuous P2/P3 bubble drift for the 3D depth effect, title-then-CTA halo guidance, and screenshotable booking contacts (`@username`, phone, or compact VK label).

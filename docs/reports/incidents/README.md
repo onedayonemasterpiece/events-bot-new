@@ -44,6 +44,9 @@
 - `INC-2026-07-02-kldevents-1778-vk-ocr-location-time.md`
   - Scope: VK auto-import poster OCR handoff under long-caption token budgets, Smart Update/location_reference generic venue fuzzy matching, and public `@kldevents`/`klgdevents`/Telegraph repair for source `https://vk.com/wall-169817694_32270`.
   - Must not regress: poster OCR logistics lines with date/time/venue/free-entry evidence must remain available to the LLM parse even when full OCR is trimmed for budget; `Городской парк, Пионерский` must not fuzzy-bind to a Зеленоградск culture-center venue through generic tokens; sibling events for `05/19 июля 14:00` must publish with `Городской парк, #Пионерский`.
+- `INC-2026-07-02-exhibition-duplicates-static-site.md`
+  - Scope: exhibition/current-future inventory duplicates, recap/spotlight/update materialization, invalid date fields, prompt/prose venue leakage, and static-site exposure amplification.
+  - Must not regress: recap posts with only a thin future teaser and source-ungrounded venue/address must not auto-create public events; exhibition spotlights/roundups must attach to a canonical identity or skip, not create active duplicates with inferred ranges.
 - `INC-2026-06-30-kraftmarket317-poster-only-zero-events.md`
   - Scope: Telegram Monitoring producer OCR-only poster extraction for `@kraftmarket39`, server `producer_zero_events:clear_event_signals` diagnostics, standard location reference for `Музей «Восток на Западе»`, and forced replay/public fanout for source post `https://t.me/kraftmarket39/317`.
   - Must not regress: an empty-caption Telegram post whose poster OCR contains title/date/time/venue/price/registration must enter the LLM-first extraction path instead of returning `events=[]`; clear poster-only single-event rescue must not become a blanket schedule parser for multi-time poster digests; `Музей «Восток на Западе», Клиническая 19А` must normalize consistently.
