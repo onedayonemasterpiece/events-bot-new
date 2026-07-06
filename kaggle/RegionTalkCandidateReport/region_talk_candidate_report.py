@@ -128,6 +128,23 @@ def canonical_source_key(platform: str, handle: str = "", url: str = "") -> str:
     return (p or "unknown") + ":" + (cu or canonical_handle(handle).lower())
 
 
+
+
+def normalize_source_platform(value: str, url: str = "") -> str:
+    raw = (value or "").strip().lower().replace("_", "-")
+    low_url = (url or "").strip().lower()
+    if raw in {"telegram", "tg", "telegram-channel", "telegram channel", "telegram_post", "telegram-post"} or "t.me/" in low_url or "telegram.me/" in low_url:
+        return "telegram"
+    if raw in {"vk", "vkontakte", "vk-public", "vk public", "vk-community", "vk community", "vk group", "vk_group"} or "vk.com/" in low_url:
+        if "video" in raw:
+            return "vkvideo"
+        return "vk"
+    if raw in {"youtube", "youtube-channel", "youtube channel"} or "youtube.com" in low_url or "youtu.be" in low_url:
+        return "youtube"
+    if raw in {"dzen", "zen", "dzen-channel", "dzen channel"} or "dzen.ru" in low_url:
+        return "dzen"
+    return raw or "unknown"
+
 def load_dotenv(path: Path) -> None:
     if not path.exists():
         return
@@ -308,7 +325,6 @@ URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|\bt\.me/[A-Za-z0-9_+/.-]+|\bv
 HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,}")
 STATE_FILE_NAME = "region-talk-state.json"
 
-
 def selected_sources_for_run(seeds: list[Seed], max_sources: int) -> list[Seed]:
     enabled = [s for s in seeds if s.monitoring_enabled]
     fallback = [s for s in seeds if not s.monitoring_enabled]
@@ -436,7 +452,94 @@ def iso_after_seconds(seconds: int) -> str:
     return datetime.fromtimestamp(time.time() + max(0, seconds), timezone.utc).isoformat()
 
 
+
+
+def region_talk_state_backend_requested() -> str:
+    return (os.getenv("REGION_TALK_STATE_BACKEND") or "json").strip().lower() or "json"
+
+
+def ydb_config_status() -> dict[str, str]:
+    endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
+    database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
+    namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk"
+    missing = [k for k, v in {"REGION_TALK_YDB_ENDPOINT": endpoint, "REGION_TALK_YDB_DATABASE": database}.items() if not v]
+    return {"endpoint": endpoint, "database": database, "namespace": namespace, "missing": ",".join(missing)}
+
+
+def ydb_table_plan() -> str:
+    return ";".join([
+        "region_talk_sources", "region_talk_source_edges", "region_talk_telegram_entity_cache",
+        "region_talk_similar_seed_cursor", "region_talk_posts", "region_talk_candidate_memory",
+        "region_talk_run_artifacts", "region_talk_state_snapshots",
+    ])
+
+
+def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
+    cfg = ydb_config_status()
+    meta = {"state_backend_requested": "ydb", "state_backend": "ydb", "state_fallback_used": "false", "ydb_namespace": cfg["namespace"], "ydb_tables_expected": ydb_table_plan(), "ydb_read_status": "not_started", "ydb_write_status": "not_started"}
+    if cfg["missing"]:
+        meta.update({"ydb_read_status": "missing_config", "ydb_error": "missing " + cfg["missing"]})
+        return {}, meta
+    try:
+        import ydb  # type: ignore
+    except Exception as exc:
+        meta.update({"ydb_read_status": "sdk_missing", "ydb_error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        return {}, meta
+    # MVP contract gate: do not invent a new production schema if the snapshot table/path is not explicitly configured.
+    # Full table upserts are represented in the exported snapshot and documented table plan; production enablement
+    # must provide REGION_TALK_YDB_STATE_SNAPSHOT_FILE or a future SDK-backed table adapter.
+    snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
+    if not snapshot:
+        meta.update({"ydb_read_status": "adapter_not_configured", "ydb_error": "YDB SDK import ok but REGION_TALK_YDB_STATE_SNAPSHOT_FILE/table adapter is not configured"})
+        return {}, meta
+    path = Path(snapshot)
+    try:
+        raw = path.read_bytes()
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("snapshot is not JSON object")
+        state_hash = hashlib.sha256(raw).hexdigest()
+        data["_loaded_from_path"] = str(path)
+        meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + str(path), "increment_state_path": "ydb:" + str(path), "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {})})
+        return data, meta
+    except Exception as exc:
+        meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}"})
+        return {}, meta
+
+
+def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
+    cfg = ydb_config_status()
+    meta = {"state_backend_requested": "ydb", "state_backend": "ydb", "state_fallback_used": "false", "ydb_namespace": cfg["namespace"], "ydb_tables_expected": ydb_table_plan(), "ydb_write_status": "not_started"}
+    if cfg["missing"]:
+        return {**meta, "ydb_write_status": "missing_config", "state_write_status": "error", "state_write_error": "missing " + cfg["missing"]}
+    snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
+    if not snapshot:
+        return {**meta, "ydb_write_status": "adapter_not_configured", "state_write_status": "error", "state_write_error": "YDB snapshot/table adapter is not configured"}
+    try:
+        target = Path(snapshot)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(state, ensure_ascii=False, indent=2)
+        target.write_text(payload, encoding="utf-8")
+        state_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + str(target), "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + str(target), "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + str(target)}
+    except Exception as exc:
+        return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
+
 def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    requested_backend = region_talk_state_backend_requested()
+    if requested_backend == "ydb":
+        ydb_state, ydb_meta = load_region_talk_ydb_state()
+        if ydb_state:
+            return ydb_state, ydb_meta
+        if getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
+            raise RuntimeError("REGION_TALK_REQUIRE_YDB_STATE=1 but YDB state is unavailable: " + str(ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status")))
+        fallback_state, fallback_meta = load_region_talk_json_state(output_dir)
+        fallback_meta.update({**ydb_meta, "state_backend": "json_fallback", "state_fallback_used": "true", "state_fallback_reason": ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status") or "ydb_unavailable", "previous_state_loaded": fallback_meta.get("previous_state_loaded", "false"), "previous_state_hash": fallback_meta.get("previous_state_hash", "")})
+        return fallback_state, fallback_meta
+    return load_region_talk_json_state(output_dir)
+
+
+def load_region_talk_json_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     for path in state_file_candidates(output_dir):
         try:
             if path.exists():
@@ -499,20 +602,22 @@ def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict
     seen: set[tuple[str, str]] = set()
     for row in rows_iter:
         rec = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
-        platform = str(rec.get("Platform") or "").strip().lower()
         url = str(rec.get("URL") or "").strip()
+        platform = normalize_source_platform(str(rec.get("Platform") or ""), url)
         handle = canonical_handle(str(rec.get("Handle") or "").strip())
         if not platform or not url:
             continue
-        key = (platform, canonical_source_url(platform, handle, url))
+        canonical_key = canonical_source_key(platform, handle, url)
+        key = (platform, canonical_key)
         if key in seen:
             continue
         seen.add(key)
-        canonical = key[1]
-        cand_id = "src_cand_" + stable_hash(platform, canonical)
+        canonical = canonical_source_url(platform, handle, url)
+        cand_id = "src_cand_" + stable_hash(platform, canonical_key)
         out.append({
             "source_candidate_id": cand_id,
             "frontier_source_id": cand_id,
+            "canonical_source_key": canonical_key,
             "platform": platform,
             "platform_guess": platform,
             "canonical_url": canonical,
@@ -526,9 +631,10 @@ def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict
             "discovery_type": "public_travel_blogger_catalog",
             "edge_type": "public_travel_blogger_catalog",
             "candidate_source_status": "source_frontier",
-            "frontier_status": "queued_unresolved",
+            "frontier_status": "queued_unresolved" if platform != "vk" else "unsupported_until_vk_wall_enabled",
+            "scan_status": "pending_primary_scan" if platform == "telegram" else ("unsupported_until_vk_wall_enabled" if platform == "vk" else "unsupported_backlog"),
             "confidence": 0.45 if platform == "telegram" else 0.35,
-            "frontier_priority": 0.55 if platform == "telegram" else 0.40,
+            "frontier_priority": 0.62 if platform == "telegram" else 0.40,
             "frontier_reason": "public travel/blogger catalog import; do not auto-fetch without frontier scoring",
             "discovered_from_source": str(rec.get("Source") or "public_travel_blogger_channel_links.xlsx"),
             "discovered_from_post_url": "",
@@ -538,6 +644,19 @@ def load_public_blogger_links(config: dict[str, Any] | None = None) -> list[dict
 
 
 def save_region_talk_state(output_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
+    requested_backend = region_talk_state_backend_requested()
+    if requested_backend == "ydb":
+        ydb_meta = save_region_talk_ydb_state(output_dir, state)
+        json_meta = save_region_talk_json_state(output_dir, state)
+        if ydb_meta.get("state_write_status") == "ok":
+            return {**json_meta, **ydb_meta, "json_backup_write_status": json_meta.get("state_write_status", "")}
+        if getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
+            raise RuntimeError("REGION_TALK_REQUIRE_YDB_STATE=1 but YDB state write failed: " + str(ydb_meta.get("state_write_error") or ydb_meta.get("ydb_write_status")))
+        return {**json_meta, **ydb_meta, "state_backend": "json_fallback", "state_fallback_used": "true", "state_fallback_reason": ydb_meta.get("state_write_error") or ydb_meta.get("ydb_write_status") or "ydb_write_failed"}
+    return save_region_talk_json_state(output_dir, state)
+
+
+def save_region_talk_json_state(output_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     target = state_file_candidates(output_dir)[0]
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1081,16 +1200,27 @@ def source_candidate_score(row: dict[str, Any]) -> float:
 
 def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered: dict[str, Any], run_id: str) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
+    prev_by_key: dict[str, dict[str, Any]] = {}
+    for pv in previous_discovered.values() if isinstance(previous_discovered, dict) else []:
+        if isinstance(pv, dict):
+            pkey = str(pv.get("canonical_source_key") or canonical_source_key(str(pv.get("platform") or pv.get("platform_guess") or ""), str(pv.get("username_or_handle") or ""), str(pv.get("canonical_url") or pv.get("normalized_url") or "")))
+            if pkey:
+                prev_by_key[pkey] = pv
     for row in rows:
-        cid = str(row.get("source_candidate_id") or "src_cand_" + stable_hash(row.get("platform_guess"), row.get("normalized_url")))
-        prev = previous_discovered.get(cid) or {}
-        g = grouped.setdefault(cid, {
+        platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("raw_url") or ""))
+        canonical_url = canonical_source_url(platform, str(row.get("username_or_handle") or row.get("recommended_username") or ""), str(row.get("canonical_url") or row.get("normalized_url") or ""))
+        ckey = str(row.get("canonical_source_key") or canonical_source_key(platform, str(row.get("username_or_handle") or row.get("recommended_username") or ""), canonical_url))
+        cid = str(row.get("source_candidate_id") or "src_cand_" + stable_hash(ckey or platform, canonical_url))
+        prev = previous_discovered.get(cid) or prev_by_key.get(ckey) or {}
+        group_key = ckey or cid
+        g = grouped.setdefault(group_key, {
             "frontier_source_id": cid,
             "source_candidate_id": cid,
-            "platform": row.get("platform") or row.get("platform_guess") or prev.get("platform_guess", ""),
-            "platform_guess": row.get("platform_guess") or prev.get("platform_guess", ""),
-            "canonical_url": row.get("canonical_url") or row.get("normalized_url") or prev.get("normalized_url", ""),
-            "normalized_url": row.get("normalized_url") or row.get("canonical_url") or prev.get("normalized_url", ""),
+            "platform": platform or prev.get("platform_guess", ""),
+            "platform_guess": platform or prev.get("platform_guess", ""),
+            "canonical_source_key": ckey,
+            "canonical_url": canonical_url or prev.get("normalized_url", ""),
+            "normalized_url": canonical_url or prev.get("normalized_url", ""),
             "username_or_handle": row.get("recommended_username") or row.get("username_or_handle") or "",
             "title_guess": row.get("recommended_title") or row.get("title_guess") or row.get("to_source_title") or "",
             "discovery_first_run_id": prev.get("first_seen_run_id") or run_id,
@@ -1662,6 +1792,8 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     errors = 0
     floodwait = 0
     seen: set[str] = set()
+    self_loop_count = 0
+    duplicate_count = 0
     seed_updates: dict[str, dict[str, Any]] = {}
     for seed_idx, srow in enumerate(seeds, start=1):
         if governor.recommendation_calls_attempted >= governor.max_recommendation_calls or not governor.has_total_request_budget("channels.getChannelRecommendations", str(srow.get("source_id") or ""), str(srow.get("canonical_url") or "")):
@@ -1689,9 +1821,11 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 rec_url = "https://t.me/" + username
                 cand_id = "src_cand_" + stable_hash("telegram", rec_url)
                 if canonical_source_key("telegram", username, rec_url) == canonical_source_key("telegram", srow.get("handle", ""), canonical):
+                    self_loop_count += 1
                     rows.append({"run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical, "recommended_canonical_url": rec_url, "method_status": "debug_self_loop_rejected", "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "self-loop rejected"})
                     continue
                 if cand_id in seen:
+                    duplicate_count += 1
                     continue
                 seen.add(cand_id)
                 unique_for_seed += 1
@@ -1791,6 +1925,9 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
         "telegram_similar_channels_added_to_frontier": governor.recommendation_channels_added_to_frontier,
         "telegram_similar_channels_fetch_errors": errors,
         "telegram_similar_channels_floodwait_count": floodwait,
+        "telegram_similar_self_loop_count": self_loop_count,
+        "telegram_similar_duplicate_canonical_count": duplicate_count,
+        "similar_seed_cursor_advanced": str(bool(seed_updates)).lower(),
         "similar_seed_updates": seed_updates,
     })
     return rows, edges
@@ -2048,6 +2185,89 @@ def _clip_image_scores(image_path: str, text_score: dict[str, Any]) -> dict[str,
     }
 
 
+def vk_wall_token() -> str:
+    return (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN") or "").strip()
+
+
+def vk_domain_from_seed(seed: Seed) -> str:
+    raw = (seed.url or seed.handle or "").strip()
+    m = re.search(r"vk\.com/(?:club|public)?([A-Za-z0-9_.-]+)", raw, re.I)
+    if m:
+        return m.group(1)
+    return canonical_handle(seed.handle).lstrip("@")
+
+
+def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    token = vk_wall_token()
+    src = source_status_row(seed, "skipped_vk_wall_not_configured" if not token else "ok", vk_wall_probe_status="not_configured" if not token else "ok", fetch_attempted=str(bool(token)).lower())
+    if not token:
+        src["source_probe_reason"] = "VK token is not configured; source retained in frontier/backlog"
+        return src, []
+    domain = vk_domain_from_seed(seed)
+    if not domain:
+        src.update({"fetch_status": "skipped_vk_wall_domain_missing", "vk_wall_probe_status": "domain_missing", "source_probe_reason": "Cannot extract VK domain from seed"})
+        return src, []
+    try:
+        import urllib.parse, urllib.request
+        params = urllib.parse.urlencode({"domain": domain, "count": max(1, min(max_posts, getenv_int("REGION_TALK_VK_MAX_WALL_POSTS_PER_SOURCE", max_posts))), "filter": "owner", "extended": 1, "access_token": token, "v": os.getenv("VK_API_VERSION") or "5.199"})
+        with urllib.request.urlopen("https://api.vk.com/method/wall.get?" + params, timeout=getenv_int("REGION_TALK_VK_TIMEOUT_SECONDS", 20)) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("error"):
+            err = payload["error"] or {}
+            src.update({"fetch_status": "error_vk_wall_api", "vk_wall_probe_status": "error", "fetch_error_code": err.get("error_code"), "fetch_error_message": str(err.get("error_msg") or "")[:180]})
+            return src, []
+        response = payload.get("response") or {}
+        items = response.get("items") or []
+        groups = {str(g.get("id")): g for g in response.get("groups") or [] if isinstance(g, dict)}
+        posts: list[dict[str, Any]] = []
+        media_budget = getenv_int("REGION_TALK_VK_MAX_MEDIA_DOWNLOADS_PER_RUN", getenv_int("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", 120))
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            mid = item.get("id")
+            owner_id = item.get("owner_id") or item.get("from_id")
+            text = str(item.get("text") or "").strip()
+            if not mid or not owner_id or not text:
+                continue
+            dt = datetime.fromtimestamp(int(item.get("date") or 0), timezone.utc).isoformat() if item.get("date") else ""
+            post_url = f"https://vk.com/wall{owner_id}_{mid}"
+            attachments = item.get("attachments") or []
+            photo_url = ""
+            for a in attachments:
+                if not isinstance(a, dict) or a.get("type") != "photo":
+                    continue
+                sizes = ((a.get("photo") or {}).get("sizes") or [])
+                if sizes:
+                    best = sorted([s for s in sizes if isinstance(s, dict) and s.get("url")], key=lambda s: int(s.get("width") or 0) * int(s.get("height") or 0), reverse=True)[0]
+                    photo_url = str(best.get("url") or "")
+                    break
+            primary_media_path = ""
+            if photo_url and media_budget > 0 and getenv_bool("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", True):
+                try:
+                    media_dir = output_dir / "media" / stable_hash("vk", domain)
+                    media_dir.mkdir(parents=True, exist_ok=True)
+                    ext = ".jpg" if ".jpg" in photo_url.lower() or ".jpeg" in photo_url.lower() else ".jpg"
+                    target = media_dir / f"{mid}{ext}"
+                    urllib.request.urlretrieve(photo_url, target)
+                    primary_media_path = str(target)
+                    media_budget -= 1
+                except Exception:
+                    primary_media_path = ""
+            copy_history = item.get("copy_history") or []
+            origin = copy_history[0] if copy_history and isinstance(copy_history[0], dict) else {}
+            origin_owner = origin.get("owner_id") or ""
+            origin_mid = origin.get("id") or ""
+            forwarded_url = f"https://vk.com/wall{origin_owner}_{origin_mid}" if origin_owner and origin_mid else ""
+            group = groups.get(str(abs(int(owner_id))) if str(owner_id).lstrip("-").isdigit() else "") or {}
+            title = str(group.get("name") or seed.source_title or domain)
+            posts.append({"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else ""})
+        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "minimal VK wall.get fetch; text/photos/copy_history origins"})
+        return src, posts
+    except Exception as exc:
+        src.update({"fetch_status": "error_vk_wall_fetch", "vk_wall_probe_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]})
+        return src, []
+
+
 def media_scores(has_media: bool, text_score: dict[str, Any], post: dict[str, Any] | None = None) -> dict[str, Any]:
     mode = current_image_scoring_mode()
     post = post or {}
@@ -2096,8 +2316,13 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         if seed.platform == "telegram":
             continue
         if seed.platform == "vk":
-            status_value = "skipped_vk_wall_not_configured" if not (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else "skipped_vk_wall_not_implemented"
-            source_rows.append(source_status_row(seed, status_value, vk_wall_probe_status=status_value, source_probe_reason="VK wall probing is visible in coverage but not fetched in this MVP run."))
+            if fetch_enabled:
+                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
+                source_rows.append(vk_row)
+                posts.extend(vk_posts)
+            else:
+                status_value = "skipped_vk_wall_not_configured" if not vk_wall_token() else "skipped_fetch_disabled"
+                source_rows.append(source_status_row(seed, status_value, vk_wall_probe_status="fetch_disabled", source_probe_reason="VK wall fetch disabled by REGION_TALK_FETCH_TELEGRAM=0"))
         elif seed.platform == "vkvideo":
             source_rows.append(source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."))
         else:
@@ -3198,13 +3423,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})
 
     for drow in discovered_rows:
-        did = str(drow.get("source_candidate_id") or stable_hash(drow.get("normalized_url")))
+        platform_norm = normalize_source_platform(str(drow.get("platform") or drow.get("platform_guess") or ""), str(drow.get("canonical_url") or drow.get("normalized_url") or drow.get("raw_url") or ""))
+        canonical_url = canonical_source_url(platform_norm, str(drow.get("username_or_handle") or drow.get("recommended_username") or ""), str(drow.get("canonical_url") or drow.get("normalized_url") or ""))
+        canonical_key = str(drow.get("canonical_source_key") or canonical_source_key(platform_norm, str(drow.get("username_or_handle") or drow.get("recommended_username") or ""), canonical_url))
+        did = str(drow.get("source_candidate_id") or "src_cand_" + stable_hash(canonical_key or canonical_url))
         prev = updated_discovered_state.get(did) or {}
         updated_discovered_state[did] = {
             **prev,
             "source_candidate_id": did,
-            "normalized_url": drow.get("normalized_url"),
-            "platform_guess": drow.get("platform_guess"),
+            "normalized_url": canonical_url or drow.get("normalized_url"),
+            "canonical_url": canonical_url or drow.get("canonical_url") or drow.get("normalized_url"),
+            "canonical_source_key": canonical_key,
+            "platform_guess": platform_norm or drow.get("platform_guess"),
             "title_guess": drow.get("recommended_title") or drow.get("title_guess") or drow.get("to_source_title") or prev.get("title_guess", ""),
             "edge_types_all": "; ".join(sorted(set(str(x) for x in ((str(prev.get("edge_types_all") or "").split("; ") if prev.get("edge_types_all") else []) + [str(drow.get("edge_type") or "")]) if x))),
             "discovery_types": "; ".join(sorted(set(str(x) for x in ((str(prev.get("discovery_types") or "").split("; ") if prev.get("discovery_types") else []) + [str(drow.get("discovery_type") or "")]) if x))),
@@ -3228,6 +3458,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "source_id": sid,
             "source_title": srow.get("source_title") or srow.get("resolved_title"),
             "platform": srow.get("platform"),
+            "canonical_url": srow.get("canonical_url"),
+            "canonical_source_key": srow.get("canonical_source_key") or canonical_source_key(str(srow.get("platform") or ""), str(srow.get("handle") or ""), str(srow.get("canonical_url") or "")),
+            "handle": srow.get("handle"),
             "fetch_status": srow.get("fetch_status"),
             "last_history_fetch_run_id": run_id if scanned_ok else prev_cursor.get("last_history_fetch_run_id", ""),
             "last_history_fetch_at": run_now if scanned_ok else prev_cursor.get("last_history_fetch_at", ""),
@@ -3244,6 +3477,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "delta_scan_count_total": int(prev_cursor.get("delta_scan_count_total") or 0) + (1 if scanned_ok and not is_new_source else 0),
             "source_scan_tier": srow.get("source_scan_tier") or ("high_daily" if float(srow.get("monitor_priority_score") or 0) >= 0.5 else "medium_weekly" if sampled else "keyword_probe"),
             "next_history_scan_at": iso_after_seconds(86400 if float(srow.get("monitor_priority_score") or 0) >= 0.5 else 7 * 86400),
+            "next_delta_scan_at": iso_after_seconds(86400 if float(srow.get("monitor_priority_score") or 0) >= 0.5 else 7 * 86400),
+            "delta_scanned_this_run": str(bool(scanned_ok and not is_new_source)).lower(),
             "delta_scan_window_days": getenv_int("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", 14),
             "delta_overlap_posts": getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10),
             "last_run_id": run_id,
@@ -3265,6 +3500,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "discovered_sources": updated_discovered_state,
         "source_cursors": source_cursors,
         "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
+        "region_talk_sources": {str(r.get("canonical_source_key") or r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
         "source_frontier_queue_next": {str(r.get("canonical_url") or r.get("queue_rank")): r for r in source_frontier_queue_next},
         "similar_seed_queue": {str(r.get("similar_seed_id") or r.get("canonical_url")): r for r in similar_seed_queue},
         "candidate_memory": {str(r.get("candidate_memory_id")): r for r in candidate_memory_rows if r.get("candidate_memory_id")},
@@ -3330,7 +3566,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "sources_skipped_due_resolve_budget":sum(1 for s in source_rows if "budget" in str(s.get("fetch_status") or "")),
         "sources_skipped_due_platform_not_configured":sum(1 for s in source_rows if "not_configured" in str(s.get("fetch_status") or "")),
         "sources_skipped_due_low_priority_defer":sum(1 for s in source_rows if "low_priority" in str(s.get("fetch_status") or "")),
-        "vk_wall_probe_status":"configured_not_implemented" if any(s.get("platform") == "vk" for s in source_rows) and (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN")) else ("not_configured" if any(s.get("platform") == "vk" for s in source_rows) else "not_selected"),
+        "vk_wall_probe_status":"ok" if any(s.get("platform") == "vk" and s.get("fetch_status") == "ok" for s in source_rows) else ("error" if any(s.get("platform") == "vk" and str(s.get("fetch_status") or "").startswith("error") for s in source_rows) else ("not_configured" if any(s.get("platform") == "vk" for s in source_rows) and not vk_wall_token() else ("configured_no_vk_selected" if vk_wall_token() else "not_selected"))),
         "posts_region_relevant":sum(1 for r in new_posts if r.get("kaliningrad_oblast_only_scope")),
         "fresh_posts":len(fresh_rows),"fresh_posts_with_place_evidence":len(fresh_with_place_evidence),
         "review_queue_rows":len(review_queue),"pre_candidates_created":len(pre_candidates),
@@ -3413,10 +3649,49 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "resolved_sources_used_without_network_resolve":tg_obs.get("resolved_sources_used_without_network_resolve", ""),
         "telegram_sources_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
         "telegram_sources_deferred_unresolved":sum(1 for s in source_rows if "unresolved" in str(s.get("fetch_status") or "")),
+        "telegram_similar_self_loop_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_self_loop_count", 0),
+        "telegram_similar_duplicate_canonical_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_duplicate_canonical_count", 0),
+        "similar_seed_cursor_advanced":_REGION_TALK_TELEGRAM_RUNTIME.get("similar_seed_cursor_advanced", "false"),
         **tg_similar_metrics,
         "new_posts_this_run":sum(1 for r in increment if r.get("new_this_run") == "yes"),
         "changed_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "true"),
         "unchanged_posts_this_run":sum(1 for r in increment if r.get("changed_this_run") == "false"),
+        "state_backend": state_write_meta.get("state_backend") or state_meta.get("state_backend") or region_talk_state_backend_requested(),
+        "state_backend_requested": state_meta.get("state_backend_requested") or region_talk_state_backend_requested(),
+        "state_fallback_used": state_write_meta.get("state_fallback_used") or state_meta.get("state_fallback_used") or "false",
+        "state_fallback_reason": state_write_meta.get("state_fallback_reason") or state_meta.get("state_fallback_reason") or "",
+        "ydb_read_status": state_meta.get("ydb_read_status", "not_requested"),
+        "ydb_write_status": state_write_meta.get("ydb_write_status", "not_requested"),
+        "ydb_tables_expected": state_write_meta.get("ydb_tables_expected") or state_meta.get("ydb_tables_expected") or "",
+        "source_frontier_total_previous":len(previous_state.get("source_frontier_unique") or {}),
+        "source_frontier_total_current":len(source_frontier_unique),
+        "catalog_import_rows_total":len(public_blogger_rows),
+        "catalog_import_unique_sources":len({r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url") for r in public_blogger_rows}),
+        "catalog_sources_in_authoritative_frontier":sum(1 for r in source_frontier_unique if "public_travel_blogger_catalog" in str(r.get("discovery_types") or "")),
+        "catalog_sources_in_frontier":sum(1 for r in source_frontier_unique if "public_travel_blogger_catalog" in str(r.get("discovery_types") or "")),
+        "frontier_duplicate_canonical_keys":len(source_frontier_unique) - len({r.get("canonical_source_key") or r.get("canonical_url") for r in source_frontier_unique}),
+        "frontier_self_loops":0,
+        "telegram_similar_seed_used":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_seed_count", 0),
+        "telegram_similar_raw_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_raw_count", 0),
+        "telegram_similar_unique_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_unique_count", 0),
+        "keyword_queries_processed":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_search_queries_processed", 0),
+        "keyword_unique_sources":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique", 0),
+        "sources_primary_scanned_this_run":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("is_new_source_this_run") or "").lower() == "true"),
+        "sources_delta_scanned_this_run":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("history_fetch_mode") or "").startswith("delta")),
+        "posts_new_this_run":sum(1 for r in increment if r.get("new_this_run") == "yes"),
+        "posts_delta_new_this_run":sum(1 for r in increment if r.get("new_this_run") == "yes" and not str(r.get("source_seed_id") or "").startswith("frontier_dynamic_")),
+        "sample_bias_note":"priority-biased source sample; not a random conversion estimate",
+        "sources_with_any_ko_post_per_1000":round(1000 * len({r.get("source_id") for r in new_posts if r.get("kaliningrad_oblast_only_scope")}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
+        "sources_with_fresh_ko_post_per_1000":round(1000 * len({r.get("source_id") for r in new_posts if r.get("kaliningrad_oblast_only_scope") and r.get("fresh_enough")}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
+        "sources_with_candidate_memory_post_per_1000":round(1000 * len({r.get("source_id") for r in candidate_memory_rows}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
+        "sources_with_actual_image_candidate_per_1000":round(1000 * len({r.get("source_id") for r in new_posts if r.get("image_model_input_type") == "actual_image"}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
+        "sources_with_publication_ready_candidate_per_1000":round(1000 * len({r.get("source_id") for r in candidate_memory_rows if str(r.get("image_publication_ready") or "") == "true"}) / max(1, len([s for s in source_rows if s.get("fetch_status") == "ok"])), 1),
+        "current_run_reviewable_candidates":sum(1 for r in candidate_memory_rows if r.get("first_candidate_run_id") == run_id),
+        "final_candidates":len(candidates),
+        "favorites":len(favorites),
+        "image_fetch_retry_needed":sum(1 for r in new_posts if r.get("current_stage") == "image_fetch_retry_needed"),
+        "has_firsthand_visit_evidence_count":sum(1 for r in new_posts if str(r.get("has_firsthand_visit_evidence") or "").lower() == "true"),
+        "visit_impression_candidate_count":sum(1 for r in new_posts if str(r.get("content_type") or r.get("vector_content_type") or "") == "visit_impression_candidate"),
         **state_meta,
         **state_write_meta,
         **all_time_metrics,
@@ -3602,12 +3877,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"similar_seed_queue_total","value":summary_row.get("similar_seed_queue_total")},
         {"metric":"similar_seed_queue_ready","value":summary_row.get("similar_seed_queue_ready")},
         {"metric":"similar_seed_queue_used_total","value":summary_row.get("similar_seed_queue_used_total")},
+        {"metric":"similar_seed_cursor_advanced","value":summary_row.get("similar_seed_cursor_advanced")},
         {"metric":"telegram_keyword_discovery_status","value":summary_row.get("telegram_keyword_discovery_status")},
         {"metric":"keyword_search_queries_processed","value":summary_row.get("keyword_search_queries_processed")},
         {"metric":"keyword_discovered_sources_unique","value":summary_row.get("keyword_discovered_sources_unique")},
         {"metric":"dynamic_frontier_seed_count","value":summary_row.get("dynamic_frontier_seed_count")},
         {"metric":"source_frontier_unique_total","value":summary_row.get("source_frontier_unique_total")},
         {"metric":"source_frontier_new_this_run","value":summary_row.get("source_frontier_new_this_run")},
+        {"metric":"catalog_import_rows_total","value":summary_row.get("catalog_import_rows_total")},
+        {"metric":"catalog_sources_in_authoritative_frontier","value":summary_row.get("catalog_sources_in_authoritative_frontier")},
+        {"metric":"frontier_duplicate_canonical_keys","value":summary_row.get("frontier_duplicate_canonical_keys")},
         {"metric":"source_frontier_ready_to_probe","value":summary_row.get("source_frontier_ready_to_probe")},
         {"metric":"source_frontier_promoted_this_run","value":summary_row.get("source_frontier_promoted_this_run")},
         {"metric":"source_frontier_ready_next_run","value":summary_row.get("source_frontier_ready_next_run")},
@@ -3615,6 +3894,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"sources_primary_scanned_total_all_time","value":summary_row.get("sources_primary_scanned_total_all_time")},
         {"metric":"telegram_sources_primary_scanned_total_all_time","value":summary_row.get("telegram_sources_primary_scanned_total_all_time")},
         {"metric":"vk_sources_primary_scanned_total_all_time","value":summary_row.get("vk_sources_primary_scanned_total_all_time")},
+        {"metric":"sources_delta_scanned_this_run","value":summary_row.get("sources_delta_scanned_this_run")},
         {"metric":"sources_delta_scanned_total_all_time","value":summary_row.get("sources_delta_scanned_total_all_time")},
         {"metric":"sources_never_scanned_total","value":summary_row.get("sources_never_scanned_total")},
         {"metric":"frontier_total_by_platform","value":summary_row.get("frontier_total_by_platform")},
@@ -3739,22 +4019,39 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     write_xlsx(xlsx, sheets)
     candidate_event_rows = []
-    for r in (candidate_memory_top or final_shortlist)[:100]:
-        candidate_event_rows.append({
-            "event_type": "candidate_found",
+    def _candidate_event(stage: str, r: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "event_type": stage,
             "run_id": run_id,
-            "created_at": run_now,
-            "candidate_stage": r.get("current_stage") or r.get("decision_bucket"),
-            "post_url": r.get("post_url"),
+            "event_at": run_now,
+            "source_id": r.get("source_id"),
             "source_title": r.get("source_title"),
-            "source_geo_class": r.get("source_geo_class", ""),
+            "source_url": r.get("source_url"),
+            "post_id": r.get("post_id"),
+            "post_url": r.get("post_url"),
+            "post_date": r.get("post_date"),
+            "matched_place_names": r.get("matched_place_names"),
             "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
             "candidate_score": r.get("candidate_score_current") or r.get("candidate_score") or r.get("best_candidate_score_ever"),
-            "overall_media_score": r.get("media_score_current") or r.get("overall_media_score") or r.get("best_media_score_ever"),
-            "has_firsthand_visit_evidence": r.get("has_firsthand_visit_evidence"),
-            "why_relevant": r.get("why_keep_in_memory") or r.get("why_this_is_about_kaliningrad") or r.get("short_summary"),
+            "media_score": r.get("media_score_current") or r.get("overall_media_score") or r.get("best_media_score_ever"),
+            "stage": r.get("current_stage") or r.get("decision_bucket"),
             "next_action": r.get("next_action") or r.get("suggested_action"),
-        })
+            "short_summary": r.get("short_summary") or r.get("why_keep_in_memory") or r.get("why_this_is_about_kaliningrad"),
+        }
+    for r in new_posts:
+        if r.get("kaliningrad_oblast_only_scope"):
+            candidate_event_rows.append(_candidate_event("fresh_ko_post_found" if r.get("fresh_enough") else "new_source_with_ko_post", r))
+        if r.get("current_stage") in {"pre_candidate_needs_llm", "semantic_candidate", "favorite", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media"}:
+            candidate_event_rows.append(_candidate_event("pre_candidate_created", r))
+        if r.get("current_stage") == "needs_image_review":
+            candidate_event_rows.append(_candidate_event("image_reviewable_candidate", r))
+        if r.get("current_stage") == "image_fetch_retry_needed":
+            candidate_event_rows.append(_candidate_event("image_fetch_retry_needed", r))
+        if str(r.get("image_publication_ready") or "").lower() == "true" and r.get("image_model_input_type") == "actual_image":
+            candidate_event_rows.append(_candidate_event("publication_ready_candidate", r))
+    if not candidate_event_rows:
+        for r in (candidate_memory_top or final_shortlist)[:100]:
+            candidate_event_rows.append(_candidate_event("candidate_found", r))
     (output_dir / "candidate_found.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in candidate_event_rows) + ("\n" if candidate_event_rows else ""), encoding="utf-8")
     run_event_rows = [
         {"event_type":"run_started","run_id":run_id,"created_at":RUN_STARTED_AT.isoformat()},

@@ -156,36 +156,45 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_RUN_ID": run_id,
         "REGION_TALK_DRY_RUN": "1",
         "REGION_TALK_DISABLE_PUBLISH": "1",
-        "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "120"),
-        "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "20"),
+        "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "json"),
+        "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get("REGION_TALK_REQUIRE_YDB_STATE", "0"),
+        "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
+        "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
+        "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
+        "REGION_TALK_YDB_STATE_SNAPSHOT_FILE": os.environ.get("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", ""),
+        "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
+        "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
+        "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
+        "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "220"),
+        "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "50"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
         "REGION_TALK_TG_GOVERNOR_ENABLED": os.environ.get("REGION_TALK_TG_GOVERNOR_ENABLED", "1"),
-        "REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "800"),
-        "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "8"),
-        "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "100"),
-        "REGION_TALK_HISTORY_SOURCES_TARGET": os.environ.get("REGION_TALK_HISTORY_SOURCES_TARGET", "100"),
-        "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "25"),
-        "REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "120"),
-        "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "100"),
-        "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": os.environ.get("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "100"),
-        "REGION_TALK_MAX_NEW_SOURCE_PROBES": os.environ.get("REGION_TALK_MAX_NEW_SOURCE_PROBES", "30"),
+        "REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "2000"),
+        "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "30"),
+        "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "150"),
+        "REGION_TALK_HISTORY_SOURCES_TARGET": os.environ.get("REGION_TALK_HISTORY_SOURCES_TARGET", "150"),
+        "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "50"),
+        "REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "200"),
+        "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "250"),
+        "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": os.environ.get("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "200"),
+        "REGION_TALK_MAX_NEW_SOURCE_PROBES": os.environ.get("REGION_TALK_MAX_NEW_SOURCE_PROBES", "100"),
         "REGION_TALK_DISCOVERY_MODE": os.environ.get("REGION_TALK_DISCOVERY_MODE", "mixed"),
         "REGION_TALK_HISTORY_SCAN_MODE": os.environ.get("REGION_TALK_HISTORY_SCAN_MODE", "primary_and_delta"),
         "REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS", "60"),
         "REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", "300"),
         "REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS": os.environ.get("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", "1800"),
         "REGION_TALK_TG_SIMILAR_ENABLED": os.environ.get("REGION_TALK_TG_SIMILAR_ENABLED", os.environ.get("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", "1")),
-        "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", "100")),
-        "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", "10")),
-        "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", "1000")),
-        "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "1000"),
+        "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_SEED_CHANNELS", "200")),
+        "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", os.environ.get("REGION_TALK_DISCOVERY_MAX_SIMILAR_PER_SEED", "30")),
+        "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", os.environ.get("REGION_TALK_DISCOVERY_MAX_NEW_FRONTIER_PER_RUN", "2000")),
+        "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "2000"),
         "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": os.environ.get("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1"),
-        "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": os.environ.get("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "30"),
+        "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": os.environ.get("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "80"),
         "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip"),
         "REGION_TALK_MEDIA_SCORING_MODE": os.environ.get("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first"),
         "REGION_TALK_MEDIA_RETRY_FIRST": os.environ.get("REGION_TALK_MEDIA_RETRY_FIRST", "1"),
-        "REGION_TALK_ACTUAL_IMAGE_TARGET": os.environ.get("REGION_TALK_ACTUAL_IMAGE_TARGET", "30"),
+        "REGION_TALK_ACTUAL_IMAGE_TARGET": os.environ.get("REGION_TALK_ACTUAL_IMAGE_TARGET", "60"),
         "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm"),
@@ -194,7 +203,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_ENABLE_EARLY_LLM": os.environ.get("REGION_TALK_ENABLE_EARLY_LLM", "0"),
         "REGION_TALK_ENABLE_VECTOR_GATES": os.environ.get("REGION_TALK_ENABLE_VECTOR_GATES", "1"),
         "REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1"),
-        "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "0"),
+        "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1"),
         "REGION_TALK_TARGET_LLM_CALLS": os.environ.get("REGION_TALK_TARGET_LLM_CALLS", "10"),
         "REGION_TALK_MAX_LLM_FINAL_VERIFY": os.environ.get("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10"),
         "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": "0",
@@ -212,6 +221,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
         "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
         "GOOGLE_API_KEY", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
+        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN", "VK_TOKEN",
     ]
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
@@ -310,7 +320,7 @@ def main() -> int:
     ap.add_argument("--poll-interval-seconds", type=int, default=20)
     ap.add_argument("--no-wait", action="store_true")
     ap.add_argument("--download-output", action="store_true", default=True)
-    ap.add_argument("--max-sources", type=int, default=120)
+    ap.add_argument("--max-sources", type=int, default=220)
     args = ap.parse_args()
     load_env_file(args.env_file)
     run_id = args.run_id or "region-talk-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -318,38 +328,43 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_DRY_RUN", "1")
     os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH", "1")
     os.environ.setdefault("REGION_TALK_MAX_SOURCES", str(args.max_sources))
-    os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "20")
+    os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "50")
     os.environ.setdefault("REGION_TALK_MAX_IMAGES_PER_POST", "8")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_TG_GOVERNOR_ENABLED", "1")
-    os.environ.setdefault("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "800")
-    os.environ.setdefault("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "8")
-    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "100")
-    os.environ.setdefault("REGION_TALK_HISTORY_SOURCES_TARGET", "100")
-    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "25")
-    os.environ.setdefault("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "120")
-    os.environ.setdefault("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "100")
-    os.environ.setdefault("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "100")
-    os.environ.setdefault("REGION_TALK_MAX_NEW_SOURCE_PROBES", "30")
+    os.environ.setdefault("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "2000")
+    os.environ.setdefault("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "30")
+    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "150")
+    os.environ.setdefault("REGION_TALK_HISTORY_SOURCES_TARGET", "150")
+    os.environ.setdefault("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "50")
+    os.environ.setdefault("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "200")
+    os.environ.setdefault("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "250")
+    os.environ.setdefault("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "200")
+    os.environ.setdefault("REGION_TALK_MAX_NEW_SOURCE_PROBES", "100")
     os.environ.setdefault("REGION_TALK_DISCOVERY_MODE", "mixed")
     os.environ.setdefault("REGION_TALK_HISTORY_SCAN_MODE", "primary_and_delta")
     os.environ.setdefault("REGION_TALK_TG_SIMILAR_ENABLED", "1")
-    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", "100")
-    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", "10")
-    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", "1000")
-    os.environ.setdefault("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "1000")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN", "200")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED", "30")
+    os.environ.setdefault("REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN", "2000")
+    os.environ.setdefault("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "2000")
     os.environ.setdefault("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1")
-    os.environ.setdefault("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "30")
+    os.environ.setdefault("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "80")
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip")
     os.environ.setdefault("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first")
     os.environ.setdefault("REGION_TALK_MEDIA_RETRY_FIRST", "1")
-    os.environ.setdefault("REGION_TALK_ACTUAL_IMAGE_TARGET", "30")
+    os.environ.setdefault("REGION_TALK_ACTUAL_IMAGE_TARGET", "60")
     os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1")
+    os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
+    os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
+    os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
+    os.environ.setdefault("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14")
+    os.environ.setdefault("REGION_TALK_DELTA_OVERLAP_POSTS", "50")
     os.environ.setdefault("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm")
     os.environ.setdefault("REGION_TALK_ENABLE_EARLY_LLM", "0")
     os.environ.setdefault("REGION_TALK_ENABLE_VECTOR_GATES", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1")
-    os.environ.setdefault("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "0")
+    os.environ.setdefault("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1")
     os.environ.setdefault("REGION_TALK_TARGET_LLM_CALLS", "10")
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")
     os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")

@@ -217,6 +217,15 @@ REGION_TALK_ACTUAL_IMAGE_TARGET=30
 
 Keyword discovery is source discovery only. It may record `matched_query`, public channel title/username/url and a source-candidate edge, but it must not store raw personal/comment data or treat the matched post as a content candidate outside the normal Region Talk funnel.
 
+## z8 product-acceleration discovery defaults
+
+The authoritative frontier is `region_talk_sources` / `source_frontier_unique` keyed by `canonical_source_key`, not separate raw catalog/similar/keyword lists. Catalog imports, Telegram similar recommendations, Telegram keyword-discovered channels, post-text links and forwarded/repost origins upsert into the same deduped source record and accumulate evidence.
+
+Similar Channels remain non-recursive inside one run: select a round-robin/cooldown seed queue, call Telegram recommendations for the next bounded batch, reject self-loops/duplicates, update `similar_seed_*` cursor fields, then let later runs scan the newly found frontier. z8 target config is 200 seeds/run, 30 recommendations/seed, 2000 new frontier cap and 250 recommendation calls.
+
+VK public/group wall sources are now first-class read-only scan candidates when a VK token is configured. Unsupported or missing-token VK rows stay visible in backlog metrics instead of disappearing from the catalog/frontier.
+
+
 ## MVP-1.x forwarded/repost/comment discovery hardening
 
 Link-to-link discovery now treats forwarded/reposted origin as a high-value source graph edge:

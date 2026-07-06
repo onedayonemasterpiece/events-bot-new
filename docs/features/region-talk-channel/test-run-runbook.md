@@ -136,6 +136,17 @@ YDB mode must be one of:
 - configured dev/test namespace through `REGION_TALK_YDB_*`; or
 - explicit dry-run JSON namespace under `artifacts/region-talk/runs/{run_id}/dry-run-state/`.
 
+
+For z8 product-acceleration runs, prefer explicit state settings. Use `REGION_TALK_STATE_BACKEND=ydb` only when the YDB env set is provisioned; otherwise run with fallback intentionally visible (`REGION_TALK_STATE_BACKEND=ydb`, `REGION_TALK_REQUIRE_YDB_STATE=0`) and require the XLSX to show `state_backend=json_fallback`, `state_fallback_used=true` and the YDB fail reason. A production-like acceptance run must not silently use JSON state.
+
+Minimum z8 acceptance evidence in `01_run_summary` / `00_product_summary`:
+
+- state: `state_backend`, `previous_state_loaded`, `previous_state_hash`, `state_write_status`, `state_fallback_used`, `ydb_read_status`, `ydb_write_status`;
+- discovery: catalog/import coverage, similar seed/raw/unique counts, keyword query/source counts, duplicate/self-loop counts;
+- scanning: primary and delta scanned this run/all time, new posts and delta-new posts;
+- conversion: per-1000 source metrics plus `sample_bias_note`;
+- product: current-run reviewable candidates, candidate memory, publication-ready/favorites/final candidates and actual-image retry metrics.
+
 ## Expected artifacts
 
 - `artifacts/region-talk/runs/{run_id}/region-talk-candidates-{run_id}.xlsx`

@@ -283,7 +283,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         statuses = {r["source_seed_id"]: r["fetch_status"] for r in rows}
         self.assertEqual(statuses["tg1"], "skipped_fetch_disabled")
         self.assertEqual(statuses["tg2"], "skipped_fetch_disabled")
-        self.assertIn(statuses["vk1"], {"skipped_vk_wall_not_configured", "skipped_vk_wall_not_implemented"})
+        self.assertIn(statuses["vk1"], {"skipped_vk_wall_not_configured", "skipped_vk_wall_not_implemented", "skipped_fetch_disabled"})
         self.assertEqual(statuses["vv1"], "skipped_vkvideo_auxiliary_not_implemented")
 
     def test_weak_image_not_marked_reviewable_in_final_shortlist(self) -> None:
@@ -392,6 +392,49 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertGreaterEqual(row["source_candidate_score"], 0.75)
         self.assertNotIn("access_hash", json.dumps(row).lower())
         self.assertNotIn("channel_id_private", json.dumps(row).lower())
+
+
+    def test_ydb_required_state_fails_fast_without_config(self) -> None:
+        mod = load_module()
+        old_backend = os.environ.get("REGION_TALK_STATE_BACKEND")
+        old_require = os.environ.get("REGION_TALK_REQUIRE_YDB_STATE")
+        for key in ["REGION_TALK_YDB_ENDPOINT", "REGION_TALK_YDB_DATABASE", "REGION_TALK_YDB_STATE_SNAPSHOT_FILE"]:
+            os.environ.pop(key, None)
+        os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+        os.environ["REGION_TALK_REQUIRE_YDB_STATE"] = "1"
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                with self.assertRaises(RuntimeError):
+                    mod.load_region_talk_state(Path(td))
+        finally:
+            if old_backend is None: os.environ.pop("REGION_TALK_STATE_BACKEND", None)
+            else: os.environ["REGION_TALK_STATE_BACKEND"] = old_backend
+            if old_require is None: os.environ.pop("REGION_TALK_REQUIRE_YDB_STATE", None)
+            else: os.environ["REGION_TALK_REQUIRE_YDB_STATE"] = old_require
+
+    def test_source_frontier_dedupes_by_canonical_key_across_discovery_types(self) -> None:
+        mod = load_module()
+        rows = [
+            {"source_candidate_id":"src_cand_catalog", "canonical_source_key":"telegram:foo", "normalized_url":"https://t.me/foo", "platform_guess":"telegram", "edge_type":"public_travel_blogger_catalog", "discovery_type":"public_travel_blogger_catalog", "confidence":0.45, "discovered_from_source":"catalog"},
+            {"source_candidate_id":"src_cand_similar", "normalized_url":"https://t.me/foo", "recommended_username":"foo", "platform_guess":"telegram_channel", "edge_type":"telegram_similar_channel", "discovery_type":"telegram_similar_channels", "confidence":0.85, "recommended_title":"Foo Travel", "discovered_from_source":"similar"},
+        ]
+        frontier = mod.build_source_frontier_unique(rows, {}, "canon-run")
+        self.assertEqual(len(frontier), 1)
+        self.assertEqual(frontier[0]["canonical_source_key"], "telegram:foo")
+        self.assertIn("public_travel_blogger_catalog", frontier[0]["discovery_types"])
+        self.assertIn("telegram_similar_channels", frontier[0]["discovery_types"])
+
+    def test_candidate_found_jsonl_uses_stage_events_schema(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{"post_id":"event_post", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/8", "platform_post_key":"tg:src:8", "post_date":"2026-06-01T12:00:00+00:00", "text":"Мы приехали в Калининград, гуляли по Амалиенау, понравилось море, маршрут и что особенно запомнилось на Куршской косе", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        with tempfile.TemporaryDirectory() as td:
+            mod.build_report(seeds, [], posts, "event-run", Path(td))
+            rows = [json.loads(line) for line in (Path(td) / "candidate_found.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertTrue(rows)
+        self.assertTrue({"run_id", "event_at", "source_id", "post_url", "stage", "next_action", "short_summary"}.issubset(rows[0]))
+        self.assertIn("fresh_ko_post_found", {r["event_type"] for r in rows})
 
 
 if __name__ == "__main__":

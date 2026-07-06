@@ -478,3 +478,17 @@ Source classification is visible in `12f_source_classification`, `13_sources_mon
 The local/vector-first visit classifier now fills `has_firsthand_visit_evidence`, `visit_evidence_type`, `first_person_markers`, `emotion_or_impression_evidence`, `review_or_opinion_evidence`, `useful_route_evidence`, `nonlocal_blogger_visit_score`, and `publication_story_score` before any final LLM verifier. Metadata-only media is still never publication-ready.
 
 Incremental run-event artifacts are written next to the XLSX: `run_events.jsonl`, `candidate_found.jsonl`, and `stage_status.json`. `05_favorites` and `06_candidates_all` now use `_sheet_note` placeholders and expose `favorites_candidates_consistency_status` so placeholder rows are not confused with real candidates.
+
+## MVP-1.z8 product-acceleration contract
+
+The z8 runner treats storage backend selection as an explicit product signal:
+
+- `REGION_TALK_STATE_BACKEND=ydb` requests authoritative YDB state; JSON files are backup/export only.
+- `REGION_TALK_REQUIRE_YDB_STATE=1` fails the run when YDB state cannot be read or written.
+- If YDB is requested without the required config and fail-fast is disabled, the workbook must say `state_backend=json_fallback`, `state_fallback_used=true`, and include `ydb_read_status` / `ydb_write_status` / `state_fallback_reason`; it must not silently look like production state.
+
+Source frontier is canonical-key based. Catalog imports, Telegram similar-channel recommendations, keyword discovery, post links and forwarded origins should upsert into one deduplicated frontier/source view. Required KPI fields include `catalog_import_rows_total`, `catalog_import_unique_sources`, `catalog_sources_in_authoritative_frontier`, `frontier_duplicate_canonical_keys`, `frontier_self_loops`, `telegram_similar_seed_used`, `telegram_similar_raw_count`, `telegram_similar_unique_count`, `keyword_queries_processed` and `keyword_unique_sources`.
+
+The JSONL candidate event contract is stage-first. `candidate_found.jsonl` may contain `new_source_with_ko_post`, `fresh_ko_post_found`, `pre_candidate_created`, `image_reviewable_candidate`, `publication_ready_candidate` and `image_fetch_retry_needed` with `run_id`, `event_at`, `source_id`, `source_title`, `source_url`, `post_id`, `post_url`, `post_date`, `matched_place_names`, `content_type`, `candidate_score`, `media_score`, `stage`, `next_action` and `short_summary`. These are internal review/reporting events only; public publication remains disabled.
+
+Every XLSX/summary must expose product acceleration KPIs for state, discovery, scanning, delta, conversion per 1000 scanned sources, product shortlist/memory/favorites and actual-image retry. Conversion metrics must carry `sample_bias_note` because current runs are priority-biased, not random samples.
