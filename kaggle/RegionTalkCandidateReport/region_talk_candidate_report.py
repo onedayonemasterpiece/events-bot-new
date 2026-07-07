@@ -46,6 +46,8 @@ _REGION_TALK_GOOGLE_CLIENT: Any | None = None
 _REGION_TALK_CLIP_MODEL: Any | None = None
 _REGION_TALK_CLIP_PROCESSOR: Any | None = None
 _REGION_TALK_CLIP_DEVICE: str | None = None
+_REGION_TALK_TEXT_MODELS: dict[str, Any] = {}
+_REGION_TALK_TEXT_PROTOTYPE_CACHE: dict[str, Any] = {}
 _REGION_TALK_TELEGRAM_RUNTIME: dict[str, Any] = {}
 
 
@@ -1888,9 +1890,11 @@ def candidate_lifecycle_status(row: dict[str, Any]) -> str:
 
 
 def is_candidate_memory_row(row: dict[str, Any]) -> bool:
-    if not row.get("kaliningrad_oblast_only_scope"):
+    vector_status = str(row.get("vector_gate_status") or "")
+    vector_region_accept = vector_status == "vector_accept_candidate" and str(row.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
+    if not row.get("kaliningrad_oblast_only_scope") and not vector_region_accept:
         return row.get("manual_decision") in {"manual_keep", "keep", "favorite"} and str(row.get("manual_region_override") or "").lower() == "true"
-    if str(row.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject"}:
+    if str(row.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept:
         return False
     return row.get("current_stage") in CANDIDATE_MEMORY_STAGES or row.get("llm_decision") == "accept" or row.get("manual_decision") in {"manual_keep", "keep", "favorite"}
 
@@ -2003,11 +2007,12 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
     for mid, rec in list(memory.items()):
         if rec.get("manual_decision") in {"manual_keep", "keep", "favorite"}:
             continue
-        if str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} or str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject"}:
+        vector_region_accept = str(rec.get("vector_gate_status") or "") == "vector_accept_candidate" and str(rec.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
+        if (str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} and not vector_region_accept) or (str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept):
             rec["current_lifecycle_status"] = "region_evidence_missing_needs_refetch"
-            rec["visibility_status"] = "excluded_from_candidate_memory_by_hard_region_gate"
+            rec["visibility_status"] = "excluded_from_candidate_memory_by_region_vector_gate"
             rec["next_action"] = "refetch_source_or_manual_region_override"
-            rec["why_not_publication_ready"] = "hard region evidence missing in candidate memory"
+            rec["why_not_publication_ready"] = "region/vector evidence missing in candidate memory"
             region_excluded.append({**rec, "candidate_memory_id": mid})
             memory.pop(mid, None)
     rows = sorted(memory.values(), key=lambda r: (str(r.get("manual_decision") or "") == "reject", str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("best_candidate_score_ever") or 0), str(r.get("post_date") or "")))
@@ -2382,7 +2387,11 @@ def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
         "short_summary": r.get("short_summary"),
         "why_relevant": r.get("why_this_is_about_kaliningrad"),
         "matched_place_names": r.get("matched_place_names"),
-        "content_type": r.get("content_type") or r.get("llm_content_type"),
+        "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
+        "vector_gate_status": r.get("vector_gate_status"),
+        "vector_negative_class": r.get("vector_negative_class"),
+        "vector_positive_score": r.get("vector_positive_score"),
+        "vector_negative_score": r.get("vector_negative_score"),
         "candidate_score": r.get("candidate_score"),
         "text_substance_score": r.get("text_substance_score"),
         "source_geo_class": r.get("source_geo_class"),
@@ -2446,6 +2455,11 @@ def candidate_memory_shortlist_row(r: dict[str, Any], rank: int) -> dict[str, An
         "why_relevant": r.get("why_keep_in_memory"),
         "matched_place_names": r.get("matched_place_names"),
         "content_type": r.get("content_type") or r.get("llm_content_type") or r.get("vector_content_type"),
+        "vector_gate_status": r.get("vector_gate_status"),
+        "memory_vector_recheck_status": r.get("memory_vector_recheck_status"),
+        "vector_negative_class": r.get("vector_negative_class") or r.get("memory_vector_recheck_negative_class"),
+        "vector_positive_score": r.get("vector_positive_score"),
+        "memory_product_exclusion_reason": r.get("memory_product_exclusion_reason"),
         "source_geo_class": r.get("source_geo_class"),
         "source_topic_class": r.get("source_topic_class"),
         "nonlocal_value_score": r.get("nonlocal_value_score"),
@@ -3612,14 +3626,180 @@ def should_send_to_llm(fresh: dict[str, Any], scope: dict[str, Any], post: dict[
     return True
 
 
-def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any]) -> dict[str, Any]:
-    """Local-first text gate.
+TEXT_EMBEDDING_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
-    MVP implementation uses deterministic/prototype score fusion and records the
-    dual-model embedding target. Kaggle can later replace the prototype fallback
-    with real intfloat/multilingual-e5-base + BAAI/bge-m3 embeddings without
-    changing the row contract.
+
+def semantic_bank_v1() -> dict[str, list[str]]:
+    """Prototype texts for vector-first Region Talk selection.
+
+    The bank is intentionally semantic examples, not regex rules. Keyword/lexicon
+    features remain evidence/fallback; when embeddings are enabled, acceptance and
+    mass rejection come from distance to these positive/negative meaning classes.
     """
+    return {
+        "ko_visit_impression": [
+            "Личный рассказ о поездке в Калининградскую область: что увидели, что понравилось, какие места запомнились.",
+            "Автор делится впечатлениями от Зеленоградска, Светлогорска, Куршской косы, Балтийска или других городов Калининградской области.",
+            "Фотоотчет или заметка путешественника о посещении Калининградской области с эмоциями и наблюдениями.",
+        ],
+        "ko_route_useful": [
+            "Полезный маршрут по Калининградской области: как добраться, что посмотреть, где гулять, советы для поездки.",
+            "Содержательная карточка о достопримечательности Калининградской области, истории места, природе, море, дюнах или архитектуре.",
+            "Пост о нескольких городах или местах внутри Калининградской области без других регионов России.",
+        ],
+        "ko_visual_place_card": [
+            "Красивое место Калининградской области с описанием вида, атмосферы, моря, пляжа, кирхи, форта, музея или природной локации.",
+            "Один конкретный объект или локация в Калининградской области: чем интересен и почему стоит посмотреть.",
+        ],
+        "other_region_travel": [
+            "Пост о Москве, московских парках, пляжах, маршрутах и прогулках, не связанный с Калининградской областью.",
+            "Путешествие по Хайнаню, Турции, Беларуси, Европе, Кавказу, Байкалу, Сочи, Петербургу или другому региону, где Калининградская область не является основной темой.",
+            "Рассказ о другом городе или стране, случайно содержащий слово, похожее на калининградский топоним.",
+        ],
+        "multi_region_roundup": [
+            "Подборка разных регионов России: Калининград, Байкал, Дагестан, Сочи, Карелия, Алтай и другие направления одним списком.",
+            "Дайджест куда поехать летом по России, где Калининградская область только один пункт среди многих регионов.",
+            "Сравнение направлений или список городов из разных регионов и стран.",
+        ],
+        "news_report": [
+            "Новость, официальное сообщение, заявление властей, происшествие, политика, суд, полиция, транспортные планы или исследовательская новость.",
+            "Информационная заметка СМИ о факте, находке, решении, субсидиях, запуске парома или событии без личного опыта посещения региона.",
+            "Локальная городская новость или федеральная новость, где место лишь контекст события.",
+        ],
+        "event_announcement": [
+            "Анонс мероприятия, афиша, выставка, концерт, регистрация, билеты, расписание, программа, приглашаем прийти.",
+            "Пост приглашает на событие или публикует календарь мероприятий, а не рассказывает о впечатлениях от региона.",
+        ],
+        "ad_or_promo": [
+            "Реклама, промокод, скидка, конкурс, розыгрыш, тур, экскурсия, бронирование, покупка билетов, коммерческая услуга.",
+            "Промо туристического сервиса или платной поездки, где основной смысл — продать или зарегистрировать.",
+        ],
+        "low_substance": [
+            "Короткий пост без содержания: только фото, эмодзи, хэштег, поздравление или слабая подпись без полезной информации.",
+            "Служебное объявление, репост, навигация по каналу, техническая новость или пустой визуальный дамп.",
+        ],
+    }
+
+
+def _text_vector_mode() -> str:
+    raw = (os.getenv("REGION_TALK_TEXT_VECTOR_MODE") or "").strip().lower()
+    if raw:
+        return raw
+    if not getenv_bool("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", True):
+        return "prototype"
+    # Avoid surprise model downloads in local unit tests; Kaggle/product runs opt in by environment or /kaggle.
+    return "dual_embeddings" if Path("/kaggle/input").exists() else "prototype"
+
+
+def _prefix_for_embedding_model(model_id: str, text: str, *, query: bool) -> str:
+    if model_id.startswith("intfloat/multilingual-e5"):
+        return ("query: " if query else "passage: ") + text
+    return text
+
+
+def _ensure_text_embedding_model(model_id: str) -> tuple[Any, Any, Any, str]:
+    if model_id in _REGION_TALK_TEXT_MODELS:
+        return _REGION_TALK_TEXT_MODELS[model_id]
+    try:
+        import torch  # type: ignore
+        from transformers import AutoModel, AutoTokenizer  # type: ignore
+    except Exception:
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "transformers", "torch", "sentencepiece"])
+            import torch  # type: ignore
+            from transformers import AutoModel, AutoTokenizer  # type: ignore
+        else:
+            raise
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModel.from_pretrained(model_id)
+    device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
+    model.to(device)
+    model.eval()
+    _REGION_TALK_TEXT_MODELS[model_id] = (tokenizer, model, torch, device)
+    return _REGION_TALK_TEXT_MODELS[model_id]
+
+
+def _mean_pool(last_hidden_state: Any, attention_mask: Any, torch: Any) -> Any:
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    return torch.sum(last_hidden_state * mask, 1) / torch.clamp(mask.sum(1), min=1e-9)
+
+
+def embed_texts_for_model(model_id: str, texts: list[str], *, query: bool = False) -> Any:
+    tokenizer, model, torch, device = _ensure_text_embedding_model(model_id)
+    prefixed = [_prefix_for_embedding_model(model_id, t, query=query) for t in texts]
+    encoded = tokenizer(prefixed, padding=True, truncation=True, max_length=512, return_tensors="pt")
+    encoded = {k: v.to(device) for k, v in encoded.items()}
+    with torch.no_grad():
+        out = model(**encoded)
+    pooled = _mean_pool(out.last_hidden_state, encoded["attention_mask"], torch)
+    return torch.nn.functional.normalize(pooled, p=2, dim=1).detach().cpu()
+
+
+def dual_model_semantic_scores(text: str) -> dict[str, Any] | None:
+    mode = _text_vector_mode()
+    if mode not in {"dual_embeddings", "embeddings", "real", "dual"}:
+        return None
+    bank = semantic_bank_v1()
+    flat_labels: list[str] = []
+    flat_texts: list[str] = []
+    for label, examples in bank.items():
+        for ex in examples:
+            flat_labels.append(label)
+            flat_texts.append(ex)
+    per_model: dict[str, dict[str, float]] = {}
+    errors: list[str] = []
+    for model_id in TEXT_EMBEDDING_MODELS:
+        try:
+            cache_key = model_id + ":semantic_bank_v1"
+            if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
+                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+            proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
+            query_vec = embed_texts_for_model(model_id, [text], query=True)[0]
+            # embeddings are already normalized; dot product is cosine similarity.
+            sims = (proto @ query_vec).tolist()
+            scores: dict[str, float] = {}
+            for label, sim in zip(flat_labels, sims):
+                scores[label] = max(scores.get(label, -1.0), float(sim))
+            per_model[model_id] = scores
+        except Exception as exc:
+            errors.append(f"{model_id}:{type(exc).__name__}:{str(exc)[:120]}")
+    if not per_model:
+        return {"embedding_error": "; ".join(errors)[:500], "text_embedding_runtime": "dual_embedding_failed_fallback"}
+    labels = sorted(bank)
+    fused = {label: sum(scores.get(label, 0.0) for scores in per_model.values()) / max(1, len(per_model)) for label in labels}
+    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
+    negative_labels = set(labels) - positive_labels
+    pos_label, pos_score = max(((l, fused.get(l, 0.0)) for l in positive_labels), key=lambda x: x[1])
+    neg_label, neg_score = max(((l, fused.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
+    model_summaries: dict[str, Any] = {}
+    top_labels = []
+    for model_id, scores in per_model.items():
+        mtop_label, mtop_score = max(scores.items(), key=lambda x: x[1])
+        mneg_label, mneg_score = max(((l, scores.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
+        short = "e5" if model_id.startswith("intfloat/") else "bge_m3" if model_id == "BAAI/bge-m3" else stable_hash(model_id, length=8)
+        model_summaries[f"{short}_top_class"] = mtop_label
+        model_summaries[f"{short}_top_score"] = round(float(mtop_score), 3)
+        model_summaries[f"{short}_negative_class"] = mneg_label
+        model_summaries[f"{short}_negative_score"] = round(float(mneg_score), 3)
+        top_labels.append(mtop_label)
+    reason = "both_models" if len(set(top_labels)) == 1 and len(per_model) == 2 else ("model_disagreement" if len(per_model) == 2 else "single_model_fallback")
+    return {
+        **model_summaries,
+        "text_embedding_runtime": "kaggle_local_dual_text_embeddings",
+        "text_embedding_model_id": "+".join(per_model.keys()),
+        "vector_fusion_reason": reason,
+        "vector_top_class": pos_label if pos_score >= neg_score else neg_label,
+        "vector_top_score": round(max(pos_score, neg_score), 3),
+        "vector_negative_class": neg_label,
+        "vector_negative_score": round(float(neg_score), 3),
+        "vector_positive_semantic_class": pos_label,
+        "vector_positive_semantic_score": round(float(pos_score), 3),
+        "vector_margin_positive_vs_negative": round(float(pos_score - neg_score), 3),
+        "embedding_error": "; ".join(errors)[:500],
+    }
+
+
+def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any]) -> dict[str, Any]:
     low = (text or "").lower()
     positive = max(float(substance.get("visit_impression_score") or 0), float(substance.get("useful_route_score") or 0), float(substance.get("emotion_observation_score") or 0))
     if scope.get("kaliningrad_oblast_only_scope"):
@@ -3627,43 +3807,123 @@ def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_ga
     if scope.get("matched_place_names"):
         positive += 0.10
     news_event = float(ts.get("newsiness_score") or 0)
-    if any(w in low for w in ["анонс", "мероприят", "конкурс", "диктант", "регистрац", "заявк", "афиша", "билет", "расписан"]):
-        news_event += 0.45
+    event_terms = ["анонс", "мероприят", "конкурс", "диктант", "регистрац", "заявк", "афиша", "билет", "расписан", "состоится", "программа"]
+    news_terms = [
+        "уголов", "возбужден", "задерж", "следств", "силов", "прокурат", "суд", "побит рекорд", "температурный рекорд",
+        "официально открыт", "мапп", "сообщили", "признан", "штраф", "проверка", "расследован", "помогает компаниям",
+    ]
+    event_like = any(w in low for w in event_terms)
+    news_like = any(w in low for w in news_terms)
+    if event_like or news_like:
+        news_event += 0.65
+    news_class = "event_announcement" if event_like and not news_like else "news_report"
     ad_promo = float(ts.get("ad_score") or 0)
     if bool(ad_gate.get("is_ad_or_promo")):
         ad_promo += 0.50
     roundup = 0.60 if scope.get("external_geo_mentions") else 0.0
     if any(w in low for w in ["подборка", "топ-", "топ ", "куда поехать", "мест россии", "регионов россии", "направлений"]):
         roundup += 0.25
-    low_substance = max(0.0, 0.65 - float(substance.get("text_substance_score") or 0))
-    negative = max(news_event, ad_promo, roundup, low_substance)
+    # Ambiguous lexicon hits such as Светлый/Пионерский/Сокольники must not create a strong KO vector positive by themselves.
+    ambiguous_place_penalty = 0.18 if scope.get("matched_place_names") and not scope.get("matched_place_accepted_as_region_evidence") else 0.0
+    low_substance = max(0.0, 0.65 - float(substance.get("text_substance_score") or 0) + ambiguous_place_penalty)
+    other_region = 0.0
+    if scope.get("external_geo_mentions"):
+        other_region = max(other_region, 0.75)
+    # Full-text external evidence catches cases where hashtags/boilerplate were removed from geo-main-content.
+    full_norm = normalize_geo_text(text)
+    full_external_regions = [term for term in EXTERNAL_REGION_TERMS if term_in_text(normalize_geo_text(term), full_norm)]
+    full_external_countries = [term for term in EXTERNAL_COUNTRY_TERMS if term_in_text(normalize_geo_text(term), full_norm)]
+    if full_external_regions or full_external_countries:
+        other_region = max(other_region, 0.75)
+    if not scope.get("kaliningrad_oblast_only_scope"):
+        other_region = max(other_region, 0.55 if scope.get("matched_place_names") else 0.62)
+    negative = max(news_event, ad_promo, roundup, low_substance, other_region)
+    content_type = "visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) >= 0.20 else ("route_useful_candidate" if float(substance.get("useful_route_score") or 0) >= 0.18 else "single_location_photo_card" if scope.get("matched_place_names") else "low_substance")
+    return {
+        "positive": positive,
+        "news_event": news_event,
+        "ad_promo": ad_promo,
+        "roundup": roundup,
+        "low_substance": low_substance,
+        "other_region": other_region,
+        "negative": negative,
+        "news_class": news_class,
+        "content_type": content_type,
+    }
+
+
+def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any], embedding_scores: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Vector-first text gate with deterministic evidence as fallback only."""
+    proto = _prototype_vector_scores(text, ts, scope, ad_gate, substance)
+    embed = embedding_scores if embedding_scores is not None else dual_model_semantic_scores(text)
+    negative_class = ""
+    if embed and embed.get("vector_negative_class"):
+        positive = float(embed.get("vector_positive_semantic_score") or 0)
+        negative = float(embed.get("vector_negative_score") or 0)
+        negative_class = str(embed.get("vector_negative_class") or "")
+        content_type = "visit_impression_candidate" if embed.get("vector_positive_semantic_class") == "ko_visit_impression" else ("route_useful_candidate" if embed.get("vector_positive_semantic_class") == "ko_route_useful" else "single_location_photo_card")
+        runtime = str(embed.get("text_embedding_runtime") or "kaggle_local_dual_text_embeddings")
+        model_id = str(embed.get("text_embedding_model_id") or "+".join(TEXT_EMBEDDING_MODELS))
+    else:
+        positive = float(proto["positive"])
+        negative = float(proto["negative"])
+        content_type = str(proto["content_type"])
+        runtime = "kaggle_local_prototype_vector_gate"
+        model_id = "dual_model_target:intfloat/multilingual-e5-base+BAAI/bge-m3;prototype_fallback_v2"
+        if proto["other_region"] >= negative:
+            negative_class = "other_region_travel"
+        elif proto["roundup"] >= negative:
+            negative_class = "multi_region_roundup"
+        elif proto["news_event"] >= negative:
+            negative_class = str(proto.get("news_class") or "news_report")
+        elif proto["ad_promo"] >= negative:
+            negative_class = "ad_or_promo"
+        elif proto["low_substance"] >= negative:
+            negative_class = "low_substance"
+    # Deterministic evidence can raise negative confidence for obvious categories, but cannot be the sole positive signal.
+    if proto["other_region"] >= 0.55 and negative < proto["other_region"]:
+        negative, negative_class = float(proto["other_region"]), "other_region_travel"
+    if proto["roundup"] >= 0.60 and negative < proto["roundup"]:
+        negative, negative_class = float(proto["roundup"]), "multi_region_roundup"
+    if proto["news_event"] >= 0.65 and negative < proto["news_event"]:
+        negative, negative_class = float(proto["news_event"]), "event_announcement"
+    if proto["ad_promo"] >= 0.65 and negative < proto["ad_promo"]:
+        negative, negative_class = float(proto["ad_promo"]), "ad_or_promo"
     margin = round(max(0.0, min(1.0, positive)) - max(0.0, min(1.0, negative)), 3)
     status = "vector_ambiguous_keep_for_ranking"
     reason = ""
-    content_type = "visit_impression_candidate" if float(substance.get("visit_impression_score") or 0) >= 0.20 else ("route_useful_candidate" if float(substance.get("useful_route_score") or 0) >= 0.18 else "single_location_photo_card" if scope.get("matched_place_names") else "low_substance")
-    if news_event >= 0.55 and positive < 0.55:
-        status, reason, content_type = "vector_reject_news_event", "news/event/announcement prototype score dominates", "news_or_event"
-    elif ad_promo >= 0.55 and positive < 0.60:
-        status, reason, content_type = "vector_reject_ad_promo", "ad/promo prototype score dominates", "ad_or_promo"
-    elif roundup >= 0.60 and positive < 0.60:
-        status, reason, content_type = "vector_reject_roundup", "multi-region/SEO roundup prototype score dominates", "multi_region_roundup"
-    elif low_substance >= 0.55 and positive < 0.40:
-        status, reason, content_type = "vector_reject_low_substance", "low-substance prototype score dominates", "low_substance"
-    elif positive >= 0.55 and margin >= -0.15:
-        status, reason = "vector_accept_candidate", "positive visit/route/Kaliningrad signal kept for local image ranking"
-    return {
-        "text_embedding_model_id": "dual_model_target:intfloat/multilingual-e5-base+BAAI/bge-m3;prototype_fallback_v1",
-        "text_embedding_runtime": "kaggle_local_prototype_vector_gate",
+    if negative_class == "other_region_travel" and negative >= 0.55 and positive < 0.68:
+        status, reason, content_type = "vector_reject_not_kaliningrad_oblast", "other-region semantic class dominates Kaliningrad fit", "other_region_travel"
+    elif negative_class == "multi_region_roundup" and negative >= 0.55 and positive < 0.68:
+        status, reason, content_type = "vector_reject_multi_region_roundup", "multi-region roundup semantic class dominates", "multi_region_roundup"
+    elif negative_class in {"news_report", "event_announcement"} and negative >= 0.55 and positive < 0.68:
+        status, reason, content_type = "vector_reject_news_event", "news/event/announcement semantic class dominates", "news_or_event"
+    elif negative_class == "ad_or_promo" and negative >= 0.55 and positive < 0.70:
+        status, reason, content_type = "vector_reject_ad_promo", "ad/promo semantic class dominates", "ad_or_promo"
+    elif negative_class == "low_substance" and negative >= 0.62 and positive < 0.45:
+        status, reason, content_type = "vector_reject_low_substance", "low-substance semantic class dominates", "low_substance"
+    elif positive >= 0.55 and margin >= -0.12:
+        status, reason = "vector_accept_candidate", "positive Kaliningrad visit/route/place semantic signal kept for local image ranking"
+    out = {
+        "text_embedding_model_id": model_id,
+        "text_embedding_runtime": runtime,
         "vector_gate_status": status,
         "vector_content_type": content_type,
         "vector_positive_score": round(max(0.0, min(1.0, positive)), 3),
-        "vector_news_event_score": round(max(0.0, min(1.0, news_event)), 3),
-        "vector_ad_promo_score": round(max(0.0, min(1.0, ad_promo)), 3),
-        "vector_roundup_score": round(max(0.0, min(1.0, roundup)), 3),
-        "vector_low_substance_score": round(max(0.0, min(1.0, low_substance)), 3),
+        "vector_news_event_score": round(max(0.0, min(1.0, max(float(proto.get("news_event") or 0), negative if negative_class in {"news_report", "event_announcement"} else 0))), 3),
+        "vector_ad_promo_score": round(max(0.0, min(1.0, max(float(proto.get("ad_promo") or 0), negative if negative_class == "ad_or_promo" else 0))), 3),
+        "vector_roundup_score": round(max(0.0, min(1.0, max(float(proto.get("roundup") or 0), negative if negative_class == "multi_region_roundup" else 0))), 3),
+        "vector_low_substance_score": round(max(0.0, min(1.0, max(float(proto.get("low_substance") or 0), negative if negative_class == "low_substance" else 0))), 3),
+        "vector_other_region_score": round(max(0.0, min(1.0, max(float(proto.get("other_region") or 0), negative if negative_class == "other_region_travel" else 0))), 3),
+        "vector_region_scope_score": round(max(0.0, min(1.0, positive)), 3),
+        "vector_not_other_region_score": round(max(0.0, min(1.0, 1.0 - max(float(proto.get("other_region") or 0), negative if negative_class == "other_region_travel" else 0))), 3),
+        "vector_not_news_score": round(max(0.0, min(1.0, 1.0 - max(float(proto.get("news_event") or 0), negative if negative_class in {"news_report", "event_announcement"} else 0))), 3),
+        "vector_not_ad_score": round(max(0.0, min(1.0, 1.0 - max(float(proto.get("ad_promo") or 0), negative if negative_class == "ad_or_promo" else 0))), 3),
         "vector_visit_impression_score": round(float(substance.get("visit_impression_score") or 0), 3),
         "vector_route_useful_score": round(float(substance.get("useful_route_score") or 0), 3),
         "vector_emotion_observation_score": round(float(substance.get("emotion_observation_score") or 0), 3),
+        "vector_negative_class": negative_class,
+        "vector_negative_score": round(max(0.0, min(1.0, negative)), 3),
         "vector_margin_positive_vs_negative": margin,
         "vector_rejection_reason": reason if status.startswith("vector_reject") else "",
         "vector_gate_confidence": round(abs(margin), 3),
@@ -3672,6 +3932,18 @@ def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_ga
         "llm_stage": "",
         "llm_status": "not_called_until_final_verifier" if status in {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"} else "not_called_vector_reject",
     }
+    if embed:
+        out.update(embed)
+        out["vector_gate_status"] = status
+        out["vector_content_type"] = content_type
+        out["vector_positive_score"] = round(max(0.0, min(1.0, positive)), 3)
+        out["vector_negative_class"] = negative_class
+        out["vector_negative_score"] = round(max(0.0, min(1.0, negative)), 3)
+        out["vector_margin_positive_vs_negative"] = margin
+        out["needs_llm_final_verify"] = str(status in {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"}).lower()
+        out["llm_status"] = "not_called_until_final_verifier" if status in {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"} else "not_called_vector_reject"
+        out["vector_rejection_reason"] = reason if status.startswith("vector_reject") else ""
+    return out
 
 
 def build_similar_seed_queue(previous_state: dict[str, Any], source_rows: list[dict[str, Any]], candidate_memory_rows: list[dict[str, Any]], run_id: str, run_now: str) -> list[dict[str, Any]]:
@@ -3901,25 +4173,22 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "llm_usage_input_tokens": "", "llm_usage_output_tokens": "", "llm_usage_total_tokens": "",
             "rejection_reason_primary": "", "rejection_reason_details": "",
         }
-        if not rejection and not scope.get("kaliningrad_oblast_only_scope"):
-            drop_gate = "hard_region_gate"
-            rejection = "reject_not_kaliningrad_oblast_only"
-            visual_skip_reason = str(scope.get("region_scope_reason") or "not Kaliningrad Oblast main subject")
-            current_stage = "dropped_text_gate"
-            vector_gate["needs_llm_final_verify"] = "false"
-            vector_gate["llm_status"] = "not_called_hard_region_reject"
-            vector_gate["llm_not_called_reason"] = "hard_region_gate_reject"
-            gate_trace.append("hard_region_gate:reject_not_kaliningrad_oblast_only")
-        elif not rejection and bool(ad_gate.get("is_ad_or_promo")) and float(substance.get("visit_impression_score") or 0) < 0.25:
-            drop_gate = "ad_promo_announcement_gate"
-            rejection = "reject_ad_or_promo"
-            visual_skip_reason = str(ad_gate.get("ad_promo_hits") or "ad/promo/event deterministic evidence")
-            current_stage = "dropped_text_gate"
-        elif not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject"):
-            drop_gate = "news_event_vector_gate"
+        if not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject"):
+            drop_gate = "semantic_vector_gate"
             rejection = str(vector_gate.get("vector_gate_status") or "vector_reject")
             visual_skip_reason = str(vector_gate.get("vector_rejection_reason") or rejection)
             current_stage = "dropped_text_gate"
+        elif not rejection and not scope.get("kaliningrad_oblast_only_scope") and str(vector_gate.get("vector_gate_status") or "") != "vector_accept_candidate":
+            # Last-resort safety fallback for rows with no Kaliningrad evidence when vector embeddings are unavailable/ambiguous.
+            # This is not a positive/negative semantic classifier; product mass decisions should be made by vector_gate above.
+            drop_gate = "region_evidence_safety_gate"
+            rejection = "vector_reject_not_kaliningrad_oblast"
+            visual_skip_reason = str(scope.get("region_scope_reason") or "no Kaliningrad Oblast evidence for vector review")
+            current_stage = "dropped_text_gate"
+            vector_gate["needs_llm_final_verify"] = "false"
+            vector_gate["llm_status"] = "not_called_region_evidence_safety"
+            vector_gate["llm_not_called_reason"] = "region_evidence_safety_gate"
+            gate_trace.append("region_evidence_safety_gate:reject_no_ko_evidence")
         llm_required = early_llm_enabled and semantic_gate_mode in {"llm_required", "llm", "semantic_required", "early_llm"} and not deterministic_override
         if not rejection and llm_required:
             if llm_supabase_unavailable:
@@ -4291,7 +4560,41 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
-    candidate_memory_top = sorted(candidate_memory_active_rows, key=lambda r: (str(r.get("not_refetched_this_run") or "") == "true", -float(r.get("publication_story_score") or 0), -float(r.get("nonlocal_value_score") or 0), -float(r.get("best_candidate_score_ever") or 0), -float(r.get("best_media_score_ever") or 0)))[:100]
+
+    def memory_product_vector_ok(row: dict[str, Any]) -> bool:
+        existing_status = str(row.get("vector_gate_status") or "")
+        if existing_status.startswith("vector_reject"):
+            row["memory_product_exclusion_reason"] = existing_status
+            return False
+        sample_text = str(row.get("short_summary") or row.get("text_excerpt") or row.get("post_url") or "")
+        if not sample_text.strip():
+            row["memory_product_exclusion_reason"] = "missing_text_for_memory_vector_recheck"
+            return False
+        scope2 = kaliningrad_oblast_only_scope_gate(sample_text, lexicon)
+        gate2 = text_vector_gate(sample_text, score_text(sample_text), scope2, ad_promo_gate(sample_text), score_substance(sample_text))
+        row["memory_vector_recheck_status"] = gate2.get("vector_gate_status")
+        row["memory_vector_recheck_negative_class"] = gate2.get("vector_negative_class")
+        row["memory_vector_recheck_reason"] = gate2.get("vector_rejection_reason")
+        if str(gate2.get("vector_gate_status") or "").startswith("vector_reject"):
+            row["memory_product_exclusion_reason"] = str(gate2.get("vector_gate_status") or "")
+            return False
+        topic = str(row.get("source_topic_class") or "")
+        if topic in {"local_news", "federal_media", "ads_tours"} and str(gate2.get("vector_content_type") or "") not in {"visit_impression_candidate", "route_useful_candidate"}:
+            row["memory_product_exclusion_reason"] = "low_priority_news_or_ads_source_without_positive_vector_fit"
+            return False
+        row["memory_product_exclusion_reason"] = ""
+        return True
+
+    candidate_memory_product_rows = [r for r in candidate_memory_active_rows if memory_product_vector_ok(r)]
+    candidate_memory_top = sorted(candidate_memory_product_rows, key=lambda r: (
+        str(r.get("not_refetched_this_run") or "") == "true",
+        str(r.get("source_geo_class") or "") == "kaliningrad_local",
+        str(r.get("source_topic_class") or "") in {"local_news", "federal_media", "ads_tours"},
+        -float(r.get("publication_story_score") or 0),
+        -float(r.get("nonlocal_value_score") or 0),
+        -float(r.get("best_candidate_score_ever") or 0),
+        -float(r.get("best_media_score_ever") or 0),
+    ))[:100]
     similar_seed_queue = build_similar_seed_queue(previous_state, source_rows, candidate_memory_rows, run_id, run_now)
     source_delta_scan_sheet = build_source_delta_scan_sheet(source_rows, previous_state, run_id)
     source_yield_metrics_sheet = build_source_yield_metrics(source_rows, posts_by_source, new_posts)
@@ -4398,7 +4701,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "text_vector_rows_scored":len(vector_scored_rows),
         "vector_rejected_news_event_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_news_event"),
         "vector_rejected_ad_promo_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_ad_promo"),
-        "vector_rejected_roundup_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_roundup"),
+        "vector_rejected_roundup_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") in {"vector_reject_roundup", "vector_reject_multi_region_roundup"}),
+        "vector_rejected_not_ko_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_not_kaliningrad_oblast"),
         "vector_rejected_low_substance_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_reject_low_substance"),
         "vector_ambiguous_kept_count":sum(1 for r in vector_scored_rows if r.get("vector_gate_status") == "vector_ambiguous_keep_for_ranking"),
         "actual_image_scored_before_llm_count":actual_image_scored_before_llm_count,
@@ -4665,6 +4969,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"vector_rejected_news_event_count","value":summary_row.get("vector_rejected_news_event_count")},
         {"metric":"vector_rejected_ad_promo_count","value":summary_row.get("vector_rejected_ad_promo_count")},
         {"metric":"vector_rejected_roundup_count","value":summary_row.get("vector_rejected_roundup_count")},
+        {"metric":"vector_rejected_not_ko_count","value":summary_row.get("vector_rejected_not_ko_count")},
         {"metric":"vector_rejected_low_substance_count","value":summary_row.get("vector_rejected_low_substance_count")},
         {"metric":"vector_ambiguous_kept_count","value":summary_row.get("vector_ambiguous_kept_count")},
         {"metric":"actual_image_scored_before_llm_count","value":summary_row.get("actual_image_scored_before_llm_count")},

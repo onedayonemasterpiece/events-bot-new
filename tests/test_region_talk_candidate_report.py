@@ -168,7 +168,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             urls = {r.get("post_url") for r in payload["sheets"][sheet_name] if isinstance(r, dict)}
             self.assertFalse(false_urls & urls, sheet_name)
         dropped = {r.get("post_url"): r for r in payload["sheets"]["08_dropped_posts"]}
-        self.assertEqual({dropped[u]["rejection_reason"] for u in false_urls}, {"reject_not_kaliningrad_oblast_only"})
+        self.assertEqual({dropped[u]["rejection_reason"] for u in false_urls}, {"vector_reject_multi_region_roundup"})
         self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
         self.assertEqual(calls["n"], 0)
         memory_urls = {r.get("post_url") for r in payload["sheets"]["06a_candidate_memory"] if isinstance(r, dict)}
@@ -188,7 +188,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         review = payload["sheets"]["04_review_queue"]
         dropped_reasons = {r["post_id"]: r["rejection_reason"] for r in dropped}
         self.assertEqual(dropped_reasons["post_old"], "reject_stale_or_missing_date")
-        self.assertEqual(dropped_reasons["post_ad"], "reject_ad_or_promo")
+        self.assertIn(dropped_reasons["post_ad"], {"reject_ad_or_promo", "vector_reject_ad_promo", "vector_reject_news_event"})
         by_dropped_id = {r["post_id"]: r for r in dropped}
         self.assertIn("deterministic_ad_promo_evidence", by_dropped_id["post_ad"]["semantic_evidence_flags"])
         self.assertEqual(payload["summary"]["image_model_calls"], 0)
@@ -245,8 +245,29 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             payload = mod.build_report(seeds, [], posts, "news-vector-run", Path(td))
         row = payload["sheets"]["08_dropped_posts"][0]
         self.assertEqual(calls["n"], 0)
-        self.assertIn(row["rejection_reason"], {"reject_ad_or_promo", "vector_reject_news_event"})
+        self.assertIn(row["rejection_reason"], {"reject_ad_or_promo", "vector_reject_news_event", "vector_reject_ad_promo"})
         self.assertIn(row["llm_status"], {"not_called_vector_reject", "not_called_until_final_verifier"})
+        self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
+
+    def test_news_and_external_homonyms_are_vector_rejected_before_memory(self) -> None:
+        mod = load_module()
+        mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        base = {"source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_date":"2026-06-29T12:00:00+00:00", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}
+        posts = [
+            {**base, "post_id":"news_kalina", "post_url":"https://t.me/src/news1", "platform_post_key":"tg:src:news1", "text":"Уголовное дело в отношении директора нацпарка Куршская коса возбуждено из-за незаконной вырубки деревьев. Следствие сообщает подробности."},
+            {**base, "post_id":"moscow_sokolniki", "post_url":"https://t.me/src/moscow1", "platform_post_key":"tg:src:moscow1", "text":"Отправляемся гулять в обновленный парк Сокольники. Здесь можно насладиться природой. #Москва_в_объективе"},
+            {**base, "post_id":"ko_visit", "post_url":"https://t.me/src/ko1", "platform_post_key":"tg:src:ko1", "text":"Вчера ездили на Куршскую косу из Зеленоградска: дюны, море, маршрут, личные впечатления и что особенно запомнилось."},
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            payload = mod.build_report(seeds, [], posts, "vector-news-run", Path(td))
+        memory_urls = {r.get("post_url") for r in payload["sheets"]["06a_candidate_memory"] if isinstance(r, dict)}
+        self.assertNotIn("https://t.me/src/news1", memory_urls)
+        self.assertNotIn("https://t.me/src/moscow1", memory_urls)
+        self.assertIn("https://t.me/src/ko1", memory_urls)
+        dropped = {r.get("post_url"): r for r in payload["sheets"]["08_dropped_posts"]}
+        self.assertEqual(dropped["https://t.me/src/news1"]["rejection_reason"], "vector_reject_news_event")
+        self.assertEqual(dropped["https://t.me/src/moscow1"]["rejection_reason"], "vector_reject_not_kaliningrad_oblast")
         self.assertEqual(payload["summary"]["wide_funnel_llm_calls"], 0)
 
     def test_llm_sync_wrapper_works_inside_active_event_loop(self) -> None:

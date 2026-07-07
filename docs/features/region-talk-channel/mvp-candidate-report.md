@@ -564,3 +564,14 @@ frontier/debug columns must not be durable YDB queue state. The writer runs a
 bounded prune pass (`REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS=1`) that
 rewrites old compact snapshots to this contract without deleting source/post or
 candidate data.
+
+## Vector-first product quality correction
+
+After the z10b workbook review, `04a_final_shortlist` must be treated as product-facing and must not be filled by news, afisha, local institution PR, ads/promos, or posts whose main topic is another region. The mass filter is vector-owned:
+
+- positive classes: Kaliningrad Oblast visit/impression, useful route, visual place card;
+- negative classes: other-region primary topic/homonym, multi-region roundup, news/report, event announcement, ad/promo, local institution PR/event report, low-substance chat/test output;
+- deterministic place/regex/keyword checks are only evidence or last-resort safety fallback;
+- LLM remains final verifier only and must not be used for broad corpus classification.
+
+Candidate memory may keep historical rows for diagnostics, but before rendering `04a_final_shortlist` / `21_manual_review_queue` it must re-check memory rows with the same vector product gate and push vector-negative rows out of the product shortlist.

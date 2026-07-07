@@ -1,0 +1,4 @@
+interface:
+  display_name: "Region Talk Vector Selection"
+  short_description: "Vector-first selection for Region Talk candidates"
+  default_prompt: "Use Region Talk vector-selection workflow to audit and improve candidate filtering."
