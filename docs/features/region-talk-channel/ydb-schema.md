@@ -170,7 +170,8 @@ For the 1 GB sidecar budget, the MVP adapter writes a compact `region_talk_state
 
 The compact payload keeps source/channel URLs, source cursors, the canonical
 Telegram/VK `unified_source_queue` + cursor, post URLs/platform keys, candidate
-lifecycle, the `image_candidate_queue` + cursor and image scoring metrics. It
+lifecycle, the `image_candidate_queue` + cursor, the product
+`publication_goal`, and image/publication scoring metrics. It
 deliberately excludes raw post text, raw API payload JSON and media bytes
 because posts/images can be re-fetched from external URLs when needed.
 
@@ -184,6 +185,13 @@ into the same KV table:
 - kind `image_queue_item`, pk `image_queue_item:<image_queue_id>` — the downstream
   image-analysis work item for a text-confirmed Kaliningrad-only post, including
   lease/status fields and actual-image consensus scores;
+- kind `publication_candidate_item`, pk
+  `publication_candidate_item:<publication_candidate_id|post_url>` — the ranked
+  product shortlist row joined from text/source/vector evidence and
+  ImageDiagnostic actual-image scores. It carries
+  `publication_candidate_status=llm_confirmed|sent_to_chat|filtered_before_llm|llm_needs_review|llm_rejected|llm_budget_deferred`,
+  rank/score fields, the Gemini Lite verifier decision, goal-stop marker and
+  local notification markers (`sent_to_chat`, `sent_message_id`);
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.

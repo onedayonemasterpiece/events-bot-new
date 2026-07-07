@@ -304,7 +304,7 @@ class Status:
             print(f"[region-talk] business_heartbeat_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         if self.client:
             try:
-                self.client.event(name, phase=clean.get("phase"), status=clean.get("status"), progress_json=clean)
+                self.client.event(name, phase=clean.get("phase"), status=clean.get("status"), progress=clean)
             except Exception:
                 pass
 
@@ -736,8 +736,23 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
     "external_geo_mentions", "mentioned_external_regions", "is_ad_or_promo",
     "vector_gate_status", "vector_content_type", "first_seen_run_id", "seen_run_count",
-    "short_summary", "why_selected",
+    "short_summary", "why_selected", "final_verifier_status", "final_verifier_decision",
+    "final_verifier_reason", "final_verifier_model", "llm_gate_status", "llm_decision",
+    "image_model_input_type", "image_queue_status", "overall_media_score", "postcardness_score",
+    "aesthetic_score", "image_publication_ready",
 ]
+PUBLICATION_CANDIDATE_STATE_FIELDS = [
+    "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
+    "post_id", "post_url", "source_id", "source_title", "source_geo_class", "source_topic_class",
+    "post_date", "short_summary", "why_selected", "why_not_selected", "matched_place_names",
+    "candidate_score", "publication_score", "visual_score", "text_story_score", "diversity_penalty",
+    "overall_media_score", "postcardness_score", "aesthetic_score", "image_model_input_type",
+    "image_queue_status", "vector_gate_status", "vector_content_type", "vector_positive_score",
+    "publication_llm_status", "publication_llm_decision", "publication_llm_reason",
+    "publication_llm_model", "visual_confirmation_source", "goal_stop_candidate", "sent_to_chat",
+    "sent_message_id", "created_at", "last_seen_run_id", "last_confirmed_run_id",
+]
+PUBLICATION_CONFIRMED_STATUSES = {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
 
 
 def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
@@ -756,6 +771,7 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     if not sources:
         sources = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
     candidate_memory = state.get("candidate_memory") if isinstance(state.get("candidate_memory"), dict) else {}
+    publication_candidates = state.get("publication_candidate_queue") if isinstance(state.get("publication_candidate_queue"), dict) else {}
     max_posts = getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000)
     max_sources = getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000)
     max_candidates = getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000)
@@ -819,6 +835,12 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "sources": compact_sources,
         "processed_posts": compact_posts,
         "candidate_memory": compact_candidates,
+        "publication_goal": state.get("publication_goal") or {},
+        "publication_candidate_queue": {
+            str(k): compact_record(v, PUBLICATION_CANDIDATE_STATE_FIELDS, max_len=900)
+            for k, v in list(publication_candidates.items())[:max_candidates]
+            if isinstance(v, dict)
+        },
         "unified_source_queue_cursor_position": state.get("unified_source_queue_cursor_position", 0),
         "unified_source_queue_cursor_key": state.get("unified_source_queue_cursor_key", ""),
         "unified_source_queue": {
@@ -1107,6 +1129,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 source_items = ydb_select_kind_items(session, ydb, table_path, "source_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                publication_items = ydb_select_kind_items(session, ydb, table_path, "publication_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
                     if image_items:
@@ -1127,6 +1150,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["unified_source_queue"] = q
                         data0["ydb_row_level_source_queue_items_loaded"] = len(source_items)
+                    if publication_items:
+                        q = data0.get("publication_candidate_queue") if isinstance(data0.get("publication_candidate_queue"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in publication_items.items():
+                            key = str(item.get("publication_candidate_id") or item.get("post_url") or _pk.replace("publication_candidate_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["publication_candidate_queue"] = q
+                        data0["ydb_row_level_publication_candidate_items_loaded"] = len(publication_items)
                     if queue_cursors:
                         cursors = data0.get("queue_cursors") if isinstance(data0.get("queue_cursors"), dict) else {}
                         cursors = dict(cursors)
@@ -1220,6 +1252,11 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("image_queue_id") or item.get("post_url") or "")
                         if key:
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
+                for item in (compact.get("publication_candidate_queue") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("publication_candidate_id") or item.get("post_url") or "")
+                        if key:
+                            row_items.append(("publication_candidate_item:" + key, "publication_candidate_item", item))
                 for item in (compact.get("unified_source_queue") or {}).values():
                     if isinstance(item, dict) and should_write_queue_item(item, item_type="source"):
                         key = str(item.get("canonical_source_key") or item.get("source_queue_id") or "")
@@ -1230,11 +1267,12 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         if isinstance(item, dict):
                             row_items.append(("queue_cursor:" + str(name), "queue_cursor", item))
                     row_items.append(("queue_metrics:latest", "queue_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "queue_cursors": compact.get("queue_cursors") or {}, "source_queue_total": len(compact.get("unified_source_queue") or {}), "image_queue_total": len(compact.get("image_candidate_queue") or {})}))
+                compact["_ydb_row_level_publication_candidate_items_written"] = len(compact.get("publication_candidate_queue") or {})
                 compact["_ydb_row_level_items_written"] = ydb_upsert_json_many(session, ydb, table_path, row_items, updated_at, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -2307,6 +2345,8 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "image_publication_ready": row.get("image_publication_ready", "false"), "image_reviewable": row.get("image_reviewable", "false"),
             "visual_decision": row.get("visual_decision", ""),
             "llm_status": row.get("llm_status", ""), "llm_stage": row.get("llm_stage", ""), "needs_llm_final_verify": row.get("needs_llm_final_verify", ""),
+            "llm_gate_status": row.get("llm_gate_status", ""), "llm_decision": row.get("llm_decision", ""), "llm_reason": row.get("llm_reason", ""), "llm_model": row.get("llm_model", ""),
+            "final_verifier_status": row.get("final_verifier_status", ""), "final_verifier_decision": row.get("final_verifier_decision", ""), "final_verifier_reason": row.get("final_verifier_reason", ""), "final_verifier_model": row.get("final_verifier_model", ""),
             "vector_gate_status": row.get("vector_gate_status", ""), "vector_positive_score": row.get("vector_positive_score", ""),
             "has_firsthand_visit_evidence": row.get("has_firsthand_visit_evidence", ""), "visit_evidence_type": row.get("visit_evidence_type", ""),
             "first_person_markers": row.get("first_person_markers", prev.get("first_person_markers", "")),
@@ -2916,6 +2956,280 @@ def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
         "image_model_explanation": r.get("model_short_explanation"),
         "risk_flags": r.get("risk_flags"),
     }
+
+
+def _rt_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value in ("", None):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _rt_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on", "accept", "accepted"}
+
+
+def publication_goal_defaults(previous_state: dict[str, Any], *, run_now: str) -> dict[str, Any]:
+    prev = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
+    goal_id = (os.getenv("REGION_TALK_PUBLICATION_GOAL_ID") or str(prev.get("publication_goal_id") or "region-talk-product-goal-v1")).strip()
+    target = getenv_int("REGION_TALK_PUBLICATION_GOAL_TARGET", int(prev.get("target_confirmed") or 20))
+    budget = getenv_int("REGION_TALK_PUBLICATION_LLM_BUDGET_MAX", int(prev.get("llm_budget_max") or 100))
+    return {
+        **prev,
+        "publication_goal_id": goal_id,
+        "target_confirmed": target,
+        "llm_budget_max": budget,
+        "started_at": prev.get("started_at") or run_now,
+        "updated_at": run_now,
+    }
+
+
+def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
+    if not str(row.get("post_url") or "").strip():
+        return False, "missing_post_url"
+    if str(row.get("source_geo_class") or "") == "kaliningrad_local":
+        return False, "local_kaliningrad_source_for_separate_monitoring"
+    topic = str(row.get("source_topic_class") or "")
+    if topic in {"local_news", "federal_media", "ads_tours"}:
+        return False, "source_topic_not_nonlocal_blogger_travel"
+    if not _rt_bool(row.get("kaliningrad_oblast_only_scope")):
+        return False, "not_confirmed_kaliningrad_oblast_scope"
+    if str(row.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"}:
+        return False, "kaliningrad_not_main_subject"
+    if _rt_bool(row.get("is_ad_or_promo")):
+        return False, "ad_or_promo"
+    if str(row.get("vector_gate_status") or "").startswith("vector_reject"):
+        return False, str(row.get("vector_gate_status") or "vector_reject")
+    if str(row.get("image_model_input_type") or "") != "actual_image":
+        return False, "actual_image_required"
+    if str(row.get("image_queue_status") or "") not in {"", "actual_scored"}:
+        return False, "image_queue_not_actual_scored"
+    if _rt_float(row.get("overall_media_score")) < _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE"), 0.66):
+        return False, "overall_media_score_below_threshold"
+    if _rt_float(row.get("postcardness_score")) < _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE"), 0.55):
+        return False, "postcardness_score_below_threshold"
+    return True, ""
+
+
+def _publication_text_story_score(row: dict[str, Any]) -> float:
+    bool_bonus = 0.0
+    for key, weight in [
+        ("has_firsthand_visit_evidence", 0.22),
+        ("emotion_or_impression_evidence", 0.18),
+        ("review_or_opinion_evidence", 0.16),
+        ("memorable_detail_evidence", 0.16),
+        ("useful_route_evidence", 0.12),
+    ]:
+        if _rt_bool(row.get(key)):
+            bool_bonus += weight
+    numeric = max(
+        _rt_float(row.get("publication_story_score")),
+        _rt_float(row.get("nonlocal_blogger_visit_score")),
+        _rt_float(row.get("vector_visit_impression_score")),
+        _rt_float(row.get("vector_route_useful_score")),
+        _rt_float(row.get("vector_emotion_observation_score")),
+    )
+    return round(min(1.0, max(numeric, bool_bonus, _rt_float(row.get("candidate_score_current")), _rt_float(row.get("candidate_score")))), 3)
+
+
+def _publication_diversity_penalty(row: dict[str, Any], accepted_rows: list[dict[str, Any]]) -> float:
+    """Small anti-overlap penalty; vector-nearest-neighbour diversity can replace this after first accepted set exists."""
+    if not accepted_rows:
+        return 0.0
+    source = str(row.get("source_id") or row.get("source_title") or "")
+    places = {p.strip().lower() for p in str(row.get("matched_place_names") or "").replace(",", ";").split(";") if p.strip()}
+    ctype = str(row.get("content_type") or row.get("vector_content_type") or "")
+    penalty = 0.0
+    for prev in accepted_rows:
+        if source and source == str(prev.get("source_id") or prev.get("source_title") or ""):
+            penalty = max(penalty, 0.18)
+        prev_places = {p.strip().lower() for p in str(prev.get("matched_place_names") or "").replace(",", ";").split(";") if p.strip()}
+        if places and prev_places and places & prev_places:
+            penalty = max(penalty, 0.12)
+        if ctype and ctype == str(prev.get("content_type") or prev.get("vector_content_type") or ""):
+            penalty = max(penalty, 0.05)
+    return round(penalty, 3)
+
+
+def _merge_candidate_and_image_rows(candidate_rows: list[dict[str, Any]], image_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_url = {str(r.get("post_url") or ""): r for r in image_rows if str(r.get("post_url") or "")}
+    merged = []
+    for row in candidate_rows:
+        img = by_url.get(str(row.get("post_url") or "")) or {}
+        merged.append({**row, **{k: v for k, v in img.items() if v not in ("", None)}})
+    return merged
+
+
+def build_publication_candidate_queue(
+    candidate_rows: list[dict[str, Any]],
+    image_rows: list[dict[str, Any]],
+    previous_publication_rows: list[dict[str, Any]],
+    previous_goal: dict[str, Any],
+    *,
+    run_id: str,
+    run_now: str,
+    llm_model: str,
+    llm_default_env_var_name: str,
+    current_run_preverified_llm_calls: int = 0,
+    report_event: Any | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    goal = publication_goal_defaults({"publication_goal": previous_goal}, run_now=run_now)
+    goal_id = str(goal.get("publication_goal_id") or "region-talk-product-goal-v1")
+    budget_max = int(goal.get("llm_budget_max") or 100)
+    target = int(goal.get("target_confirmed") or 20)
+    previous_by_url = {str(r.get("post_url") or ""): dict(r) for r in previous_publication_rows if str(r.get("post_url") or "")}
+    confirmed_urls = {u for u, r in previous_by_url.items() if str(r.get("publication_candidate_status") or "") in PUBLICATION_CONFIRMED_STATUSES}
+    sent_urls = {u for u, r in previous_by_url.items() if _rt_bool(r.get("sent_to_chat"))}
+    previous_llm_used = int(goal.get("llm_calls_used_total") or 0)
+    preverified_calls = max(0, int(current_run_preverified_llm_calls or 0))
+    calls_this_run = 0
+    per_run_cap = getenv_int("REGION_TALK_PUBLICATION_MAX_LLM_VERIFY_PER_RUN", 20)
+    rows: list[dict[str, Any]] = []
+    accepted_for_diversity: list[dict[str, Any]] = [previous_by_url[u] for u in confirmed_urls if u in previous_by_url]
+    pool = _merge_candidate_and_image_rows(candidate_rows, image_rows)
+    pre_ranked: list[dict[str, Any]] = []
+    for row in pool:
+        ok, reason = _publication_candidate_base_ok(row)
+        visual = max(_rt_float(row.get("overall_media_score")), _rt_float(row.get("final_visual_score")))
+        postcard = _rt_float(row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score"))
+        text_story = _publication_text_story_score(row)
+        nonlocal_score = _rt_float(row.get("nonlocal_value_score"))
+        base_score = round(min(1.0, 0.42 * visual + 0.18 * postcard + 0.30 * text_story + 0.10 * nonlocal_score), 3)
+        pre_ranked.append({**row, "_publication_base_ok": ok, "_publication_base_reject_reason": reason, "_publication_base_score": base_score, "_publication_visual_score": visual, "_publication_text_story_score": text_story})
+    pre_ranked.sort(key=lambda r: (-_rt_float(r.get("_publication_base_score")), -_rt_float(r.get("overall_media_score")), -_rt_float(r.get("postcardness_score")), str(r.get("post_date") or "")))
+    for row in pre_ranked:
+        post_url = str(row.get("post_url") or "")
+        prev = previous_by_url.get(post_url, {})
+        candidate_id = "pubcand_" + stable_hash(goal_id, post_url or row.get("candidate_memory_id") or row.get("post_id"))
+        diversity_penalty = _publication_diversity_penalty(row, accepted_for_diversity)
+        publication_score = round(max(0.0, _rt_float(row.get("_publication_base_score")) - diversity_penalty), 3)
+        base_ok = bool(row.get("_publication_base_ok"))
+        status = str(prev.get("publication_candidate_status") or ("ready_for_llm" if base_ok else "filtered_before_llm"))
+        llm_status = str(prev.get("publication_llm_status") or "")
+        llm_decision = str(prev.get("publication_llm_decision") or "")
+        llm_reason = str(prev.get("publication_llm_reason") or "")
+        llm_model_used = str(prev.get("publication_llm_model") or "")
+        if base_ok and post_url not in confirmed_urls:
+            final_status = str(row.get("final_verifier_status") or row.get("llm_gate_status") or "")
+            final_decision = str(row.get("final_verifier_decision") or row.get("llm_decision") or "")
+            if final_status == "ok" and final_decision == "accept":
+                llm_status, llm_decision = "confirmed_from_final_verifier", "accept"
+                llm_reason = str(row.get("final_verifier_reason") or row.get("llm_reason") or "Gemini final verifier accepted text criteria")
+                llm_model_used = str(row.get("final_verifier_model") or row.get("llm_model") or llm_model)
+                status = "llm_confirmed"
+            elif previous_llm_used + preverified_calls + calls_this_run < budget_max and calls_this_run < per_run_cap:
+                evidence = {
+                    "stage": "publication_queue_final_verifier",
+                    "visual_score": row.get("_publication_visual_score"),
+                    "overall_media_score": row.get("overall_media_score"),
+                    "postcardness_score": row.get("postcardness_score"),
+                    "aesthetic_score": row.get("aesthetic_score"),
+                    "image_model_input_type": row.get("image_model_input_type"),
+                    "image_model_type": row.get("image_model_type"),
+                    "visual_confirmation_source": "RegionTalkImageDiagnostic actual-image scoring",
+                    "vector_gate_status": row.get("vector_gate_status"),
+                    "source_geo_class": row.get("source_geo_class"),
+                    "source_topic_class": row.get("source_topic_class"),
+                    "publication_text_story_score": row.get("_publication_text_story_score"),
+                }
+                result = call_region_talk_semantic_llm(row, evidence, model=llm_model, default_env_var_name=llm_default_env_var_name)
+                if result.get("llm_gate_status") in {"ok", "error", "rate_limited"}:
+                    calls_this_run += 1
+                llm_status = str(result.get("llm_gate_status") or "")
+                llm_decision = str(result.get("llm_decision") or "")
+                llm_reason = str(result.get("llm_reason") or "")
+                llm_model_used = str(result.get("llm_model") or llm_model)
+                status = "llm_confirmed" if llm_status == "ok" and llm_decision == "accept" else ("llm_rejected" if llm_status == "ok" and llm_decision == "reject" else "llm_needs_review")
+            else:
+                status = "llm_budget_deferred"
+                llm_status = "budget_deferred"
+                llm_reason = f"Goal LLM budget/cap reached: used={previous_llm_used + preverified_calls + calls_this_run}/{budget_max}, per_run={calls_this_run}/{per_run_cap}, preverified={preverified_calls}"
+        elif not base_ok and status not in PUBLICATION_CONFIRMED_STATUSES:
+            status = "filtered_before_llm"
+        if status in PUBLICATION_CONFIRMED_STATUSES:
+            accepted_for_diversity.append(row)
+        is_confirmed = status in PUBLICATION_CONFIRMED_STATUSES
+        why_selected = (
+            f"визуал={_rt_float(row.get('_publication_visual_score')):.2f}, открытка={_rt_float(row.get('postcardness_score')):.2f}, "
+            f"текст/эмоция={_rt_float(row.get('_publication_text_story_score')):.2f}, источник={row.get('source_topic_class') or 'unknown'}, "
+            f"diversity_penalty={diversity_penalty:.2f}"
+        )
+        rows.append({
+            "publication_candidate_id": candidate_id,
+            "publication_goal_id": goal_id,
+            "publication_rank": 0,
+            "publication_candidate_status": status,
+            "post_id": row.get("post_id"),
+            "post_url": post_url,
+            "source_id": row.get("source_id"),
+            "source_title": row.get("source_title"),
+            "source_geo_class": row.get("source_geo_class"),
+            "source_topic_class": row.get("source_topic_class"),
+            "post_date": row.get("post_date"),
+            "short_summary": row.get("short_summary"),
+            "matched_place_names": row.get("matched_place_names"),
+            "candidate_score": row.get("candidate_score") or row.get("candidate_score_current") or row.get("best_candidate_score_ever"),
+            "publication_score": publication_score,
+            "visual_score": round(_rt_float(row.get("_publication_visual_score")), 3),
+            "text_story_score": row.get("_publication_text_story_score"),
+            "diversity_penalty": diversity_penalty,
+            "overall_media_score": row.get("overall_media_score") or row.get("final_visual_score"),
+            "postcardness_score": row.get("postcardness_score"),
+            "aesthetic_score": row.get("aesthetic_score"),
+            "image_model_input_type": row.get("image_model_input_type"),
+            "image_queue_status": row.get("image_queue_status"),
+            "vector_gate_status": row.get("vector_gate_status"),
+            "vector_content_type": row.get("vector_content_type"),
+            "vector_positive_score": row.get("vector_positive_score"),
+            "publication_llm_status": llm_status,
+            "publication_llm_decision": llm_decision,
+            "publication_llm_reason": llm_reason[:500],
+            "publication_llm_model": llm_model_used,
+            "visual_confirmation_source": "RegionTalkImageDiagnostic actual-image scoring" if base_ok else "",
+            "why_selected": why_selected if is_confirmed else "",
+            "why_not_selected": "" if is_confirmed else (row.get("_publication_base_reject_reason") or llm_reason),
+            "goal_stop_candidate": "false",
+            "sent_to_chat": str(post_url in sent_urls).lower(),
+            "sent_message_id": prev.get("sent_message_id", ""),
+            "created_at": prev.get("created_at") or run_now,
+            "last_seen_run_id": run_id,
+            "last_confirmed_run_id": run_id if is_confirmed else prev.get("last_confirmed_run_id", ""),
+        })
+    rows.sort(key=lambda r: (
+        0 if str(r.get("publication_candidate_status")) in PUBLICATION_CONFIRMED_STATUSES else 1 if str(r.get("publication_candidate_status")) in {"ready_for_llm", "llm_needs_review"} else 2,
+        -_rt_float(r.get("publication_score")),
+        -_rt_float(r.get("visual_score")),
+        str(r.get("post_date") or ""),
+    ))
+    for i, row in enumerate(rows, start=1):
+        row["publication_rank"] = i
+        if i <= target and str(row.get("publication_candidate_status") or "") in PUBLICATION_CONFIRMED_STATUSES:
+            row["goal_stop_candidate"] = "true"
+    confirmed_count = sum(1 for r in rows if str(r.get("publication_candidate_status")) in PUBLICATION_CONFIRMED_STATUSES)
+    total_llm_calls = previous_llm_used + preverified_calls + calls_this_run
+    goal.update({
+        "updated_at": run_now,
+        "last_run_id": run_id,
+        "confirmed_count": confirmed_count,
+        "sent_count": sum(1 for r in rows if _rt_bool(r.get("sent_to_chat"))),
+        "llm_calls_used_total": total_llm_calls,
+        "llm_calls_used_this_run": preverified_calls + calls_this_run,
+        "llm_calls_used_publication_queue_this_run": calls_this_run,
+        "llm_calls_used_preverified_this_run": preverified_calls,
+        "llm_budget_remaining": max(0, budget_max - total_llm_calls),
+        "goal_status": "complete" if confirmed_count >= target else ("llm_budget_exhausted" if total_llm_calls >= budget_max else "running"),
+        "top_confirmed_post_urls": [r.get("post_url") for r in rows if str(r.get("publication_candidate_status")) in PUBLICATION_CONFIRMED_STATUSES][:target],
+    })
+    if callable(report_event):
+        try:
+            report_event("publication_queue_built", phase="publication_queue", status=goal.get("goal_status"), publication_goal_id=goal_id, confirmed_count=confirmed_count, target_confirmed=target, llm_calls_used_total=goal.get("llm_calls_used_total"), llm_budget_max=budget_max)
+        except Exception:
+            pass
+    return rows, goal
 
 
 def candidate_memory_shortlist_row(r: dict[str, Any], rank: int) -> dict[str, Any]:
@@ -4007,6 +4321,7 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "Accept only if the main subject is Kaliningrad Oblast, not one item in a multi-region/country digest.",
             "Reject ads, promos, registrations, contests, paid/service CTAs, app-download promos, event announcements, and news digests.",
             "Prefer visit impressions, route/useful observations, emotional or memorable details about visiting the region.",
+            "For evidence_hints_not_decisions.stage=publication_queue_final_verifier, accept only when supplied visual evidence says this is an actual-image candidate with strong postcard/aesthetic scores; otherwise return needs_review or reject.",
             "A single-location Kaliningrad Oblast card is NOT a multi-region roundup even if it belongs to a source rubric; classify it as single_location_photo_card or encyclopedic_card_candidate, not reject_multi_region_roundup.",
             "Encyclopedic/single-location cards may be research candidates but weaker than firsthand visit impressions; pure visual dumps or passing mentions are not publication candidates.",
             "Return JSON only.",
@@ -5447,6 +5762,20 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
         previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
     )
+    previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
+    previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
+    publication_candidate_rows, publication_goal = build_publication_candidate_queue(
+        candidate_memory_product_rows,
+        image_candidate_queue_sheet,
+        previous_publication_rows,
+        previous_publication_goal,
+        run_id=run_id,
+        run_now=run_now,
+        llm_model=llm_model,
+        llm_default_env_var_name=llm_default_env_var_name,
+        current_run_preverified_llm_calls=final_verifier_llm_calls,
+        report_event=report_event,
+    )
     state_to_write = {
         "run_id": run_id,
         "state_schema_version": "region-talk-state-v2",
@@ -5674,6 +6003,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         **all_time_metrics,
         **unified_source_queue_metrics,
         **image_queue_metrics,
+        "publication_goal_id": publication_goal.get("publication_goal_id"),
+        "publication_goal_status": publication_goal.get("goal_status"),
+        "publication_goal_target": publication_goal.get("target_confirmed"),
+        "publication_confirmed_count": publication_goal.get("confirmed_count"),
+        "publication_sent_count": publication_goal.get("sent_count"),
+        "publication_llm_calls_used_this_run": publication_goal.get("llm_calls_used_this_run"),
+        "publication_llm_calls_used_total": publication_goal.get("llm_calls_used_total"),
+        "publication_llm_budget_remaining": publication_goal.get("llm_budget_remaining"),
+        "publication_candidate_rows": len(publication_candidate_rows),
+        "publication_candidate_confirmed_rows": sum(1 for r in publication_candidate_rows if str(r.get("publication_candidate_status") or "") in PUBLICATION_CONFIRMED_STATUSES),
+        "publication_candidate_ready_for_chat_rows": sum(1 for r in publication_candidate_rows if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"),
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]
@@ -5787,6 +6127,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"candidate_memory_new_this_run","value":summary_row.get("candidate_memory_new_this_run")},
         {"metric":"candidate_memory_not_refetched_this_run","value":summary_row.get("candidate_memory_not_refetched_this_run")},
         {"metric":"current_run_shortlist_count","value":len(final_shortlist)},
+        {"metric":"publication_goal_status","value":summary_row.get("publication_goal_status")},
+        {"metric":"publication_confirmed_count","value":summary_row.get("publication_confirmed_count")},
+        {"metric":"publication_goal_target","value":summary_row.get("publication_goal_target")},
+        {"metric":"publication_llm_calls_used_total","value":summary_row.get("publication_llm_calls_used_total")},
+        {"metric":"publication_llm_budget_remaining","value":summary_row.get("publication_llm_budget_remaining")},
+        {"metric":"publication_candidate_ready_for_chat_rows","value":summary_row.get("publication_candidate_ready_for_chat_rows")},
         {"metric":"cumulative_candidate_memory_count","value":len(candidate_memory_rows)},
         {"metric":"publication_ready_current_run_count","value":sum(1 for r in new_posts if str(r.get("image_publication_ready")) == "true")},
         {"metric":"publication_ready_cumulative_count","value":sum(1 for r in candidate_memory_rows if str(r.get("image_publication_ready")) == "true")},
@@ -5891,6 +6237,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
     compact_current_run_shortlist = [compact_shortlist_row(r) for r in final_shortlist]
     compact_final_shortlist = [candidate_memory_shortlist_row(r, i) for i, r in enumerate(candidate_memory_top, start=1)] or compact_current_run_shortlist
+    publication_queue_sheet = publication_candidate_rows or [{"_sheet_note":"no publication candidate rows yet; requires nonlocal text candidate + actual scored image + Gemini final verification"}]
+    publication_confirmed_sheet = [r for r in publication_candidate_rows if str(r.get("publication_candidate_status") or "") in PUBLICATION_CONFIRMED_STATUSES] or [{"_sheet_note":"no Gemini-confirmed publication candidates yet"}]
     manual_review_queue = candidate_memory_top or compact_current_run_shortlist or [{"_sheet_note":"no active candidate memory/manual review rows yet"}]
     candidate_memory_sheet = candidate_memory_rows or [{"_sheet_note":"candidate memory is empty; no current or previous candidate rows reached memory criteria"}]
     candidate_memory_top_sheet = candidate_memory_top or [{"_sheet_note":"no active candidate memory rows"}]
@@ -5966,6 +6314,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_queue_only_telegram_vk", "source_queue_only_target_source_urls", "image_queue_total", "image_queue_cursor_position",
         "image_queue_target_this_run", "image_queue_selected_next_batch", "image_queue_actual_scored_total",
         "image_queue_needs_actual_fetch_total",
+        "publication_goal_status", "publication_confirmed_count", "publication_goal_target",
+        "publication_candidate_rows", "publication_candidate_confirmed_rows", "publication_candidate_ready_for_chat_rows",
+        "publication_llm_calls_used_this_run", "publication_llm_calls_used_total", "publication_llm_budget_remaining",
     ]:
         product_summary.append({"metric": metric, "value": summary_row.get(metric)})
     keyword_discovery_sheet = keyword_discovery_rows or [{"_sheet_note":"no Telegram keyword discovery rows in this run", "method_status": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_keyword_discovery_status", "not_run")}]
@@ -5989,6 +6340,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "04a_final_shortlist":compact_final_shortlist,
         "04a_current_run_shortlist":compact_current_run_shortlist,
         "04a_final_shortlist_raw":candidate_memory_top or final_shortlist,
+        "04p_publication_queue":publication_queue_sheet,
+        "04q_publication_confirmed":publication_confirmed_sheet,
         "04b_needs_llm_retry":llm_error_sheet_rows,
         "04c_debug_rejects":debug_rejects,
         "05_favorites":favorites_sheet,

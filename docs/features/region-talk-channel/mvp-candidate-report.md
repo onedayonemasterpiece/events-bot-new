@@ -151,6 +151,21 @@ Rows may enter this sheet only when the semantic gate accepted the post and imag
 
 Uncompacted raw rows behind `04a_final_shortlist`, kept for debugging score/gate details without making the main review screen unreadable.
 
+### `04p_publication_queue`
+
+Product-goal queue for the current 20-link objective. Rows are built by joining
+candidate memory/text-vector/source evidence with `RegionTalkImageDiagnostic`
+actual-image scores. This sheet is ranked top-down by publication score and
+shows `publication_candidate_status`, Gemini Lite verifier decision, visual/text
+scores, diversity penalty, `goal_stop_candidate`, and `sent_to_chat`.
+
+### `04q_publication_confirmed`
+
+Confirmed subset of `04p_publication_queue`: Gemini-accepted rows and rows that
+have already been sent to the operator chat. This is the lightweight shortlist
+to inspect when the objective is “find 20 strong post links”, not a public
+auto-publish queue.
+
 ### `04_review_queue`
 
 Main human review screen. Columns must stay short and readable:
@@ -500,6 +515,9 @@ Region Talk is a cumulative discovery/research process, not a single-run-only re
 New/clarified workbook sheets:
 
 - `04a_current_run_shortlist` — compact shortlist from the current run only; `04a_final_shortlist` is the cumulative active candidate-memory shortlist.
+- `04p_publication_queue` / `04q_publication_confirmed` — product-goal ranked
+  queue and Gemini-confirmed shortlist built after ImageDiagnostic actual-image
+  scoring.
 - `06a_candidate_memory` — all accumulated candidate-memory rows, including text-accepted/image-pending/good-text-weak-media/publication-ready/manual-keep rows.
 - `06b_candidate_memory_top` — active cumulative candidate memory for human review.
 - `07b_prev_candidates_not_refetch` — Excel-safe name for previous candidates not refetched this run; the longer requested name does not fit Excel's 31-character sheet limit.

@@ -76,6 +76,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("12d_similar_seed_queue", workbook)
             self.assertIn("20_telegram_rate_observability", workbook)
             self.assertIn("04a_current_run_shortlist", workbook)
+            self.assertIn("04p_publication_queue", workbook)
+            self.assertIn("04q_publication_confirmed", workbook)
             self.assertIn("04k_keyword_hit_candidates", workbook)
             self.assertIn("06a_candidate_memory", workbook)
             self.assertIn("06b_candidate_memory_top", workbook)
@@ -795,6 +797,102 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(ms["image_model_runtime"], "external_region_talk_image_diagnostic")
         self.assertEqual(ms["image_model_input_type"], "actual_image")
         self.assertEqual(ms["image_publication_ready"], "true")
+
+    def test_publication_queue_requires_nonlocal_actual_image_and_llm_accept(self) -> None:
+        mod = load_module()
+        rows, goal = mod.build_publication_candidate_queue(
+            [
+                {
+                    "candidate_memory_id": "cm1", "post_id": "p1", "post_url": "https://t.me/travel/1",
+                    "source_id": "s1", "source_title": "Travel", "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger", "post_date": "2026-07-01T00:00:00+00:00",
+                    "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject",
+                    "is_ad_or_promo": False, "vector_gate_status": "vector_accept_candidate",
+                    "vector_content_type": "visit_impression_candidate", "final_verifier_status": "ok",
+                    "final_verifier_decision": "accept", "final_verifier_reason": "подходит",
+                    "has_firsthand_visit_evidence": "true", "emotion_or_impression_evidence": "true",
+                    "review_or_opinion_evidence": "true", "short_summary": "Калининград впечатлил морем",
+                    "matched_place_names": "Калининград", "nonlocal_value_score": 0.8,
+                },
+                {
+                    "candidate_memory_id": "cm2", "post_id": "p2", "post_url": "https://t.me/local/2",
+                    "source_id": "s2", "source_title": "Local", "source_geo_class": "kaliningrad_local",
+                    "source_topic_class": "travel_blogger", "kaliningrad_oblast_only_scope": True,
+                    "vector_gate_status": "vector_accept_candidate", "final_verifier_status": "ok",
+                    "final_verifier_decision": "accept",
+                },
+            ],
+            [
+                {"post_url": "https://t.me/travel/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "overall_media_score": 0.86, "postcardness_score": 0.77, "aesthetic_score": 0.74},
+                {"post_url": "https://t.me/local/2", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "overall_media_score": 0.90, "postcardness_score": 0.88},
+            ],
+            [],
+            {"publication_goal_id": "unit-goal", "target_confirmed": 20, "llm_budget_max": 100},
+            run_id="pub-run",
+            run_now="2026-07-07T00:00:00+00:00",
+            llm_model="gemini-3.1-flash-lite",
+            llm_default_env_var_name="GOOGLE_API_KEY3",
+        )
+        by_url = {r["post_url"]: r for r in rows}
+        self.assertEqual(by_url["https://t.me/travel/1"]["publication_candidate_status"], "llm_confirmed")
+        self.assertEqual(by_url["https://t.me/travel/1"]["visual_confirmation_source"], "RegionTalkImageDiagnostic actual-image scoring")
+        self.assertEqual(by_url["https://t.me/local/2"]["publication_candidate_status"], "filtered_before_llm")
+        self.assertEqual(by_url["https://t.me/local/2"]["why_not_selected"], "local_kaliningrad_source_for_separate_monitoring")
+        self.assertEqual(goal["confirmed_count"], 1)
+        self.assertEqual(goal["llm_calls_used_total"], 0)
+
+    def test_publication_queue_counts_sent_rows_as_confirmed_and_budgeted(self) -> None:
+        mod = load_module()
+        rows, goal = mod.build_publication_candidate_queue(
+            [
+                {
+                    "candidate_memory_id": "cm1", "post_id": "p1", "post_url": "https://t.me/travel/1",
+                    "source_id": "s1", "source_title": "Travel", "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger", "post_date": "2026-07-01T00:00:00+00:00",
+                    "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject",
+                    "is_ad_or_promo": False, "vector_gate_status": "vector_accept_candidate",
+                    "final_verifier_status": "ok", "final_verifier_decision": "accept",
+                    "has_firsthand_visit_evidence": "true", "emotion_or_impression_evidence": "true",
+                    "nonlocal_value_score": 0.8,
+                }
+            ],
+            [
+                {"post_url": "https://t.me/travel/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "overall_media_score": 0.86, "postcardness_score": 0.77}
+            ],
+            [
+                {
+                    "publication_candidate_id": "prev1", "publication_goal_id": "unit-goal",
+                    "post_url": "https://t.me/travel/1", "publication_candidate_status": "sent_to_chat",
+                    "sent_to_chat": "true", "sent_message_id": "123",
+                }
+            ],
+            {"publication_goal_id": "unit-goal", "target_confirmed": 1, "llm_budget_max": 100, "llm_calls_used_total": 7},
+            run_id="pub-run-2",
+            run_now="2026-07-07T00:00:00+00:00",
+            llm_model="gemini-3.1-flash-lite",
+            llm_default_env_var_name="GOOGLE_API_KEY3",
+            current_run_preverified_llm_calls=2,
+        )
+        self.assertEqual(rows[0]["publication_candidate_status"], "sent_to_chat")
+        self.assertEqual(rows[0]["goal_stop_candidate"], "true")
+        self.assertEqual(goal["confirmed_count"], 1)
+        self.assertEqual(goal["sent_count"], 1)
+        self.assertEqual(goal["goal_status"], "complete")
+        self.assertEqual(goal["llm_calls_used_total"], 9)
+        self.assertEqual(goal["llm_calls_used_preverified_this_run"], 2)
+
+    def test_status_event_uses_kaggle_progress_argument(self) -> None:
+        mod = load_module()
+        class Client:
+            def __init__(self) -> None:
+                self.kw = None
+            def event(self, event, **kwargs):
+                self.kw = kwargs
+        st = mod.Status()
+        st.client = Client()
+        st.event("unit_event", phase="unit", status="running", value=1)
+        self.assertIsInstance(st.client.kw.get("progress"), dict)
+        self.assertNotIn("progress_json", st.client.kw)
 
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
