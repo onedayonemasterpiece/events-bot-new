@@ -169,6 +169,56 @@ def region_talk_secret_names(auth_bundle_env: str | None = None) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def getenv_bool(name: str, default: bool = False) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
+def preflight_ydb_access() -> None:
+    if (os.environ.get("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return
+    if not getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
+        return
+    endpoint = (os.environ.get("REGION_TALK_YDB_ENDPOINT") or "").strip().split("?")[0].rstrip("/")
+    database = (os.environ.get("REGION_TALK_YDB_DATABASE") or "").strip()
+    if not endpoint or not database:
+        raise RuntimeError("Region Talk YDB preflight failed: REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE are required")
+    if getenv_bool("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", False) and not (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip():
+        raise RuntimeError("Region Talk YDB preflight failed: REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1 but REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON is not set")
+    try:
+        import ydb  # type: ignore
+        token = (os.environ.get("REGION_TALK_YDB_IAM_TOKEN") or os.environ.get("YC_IAM_TOKEN") or os.environ.get("YDB_ACCESS_TOKEN") or "").strip()
+        key_json = (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip()
+        if key_json:
+            import tempfile
+            import ydb.iam  # type: ignore
+            fd, path = tempfile.mkstemp(prefix="region-talk-ydb-preflight-", suffix=".json")
+            os.close(fd)
+            try:
+                Path(path).write_text(key_json, encoding="utf-8")
+                credentials = ydb.iam.ServiceAccountCredentials.from_file(path)
+            finally:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+        elif token:
+            credentials = ydb.AccessTokenCredentials(token)
+        else:
+            raise RuntimeError("no REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON or REGION_TALK_YDB_IAM_TOKEN/YC_IAM_TOKEN/YDB_ACCESS_TOKEN")
+        driver = ydb.Driver(endpoint=endpoint, database=database, credentials=credentials)
+        try:
+            driver.wait(timeout=int(os.environ.get("REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS") or "20"), fail_fast=True)
+        finally:
+            driver.stop(timeout=5)
+    except Exception as exc:
+        raise RuntimeError(f"Region Talk YDB preflight failed: {type(exc).__name__}: {str(exc)[:240]}") from exc
+    credential_kind = "service_account_key" if (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip() else "access_token"
+    print(f"[region-talk-kaggle] YDB preflight OK credential={credential_kind}", flush=True)
+
+
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
     safe_slug = run_dataset_slug(run_id)
@@ -186,6 +236,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DISABLE_PUBLISH": "1",
         "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "json"),
         "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get("REGION_TALK_REQUIRE_YDB_STATE", "0"),
+        "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": os.environ.get("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0"),
+        "REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS", "20"),
         "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
         "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
@@ -431,6 +483,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
+    os.environ.setdefault("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
@@ -453,6 +506,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
     os.environ.setdefault("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30")
+    preflight_ydb_access()
     kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)
     client = KaggleClient() if KaggleClient is not None else DirectKaggleClient()
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()

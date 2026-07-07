@@ -299,6 +299,11 @@ The XLSX has:
   `REGION_TALK_HF_HUB_DISABLE_XET`). If a pass times out, CandidateReport emits
   `text_embedding_batch_deferred`, writes state/report, and defers scoring
   rather than silently replacing the accepted dual-vector process.
+- For true live-YDB product runs, the CandidateReport Kaggle runner performs a
+  local YDB preflight when `REGION_TALK_REQUIRE_YDB_STATE=1`; set
+  `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` for production-like
+  semi-manual runs so a short-lived/expired user IAM token cannot launch a
+  notebook that later fails to write online state.
 - Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
