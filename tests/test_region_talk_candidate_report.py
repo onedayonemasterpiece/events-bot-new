@@ -834,6 +834,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(compact["posts_deferred"], 473)
         self.assertNotIn("raw_post_text", compact)
 
+    def test_ydb_retention_defaults_bound_snapshots_and_semantic_cache(self) -> None:
+        mod = load_module()
+        old_env = {k: os.environ.get(k) for k in [
+            "REGION_TALK_YDB_RETENTION_PRUNE",
+            "REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST",
+            "REGION_TALK_YDB_SEMANTIC_BANK_KEEP_LAST",
+        ]}
+        calls: list[tuple[str, int, set[str]]] = []
+        original = mod.ydb_prune_kind_keep_latest
+
+        def fake_prune(session, ydb, table_path, kind, keep_last, *, protected_pks=None):
+            calls.append((kind, int(keep_last), set(protected_pks or set())))
+            return 0
+
+        try:
+            for key in old_env:
+                os.environ.pop(key, None)
+            mod.ydb_prune_kind_keep_latest = fake_prune
+            mod.ydb_prune_compact_retention(None, None, "/db/region_talk_state_kv")
+        finally:
+            mod.ydb_prune_kind_keep_latest = original
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+        plan = {kind: keep for kind, keep, _ in calls}
+        self.assertEqual(plan["run_state_snapshot"], 1)
+        self.assertEqual(plan["semantic_bank_embedding"], 4)
+        protected = {kind: pks for kind, _, pks in calls}
+        self.assertIn("queue_cursor:source_scan", protected["queue_cursor"])
+        self.assertIn("queue_cursor:image_diagnostic", protected["queue_cursor"])
+
     def test_candidate_report_delegates_image_scoring_to_ydb_worker_by_default(self) -> None:
         mod = load_module()
         old_mode = os.environ.get("REGION_TALK_IMAGE_SCORING_MODE")

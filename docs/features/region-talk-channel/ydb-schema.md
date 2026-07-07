@@ -241,11 +241,14 @@ Region Talk must keep row-level product state compact:
   excluded from YDB;
 - row payloads use compact field allow-lists and short excerpts/hashes only;
 - large `run_state_snapshot` rows are retention-limited
-  (`REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST`, default `2`) because the durable
+  (`REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST`, default `1`) because the durable
   source/post/image/candidate rows already carry the live product state;
 - ephemeral observability rows are retention-limited:
   `business_event`, per-run `business_heartbeat`, per-run `online_stats`,
   per-run `queue_cursor`, and `run_metrics`;
+- semantic-bank embedding cache rows are retention-limited too
+  (`REGION_TALK_YDB_SEMANTIC_BANK_KEEP_LAST`, default `4`), so model/bank
+  version churn cannot silently consume the shared 1 GB sidecar;
 - protected latest rows such as `latest_state`, `latest_business_heartbeat`,
   `online_stats:latest`, `queue_cursor:source`, `queue_cursor:image`,
   `queue_cursor:source_scan` and `queue_cursor:image_diagnostic` are kept.

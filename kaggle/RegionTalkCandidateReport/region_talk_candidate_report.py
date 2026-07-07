@@ -1600,12 +1600,13 @@ def ydb_prune_compact_retention(session: Any, ydb: Any, table_path: str) -> dict
     if not getenv_bool("REGION_TALK_YDB_RETENTION_PRUNE", True):
         return {}
     plan = {
-        "run_state_snapshot": getenv_int("REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST", 2),
+        "run_state_snapshot": getenv_int("REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST", 1),
         "run_metrics": getenv_int("REGION_TALK_YDB_RUN_METRICS_KEEP_LAST", 20),
         "business_event": getenv_int("REGION_TALK_YDB_BUSINESS_EVENT_KEEP_LAST", 500),
         "business_heartbeat": getenv_int("REGION_TALK_YDB_BUSINESS_HEARTBEAT_KEEP_LAST", 50),
         "online_stats": getenv_int("REGION_TALK_YDB_ONLINE_STATS_KEEP_LAST", 50),
         "queue_cursor": getenv_int("REGION_TALK_YDB_CURSOR_HISTORY_KEEP_LAST", 100),
+        "semantic_bank_embedding": getenv_int("REGION_TALK_YDB_SEMANTIC_BANK_KEEP_LAST", 4),
     }
     protected = {
         "business_heartbeat": {"latest_business_heartbeat"},

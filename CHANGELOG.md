@@ -4,7 +4,8 @@
 - **Region Talk Channel / YDB size retention**: measured compact YDB payload
   growth, documented the 1 GB sidecar budget policy, and added retention pruning
   for large per-run snapshots plus ephemeral business events, stats and cursor
-  histories while preserving stable product rows.
+  histories while preserving stable product rows; tightened the default kept
+  run snapshot count to one and capped semantic-bank embedding cache rows.
 - **Region Talk Channel / live product funnel cursors**: documented the
   operator-facing Region Talk funnel and added live YDB cursor upserts for
   source scanning, rebuilt source/image queues and ImageDiagnostic polling so
