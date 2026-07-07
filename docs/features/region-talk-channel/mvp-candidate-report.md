@@ -621,10 +621,16 @@ are persisted.
 
 CandidateReport report assembly is bounded by
 `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) with periodic
-`REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS` (default `25`) heartbeats. Posts
-fetched beyond the scoring budget are not stored as raw YDB payloads; they are
-visible in the XLSX-only `02b_runtime_deferred_posts` sheet with links/metadata
-so the next bounded run can score them.
+`REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS` (default `5`) heartbeats. The
+scoring loop also checks `REGION_TALK_RUNTIME_RESERVE_DURING_SCORING_SECONDS`
+(default `120`) before each post and emits
+`runtime_budget_vector_scoring_stop` instead of silently overrunning the
+20-minute product run budget. Posts fetched beyond the scoring/runtime budget
+are not stored as raw YDB payloads; they are visible in the XLSX-only
+`02b_runtime_deferred_posts` sheet with links/metadata so the next bounded run
+can score them. Final LLM verification and candidate-memory vector recheck have
+the same heartbeat/runtime-stop discipline so YDB receives partial queues before
+the notebook exits.
 
 Real dual text embeddings remain the required product path when enabled, but
 CandidateReport must run them as sequential model passes: load E5, batch-score

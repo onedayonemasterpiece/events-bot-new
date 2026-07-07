@@ -6,6 +6,10 @@
   for large per-run snapshots plus ephemeral business events, stats and cursor
   histories while preserving stable product rows; tightened the default kept
   run snapshot count to one and capped semantic-bank embedding cache rows.
+- **Region Talk Channel / bounded scoring watchdog**: CandidateReport now emits
+  more frequent vector-scoring heartbeats and stops scoring/final verifier/memory
+  recheck when the runtime reserve is reached, preserving partial YDB queues
+  instead of silently exceeding the semi-manual 20-minute run budget.
 - **Region Talk Channel / live product funnel cursors**: documented the
   operator-facing Region Talk funnel and added live YDB cursor upserts for
   source scanning, rebuilt source/image queues and ImageDiagnostic polling so

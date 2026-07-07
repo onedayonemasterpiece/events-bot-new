@@ -5987,9 +5987,30 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             posts_for_scoring = []
             precomputed_embedding_scores = []
 
+    posts_scored_count = 0
+    scoring_stopped_by_runtime_budget = False
+    vector_heartbeat_every = max(1, getenv_int("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", 5))
+    scoring_runtime_reserve_seconds = getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_SCORING_SECONDS", 120)
     for idx, p in enumerate(posts_for_scoring, start=1):
-        if idx == 1 or idx % max(1, getenv_int("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", 25)) == 0:
-            report_event("vector_scoring_alive", phase="vector_scoring", status="running", progress_label=f"posts {idx}/{len(posts_for_scoring)}", posts_scored=idx, posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts))
+        if not runtime_budget_ok(reserve_seconds=scoring_runtime_reserve_seconds):
+            deferred_now = posts_for_scoring[idx - 1:]
+            runtime_deferred_posts = list(runtime_deferred_posts) + list(deferred_now)
+            scoring_stopped_by_runtime_budget = True
+            report_event(
+                "runtime_budget_vector_scoring_stop",
+                phase="vector_scoring",
+                status="deferred",
+                progress_label=f"runtime budget stop at posts {posts_scored_count}/{len(posts_for_scoring)}",
+                posts_scored=posts_scored_count,
+                posts_to_score=len(posts_for_scoring),
+                posts_deferred=len(runtime_deferred_posts),
+                runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1),
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                runtime_reserve_seconds=scoring_runtime_reserve_seconds,
+            )
+            break
+        if idx == 1 or idx % vector_heartbeat_every == 0:
+            report_event("vector_scoring_alive", phase="vector_scoring", status="running", progress_label=f"posts {idx}/{len(posts_for_scoring)}", posts_scored=idx, posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
         seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or '')) or (seeds[0] if seeds else None)
         text = p.get("text") or ""
         ts = score_text(text)
@@ -6276,6 +6297,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             pre_candidates.append(row)
         else:
             dropped.append(row)
+        posts_scored_count = idx
+
+    if scoring_stopped_by_runtime_budget:
+        posts_for_scoring = posts_for_scoring[:posts_scored_count]
+        precomputed_embedding_scores = precomputed_embedding_scores[:posts_scored_count]
 
     similar_channel_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows") or [])
     similar_channel_edges = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_edges") or [])
@@ -6311,7 +6337,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
     ]
     final_verifier_limit = getenv_int("REGION_TALK_MAX_LLM_FINAL_VERIFY", 10)
-    for r in final_verifier_queue_rows[:max(0, final_verifier_limit)]:
+    if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", 90)):
+        report_event("runtime_budget_final_verifier_skip", phase="final_llm_verifier", status="deferred", final_verifier_queue_count=len(final_verifier_queue_rows), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+        final_verifier_limit = 0
+    final_verifier_heartbeat_every = max(1, getenv_int("REGION_TALK_FINAL_VERIFIER_HEARTBEAT_EVERY_CALLS", 1))
+    for final_idx, r in enumerate(final_verifier_queue_rows[:max(0, final_verifier_limit)], start=1):
+        if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", 90)):
+            report_event("runtime_budget_final_verifier_stop", phase="final_llm_verifier", status="deferred", final_verifier_done=final_idx - 1, final_verifier_queue_count=len(final_verifier_queue_rows), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+            break
+        if final_idx == 1 or final_idx % final_verifier_heartbeat_every == 0:
+            report_event("final_verifier_alive", phase="final_llm_verifier", status="running", final_verifier_done=final_idx - 1, final_verifier_queue_count=len(final_verifier_queue_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
         evidence = {
             "stage": "final_publication_verifier",
             "vector_gate_status": r.get("vector_gate_status"),
@@ -6496,7 +6531,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         row["memory_product_exclusion_reason"] = ""
         return True
 
-    candidate_memory_product_rows = [r for r in candidate_memory_active_rows if memory_product_vector_ok(r)]
+    candidate_memory_product_rows = []
+    memory_recheck_limit = getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", 100)
+    for memory_idx, row in enumerate(candidate_memory_active_rows[:max(0, memory_recheck_limit)], start=1):
+        if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
+            report_event("runtime_budget_memory_vector_recheck_stop", phase="memory_vector_recheck", status="deferred", memory_recheck_done=memory_idx - 1, memory_recheck_total=len(candidate_memory_active_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+            break
+        if memory_idx == 1 or memory_idx % max(1, getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_HEARTBEAT_EVERY_ROWS", 10)) == 0:
+            report_event("memory_vector_recheck_alive", phase="memory_vector_recheck", status="running", memory_recheck_done=memory_idx - 1, memory_recheck_total=len(candidate_memory_active_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+        if memory_product_vector_ok(row):
+            candidate_memory_product_rows.append(row)
     candidate_memory_top = sorted(candidate_memory_product_rows, key=lambda r: (
         str(r.get("not_refetched_this_run") or "") == "true",
         str(r.get("source_geo_class") or "") == "kaliningrad_local",
@@ -6653,7 +6697,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible",
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
-        "posts_scored":len(posts_for_scoring),"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
+        "posts_scored":posts_scored_count,"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
+        "scoring_stopped_by_runtime_budget":str(scoring_stopped_by_runtime_budget).lower(),
         "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true" or str(s.get("fetch_status") or "").startswith(("ok", "error"))),
         "source_count_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
         "source_count_skipped":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("skipped")),
@@ -7211,7 +7256,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "23_vk_wall_setup":vk_wall_setup_sheet,
         "24_source_yield_metrics":source_yield_metrics_sheet,
     }
-    report_event("vector_scoring_done", phase="vector_scoring", status="running", posts_scored=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet))
+    report_event("vector_scoring_done", phase="vector_scoring", status="running", posts_scored=posts_scored_count, posts_deferred=len(runtime_deferred_posts), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet), scoring_stopped_by_runtime_budget=str(scoring_stopped_by_runtime_budget).lower())
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
     report_event("report_write_started", phase="report", status="running", xlsx=str(xlsx), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet))
     write_xlsx(xlsx, sheets)
