@@ -429,6 +429,67 @@ def frontier_dynamic_seeds(previous_state: dict[str, Any], max_items: int) -> li
     return selected
 
 
+def seed_from_unified_queue_row(row: dict[str, Any], idx: int) -> Seed | None:
+    seed = _source_queue_seed_from_row(row)
+    if not seed:
+        return None
+    platform = str(seed.get("platform") or "")
+    handle = canonical_handle(str(seed.get("handle") or seed.get("source_url") or ""))
+    url = str(seed.get("source_url") or seed.get("canonical_url") or "")
+    title = str(seed.get("source_title") or handle or url).strip()
+    if platform == "telegram" and (not handle or "/" in handle.lstrip("@")):
+        return None
+    return Seed(
+        source_seed_id=f"unified_queue_{idx}_{stable_hash(seed.get('canonical_source_key'), length=8)}",
+        platform=platform,
+        source_title=title,
+        handle=handle,
+        url=url,
+        source_kind="unified_source_queue",
+        source_scope_guess="canonical_queue",
+        priority=0,
+        discovered_from=str(row.get("added_from") or "unified_source_queue"),
+        discovered_from_url=str(row.get("source_url") or ""),
+        why_seeded="selected from canonical single Telegram/VK source queue after cursor",
+        expected_value="queue-ordered history scan",
+        known_risks=str(row.get("last_scan_status") or ""),
+        initial_status=str(row.get("source_queue_status") or "pending_scan"),
+        monitoring_enabled=True,
+        rights_policy="unknown",
+        notes=f"queue_order={row.get('queue_order')}; cursor_marker={row.get('cursor_marker')}",
+    )
+
+
+def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
+    rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    if not rows:
+        return []
+    cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    rows = [
+        r for r in rows
+        if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) in {"telegram", "vk"}
+    ]
+    rows = sorted(rows, key=lambda r: (
+        int(r.get("queue_order") or 999999999) <= cursor,
+        str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
+        int(r.get("queue_order") or 999999999),
+    ))
+    selected: list[Seed] = []
+    seen: set[str] = set()
+    for i, row in enumerate(rows, start=1):
+        seed = seed_from_unified_queue_row(row, i)
+        if not seed:
+            continue
+        key = seed.canonical_url
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append(seed)
+        if len(selected) >= max_items:
+            break
+    return selected
+
+
 def source_status_row(seed: Seed, status_value: str, **extra: Any) -> dict[str, Any]:
     return {
         **asdict(seed),
@@ -532,6 +593,20 @@ SOURCE_STATE_FIELDS = [
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
     "confidence", "frontier_priority", "next_action", "blocked_reason", "updated_at", "last_run_id",
 ]
+SOURCE_QUEUE_STATE_FIELDS = [
+    "source_queue_id", "queue_order", "source_queue_status", "status_color_hint", "added_at",
+    "added_from", "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
+    "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
+    "posts_scanned", "ko_posts_found", "candidate_posts_found", "next_action",
+]
+IMAGE_QUEUE_STATE_FIELDS = [
+    "image_queue_id", "image_queue_order", "image_queue_status", "status_color_hint",
+    "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "post_id",
+    "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
+    "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
+    "image_model_input_type", "image_model_type", "media_acquisition_status",
+    "media_acquisition_error_type", "images_scored_actual_count", "next_action",
+]
 POST_STATE_FIELDS = [
     "post_id", "source_id", "source_title", "platform", "platform_post_key", "post_url", "post_date",
     "current_stage", "fresh_enough", "kaliningrad_oblast_only_scope", "matched_place_names",
@@ -578,6 +653,8 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         for k, v in list(candidate_memory.items())[-max_candidates:]
         if isinstance(v, dict)
     }
+    source_queue = state.get("unified_source_queue") if isinstance(state.get("unified_source_queue"), dict) else {}
+    image_queue = state.get("image_candidate_queue") if isinstance(state.get("image_candidate_queue"), dict) else {}
     return {
         "run_id": state.get("run_id"),
         "state_schema_version": "region-talk-ydb-compact-v1",
@@ -590,6 +667,20 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "sources": compact_sources,
         "processed_posts": compact_posts,
         "candidate_memory": compact_candidates,
+        "unified_source_queue_cursor_position": state.get("unified_source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_key": state.get("unified_source_queue_cursor_key", ""),
+        "unified_source_queue": {
+            str(k): compact_record(v, SOURCE_QUEUE_STATE_FIELDS, max_len=700)
+            for k, v in list(source_queue.items())[:max_sources]
+            if isinstance(v, dict)
+        },
+        "image_candidate_queue_cursor_position": state.get("image_candidate_queue_cursor_position", 0),
+        "image_candidate_queue_cursor_key": state.get("image_candidate_queue_cursor_key", ""),
+        "image_candidate_queue": {
+            str(k): compact_record(v, IMAGE_QUEUE_STATE_FIELDS, max_len=700)
+            for k, v in list(image_queue.items())[:max_candidates]
+            if isinstance(v, dict)
+        },
         "source_frontier_queue_next": {
             str(k): compact_record(v, SOURCE_STATE_FIELDS + ["queue_rank", "queue_reason"], max_len=700)
             for k, v in list((state.get("source_frontier_queue_next") or {}).items())[:max_sources]
@@ -1942,6 +2033,291 @@ def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source
         row["queue_rank"] = i
     return final[:100]
 
+
+def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str = "") -> dict[str, Any] | None:
+    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("raw_url") or ""))
+    if platform not in {"telegram", "vk"}:
+        return None
+    url = canonical_source_url(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
+    ckey = str(row.get("canonical_source_key") or canonical_source_key(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), url))
+    if not url or not ckey:
+        return None
+    added_from = default_added_from or str(row.get("discovery_type") or row.get("edge_type") or row.get("source_kind") or row.get("source_type") or "unknown")
+    return {
+        "canonical_source_key": ckey,
+        "platform": platform,
+        "source_url": url,
+        "canonical_url": url,
+        "handle": canonical_handle(str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or url)),
+        "source_title": row.get("source_title") or row.get("title_guess") or row.get("recommended_title") or row.get("resolved_title") or row.get("seed_channel_title") or row.get("source_seed_id") or url,
+        "added_from": added_from,
+        "source_candidate_id": row.get("source_candidate_id") or row.get("frontier_source_id") or "",
+        "source_id": row.get("source_id") or "",
+        "discovery_types": row.get("discovery_types") or row.get("discovery_type") or "",
+        "edge_types_all": row.get("edge_types_all") or row.get("edge_type") or "",
+        "source_priority_score": row.get("source_candidate_score") or row.get("frontier_priority") or row.get("monitor_priority_score") or "",
+    }
+
+
+def _previous_rows_dict(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        return [dict(v) for v in value.values() if isinstance(v, dict)]
+    if isinstance(value, list):
+        return [dict(v) for v in value if isinstance(v, dict)]
+    return []
+
+
+def build_unified_source_queue(
+    previous_state: dict[str, Any],
+    seeds: list[Seed],
+    source_rows: list[dict[str, Any]],
+    source_frontier_unique: list[dict[str, Any]],
+    public_blogger_rows: list[dict[str, Any]],
+    keyword_discovery_rows: list[dict[str, Any]],
+    keyword_post_hit_rows: list[dict[str, Any]],
+    posts_by_source: dict[str, list[dict[str, Any]]],
+    run_id: str,
+    run_now: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build the single human-visible source URL queue.
+
+    Contract: only Telegram/VK sources, deduped by canonical_source_key. Rows
+    discovered by Telegram keyword search are inserted immediately after the
+    persisted cursor so they become the next backlog; all other new sources are
+    appended to the tail. Existing order is preserved.
+    """
+    previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    entries: dict[str, dict[str, Any]] = {}
+
+    def merge_existing(row: dict[str, Any]) -> None:
+        seed = _source_queue_seed_from_row(row)
+        if not seed:
+            return
+        key = seed["canonical_source_key"]
+        order = int(row.get("queue_order") or 0)
+        entries[key] = {**row, **{k: v for k, v in seed.items() if v not in ("", None)}, "queue_order": order}
+
+    for row in sorted(previous_queue_rows, key=lambda r: int(r.get("queue_order") or 999999999)):
+        merge_existing(row)
+
+    def append_or_update(row: dict[str, Any], *, added_from: str) -> bool:
+        seed = _source_queue_seed_from_row(row, default_added_from=added_from)
+        if not seed:
+            return False
+        key = seed["canonical_source_key"]
+        if key in entries:
+            entries[key].update({k: v for k, v in seed.items() if v not in ("", None)})
+            return False
+        next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
+        entries[key] = {
+            **seed,
+            "source_queue_id": "srcq_" + stable_hash(key),
+            "queue_order": next_order,
+            "added_at": run_now,
+            "added_from": added_from,
+            "first_seen_run_id": run_id,
+        }
+        return True
+
+    for s in seeds:
+        append_or_update({**asdict(s), "canonical_url": s.canonical_url, "source_id": s.source_id}, added_from="seed_file")
+    for collection, origin in [
+        (source_rows, "monitored_source"),
+        (source_frontier_unique, "frontier"),
+        (public_blogger_rows, "public_travel_blogger_catalog"),
+    ]:
+        for row in collection:
+            append_or_update(row, added_from=origin)
+
+    keyword_inserted = 0
+    keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or [])
+    missing_keyword: list[dict[str, Any]] = []
+    seen_keyword: set[str] = set()
+    for row in keyword_candidates:
+        seed = _source_queue_seed_from_row(row, default_added_from="telegram_keyword_search")
+        if not seed or seed["platform"] != "telegram" or seed["canonical_source_key"] in entries or seed["canonical_source_key"] in seen_keyword:
+            continue
+        seen_keyword.add(seed["canonical_source_key"])
+        missing_keyword.append(seed)
+    if missing_keyword:
+        for rec in entries.values():
+            if int(rec.get("queue_order") or 0) > prev_cursor:
+                rec["queue_order"] = int(rec.get("queue_order") or 0) + len(missing_keyword)
+        for offset, seed in enumerate(missing_keyword, start=1):
+            key = seed["canonical_source_key"]
+            entries[key] = {
+                **seed,
+                "source_queue_id": "srcq_" + stable_hash(key),
+                "queue_order": prev_cursor + offset,
+                "added_at": run_now,
+                "added_from": "telegram_keyword_search",
+                "first_seen_run_id": run_id,
+                "insertion_policy": "insert_after_cursor",
+            }
+            keyword_inserted += 1
+
+    source_by_key: dict[str, dict[str, Any]] = {}
+    for srow in source_rows:
+        seed = _source_queue_seed_from_row(srow)
+        if seed:
+            source_by_key[seed["canonical_source_key"]] = srow
+    processed_orders: list[int] = []
+    out: list[dict[str, Any]] = []
+    for key, rec in entries.items():
+        srow = source_by_key.get(key) or {}
+        sid = str(srow.get("source_id") or rec.get("source_id") or "")
+        sampled = posts_by_source.get(sid, []) if sid else []
+        ko_posts = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
+        candidate_posts = sum(1 for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES)
+        fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
+        scanned = bool(fetch_status)
+        if scanned:
+            processed_orders.append(int(rec.get("queue_order") or 0))
+        if scanned and (ko_posts > 0 or candidate_posts > 0):
+            qstatus, color, next_action = "processed_found_ko_candidate", "green_found_ko", "prioritize_delta_rescan_or_manual_review_posts"
+        elif scanned and fetch_status == "ok":
+            qstatus, color, next_action = "processed_no_ko", "red_no_ko", "rescan_later_or_deprioritize"
+        elif scanned:
+            qstatus, color, next_action = "needs_rescan_or_retry", "yellow_retry", "retry_or_fix_source_access"
+        else:
+            qstatus, color, next_action = "pending_scan", "white_pending", "scan_when_cursor_reaches_source"
+        out.append({
+            **rec,
+            "source_queue_id": rec.get("source_queue_id") or "srcq_" + stable_hash(key),
+            "source_queue_status": qstatus,
+            "status_color_hint": color,
+            "row_fill_color": color,
+            "last_processed_at": run_now if scanned else rec.get("last_processed_at", ""),
+            "last_scan_run_id": run_id if scanned else rec.get("last_scan_run_id", ""),
+            "last_scan_status": fetch_status,
+            "posts_scanned": int(srow.get("posts_scanned") or len(sampled) or rec.get("posts_scanned") or 0),
+            "ko_posts_found": ko_posts,
+            "candidate_posts_found": candidate_posts,
+            "next_action": next_action,
+        })
+    cursor_position = max([prev_cursor] + processed_orders) if out else 0
+    cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
+    display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" else 1, int(r.get("queue_order") or 0)))
+    next_pending_marked = False
+    for idx, row in enumerate(display_rows, start=1):
+        order = int(row.get("queue_order") or 0)
+        row["display_order"] = idx
+        row["cursor_marker"] = "cursor_here" if order == cursor_position else ""
+        row["is_after_cursor"] = str(order > cursor_position).lower()
+        if not next_pending_marked and order > cursor_position:
+            row["cursor_marker"] = "next_after_cursor"
+            next_pending_marked = True
+    metrics = {
+        "source_queue_total": len(out),
+        "source_queue_pending_total": sum(1 for r in out if r.get("source_queue_status") == "pending_scan"),
+        "source_queue_processed_total": sum(1 for r in out if str(r.get("source_queue_status") or "").startswith("processed")),
+        "source_queue_retry_total": sum(1 for r in out if r.get("source_queue_status") == "needs_rescan_or_retry"),
+        "source_queue_cursor_position": cursor_position,
+        "source_queue_cursor_key": cursor_key,
+        "source_queue_keyword_inserted_this_run": keyword_inserted,
+        "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
+        "source_queue_only_telegram_vk": str(all(r.get("platform") in {"telegram", "vk"} for r in out)).lower(),
+    }
+    return display_rows, metrics
+
+
+def build_image_candidate_queue(
+    previous_state: dict[str, Any],
+    new_posts: list[dict[str, Any]],
+    candidate_memory_rows: list[dict[str, Any]],
+    media_rows: list[dict[str, Any]],
+    run_id: str,
+    run_now: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    previous_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
+    entries: dict[str, dict[str, Any]] = {}
+    prev_cursor = int(previous_state.get("image_candidate_queue_cursor_position") or 0)
+    for row in sorted(previous_queue_rows, key=lambda r: int(r.get("image_queue_order") or 999999999)):
+        key = str(row.get("post_url") or row.get("post_id") or row.get("image_queue_id") or "")
+        if key:
+            entries[key] = dict(row)
+    media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
+
+    def add_or_update(row: dict[str, Any], *, added_from: str) -> None:
+        post_url = str(row.get("post_url") or "")
+        key = post_url or str(row.get("post_id") or "")
+        if not key:
+            return
+        media = media_by_url.get(post_url) or row
+        actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
+        metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
+        status = "actual_scored" if actual else ("needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media")
+        color = "green_found_ko" if actual else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko")
+        if key not in entries:
+            order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
+            entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
+        entries[key].update({
+            "post_id": row.get("post_id", entries[key].get("post_id", "")),
+            "post_url": post_url,
+            "platform_post_key": row.get("platform_post_key", entries[key].get("platform_post_key", "")),
+            "source_id": row.get("source_id", entries[key].get("source_id", "")),
+            "source_title": row.get("source_title", entries[key].get("source_title", "")),
+            "source_url": row.get("source_url", entries[key].get("source_url", "")),
+            "post_date": row.get("post_date", entries[key].get("post_date", "")),
+            "candidate_score": row.get("candidate_score") or row.get("candidate_score_current") or row.get("best_candidate_score_ever") or entries[key].get("candidate_score", ""),
+            "overall_media_score": media.get("overall_media_score", row.get("overall_media_score", entries[key].get("overall_media_score", ""))),
+            "postcardness_score": media.get("postcardness_score", row.get("postcardness_score", entries[key].get("postcardness_score", ""))),
+            "aesthetic_score": media.get("aesthetic_score", row.get("aesthetic_score", entries[key].get("aesthetic_score", ""))),
+            "technical_quality_score": media.get("technical_quality_score", row.get("technical_quality_score", "")),
+            "publication_safety_score": media.get("publication_safety_score", row.get("publication_safety_score", "")),
+            "image_model_input_type": media.get("image_model_input_type", row.get("image_model_input_type", "")),
+            "image_model_type": media.get("image_model_type", row.get("image_model_type", "")),
+            "image_url_or_local_path": media.get("image_url_or_local_path", row.get("primary_media_path", "")),
+            "image_queue_status": status,
+            "status_color_hint": color,
+            "row_fill_color": color,
+            "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else "no_media_or_not_supported"),
+            "media_acquisition_error_type": "" if actual else (media.get("failure_reason") or row.get("failure_reason") or status),
+            "images_scored_actual_count": 1 if actual else 0,
+            "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),
+            "last_attempt_at": run_now if media.get("post_url") else entries[key].get("last_attempt_at", ""),
+            "next_action": "human_review_best_image" if actual else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else "skip_or_manual_open"),
+        })
+
+    for row in new_posts:
+        if row.get("has_media") and not row.get("is_ad_or_promo") and row.get("kaliningrad_oblast_only_scope"):
+            add_or_update(row, added_from="current_run_text_gate")
+    for row in candidate_memory_rows:
+        if row.get("post_url") and (row.get("current_lifecycle_status") in ACTIVE_CANDIDATE_MEMORY_STATUSES or row.get("image_status") == "needs_actual_image_fetch"):
+            add_or_update(row, added_from="candidate_memory")
+    for media in media_rows:
+        if media.get("post_url"):
+            add_or_update(media, added_from="media_scoring")
+
+    processed_orders = [int(r.get("image_queue_order") or 0) for r in entries.values() if r.get("last_attempt_run_id") == run_id or r.get("image_queue_status") == "actual_scored"]
+    cursor_position = max([prev_cursor] + processed_orders) if entries else 0
+    target = getenv_int("REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN", 30)
+    ordered = sorted(entries.values(), key=lambda r: (int(r.get("image_queue_order") or 0)))
+    pending_after_cursor = [r for r in ordered if int(r.get("image_queue_order") or 0) > cursor_position and r.get("image_queue_status") != "actual_scored"]
+    target_ids = {str(r.get("image_queue_id")) for r in pending_after_cursor[:target]}
+    display = sorted(ordered, key=lambda r: (0 if r.get("image_queue_status") == "actual_scored" else 1, int(r.get("image_queue_order") or 0)))
+    for idx, row in enumerate(display, start=1):
+        order = int(row.get("image_queue_order") or 0)
+        row["display_order"] = idx
+        row["cursor_marker"] = "cursor_here" if order == cursor_position else ("next_after_cursor" if order > cursor_position and str(row.get("image_queue_id")) in target_ids else "")
+        row["selected_for_next_image_batch"] = str(str(row.get("image_queue_id")) in target_ids).lower()
+        row["image_queue_batch_target"] = target
+    top = [
+        {"image_rank": i, **r}
+        for i, r in enumerate(sorted([r for r in display if r.get("image_queue_status") == "actual_scored"], key=lambda r: (-float(r.get("overall_media_score") or 0), -float(r.get("postcardness_score") or 0), -float(r.get("aesthetic_score") or 0))), start=1)
+    ]
+    metrics = {
+        "image_queue_total": len(display),
+        "image_queue_cursor_position": cursor_position,
+        "image_queue_target_this_run": target,
+        "image_queue_selected_next_batch": len(target_ids),
+        "image_queue_actual_scored_total": sum(1 for r in display if r.get("image_queue_status") == "actual_scored"),
+        "image_queue_needs_actual_fetch_total": sum(1 for r in display if r.get("image_queue_status") == "needs_actual_image_fetch"),
+    }
+    return display, top, metrics
+
+
 def compact_shortlist_row(r: dict[str, Any]) -> dict[str, Any]:
     return {
         "rank": r.get("human_shortlist_rank") or r.get("rank"),
@@ -2620,7 +2996,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     previous_state, _state_meta = load_region_talk_state(output_dir)
     governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
-    dynamic = frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
+    queue_dynamic = unified_queue_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_SOURCES", max_sources))
+    dynamic = queue_dynamic + frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
     all_seed_candidates = list(seeds)
     seen_seed_urls = {s.canonical_url for s in all_seed_candidates}
     for s in dynamic:
@@ -2629,6 +3006,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             seen_seed_urls.add(s.canonical_url)
     selected = selected_sources_for_run(all_seed_candidates, max_sources)
     _REGION_TALK_TELEGRAM_RUNTIME["dynamic_frontier_seed_count"] = len(dynamic)
+    _REGION_TALK_TELEGRAM_RUNTIME["unified_queue_dynamic_seed_count"] = len(queue_dynamic)
     _REGION_TALK_TELEGRAM_RUNTIME["history_sources_target"] = governor.max_history_sources
     monitored = [s for s in selected if s.platform == "telegram" and (s.handle or "t.me/" in s.url.lower())]
     source_rows: list[dict[str, Any]] = []
@@ -3835,6 +4213,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     similar_seed_queue = build_similar_seed_queue(previous_state, source_rows, candidate_memory_rows, run_id, run_now)
     source_delta_scan_sheet = build_source_delta_scan_sheet(source_rows, previous_state, run_id)
     source_yield_metrics_sheet = build_source_yield_metrics(source_rows, posts_by_source, new_posts)
+    early_keyword_post_hit_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows") or [])
+    unified_source_queue_sheet, unified_source_queue_metrics = build_unified_source_queue(
+        previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
+        keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
+    )
+    image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
+        previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
+    )
     state_to_write = {
         "run_id": run_id,
         "state_schema_version": "region-talk-state-v2",
@@ -3845,7 +4231,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
         "region_talk_sources": {str(r.get("canonical_source_key") or r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
         "source_frontier_queue_next": {str(r.get("canonical_url") or r.get("queue_rank")): r for r in source_frontier_queue_next},
+        "unified_source_queue": {str(r.get("canonical_source_key")): r for r in unified_source_queue_sheet if r.get("canonical_source_key")},
+        "unified_source_queue_cursor_position": unified_source_queue_metrics.get("source_queue_cursor_position", 0),
+        "unified_source_queue_cursor_key": unified_source_queue_metrics.get("source_queue_cursor_key", ""),
         "similar_seed_queue": {str(r.get("similar_seed_id") or r.get("canonical_url")): r for r in similar_seed_queue},
+        "image_candidate_queue": {str(r.get("image_queue_id") or r.get("post_url")): r for r in image_candidate_queue_sheet if r.get("image_queue_id") or r.get("post_url")},
+        "image_candidate_queue_cursor_position": image_queue_metrics.get("image_queue_cursor_position", 0),
+        "image_candidate_queue_cursor_key": next((str(r.get("image_queue_id") or "") for r in image_candidate_queue_sheet if int(r.get("image_queue_order") or 0) == int(image_queue_metrics.get("image_queue_cursor_position") or 0)), ""),
         "candidate_memory": {str(r.get("candidate_memory_id")): r for r in candidate_memory_rows if r.get("candidate_memory_id")},
         "telegram_entity_cache": _REGION_TALK_TELEGRAM_RUNTIME.get("entity_cache") or previous_state.get("telegram_entity_cache") or {},
         "telegram_cooldowns": _REGION_TALK_TELEGRAM_RUNTIME.get("cooldowns") or previous_state.get("telegram_cooldowns") or {},
@@ -4053,6 +4445,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         **state_meta,
         **state_write_meta,
         **all_time_metrics,
+        **unified_source_queue_metrics,
+        **image_queue_metrics,
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]
@@ -4337,6 +4731,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "catalog_import_file_status", "catalog_import_rows_total", "catalog_import_telegram_unique", "catalog_import_vk_unique",
         "keyword_post_hits_raw", "keyword_unique_channels", "keyword_nonlocal_channels", "keyword_hit_posts_sent_to_pipeline",
         "history_cursor_advanced", "delta_cursor_advanced", "keyword_query_cursor_advanced",
+        "source_queue_total", "source_queue_pending_total", "source_queue_processed_total", "source_queue_retry_total",
+        "source_queue_cursor_position", "source_queue_keyword_inserted_this_run", "source_queue_catalog_sources_total",
+        "source_queue_only_telegram_vk", "image_queue_total", "image_queue_cursor_position",
+        "image_queue_target_this_run", "image_queue_selected_next_batch", "image_queue_actual_scored_total",
+        "image_queue_needs_actual_fetch_total",
     ]:
         product_summary.append({"metric": metric, "value": summary_row.get(metric)})
     keyword_discovery_sheet = keyword_discovery_rows or [{"_sheet_note":"no Telegram keyword discovery rows in this run", "method_status": _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_keyword_discovery_status", "not_run")}]
@@ -4370,10 +4769,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "07b_prev_candidates_not_refetch":previous_not_refetched_sheet,
         "08_dropped_posts":dropped,
         "09_image_quality":actual_image_quality_rows or [{"_sheet_note":"no actual-image rows in this run; see 09c_image_quality_debug_fallback"}],
+        "09a_image_candidate_queue":image_candidate_queue_sheet or [{"_sheet_note":"no image candidate queue rows"}],
         "09b_image_fetch_retry_queue":image_retry_queue_sheet,
         "09c_image_debug_fallback":image_quality_debug_rows,
+        "09d_image_driven_top":image_driven_top_sheet or [{"_sheet_note":"no actual-image rows scored yet; image-driven ranking waits for media acquisition"}],
         "10_good_text_weak_media":[r for r in dropped if r.get("current_stage") == "good_text_weak_media"],
         "11_sources_seed":source_seed_rows,
+        "12_source_queue":unified_source_queue_sheet or [{"_sheet_note":"no canonical Telegram/VK source queue rows"}],
         "12_sources_discovered":discovered_rows,
         "12a_source_frontier_unique":source_frontier_unique,
         "12a_active_tg_vk_frontier":active_frontier_tg_vk or [{"_sheet_note":"no active Telegram/VK frontier rows"}],
@@ -4588,6 +4990,13 @@ def write_xlsx_openpyxl(path: Path, sheets: dict[str, list[dict[str, Any]]]) -> 
     header_font = Font(color="FFFFFF", bold=True)
     thin = Side(style="thin", color="D9E2F3")
     header_border = Border(bottom=thin)
+    row_fills = {
+        "white_pending": PatternFill("solid", fgColor="FFFFFF"),
+        "yellow_retry": PatternFill("solid", fgColor="FFF2CC"),
+        "green_found_ko": PatternFill("solid", fgColor="E2F0D9"),
+        "red_no_ko": PatternFill("solid", fgColor="F4CCCC"),
+        "blue_cursor": PatternFill("solid", fgColor="D9EAF7"),
+    }
     used_titles: set[str] = set()
     for sheet_name, raw_rows in sheets.items():
         title = re.sub(r"[:\\/?*\[\]]", "_", str(sheet_name))[:31] or "sheet"
@@ -4608,6 +5017,13 @@ def write_xlsx_openpyxl(path: Path, sheets: dict[str, list[dict[str, Any]]]) -> 
             row = raw if isinstance(raw, dict) else {"value": raw}
             values = [excel_safe_value(row.get(header, "")) for header in headers]
             ws.append(values)
+            fill_key = str(row.get("row_fill_color") or row.get("status_color_hint") or "").strip()
+            if str(row.get("cursor_marker") or "") in {"cursor_here", "next_after_cursor"}:
+                fill_key = "blue_cursor" if str(row.get("cursor_marker") or "") == "cursor_here" else fill_key
+            fill = row_fills.get(fill_key)
+            if fill:
+                for cell in ws[ws.max_row]:
+                    cell.fill = fill
             for idx, value in enumerate(values, start=1):
                 widths[idx] = min(max(widths.get(idx, 0), len(str(value))), 80)
         for cell in ws[1]:

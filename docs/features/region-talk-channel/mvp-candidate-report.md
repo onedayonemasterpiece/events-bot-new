@@ -262,6 +262,24 @@ Columns:
 - `model_id`
 - `model_version`
 
+### `09a_image_candidate_queue`
+
+Single persistent queue for posts/images that need actual media acquisition or
+actual-image scoring. It is separate from the source queue and has its own
+cursor/batch marker. Rows include `image_queue_order`, `cursor_marker`,
+`selected_for_next_image_batch`, `image_queue_status`,
+`media_acquisition_status`, `media_acquisition_error_type`, post/source URLs and
+the latest scoring fields. The default human-sized processing target is
+`REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN=30`.
+
+### `09d_image_driven_top`
+
+Image-first review sheet sorted by actual-image model results, not metadata
+fallback. It lists the best scored images with their source post URL so a human
+can inspect top visual candidates directly or later compare an alternative
+neural scorer. Metadata-only rows must not appear here as successful image
+quality decisions.
+
 ### `10_good_text_weak_media`
 
 Good semantic candidates blocked because images are weak. These never enter the main publication queue in MVP-1.
@@ -277,6 +295,28 @@ New source candidates discovered from links, mentions, forwards, repost attribut
 ### `12a_source_frontier_unique`
 
 De-duplicated source frontier across seeds, link graph, public travel-blogger workbook imports and Telegram similar-channel recommendations. This is the main place to inspect what could be added to monitoring next. Public fields may include `private_state_key` for matching back to private state, but must not include Telegram `channel_id`, `access_hash`, session strings or tokens.
+
+### `12_source_queue`
+
+Canonical product source queue. This is the single reviewer-facing URL list and
+must contain **only** Telegram channels and VK community/wall URLs. It is
+deduped by `canonical_source_key`, carries one `queue_order` cursor, and exposes
+`added_at`, `added_from`, `source_queue_status`, `status_color_hint`,
+`last_scan_status`, `posts_scanned`, `ko_posts_found`,
+`candidate_posts_found` and `next_action`.
+
+Insertion policy:
+
+- existing queue order is preserved;
+- new Telegram sources discovered by Telegram keyword search are inserted
+  immediately after the saved cursor so they are scanned next;
+- catalog/static/similar/link discoveries are appended to the tail;
+- non-Telegram/VK URLs stay out of this sheet and may only appear in diagnostic
+  quarantine sheets.
+
+Visual colors are part of the XLSX contract: white = pending scan, yellow =
+retry/rescan needed, green = processed with Kaliningrad/candidate hits, red =
+processed with no Kaliningrad hits, blue = cursor marker.
 
 ### `12b_telegram_similar_channels`
 
@@ -492,3 +532,24 @@ Source frontier is canonical-key based. Catalog imports, Telegram similar-channe
 The JSONL candidate event contract is stage-first. `candidate_found.jsonl` may contain `new_source_with_ko_post`, `fresh_ko_post_found`, `pre_candidate_created`, `image_reviewable_candidate`, `publication_ready_candidate` and `image_fetch_retry_needed` with `run_id`, `event_at`, `source_id`, `source_title`, `source_url`, `post_id`, `post_url`, `post_date`, `matched_place_names`, `content_type`, `candidate_score`, `media_score`, `stage`, `next_action` and `short_summary`. These are internal review/reporting events only; public publication remains disabled.
 
 Every XLSX/summary must expose product acceleration KPIs for state, discovery, scanning, delta, conversion per 1000 scanned sources, product shortlist/memory/favorites and actual-image retry. Conversion metrics must carry `sample_bias_note` because current runs are priority-biased, not random samples.
+
+## MVP-1.z9 unified queue correction
+
+The product source queue is now `12_source_queue`, not the diagnostic frontier
+tabs. `12a_source_frontier_unique`, `12c_source_frontier_queue_next`,
+`12e_*` and `12g_external_links_quarantine` remain engineering/debug evidence,
+but reviewer acceptance starts with `12_source_queue`.
+
+Summary metrics include `source_queue_total`, pending/processed/retry counts,
+`source_queue_cursor_position`, `source_queue_keyword_inserted_this_run`,
+`source_queue_catalog_sources_total`, `source_queue_only_telegram_vk`,
+`image_queue_total`, `image_queue_cursor_position`,
+`image_queue_target_this_run`, `image_queue_selected_next_batch`,
+`image_queue_actual_scored_total` and `image_queue_needs_actual_fetch_total`.
+
+Kaggle launcher safety: per-run private input datasets use hash-suffixed slugs
+to avoid stale dataset reuse, copy the public blogger workbook from the
+canonical artifact path when running in a linked worktree, and delete temporary
+`region-talk-config-*` / `rt-secret-bundle-*` datasets after a waited run has
+downloaded output. Use `--keep-input-datasets` only for debugging a still-running
+kernel.

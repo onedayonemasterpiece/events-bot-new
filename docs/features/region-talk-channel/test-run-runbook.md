@@ -127,7 +127,7 @@ The runner must prefer cached Telegram entities and stop expanding work when the
 
 For z6 throughput validation, the next real run should target at least `sources_history_fetched_ok >= 25` without bypassing FloodWait/cooldown evidence. If it misses, `00_product_summary` and `20_telegram_rate_observability` must show whether the blocker was network resolve budget, history source budget, cached entity coverage, FloodWait or Telegram errors.
 
-`public_travel_blogger_channel_links.xlsx` is copied into the Kaggle private input dataset by the launcher when present under `artifacts/`. It is imported into source frontier only and deduped in `12a_source_frontier_unique`.
+`public_travel_blogger_channel_links.xlsx` is copied into the Kaggle private input dataset by the launcher when present under `artifacts/` in either the active worktree or canonical `/home/dev/projects/events-bot-new/artifacts/`. Telegram/VK rows are imported into the single canonical `12_source_queue`; non-target URLs stay out of that product queue and may appear only in diagnostic/quarantine sheets.
 
 `REGION_TALK_MAX_LLM_CALLS` is intentionally not part of the authoritative config. The run must reserve/finalize calls through Supabase `google_ai`; local/env counters may not be used as a substitute for the shared limiter.
 
@@ -222,6 +222,7 @@ The XLSX has:
 - LLM-accepted rows with weak media go to `10_good_text_weak_media`.
 - `04b_needs_llm_retry` and `14c_llm_errors` keep useful headers even when there are no retry rows.
 - `09_image_quality` and `19_image_model_observability` must show whether scoring was actual-image local CLIP or metadata fallback.
+- `09a_image_candidate_queue` shows the media-acquisition/scoring cursor and the next ~30 image rows to process; `09d_image_driven_top` is sorted by actual-image model scores only.
 
 
 ## MVP-1.z3 validation checklist
@@ -258,6 +259,7 @@ The XLSX has:
 - `06b_candidate_memory_top`, `21_manual_review_queue` and `22_candidate_deltas` make cumulative review possible even if `04a_current_run_shortlist` is empty.
 - `07b_prev_candidates_not_refetch` shows retained previous candidates skipped by budget/cooldown/not-configured source status.
 - `12c_source_frontier_queue_next` contains a small but nonzero actionable queue from P0/P1/P2 frontier rows; 500+ catalog rows must not be invisible.
+- `12_source_queue` is the canonical single Telegram/VK URL queue: it is deduped, has one cursor, has `added_at`, color/status hints, shows processed rows above pending rows, and imports Telegram/VK rows from `public_travel_blogger_channel_links.xlsx`.
 - Entity-cache observability includes loaded path/write path/hit rate/resolved-source counts.
 - Metadata-only image rows are `needs_actual_image_fetch`, not final weak/strong image decisions.
 - Single-location Kaliningrad cards are not rejected as multi-region roundups.
@@ -265,6 +267,7 @@ The XLSX has:
 
 - Kaggle output download is filtered to report/log/state files by default; media files remain in Kaggle output and are not pulled locally unless `REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN` is overridden.
 - The mounted `region_talk_run_config.json` is authoritative for per-run `REGION_TALK_*` controls, including `REGION_TALK_RUN_ID`, so a stale Kaggle environment cannot rename a fresh run.
+- Waited Kaggle runs delete their temporary private input datasets (`region-talk-config-*`, `rt-secret-bundle-*`) after output download. Use `--keep-input-datasets` only when debugging a still-running kernel; otherwise secret/config datasets must not accumulate in Kaggle.
 
 ## z8/z9 YDB and VK smoke requirements
 

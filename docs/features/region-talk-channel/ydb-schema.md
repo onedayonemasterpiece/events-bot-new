@@ -163,4 +163,8 @@ For the 1 GB sidecar budget, the MVP adapter writes a compact `region_talk_state
 - `run:<run_id>` — compact run snapshot;
 - `metrics:<run_id>` — run/all-time metrics only.
 
-The compact payload keeps source/channel URLs, source cursors, post URLs/platform keys, candidate lifecycle and image scoring metrics. It deliberately excludes raw post text, raw API payload JSON and media bytes because posts/images can be re-fetched from external URLs when needed.
+The compact payload keeps source/channel URLs, source cursors, the canonical
+Telegram/VK `unified_source_queue` + cursor, post URLs/platform keys, candidate
+lifecycle, the `image_candidate_queue` + cursor and image scoring metrics. It
+deliberately excludes raw post text, raw API payload JSON and media bytes
+because posts/images can be re-fetched from external URLs when needed.

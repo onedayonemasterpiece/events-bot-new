@@ -41,12 +41,15 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("docProps/app.xml", names)
             self.assertIn("04_review_queue", workbook)
             self.assertIn("09_image_quality", workbook)
+            self.assertIn("09a_image_candidate_queue", workbook)
             self.assertIn("09b_image_fetch_retry_queue", workbook)
             self.assertIn("09c_image_debug_fallback", workbook)
+            self.assertIn("09d_image_driven_top", workbook)
             self.assertIn("15_manual_decisions", workbook)
             self.assertIn("17_source_graph_edges", workbook)
             self.assertIn("18_place_lexicon_matches", workbook)
             self.assertIn("12a_source_frontier_unique", workbook)
+            self.assertIn("12_source_queue", workbook)
             self.assertIn("12a_active_tg_vk_frontier", workbook)
             self.assertIn("12b_telegram_similar_channels", workbook)
             self.assertIn("12d_similar_seed_queue", workbook)
@@ -76,6 +79,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("previous_state_loaded", summary)
         self.assertIn("sources_primary_scanned_total_all_time", summary)
         self.assertIn("keyword_search_queries_processed", summary)
+        self.assertIn("source_queue_total", summary)
+        self.assertIn("image_queue_total", summary)
         self.assertEqual(summary["favorites_candidates_consistency_status"], "ok")
 
     def test_text_and_media_scoring_strong_region_media(self) -> None:
@@ -484,6 +489,68 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(frontier[0]["canonical_source_key"], "telegram:foo")
         self.assertIn("public_travel_blogger_catalog", frontier[0]["discovery_types"])
         self.assertIn("telegram_similar_channels", frontier[0]["discovery_types"])
+
+    def test_unified_source_queue_only_tg_vk_dedupes_and_inserts_keyword_after_cursor(self) -> None:
+        mod = load_module()
+        seeds = [
+            mod.Seed("seed1", "telegram", "Seed TG", "@seedtg", "https://t.me/seedtg", "", "", 1, "", "", "", "", "", "", True, "", ""),
+            mod.Seed("seed2", "youtube", "YT", "", "https://youtube.com/x", "", "", 1, "", "", "", "", "", "", True, "", ""),
+        ]
+        previous = {
+            "unified_source_queue_cursor_position": 1,
+            "unified_source_queue": {
+                "telegram:old": {"canonical_source_key": "telegram:old", "platform": "telegram", "source_url": "https://t.me/old", "queue_order": 1, "source_queue_status": "processed_no_ko"},
+                "telegram:tail": {"canonical_source_key": "telegram:tail", "platform": "telegram", "source_url": "https://t.me/tail", "queue_order": 2, "source_queue_status": "pending_scan"},
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous,
+            seeds,
+            [{"source_id": "src_old", "platform": "telegram", "canonical_url": "https://t.me/old", "canonical_source_key": "telegram:old", "fetch_status": "ok", "posts_scanned": 2}],
+            [
+                {"platform": "dzen", "canonical_url": "https://dzen.ru/nope", "canonical_source_key": "dzen:nope"},
+                {"platform": "vk", "canonical_url": "https://vk.com/vktravel", "canonical_source_key": "vk:vktravel", "source_candidate_score": 0.5},
+            ],
+            [{"platform": "telegram", "canonical_url": "https://t.me/seedtg", "canonical_source_key": "telegram:seedtg", "discovery_type": "public_travel_blogger_catalog"}],
+            [{"platform": "telegram", "recommended_canonical_url": "https://t.me/keynew", "recommended_username": "keynew", "canonical_source_key": "telegram:keynew"}],
+            [],
+            {"src_old": [{"kaliningrad_oblast_only_scope": False, "current_stage": "dropped_text_gate"}]},
+            "run-q",
+            "2026-07-07T00:00:00+00:00",
+        )
+        self.assertTrue(rows)
+        self.assertEqual(metrics["source_queue_only_telegram_vk"], "true")
+        self.assertNotIn("youtube", {r["platform"] for r in rows})
+        self.assertNotIn("dzen", {r["platform"] for r in rows})
+        orders = {r["canonical_source_key"]: r["queue_order"] for r in rows}
+        self.assertEqual(orders["telegram:keynew"], 2)
+        self.assertGreater(orders["telegram:tail"], orders["telegram:keynew"])
+        self.assertEqual(len([r for r in rows if r["canonical_source_key"] == "telegram:seedtg"]), 1)
+
+    def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
+        mod = load_module()
+        posts = [
+            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "S", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "candidate_score": 0.5}
+            for i in range(35)
+        ]
+        media_rows = [
+            {"post_url": "https://t.me/src/3", "image_model_input_type": "actual_image", "image_model_type": "clip", "overall_media_score": 0.8, "postcardness_score": 0.9, "aesthetic_score": 0.7, "image_url_or_local_path": "/tmp/3.jpg"},
+            {"post_url": "https://t.me/src/4", "image_model_input_type": "metadata_only", "failure_reason": "needs_actual_image_fetch", "overall_media_score": 0.1},
+        ]
+        old_target = os.environ.get("REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN")
+        os.environ["REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN"] = "30"
+        try:
+            queue, top, metrics = mod.build_image_candidate_queue({}, posts, [], media_rows, "run-img", "2026-07-07T00:00:00+00:00")
+        finally:
+            if old_target is None:
+                os.environ.pop("REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN", None)
+            else:
+                os.environ["REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN"] = old_target
+        self.assertEqual(metrics["image_queue_target_this_run"], 30)
+        self.assertLessEqual(metrics["image_queue_selected_next_batch"], 30)
+        self.assertTrue(top)
+        self.assertEqual(top[0]["post_url"], "https://t.me/src/3")
+        self.assertEqual(top[0]["image_queue_status"], "actual_scored")
 
     def test_candidate_found_jsonl_uses_stage_events_schema(self) -> None:
         mod = load_module()

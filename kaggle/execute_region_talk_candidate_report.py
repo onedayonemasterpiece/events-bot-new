@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -141,9 +142,16 @@ def wait_dataset_ready(client: Any, dataset_ref: str, *, expected_files: list[st
     raise TimeoutError(f"dataset not ready: {dataset_ref} status={last_status} files={last_files}")
 
 
+def run_dataset_slug(run_id: str) -> str:
+    """Stable Kaggle dataset slug with a hash suffix to avoid timestamp truncation collisions."""
+    digest = hashlib.sha1(str(run_id).encode("utf-8")).hexdigest()[:8]
+    base = slugify(run_id, max_len=21).strip("-") or "region-talk-run"
+    return f"{base}-{digest}"[:31].strip("-")
+
+
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
-    safe_slug = slugify(run_id, max_len=28)
+    safe_slug = run_dataset_slug(run_id)
     try:
         git_sha = os.popen("git rev-parse HEAD 2>/dev/null").read().strip()
         git_branch = os.popen("git rev-parse --abbrev-ref HEAD 2>/dev/null").read().strip()
@@ -238,9 +246,17 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         shutil.copy2(feature_dir / "seed-sources-v1.csv", folder / "seed-sources-v1.csv")
         shutil.copy2(feature_dir / "seed-sources-v2.csv", folder / "seed-sources-v2.csv")
         shutil.copy2(feature_dir / "kaliningrad-place-lexicon-v1.csv", folder / "kaliningrad-place-lexicon-v1.csv")
-        blogger_links = PROJECT_ROOT / "artifacts" / "public_travel_blogger_channel_links.xlsx"
-        if blogger_links.exists():
-            shutil.copy2(blogger_links, folder / "public_travel_blogger_channel_links.xlsx")
+        blogger_link_candidates = []
+        if os.environ.get("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE"):
+            blogger_link_candidates.append(Path(str(os.environ["REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE"])))
+        blogger_link_candidates.extend([
+            PROJECT_ROOT / "artifacts" / "public_travel_blogger_channel_links.xlsx",
+            Path("/home/dev/projects/events-bot-new/artifacts/public_travel_blogger_channel_links.xlsx"),
+        ])
+        for blogger_links in blogger_link_candidates:
+            if blogger_links.exists():
+                shutil.copy2(blogger_links, folder / "public_travel_blogger_channel_links.xlsx")
+                break
         shutil.copytree(PROJECT_ROOT / "google_ai", folder / "google_ai", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         state_candidates = [
             Path(os.environ["REGION_TALK_STATE_FILE"]) if os.environ.get("REGION_TALK_STATE_FILE") else None,
@@ -268,6 +284,17 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
     wait_dataset_ready(client, config_ref, expected_files=["seed-sources-v1.csv", "seed-sources-v2.csv", "kaliningrad-place-lexicon-v1.csv", "region_talk_run_config.json", "google_ai/__init__.py"])
     wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc", "region_talk_fernet.key"])
     return [config_ref, secret_ref]
+
+
+def cleanup_input_datasets(client: Any, dataset_refs: list[str]) -> None:
+    for dataset_ref in dataset_refs:
+        if not dataset_ref:
+            continue
+        try:
+            client.delete_dataset(dataset_ref)
+            print(f"[region-talk-kaggle] cleaned input dataset {dataset_ref}", flush=True)
+        except Exception as exc:
+            print(f"[region-talk-kaggle] WARNING failed to clean input dataset {dataset_ref}: {type(exc).__name__}: {exc}", flush=True)
 
 
 def kernel_ref_from_meta(kernel_path: Path, *, kernel_slug: str | None = None) -> str:
@@ -326,6 +353,7 @@ def main() -> int:
     ap.add_argument("--no-wait", action="store_true")
     ap.add_argument("--download-output", action="store_true", default=True)
     ap.add_argument("--max-sources", type=int, default=220)
+    ap.add_argument("--keep-input-datasets", action="store_true", help="Do not delete temporary Kaggle config/secret input datasets after a waited run.")
     args = ap.parse_args()
     load_env_file(args.env_file)
     run_id = args.run_id or "region-talk-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -394,7 +422,7 @@ def main() -> int:
     print(f"[region-talk-kaggle] pushing {kernel_ref} run_id={run_id} datasets={len(dataset_sources)}", flush=True)
     client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
     if args.no_wait:
-        print(f"[region-talk-kaggle] pushed {kernel_ref}; not waiting", flush=True)
+        print(f"[region-talk-kaggle] pushed {kernel_ref}; not waiting; temporary input datasets retained until run completion: {dataset_sources}", flush=True)
         return 0
     poll_kernel(client, kernel_ref, timeout_minutes=args.timeout_minutes, poll_interval_seconds=args.poll_interval_seconds)
     out_dir = ARTIFACT_ROOT / run_id
@@ -411,6 +439,8 @@ def main() -> int:
         public_latest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(latest, public_latest)
         print(f"[region-talk-kaggle] latest workbook: {public_latest}", flush=True)
+    if not args.keep_input_datasets:
+        cleanup_input_datasets(client, dataset_sources)
     return 0
 
 
