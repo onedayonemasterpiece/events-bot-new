@@ -40,6 +40,7 @@
 ## Research / rollout
 
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
+- `docs/features/event-comment-feedback/README.md` — **Сигналы обсуждения**: docs-first дочерняя фича static-site pages для агрегированной смысловой сводки открытых комментариев к источникам события
 - `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: MVP-0 `event_detail_related`, localStorage + Supabase telemetry/profile без auth
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
 

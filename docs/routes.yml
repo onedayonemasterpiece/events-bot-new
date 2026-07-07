@@ -261,6 +261,7 @@ features:
     astro_preview: docs/features/static-site-pages/astro-preview.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    event_comment_feedback: docs/features/event-comment-feedback/README.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
@@ -298,6 +299,22 @@ features:
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs
+  event_comment_feedback:
+    status: design
+    docs: docs/features/event-comment-feedback/README.md
+    parent_static_site_pages: docs/features/static-site-pages/README.md
+    phrase_bank_v1: docs/features/event-comment-feedback/phrase-bank-v1.md
+    ydb_schema: docs/features/event-comment-feedback/ydb-schema.md
+    llm_verifier_contract: docs/features/event-comment-feedback/llm-verifier-contract.md
+    static_site_contract: docs/features/event-comment-feedback/static-site-contract.md
+    probe_plan: docs/features/event-comment-feedback/probe-plan.md
+    related_post_metrics: docs/features/post-metrics/README.md
+    related_subscriber_acquisition: docs/features/subscriber-acquisition/requirements.md
+    related_unsigned_personalization: docs/features/unsigned-personalization/semantic-vector-retrieval.md
+    related_kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
+    planned_pipeline: event_comment_feedback_discovery
+    planned_probe_script: scripts/probe_event_comment_feedback.py
+
   unsigned_personalization:
     status: design
     docs: docs/features/unsigned-personalization/README.md
