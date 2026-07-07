@@ -103,6 +103,65 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     return ydb, driver, pool, table, out
 
 
+def _json_row_payload(row: Any) -> dict[str, Any]:
+    payload = row.payload_json
+    return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+
+
+def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> list[dict[str, Any]]:
+    q = f"DECLARE $kind AS Utf8; SELECT pk, payload_json FROM `{table}` WHERE kind=$kind LIMIT {max(1, int(limit))};"
+    rows = pool.retry_operation_sync(lambda s: s.transaction(ydb.StaleReadOnly()).execute(q, {"$kind": kind}, commit_tx=True))[0].rows
+    out = []
+    for row in rows:
+        item = _json_row_payload(row)
+        item["_ydb_pk"] = str(row.pk)
+        out.append(item)
+    return out
+
+
+def build_stats_message(limit: int = 20000) -> str:
+    import ydb  # type: ignore
+    endpoint, database = ydb_endpoint_database()
+    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb.AccessTokenCredentials(ydb_token()))
+    driver.wait(timeout=20, fail_fast=True)
+    pool = ydb.SessionPool(driver)
+    table = ydb_table_path(database)
+    try:
+        sources = read_kind_rows(pool, ydb, table, "source_status_item", limit)
+        if not sources:
+            sources = read_kind_rows(pool, ydb, table, "source_queue_item", limit)
+        posts = read_kind_rows(pool, ydb, table, "processed_post_item", limit)
+        candidates = read_kind_rows(pool, ydb, table, "candidate_memory_item", limit)
+        images = read_kind_rows(pool, ydb, table, "image_queue_item", limit)
+        publications = read_kind_rows(pool, ydb, table, "publication_candidate_item", limit)
+    finally:
+        driver.stop()
+    rejected_status_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
+    rejected_sources = [
+        r for r in sources
+        if str(r.get("fetch_status") or r.get("source_queue_status") or r.get("queue_status") or r.get("frontier_action") or "").startswith(rejected_status_prefixes)
+        or bool(str(r.get("monitoring_exclusion_reason") or "").strip())
+    ]
+    ko_sources = [r for r in sources if int(float(r.get("ko_posts_found") or 0)) > 0]
+    actual_images = [r for r in images if str(r.get("image_model_input_type") or "") == "actual_image" or str(r.get("image_queue_status") or "") == "actual_scored"]
+    strong_images = [r for r in actual_images if float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.66]
+    confirmed = [r for r in publications if str(r.get("publication_candidate_status") or "") in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}]
+    ready_to_send = [r for r in publications if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"]
+    return "\n".join([
+        "📊 Region Talk live YDB stats",
+        f"Каналов/пабликов в базе: {len(sources)}",
+        f"Каналов отброшено/скрыто/ошибка: {len(rejected_sources)}",
+        f"Каналов с постами о Калининградской области: {len(ko_sources)}",
+        f"Постов-кандидатов про Калининградскую область: {len(candidates)}",
+        f"Постов compact processed: {len(posts)}",
+        f"Картинок actual-scored: {len(actual_images)}",
+        f"Сильных картинок: {len(strong_images)}",
+        f"Gemini-confirmed publication candidates: {len(confirmed)}",
+        f"Готово к отправке ссылок: {len(ready_to_send)}",
+        f"updated_at: {datetime.now(timezone.utc).isoformat()}",
+    ])
+
+
 def upsert_sent(pool: Any, ydb: Any, table: str, row: dict[str, Any], message_id: int) -> None:
     now = datetime.now(timezone.utc).isoformat()
     item = dict(row)
@@ -160,7 +219,9 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
     auth = decode_e2e_bundle()
     ydb = driver = pool = table = None
     rows: list[dict[str, Any]] = []
-    if args.message:
+    if args.stats:
+        messages = [build_stats_message(args.stats_limit)]
+    elif args.message:
         messages = [args.message]
     else:
         ydb, driver, pool, table, rows = read_publication_rows(args.limit)
@@ -195,6 +256,8 @@ def main() -> int:
     ap.add_argument("--chat", default=os.getenv("REGION_TALK_NOTIFY_CHAT") or "https://t.me/+kfaIRh98oHVkYWFi")
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--message", default="", help="Send a single status message instead of YDB publication candidates")
+    ap.add_argument("--stats", action="store_true", help="Send live Region Talk YDB statistics instead of candidate links")
+    ap.add_argument("--stats-limit", type=int, default=20000)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     load_env(args.env_file)
