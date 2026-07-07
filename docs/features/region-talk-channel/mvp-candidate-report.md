@@ -619,6 +619,10 @@ fetch status, post counters, vector/report counters (`posts_to_score`,
 `posts_scored`, `posts_deferred`) and final YDB/write summary fields; no secrets
 are persisted.
 
+CandidateReport discovery tail is budget-gated before report assembly:
+`REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)
+keeps similar/keyword discovery from consuming the final vector/report window,
+and keyword search reports `keyword_discovery_alive` progress every few queries.
 CandidateReport report assembly is bounded by
 `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) with periodic
 `REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS` (default `5`) heartbeats. The

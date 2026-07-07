@@ -4178,7 +4178,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
     return rows, edges
 
 
-async def discover_telegram_keyword_sources(client: Any, governor: TelegramRequestGovernor, run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+async def discover_telegram_keyword_sources(client: Any, governor: TelegramRequestGovernor, run_id: str, status: Status | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     mode = (os.getenv("REGION_TALK_DISCOVERY_MODE") or "mixed").strip().lower()
     if mode in {"off", "similar_only"} or not getenv_bool("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", mode in {"mixed", "keyword_only"}):
         _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "disabled"
@@ -4197,12 +4197,16 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
     raw_hits = 0
     try:
         for query in terms[:max(0, max_queries)]:
-            if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
+            if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 420))):
                 _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"
+                if status is not None:
+                    status.event("keyword_discovery_skipped_runtime_budget", phase="keyword_discovery", status="deferred", run_id=run_id, progress_label=f"keyword discovery stopped at query {processed}/{min(len(terms), max_queries)}", keyword_queries_processed=processed, keyword_queries_total=min(len(terms), max_queries), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
                 break
             if not governor.has_total_request_budget("messages.searchGlobal", "keyword_discovery", query):
                 break
             processed += 1
+            if status is not None and (processed == 1 or processed % max(1, getenv_int("REGION_TALK_KEYWORD_DISCOVERY_HEARTBEAT_EVERY_QUERIES", 5)) == 0):
+                status.event("keyword_discovery_alive", phase="keyword_discovery", status="running", run_id=run_id, progress_label=f"keyword query {processed}/{min(len(terms), max_queries)}", keyword_queries_processed=processed, keyword_queries_total=min(len(terms), max_queries), keyword_sources_found=len(rows), keyword_raw_hits=raw_hits, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
             governor.total_attempted += 1
             governor.requests_by_method["messages.searchGlobal"] = governor.requests_by_method.get("messages.searchGlobal", 0) + 1
             try:
@@ -5053,16 +5057,17 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 "fetch_error_code": src_row.get("fetch_error_code", ""),
                 "fetch_error_message": src_row.get("fetch_error_message", ""),
             })
-        if runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
+        discovery_tail_reserve = getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 420)
+        if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
             status.event("similar_discovery_started", phase="similar_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery started")
             similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
         else:
             similar_rows, similar_edges = [], []
             _REGION_TALK_TELEGRAM_RUNTIME["telegram_similar_channels_status"] = "skipped_runtime_budget"
             status.event("similar_discovery_skipped_runtime_budget", phase="similar_discovery", status="deferred", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery skipped: runtime budget")
-        if runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
+        if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
             status.event("keyword_discovery_started", phase="keyword_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="keyword discovery started")
-            keyword_rows, keyword_edges = await discover_telegram_keyword_sources(client, governor, run_id)
+            keyword_rows, keyword_edges = await discover_telegram_keyword_sources(client, governor, run_id, status=status)
         else:
             keyword_rows, keyword_edges = [], []
             _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"

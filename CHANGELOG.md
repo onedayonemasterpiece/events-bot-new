@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / discovery tail budget**: capped the default keyword
+  search fan-out, added keyword-discovery heartbeat events, and gated
+  similar/keyword discovery with a 420-second runtime reserve so a 20-minute
+  CandidateReport run still reaches text-vector/report writing instead of
+  spending the final window on Telegram search.
 - **Region Talk Channel / source rescan budget**: CandidateReport now carries
   YDB row `updated_at` into loaded queue rows and selects source scans by
   due/retry cursor state, so already processed publics such as

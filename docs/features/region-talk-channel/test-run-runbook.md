@@ -113,6 +113,8 @@ REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=100
 REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=1000
 REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY=1
 REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES=30
+REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY=10
+REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS=420
 REGION_TALK_MEDIA_SCORING_MODE=retry_queue_first
 REGION_TALK_ACTUAL_IMAGE_TARGET=30
 REGION_TALK_REQUIRE_PREVIOUS_STATE=1
@@ -291,6 +293,11 @@ The XLSX has:
   unless explicitly changed. Never run two Kaggle kernels against the same
   Telethon auth key.
 - CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, text-embedding model pass events, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage. Real E5+BGE-M3 scoring is sequential by model pass (load/score/release E5, then load/score/release BGE-M3) so Kaggle does not hold both text encoders in memory simultaneously. For model/runtime validation without discovery, run CandidateReport with `REGION_TALK_POST_INPUT_MODE=ydb_candidate_links`, `REGION_TALK_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_DISCOVERY`, `REGION_TALK_DISCOVERY_MODE=off` and a local/non-YDB state backend; this reads only existing YDB candidate/image post links and refetches those public Telegram posts for text.
+- Similar/keyword discovery must leave enough budget for report/vector stages.
+  `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)
+  gates the discovery tail, and keyword discovery emits `keyword_discovery_alive`
+  while consuming `messages.searchGlobal`; do not let keyword search consume the
+  final embedding/report window.
 - Each required text-embedding model pass is bounded by
   `REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS` (default `300`) and runs in
   its own subprocess by default (`REGION_TALK_TEXT_EMBEDDING_SUBPROCESS=1`).
