@@ -169,10 +169,36 @@ lifecycle, the `image_candidate_queue` + cursor and image scoring metrics. It
 deliberately excludes raw post text, raw API payload JSON and media bytes
 because posts/images can be re-fetched from external URLs when needed.
 
-Current compact state schema is `region-talk-ydb-compact-v2`. YDB must not carry
-parallel durable queue processes such as `source_frontier_queue_next` or
-`similar_seed_queue`; those are XLSX/debug/report artifacts only. XLSX-only
-columns (`status_color_hint`, `row_fill_color`) and frontier/debug columns are
-also pruned from durable YDB queue payloads. The Kaggle writer may rewrite old
-compact state rows through the v2 compactor to remove those parasite fields
-without deleting URLs/posts/candidates.
+Current compact state schema is `region-talk-ydb-compact-v3`. The MVP adapter
+keeps the compact snapshots above and additionally writes row-level queue records
+into the same KV table:
+
+- kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
+  canonical Telegram/VK source queue row with `queue_order`, status, status-change
+  fields, cursor display markers, KO/candidate counters and image-quality rollup;
+- kind `image_queue_item`, pk `image_queue_item:<image_queue_id>` — the downstream
+  image-analysis work item for a text-confirmed Kaliningrad-only post, including
+  lease/status fields and actual-image consensus scores;
+- kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
+  quick counts for source and image queues;
+- kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.
+
+`RegionTalkCandidateReport` is the source/source-cursor writer and reads row-level
+items before every report. It does source/text work and consumes already-written
+image scores; it does not run local image-scoring models in normal runs.
+`RegionTalkImageDiagnostic` is an image worker/poller: it leases
+`image_queue_item` rows, writes scores/statuses back, updates the source visual
+rollup on matching `source_queue_item` rows, waits bounded intervals for an empty
+or just-drained queue, and exits after its fixed per-run item budget. Heartbeat
+rows remain observability-only and must not be used as durable queue state.
+
+YDB must not carry parallel durable queue processes such as
+`source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report
+artifacts only. The Kaggle writer may rewrite old compact state rows through the
+v3 compactor to remove parasite legacy queue payloads without deleting
+URLs/posts/candidates. Row-level queue reads must be paginated by `pk`
+(`REGION_TALK_YDB_SELECT_PAGE_SIZE`, default 200) to avoid YDB truncated response
+errors. Row-level queue writes default to changed/current-run rows only
+(`REGION_TALK_YDB_ROW_WRITE_MODE=changed`); use `full` only for a deliberate
+maintenance rewrite, and `REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE=1` for
+snapshot-only recovery.

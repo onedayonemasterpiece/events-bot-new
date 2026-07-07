@@ -653,6 +653,34 @@ def compact_record(row: dict[str, Any], fields: Iterable[str], *, max_len: int =
     return {field: compact_scalar(row.get(field), max_len=max_len) for field in fields if row.get(field) not in (None, "", [], {})}
 
 
+def build_queue_cursor_state(state: dict[str, Any], source_queue: dict[str, Any], image_queue: dict[str, Any]) -> dict[str, Any]:
+    source_rows = [v for v in source_queue.values() if isinstance(v, dict)]
+    image_rows = [v for v in image_queue.values() if isinstance(v, dict)]
+    updated_at = state.get("updated_at") or datetime.now(timezone.utc).isoformat()
+    return {
+        "source": {
+            "queue_name": "unified_source_queue",
+            "cursor_position": int(state.get("unified_source_queue_cursor_position") or 0),
+            "cursor_key": state.get("unified_source_queue_cursor_key") or "",
+            "total": len(source_rows),
+            "pending_total": sum(1 for r in source_rows if r.get("source_queue_status") == "pending_scan"),
+            "processed_total": sum(1 for r in source_rows if str(r.get("source_queue_status") or "").startswith("processed")),
+            "retry_total": sum(1 for r in source_rows if r.get("source_queue_status") == "needs_rescan_or_retry"),
+            "updated_at": updated_at,
+        },
+        "image": {
+            "queue_name": "image_candidate_queue",
+            "cursor_position": int(state.get("image_candidate_queue_cursor_position") or 0),
+            "cursor_key": state.get("image_candidate_queue_cursor_key") or "",
+            "total": len(image_rows),
+            "needs_actual_fetch_total": sum(1 for r in image_rows if r.get("image_queue_status") == "needs_actual_image_fetch"),
+            "in_progress_total": sum(1 for r in image_rows if r.get("image_queue_status") == "image_analysis_in_progress"),
+            "actual_scored_total": sum(1 for r in image_rows if r.get("image_queue_status") == "actual_scored"),
+            "updated_at": updated_at,
+        },
+    }
+
+
 SOURCE_STATE_FIELDS = [
     "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
@@ -661,21 +689,33 @@ SOURCE_STATE_FIELDS = [
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
-    "source_queue_id", "queue_order", "source_queue_status", "added_at",
-    "added_from", "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
+    "source_queue_id", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
+    "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
+    "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
+    "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
-    "posts_scanned", "ko_posts_found", "candidate_posts_found", "next_action",
+    "posts_scanned", "ko_posts_found", "candidate_posts_found",
+    "actual_images_scored_count", "avg_actual_image_score", "low_actual_image_count",
+    "source_image_quality_status", "source_image_quality_min_actual_scored",
+    "source_image_quality_min_avg_score", "monitoring_exclusion_reason",
+    "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
 IMAGE_QUEUE_STATE_FIELDS = [
-    "image_queue_id", "image_queue_order", "image_queue_status",
-    "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "post_id",
+    "image_queue_id", "image_queue_order", "display_order", "image_queue_status", "previous_image_queue_status",
+    "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
+    "cursor_marker", "is_after_cursor", "selected_for_next_image_batch", "image_queue_batch_target",
+    "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "lease_run_id", "lease_at",
+    "last_image_diag_run_id", "last_image_diag_stage", "last_image_diag_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
     "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
     "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
     "is_ad_or_promo", "current_stage", "current_lifecycle_status", "vector_gate_status",
     "vector_content_type", "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
-    "image_model_input_type", "image_model_type", "media_acquisition_status",
-    "media_acquisition_error_type", "images_scored_actual_count", "next_action",
+    "technical_quality_score", "publication_safety_score", "cv_overall_media_score", "clip_postcardness_score",
+    "laion_aesthetic_score", "nima_quality_score", "final_visual_score", "final_visual_status",
+    "model_disagreement_score", "image_width", "image_height",
+    "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
+    "media_acquisition_error_type", "media_fetch_error", "images_scored_actual_count", "next_action",
 ]
 POST_STATE_FIELDS = [
     "post_id", "source_id", "source_title", "platform", "platform_post_key", "post_url", "post_date",
@@ -764,8 +804,8 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     image_queue = state.get("image_candidate_queue") if isinstance(state.get("image_candidate_queue"), dict) else {}
     return {
         "run_id": state.get("run_id"),
-        "state_schema_version": "region-talk-ydb-compact-v2",
-        "queue_contract_version": "unified_source_queue_v1_and_image_candidate_queue_v1",
+        "state_schema_version": "region-talk-ydb-compact-v3",
+        "queue_contract_version": "ydb_row_level_unified_source_queue_v2_and_image_candidate_queue_v2",
         "full_state_schema_version": state.get("state_schema_version"),
         "updated_at": state.get("updated_at"),
         "all_time_metrics": state.get("all_time_metrics") or {},
@@ -789,6 +829,7 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
             for k, v in list(image_queue.items())[:max_candidates]
             if isinstance(v, dict)
         },
+        "queue_cursors": build_queue_cursor_state(state, source_queue, image_queue),
     }
 
 
@@ -949,6 +990,58 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
     )
 
 
+def ydb_upsert_json_many(session: Any, ydb: Any, table_path: str, rows: list[tuple[str, str, dict[str, Any]]], updated_at: str, *, chunk_size: int = 100) -> int:
+    if not rows:
+        return 0
+    query = session.prepare(f"""
+DECLARE $pk AS Utf8;
+DECLARE $kind AS Utf8;
+DECLARE $payload_json AS Json;
+DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at)
+VALUES ($pk, $kind, $payload_json, $updated_at);
+""")
+    written = 0
+    chunk_size = max(1, int(chunk_size or 100))
+    for start in range(0, len(rows), chunk_size):
+        tx = session.transaction(ydb.SerializableReadWrite())
+        for pk, kind, payload in rows[start:start + chunk_size]:
+            tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False)
+            written += 1
+        tx.commit()
+    return written
+
+
+def ydb_select_kind_items(session: Any, ydb: Any, table_path: str, kind: str, *, limit: int = 10000) -> dict[str, dict[str, Any]]:
+    max_items = max(1, int(limit))
+    page_size = max(1, min(max_items, getenv_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200)))
+    out: dict[str, dict[str, Any]] = {}
+    after = ""
+    while len(out) < max_items:
+        query = session.prepare(f"""
+DECLARE $kind AS Utf8;
+DECLARE $after AS Utf8;
+SELECT pk, payload_json FROM `{table_path}`
+WHERE kind = $kind AND pk > $after
+ORDER BY pk
+LIMIT {min(page_size, max_items - len(out))};
+""")
+        result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$kind": kind, "$after": after}, commit_tx=True)
+        rows = result_sets[0].rows if result_sets else []
+        if not rows:
+            break
+        for row in rows:
+            pk = str(row.pk)
+            payload = row.payload_json
+            data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+            if isinstance(data, dict):
+                out[pk] = data
+            after = pk
+        if len(rows) < page_size:
+            break
+    return out
+
+
 def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
     result_sets = session.transaction(ydb.StaleReadOnly()).execute(
         f"SELECT payload_json FROM `{table_path}` WHERE pk = 'latest_state';",
@@ -1005,7 +1098,46 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
             pool = ydb.SessionPool(driver)
             def op(session: Any) -> dict[str, Any]:
                 ensure_ydb_kv_table(ydb, session, table_path)
-                return ydb_select_latest_state(session, ydb, table_path)
+                data0 = ydb_select_latest_state(session, ydb, table_path)
+                # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
+                image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                source_items = ydb_select_kind_items(session, ydb, table_path, "source_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
+                if isinstance(data0, dict):
+                    if image_items:
+                        q = data0.get("image_candidate_queue") if isinstance(data0.get("image_candidate_queue"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in image_items.items():
+                            key = str(item.get("image_queue_id") or item.get("post_url") or _pk.replace("image_queue_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["image_candidate_queue"] = q
+                        data0["ydb_row_level_image_queue_items_loaded"] = len(image_items)
+                    if source_items:
+                        q = data0.get("unified_source_queue") if isinstance(data0.get("unified_source_queue"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in source_items.items():
+                            key = str(item.get("canonical_source_key") or _pk.replace("source_queue_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["unified_source_queue"] = q
+                        data0["ydb_row_level_source_queue_items_loaded"] = len(source_items)
+                    if queue_cursors:
+                        cursors = data0.get("queue_cursors") if isinstance(data0.get("queue_cursors"), dict) else {}
+                        cursors = dict(cursors)
+                        for _pk, item in queue_cursors.items():
+                            name = str(item.get("queue_name") or item.get("name") or _pk.replace("queue_cursor:", ""))
+                            short = "source" if "source" in name else ("image" if "image" in name else name)
+                            cursors[short] = {**(cursors.get(short) or {}), **item}
+                            if short == "source":
+                                data0["unified_source_queue_cursor_position"] = item.get("cursor_position", data0.get("unified_source_queue_cursor_position", 0))
+                                data0["unified_source_queue_cursor_key"] = item.get("cursor_key", data0.get("unified_source_queue_cursor_key", ""))
+                            elif short == "image":
+                                data0["image_candidate_queue_cursor_position"] = item.get("cursor_position", data0.get("image_candidate_queue_cursor_position", 0))
+                                data0["image_candidate_queue_cursor_key"] = item.get("cursor_key", data0.get("image_candidate_queue_cursor_key", ""))
+                        data0["queue_cursors"] = cursors
+                        data0["ydb_queue_cursor_items_loaded"] = len(queue_cursors)
+                return data0
             data = pool.retry_operation_sync(op)
             driver.stop(timeout=5)
             if not isinstance(data, dict) or not data:
@@ -1062,10 +1194,42 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at)
                 ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at)
                 ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at)
+                row_items: list[tuple[str, str, dict[str, Any]]] = []
+                row_write_mode = (os.getenv("REGION_TALK_YDB_ROW_WRITE_MODE") or "changed").strip().lower()
+                skip_row_rewrite = getenv_bool("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", False)
+                current_run_id = str(compact.get("run_id") or "")
+                def should_write_queue_item(item: dict[str, Any], *, item_type: str) -> bool:
+                    if skip_row_rewrite:
+                        return False
+                    if row_write_mode == "full":
+                        return True
+                    if str(item.get("status_changed_this_run") or "").lower() == "true":
+                        return True
+                    if current_run_id and current_run_id in {str(item.get("first_seen_run_id") or ""), str(item.get("last_scan_run_id") or ""), str(item.get("last_attempt_run_id") or ""), str(item.get("last_image_diag_run_id") or ""), str(item.get("source_visual_rollup_run_id") or "")} :
+                        return True
+                    if item_type == "image" and str(item.get("image_queue_status") or "") in {"image_analysis_in_progress", "actual_scored"}:
+                        return True
+                    return False
+                for item in (compact.get("image_candidate_queue") or {}).values():
+                    if isinstance(item, dict) and should_write_queue_item(item, item_type="image"):
+                        key = str(item.get("image_queue_id") or item.get("post_url") or "")
+                        if key:
+                            row_items.append(("image_queue_item:" + key, "image_queue_item", item))
+                for item in (compact.get("unified_source_queue") or {}).values():
+                    if isinstance(item, dict) and should_write_queue_item(item, item_type="source"):
+                        key = str(item.get("canonical_source_key") or item.get("source_queue_id") or "")
+                        if key:
+                            row_items.append(("source_queue_item:" + key, "source_queue_item", item))
+                if not skip_row_rewrite:
+                    for name, item in (compact.get("queue_cursors") or {}).items():
+                        if isinstance(item, dict):
+                            row_items.append(("queue_cursor:" + str(name), "queue_cursor", item))
+                    row_items.append(("queue_metrics:latest", "queue_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "queue_cursors": compact.get("queue_cursors") or {}, "source_queue_total": len(compact.get("unified_source_queue") or {}), "image_queue_total": len(compact.get("image_candidate_queue") or {})}))
+                compact["_ydb_row_level_items_written"] = ydb_upsert_json_many(session, ydb, table_path, row_items, updated_at, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {})}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -1990,7 +2154,7 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
 
 def normalize_image_status(stage: str, ms: dict[str, Any]) -> dict[str, Any]:
     input_type = str(ms.get("image_model_input_type") or "")
-    has_media_fallback = input_type != "actual_image" and str(ms.get("image_download_status") or "") in {"actual_image_missing_or_fallback", "download_failed_or_missing"}
+    has_media_fallback = input_type != "actual_image" and str(ms.get("image_download_status") or "") in {"actual_image_missing_or_fallback", "download_failed_or_missing", "queued_for_region_talk_image_diagnostic"}
     if has_media_fallback:
         return {
             "current_stage": "image_fetch_retry_needed",
@@ -2317,6 +2481,7 @@ def build_unified_source_queue(
     appended to the tail. Existing order is preserved.
     """
     previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     entries: dict[str, dict[str, Any]] = {}
     skipped_non_target_queue_rows = 0
@@ -2416,14 +2581,31 @@ def build_unified_source_queue(
             r for r in sampled
             if r.get("kaliningrad_oblast_only_scope") and not r.get("is_ad_or_promo") and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
         ]
+        source_urls = {str(rec.get("source_url") or ""), str(rec.get("canonical_url") or ""), str(srow.get("source_url") or ""), str(srow.get("canonical_url") or "")}
+        source_urls = {u.rstrip("/") for u in source_urls if u}
+        previous_visual_rows = []
+        for ir in previous_image_queue_rows:
+            ir_source_url = str(ir.get("source_url") or "").rstrip("/")
+            if sid and str(ir.get("source_id") or "") == sid:
+                previous_visual_rows.append(ir)
+            elif ir_source_url and ir_source_url in source_urls:
+                previous_visual_rows.append(ir)
+        visual_rows_all = visual_rows + [r for r in previous_visual_rows if image_queue_text_region_confirmed(r)]
         actual_scores: list[float] = []
-        for vr in visual_rows:
-            if str(vr.get("image_model_input_type") or "") != "actual_image":
+        seen_score_rows: set[str] = set()
+        for vr in visual_rows_all:
+            if str(vr.get("image_model_input_type") or "") != "actual_image" and str(vr.get("image_queue_status") or "") != "actual_scored":
                 continue
+            score_key = str(vr.get("post_url") or vr.get("post_id") or id(vr))
+            if score_key in seen_score_rows:
+                continue
+            seen_score_rows.add(score_key)
             try:
-                actual_scores.append(float(vr.get("overall_media_score") or 0))
+                actual_scores.append(float(vr.get("overall_media_score") or vr.get("final_visual_score") or 0))
             except Exception:
                 pass
+        ko_posts = max(ko_posts, int(rec.get("ko_posts_found") or 0), sum(1 for r in previous_visual_rows if image_queue_text_region_confirmed(r)))
+        candidate_posts = max(candidate_posts, int(rec.get("candidate_posts_found") or 0), sum(1 for r in previous_visual_rows if image_queue_text_region_confirmed(r) and str(r.get("current_stage") or "") in CANDIDATE_MEMORY_STAGES))
         actual_n = len(actual_scores) if actual_scores else int(rec.get("actual_images_scored_count") or 0)
         avg_score = round(sum(actual_scores) / len(actual_scores), 3) if actual_scores else rec.get("avg_actual_image_score", "")
         low_count = sum(1 for x in actual_scores if x < image_quality_min_score) if actual_scores else int(rec.get("low_actual_image_count") or 0)
@@ -2443,7 +2625,8 @@ def build_unified_source_queue(
             image_quality_source_status = "no_ko_posts_yet"
             monitoring_exclusion_reason = ""
         fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
-        scanned = bool(fetch_status)
+        previous_queue_status = str(rec.get("source_queue_status") or "")
+        scanned = bool(fetch_status) or previous_queue_status.startswith("processed") or bool(rec.get("last_processed_at")) or actual_n > 0 or ko_posts > 0 or candidate_posts > 0
         if scanned:
             processed_orders.append(int(rec.get("queue_order") or 0))
         if scanned and image_quality_source_status == "exclude_low_image_quality":
@@ -2456,10 +2639,15 @@ def build_unified_source_queue(
             qstatus, color, next_action = "needs_rescan_or_retry", "yellow_retry", "retry_or_fix_source_access"
         else:
             qstatus, color, next_action = "pending_scan", "white_pending", "scan_when_cursor_reaches_source"
+        previous_status = str(rec.get("source_queue_status") or "")
+        status_changed = bool(previous_status and previous_status != qstatus)
         out.append({
             **rec,
             "source_queue_id": rec.get("source_queue_id") or "srcq_" + stable_hash(key),
             "source_queue_status": qstatus,
+            "previous_source_queue_status": previous_status if status_changed else rec.get("previous_source_queue_status", ""),
+            "status_changed_this_run": str(status_changed).lower(),
+            "last_status_changed_at": run_now if status_changed or not rec.get("last_status_changed_at") else rec.get("last_status_changed_at"),
             "status_color_hint": color,
             "row_fill_color": color,
             "last_processed_at": run_now if scanned else rec.get("last_processed_at", ""),
@@ -2476,6 +2664,7 @@ def build_unified_source_queue(
             "source_image_quality_min_avg_score": image_quality_min_score,
             "monitoring_exclusion_reason": monitoring_exclusion_reason,
             "next_action": next_action,
+            "queue_item_updated_at": run_now,
         })
     cursor_position = max([prev_cursor] + processed_orders) if out else 0
     cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
@@ -2574,12 +2763,22 @@ def build_image_candidate_queue(
         media = media_by_url.get(post_url) or row
         actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
         metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
-        status = "actual_scored" if actual else ("needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media")
-        color = "green_found_ko" if actual else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko")
         if key not in entries:
             order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
             entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
+        previous_status = str(entries[key].get("image_queue_status") or "")
+        if actual or previous_status == "actual_scored":
+            status = "actual_scored"
+        elif previous_status == "image_analysis_in_progress":
+            status = "image_analysis_in_progress"
+        else:
+            status = "needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media"
+        color = "green_found_ko" if status == "actual_scored" else ("blue_cursor" if status == "image_analysis_in_progress" else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko"))
+        status_changed = bool(previous_status and previous_status != status)
         entries[key].update({
+            "previous_image_queue_status": previous_status if status_changed else entries[key].get("previous_image_queue_status", ""),
+            "status_changed_this_run": str(status_changed).lower(),
+            "last_status_changed_at": run_now if status_changed or not entries[key].get("last_status_changed_at") else entries[key].get("last_status_changed_at"),
             "post_id": row.get("post_id", entries[key].get("post_id", "")),
             "post_url": post_url,
             "platform_post_key": row.get("platform_post_key", entries[key].get("platform_post_key", "")),
@@ -2602,10 +2801,10 @@ def build_image_candidate_queue(
             "overall_media_score": media.get("overall_media_score", row.get("overall_media_score", entries[key].get("overall_media_score", ""))),
             "postcardness_score": media.get("postcardness_score", row.get("postcardness_score", entries[key].get("postcardness_score", ""))),
             "aesthetic_score": media.get("aesthetic_score", row.get("aesthetic_score", entries[key].get("aesthetic_score", ""))),
-            "technical_quality_score": media.get("technical_quality_score", row.get("technical_quality_score", "")),
-            "publication_safety_score": media.get("publication_safety_score", row.get("publication_safety_score", "")),
-            "image_model_input_type": media.get("image_model_input_type", row.get("image_model_input_type", "")),
-            "image_model_type": media.get("image_model_type", row.get("image_model_type", "")),
+            "technical_quality_score": media.get("technical_quality_score", row.get("technical_quality_score", entries[key].get("technical_quality_score", ""))),
+            "publication_safety_score": media.get("publication_safety_score", row.get("publication_safety_score", entries[key].get("publication_safety_score", ""))),
+            "image_model_input_type": media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
+            "image_model_type": media.get("image_model_type", row.get("image_model_type", entries[key].get("image_model_type", ""))),
             "image_url_or_local_path": media.get("image_url_or_local_path", row.get("primary_media_path", "")),
             "image_queue_status": status,
             "status_color_hint": color,
@@ -2615,7 +2814,8 @@ def build_image_candidate_queue(
             "images_scored_actual_count": 1 if actual else 0,
             "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),
             "last_attempt_at": run_now if media.get("post_url") else entries[key].get("last_attempt_at", ""),
-            "next_action": "human_review_best_image" if actual else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else "skip_or_manual_open"),
+            "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else "skip_or_manual_open")),
+            "queue_item_updated_at": run_now,
         })
 
     for row in new_posts:
@@ -2639,6 +2839,7 @@ def build_image_candidate_queue(
         order = int(row.get("image_queue_order") or 0)
         row["display_order"] = idx
         row["cursor_marker"] = "cursor_here" if order == cursor_position else ("next_after_cursor" if order > cursor_position and str(row.get("image_queue_id")) in target_ids else "")
+        row["is_after_cursor"] = str(order > cursor_position).lower()
         row["selected_for_next_image_batch"] = str(str(row.get("image_queue_id")) in target_ids).lower()
         row["image_queue_batch_target"] = target
     top = [
@@ -3093,7 +3294,63 @@ def image_scores_skipped(reason: str) -> dict[str, Any]:
 
 
 def current_image_scoring_mode() -> str:
-    return (os.getenv("REGION_TALK_IMAGE_SCORING_MODE") or "cv_aesthetic_clip").strip().lower() or "cv_aesthetic_clip"
+    return (os.getenv("REGION_TALK_IMAGE_SCORING_MODE") or "external_ydb_queue").strip().lower() or "external_ydb_queue"
+
+
+def _external_image_queue_pending_scores(has_media: bool, *, reason_prefix: str = "") -> dict[str, Any]:
+    reason = "queued_for_region_talk_image_diagnostic" if has_media else "no_media"
+    prefix = (reason_prefix + "; ") if reason_prefix else ""
+    return {
+        "technical_quality_score":0.0,"aesthetic_score":0.0,"postcardness_score":0.0,"region_visual_relevance_score":0.0,
+        "publication_safety_score":1.0 if has_media else 0.0,"low_noise_score":0.0,"overall_media_score":0.0,
+        "is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false",
+        "image_quality_bucket":"metadata_pending_actual_image" if has_media else "no_media",
+        "recognized_visual_elements":"",
+        "model_short_explanation":prefix + "CandidateReport does not run image models; actual-image scoring is delegated to RegionTalkImageDiagnostic via YDB image_queue_item.",
+        "failure_reason":"needs_actual_image_fetch" if has_media else "no_media",
+        "model_id":"external_region_talk_image_diagnostic","model_version":"2026-07-07",
+        "image_model_type":"external_ydb_queue","image_model_runtime":"not_run_in_candidate_report",
+        "image_model_input_type":"metadata_only" if has_media else "none",
+        "image_scoring_mode": current_image_scoring_mode(),"image_model_device":"not_run",
+        "image_download_status":reason,
+    }
+
+
+def _image_scores_from_ydb_queue(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    if str(row.get("image_queue_status") or "") != "actual_scored" and str(row.get("image_model_input_type") or "") != "actual_image":
+        return None
+    try:
+        overall = float(row.get("overall_media_score") or row.get("final_visual_score") or 0)
+    except Exception:
+        overall = 0.0
+    if overall <= 0:
+        return None
+    postcard = row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score") or overall
+    aesthetic = row.get("aesthetic_score") or row.get("laion_aesthetic_score") or row.get("cv_aesthetic_score") or overall
+    technical = row.get("technical_quality_score") or row.get("cv_technical_quality_score") or overall
+    selected = overall >= float(os.getenv("REGION_TALK_IMAGE_PUBLICATION_READY_MIN_SCORE", "0.72"))
+    reviewable = selected or overall >= float(os.getenv("REGION_TALK_IMAGE_REVIEWABLE_MIN_SCORE", "0.55"))
+    return {
+        "technical_quality_score":technical,"aesthetic_score":aesthetic,"postcardness_score":postcard,
+        "region_visual_relevance_score":row.get("region_visual_relevance_score") or postcard,
+        "publication_safety_score":row.get("publication_safety_score") or 0.98,"low_noise_score":row.get("low_noise_score") or row.get("cv_low_noise_score") or "",
+        "overall_media_score":round(overall,3),"is_selected_for_publication":selected,"image_publication_ready":str(selected).lower(),
+        "image_reviewable":str(reviewable).lower(),"image_quality_bucket":"publication_ready" if selected else ("reviewable_image" if reviewable else "weak_image"),
+        "recognized_visual_elements":"actual image scored by RegionTalkImageDiagnostic",
+        "model_short_explanation":"Actual-image score read from YDB image_queue_item written by RegionTalkImageDiagnostic.",
+        "failure_reason":"" if reviewable else "below_reviewable_image_threshold",
+        "model_id":row.get("image_model_type") or "region_talk_image_diagnostic_consensus",
+        "model_version":"2026-07-07","image_model_type":row.get("image_model_type") or "multi_model_visual_consensus",
+        "image_model_runtime":"external_region_talk_image_diagnostic","image_model_input_type":"actual_image",
+        "image_scoring_mode": current_image_scoring_mode(),"image_model_device":row.get("image_model_device") or "external",
+        "image_download_status":"downloaded_actual_image",
+        "media_acquisition_status":row.get("media_acquisition_status") or "actual_image_downloaded_and_scored",
+        "images_scored_actual_count":row.get("images_scored_actual_count") or 1,
+        "final_visual_score":row.get("final_visual_score") or overall,
+        "model_disagreement_score":row.get("model_disagreement_score") or "",
+    }
 
 
 def _metadata_media_scores(has_media: bool, text_score: dict[str, Any], *, reason_prefix: str = "") -> dict[str, Any]:
@@ -3318,6 +3575,9 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
 
 def media_scores(has_media: bool, text_score: dict[str, Any], post: dict[str, Any] | None = None) -> dict[str, Any]:
     mode = current_image_scoring_mode()
+    allow_local_models = getenv_bool("REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING", False)
+    if not allow_local_models or mode in {"external_ydb_queue", "off", "queue_only"}:
+        return _external_image_queue_pending_scores(has_media, reason_prefix="candidate_report_image_models_disabled")
     post = post or {}
     image_path = str(post.get("primary_media_path") or "").strip()
     if mode in {"cv_aesthetic_clip", "clip", "cv_aesthetic_clip_vlm"} and has_media and image_path and Path(image_path).exists():
@@ -4375,6 +4635,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     llm_supabase_unavailable = llm_limit_snapshot.get("llm_limit_source") == "supabase_required_unavailable"
     previous_state, state_meta = load_region_talk_state(output_dir)
     previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
+    previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
+    previous_image_scores_by_url = {str(r.get("post_url") or ""): r for r in previous_image_queue_rows if str(r.get("post_url") or "")}
     previous_discovered = previous_state.get("discovered_sources") if isinstance(previous_state.get("discovered_sources"), dict) else {}
     updated_posts_state: dict[str, Any] = dict(previous_posts)
     updated_discovered_state: dict[str, Any] = dict(previous_discovered)
@@ -4560,7 +4822,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             visual_stage = "scored_after_vector_text_gates_before_final_llm"
             visual_skip_reason = ""
             image_cost_saved = False
-            ms = media_scores(bool(p.get("has_media")), ts, p)
+            ms = _image_scores_from_ydb_queue(previous_image_scores_by_url.get(str(p.get("post_url") or ""))) or media_scores(bool(p.get("has_media")), ts, p)
             initial_image_status_fields = normalize_image_status(current_stage, ms)
             if initial_image_status_fields.get("image_status") == "needs_actual_image_fetch":
                 ms = {**ms, **initial_image_status_fields}

@@ -88,7 +88,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         text_score = mod.score_text("Калининград и Куршская коса: красивый маршрут, море, дюны и архитектура")
         media = mod.media_scores(True, text_score)
         self.assertGreater(text_score["region_relevance_score"], 0)
-        self.assertGreaterEqual(media["postcardness_score"], 0.72)
+        self.assertEqual(media["postcardness_score"], 0.0)
+        self.assertEqual(media["image_model_type"], "external_ydb_queue")
+        self.assertEqual(media["image_model_runtime"], "not_run_in_candidate_report")
         self.assertFalse(media["is_selected_for_publication"])
         self.assertEqual(media["image_publication_ready"], "false")
         self.assertEqual(media["image_reviewable"], "false")
@@ -479,7 +481,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else: os.environ["REGION_TALK_YDB_NAMESPACE"] = old_namespace
         blob = json.dumps(compact, ensure_ascii=False)
         self.assertIn("processed_posts", compact)
-        self.assertEqual(compact["state_schema_version"], "region-talk-ydb-compact-v2")
+        self.assertEqual(compact["state_schema_version"], "region-talk-ydb-compact-v3")
+        self.assertEqual(compact["queue_contract_version"], "ydb_row_level_unified_source_queue_v2_and_image_candidate_queue_v2")
+        self.assertIn("queue_cursors", compact)
         self.assertIn("unified_source_queue", compact)
         self.assertIn("image_candidate_queue", compact)
         self.assertNotIn("source_frontier_queue_next", compact)
@@ -489,8 +493,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn("RAW SOURCE DESC", blob)
         self.assertNotIn("raw_payload_json", blob)
         self.assertNotIn("frontier_status", blob)
-        self.assertNotIn("status_color_hint", blob)
-        self.assertNotIn("row_fill_color", blob)
+        self.assertIn("queue_cursors", compact)
 
     def test_vk_wall_uses_service_key_first_and_skips_catalog_paths(self) -> None:
         mod = load_module()
@@ -576,6 +579,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len([r for r in rows if r["canonical_source_key"] == "telegram:seedtg"]), 1)
         self.assertGreaterEqual(metrics["source_queue_non_target_skipped_this_run"], 5)
 
+    def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 1,
+            "unified_source_queue": {
+                "telegram:visual": {
+                    "canonical_source_key": "telegram:visual", "platform": "telegram",
+                    "source_url": "https://t.me/visual", "canonical_url": "https://t.me/visual",
+                    "queue_order": 1, "source_queue_status": "processed_found_ko_candidate",
+                    "ko_posts_found": 1, "candidate_posts_found": 1,
+                },
+            },
+            "image_candidate_queue": {
+                f"img{i}": {
+                    "image_queue_id": f"img{i}", "image_queue_order": i,
+                    "post_url": f"https://t.me/visual/{i}", "source_url": "https://t.me/visual",
+                    "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "semantic_candidate", "image_queue_status": "actual_scored",
+                    "image_model_input_type": "actual_image", "overall_media_score": score,
+                }
+                for i, score in enumerate([0.2, 0.3, 0.4], start=1)
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00")
+        row = next(r for r in rows if r["canonical_source_key"] == "telegram:visual")
+        self.assertEqual(row["actual_images_scored_count"], 3)
+        self.assertEqual(row["source_image_quality_status"], "exclude_low_image_quality")
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_low_image_quality")
+        self.assertEqual(row["status_changed_this_run"], "true")
+        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 1)
+
     def test_source_queue_marks_low_image_quality_sources_for_monitoring_exclusion(self) -> None:
         mod = load_module()
         previous = {
@@ -620,6 +654,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(calls[0]["run_id"], "heartbeat-unit")
         self.assertEqual(calls[0]["phase"], "fetch")
         self.assertIn("event_seq", calls[0])
+
+    def test_candidate_report_delegates_image_scoring_to_ydb_worker_by_default(self) -> None:
+        mod = load_module()
+        old_mode = os.environ.get("REGION_TALK_IMAGE_SCORING_MODE")
+        old_allow = os.environ.get("REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING")
+        try:
+            os.environ.pop("REGION_TALK_IMAGE_SCORING_MODE", None)
+            os.environ.pop("REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING", None)
+            ms = mod.media_scores(True, {"anchor_hits": ["Калининград"], "positive_hits": ["море"]}, {"primary_media_path": "/tmp/nonexistent.jpg"})
+        finally:
+            if old_mode is None: os.environ.pop("REGION_TALK_IMAGE_SCORING_MODE", None)
+            else: os.environ["REGION_TALK_IMAGE_SCORING_MODE"] = old_mode
+            if old_allow is None: os.environ.pop("REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING", None)
+            else: os.environ["REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING"] = old_allow
+        self.assertEqual(ms["image_model_type"], "external_ydb_queue")
+        self.assertEqual(ms["image_model_runtime"], "not_run_in_candidate_report")
+        self.assertEqual(ms["failure_reason"], "needs_actual_image_fetch")
+        self.assertEqual(mod.current_image_scoring_mode(), "external_ydb_queue")
+
+    def test_candidate_report_uses_actual_image_scores_from_ydb_queue(self) -> None:
+        mod = load_module()
+        ms = mod._image_scores_from_ydb_queue({
+            "image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+            "overall_media_score": 0.81,
+            "clip_postcardness_score": 0.83,
+            "laion_aesthetic_score": 0.79,
+            "cv_technical_quality_score": 0.76,
+            "image_model_type": "multi_model_visual_consensus",
+        })
+        self.assertIsNotNone(ms)
+        self.assertEqual(ms["image_model_runtime"], "external_region_talk_image_diagnostic")
+        self.assertEqual(ms["image_model_input_type"], "actual_image")
+        self.assertEqual(ms["image_publication_ready"], "true")
 
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()

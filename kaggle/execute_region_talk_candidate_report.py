@@ -205,11 +205,11 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": os.environ.get("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "2000"),
         "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": os.environ.get("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1"),
         "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": os.environ.get("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "80"),
-        "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip"),
+        "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "external_ydb_queue"),
         "REGION_TALK_MEDIA_SCORING_MODE": os.environ.get("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first"),
         "REGION_TALK_MEDIA_RETRY_FIRST": os.environ.get("REGION_TALK_MEDIA_RETRY_FIRST", "1"),
         "REGION_TALK_ACTUAL_IMAGE_TARGET": os.environ.get("REGION_TALK_ACTUAL_IMAGE_TARGET", "60"),
-        "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1"),
+        "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "0"),
         "REGION_TALK_VK_READ_SERVICE_FIRST": os.environ.get("REGION_TALK_VK_READ_SERVICE_FIRST", "1"),
         "REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK": os.environ.get("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
@@ -387,11 +387,11 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_NEW_FRONTIER_PER_RUN", "2000")
     os.environ.setdefault("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1")
     os.environ.setdefault("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "80")
-    os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "cv_aesthetic_clip")
+    os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "external_ydb_queue")
     os.environ.setdefault("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first")
     os.environ.setdefault("REGION_TALK_MEDIA_RETRY_FIRST", "1")
     os.environ.setdefault("REGION_TALK_ACTUAL_IMAGE_TARGET", "60")
-    os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1")
+    os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "0")
     os.environ.setdefault("REGION_TALK_VK_READ_SERVICE_FIRST", "1")
     os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")

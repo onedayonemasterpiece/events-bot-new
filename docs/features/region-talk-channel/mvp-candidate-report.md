@@ -593,22 +593,63 @@ kernel.
 YDB business heartbeat: when `REGION_TALK_STATE_BACKEND=ydb`, every
 `Status.event(...)` also upserts compact online progress to
 `latest_business_heartbeat`, `business_heartbeat:<run_id>` and, by default,
-`business_event:<run_id>:<seq>`. This is the primary live observability channel
-for manual Kaggle runs because Kaggle `kernels_logs` can be empty while the
-kernel is still `RUNNING`. Heartbeat payloads include phase/status,
-`progress_label`, current source title/url/handle, source counters, fetch status,
-post counters and final YDB/write summary fields; no secrets are persisted.
+`business_event:<run_id>:<seq>`. Heartbeat is **observability only**: it helps
+watch a running Kaggle job when `kernels_logs` are empty, but it is not the
+source of truth for queues, scores or cursor state. Heartbeat payloads include
+phase/status, `progress_label`, current source title/url/handle, source counters,
+fetch status, post counters and final YDB/write summary fields; no secrets are
+persisted.
 
 YDB compact state is process state, not a mirror of every XLSX/debug tab.
-Schema `region-talk-ydb-compact-v2` persists `unified_source_queue` +
-`unified_source_queue_cursor_*`, `image_candidate_queue` +
-`image_candidate_queue_cursor_*`, compact source cursors/links, processed post
-links/keys, candidate lifecycle and metrics. Legacy queue-like structures such
-as `source_frontier_queue_next`, `similar_seed_queue`, XLSX-only color fields and
-frontier/debug columns must not be durable YDB queue state. The writer runs a
-bounded prune pass (`REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS=1`) that
-rewrites old compact snapshots to this contract without deleting source/post or
-candidate data.
+Schema `region-talk-ydb-compact-v3` persists the single Telegram/VK
+`unified_source_queue`, the downstream text-confirmed `image_candidate_queue`,
+compact source/post/candidate lifecycle state and `queue_cursors`. In addition
+to `latest_state`, the writer upserts row-level records so parallel notebooks can
+exchange work without treating Kaggle as a black box:
+
+- `source_queue_item:<canonical_source_key>` / kind `source_queue_item`: one
+  durable row per Telegram channel or VK community/wall source, including
+  `queue_order`, `source_queue_status`, `status_changed_this_run`,
+  `last_status_changed_at`, `ko_posts_found`, `candidate_posts_found`,
+  image-quality rollup fields and next action.
+- `image_queue_item:<image_queue_id>` / kind `image_queue_item`: one durable row
+  per text-confirmed Kaliningrad-only post/image candidate, including lease
+  fields, acquisition status, actual-image model scores and final visual status.
+- `queue_cursor:source`, `queue_cursor:image` / kind `queue_cursor`: current
+  cursor positions, cursor keys and queue totals.
+- `queue_metrics:latest` / kind `queue_metrics`: compact latest queue totals for
+  quick probes.
+
+`RegionTalkCandidateReport` reads `latest_state` and overlays row-level
+`source_queue_item`, `image_queue_item` and `queue_cursor` rows before building
+the workbook. It owns source discovery, source/text scanning, vector/text gates
+and final workbook assembly; it must not run local image-scoring models by
+default. Default config is `REGION_TALK_IMAGE_SCORING_MODE=external_ydb_queue`,
+`REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=0`, and local CandidateReport image
+models require explicit `REGION_TALK_CANDIDATE_REPORT_ALLOW_IMAGE_MODEL_SCORING=1`
+for a debug-only run.
+
+`RegionTalkImageDiagnostic` is the dedicated image worker. It reads/leases
+`image_queue_item` rows, writes actual-image consensus scores back to those rows,
+and updates visual rollups on matching `source_queue_item` rows. In YDB mode it
+acts as a bounded poller: if the queue is empty at startup it waits up to
+`REGION_TALK_IMAGE_DIAG_WAIT_INITIAL_SECONDS` (default 600) checking every
+`REGION_TALK_IMAGE_DIAG_POLL_INTERVAL_SECONDS` (default 60); after draining
+available rows it waits up to `REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS`
+(default 600) for newly queued candidates. The run is capped by
+`REGION_TALK_IMAGE_DIAG_MAX_ITEMS_PER_RUN` and `REGION_TALK_IMAGE_DIAG_BATCH_SIZE`
+so it cannot become an infinite worker. This makes visible deltas such as “new
+communities added”, “source status changed”, “new image rows appeared” and
+“images scored” available online in YDB before the final XLSX is downloaded.
+
+Legacy queue-like structures such as `source_frontier_queue_next` and
+`similar_seed_queue` must not be durable YDB queue state. Frontier/debug sheets
+remain XLSX/report artifacts only. The writer runs a bounded prune pass
+(`REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS=1`) that rewrites old compact
+snapshots to this contract without deleting source/post or candidate data.
+Row-level reads are paginated to avoid YDB `TruncatedResponseError`. Row-level
+writes default to changed/current-run queue items; full rewrites are an explicit
+maintenance mode, not normal notebook behavior.
 
 ## Vector-first product quality correction
 
