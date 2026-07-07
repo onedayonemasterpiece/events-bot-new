@@ -3602,17 +3602,165 @@ def candidate_score(text_score: dict[str, Any], media: dict[str, Any], seed: See
     return round(max(0.0, min(1.0, score)), 3)
 
 
+def parse_public_telegram_post_url(url: str) -> tuple[str, int] | None:
+    m = re.match(r"^https?://t\.me/([A-Za-z0-9_]+)/([0-9]+)(?:\?.*)?$", str(url or "").strip())
+    if not m:
+        return None
+    handle = m.group(1).strip()
+    if not handle or handle == "c":
+        return None
+    return handle, int(m.group(2))
+
+
+def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
+    cfg = ydb_config_status()
+    if cfg.get("missing"):
+        return []
+    try:
+        ydb, driver, cfg = ydb_connect()
+        table_path = ydb_kv_table_path(cfg)
+        pool = ydb.SessionPool(driver)
+        def op(session: Any) -> list[dict[str, Any]]:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            rows: list[dict[str, Any]] = []
+            for kind in ("candidate_memory_item", "image_queue_item"):
+                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, limit * 2))
+                for pk, payload in items.items():
+                    if not isinstance(payload, dict):
+                        continue
+                    url = str(payload.get("post_url") or "").strip()
+                    if not url:
+                        continue
+                    rows.append({"_pk": pk, "_kind": kind, **payload})
+            return rows
+        raw_rows = pool.retry_operation_sync(op)
+        driver.stop(timeout=5)
+    except Exception:
+        return []
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    def rank(row: dict[str, Any]) -> tuple[int, str]:
+        status = str(row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
+        pri = 0 if status == "actual_scored" else 1 if "image" in status else 2
+        return pri, str(row.get("post_date") or "")
+    for row in sorted(raw_rows, key=rank):
+        url = str(row.get("post_url") or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any, output_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
+    limit = getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180))
+    rows = ydb_candidate_link_rows_from_row_kv(limit)
+    status.event("ydb_candidate_links_loaded", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_to_score=min(limit, len(rows)), progress_label=f"YDB candidate links {len(rows)}")
+    posts: list[dict[str, Any]] = []
+    source_stats: dict[str, dict[str, Any]] = {}
+    entity_cache: dict[str, Any] = {}
+    for idx, row in enumerate(rows, start=1):
+        url = str(row.get("post_url") or "")
+        parsed = parse_public_telegram_post_url(url)
+        if not parsed:
+            continue
+        handle, mid = parsed
+        stat = source_stats.setdefault(handle, {"handle": handle, "source_title": row.get("source_title") or handle, "attempted": 0, "ok": 0, "errors": 0, "last_seen_post_date": ""})
+        stat["attempted"] += 1
+        status.event("alive", phase="fetch", status="running", run_id=run_id, progress_label=f"YDB post links {idx}/{len(rows)} · {handle}/{mid}", sources_done=idx - 1, sources_total=len(rows), current_source_handle=handle, current_source_title=stat.get("source_title"), current_source_url=f"https://t.me/{handle}")
+        try:
+            entity = entity_cache.get(handle)
+            if entity is None:
+                entity = await client.get_entity(handle)
+                entity_cache[handle] = entity
+            msg = await client.get_messages(entity, ids=mid)
+            text = str(getattr(msg, "message", None) or "").strip() if msg is not None else ""
+            if not text:
+                stat["errors"] += 1
+                continue
+            dt = getattr(msg, "date", None)
+            has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
+            title = str(getattr(entity, "title", None) or row.get("source_title") or handle)
+            post_date = dt.isoformat() if dt else str(row.get("post_date") or "")
+            posts.append({
+                "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
+                "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
+                "source_seed_id": "ydb_candidate_links",
+                "source_title": title,
+                "platform": "telegram",
+                "handle": handle,
+                "post_url": f"https://t.me/{handle}/{mid}",
+                "platform_post_key": f"tg:{handle}:{mid}",
+                "post_date": post_date,
+                "text": text,
+                "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+                "has_media": has_media,
+                "media_count": 1 if has_media else 0,
+                "primary_media_path": "",
+                "local_media_paths": "",
+                "rights_policy": "unknown",
+                "source_kind": "ydb_candidate_link",
+                "source_type": "ydb_candidate_link",
+                "source_url": f"https://t.me/{handle}",
+                "is_forwarded_or_repost": False,
+                "forwarded_from_source_title": "",
+                "forwarded_from_source_id": "",
+                "forwarded_from_platform": "",
+                "forwarded_from_handle": "",
+                "forwarded_from_url": "",
+                "forwarded_from_post_url": "",
+                "forwarded_from_confidence": 0.0,
+                "original_source_candidate_id": "",
+                "ydb_candidate_link_kind": row.get("_kind") or "",
+                "ydb_candidate_link_pk": row.get("_pk") or "",
+            })
+            stat["ok"] += 1
+            stat["last_seen_post_date"] = max(str(stat.get("last_seen_post_date") or ""), post_date)
+        except Exception as exc:
+            stat["errors"] += 1
+            stat["last_error_code"] = type(exc).__name__
+            stat["last_error_message"] = str(exc)[:180]
+    source_rows = []
+    for handle, stat in source_stats.items():
+        ok = int(stat.get("ok") or 0)
+        errors = int(stat.get("errors") or 0)
+        source_rows.append({
+            "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
+            "source_seed_id": "ydb_candidate_links",
+            "source_title": stat.get("source_title") or handle,
+            "platform": "telegram",
+            "handle": handle,
+            "canonical_url": f"https://t.me/{handle}",
+            "fetch_status": "ok" if ok else "error_ydb_candidate_link_fetch",
+            "fetch_attempted": "true",
+            "posts_scanned": ok,
+            "history_fetch_mode": "ydb_candidate_links_only_no_discovery",
+            "source_probe_reason": "Refetched only post URLs already present in YDB candidate/image queues; no source discovery/history scan.",
+            "last_seen_post_date": stat.get("last_seen_post_date") or "",
+            "fetch_error_code": stat.get("last_error_code", "") if errors else "",
+            "fetch_error_message": stat.get("last_error_message", "") if errors else "",
+            "vk_wall_probe_status": "not_applicable",
+        })
+    status.event("ydb_candidate_posts_fetched", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_fetched=len(posts), sources_scanned=len(source_rows), progress_label=f"YDB candidate posts fetched {len(posts)}/{len(rows)}")
+    return source_rows, posts
+
+
 async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     max_sources = getenv_int("REGION_TALK_MAX_SOURCES", 5)
     max_posts = getenv_int("REGION_TALK_MAX_POSTS_PER_SOURCE", 20)
+    post_input_mode = (os.getenv("REGION_TALK_POST_INPUT_MODE") or os.getenv("REGION_TALK_FETCH_MODE") or "").strip().lower()
     fetch_enabled = getenv_bool("REGION_TALK_FETCH_TELEGRAM", True)
     discovery_mode = (os.getenv("REGION_TALK_DISCOVERY_MODE") or "mixed").strip().lower()
     history_scan_mode = (os.getenv("REGION_TALK_HISTORY_SCAN_MODE") or "primary_and_delta").strip().lower()
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     previous_state, _state_meta = load_region_talk_state(output_dir)
     governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
-    queue_dynamic = unified_queue_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_SOURCES", max_sources))
-    dynamic = queue_dynamic + frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
+    ydb_candidate_links_only = post_input_mode in {"ydb_candidate_links", "ydb_candidates", "candidate_links"}
+    queue_dynamic = [] if ydb_candidate_links_only else unified_queue_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_SOURCES", max_sources))
+    dynamic = [] if ydb_candidate_links_only else queue_dynamic + frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
     all_seed_candidates = list(seeds)
     seen_seed_urls = {s.canonical_url for s in all_seed_candidates}
     for s in dynamic:
@@ -3669,7 +3817,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             for s in monitored:
                 source_rows.append(source_status_row(s, "skipped_telethon_not_installed"))
             return source_rows, posts
-    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_S22").strip()
+    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
     raw = (os.getenv(bundle_env) or "").strip()
     api_id = int((os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID") or "0").strip() or 0)
     api_hash = (os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH") or "").strip()
@@ -3691,6 +3839,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         await client.disconnect()
         raise RuntimeError("Telethon client is not authorized")
     try:
+        if ydb_candidate_links_only:
+            return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir)
         for idx, seed in enumerate(monitored, start=1):
             source_progress = {
                 "phase": "fetch",

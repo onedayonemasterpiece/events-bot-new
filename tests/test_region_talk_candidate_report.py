@@ -663,6 +663,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(calls[0]["phase"], "fetch")
         self.assertIn("event_seq", calls[0])
 
+    def test_parse_public_telegram_post_url_for_ydb_candidate_links(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.parse_public_telegram_post_url("https://t.me/puteshestvuem_rf/14373"), ("puteshestvuem_rf", 14373))
+        self.assertEqual(mod.parse_public_telegram_post_url("http://t.me/travel_yutturizm/36480?single"), ("travel_yutturizm", 36480))
+        self.assertIsNone(mod.parse_public_telegram_post_url("https://t.me/c/123/456"))
+        self.assertIsNone(mod.parse_public_telegram_post_url("https://vk.com/wall-1_2"))
+
     def test_dual_embedding_batch_releases_each_model(self) -> None:
         mod = load_module()
 
