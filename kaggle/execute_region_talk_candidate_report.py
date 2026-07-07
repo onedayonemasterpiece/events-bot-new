@@ -79,8 +79,8 @@ class DirectKaggleClient:
             out["failureMessage"] = failure
         return out
 
-    def download_kernel_output(self, kernel_ref: str, *, path, force=True) -> list[str]:
-        files, _ = self.api.kernels_output(kernel_ref, path=str(path), force=force, quiet=False)
+    def download_kernel_output(self, kernel_ref: str, *, path, force=True, file_pattern: str | None = None) -> list[str]:
+        files, _ = self.api.kernels_output(kernel_ref, path=str(path), force=force, quiet=False, file_pattern=file_pattern)
         return [str(x) for x in files]
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkCandidateReport"
@@ -391,7 +391,11 @@ def main() -> int:
     poll_kernel(client, kernel_ref, timeout_minutes=args.timeout_minutes, poll_interval_seconds=args.poll_interval_seconds)
     out_dir = ARTIFACT_ROOT / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
+    output_file_pattern = os.environ.get(
+        "REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN",
+        r"(^|/)(candidates-latest\.xlsx|output\.json|stage_status\.json|run_events\.jsonl|candidate_found\.jsonl|telegram-request-ledger\.jsonl|region-talk-state\.json|[^/]+\.(xlsx|json|jsonl|md|html|log|csv))$",
+    )
+    files = client.download_kernel_output(kernel_ref, path=out_dir, force=True, file_pattern=output_file_pattern)
     print(f"[region-talk-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
     latest = out_dir / "candidates-latest.xlsx"
     if latest.exists():

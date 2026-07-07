@@ -262,3 +262,6 @@ The XLSX has:
 - Metadata-only image rows are `needs_actual_image_fetch`, not final weak/strong image decisions.
 - Single-location Kaliningrad cards are not rejected as multi-region roundups.
 - Supabase `google_ai` limiter remains authoritative; no direct `GOOGLE KEY2` bypass; no publishing; no secrets in XLSX.
+
+- Kaggle output download is filtered to report/log/state files by default; media files remain in Kaggle output and are not pulled locally unless `REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN` is overridden.
+- The mounted `region_talk_run_config.json` is authoritative for per-run `REGION_TALK_*` controls, including `REGION_TALK_RUN_ID`, so a stale Kaggle environment cannot rename a fresh run.

@@ -4298,8 +4298,14 @@ async def amain() -> int:
     config = load_split_runtime_from_kaggle_input()
     for k, v in (config.get('env') or {}).items():
         if v is not None:
-            os.environ.setdefault(str(k), str(v))
-    run_id = os.getenv('REGION_TALK_RUN_ID') or str(config.get('run_id') or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}")
+            # The Kaggle runtime process can retain or receive environment
+            # variables from an older pushed session. The run config dataset is
+            # the authoritative per-run contract; use it to override non-secret
+            # REGION_TALK/GOOGLE_AI controls while secrets remain loaded through
+            # the encrypted bundle above.
+            os.environ[str(k)] = str(v)
+    run_id = str(config.get('run_id') or os.getenv('REGION_TALK_RUN_ID') or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}")
+    os.environ["REGION_TALK_RUN_ID"] = run_id
     if not getenv_bool('REGION_TALK_DRY_RUN', True):
         raise RuntimeError('REGION_TALK_DRY_RUN=1 is required for MVP-1')
     if not getenv_bool('REGION_TALK_DISABLE_PUBLISH', True):
