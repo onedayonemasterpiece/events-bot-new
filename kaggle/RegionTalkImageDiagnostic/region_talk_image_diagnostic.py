@@ -206,7 +206,20 @@ def ydb_select_image_queue(limit_n: int):
     return ydb_select_kind("image_queue_item", max(1, limit_n*5))
 
 def ydb_select_source_queue(limit_n: int = 10000):
-    return ydb_select_kind("source_queue_item", max(1, limit_n))
+    by_key = {}
+    for row in ydb_select_kind("source_queue_item", max(1, limit_n)):
+        key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_url") or row.get("_ydb_pk") or "")
+        if key:
+            by_key[key] = {**by_key.get(key, {}), **row}
+    # Live CandidateReport writes source/public status aliases immediately while
+    # a run is still in progress. ImageDiagnostic must consume those too, or a
+    # source selected/skipped/updated only through the live-status path will be
+    # invisible to visual rollups until a later final snapshot rewrite.
+    for row in ydb_select_kind("source_status_item", max(1, limit_n)):
+        key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_url") or row.get("_ydb_pk") or "")
+        if key:
+            by_key[key] = {**by_key.get(key, {}), **row}
+    return list(by_key.values())[: max(1, limit_n)]
 
 def text_region_confirmed(r):
     if str(r.get("is_ad_or_promo") or "").lower() in {"true","1","yes"}: return False
@@ -252,14 +265,16 @@ def ydb_upsert_source_rows(batch, *, stage: str):
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
     def op(session):
-        query=session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
-UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'source_queue_item', $payload_json, $updated_at);""")
+        query=session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, $kind, $payload_json, $updated_at);""")
         tx=session.transaction(ydb.SerializableReadWrite())
         for r in batch:
             key=str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("_ydb_pk") or "")
             if not key: continue
             r["source_visual_rollup_run_id"]=RUN_ID; r["source_visual_rollup_updated_at"]=now; r["queue_item_updated_at"]=now
-            tx.execute(query,{"$pk":"source_queue_item:"+key.replace("source_queue_item:",""),"$payload_json":json.dumps(r,ensure_ascii=False),"$updated_at":now},commit_tx=False)
+            clean_key=key.replace("source_queue_item:","").replace("source_status_item:","").replace("online_source_item:","")
+            for kind in ["source_queue_item", "source_status_item"]:
+                tx.execute(query,{"$pk":kind+":"+clean_key,"$kind":kind,"$payload_json":json.dumps(r,ensure_ascii=False),"$updated_at":now},commit_tx=False)
         tx.commit()
     try: pool.retry_operation_sync(op)
     finally: driver.stop(timeout=5)
@@ -267,7 +282,7 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'so
 def ydb_update_source_visual_rollups():
     try:
         image_rows=ydb_select_kind("image_queue_item", int(os.getenv("REGION_TALK_YDB_MAX_CANDIDATE_ROWS") or "5000"))
-        source_rows=ydb_select_kind("source_queue_item", int(os.getenv("REGION_TALK_YDB_MAX_SOURCE_ROWS") or "5000"))
+        source_rows=ydb_select_source_queue(int(os.getenv("REGION_TALK_YDB_MAX_SOURCE_ROWS") or "5000"))
     except Exception as exc:
         log_event("ydb_source_rollup_read_failed", error=type(exc).__name__ + ": " + str(exc)[:300]); return
     if not source_rows:

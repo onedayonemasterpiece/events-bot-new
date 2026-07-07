@@ -244,13 +244,19 @@ that a source/post/image/candidate exists in the product state.
   only.
 
 `RegionTalkCandidateReport` is the source/source-cursor writer and reads row-level
-items before every report. It does source/text work and consumes already-written
-image scores; it does not run local image-scoring models in normal runs.
+items before every report. Source/public state reads must overlay
+`source_queue_item`, `source_status_item` and `online_source_item`; the status
+aliases are not heartbeat-only rows because they may contain live selected,
+skipped, rejected or visual-rollup updates that have not yet been folded into a
+final snapshot. CandidateReport does source/text work and consumes
+already-written image scores; it does not run local image-scoring models in
+normal runs.
 `RegionTalkImageDiagnostic` is an image worker/poller: it leases
 `image_queue_item` rows, writes scores/statuses back, updates the source visual
-rollup on matching `source_queue_item` rows, waits bounded intervals for an empty
-or just-drained queue, and exits after its fixed per-run item budget. Heartbeat
-rows remain observability-only and must not be used as durable queue state.
+rollup on matching `source_queue_item` and `source_status_item` rows, waits
+bounded intervals for an empty or just-drained queue, and exits after its fixed
+per-run item budget. Heartbeat rows remain observability-only and must not be
+used as durable queue state.
 The two notebooks must run with different Telethon auth bundles and must not
 share one Telegram session concurrently.
 

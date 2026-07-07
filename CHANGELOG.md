@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / YDB row-polling coverage**: CandidateReport now
+  overlays `source_status_item` and `online_source_item` with
+  `source_queue_item` when rebuilding live source state, and ImageDiagnostic
+  reads/writes source visual rollups through both source queue and source status
+  rows so operator-visible public statuses are not missed between final
+  snapshots.
 - **Region Talk Channel / live YDB fail-fast**: verified Kaggle→YDB row writes
   with a minimal encrypted-bundle probe and tightened CandidateReport live-YDB
   launcher behavior so `REGION_TALK_STATE_BACKEND=ydb` refuses missing

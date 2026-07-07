@@ -1478,6 +1478,40 @@ def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str
     return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
 
 
+def merge_ydb_source_queue_status_items(
+    data: dict[str, Any],
+    *item_sets: dict[str, dict[str, Any]],
+) -> int:
+    """Overlay all source/public live-status row kinds into the durable source queue.
+
+    `source_queue_item` is the canonical queue row, but live runs also write
+    `source_status_item` / `online_source_item` for operator visibility while a
+    notebook is still running. The next CandidateReport run must not ignore
+    those rows, otherwise selected/skipped/status-only publics disappear from
+    the reconstructed live state until a final snapshot rewrite catches up.
+    """
+    q = data.get("unified_source_queue") if isinstance(data.get("unified_source_queue"), dict) else {}
+    q = dict(q)
+    merged = 0
+    for items in item_sets:
+        for _pk, item in (items or {}).items():
+            if not isinstance(item, dict):
+                continue
+            key = str(
+                item.get("canonical_source_key")
+                or item.get("source_queue_id")
+                or item.get("source_id")
+                or item.get("source_url")
+                or _pk.replace("source_queue_item:", "").replace("source_status_item:", "").replace("online_source_item:", "")
+            )
+            if not key:
+                continue
+            q[key] = {**q.get(key, {}), **item}
+            merged += 1
+    data["unified_source_queue"] = q
+    return merged
+
+
 def ydb_prune_legacy_queue_payloads(session: Any, ydb: Any, table_path: str) -> int:
     """Rewrite compact state rows to the current queue contract without deleting data."""
     if not getenv_bool("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", True):
@@ -1526,6 +1560,8 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 source_items = ydb_select_kind_items(session, ydb, table_path, "source_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                source_status_items = ydb_select_kind_items(session, ydb, table_path, "source_status_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                online_source_items = ydb_select_kind_items(session, ydb, table_path, "online_source_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 publication_items = ydb_select_kind_items(session, ydb, table_path, "publication_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 post_items = ydb_select_kind_items(session, ydb, table_path, "processed_post_item", limit=getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000))
                 candidate_items = ydb_select_kind_items(session, ydb, table_path, "candidate_memory_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
@@ -1561,15 +1597,12 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["image_candidate_queue"] = q
                         data0["ydb_row_level_image_queue_items_loaded"] = len(image_items)
-                    if source_items:
-                        q = data0.get("unified_source_queue") if isinstance(data0.get("unified_source_queue"), dict) else {}
-                        q = dict(q)
-                        for _pk, item in source_items.items():
-                            key = str(item.get("canonical_source_key") or _pk.replace("source_queue_item:", ""))
-                            if key:
-                                q[key] = {**q.get(key, {}), **item}
-                        data0["unified_source_queue"] = q
+                    if source_items or source_status_items or online_source_items:
+                        merged_sources = merge_ydb_source_queue_status_items(data0, source_items, source_status_items, online_source_items)
                         data0["ydb_row_level_source_queue_items_loaded"] = len(source_items)
+                        data0["ydb_row_level_source_status_items_loaded"] = len(source_status_items)
+                        data0["ydb_row_level_online_source_items_loaded"] = len(online_source_items)
+                        data0["ydb_row_level_source_queue_status_items_merged"] = merged_sources
                     if source_candidate_items:
                         q = data0.get("discovered_sources") if isinstance(data0.get("discovered_sources"), dict) else {}
                         q = dict(q)

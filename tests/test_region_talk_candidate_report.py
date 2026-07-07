@@ -544,6 +544,50 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn("frontier_status", blob)
         self.assertIn("queue_cursors", compact)
 
+    def test_ydb_source_status_rows_overlay_source_queue_state(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:old": {
+                    "canonical_source_key": "telegram:old",
+                    "source_queue_status": "pending_scan",
+                    "source_title": "Old",
+                }
+            }
+        }
+        merged = mod.merge_ydb_source_queue_status_items(
+            state,
+            {
+                "source_queue_item:telegram:old": {
+                    "canonical_source_key": "telegram:old",
+                    "source_queue_status": "processed_ok",
+                    "ko_posts_found": 1,
+                }
+            },
+            {
+                "source_status_item:telegram:new": {
+                    "canonical_source_key": "telegram:new",
+                    "source_queue_status": "selected_or_observed",
+                    "fetch_status": "selected_for_run",
+                    "source_url": "https://t.me/new",
+                }
+            },
+            {
+                "online_source_item:telegram:live": {
+                    "canonical_source_key": "telegram:live",
+                    "queue_status": "skipped_or_rejected",
+                    "fetch_status": "skipped_fetch_disabled",
+                    "source_url": "https://t.me/live",
+                }
+            },
+        )
+        self.assertEqual(merged, 3)
+        queue = state["unified_source_queue"]
+        self.assertEqual(queue["telegram:old"]["source_queue_status"], "processed_ok")
+        self.assertEqual(queue["telegram:old"]["ko_posts_found"], 1)
+        self.assertEqual(queue["telegram:new"]["fetch_status"], "selected_for_run")
+        self.assertEqual(queue["telegram:live"]["fetch_status"], "skipped_fetch_disabled")
+
     def test_vk_wall_uses_service_key_first_and_skips_catalog_paths(self) -> None:
         mod = load_module()
         old = {k: os.environ.get(k) for k in ["VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_ACCESS_TOKEN", "REGION_TALK_VK_READ_SERVICE_FIRST"]}
