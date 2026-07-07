@@ -1008,6 +1008,15 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
     handle = str(row.get("handle") or row.get("recommended_username") or row.get("username_or_handle") or "")
     title = str(row.get("source_title") or row.get("resolved_title") or row.get("recommended_title") or row.get("discovered_from_source") or handle or url)
     fetch_status = str(status or row.get("fetch_status") or row.get("candidate_source_status") or row.get("frontier_status") or row.get("method_status") or "observed")
+    rejected_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
+    if row.get("source_candidate_id"):
+        queue_status = "candidate"
+    elif fetch_status == "ok":
+        queue_status = "scanned"
+    elif fetch_status.startswith(rejected_prefixes):
+        queue_status = "skipped_or_rejected"
+    else:
+        queue_status = "selected_or_observed"
     payload = {
         "run_id": run_id,
         "updated_at": now,
@@ -1024,7 +1033,7 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "canonical_url": url,
         "source_url": url,
         "fetch_status": fetch_status,
-        "queue_status": "candidate" if row.get("source_candidate_id") else ("scanned" if fetch_status == "ok" else "skipped_or_rejected"),
+        "queue_status": queue_status,
         "frontier_status": row.get("frontier_status") or "",
         "frontier_action": row.get("frontier_action") or "",
         "frontier_reason": row.get("frontier_reason") or row.get("source_probe_reason") or "",
