@@ -9,7 +9,9 @@
   timeout as `llm_gate_status=error` so the notebook can continue to YDB/report
   writes instead of hanging with no new heartbeats. Image-not-ready rows now
   emit non-blocking `final_verifier_deferred_until_image_scoring` and the
-  post-verifier queue assembly path has explicit YDB checkpoints.
+  post-verifier queue assembly path has explicit YDB checkpoints; historical
+  candidate-memory dual-embedding rechecks are disabled by default for the
+  image-queue CandidateReport phase.
 - **Region Talk Channel / image-gated final verifier**: CandidateReport no
   longer calls Gemini Lite final verification for text-only vector candidates;
   final LLM checks are deferred until ImageDiagnostic has produced actual-image

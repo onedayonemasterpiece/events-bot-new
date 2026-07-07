@@ -78,6 +78,8 @@ REGION_TALK_ENABLE_VECTOR_GATES=1
 REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS=1
 REGION_TALK_TARGET_LLM_CALLS=10
 REGION_TALK_MAX_LLM_FINAL_VERIFY=10
+REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0
+REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS=0
 # Debug-only, never for final quality claims:
 # REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES=0
 REGION_TALK_MAX_DISCOVERED_LINKS_PER_RUN=3000
@@ -363,6 +365,12 @@ The XLSX has:
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
   `publication_queue_*`, then `state_write_*`) so a run never stays silent after
   deferring the final verifier.
+- The image-queue CandidateReport phase must not spend time on historical
+  candidate-memory dual-embedding rechecks. Defaults are
+  `REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0` and
+  `REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS=0`; raise them only for a
+  dedicated final-publication pass after ImageDiagnostic has produced
+  `actual_scored` rows.
 - Source scanning must be cursor/due driven, not “top seeds every run”.
   `source_queue_item.source_queue_status=processed_*` plus `_ydb_updated_at`/
   `source_cursors.next_history_scan_at` suppresses immediate re-scan until the

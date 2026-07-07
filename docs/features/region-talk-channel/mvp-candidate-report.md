@@ -537,6 +537,13 @@ Region Talk text quality is now **local/vector-first**. Broad fetched/current-ru
 
 LLM usage is allowed only for compact final verifier/tie-breaker stages (`final_publication_verifier`, `final_human_review_explainer`, `ambiguous_final_tiebreaker`, retry of a previous final verifier) and must remain Supabase-limiter controlled. Default config is `REGION_TALK_ENABLE_EARLY_LLM=0`, `REGION_TALK_ENABLE_VECTOR_GATES=1`, `REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS=1`, `REGION_TALK_MAX_LLM_FINAL_VERIFY=10`, `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS=60`, `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS=1800`, with `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` propagated to the same value unless explicitly overridden. Timeout is a structured `llm_gate_status=error` row outcome, not a notebook hang. The prompt must use compact text/summary fallback and slim image/vector evidence only. XLSX observability exposes `wide_funnel_llm_calls`, `final_verifier_llm_calls`, vector reject counts, `actual_image_scored_before_llm_count`, and `14d_llm_usage_by_stage`; acceptance requires `wide_funnel_llm_calls=0`.
 
+For the image-queue CandidateReport phase, historical candidate-memory vector
+rechecks are disabled by default (`REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0`,
+`REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS=0`) so the job does not run a
+second dual-embedding pass after already scoring the current posts. A final
+publication pass may explicitly enable a small recheck limit after
+ImageDiagnostic has written `actual_scored` rows.
+
 `04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.
 
 ## MVP-1.z6 throughput / hard-region / recursive discovery correction

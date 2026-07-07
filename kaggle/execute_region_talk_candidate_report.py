@@ -331,6 +331,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1"),
         "REGION_TALK_TARGET_LLM_CALLS": os.environ.get("REGION_TALK_TARGET_LLM_CALLS", "10"),
         "REGION_TALK_MAX_LLM_FINAL_VERIFY": os.environ.get("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10"),
+        "REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS": os.environ.get("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", "0"),
+        "REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS": os.environ.get("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", "0"),
         "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": "0",
         "GOOGLE_AI_LOCAL_LIMITER_FALLBACK": "0",
         "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": "0",
@@ -598,6 +600,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1")
     os.environ.setdefault("REGION_TALK_TARGET_LLM_CALLS", "10")
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")
+    os.environ.setdefault("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", "0")
+    os.environ.setdefault("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", "0")
     os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3")
     os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60")

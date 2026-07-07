@@ -6915,13 +6915,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         return True
 
     candidate_memory_product_rows = []
-    memory_recheck_limit = getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", 100)
+    # The regular CandidateReport product step is to refresh text/vector rows and
+    # write image_queue_item records for ImageDiagnostic. Re-checking historical
+    # candidate memory with another dual-embedding pass is expensive and not
+    # needed for that step; enable it explicitly for a final publication pass.
+    memory_recheck_limit = getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", 0)
     memory_recheck_rows = candidate_memory_active_rows[:max(0, memory_recheck_limit)]
     memory_embedding_scores: list[dict[str, Any]] = []
     if (
         memory_recheck_rows
         and vector_gates_enabled
-        and getenv_bool("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", True)
+        and getenv_bool("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", False)
         and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}
         and runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_MEMORY_EMBEDDING_SECONDS", 240))
     ):
@@ -6955,6 +6959,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         embedding_scores = memory_embedding_scores[memory_idx - 1] if memory_idx - 1 < len(memory_embedding_scores) else None
         if memory_product_vector_ok(row, embedding_scores=embedding_scores):
             candidate_memory_product_rows.append(row)
+    if not memory_recheck_rows:
+        report_event(
+            "memory_vector_recheck_skipped",
+            phase="memory_vector_recheck",
+            status="deferred",
+            reason="disabled_for_candidate_report_image_queue_phase",
+            memory_recheck_limit=memory_recheck_limit,
+            candidate_memory_active_rows=len(candidate_memory_active_rows),
+            next_action="enable_REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS_for_final_publication_pass",
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
     candidate_memory_top = sorted(candidate_memory_product_rows, key=lambda r: (
         str(r.get("not_refetched_this_run") or "") == "true",
         str(r.get("source_geo_class") or "") == "kaliningrad_local",
