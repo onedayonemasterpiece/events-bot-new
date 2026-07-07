@@ -240,6 +240,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DRY_RUN": "1",
         "REGION_TALK_DISABLE_PUBLISH": "1",
         "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "json"),
+        "REGION_TALK_VECTOR_PROBE_ONLY": os.environ.get("REGION_TALK_VECTOR_PROBE_ONLY", "0"),
+        "REGION_TALK_VECTOR_PROBE_TEXT_LIMIT": os.environ.get("REGION_TALK_VECTOR_PROBE_TEXT_LIMIT", "6"),
         "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get(
             "REGION_TALK_REQUIRE_YDB_STATE",
             "1" if os.environ.get("REGION_TALK_STATE_BACKEND", "").strip().lower() == "ydb" else "0",
@@ -269,8 +271,11 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", "90"),
         "REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE": os.environ.get("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", "40"),
         "REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS": os.environ.get("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", "25"),
+        "REGION_TALK_PRIORITIZE_TEXT_VECTORS": os.environ.get("REGION_TALK_PRIORITIZE_TEXT_VECTORS", "1"),
+        "REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS", "420"),
+        "REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", "120"),
         "REGION_TALK_TEXT_EMBEDDING_SUBPROCESS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS", "1"),
-        "REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", "300"),
+        "REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", "420"),
         "REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60"),
         "REGION_TALK_HF_HUB_ETAG_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"),
         "REGION_TALK_HF_HUB_DISABLE_XET": os.environ.get("REGION_TALK_HF_HUB_DISABLE_XET", "1"),
@@ -302,8 +307,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": os.environ.get("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1"),
         "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": os.environ.get("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "30"),
         "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": os.environ.get("REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY", "10"),
-        "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "420"),
-        "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "420")),
+        "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "930"),
+        "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "930")),
         "REGION_TALK_IMAGE_SCORING_MODE": os.environ.get("REGION_TALK_IMAGE_SCORING_MODE", "external_ydb_queue"),
         "REGION_TALK_MEDIA_SCORING_MODE": os.environ.get("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first"),
         "REGION_TALK_MEDIA_RETRY_FIRST": os.environ.get("REGION_TALK_MEDIA_RETRY_FIRST", "1"),
@@ -435,6 +440,7 @@ def assert_region_talk_kaggle_slots_free(
     client: Any,
     kernel_refs: list[str],
     *,
+    optional_kernel_refs: list[str] | None = None,
     allow_active: bool = False,
     auth_bundle_env: str = "",
 ) -> None:
@@ -451,14 +457,21 @@ def assert_region_talk_kaggle_slots_free(
     checked: list[str] = []
     active: list[tuple[str, str]] = []
     errors: list[str] = []
-    for kernel_ref in list(dict.fromkeys([r for r in kernel_refs if str(r).strip()])):
+    required = list(dict.fromkeys([r for r in kernel_refs if str(r).strip()]))
+    optional = [r for r in list(dict.fromkeys(optional_kernel_refs or [])) if str(r).strip() and r not in required]
+    for kernel_ref in required + optional:
+        is_optional = kernel_ref in optional
         try:
             raw = _kernel_status_raw(client, str(kernel_ref))
-            checked.append(f"{kernel_ref}={raw or 'UNKNOWN'}")
+            checked.append(f"{kernel_ref}={raw or 'UNKNOWN'}" + ("(optional)" if is_optional else ""))
             if raw in ACTIVE_KERNEL_STATUSES:
                 active.append((str(kernel_ref), raw))
         except Exception as exc:
-            errors.append(f"{kernel_ref}:{type(exc).__name__}:{str(exc)[:180]}")
+            msg = f"{kernel_ref}:{type(exc).__name__}:{str(exc)[:180]}"
+            if is_optional:
+                checked.append(f"{kernel_ref}=UNVERIFIED_OPTIONAL:{type(exc).__name__}")
+            else:
+                errors.append(msg)
     if active:
         refs = ", ".join(f"{ref}({status})" for ref, status in active)
         bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
@@ -505,20 +518,26 @@ def main() -> int:
     ap.add_argument("--max-sources", type=int, default=220)
     ap.add_argument("--keep-input-datasets", action="store_true", help="Do not delete temporary Kaggle config/secret input datasets after a waited run.")
     ap.add_argument("--allow-active-region-talk-kernel", action="store_true", help="Bypass active-kernel/session guard after a manual Kaggle UI audit.")
+    ap.add_argument("--vector-probe-only", action="store_true", help="Run only the dual text-embedding probe on YDB texts; skip Telegram discovery and report XLSX.")
     args = ap.parse_args()
     load_env_file(args.env_file)
     run_id = args.run_id or "region-talk-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     os.environ.setdefault("REGION_TALK_RUN_ID", run_id)
     os.environ.setdefault("REGION_TALK_DRY_RUN", "1")
     os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH", "1")
+    if args.vector_probe_only:
+        os.environ["REGION_TALK_VECTOR_PROBE_ONLY"] = "1"
     os.environ.setdefault("REGION_TALK_MAX_SOURCES", str(args.max_sources))
     os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "50")
     os.environ.setdefault("REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS", "1080")
     os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", "180")
     os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", "90")
     os.environ.setdefault("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", "40")
+    os.environ.setdefault("REGION_TALK_PRIORITIZE_TEXT_VECTORS", "1")
+    os.environ.setdefault("REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS", "420")
+    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", "120")
     os.environ.setdefault("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS", "1")
-    os.environ.setdefault("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", "300")
+    os.environ.setdefault("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", "420")
     os.environ.setdefault("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60")
     os.environ.setdefault("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20")
     os.environ.setdefault("REGION_TALK_HF_HUB_DISABLE_XET", "1")
@@ -545,8 +564,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", "1")
     os.environ.setdefault("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", "30")
     os.environ.setdefault("REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY", "10")
-    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "420")
-    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "420"))
+    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "930")
+    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", "930"))
     os.environ.setdefault("REGION_TALK_IMAGE_SCORING_MODE", "external_ydb_queue")
     os.environ.setdefault("REGION_TALK_MEDIA_SCORING_MODE", "retry_queue_first")
     os.environ.setdefault("REGION_TALK_MEDIA_RETRY_FIRST", "1")
@@ -594,7 +613,8 @@ def main() -> int:
     image_kernel_ref = f"{username}/region-talk-image-diagnostic"
     assert_region_talk_kaggle_slots_free(
         client,
-        [kernel_ref, image_kernel_ref],
+        [kernel_ref],
+        optional_kernel_refs=[image_kernel_ref],
         allow_active=bool(args.allow_active_region_talk_kernel),
         auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
     )

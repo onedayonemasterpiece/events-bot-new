@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / vector-first runtime profile**: CandidateReport now
+  prioritizes the accepted E5+BGE-M3 dual-vector pass over similar/keyword
+  discovery tail, floors accidental tiny embedding timeouts to the vector-priority
+  minimum, adds sequential one-model-in-memory heartbeat fields, and exposes a
+  `--vector-probe-only` Kaggle mode that tests batched dual embeddings from YDB
+  without Telegram discovery or XLSX report work.
 - **Region Talk Channel / embedding timeout terminal state**: CandidateReport now
   treats dual text-embedding batch failure as a bounded `partial` run, writes
   deferred post rows/live artifacts and stops the report tail instead of

@@ -211,6 +211,73 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/puteshestvuem_rf"])
 
 
+
+
+    def test_dual_embeddings_run_sequential_model_passes_and_release_each_model(self) -> None:
+        mod = load_module()
+        old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
+        old_require = os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS")
+        os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "dual_embeddings"
+        os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = "1"
+        calls = []
+        releases = []
+        events = []
+        old_runner = mod._run_embedding_model_pass_bounded
+        old_release = mod.release_text_embedding_model
+        def fake_runner(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, report_event=None):
+            calls.append((model_id, list(texts)))
+            labels = sorted(set(flat_labels))
+            scores = {label: (0.9 if label == "ko_visit_impression" else 0.1) for label in labels}
+            return {"ok": True, "scores": [dict(scores) for _ in texts]}
+        try:
+            mod._run_embedding_model_pass_bounded = fake_runner
+            mod.release_text_embedding_model = lambda model_id: releases.append(model_id)
+            out = mod.dual_model_semantic_scores_batch(["текст 1", "текст 2"], report_event=lambda name, **payload: events.append((name, payload)))
+            self.assertEqual([c[0] for c in calls], mod.TEXT_EMBEDDING_MODELS)
+            self.assertEqual([c[1] for c in calls], [["текст 1", "текст 2"], ["текст 1", "текст 2"]])
+            self.assertEqual(releases, mod.TEXT_EMBEDDING_MODELS)
+            started = [payload for name, payload in events if name == "text_embedding_model_pass_started"]
+            self.assertTrue(started)
+            self.assertTrue(all(p.get("text_embedding_models_loaded") == 0 for p in started))
+            self.assertTrue(all(p.get("text_embedding_execution_mode") == "sequential_one_model_in_memory" for p in started))
+            self.assertEqual(len(out), 2)
+            self.assertEqual(out[0].get("vector_fusion_reason"), "both_models")
+        finally:
+            mod._run_embedding_model_pass_bounded = old_runner
+            mod.release_text_embedding_model = old_release
+            if old_mode is None:
+                os.environ.pop("REGION_TALK_TEXT_VECTOR_MODE", None)
+            else:
+                os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = old_mode
+            if old_require is None:
+                os.environ.pop("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", None)
+            else:
+                os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = old_require
+
+    def test_text_vector_priority_protects_embedding_timeout_and_discovery_reserve(self) -> None:
+        mod = load_module()
+        old = {k: os.environ.get(k) for k in [
+            "REGION_TALK_PRIORITIZE_TEXT_VECTORS",
+            "REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS",
+            "REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS",
+            "REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS",
+            "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS",
+        ]}
+        try:
+            os.environ["REGION_TALK_PRIORITIZE_TEXT_VECTORS"] = "1"
+            os.environ["REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS"] = "30"
+            os.environ["REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS"] = "420"
+            os.environ["REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS"] = "120"
+            os.environ.pop("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", None)
+            self.assertEqual(mod.text_embedding_model_timeout_seconds(), 420)
+            self.assertGreaterEqual(mod.discovery_tail_reserve_seconds(), 420 * 2 + 120)
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
     def test_source_selection_finishes_pending_queue_before_processed_rescans(self) -> None:
         mod = load_module()
         processed_due = mod.Seed(
@@ -1324,6 +1391,23 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "active kernel"):
             mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+
+
+    def test_active_slot_guard_ignores_unverified_optional_sibling(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+
+        class FakeClient:
+            def get_kernel_status(self, ref: str) -> dict[str, str]:
+                if ref.endswith("image"):
+                    raise ValueError("permission denied")
+                return {"status": "COMPLETE"}
+
+        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate"], optional_kernel_refs=["u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
 
     def test_active_slot_guard_allows_terminal_kernels(self) -> None:
         import importlib.util

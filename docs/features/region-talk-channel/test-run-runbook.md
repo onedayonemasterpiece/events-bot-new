@@ -123,7 +123,7 @@ REGION_TALK_REQUIRE_PREVIOUS_STATE=1
 
 ## Telegram session and human-like discovery constraints
 
-Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check both Region Talk Kaggle kernel slots before pushing and refuse to start if either sibling kernel is `RUNNING`/queued with the shared Discovery bundle. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
+Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the shared Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
 
 The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
 
@@ -299,16 +299,31 @@ The XLSX has:
   while consuming `messages.searchGlobal`; do not let keyword search consume the
   final embedding/report window.
 - Each required text-embedding model pass is bounded by
-  `REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS` (default `300`) and runs in
+  `REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS` (default `420`) and runs in
   its own subprocess by default (`REGION_TALK_TEXT_EMBEDDING_SUBPROCESS=1`).
   Hugging Face Hub timeouts are set before import
   (`REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT`, `REGION_TALK_HF_HUB_ETAG_TIMEOUT`,
-  `REGION_TALK_HF_HUB_DISABLE_XET`). If a pass times out, CandidateReport emits
-  `text_embedding_batch_deferred`, marks fetched posts as deferred in live YDB,
-  writes compact `partial` artifacts and stops the report tail by default
-  (`REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER=1`) rather than silently
-  replacing the accepted dual-vector process or hanging after the 20-minute
-  budget.
+  `REGION_TALK_HF_HUB_DISABLE_XET`). The vector-priority profile is enabled by
+  default (`REGION_TALK_PRIORITIZE_TEXT_VECTORS=1`): even if a smoke env
+  accidentally passes a tiny timeout such as 30 seconds, the model-pass floor is
+  raised to `REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS`
+  (default `420`), and similar/keyword discovery tail is skipped unless enough
+  runtime remains for both sequential model passes. If a pass still times out,
+  CandidateReport emits `text_embedding_batch_deferred`, marks fetched posts as
+  deferred in live YDB, writes compact `partial` artifacts and stops the report
+  tail by default (`REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER=1`) rather
+  than silently replacing the accepted dual-vector process or hanging after the
+  bounded run.
+- The dual-vector implementation is sequential and batched by design: one model
+  is loaded, the whole text batch is encoded, the model is released/GC-ed, and
+  only then the second model is loaded for the same batch. Heartbeats use
+  `text_embedding_execution_mode=sequential_one_model_in_memory`;
+  `text_embedding_passes_completed` is a pass counter, not resident model count.
+- For model-only validation, run CandidateReport with `--vector-probe-only`
+  (sets `REGION_TALK_VECTOR_PROBE_ONLY=1`). That mode skips Telegram discovery
+  and XLSX report building, reads a small text batch from live YDB, runs E5 then
+  BGE-M3 sequentially, writes `vector_probe_result` rows/heartbeats to YDB and
+  exits.
 - For true live-YDB product runs, the CandidateReport Kaggle runner performs a
   local YDB preflight when `REGION_TALK_REQUIRE_YDB_STATE=1`; set
   `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` for production-like

@@ -4208,7 +4208,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
     raw_hits = 0
     try:
         for query in terms[:max(0, max_queries)]:
-            if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 420))):
+            if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", discovery_tail_reserve_seconds())):
                 _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"
                 if status is not None:
                     status.event("keyword_discovery_skipped_runtime_budget", phase="keyword_discovery", status="deferred", run_id=run_id, progress_label=f"keyword discovery stopped at query {processed}/{min(len(terms), max_queries)}", keyword_queries_processed=processed, keyword_queries_total=min(len(terms), max_queries), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
@@ -5068,7 +5068,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 "fetch_error_code": src_row.get("fetch_error_code", ""),
                 "fetch_error_message": src_row.get("fetch_error_message", ""),
             })
-        discovery_tail_reserve = getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 420)
+        discovery_tail_reserve = discovery_tail_reserve_seconds()
         if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
             status.event("similar_discovery_started", phase="similar_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery started")
             similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
@@ -5427,6 +5427,30 @@ def should_send_to_llm(fresh: dict[str, Any], scope: dict[str, Any], post: dict[
 TEXT_EMBEDDING_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 
+def text_vector_priority_enabled() -> bool:
+    return getenv_bool("REGION_TALK_PRIORITIZE_TEXT_VECTORS", True)
+
+
+def text_embedding_model_timeout_seconds() -> int:
+    configured = getenv_int("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", 420)
+    if text_vector_priority_enabled():
+        configured = max(configured, getenv_int("REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS", 420))
+    return max(30, configured)
+
+
+def text_embedding_required_runtime_reserve_seconds() -> int:
+    model_budget = text_embedding_model_timeout_seconds() * len(TEXT_EMBEDDING_MODELS)
+    tail_reserve = getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", 120)
+    return max(30, model_budget + tail_reserve)
+
+
+def discovery_tail_reserve_seconds() -> int:
+    configured = getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 930 if text_vector_priority_enabled() else 420)
+    if text_vector_priority_enabled():
+        configured = max(configured, text_embedding_required_runtime_reserve_seconds())
+    return max(0, configured)
+
+
 def semantic_bank_v1() -> dict[str, list[str]]:
     """Prototype texts for vector-first Region Talk selection.
 
@@ -5597,7 +5621,7 @@ def _run_embedding_model_pass_bounded(
         sims_rows = (query_vecs @ proto.T).tolist()
         return {"ok": True, "scores": [{label: max([float(sim2) for label2, sim2 in zip(flat_labels, sims) if label2 == label] or [-1.0]) for label in sorted(set(flat_labels))} for sims in sims_rows]}
     import multiprocessing as mp
-    timeout = max(30, getenv_int("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", 300))
+    timeout = text_embedding_model_timeout_seconds()
     if runtime_remaining_seconds() > 0:
         timeout = max(30, min(timeout, int(max(30, runtime_remaining_seconds() - getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", 120)))))
     ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
@@ -5705,7 +5729,7 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
 
     for model_index, model_id in enumerate(TEXT_EMBEDDING_MODELS, start=1):
         started = time.monotonic()
-        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_to_score=len(texts))
+        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", texts_to_score=len(texts))
         try:
             result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, report_event=report_event)
             if not result.get("ok"):
@@ -5713,14 +5737,14 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
             for i, scores in enumerate(result.get("scores") or []):
                 if i < len(per_text) and isinstance(scores, dict):
                     per_text[i][model_id] = {str(k): float(v) for k, v in scores.items()}
-            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=1, text_embedding_passes_completed=model_index, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         except Exception as exc:
             err = f"{model_id}:{type(exc).__name__}:{str(exc)[:180]}"
             errors.append(err)
-            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         finally:
             release_text_embedding_model(model_id)
-            emit("text_embedding_model_released", status="running", text_embedding_model_id=model_id)
+            emit("text_embedding_model_released", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index, text_embedding_execution_mode="sequential_one_model_in_memory")
     if require_dual and any(len(item) != len(TEXT_EMBEDDING_MODELS) for item in per_text):
         message = "; ".join(errors)[:700] or "not all dual text embedding models produced scores"
         emit("text_embedding_dual_requirement_failed", status="error", text_embedding_models_loaded=min((len(item) for item in per_text), default=0), text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_error=message)
@@ -7869,6 +7893,137 @@ def render_html(payload: dict[str, Any]) -> str:
     return '<!doctype html><meta charset="utf-8"><pre>' + html.escape(render_md(payload)) + '</pre>'
 
 
+def _vector_probe_text_candidates(previous_state: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    sources = []
+    for key in ["candidate_memory", "posts", "processed_posts"]:
+        value = previous_state.get(key)
+        if isinstance(value, dict):
+            sources.extend([r for r in value.values() if isinstance(r, dict)])
+        elif isinstance(value, list):
+            sources.extend([r for r in value if isinstance(r, dict)])
+    for row in sources:
+        text = str(row.get("text") or row.get("text_excerpt") or row.get("short_summary") or row.get("why_keep_in_memory") or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        rows.append({
+            "post_id": row.get("post_id") or row.get("candidate_memory_id") or "",
+            "post_url": row.get("post_url") or "",
+            "source_title": row.get("source_title") or "",
+            "text": text[:4000],
+        })
+        if len(rows) >= max(1, limit):
+            break
+    if rows:
+        return rows
+    fallback = [
+        "Личный отзыв о поездке в Калининградскую область: Куршская коса, море, дюны и впечатления от прогулки.",
+        "Подборка разных регионов России: Байкал, Сочи, Алтай и Калининград одним списком направлений.",
+        "Анонс мероприятия, регистрация, билеты и программа события в Калининграде.",
+    ]
+    return [{"post_id": f"fallback_{i}", "post_url": "", "source_title": "fallback", "text": text} for i, text in enumerate(fallback, start=1)][:max(1, limit)]
+
+
+def _write_vector_probe_result_to_ydb(result: dict[str, Any]) -> bool:
+    try:
+        ydb, driver, cfg = ydb_connect()
+        table_path = ydb_kv_table_path(cfg)
+        pool = ydb.SessionPool(driver)
+        now = utc_now_iso()
+        pk = "vector_probe_result:" + str(result.get("run_id") or stable_hash(now))
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, pk, "vector_probe_result", result, now)
+            ydb_upsert_json(session, ydb, table_path, "vector_probe_result:latest", "vector_probe_result", result, now)
+        pool.retry_operation_sync(op)
+        driver.stop(timeout=5)
+        return True
+    except Exception as exc:
+        print(f"[region-talk] vector_probe_ydb_write_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        return False
+
+
+def run_vector_probe(run_id: str, output_dir: Path, status: Any | None = None) -> dict[str, Any]:
+    def report_event(name: str, **payload: Any) -> None:
+        if status is not None and hasattr(status, "event"):
+            try:
+                status.event(name, run_id=run_id, **payload)
+            except Exception:
+                pass
+    limit = getenv_int("REGION_TALK_VECTOR_PROBE_TEXT_LIMIT", 6)
+    previous_state, state_meta = load_region_talk_state()
+    rows = _vector_probe_text_candidates(previous_state, limit)
+    report_event(
+        "vector_probe_started",
+        phase="text_embedding",
+        status="running",
+        texts_to_score=len(rows),
+        ydb_read_status=state_meta.get("ydb_read_status"),
+        text_embedding_model_timeout_seconds=text_embedding_model_timeout_seconds(),
+        discovery_tail_reserve_seconds=discovery_tail_reserve_seconds(),
+    )
+    started = time.monotonic()
+    ok = False
+    error = ""
+    scores: list[dict[str, Any]] = []
+    try:
+        scores = dual_model_semantic_scores_batch([r["text"] for r in rows], report_event=report_event)
+        ok = True
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {str(exc)[:500]}"
+        report_event("vector_probe_failed", phase="text_embedding", status="error", text_embedding_error=error, texts_to_score=len(rows), elapsed_seconds=round(time.monotonic() - started, 3))
+    result_rows = []
+    for i, row in enumerate(rows):
+        score = scores[i] if i < len(scores) and isinstance(scores[i], dict) else {}
+        result_rows.append({
+            "post_id": row.get("post_id"),
+            "post_url": row.get("post_url"),
+            "source_title": row.get("source_title"),
+            "text_excerpt": str(row.get("text") or "")[:500],
+            "text_embedding_model_id": score.get("text_embedding_model_id", ""),
+            "vector_top_class": score.get("vector_top_class", ""),
+            "vector_top_score": score.get("vector_top_score", ""),
+            "vector_positive_semantic_class": score.get("vector_positive_semantic_class", ""),
+            "vector_positive_semantic_score": score.get("vector_positive_semantic_score", ""),
+            "vector_negative_class": score.get("vector_negative_class", ""),
+            "vector_negative_score": score.get("vector_negative_score", ""),
+            "vector_margin_positive_vs_negative": score.get("vector_margin_positive_vs_negative", ""),
+            "embedding_error": score.get("embedding_error", ""),
+        })
+    result = {
+        "ok": ok,
+        "status": "done" if ok else "error",
+        "run_id": run_id,
+        "summary": {
+            "run_id": run_id,
+            "status": "done" if ok else "error",
+            "vector_probe_only": "true",
+            "texts_to_score": len(rows),
+            "texts_scored": len(scores),
+            "elapsed_seconds": round(time.monotonic() - started, 3),
+            "text_embedding_models_required": len(TEXT_EMBEDDING_MODELS),
+            "text_embedding_models": "+".join(TEXT_EMBEDDING_MODELS),
+            "text_embedding_model_timeout_seconds": text_embedding_model_timeout_seconds(),
+            "error": error,
+            "ydb_read_status": state_meta.get("ydb_read_status"),
+            "ydb_write_status": "pending",
+        },
+        "rows": result_rows,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "vector_probe_result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": result["status"], "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")
+    ydb_ok = _write_vector_probe_result_to_ydb(result)
+    result["summary"]["ydb_write_status"] = "ok" if ydb_ok else "error"
+    (output_dir / "vector_probe_result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": result["status"], "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")
+    (Path.cwd() / "output.json").write_text(json.dumps({"ok": ok, "status": result["status"], "run_id": run_id, "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_event("vector_probe_done" if ok else "vector_probe_done_with_error", phase="text_embedding", status=result["status"], texts_to_score=len(rows), texts_scored=len(scores), elapsed_seconds=result["summary"]["elapsed_seconds"], ydb_write_status=result["summary"].get("ydb_write_status"), text_embedding_error=error)
+    return result
+
+
 async def amain() -> int:
     load_dotenv(Path('.env'))
     config = load_split_runtime_from_kaggle_input()
@@ -7893,6 +8048,11 @@ async def amain() -> int:
     out_dir = Path(os.getenv('REGION_TALK_OUTPUT_DIR') or str(config.get('output_dir') or f"artifacts/region-talk/runs/{run_id}"))
     ydb_cfg = ydb_config_status()
     status.event('preflight_ok', phase='preflight', status='running', run_id=run_id, seeds=len(seeds), seed_file=str(seed_path), dry_run=True, disable_publish=True, state_backend=region_talk_state_backend_requested(), ydb_config_status="missing_config" if ydb_cfg.get("missing") else "configured", ydb_missing=ydb_cfg.get("missing"), vk_token_kind=vk_wall_token_kind())
+    if getenv_bool('REGION_TALK_VECTOR_PROBE_ONLY', False):
+        payload = run_vector_probe(run_id, out_dir, status=status)
+        summary = payload.get('summary', {})
+        status.event('report_written', phase='vector_probe', status=str(payload.get('status') or 'error'), run_id=run_id, posts_fetched=0, candidates_created=0, favorites_created=0, state_backend=region_talk_state_backend_requested(), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), text_embedding_models=summary.get('text_embedding_models'), text_embedding_error=summary.get('error'))
+        return 0 if payload.get('ok') else 1
     source_rows, posts = await fetch_telegram_posts(seeds, status, out_dir)
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
     payload = build_report(seeds, source_rows, posts, run_id, out_dir, status=status)
