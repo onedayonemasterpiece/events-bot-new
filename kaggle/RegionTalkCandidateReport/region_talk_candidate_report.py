@@ -622,8 +622,11 @@ def region_talk_state_backend_requested() -> str:
 def ydb_config_status() -> dict[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
-    if "?database=" in endpoint and not database:
-        endpoint, database = endpoint.split("?database=", 1)
+    if "?database=" in endpoint:
+        endpoint_part, database_part = endpoint.split("?database=", 1)
+        endpoint = endpoint_part
+        if not database:
+            database = database_part
     endpoint = endpoint.rstrip("/")
     namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk"
     missing = [k for k, v in {"REGION_TALK_YDB_ENDPOINT": endpoint, "REGION_TALK_YDB_DATABASE": database}.items() if not v]

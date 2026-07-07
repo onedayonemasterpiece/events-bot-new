@@ -97,6 +97,11 @@ def ydb_table_name(suffix: str = "state_kv") -> str:
 
 def ydb_cfg():
     endpoint=(os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip(); database=(os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
+    if "?database=" in endpoint:
+        endpoint_part, database_part = endpoint.split("?database=", 1)
+        endpoint = endpoint_part
+        if not database: database = database_part
+    endpoint = endpoint.rstrip("/")
     if not endpoint or not database: raise RuntimeError("missing REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE")
     return endpoint, database, database.rstrip("/") + "/" + ydb_table_name()
 

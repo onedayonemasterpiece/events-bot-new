@@ -457,6 +457,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             cfg = mod.ydb_config_status()
             self.assertEqual(cfg["endpoint"], "grpcs://ydb.serverless.yandexcloud.net:2135")
             self.assertEqual(cfg["database"], "/ru-central1/cloud/db")
+            os.environ["REGION_TALK_YDB_DATABASE"] = "/ru-central1/cloud/db-from-env"
+            cfg2 = mod.ydb_config_status()
+            self.assertEqual(cfg2["endpoint"], "grpcs://ydb.serverless.yandexcloud.net:2135")
+            self.assertEqual(cfg2["database"], "/ru-central1/cloud/db-from-env")
             self.assertEqual(mod.ydb_table_name("state_kv"), "region_talk_test_state_kv")
             compact = mod.compact_region_talk_state_for_ydb({
                 "run_id": "r1",
