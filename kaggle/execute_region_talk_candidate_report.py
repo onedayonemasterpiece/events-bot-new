@@ -201,6 +201,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "220"),
         "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "50"),
         "REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN": os.environ.get("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", "180"),
+        "REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS": os.environ.get("REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS", "1080"),
+        "REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", "180"),
+        "REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS": os.environ.get("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", "90"),
+        "REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE": os.environ.get("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", "40"),
         "REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS": os.environ.get("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", "25"),
         "REGION_TALK_FETCH_TELEGRAM": os.environ.get("REGION_TALK_FETCH_TELEGRAM", "1"),
         "REGION_TALK_POST_INPUT_MODE": os.environ.get("REGION_TALK_POST_INPUT_MODE", os.environ.get("REGION_TALK_FETCH_MODE", "")),
@@ -382,6 +386,10 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH", "1")
     os.environ.setdefault("REGION_TALK_MAX_SOURCES", str(args.max_sources))
     os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "50")
+    os.environ.setdefault("REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS", "1080")
+    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", "180")
+    os.environ.setdefault("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", "90")
+    os.environ.setdefault("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", "40")
     os.environ.setdefault("REGION_TALK_FETCH_TELEGRAM", "1")
     os.environ.setdefault("REGION_TALK_MAX_IMAGES_PER_POST", "8")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
