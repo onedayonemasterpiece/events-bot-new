@@ -1135,6 +1135,10 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
             ydb_upsert_json(session, ydb, table_path, "source_queue_item:" + key, "source_queue_item", payload, updated_at)
             ydb_upsert_json(session, ydb, table_path, "source_status_item:" + key, "source_status_item", payload, updated_at)
             ydb_upsert_json(session, ydb, table_path, "online_source_item:" + key, "online_source_item", payload, updated_at)
+            if payload.get("source_candidate_id") or payload.get("candidate_source_status") or payload.get("frontier_status"):
+                candidate_payload = compact_record(payload, SOURCE_CANDIDATE_STATE_FIELDS, max_len=700)
+                cand_key = str(candidate_payload.get("source_candidate_id") or candidate_payload.get("canonical_source_key") or key)
+                ydb_upsert_json(session, ydb, table_path, "source_candidate_item:" + cand_key, "source_candidate_item", candidate_payload, updated_at)
 
         pool.retry_operation_sync(op)
     except Exception as exc:
@@ -3818,13 +3822,15 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 rows.append(row)
                 write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_similar_discovery", status="source_frontier")
                 edge_id = "edge_" + stable_hash(source_id, cand_id, "telegram_similar_channel")
-                edges.append({
+                edge = {
                     "edge_id": edge_id, "from_source_id": source_id, "from_source_title": srow.get("source_title") or srow.get("resolved_title"),
                     "from_post_id": "", "to_source_candidate_id": cand_id, "to_source_title": title or username,
                     "edge_type": "telegram_similar_channel", "evidence_url": rec_url,
                     "evidence_context_short": f"Similar channel recommendation rank {rank} from {srow.get('source_title')}",
                     "confidence": confidence, "discovery_depth": 1, "run_id": run_id,
-                })
+                }
+                edges.append(edge)
+                write_region_talk_online_discovery_items([row], [edge], run_id=run_id, stage="telegram_similar_discovery")
                 governor.entity_cache["telegram:username:" + username.lower()] = {
                     "canonical_url": rec_url, "username": username, "title_last_seen": title, "entity_kind": "channel",
                     "channel_id_private": str(getattr(ch, "id", "") or ""),
@@ -3984,7 +3990,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     row["frontier_priority"] = source_candidate_score(row)
                     rows.append(row)
                     write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_keyword_discovery", status="source_frontier")
-                    edges.append({
+                    edge = {
                         "edge_id": "edge_" + stable_hash("keyword", query, cand_id),
                         "from_source_id": "telegram_keyword_search",
                         "from_source_title": query,
@@ -3997,7 +4003,9 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "confidence": row["confidence"],
                         "discovery_depth": 0,
                         "run_id": run_id,
-                    })
+                    }
+                    edges.append(edge)
+                    write_region_talk_online_discovery_items([row], [edge], run_id=run_id, stage="telegram_keyword_discovery")
                     if len(rows) >= max_frontier:
                         break
                 governor.total_ok += 1
