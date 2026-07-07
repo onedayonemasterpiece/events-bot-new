@@ -1,0 +1,4 @@
+interface:
+  display_name: "MAX Web Messenger"
+  short_description: "MAX Web auth, chats, posts, scheduling"
+  default_prompt: "Use $max-web-messenger to operate MAX Web through Playwright for login, chat search, message posting, editing, or scheduling."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "MAX Uhty Excursion Digest"
+  short_description: "Publish Uhty Kaliningrad excursion digests"
+  default_prompt: "Use $max-uhty-excursion-digest to mirror an excursion digest into the MAX channel Ух ты, Калининград! with media and links."
