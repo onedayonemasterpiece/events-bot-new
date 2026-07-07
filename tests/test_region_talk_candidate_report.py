@@ -213,6 +213,32 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 
+
+    def test_vector_probe_loads_state_with_output_dir_and_writes_result(self) -> None:
+        mod = load_module()
+        old_load = mod.load_region_talk_state
+        old_scores = mod.dual_model_semantic_scores_batch
+        old_ydb = mod._write_vector_probe_result_to_ydb
+        calls = []
+        try:
+            def fake_load(output_dir):
+                calls.append(Path(output_dir))
+                return ({"candidate_memory": {"c1": {"candidate_memory_id": "c1", "post_url": "https://t.me/a/1", "short_summary": "Личный отзыв о Калининграде"}}}, {"ydb_read_status": "ok"})
+            mod.load_region_talk_state = fake_load
+            mod.dual_model_semantic_scores_batch = lambda texts, report_event=None: [{"text_embedding_model_id": "+".join(mod.TEXT_EMBEDDING_MODELS), "vector_top_class": "ko_visit_impression", "vector_top_score": 0.9}]
+            mod._write_vector_probe_result_to_ydb = lambda result: True
+            with tempfile.TemporaryDirectory() as td:
+                out = mod.run_vector_probe("probe-unit", Path(td), status=None)
+                self.assertTrue(calls and calls[0] == Path(td))
+                self.assertTrue(out["ok"])
+                self.assertEqual(out["summary"]["ydb_write_status"], "ok")
+                self.assertTrue((Path(td) / "vector_probe_result.json").exists())
+        finally:
+            mod.load_region_talk_state = old_load
+            mod.dual_model_semantic_scores_batch = old_scores
+            mod._write_vector_probe_result_to_ydb = old_ydb
+            Path("output.json").unlink(missing_ok=True)
+
     def test_dual_embeddings_run_sequential_model_passes_and_release_each_model(self) -> None:
         mod = load_module()
         old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")

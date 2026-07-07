@@ -7953,7 +7953,7 @@ def run_vector_probe(run_id: str, output_dir: Path, status: Any | None = None) -
             except Exception:
                 pass
     limit = getenv_int("REGION_TALK_VECTOR_PROBE_TEXT_LIMIT", 6)
-    previous_state, state_meta = load_region_talk_state()
+    previous_state, state_meta = load_region_talk_state(output_dir)
     rows = _vector_probe_text_candidates(previous_state, limit)
     report_event(
         "vector_probe_started",
