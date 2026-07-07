@@ -713,6 +713,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
         old_require = os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS")
         old_ydb_cache = os.environ.get("REGION_TALK_YDB_SEMANTIC_BANK_CACHE")
+        old_subprocess = os.environ.get("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS")
         calls = []
         def fake_embed(model_id, texts, *, query=False):
             calls.append(("embed", model_id, query, len(texts)))
@@ -727,6 +728,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "dual"
             os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = "1"
             os.environ["REGION_TALK_YDB_SEMANTIC_BANK_CACHE"] = "0"
+            os.environ["REGION_TALK_TEXT_EMBEDDING_SUBPROCESS"] = "0"
             rows = mod.dual_model_semantic_scores_batch(["текст 1", "текст 2"])
         finally:
             mod.TEXT_EMBEDDING_MODELS = old_models
@@ -738,6 +740,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else: os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = old_require
             if old_ydb_cache is None: os.environ.pop("REGION_TALK_YDB_SEMANTIC_BANK_CACHE", None)
             else: os.environ["REGION_TALK_YDB_SEMANTIC_BANK_CACHE"] = old_ydb_cache
+            if old_subprocess is None: os.environ.pop("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS", None)
+            else: os.environ["REGION_TALK_TEXT_EMBEDDING_SUBPROCESS"] = old_subprocess
         self.assertEqual(len(rows), 2)
         self.assertIn(("release", "model_a"), calls)
         self.assertIn(("release", "model_b"), calls)
@@ -1023,6 +1027,38 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertNotIn("raw_private_field", compact["source_candidates"]["sc1"])
         self.assertEqual(compact["source_edges"]["e1"]["edge_id"], "e1")
         self.assertEqual(compact["comment_discovery"]["c1"]["comment_link_id"], "c1")
+
+    def test_build_report_defers_when_dual_embeddings_fail(self) -> None:
+        mod = load_module()
+        old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
+        old_require = os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS")
+        os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "dual_embeddings"
+        os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = "1"
+        mod.dual_model_semantic_scores_batch = lambda texts, report_event=None: (_ for _ in ()).throw(TimeoutError("unit embedding timeout"))
+        seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
+        posts = [{
+            "post_id": "embed_timeout_post", "source_id": seeds[0].source_id,
+            "source_seed_id": seeds[0].source_seed_id, "source_title": "src",
+            "platform": "telegram", "handle": "@src", "post_url": "https://t.me/src/99",
+            "platform_post_key": "tg:src:99", "post_date": "2026-06-01T12:00:00+00:00",
+            "text": "Мы приехали в Калининград, гуляли по Куршской косе, понравилось море",
+            "has_media": True, "media_count": 1, "rights_policy": "unknown",
+            "source_kind": "travel_media", "source_type": "travel_media", "source_url": "https://t.me/src",
+        }]
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                report = mod.build_report(seeds, [], posts, "embed-timeout-run", Path(td))
+                self.assertEqual(report["summary"]["posts_scored"], 0)
+                self.assertEqual(report["summary"]["posts_deferred_by_runtime_budget"], 1)
+        finally:
+            if old_mode is None:
+                os.environ.pop("REGION_TALK_TEXT_VECTOR_MODE", None)
+            else:
+                os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = old_mode
+            if old_require is None:
+                os.environ.pop("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", None)
+            else:
+                os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = old_require
 
 
 if __name__ == "__main__":

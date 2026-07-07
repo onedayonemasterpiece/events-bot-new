@@ -23,6 +23,23 @@ from pathlib import Path
 from typing import Any, Iterable
 from xml.sax.saxutils import escape
 
+
+def apply_huggingface_runtime_env_defaults() -> None:
+    """Set HF Hub runtime knobs before importing transformers/huggingface_hub.
+
+    Hugging Face Hub reads these environment variables at import time. Keep the
+    values configurable, but provide bounded defaults for Kaggle notebooks so a
+    model download/materialization problem cannot silently consume the whole
+    Region Talk discovery run.
+    """
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", os.getenv("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60"))
+    os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", os.getenv("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"))
+    os.environ.setdefault("HF_HUB_DISABLE_XET", os.getenv("REGION_TALK_HF_HUB_DISABLE_XET", "1"))
+    os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+
+
+apply_huggingface_runtime_env_defaults()
+
 RUN_STARTED_AT = datetime.now(timezone.utc)
 RUN_STARTED_MONOTONIC = time.monotonic()
 DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг", "Краснолесье", "Виштынец", "Роминтенская пуща", "Балтийская коса", "Янтарный", "Балтийск", "Советск", "Неман", "Правдинск", "Черняховск"]
@@ -5252,6 +5269,68 @@ def release_text_embedding_model(model_id: str) -> None:
     gc.collect()
 
 
+def _embedding_model_pass_worker(model_id: str, texts: list[str], flat_labels: list[str], flat_texts: list[str], semantic_bank_version: str, bank_hash: str, queue: Any) -> None:
+    try:
+        apply_huggingface_runtime_env_defaults()
+        cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
+        if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
+            cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
+            if cached_proto is not None:
+                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
+            else:
+                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+                ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
+        proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
+        query_vecs = embed_texts_for_model(model_id, texts, query=True)
+        sims_rows = (query_vecs @ proto.T).tolist()
+        per_text_scores: list[dict[str, float]] = []
+        for sims in sims_rows:
+            scores: dict[str, float] = {}
+            for label, sim in zip(flat_labels, sims):
+                scores[label] = max(scores.get(label, -1.0), float(sim))
+            per_text_scores.append(scores)
+        queue.put({"ok": True, "scores": per_text_scores})
+    except BaseException as exc:
+        queue.put({"ok": False, "error": f"{model_id}:{type(exc).__name__}:{str(exc)[:260]}"})
+    finally:
+        release_text_embedding_model(model_id)
+
+
+def _run_embedding_model_pass_bounded(model_id: str, texts: list[str], flat_labels: list[str], flat_texts: list[str], semantic_bank_version: str, bank_hash: str) -> dict[str, Any]:
+    if not getenv_bool("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS", True):
+        cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
+        if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
+            cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
+            if cached_proto is not None:
+                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
+            else:
+                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+                ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
+        proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
+        query_vecs = embed_texts_for_model(model_id, texts, query=True)
+        sims_rows = (query_vecs @ proto.T).tolist()
+        return {"ok": True, "scores": [{label: max([float(sim2) for label2, sim2 in zip(flat_labels, sims) if label2 == label] or [-1.0]) for label in sorted(set(flat_labels))} for sims in sims_rows]}
+    import multiprocessing as mp
+    timeout = max(30, getenv_int("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", 300))
+    ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
+    queue: Any = ctx.Queue(maxsize=1)
+    proc = ctx.Process(target=_embedding_model_pass_worker, args=(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, queue), daemon=True)
+    proc.start()
+    proc.join(timeout)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(10)
+        if proc.is_alive() and hasattr(proc, "kill"):
+            proc.kill()
+            proc.join(5)
+        return {"ok": False, "error": f"{model_id}:TimeoutError:model pass exceeded {timeout}s"}
+    try:
+        return queue.get_nowait()
+    except Exception:
+        code = getattr(proc, "exitcode", None)
+        return {"ok": False, "error": f"{model_id}:ProcessExit:no result from subprocess exitcode={code}"}
+
+
 def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[str, list[str]], semantic_bank_version: str, bank_hash: str, errors: list[str]) -> dict[str, Any]:
     labels = sorted(bank)
     positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
@@ -5316,22 +5395,12 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
         started = time.monotonic()
         emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_to_score=len(texts))
         try:
-            cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
-            if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
-                cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
-                if cached_proto is not None:
-                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
-                else:
-                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
-                    ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
-            proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
-            query_vecs = embed_texts_for_model(model_id, texts, query=True)
-            sims_rows = (query_vecs @ proto.T).tolist()
-            for i, sims in enumerate(sims_rows):
-                scores: dict[str, float] = {}
-                for label, sim in zip(flat_labels, sims):
-                    scores[label] = max(scores.get(label, -1.0), float(sim))
-                per_text[i][model_id] = scores
+            result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash)
+            if not result.get("ok"):
+                raise RuntimeError(str(result.get("error") or "embedding subprocess failed"))
+            for i, scores in enumerate(result.get("scores") or []):
+                if i < len(per_text) and isinstance(scores, dict):
+                    per_text[i][model_id] = {str(k): float(v) for k, v in scores.items()}
             emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         except Exception as exc:
             err = f"{model_id}:{type(exc).__name__}:{str(exc)[:180]}"
@@ -5731,7 +5800,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
     precomputed_embedding_scores: list[dict[str, Any]] = []
     if vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
-        precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
+        try:
+            precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
+        except Exception as exc:
+            err = f"{type(exc).__name__}: {str(exc)[:260]}"
+            report_event("text_embedding_batch_deferred", phase="text_embedding", status="deferred", text_embedding_error=err, posts_to_score=len(posts_for_scoring), posts_deferred=len(posts))
+            runtime_deferred_posts = posts
+            posts_for_scoring = []
+            precomputed_embedding_scores = []
 
     for idx, p in enumerate(posts_for_scoring, start=1):
         if idx == 1 or idx % max(1, getenv_int("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", 25)) == 0:
@@ -6373,6 +6449,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "seed_file_version":"v2" if any("v2" in str(s.get("source_seed_id")) for s in source_seed_rows) else "v1/v2-compatible",
         "place_lexicon_file":str(lexicon_path or ""),"place_lexicon_rows":len(lexicon),
         "source_count_seeded":len(seeds),"source_count_scanned":len(source_rows),"posts_fetched":len(posts),
+        "posts_scored":len(posts_for_scoring),"posts_deferred_by_runtime_budget":len(runtime_deferred_posts),
         "source_count_selected":len(source_rows),"source_count_attempted":sum(1 for s in source_rows if str(s.get("fetch_attempted") or "").lower() == "true" or str(s.get("fetch_status") or "").startswith(("ok", "error"))),
         "source_count_ok":sum(1 for s in source_rows if s.get("fetch_status") == "ok"),
         "source_count_skipped":sum(1 for s in source_rows if str(s.get("fetch_status") or "").startswith("skipped")),

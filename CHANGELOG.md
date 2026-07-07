@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / bounded dual text embeddings**: wrapped each required
+  E5/BGE-M3 text-embedding pass in a separate bounded subprocess with
+  Hugging Face Hub timeout env defaults; if a model pass stalls, CandidateReport
+  now emits a deferred embedding event and writes a bounded report instead of
+  hanging indefinitely or silently replacing the dual-vector decision.
 - **Region Talk Channel / full live YDB discovery registry**: extended online
   row-level writes beyond final queues to include `source_candidate_item`,
   `source_edge_item` and reserved redacted `comment_link_item` rows, so newly
