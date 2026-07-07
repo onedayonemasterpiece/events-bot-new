@@ -76,6 +76,25 @@ MVP recall uses both models as enrichment lanes, not as mutually exclusive candi
 
 For every post, write embeddings and top-K semantic matches for both models, then create a fused candidate set by unioning accepted/top matches and recording per-model scores, margins and the fusion reason (`e5_only`, `bge_m3_only`, `both_models`, `model_disagreement`). Do not discard one model because the other scored higher; use disagreement as a review signal. Heavy embedding runs happen offline/Kaggle; no public hot path calls.
 
+### MVP runtime semantic bank cache
+
+The current Kaggle implementation uses a deliberately finite semantic-bank
+prototype list for vector gating. It is versioned as `semantic_bank_v1` and
+hashed by exact JSON content so edits invalidate caches automatically.
+
+Runtime labels:
+
+- positives: `ko_visit_impression`, `ko_route_useful`, `ko_visual_place_card`;
+- negatives: `other_region_travel`, `multi_region_roundup`, `news_report`,
+  `event_announcement`, `ad_or_promo`, `low_substance`.
+
+For each model (`intfloat/multilingual-e5-base`, `BAAI/bge-m3`) the prototype
+embeddings are loaded from/saved to YDB as `semantic_bank_embedding` rows. This
+means the meanings are prepared once per semantic-bank hash and model, then
+reused by later Kaggle runs instead of re-embedding the same prototypes. Per-post
+query embeddings are still computed during the run because they depend on the
+fresh post text and are not persisted for rejected garbage rows.
+
 ## Candidate scoring
 
 ```text

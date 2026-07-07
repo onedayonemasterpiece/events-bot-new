@@ -274,6 +274,24 @@ The XLSX has:
 - `REGION_TALK_STATE_BACKEND=ydb` is production-like only when `REGION_TALK_YDB_ENDPOINT` and `REGION_TALK_YDB_DATABASE` are set. `REGION_TALK_YDB_ENDPOINT` may be the full YC value with `?database=...`; the runner strips the trailing slash and extracts `REGION_TALK_YDB_DATABASE`.
 - Kaggle YDB auth must be encrypted: pass `REGION_TALK_YDB_IAM_TOKEN`, `YC_IAM_TOKEN`, `YDB_ACCESS_TOKEN`, or `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON` through the encrypted secrets bundle, never through the public config dataset.
 - YDB stores compact valuable state only: run metrics, source cursors, channel/source links, processed post links/keys/stages, candidate lifecycle and image scoring metrics. Raw post text, raw payloads and media bytes stay out of YDB and can be re-fetched from post URLs.
+- Before a product run, probe the row-level YDB queues and prune/repair garbage:
+  `source_queue_item` must contain only Telegram channel roots and VK
+  community/wall roots; `image_queue_item` must contain only text-confirmed
+  Kaliningrad Oblast candidate-post media. Do not keep invalid/rejected post
+  rows in YDB just for audit: source cursors and aggregate counters are the
+  durable evidence that a channel was scanned.
+- CandidateReport and ImageDiagnostic heartbeat rows are separate:
+  `latest_business_heartbeat` for source/text processing and
+  `latest_business_heartbeat:image_diagnostic` for image scoring. Poll both while
+  the notebooks run.
+- Run notebooks sequentially when launching manually. Use different Telegram
+  auth bundles: CandidateReport with the Kaggle/remote monitoring bundle
+  (`TELEGRAM_AUTH_BUNDLE_S22` unless explicitly changed) and ImageDiagnostic
+  with a different discovery/image bundle. Never run two Kaggle kernels against
+  the same Telethon auth key.
+- Semantic prototype vectors are cached in YDB as `semantic_bank_embedding`
+  rows keyed by semantic-bank hash and embedding model, so only fresh post query
+  vectors are recomputed every run.
 - VK read-only wall fetch should use `VK_SERVICE_KEY`/`VK_SERVICE_TOKEN` before IP-bound user tokens (`REGION_TALK_VK_READ_SERVICE_FIRST=1`). `error_code=5` from `VK_ACCESS_TOKEN` means the token is bound to another IP and is not suitable for Kaggle wall reads.
 - VK catalog/search/private pages are not global failures: they should be reported as `domain_missing` or `access_denied`. Acceptance for smoke is at least one real `vk_wall_probe_status=ok` when a public VK wall source is selected.
 - Kaggle status events must include factual `state_backend`, `ydb_read_status`, `ydb_write_status`, `ydb_state_mode`, `vk_wall_probe_status` in preflight/report logs so failures can be diagnosed without opening the workbook.

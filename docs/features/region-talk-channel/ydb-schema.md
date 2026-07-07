@@ -87,7 +87,12 @@ Fields: `edge_id` PK, `from_source_id`, `to_source_candidate_id`, `edge_type=lin
 
 Original external post.
 
-Fields: `post_id` PK, `source_id`, `platform`, `platform_post_key`, `post_url`, `text`, `text_normalized`, `text_hash`, `published_at`, `fetched_at`, `views_count`, `likes_count`, `reposts_count`, `comments_count`, `has_media`, `media_count`, `region_relevance_score`, `newsiness_score`, `trash_score`, `ad_score`, `sentiment_overall=positive|neutral|mixed|negative|unknown`, `status=fetched|rejected|candidate|verified|queued|published|expired`, `rejection_reason`, `raw_payload_ref`, `raw_payload_json`, `created_at`, `updated_at`.
+Fields: `post_id` PK, `source_id`, `platform`, `platform_post_key`, `post_url`, `text_hash`, optional short `summary`, `published_at`, `fetched_at`, `views_count`, `likes_count`, `reposts_count`, `comments_count`, `has_media`, `media_count`, `region_relevance_score`, `newsiness_score`, `trash_score`, `ad_score`, `sentiment_overall=positive|neutral|mixed|negative|unknown`, `status=candidate|verified|queued|published|expired`, `candidate_stage`, `rejection_reason` for accepted/debug rows only, `created_at`, `updated_at`.
+
+Full post text, normalized full text and raw Telegram/VK API payloads are not
+stored in YDB. Non-candidate/invalid posts are represented only by per-source
+cursors and aggregate counters; if a human needs the content again, it must be
+re-fetched by `post_url`/platform key.
 
 Unique/index: `(platform, platform_post_key)`.
 
@@ -182,6 +187,16 @@ into the same KV table:
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.
+- kind `semantic_bank_embedding`, pk `semantic_bank_embedding:<hash>` — cached
+  prototype vectors for the finite semantic-bank meaning list and one embedding
+  model (`intfloat/multilingual-e5-base` or `BAAI/bge-m3`), keyed by
+  `semantic_bank_version + bank_hash + model_id`;
+- kind `business_heartbeat`, pk `latest_business_heartbeat` and
+  `business_heartbeat:<run_id>` — CandidateReport live status only;
+- kind `business_heartbeat_image_diagnostic`, pk
+  `latest_business_heartbeat:image_diagnostic` and
+  `business_heartbeat:image_diagnostic:<run_id>` — ImageDiagnostic live status
+  only.
 
 `RegionTalkCandidateReport` is the source/source-cursor writer and reads row-level
 items before every report. It does source/text work and consumes already-written
@@ -191,6 +206,8 @@ image scores; it does not run local image-scoring models in normal runs.
 rollup on matching `source_queue_item` rows, waits bounded intervals for an empty
 or just-drained queue, and exits after its fixed per-run item budget. Heartbeat
 rows remain observability-only and must not be used as durable queue state.
+The two notebooks must run with different Telethon auth bundles and must not
+share one Telegram session concurrently.
 
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report

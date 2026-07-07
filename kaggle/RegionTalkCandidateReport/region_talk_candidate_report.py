@@ -4279,11 +4279,67 @@ def embed_texts_for_model(model_id: str, texts: list[str], *, query: bool = Fals
     return torch.nn.functional.normalize(pooled, p=2, dim=1).detach().cpu()
 
 
+def semantic_bank_version_and_hash(bank: dict[str, list[str]]) -> tuple[str, str]:
+    payload = json.dumps(bank, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "semantic_bank_v1", hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _semantic_bank_cache_pk(model_id: str, bank_hash: str) -> str:
+    return "semantic_bank_embedding:" + stable_hash(model_id, bank_hash, length=16)
+
+
+def ydb_load_semantic_bank_embedding(model_id: str, labels: list[str], bank_hash: str) -> Any | None:
+    if not getenv_bool("REGION_TALK_YDB_SEMANTIC_BANK_CACHE", True):
+        return None
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb" and not (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip():
+        return None
+    try:
+        ydb, driver, cfg = ydb_connect(); table_path = ydb_kv_table_path(cfg); pool = ydb.SessionPool(driver); pk = _semantic_bank_cache_pk(model_id, bank_hash)
+        def op(session: Any) -> dict[str, Any]:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            rs = session.transaction(ydb.StaleReadOnly()).execute(f"SELECT payload_json FROM `{table_path}` WHERE pk = '{pk}';", commit_tx=True)
+            rows = rs[0].rows if rs else []
+            if not rows:
+                return {}
+            payload = rows[0].payload_json
+            return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+        data = pool.retry_operation_sync(op); driver.stop(timeout=5)
+        if not data or data.get("model_id") != model_id or data.get("bank_hash") != bank_hash or data.get("labels") != labels:
+            return None
+        import torch  # type: ignore
+        return torch.tensor(data.get("vectors") or [], dtype=torch.float32)
+    except Exception:
+        return None
+
+
+def ydb_save_semantic_bank_embedding(model_id: str, labels: list[str], texts: list[str], bank_hash: str, vectors: Any) -> None:
+    if not getenv_bool("REGION_TALK_YDB_SEMANTIC_BANK_CACHE", True):
+        return
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb" and not (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip():
+        return
+    try:
+        ydb, driver, cfg = ydb_connect(); table_path = ydb_kv_table_path(cfg); pool = ydb.SessionPool(driver); now = utc_now_iso()
+        version, _ = semantic_bank_version_and_hash(semantic_bank_v1())
+        payload = {
+            "semantic_bank_version": version, "bank_hash": bank_hash, "model_id": model_id,
+            "labels": labels, "texts_hash": hashlib.sha256(json.dumps(texts, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
+            "embedding_dim": int(vectors.shape[1]) if hasattr(vectors, "shape") and len(vectors.shape) > 1 else 0,
+            "vectors": vectors.tolist() if hasattr(vectors, "tolist") else vectors, "updated_at": now,
+        }
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, _semantic_bank_cache_pk(model_id, bank_hash), "semantic_bank_embedding", payload, now)
+        pool.retry_operation_sync(op); driver.stop(timeout=5)
+    except Exception:
+        return
+
+
 def dual_model_semantic_scores(text: str) -> dict[str, Any] | None:
     mode = _text_vector_mode()
     if mode not in {"dual_embeddings", "embeddings", "real", "dual"}:
         return None
     bank = semantic_bank_v1()
+    semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
     flat_labels: list[str] = []
     flat_texts: list[str] = []
     for label, examples in bank.items():
@@ -4294,9 +4350,14 @@ def dual_model_semantic_scores(text: str) -> dict[str, Any] | None:
     errors: list[str] = []
     for model_id in TEXT_EMBEDDING_MODELS:
         try:
-            cache_key = model_id + ":semantic_bank_v1"
+            cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
             if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
-                _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+                cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
+                if cached_proto is not None:
+                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
+                else:
+                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+                    ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
             proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
             query_vec = embed_texts_for_model(model_id, [text], query=True)[0]
             # embeddings are already normalized; dot product is cosine similarity.
@@ -4330,6 +4391,8 @@ def dual_model_semantic_scores(text: str) -> dict[str, Any] | None:
     return {
         **model_summaries,
         "text_embedding_runtime": "kaggle_local_dual_text_embeddings",
+        "semantic_bank_version": semantic_bank_version,
+        "semantic_bank_hash": bank_hash[:16],
         "text_embedding_model_id": "+".join(per_model.keys()),
         "vector_fusion_reason": reason,
         "vector_top_class": pos_label if pos_score >= neg_score else neg_label,

@@ -17,6 +17,13 @@ def log_event(name: str, **payload):
     payload.setdefault("event_name", name)
     payload.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     print("[region-talk-image-diagnostic] " + json.dumps(payload, ensure_ascii=False)[:1200], flush=True)
+    if name in {"kernel_started", "image_queue_poll", "image_batch_started", "image_batch_done", "ydb_source_visual_rollup_written", "report_written", "image_queue_poll_finished_empty"}:
+        hb = globals().get("write_region_talk_image_diag_heartbeat")
+        if callable(hb):
+            try:
+                hb({**payload, "run_id": RUN_ID})
+            except Exception as exc:
+                print(f"[region-talk-image-diagnostic] business_heartbeat_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 def ensure(import_name: str, pip_name: str | None = None) -> bool:
     try:
@@ -106,6 +113,23 @@ def ydb_connect():
     driver=ydb.Driver(endpoint=endpoint, database=database, credentials=creds) if creds is not None else ydb.Driver(endpoint=endpoint, database=database)
     driver.wait(timeout=int(os.getenv("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS") or "20"), fail_fast=True)
     return ydb, driver, table_path
+
+def write_region_talk_image_diag_heartbeat(payload: dict):
+    if (os.getenv("REGION_TALK_IMAGE_DIAG_HEARTBEAT_YDB") or "1").lower() in {"0","false","no"}: return
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").lower() != "ydb" and not os.getenv("REGION_TALK_YDB_ENDPOINT"): return
+    ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
+    allowed=["run_id","event_name","created_at","phase","reason","attempt","total","leased","remaining_budget","batch_index","rows","actual_scored","actual_images","failures","xlsx","html","summary","source","max_items_per_run","batch_size","poll_interval_seconds","wait_initial_seconds","wait_after_drain_seconds"]
+    clean={k:payload.get(k) for k in allowed if payload.get(k) not in (None,"",[],{})}
+    clean.setdefault("run_id", RUN_ID); clean.setdefault("updated_at", now); clean.setdefault("notebook", "RegionTalkImageDiagnostic")
+    def op(session):
+        query=session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, $kind, $payload_json, $updated_at);""")
+        tx=session.transaction(ydb.SerializableReadWrite())
+        for pk in ["latest_business_heartbeat:image_diagnostic", "business_heartbeat:image_diagnostic:"+RUN_ID]:
+            tx.execute(query,{"$pk":pk,"$kind":"business_heartbeat_image_diagnostic","$payload_json":json.dumps(clean,ensure_ascii=False),"$updated_at":now},commit_tx=False)
+        tx.commit()
+    try: pool.retry_operation_sync(op)
+    finally: driver.stop(timeout=5)
 
 def ydb_select_kind(kind: str, limit_n: int):
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver)

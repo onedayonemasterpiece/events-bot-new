@@ -548,6 +548,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 {"platform": "dzen", "canonical_url": "https://dzen.ru/nope", "canonical_source_key": "dzen:nope"},
                 {"platform": "telegram", "canonical_url": "https://tgstat.ru/search?query=travel", "canonical_source_key": "telegram:https://tgstat.ru/search?query=travel"},
                 {"platform": "telegram", "canonical_url": "https://t.me/channel/123", "canonical_source_key": "telegram:channel", "source_candidate_score": 0.8},
+                {"platform": "telegram", "canonical_url": "https://t.me/+InviteHash", "canonical_source_key": "telegram:+invitehash", "source_candidate_score": 0.8},
+                {"platform": "telegram", "canonical_url": "https://t.me/c/123456", "canonical_source_key": "telegram:c/123456", "source_candidate_score": 0.8},
                 {"platform": "vk", "canonical_url": "https://vk.com/video", "canonical_source_key": "vk:video", "source_candidate_score": 0.5},
                 {"platform": "vk", "canonical_url": "https://vk.com/video-123_456", "canonical_source_key": "vk:video-123_456", "source_candidate_score": 0.5},
                 {"platform": "vk", "canonical_url": "https://vk.com/wall-123_456", "canonical_source_key": "vk:wall-123_456", "source_candidate_score": 0.5},
@@ -571,6 +573,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(any("vk.com/video" in u for u in urls))
         self.assertFalse(any("vk.com/wall-123_456" in u for u in urls))
         self.assertFalse(any(u.rstrip("/").endswith("/123") for u in urls))
+        self.assertFalse(any("t.me/+" in u for u in urls))
+        self.assertFalse(any("t.me/c/" in u for u in urls))
         orders = {r["canonical_source_key"]: r["queue_order"] for r in rows}
         self.assertEqual(orders["telegram:keynew"], 2)
         self.assertEqual(orders["telegram:keypost"], 3)
