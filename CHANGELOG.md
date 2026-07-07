@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / strict image queue text gate**: made `09a_image_candidate_queue` downstream of text/vector Kaliningrad Oblast confirmation, pruned old non-region image-queue carry-over rows, blocked media-only rows from creating image diagnostics without text proof, and persisted region/vector evidence plus queue pruning metrics for audit.
 - **Region Talk Channel / source queue hardening**: tightened the durable `12_source_queue` contract to admit only Telegram channel roots and VK community/wall roots, skip/quarantine `tgstat` search pages plus VK video/clip/photo/media pages, preserve keyword-after-cursor vs similar/catalog tail insertion, expose source-queue platform/skip diagnostics, and mark Kaliningrad sources with systematically weak actual-image scores for monitoring-candidate exclusion without deleting their audit rows.
 - **Region Talk Channel / vector-first candidate quality**: added a project skill and vector-selection contract, introduced real dual-model text embedding hooks for `intfloat/multilingual-e5-base` + `BAAI/bge-m3`, expanded semantic negative classes for news/event/ad/other-region false positives, demoted hard region/ad checks to vector/safety evidence, and re-checks candidate memory before product shortlist so old news/PR rows do not dominate `04a_final_shortlist`.
 - **Region Talk Channel / YDB acceptance controls**: passed `REGION_TALK_FETCH_TELEGRAM` through the Kaggle launcher so YDB-only acceptance runs can read/write compact queue state without opening a Telethon session.

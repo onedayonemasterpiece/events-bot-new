@@ -604,7 +604,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [
-            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "S", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "candidate_score": 0.5}
+            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "S", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "candidate_score": 0.5}
             for i in range(35)
         ]
         media_rows = [
@@ -625,6 +625,33 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue(top)
         self.assertEqual(top[0]["post_url"], "https://t.me/src/3")
         self.assertEqual(top[0]["image_queue_status"], "actual_scored")
+
+    def test_image_candidate_queue_prunes_non_region_and_media_only_rows(self) -> None:
+        mod = load_module()
+        previous = {"image_candidate_queue": {
+            "bad_prev": {"image_queue_id": "bad_prev", "image_queue_order": 1, "post_url": "https://t.me/bad/1", "source_title": "МЧС Краснодарского края", "kaliningrad_oblast_only_scope": False, "image_queue_status": "needs_actual_image_fetch"},
+            "good_prev": {"image_queue_id": "good_prev", "image_queue_order": 2, "post_url": "https://t.me/good/1", "source_title": "KO", "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "image_queue_status": "needs_actual_image_fetch"},
+        }}
+        posts = [
+            {"post_id": "bad_current", "post_url": "https://t.me/buryatia/1", "source_title": "Минтуризм Бурятии", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": False, "current_stage": "dropped_text_gate"},
+            {"post_id": "good_current", "post_url": "https://t.me/ko/1", "source_title": "KO", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate"},
+            {"post_id": "external", "post_url": "https://t.me/roundup/1", "source_title": "Roundup", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "one_item", "external_geo_mentions": "Бурятия", "current_stage": "semantic_candidate"},
+        ]
+        media_rows = [
+            {"post_url": "https://t.me/mediaonly/1", "image_model_input_type": "actual_image", "overall_media_score": 0.9},
+            {"post_url": "https://t.me/ko/1", "image_model_input_type": "actual_image", "overall_media_score": 0.8},
+        ]
+        queue, top, metrics = mod.build_image_candidate_queue(previous, posts, [], media_rows, "run-img", "2026-07-07T00:00:00+00:00")
+        urls = {r.get("post_url") for r in queue}
+        self.assertIn("https://t.me/good/1", urls)
+        self.assertIn("https://t.me/ko/1", urls)
+        self.assertNotIn("https://t.me/bad/1", urls)
+        self.assertNotIn("https://t.me/buryatia/1", urls)
+        self.assertNotIn("https://t.me/roundup/1", urls)
+        self.assertNotIn("https://t.me/mediaonly/1", urls)
+        self.assertEqual(metrics["image_queue_pruned_non_region_previous"], 1)
+        self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 3)
+        self.assertEqual(metrics["image_queue_text_region_confirmed_total"], len(queue))
 
     def test_candidate_found_jsonl_uses_stage_events_schema(self) -> None:
         mod = load_module()

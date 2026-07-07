@@ -266,8 +266,16 @@ Columns:
 
 Single persistent queue for posts/images that need actual media acquisition or
 actual-image scoring. It is separate from the source queue and has its own
-cursor/batch marker. Rows include `image_queue_order`, `cursor_marker`,
+cursor/batch marker. This queue is downstream of text/vector region gates: rows
+are admitted only when the post is text-confirmed as about Kaliningrad Oblast,
+non-ad, not a multi-region/other-region roundup, and not vector-rejected. Old
+queue rows without this proof are pruned on the next state write, so examples
+such as Krasnodar/Buryatia official posts must not be sent to image diagnostics.
+
+Rows include `image_queue_order`, `cursor_marker`,
 `selected_for_next_image_batch`, `image_queue_status`,
+`text_region_confirmation_status`, `kaliningrad_oblast_only_scope`,
+`kaliningrad_mention_role`, `vector_gate_status`, `matched_place_names`,
 `media_acquisition_status`, `media_acquisition_error_type`, post/source URLs and
 the latest scoring fields. The default human-sized processing target is
 `REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN=30`.
@@ -568,7 +576,10 @@ Summary metrics include `source_queue_total`, pending/processed/retry counts,
 `source_queue_low_image_quality_excluded_total`, `source_queue_only_telegram_vk`,
 `source_queue_only_target_source_urls`, `image_queue_total`, `image_queue_cursor_position`,
 `image_queue_target_this_run`, `image_queue_selected_next_batch`,
-`image_queue_actual_scored_total` and `image_queue_needs_actual_fetch_total`.
+`image_queue_actual_scored_total`, `image_queue_needs_actual_fetch_total`,
+`image_queue_pruned_non_region_previous`,
+`image_queue_rejected_non_region_inputs` and
+`image_queue_text_region_confirmed_total`.
 
 Kaggle launcher safety: per-run private input datasets use hash-suffixed slugs
 to avoid stale dataset reuse, copy the public blogger workbook from the

@@ -2412,6 +2412,32 @@ def build_unified_source_queue(
     return display_rows, metrics
 
 
+def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
+    """Only text-confirmed Kaliningrad Oblast candidate posts may enter image analysis.
+
+    The image queue is downstream of semantic/vector text gates. Rows that are
+    merely image/media rows, old queue carry-over, ads, other-region posts, or
+    vector rejects must not be sent to image diagnostics.
+    """
+    if str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}:
+        return False
+    vector_status = str(row.get("vector_gate_status") or row.get("memory_vector_recheck_status") or "")
+    if vector_status.startswith("vector_reject"):
+        return False
+    if str(row.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"}:
+        return False
+    mention_role = str(row.get("kaliningrad_mention_role") or "main_subject")
+    if mention_role not in {"", "main_subject", "unclear"}:
+        return False
+    if str(row.get("external_geo_mentions") or row.get("mentioned_external_regions") or row.get("mentioned_external_countries") or "").strip():
+        # Multi-region/travel roundups and other-region official posts are text failures for image analysis.
+        return False
+    stage = str(row.get("current_stage") or row.get("current_lifecycle_status") or "")
+    if stage and stage not in CANDIDATE_MEMORY_STAGES and stage not in ACTIVE_CANDIDATE_MEMORY_STATUSES and stage not in {"actual_scored", "needs_actual_image_fetch"}:
+        return False
+    return True
+
+
 def build_image_candidate_queue(
     previous_state: dict[str, Any],
     new_posts: list[dict[str, Any]],
@@ -2423,16 +2449,29 @@ def build_image_candidate_queue(
     previous_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     entries: dict[str, dict[str, Any]] = {}
     prev_cursor = int(previous_state.get("image_candidate_queue_cursor_position") or 0)
+    image_queue_pruned_non_region_previous = 0
+    image_queue_rejected_non_region_inputs = 0
     for row in sorted(previous_queue_rows, key=lambda r: int(r.get("image_queue_order") or 999999999)):
         key = str(row.get("post_url") or row.get("post_id") or row.get("image_queue_id") or "")
-        if key:
-            entries[key] = dict(row)
+        if not key:
+            continue
+        if not image_queue_text_region_confirmed(row):
+            image_queue_pruned_non_region_previous += 1
+            continue
+        entries[key] = dict(row)
     media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
 
     def add_or_update(row: dict[str, Any], *, added_from: str) -> None:
+        nonlocal image_queue_rejected_non_region_inputs
         post_url = str(row.get("post_url") or "")
         key = post_url or str(row.get("post_id") or "")
         if not key:
+            return
+        if added_from != "media_scoring" and not image_queue_text_region_confirmed(row):
+            image_queue_rejected_non_region_inputs += 1
+            return
+        if added_from == "media_scoring" and key not in entries and not image_queue_text_region_confirmed(row):
+            image_queue_rejected_non_region_inputs += 1
             return
         media = media_by_url.get(post_url) or row
         actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
@@ -2450,6 +2489,17 @@ def build_image_candidate_queue(
             "source_title": row.get("source_title", entries[key].get("source_title", "")),
             "source_url": row.get("source_url", entries[key].get("source_url", "")),
             "post_date": row.get("post_date", entries[key].get("post_date", "")),
+            "kaliningrad_oblast_only_scope": row.get("kaliningrad_oblast_only_scope", entries[key].get("kaliningrad_oblast_only_scope", "")),
+            "kaliningrad_mention_role": row.get("kaliningrad_mention_role", entries[key].get("kaliningrad_mention_role", "")),
+            "matched_place_names": row.get("matched_place_names", entries[key].get("matched_place_names", "")),
+            "external_geo_mentions": row.get("external_geo_mentions", entries[key].get("external_geo_mentions", "")),
+            "mentioned_external_regions": row.get("mentioned_external_regions", entries[key].get("mentioned_external_regions", "")),
+            "is_ad_or_promo": row.get("is_ad_or_promo", entries[key].get("is_ad_or_promo", "")),
+            "current_stage": row.get("current_stage", entries[key].get("current_stage", "")),
+            "current_lifecycle_status": row.get("current_lifecycle_status", entries[key].get("current_lifecycle_status", "")),
+            "vector_gate_status": row.get("vector_gate_status", entries[key].get("vector_gate_status", "")),
+            "vector_content_type": row.get("vector_content_type", entries[key].get("vector_content_type", "")),
+            "text_region_confirmation_status": "text_confirmed_ko_only_for_image_analysis",
             "candidate_score": row.get("candidate_score") or row.get("candidate_score_current") or row.get("best_candidate_score_ever") or entries[key].get("candidate_score", ""),
             "overall_media_score": media.get("overall_media_score", row.get("overall_media_score", entries[key].get("overall_media_score", ""))),
             "postcardness_score": media.get("postcardness_score", row.get("postcardness_score", entries[key].get("postcardness_score", ""))),
@@ -2471,7 +2521,7 @@ def build_image_candidate_queue(
         })
 
     for row in new_posts:
-        if row.get("has_media") and not row.get("is_ad_or_promo") and row.get("kaliningrad_oblast_only_scope"):
+        if row.get("has_media"):
             add_or_update(row, added_from="current_run_text_gate")
     for row in candidate_memory_rows:
         if row.get("post_url") and (row.get("current_lifecycle_status") in ACTIVE_CANDIDATE_MEMORY_STATUSES or row.get("image_status") == "needs_actual_image_fetch"):
@@ -2504,6 +2554,9 @@ def build_image_candidate_queue(
         "image_queue_selected_next_batch": len(target_ids),
         "image_queue_actual_scored_total": sum(1 for r in display if r.get("image_queue_status") == "actual_scored"),
         "image_queue_needs_actual_fetch_total": sum(1 for r in display if r.get("image_queue_status") == "needs_actual_image_fetch"),
+        "image_queue_pruned_non_region_previous": image_queue_pruned_non_region_previous,
+        "image_queue_rejected_non_region_inputs": image_queue_rejected_non_region_inputs,
+        "image_queue_text_region_confirmed_total": sum(1 for r in display if image_queue_text_region_confirmed(r)),
     }
     return display, top, metrics
 
