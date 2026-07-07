@@ -256,7 +256,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_FRESHNESS_HALF_LIFE_DAYS": os.environ.get("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
     }
-    secret_names = region_talk_secret_names(env.get("REGION_TALK_AUTH_BUNDLE_ENV"))
+    secret_names = region_talk_secret_names(env_config.get("REGION_TALK_AUTH_BUNDLE_ENV"))
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
     encrypted = Fernet(key).encrypt(json.dumps(secrets, ensure_ascii=False).encode("utf-8"))
