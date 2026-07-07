@@ -304,6 +304,13 @@ The XLSX has:
   `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` for production-like
   semi-manual runs so a short-lived/expired user IAM token cannot launch a
   notebook that later fails to write online state.
+  The preferred credential is `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON` either
+  in the local encrypted runner bundle or as a Kaggle User Secret with the same
+  name. If the secret exists only in Kaggle, set
+  `REGION_TALK_ALLOW_KAGGLE_YDB_SECRET=1`; this intentionally skips the local
+  YDB driver preflight and shifts the proof requirement to the notebook's first
+  YDB heartbeat/row-level write. Do not use this mode as completion evidence
+  until live YDB rows are observed.
 - Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when

@@ -10,6 +10,10 @@
   now validates required YDB credentials locally before pushing a live-YDB
   kernel, with an optional `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1`
   gate for service-account-key based runs.
+- **Region Talk Channel / Kaggle YDB service-account secrets**: CandidateReport
+  and ImageDiagnostic can now load `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON`
+  from Kaggle User Secrets, and ImageDiagnostic can use service-account JSON for
+  YDB live writes with the same preflight discipline as CandidateReport.
 - **Region Talk Channel / full live YDB discovery registry**: extended online
   row-level writes beyond final queues to include `source_candidate_item`,
   `source_edge_item` and reserved redacted `comment_link_item` rows, so newly

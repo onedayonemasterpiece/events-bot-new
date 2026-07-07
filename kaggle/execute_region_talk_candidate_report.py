@@ -186,6 +186,9 @@ def preflight_ydb_access() -> None:
     if not endpoint or not database:
         raise RuntimeError("Region Talk YDB preflight failed: REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE are required")
     if getenv_bool("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", False) and not (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip():
+        if getenv_bool("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", False):
+            print("[region-talk-kaggle] YDB local preflight skipped: explicit REGION_TALK_ALLOW_KAGGLE_YDB_SECRET=1; Kaggle notebook must load REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON from UserSecretsClient", flush=True)
+            return
         raise RuntimeError("Region Talk YDB preflight failed: REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1 but REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON is not set")
     try:
         import ydb  # type: ignore
@@ -238,6 +241,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get("REGION_TALK_REQUIRE_YDB_STATE", "0"),
         "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": os.environ.get("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0"),
         "REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS", "20"),
+        "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET": os.environ.get("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", "0"),
+        "REGION_TALK_KAGGLE_SECRET_NAMES": os.environ.get("REGION_TALK_KAGGLE_SECRET_NAMES", ""),
         "REGION_TALK_YDB_ENDPOINT": os.environ.get("REGION_TALK_YDB_ENDPOINT", ""),
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
         "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
@@ -484,6 +489,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
     os.environ.setdefault("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0")
+    os.environ.setdefault("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", "0")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")

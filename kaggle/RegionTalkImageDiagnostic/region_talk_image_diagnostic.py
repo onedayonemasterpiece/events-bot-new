@@ -79,7 +79,30 @@ def load_runtime_config() -> dict:
             os.environ[str(k)] = str(v)
     return cfg
 
+def load_kaggle_user_secrets() -> dict:
+    names = ["REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "REGION_TALK_YDB_IAM_TOKEN", "YDB_ACCESS_TOKEN"]
+    extra = (os.getenv("REGION_TALK_KAGGLE_SECRET_NAMES") or "").strip()
+    if extra:
+        names.extend([x.strip() for x in re.split(r"[,;\\s]+", extra) if x.strip()])
+    names = list(dict.fromkeys(names))
+    try:
+        from kaggle_secrets import UserSecretsClient  # type: ignore
+    except Exception as exc:
+        return {"ok": False, "source": "kaggle_user_secrets", "error": type(exc).__name__, "loaded": []}
+    loaded = []; errors = []; client = UserSecretsClient()
+    for name in names:
+        if os.getenv(name):
+            continue
+        try:
+            value = client.get_secret(name)
+            if value is not None and str(value).strip():
+                os.environ.setdefault(name, str(value)); loaded.append(name)
+        except Exception as exc:
+            errors.append(f"{name}:{type(exc).__name__}")
+    return {"ok": bool(loaded), "source": "kaggle_user_secrets", "loaded": loaded, "errors": errors[:5]}
+
 def load_secrets() -> dict:
+    status = {"encrypted": {"ok": False}, "kaggle_user_secrets": {"ok": False}}
     pairs = []
     for enc in Path("/kaggle/input").glob("**/region_talk_secrets.enc"):
         key = enc.parent / "region_talk_fernet.key"
@@ -89,10 +112,15 @@ def load_secrets() -> dict:
             data = json.loads(Fernet(key.read_bytes().strip()).decrypt(enc.read_bytes()).decode("utf-8"))
             for k, v in data.items():
                 if v is not None and str(v).strip(): os.environ.setdefault(str(k), str(v))
-            return {"ok": True, "keys": sorted(data.keys())}
+            status["encrypted"] = {"ok": True, "keys": sorted(data.keys())}
+            break
         except Exception as exc:
             last = type(exc).__name__ + ": " + str(exc)[:200]
-    return {"ok": False, "error": locals().get("last", "no secrets pair")}
+    else:
+        status["encrypted"] = {"ok": False, "error": locals().get("last", "no secrets pair")}
+    status["kaggle_user_secrets"] = load_kaggle_user_secrets()
+    status["ok"] = bool(status["encrypted"].get("ok") or status["kaggle_user_secrets"].get("ok"))
+    return status
 
 runtime_config = load_runtime_config()
 refresh_run_paths()
@@ -118,6 +146,14 @@ def ydb_cfg():
 def ydb_credentials(ydb):
     token=(os.getenv("REGION_TALK_YDB_IAM_TOKEN") or os.getenv("YC_IAM_TOKEN") or os.getenv("YDB_ACCESS_TOKEN") or "").strip()
     if token: return ydb.AccessTokenCredentials(token)
+    key_json=(os.getenv("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip()
+    if key_json:
+        import tempfile
+        import ydb.iam  # type: ignore
+        fd, path = tempfile.mkstemp(prefix="region-talk-image-ydb-sa-", suffix=".json")
+        os.close(fd)
+        Path(path).write_text(key_json, encoding="utf-8")
+        return ydb.iam.ServiceAccountCredentials.from_file(path)
     if os.getenv("YDB_USER"): return ydb.StaticCredentials.from_user_password(os.getenv("YDB_USER"), os.getenv("YDB_PASSWORD", ""))
     return None
 

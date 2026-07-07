@@ -22,6 +22,7 @@ create_or_replace_dataset = _candidate_executor.create_or_replace_dataset
 wait_dataset_ready = _candidate_executor.wait_dataset_ready
 build_input_datasets = _candidate_executor.build_input_datasets
 poll_kernel = _candidate_executor.poll_kernel
+preflight_ydb_access = _candidate_executor.preflight_ydb_access
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkImageDiagnostic"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-image-diagnostic"
@@ -81,6 +82,9 @@ def main() -> int:
         if not rows: print("image queue empty, diagnostic image scoring skipped", flush=True); return 0
     client=KaggleClient() if KaggleClient is not None else DirectKaggleClient(); username=(os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username: raise RuntimeError("KAGGLE_USERNAME is required")
+    if args.source == "ydb":
+        os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")
+        preflight_ydb_access()
     def write_input(folder: Path):
         (folder/"image_diag_input.json").write_text(json.dumps({"run_id":run_id,"source":args.source,"top_n":args.top_n,"max_items_per_run":args.max_items_per_run,"batch_size":args.batch_size,"wait_initial_seconds":args.wait_initial_seconds,"wait_after_drain_seconds":args.wait_after_drain_seconds,"poll_interval_seconds":args.image_poll_interval_seconds,"queue_xlsx":str(qxlsx or ""),"queue_rows_total":total,"rows":rows},ensure_ascii=False,indent=2),encoding="utf-8")
         safe_env_keys=[
@@ -90,6 +94,8 @@ def main() -> int:
             "REGION_TALK_IMAGE_DIAG_POLL_INTERVAL_SECONDS",
             "REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS",
             "REGION_TALK_STATE_BACKEND", "REGION_TALK_REQUIRE_YDB_STATE",
+            "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET",
+            "REGION_TALK_KAGGLE_SECRET_NAMES",
             "REGION_TALK_YDB_ENDPOINT", "REGION_TALK_YDB_DATABASE", "REGION_TALK_YDB_NAMESPACE",
             "REGION_TALK_YDB_MAX_SOURCE_ROWS", "REGION_TALK_YDB_MAX_CANDIDATE_ROWS",
             "REGION_TALK_SOURCE_IMAGE_MIN_ACTUAL_SCORED", "REGION_TALK_SOURCE_IMAGE_MIN_AVG_SCORE",

@@ -249,6 +249,36 @@ def load_dotenv(path: Path) -> None:
             os.environ[k] = v
 
 
+def load_kaggle_user_secrets() -> dict[str, Any]:
+    names = [
+        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON",
+        "REGION_TALK_YDB_IAM_TOKEN",
+        "YDB_ACCESS_TOKEN",
+    ]
+    extra = (os.getenv("REGION_TALK_KAGGLE_SECRET_NAMES") or "").strip()
+    if extra:
+        names.extend([x.strip() for x in re.split(r"[,;\\s]+", extra) if x.strip()])
+    names = list(dict.fromkeys(names))
+    try:
+        from kaggle_secrets import UserSecretsClient  # type: ignore
+    except Exception as exc:
+        return {"ok": False, "source": "kaggle_user_secrets", "error": type(exc).__name__, "loaded": []}
+    loaded: list[str] = []
+    errors: list[str] = []
+    client = UserSecretsClient()
+    for name in names:
+        if os.getenv(name):
+            continue
+        try:
+            value = client.get_secret(name)
+            if value is not None and str(value).strip():
+                os.environ.setdefault(name, str(value))
+                loaded.append(name)
+        except Exception as exc:
+            errors.append(f"{name}:{type(exc).__name__}")
+    return {"ok": bool(loaded), "source": "kaggle_user_secrets", "loaded": loaded, "errors": errors[:5]}
+
+
 def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
     roots = [Path("/kaggle/input"), Path.cwd()]
     config: dict[str, Any] = {}
@@ -306,6 +336,7 @@ def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
                 raise RuntimeError("no matching region_talk_secrets.enc/region_talk_fernet.key pair; " + "; ".join(failures[:5]))
         except Exception as exc:
             raise RuntimeError(f"failed to load encrypted Region Talk secrets: {type(exc).__name__}") from exc
+    load_kaggle_user_secrets()
     return config
 
 
