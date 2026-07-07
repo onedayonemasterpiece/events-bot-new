@@ -109,15 +109,19 @@ def main() -> int:
     kernel_path=stage_kernel(run_id,args.kernel_slug); kernel_ref=f"{username}/{args.kernel_slug}"
     print(f"[region-talk-image-diagnostic] pushing {kernel_ref} run_id={run_id} source={args.source} queue_rows={total} top_n={args.top_n if args.source=='ydb' else len(rows)} max_items={args.max_items_per_run} batch_size={args.batch_size}", flush=True)
     client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
+    completed=False
     try:
         poll_kernel(client,kernel_ref,timeout_minutes=args.timeout_minutes,poll_interval_seconds=args.poll_interval_seconds)
+        completed=True
         out_dir=OUT_ROOT/run_id; out_dir.mkdir(parents=True,exist_ok=True)
         files=client.download_kernel_output(kernel_ref,path=out_dir,force=True,file_pattern=r".*(xlsx|html|md|json|jsonl|jpg|png)$")
         print(f"[region-talk-image-diagnostic] downloaded {len(files)} files to {out_dir}", flush=True)
     finally:
-        if not args.keep_input_datasets:
+        if not args.keep_input_datasets and completed:
             for ref in dataset_sources:
                 try: client.delete_dataset(ref); print(f"[region-talk-image-diagnostic] cleaned input dataset {ref}", flush=True)
                 except Exception as exc: print(f"[region-talk-image-diagnostic] WARNING cleanup failed {ref}: {type(exc).__name__}: {exc}", flush=True)
+        elif not completed:
+            print(f"[region-talk-image-diagnostic] keeping input datasets because run did not complete locally: {dataset_sources}", flush=True)
     return 0
 if __name__=="__main__": raise SystemExit(main())

@@ -447,8 +447,10 @@ def main() -> int:
     if args.no_wait:
         print(f"[region-talk-kaggle] pushed {kernel_ref}; not waiting; temporary input datasets retained until run completion: {dataset_sources}", flush=True)
         return 0
+    completed = False
     try:
         poll_kernel(client, kernel_ref, timeout_minutes=args.timeout_minutes, poll_interval_seconds=args.poll_interval_seconds)
+        completed = True
         out_dir = ARTIFACT_ROOT / run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         output_file_pattern = os.environ.get(
@@ -464,8 +466,10 @@ def main() -> int:
             shutil.copy2(latest, public_latest)
             print(f"[region-talk-kaggle] latest workbook: {public_latest}", flush=True)
     finally:
-        if not args.keep_input_datasets:
+        if not args.keep_input_datasets and completed:
             cleanup_input_datasets(client, dataset_sources)
+        elif not completed:
+            print(f"[region-talk-kaggle] keeping input datasets because run did not complete locally: {dataset_sources}", flush=True)
     return 0
 
 
