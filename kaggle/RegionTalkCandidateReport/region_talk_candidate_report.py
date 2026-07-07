@@ -729,6 +729,11 @@ POST_STATE_FIELDS = [
     "vector_gate_status", "llm_gate_status", "llm_decision", "llm_reason", "content_type",
     "is_forwarded_or_repost", "forwarded_from_post_url",
 ]
+POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
+    "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
+    "media_count", "text_hash", "text_excerpt_hash", "source_url", "handle",
+    "fetch_status", "post_observation_status",
+]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
@@ -988,6 +993,239 @@ def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
     pool.retry_operation_sync(op)
 
 
+def _online_source_key(row: dict[str, Any]) -> str:
+    platform = str(row.get("platform") or row.get("platform_guess") or "telegram")
+    handle = str(row.get("handle") or row.get("recommended_username") or row.get("username_or_handle") or "")
+    url = str(row.get("canonical_url") or row.get("source_url") or row.get("normalized_url") or row.get("recommended_canonical_url") or row.get("raw_url") or "")
+    key = str(row.get("canonical_source_key") or "")
+    return key or canonical_source_key(platform, handle, url) or stable_hash(platform, handle, url, row.get("source_id") or row.get("source_candidate_id") or "")
+
+
+def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> dict[str, Any]:
+    now = utc_now_iso()
+    platform = str(row.get("platform") or row.get("platform_guess") or "telegram")
+    url = str(row.get("canonical_url") or row.get("source_url") or row.get("normalized_url") or row.get("recommended_canonical_url") or row.get("raw_url") or "")
+    handle = str(row.get("handle") or row.get("recommended_username") or row.get("username_or_handle") or "")
+    title = str(row.get("source_title") or row.get("resolved_title") or row.get("recommended_title") or row.get("discovered_from_source") or handle or url)
+    fetch_status = str(status or row.get("fetch_status") or row.get("candidate_source_status") or row.get("frontier_status") or row.get("method_status") or "observed")
+    payload = {
+        "run_id": run_id,
+        "updated_at": now,
+        "last_seen_run_id": run_id,
+        "online_update_stage": stage,
+        "canonical_source_key": _online_source_key(row),
+        "source_queue_id": "srcq_" + stable_hash(_online_source_key(row)),
+        "source_id": row.get("source_id") or row.get("source_candidate_id") or ("src_" + stable_hash(platform, handle or url)),
+        "source_candidate_id": row.get("source_candidate_id") or "",
+        "platform": platform,
+        "handle": handle,
+        "source_title": title,
+        "resolved_title": row.get("resolved_title") or title,
+        "canonical_url": url,
+        "source_url": url,
+        "fetch_status": fetch_status,
+        "queue_status": "candidate" if row.get("source_candidate_id") else ("scanned" if fetch_status == "ok" else "skipped_or_rejected"),
+        "frontier_status": row.get("frontier_status") or "",
+        "frontier_action": row.get("frontier_action") or "",
+        "frontier_reason": row.get("frontier_reason") or row.get("source_probe_reason") or "",
+        "discovery_type": row.get("discovery_type") or "",
+        "edge_type": row.get("edge_type") or "",
+        "posts_scanned": row.get("posts_scanned") or 0,
+        "ko_posts_found": row.get("ko_posts_found") or 0,
+        "candidate_posts_found": row.get("candidate_posts_found") or 0,
+        "last_seen_post_date": row.get("last_seen_post_date") or "",
+        "telegram_resolve_status": row.get("telegram_resolve_status") or "",
+        "fetch_error_code": row.get("fetch_error_code") or row.get("last_resolve_error_code") or row.get("method_error_code") or "",
+        "fetch_error_message": row.get("fetch_error_message") or row.get("last_resolve_error_message_short") or row.get("method_error_message_short") or "",
+        "confidence": row.get("confidence") or row.get("similarity_edge_confidence") or "",
+        "source_probe_reason": row.get("source_probe_reason") or row.get("frontier_reason") or "",
+    }
+    return compact_record(payload, SOURCE_QUEUE_STATE_FIELDS + [
+        "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "queue_status",
+        "source_candidate_id", "platform", "handle", "resolved_title", "discovery_type",
+        "edge_type", "frontier_status", "frontier_action", "frontier_reason", "confidence",
+    ], max_len=700)
+
+
+def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> None:
+    """Upsert source/frontier progress while discovery is still running.
+
+    Final state snapshots are still written at report end, but the product
+    discovery loop needs live YDB visibility for newly seen / skipped channels.
+    """
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return
+    if not getenv_bool("REGION_TALK_YDB_ONLINE_SOURCE_WRITES", True):
+        return
+    try:
+        payload = _online_source_payload(row, run_id=run_id, stage=stage, status=status)
+        key = str(payload.get("canonical_source_key") or "")
+        if not key:
+            return
+        updated_at = str(payload.get("updated_at") or utc_now_iso())
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, "source_queue_item:" + key, "source_queue_item", payload, updated_at)
+            ydb_upsert_json(session, ydb, table_path, "source_status_item:" + key, "source_status_item", payload, updated_at)
+            ydb_upsert_json(session, ydb, table_path, "online_source_item:" + key, "online_source_item", payload, updated_at)
+
+        pool.retry_operation_sync(op)
+    except Exception as exc:
+        print(f"[region-talk] online_source_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+
+
+def _online_post_payload(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> dict[str, Any]:
+    now = utc_now_iso()
+    text = str(row.get("text") or row.get("text_excerpt") or "")
+    payload = {
+        **row,
+        "run_id": run_id,
+        "updated_at": now,
+        "last_seen_run_id": run_id,
+        "online_update_stage": stage,
+        "post_observation_status": status or row.get("current_stage") or "fetched",
+        "text_hash": stable_hash(text) if text else row.get("text_hash", ""),
+        "text_excerpt_hash": stable_hash(str(row.get("text_excerpt") or "")) if row.get("text_excerpt") else "",
+    }
+    payload.pop("text", None)
+    payload.pop("raw", None)
+    return compact_record(payload, POST_LIVE_STATE_FIELDS, max_len=900)
+
+
+def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> None:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return
+    if not getenv_bool("REGION_TALK_YDB_ONLINE_POST_WRITES", True):
+        return
+    try:
+        payload = _online_post_payload(row, run_id=run_id, stage=stage, status=status)
+        key = str(payload.get("post_id") or payload.get("platform_post_key") or payload.get("post_url") or "")
+        if not key:
+            return
+        updated_at = str(payload.get("updated_at") or utc_now_iso())
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, "post_live_item:" + key, "post_live_item", payload, updated_at)
+            ydb_upsert_json(session, ydb, table_path, "processed_post_item:" + key, "processed_post_item", payload, updated_at)
+
+        pool.retry_operation_sync(op)
+    except Exception as exc:
+        print(f"[region-talk] online_post_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+
+
+def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_id: str, stage: str) -> int:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return 0
+    if not rows or not getenv_bool("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITES", True):
+        return 0
+    try:
+        now = utc_now_iso()
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for row in rows:
+            payload = compact_record({**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage}, CANDIDATE_MEMORY_STATE_FIELDS + ["run_id", "updated_at", "online_update_stage"], max_len=900)
+            key = str(payload.get("candidate_memory_id") or payload.get("post_id") or payload.get("post_url") or "")
+            if key:
+                items.append(("candidate_memory_item:" + key.replace("candidate_memory_item:", ""), "candidate_memory_item", payload))
+        if not items:
+            return 0
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> int:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+
+        return int(pool.retry_operation_sync(op) or 0)
+    except Exception as exc:
+        print(f"[region-talk] online_candidate_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        return 0
+
+
+def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: str, id_fields: list[str], fields: list[str], run_id: str, stage: str) -> int:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return 0
+    if not rows or not getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True):
+        return 0
+    try:
+        now = utc_now_iso()
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for row in rows:
+            payload = compact_record({**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage}, fields + ["run_id", "updated_at", "last_seen_run_id", "online_update_stage"], max_len=900)
+            key = ""
+            for f in id_fields:
+                if payload.get(f):
+                    key = str(payload.get(f))
+                    break
+            if key:
+                items.append((kind + ":" + key.replace(kind + ":", ""), kind, payload))
+        if not items:
+            return 0
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> int:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+
+        return int(pool.retry_operation_sync(op) or 0)
+    except Exception as exc:
+        print(f"[region-talk] online_queue_ydb_failed kind={kind} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        return 0
+
+
+def write_region_talk_online_stats(payload: dict[str, Any]) -> None:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return
+    if not getenv_bool("REGION_TALK_YDB_ONLINE_SOURCE_WRITES", True):
+        return
+    try:
+        compact = compact_record({**payload, "updated_at": utc_now_iso()}, [
+            "run_id", "updated_at", "phase", "status", "progress_label",
+            "sources_seen_this_run", "sources_done", "sources_total",
+            "sources_rejected_or_skipped_this_run", "sources_with_ko_posts_this_run",
+            "ko_candidate_posts_this_run", "image_strong_this_run",
+        ], max_len=700)
+        run_id = str(compact.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        updated_at = str(compact.get("updated_at") or utc_now_iso())
+
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, "online_stats:" + run_id, "online_stats", compact, updated_at)
+            ydb_upsert_json(session, ydb, table_path, "online_stats:latest", "online_stats", compact, updated_at)
+
+        pool.retry_operation_sync(op)
+    except Exception as exc:
+        print(f"[region-talk] online_stats_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+
+
+def append_source_row_online(source_rows: list[dict[str, Any]], row: dict[str, Any], *, run_id: str, stage: str, sources_total: int | None = None) -> None:
+    source_rows.append(row)
+    write_region_talk_online_source_item(row, run_id=run_id, stage=stage)
+    skipped = sum(1 for r in source_rows if str(r.get("fetch_status") or r.get("method_status") or "").startswith(("skipped", "error", "debug_self_loop_rejected")))
+    with_ko = sum(1 for r in source_rows if int(r.get("ko_posts_found") or 0) > 0)
+    ko_posts = sum(int(r.get("ko_posts_found") or 0) for r in source_rows)
+    write_region_talk_online_stats({
+        "run_id": run_id,
+        "phase": stage,
+        "status": "running",
+        "sources_seen_this_run": len(source_rows),
+        "sources_done": len(source_rows),
+        "sources_total": sources_total or "",
+        "sources_rejected_or_skipped_this_run": skipped,
+        "sources_with_ko_posts_this_run": with_ko,
+        "ko_candidate_posts_this_run": ko_posts,
+        "progress_label": f"online discovery sources {len(source_rows)}" + (f"/{sources_total}" if sources_total else ""),
+    })
+
+
+def append_post_online(posts: list[dict[str, Any]], row: dict[str, Any], *, run_id: str, stage: str) -> None:
+    posts.append(row)
+    write_region_talk_online_post_item(row, run_id=run_id, stage=stage)
+
+
 def close_region_talk_business_heartbeat() -> None:
     driver = _YDB_BUSINESS_HEARTBEAT_CACHE.get("driver")
     if driver is not None:
@@ -1130,8 +1368,28 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 source_items = ydb_select_kind_items(session, ydb, table_path, "source_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 publication_items = ydb_select_kind_items(session, ydb, table_path, "publication_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                post_items = ydb_select_kind_items(session, ydb, table_path, "processed_post_item", limit=getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000))
+                candidate_items = ydb_select_kind_items(session, ydb, table_path, "candidate_memory_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
+                    if post_items:
+                        p = data0.get("processed_posts") if isinstance(data0.get("processed_posts"), dict) else {}
+                        p = dict(p)
+                        for _pk, item in post_items.items():
+                            key = str(item.get("post_id") or item.get("platform_post_key") or item.get("post_url") or _pk.replace("processed_post_item:", ""))
+                            if key:
+                                p[key] = {**p.get(key, {}), **item}
+                        data0["processed_posts"] = p
+                        data0["ydb_row_level_processed_post_items_loaded"] = len(post_items)
+                    if candidate_items:
+                        c = data0.get("candidate_memory") if isinstance(data0.get("candidate_memory"), dict) else {}
+                        c = dict(c)
+                        for _pk, item in candidate_items.items():
+                            key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or _pk.replace("candidate_memory_item:", ""))
+                            if key:
+                                c[key] = {**c.get(key, {}), **item}
+                        data0["candidate_memory"] = c
+                        data0["ydb_row_level_candidate_memory_items_loaded"] = len(candidate_items)
                     if image_items:
                         q = data0.get("image_candidate_queue") if isinstance(data0.get("image_candidate_queue"), dict) else {}
                         q = dict(q)
@@ -1252,6 +1510,16 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("image_queue_id") or item.get("post_url") or "")
                         if key:
                             row_items.append(("image_queue_item:" + key, "image_queue_item", item))
+                for item in (compact.get("processed_posts") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("post_id") or item.get("platform_post_key") or item.get("post_url") or "")
+                        if key:
+                            row_items.append(("processed_post_item:" + key, "processed_post_item", item))
+                for item in (compact.get("candidate_memory") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or "")
+                        if key:
+                            row_items.append(("candidate_memory_item:" + key, "candidate_memory_item", item))
                 for item in (compact.get("publication_candidate_queue") or {}).values():
                     if isinstance(item, dict):
                         key = str(item.get("publication_candidate_id") or item.get("post_url") or "")
@@ -1272,7 +1540,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -3347,7 +3615,9 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 cand_id = "src_cand_" + stable_hash("telegram", rec_url)
                 if canonical_source_key("telegram", username, rec_url) == canonical_source_key("telegram", srow.get("handle", ""), canonical):
                     self_loop_count += 1
-                    rows.append({"run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical, "recommended_canonical_url": rec_url, "method_status": "debug_self_loop_rejected", "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "self-loop rejected"})
+                    debug_row = {"run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical, "recommended_canonical_url": rec_url, "method_status": "debug_self_loop_rejected", "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "self-loop rejected"}
+                    rows.append(debug_row)
+                    write_region_talk_online_source_item(debug_row, run_id=run_id, stage="telegram_similar_discovery", status="debug_self_loop_rejected")
                     continue
                 if cand_id in seen:
                     duplicate_count += 1
@@ -3386,6 +3656,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 }
                 row["frontier_priority"] = source_candidate_score(row)
                 rows.append(row)
+                write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_similar_discovery", status="source_frontier")
                 edge_id = "edge_" + stable_hash(source_id, cand_id, "telegram_similar_channel")
                 edges.append({
                     "edge_id": edge_id, "from_source_id": source_id, "from_source_title": srow.get("source_title") or srow.get("resolved_title"),
@@ -3434,12 +3705,14 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 "similar_next_allowed_at": iso_after_seconds(getenv_int("REGION_TALK_SIMILAR_ERROR_BACKOFF_SECONDS", 86400)),
                 "similar_error_count_increment": 1,
             }
-            rows.append({
+            error_row = {
                 "run_id": run_id, "seed_source_id": source_id, "seed_channel_url": canonical,
                 "seed_channel_title": srow.get("source_title"), "method_status": "error",
                 "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180],
                 "edge_type": "telegram_similar_channel", "frontier_action": "none", "frontier_reason": "recommendation call failed",
-            })
+            }
+            rows.append(error_row)
+            write_region_talk_online_source_item(error_row, run_id=run_id, stage="telegram_similar_discovery", status="error")
     governor.recommendation_channels_added_to_frontier = len([r for r in rows if r.get("candidate_source_status") == "source_frontier"])
     status = "ok" if rows or not errors else "error"
     _REGION_TALK_TELEGRAM_RUNTIME.update({
@@ -3498,7 +3771,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     key = canonical_source_key("telegram", username, url)
                     post_url = f"https://t.me/{username}/{getattr(msg, 'id', '')}"
                     text_excerpt = re.sub(r"\s+", " ", str(getattr(msg, "message", "") or ""))[:500]
-                    post_hits.append({
+                    post_hit_row = {
                         "run_id": run_id,
                         "matched_query": query,
                         "keyword_hit_post_url": post_url,
@@ -3511,7 +3784,9 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "frontier_action": "source_seen" if key in seen_keys else "source_queued",
                         "sent_to_pipeline": "true",
                         "acceptance_note": "keyword hit is discovery/context only, never auto-accepts publication candidate",
-                    })
+                    }
+                    post_hits.append(post_hit_row)
+                    write_region_talk_online_source_item(post_hit_row, run_id=run_id, stage="keyword_hit_source_context", status=post_hit_row.get("frontier_action"))
                     if key in seen_keys:
                         continue
                     seen_keys.add(key)
@@ -3543,6 +3818,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     }
                     row["frontier_priority"] = source_candidate_score(row)
                     rows.append(row)
+                    write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_keyword_discovery", status="source_frontier")
                     edges.append({
                         "edge_id": "edge_" + stable_hash("keyword", query, cand_id),
                         "from_source_id": "telegram_keyword_search",
@@ -3567,7 +3843,9 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     governor.mark_floodwait("messages.searchGlobal", "keyword_discovery", query, seconds)
                     break
                 governor.total_error += 1
-                rows.append({"run_id": run_id, "discovery_type": "telegram_keyword_search", "edge_type": "telegram_keyword_search", "matched_query": query, "method_status": "error", "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180], "frontier_action": "none"})
+                error_row = {"run_id": run_id, "discovery_type": "telegram_keyword_search", "edge_type": "telegram_keyword_search", "matched_query": query, "method_status": "error", "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180], "frontier_action": "none"}
+                rows.append(error_row)
+                write_region_talk_online_source_item(error_row, run_id=run_id, stage="telegram_keyword_discovery", status="error")
             if len(rows) >= max_frontier:
                 break
     finally:
@@ -3819,6 +4097,7 @@ def vk_domain_from_seed(seed: Seed) -> str:
 
 
 def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     token = vk_wall_token()
     src = source_status_row(seed, "skipped_vk_wall_not_configured" if not token else "ok", vk_wall_probe_status="not_configured" if not token else "ok", fetch_attempted=str(bool(token)).lower())
     if not token:
@@ -3884,7 +4163,8 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
             forwarded_url = f"https://vk.com/wall{origin_owner}_{origin_mid}" if origin_owner and origin_mid else ""
             group = groups.get(str(abs(int(owner_id))) if str(owner_id).lstrip("-").isdigit() else "") or {}
             title = str(group.get("name") or seed.source_title or domain)
-            posts.append({"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else ""})
+            post_row = {"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else ""}
+            append_post_online(posts, post_row, run_id=run_id, stage="vk_wall_fetch")
         src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind()})
         return src, posts
     except Exception as exc:
@@ -3999,7 +4279,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
             has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
             title = str(getattr(entity, "title", None) or row.get("source_title") or handle)
             post_date = dt.isoformat() if dt else str(row.get("post_date") or "")
-            posts.append({
+            post_row = {
                 "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
                 "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
                 "source_seed_id": "ydb_candidate_links",
@@ -4030,7 +4310,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
                 "original_source_candidate_id": "",
                 "ydb_candidate_link_kind": row.get("_kind") or "",
                 "ydb_candidate_link_pk": row.get("_pk") or "",
-            })
+            }
+            append_post_online(posts, post_row, run_id=run_id, stage="ydb_candidate_link_fetch")
             stat["ok"] += 1
             stat["last_seen_post_date"] = max(str(stat.get("last_seen_post_date") or ""), post_date)
         except Exception as exc:
@@ -4041,7 +4322,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
     for handle, stat in source_stats.items():
         ok = int(stat.get("ok") or 0)
         errors = int(stat.get("errors") or 0)
-        source_rows.append({
+        append_source_row_online(source_rows, {
             "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
             "source_seed_id": "ydb_candidate_links",
             "source_title": stat.get("source_title") or handle,
@@ -4057,7 +4338,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
             "fetch_error_code": stat.get("last_error_code", "") if errors else "",
             "fetch_error_message": stat.get("last_error_message", "") if errors else "",
             "vk_wall_probe_status": "not_applicable",
-        })
+        }, run_id=run_id, stage="ydb_candidate_link_fetch", sources_total=len(source_stats))
     status.event("ydb_candidate_posts_fetched", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_fetched=len(posts), sources_scanned=len(source_rows), progress_label=f"YDB candidate posts fetched {len(posts)}/{len(rows)}")
     return source_rows, posts
 
@@ -4090,30 +4371,46 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     posts: list[dict[str, Any]] = []
     entity_by_source: dict[str, Any] = {}
     for seed in selected:
+        write_region_talk_online_source_item(
+            source_status_row(seed, "selected_for_run", selected_for_planning="true", fetch_attempted="false"),
+            run_id=run_id,
+            stage="source_selected_for_run",
+            status="selected_for_run",
+        )
+    write_region_talk_online_stats({
+        "run_id": run_id,
+        "phase": "source_selected_for_run",
+        "status": "running",
+        "sources_seen_this_run": len(selected),
+        "sources_done": 0,
+        "sources_total": len(selected),
+        "progress_label": f"selected sources {len(selected)}",
+    })
+    for seed in selected:
         if seed.platform == "telegram":
             continue
         if seed.platform == "vk":
             if fetch_enabled:
                 vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
-                source_rows.append(vk_row)
+                append_source_row_online(source_rows, vk_row, run_id=run_id, stage="source_fetch", sources_total=len(selected))
                 posts.extend(vk_posts)
             else:
                 status_value = "skipped_vk_wall_not_configured" if not vk_wall_token() else "skipped_fetch_disabled"
-                source_rows.append(source_status_row(seed, status_value, vk_wall_probe_status="fetch_disabled", source_probe_reason="VK wall fetch disabled by REGION_TALK_FETCH_TELEGRAM=0"))
+                append_source_row_online(source_rows, source_status_row(seed, status_value, vk_wall_probe_status="fetch_disabled", source_probe_reason="VK wall fetch disabled by REGION_TALK_FETCH_TELEGRAM=0"), run_id=run_id, stage="source_fetch", sources_total=len(selected))
         elif seed.platform == "vkvideo":
             if fetch_enabled and getenv_bool("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", True) and "vk.com/" in seed.url.lower() and "/video" not in seed.url.lower():
                 vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
                 vk_row["platform"] = "vk"
                 vk_row["source_probe_reason"] = (vk_row.get("source_probe_reason") or "") + "; source row was marked vkvideo but has a public vk.com wall URL, fetched as VK wall fallback"
-                source_rows.append(vk_row)
+                append_source_row_online(source_rows, vk_row, run_id=run_id, stage="source_fetch", sources_total=len(selected))
                 posts.extend(vk_posts)
             else:
-                source_rows.append(source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."))
+                append_source_row_online(source_rows, source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."), run_id=run_id, stage="source_fetch", sources_total=len(selected))
         else:
-            source_rows.append(source_status_row(seed, "skipped_unsupported_platform", vk_wall_probe_status="not_applicable", source_probe_reason="Non-Telegram source is tracked for coverage/discovery, not fetched in this MVP run."))
+            append_source_row_online(source_rows, source_status_row(seed, "skipped_unsupported_platform", vk_wall_probe_status="not_applicable", source_probe_reason="Non-Telegram source is tracked for coverage/discovery, not fetched in this MVP run."), run_id=run_id, stage="source_fetch", sources_total=len(selected))
     if not fetch_enabled:
         for s in monitored:
-            source_rows.append(source_status_row(s, "skipped_fetch_disabled"))
+            append_source_row_online(source_rows, source_status_row(s, "skipped_fetch_disabled"), run_id=run_id, stage="source_fetch_disabled", sources_total=len(monitored))
         return source_rows, posts
     try:
         from telethon import TelegramClient  # type: ignore
@@ -4129,7 +4426,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             _REGION_TALK_TELEGRAM_RUNTIME["telethon_version"] = str(getattr(telethon, "__version__", ""))
         else:
             for s in monitored:
-                source_rows.append(source_status_row(s, "skipped_telethon_not_installed"))
+                append_source_row_online(source_rows, source_status_row(s, "skipped_telethon_not_installed"), run_id=run_id, stage="source_fetch", sources_total=len(monitored))
             return source_rows, posts
     bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
     raw = (os.getenv(bundle_env) or "").strip()
@@ -4141,7 +4438,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     session = str(bundle.get("session") or os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip()
     if not session or not api_id or not api_hash:
         for s in monitored:
-            source_rows.append(source_status_row(s, "skipped_missing_telethon_credentials"))
+            append_source_row_online(source_rows, source_status_row(s, "skipped_missing_telethon_credentials"), run_id=run_id, stage="source_fetch", sources_total=len(monitored))
         return source_rows, posts
     client = TelegramClient(StringSession(session), api_id, api_hash, device_model=str(bundle.get("device_model") or "Region Talk Discovery"), system_version=str(bundle.get("system_version") or "Linux"), app_version=str(bundle.get("app_version") or "1.0"), lang_code=str(bundle.get("lang_code") or "ru"), system_lang_code=str(bundle.get("system_lang_code") or "ru"))
     try:
@@ -4173,7 +4470,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             handle = seed.handle.lstrip("@")
             if not handle or "/" in handle or handle.startswith("http"):
                 skipped = source_status_row(seed, "skipped_telegram_handle_not_configured", vk_wall_probe_status="not_applicable")
-                source_rows.append(skipped)
+                append_source_row_online(source_rows, skipped, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · skipped · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": skipped.get("fetch_status"), "posts_scanned": 0})
                 continue
             src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
@@ -4181,18 +4478,18 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             src_row.update(resolve_meta)
             if entity is None:
                 src_row.setdefault("fetch_status", resolve_meta.get("fetch_status") or "skipped_telegram_unresolved_deferred")
-                source_rows.append(src_row)
+                append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · unresolved · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "telegram_resolve_status": src_row.get("telegram_resolve_status"), "posts_scanned": 0, "fetch_error_code": src_row.get("last_resolve_error_code", ""), "fetch_error_message": src_row.get("last_resolve_error_message_short", "")})
                 continue
             if history_scan_mode == "off" or discovery_mode in {"similar_only", "keyword_only"}:
                 src_row.update({"fetch_status": "profile_resolved_history_disabled", "fetch_attempted": "false", "source_probe_reason": f"history scan disabled by discovery_mode={discovery_mode} history_scan_mode={history_scan_mode}", "history_fetch_mode": "history_disabled_discovery_only", "posts_scanned": 0})
-                source_rows.append(src_row)
+                append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 entity_by_source[seed.source_id] = entity
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · history disabled · {src_row.get('resolved_title') or seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             if governor.history_sources_attempted >= governor.max_history_sources:
                 src_row.update({"fetch_status": "skipped_telegram_budget_exhausted", "fetch_attempted": "false", "source_probe_reason": "history source budget exhausted"})
-                source_rows.append(src_row)
+                append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · budget exhausted · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             entity_by_source[seed.source_id] = entity
@@ -4259,7 +4556,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                                 forwarded_from_confidence = 0.7
                             elif from_name:
                                 forwarded_from_confidence = 0.45
-                        posts.append({"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""})
+                        post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""}
+                        append_post_online(posts, post_row, run_id=run_id, stage="telegram_history_fetch")
                         if len(seen) >= max_posts:
                             break
                     if len(seen) >= max_posts:
@@ -4284,7 +4582,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                     src_row["fetch_status"] = "error_telegram_rpc"
                 src_row["fetch_error_code"] = type(exc).__name__
                 src_row["fetch_error_message"] = str(exc)[:180]
-            source_rows.append(src_row)
+            append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
             status.event("alive", **{
                 **source_progress,
                 "progress_label": f"источники {idx}/{len(monitored)} · done · {src_row.get('resolved_title') or seed.source_title or seed.canonical_url}",
@@ -5490,6 +5788,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         }
         row.pop("place_matches", None)
         new_posts.append(row)
+        write_region_talk_online_post_item(row, run_id=run_id, stage="post_scored", status=current_stage)
         previous_post = previous_posts.get(str(p["post_id"])) if isinstance(previous_posts, dict) else None
         previous_stage = str((previous_post or {}).get("current_stage") or "")
         previous_score = (previous_post or {}).get("candidate_score_current", "")
@@ -5714,6 +6013,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         ) != "ok"
     ]
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
+    online_candidate_items_written = write_region_talk_online_candidate_items(candidate_memory_rows, run_id=run_id, stage="candidate_memory_built")
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
 
@@ -5759,8 +6059,32 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
         keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
     )
+    online_source_queue_items_written = write_region_talk_online_queue_items(
+        [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+        kind="source_queue_item",
+        id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
+        fields=SOURCE_QUEUE_STATE_FIELDS,
+        run_id=run_id,
+        stage="unified_source_queue_built",
+    )
+    write_region_talk_online_queue_items(
+        [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+        kind="source_status_item",
+        id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
+        fields=SOURCE_QUEUE_STATE_FIELDS,
+        run_id=run_id,
+        stage="unified_source_queue_built",
+    )
     image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
         previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
+    )
+    online_image_queue_items_written = write_region_talk_online_queue_items(
+        [r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+        kind="image_queue_item",
+        id_fields=["image_queue_id", "post_url"],
+        fields=IMAGE_QUEUE_STATE_FIELDS,
+        run_id=run_id,
+        stage="image_candidate_queue_built",
     )
     previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
     previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
@@ -5775,6 +6099,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         llm_default_env_var_name=llm_default_env_var_name,
         current_run_preverified_llm_calls=final_verifier_llm_calls,
         report_event=report_event,
+    )
+    online_publication_candidate_items_written = write_region_talk_online_queue_items(
+        [r for r in publication_candidate_rows if isinstance(r, dict) and not r.get("_sheet_note")],
+        kind="publication_candidate_item",
+        id_fields=["publication_candidate_id", "post_url"],
+        fields=PUBLICATION_CANDIDATE_STATE_FIELDS,
+        run_id=run_id,
+        stage="publication_queue_built",
     )
     state_to_write = {
         "run_id": run_id,
@@ -6014,6 +6346,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "publication_candidate_rows": len(publication_candidate_rows),
         "publication_candidate_confirmed_rows": sum(1 for r in publication_candidate_rows if str(r.get("publication_candidate_status") or "") in PUBLICATION_CONFIRMED_STATUSES),
         "publication_candidate_ready_for_chat_rows": sum(1 for r in publication_candidate_rows if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"),
+        "online_candidate_items_written": online_candidate_items_written,
+        "online_source_queue_items_written": online_source_queue_items_written,
+        "online_image_queue_items_written": online_image_queue_items_written,
+        "online_publication_candidate_items_written": online_publication_candidate_items_written,
         "stage_counts_json":json.dumps(stage_counts, ensure_ascii=False),"artifact_paths":""
     }
     run_summary = [summary_row]

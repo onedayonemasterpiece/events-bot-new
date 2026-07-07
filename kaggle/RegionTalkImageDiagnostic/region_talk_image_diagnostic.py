@@ -192,7 +192,7 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'im
             if not key: continue
             previous_status=str(r.get("image_queue_status") or "")
             r["last_image_diag_run_id"]=RUN_ID; r["last_image_diag_stage"]=stage; r["last_image_diag_at"]=now
-            r.setdefault("queue_item_updated_at", now)
+            r["queue_item_updated_at"] = now
             if previous_status:
                 r.setdefault("last_status_changed_at", now)
             tx.execute(query,{"$pk":"image_queue_item:"+key.replace("image_queue_item:",""),"$payload_json":json.dumps(r,ensure_ascii=False),"$updated_at":now},commit_tx=False)
@@ -563,6 +563,30 @@ def finalize(r):
     r["total_inference_seconds"] = round(sum(float(r.get(k) or 0) for k in ("cv_inference_seconds","clip_inference_seconds","laion_inference_seconds","nima_inference_seconds")), 3)
     r["total_processing_seconds"] = round(sum(float(r.get(k) or 0) for k in ("media_download_seconds","image_decode_seconds","total_inference_seconds")), 3)
 
+def apply_image_queue_status(r):
+    previous_status = str(r.get("image_queue_status") or "")
+    if r.get("actual_image_count"):
+        r["image_queue_status"] = "actual_scored"
+        r["image_model_input_type"] = "actual_image"
+        r["image_model_type"] = "multi_model_visual_consensus"
+        r["overall_media_score"] = r.get("final_visual_score")
+        r["postcardness_score"] = r.get("visual_consensus_score") or r.get("clip_postcardness_score") or r.get("cv_postcardness_score")
+        r["aesthetic_score"] = r.get("laion_aesthetic_score") or r.get("cv_aesthetic_score")
+        r["technical_quality_score"] = r.get("cv_technical_quality_score")
+        r["media_acquisition_status"] = "actual_image_downloaded_and_scored"
+        r["images_scored_actual_count"] = 1
+        r["next_action"] = "human_review_best_image"
+    else:
+        r["image_queue_status"] = "needs_actual_image_fetch"
+        r["media_acquisition_status"] = "needs_actual_image_fetch"
+    if previous_status and previous_status != str(r.get("image_queue_status") or ""):
+        r["previous_image_queue_status"] = previous_status
+        r["status_changed_this_run"] = "true"
+        r["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        r.setdefault("status_changed_this_run", "false")
+    return r
+
 def process_batch(batch_rows, batch_index: int):
     rows = batch_rows
     log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows))
@@ -572,15 +596,19 @@ def process_batch(batch_rows, batch_index: int):
     log_event("media_fetch_started", phase="media_fetch", telegram=len(tg), vk=len(vk), total=len(rows))
     try:
         asyncio.run(fetch_telegram(tg))
+        for r in tg:
+            ydb_upsert_image_rows([r], stage="media_fetch_result")
     except Exception as exc:
         err=type(exc).__name__ + ": " + str(exc)[:500]
         errors.append({"stage":"telegram_fetch_batch","error":err})
         for r in tg:
             if not r.get("media_fetch_status"):
                 r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]=err
+            ydb_upsert_image_rows([r], stage="media_fetch_result")
     for i, r in enumerate(vk, 1):
         log_event("image_fetch_current", phase="vk_fetch", index=i, total=len(vk), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), source_title=r.get("source_title"))
         fetch_vk(r)
+        ydb_upsert_image_rows([r], stage="media_fetch_result")
         log_event("image_fetch_result", phase="vk_fetch", index=i, total=len(vk), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
         if i % 10 == 0: log_event("vk_fetch_progress", phase="media_fetch", done=i, total=len(vk), actual=sum(1 for x in vk if x.get("actual_media_path")))
     log_event("media_fetch_done", phase="media_fetch", actual_downloaded=sum(1 for r in rows if r.get("actual_media_path")), total=len(rows))
@@ -591,34 +619,18 @@ def process_batch(batch_rows, batch_index: int):
         if im is None:
             errors.append({"image_queue_id":r.get("image_queue_id"),"post_url":r.get("post_url"),"stage":"media_acquisition_or_decode","error":r.get("media_fetch_error") or "no image"})
             finalize(r)
+            apply_image_queue_status(r)
+            ydb_upsert_image_rows([r], stage="scored_or_retry")
             log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), error=r.get("media_fetch_error"))
             continue
         score_cv(im,r); score_clip(im,r); score_laion(im,r); score_nima(r); finalize(r)
+        apply_image_queue_status(r)
+        ydb_upsert_image_rows([r], stage="scored_or_retry")
         log_event("image_inference_result", phase="inference", index=i, total=len(rows), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("final_visual_status"), final_visual_score=r.get("final_visual_score"), cv_score=r.get("cv_overall_media_score"), clip_score=r.get("clip_postcardness_score"), laion_score=r.get("laion_aesthetic_score"), nima_score=r.get("nima_quality_score"), download_seconds=r.get("media_download_seconds"), decode_seconds=r.get("image_decode_seconds"), inference_seconds=r.get("total_inference_seconds"), total_processing_seconds=r.get("total_processing_seconds"), width=r.get("image_width"), height=r.get("image_height"))
         if i % 10 == 0: log_event("inference_progress", phase="inference", done=i, total=len(rows), actual_scored=sum(1 for x in rows if x.get("final_visual_status")=="scored_actual_image"))
 
     for r in rows:
-        previous_status = str(r.get("image_queue_status") or "")
-        if r.get("actual_image_count"):
-            r["image_queue_status"] = "actual_scored"
-            r["image_model_input_type"] = "actual_image"
-            r["image_model_type"] = "multi_model_visual_consensus"
-            r["overall_media_score"] = r.get("final_visual_score")
-            r["postcardness_score"] = r.get("visual_consensus_score") or r.get("clip_postcardness_score") or r.get("cv_postcardness_score")
-            r["aesthetic_score"] = r.get("laion_aesthetic_score") or r.get("cv_aesthetic_score")
-            r["technical_quality_score"] = r.get("cv_technical_quality_score")
-            r["media_acquisition_status"] = "actual_image_downloaded_and_scored"
-            r["images_scored_actual_count"] = 1
-            r["next_action"] = "human_review_best_image"
-        else:
-            r["image_queue_status"] = "needs_actual_image_fetch"
-            r["media_acquisition_status"] = "needs_actual_image_fetch"
-        if previous_status and previous_status != str(r.get("image_queue_status") or ""):
-            r["previous_image_queue_status"] = previous_status
-            r["status_changed_this_run"] = "true"
-            r["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
-        else:
-            r.setdefault("status_changed_this_run", "false")
+        apply_image_queue_status(r)
     ydb_upsert_image_rows(rows, stage="scored_or_retry")
     ydb_update_source_visual_rollups()
     log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"))

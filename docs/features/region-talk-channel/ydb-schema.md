@@ -177,11 +177,27 @@ because posts/images can be re-fetched from external URLs when needed.
 
 Current compact state schema is `region-talk-ydb-compact-v3`. The MVP adapter
 keeps the compact snapshots above and additionally writes row-level queue records
-into the same KV table:
+into the same KV table. For the semi-manual product discovery loop these rows are
+**online durable state**, not final-report-only artifacts: notebooks must upsert
+main records as soon as they are selected, discovered, fetched, scored or
+reclassified. Heartbeats remain observability-only and are not sufficient proof
+that a source/post/image/candidate exists in the product state.
+
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
   canonical Telegram/VK source queue row with `queue_order`, status, status-change
   fields, cursor display markers, KO/candidate counters and image-quality rollup;
+- kind `source_status_item`, pk `source_status_item:<canonical_source_key>` — live
+  source/public registry alias for statistics and operator views; written when a
+  source is selected for a run, discovered by similar/keyword discovery, skipped,
+  rejected, resolved, scanned or later enriched by final queue scoring;
+- kind `processed_post_item`, pk `processed_post_item:<post_id>` and
+  `post_live_item:<post_id>` — compact fetched/scored post state without raw text
+  or raw API payloads; text is represented only by hashes/excerpts already allowed
+  in report artifacts;
+- kind `candidate_memory_item`, pk `candidate_memory_item:<candidate_memory_id>` —
+  compact cumulative candidate-memory row. CandidateReport reads and writes this
+  row-level kind directly; it must not depend only on `latest_state.candidate_memory`;
 - kind `image_queue_item`, pk `image_queue_item:<image_queue_id>` — the downstream
   image-analysis work item for a text-confirmed Kaliningrad-only post, including
   lease/status fields and actual-image consensus scores;

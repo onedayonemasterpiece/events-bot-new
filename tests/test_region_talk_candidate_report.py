@@ -894,6 +894,29 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIsInstance(st.client.kw.get("progress"), dict)
         self.assertNotIn("progress_json", st.client.kw)
 
+    def test_online_post_payload_excludes_raw_text_and_keeps_hashes(self) -> None:
+        mod = load_module()
+        payload = mod._online_post_payload(
+            {
+                "post_id": "p1",
+                "source_id": "s1",
+                "platform": "telegram",
+                "post_url": "https://t.me/src/1",
+                "platform_post_key": "tg:src:1",
+                "post_date": "2026-07-01T00:00:00+00:00",
+                "text": "сырой текст поста не должен попадать в YDB row",
+                "text_excerpt": "сырой текст",
+                "has_media": True,
+            },
+            run_id="online-run",
+            stage="unit",
+        )
+        self.assertNotIn("text", payload)
+        self.assertEqual(payload["post_id"], "p1")
+        self.assertEqual(payload["run_id"], "online-run")
+        self.assertTrue(payload.get("text_hash"))
+        self.assertTrue(payload.get("text_excerpt_hash"))
+
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [
