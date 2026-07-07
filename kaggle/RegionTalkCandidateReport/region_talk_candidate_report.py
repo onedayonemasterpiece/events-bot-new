@@ -118,6 +118,62 @@ def canonical_source_url(platform: str, handle: str, url: str) -> str:
     return h
 
 
+
+
+VK_NON_SOURCE_PATHS = {
+    "video", "videos", "clip", "clips", "feed", "search", "places", "market",
+    "audio", "audios", "albums", "album", "photos", "photo", "app", "apps",
+    "im", "groups", "groups_create", "mail", "away", "share", "login", "join",
+}
+
+
+def _url_host_path(url: str) -> tuple[str, str]:
+    raw = (url or "").strip()
+    if raw.startswith("@"):
+        return "", raw
+    try:
+        parsed = urllib.parse.urlparse(raw if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) else "https://" + raw.lstrip("/"))
+        return (parsed.netloc or "").lower(), (parsed.path or "").strip("/")
+    except Exception:
+        return "", ""
+
+
+def target_source_url_reason(platform: str, url: str) -> str:
+    """Guardrail for the durable source queue: only real TG channels and VK walls/communities.
+
+    This is URL-shape validation, not content semantics. It prevents search/result/media
+    pages (tgstat search, vk video, web pages) from becoming durable scan sources.
+    """
+    p = (platform or "").strip().lower()
+    raw = (url or "").strip()
+    host, path = _url_host_path(raw)
+    first = (path.split("/", 1)[0] if path else "").lower()
+    if p == "telegram":
+        if host not in {"t.me", "telegram.me"}:
+            return "telegram_source_must_be_t_me_channel"
+        if "/" in path:
+            return "telegram_source_not_public_channel_url"
+        if not first or first in {"s", "c", "joinchat", "+", "share", "addstickers", "proxy", "iv"}:
+            return "telegram_source_not_public_channel_url"
+        if not re.fullmatch(r"[a-z0-9_]{4,}", first, re.I):
+            return "telegram_source_handle_invalid"
+        return "ok"
+    if p == "vk":
+        if host not in {"vk.com", "www.vk.com", "m.vk.com"}:
+            return "vk_source_must_be_vk_com_wall_or_community"
+        if not first or first in VK_NON_SOURCE_PATHS or re.match(r"(?:video|clip|photo|album|doc|story|market)-?", first, re.I):
+            return "vk_source_not_wall_or_community_url"
+        if first.startswith("wall") and "_" in first:
+            return "vk_source_not_wall_or_community_url"
+        if re.fullmatch(r"(?:club|public)\d+", first, re.I) or re.fullmatch(r"wall-?\d+", first, re.I) or re.fullmatch(r"[a-z0-9_.-]{3,}", first, re.I):
+            return "ok"
+        return "vk_source_identifier_invalid"
+    return "unsupported_platform_for_source_queue"
+
+
+def is_target_source_url(platform: str, url: str) -> bool:
+    return target_source_url_reason(platform, url) == "ok"
+
 def canonical_source_key(platform: str, handle: str = "", url: str = "") -> str:
     p = (platform or "").strip().lower()
     cu = canonical_source_url(p, handle, url).lower().rstrip("/")
@@ -1686,9 +1742,13 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
         seed_sources = sorted(g.pop("seed_sources") or [])
         priority = float(g.get("frontier_priority") or 0)
         platform = str(g.get("platform") or g.get("platform_guess") or "").lower()
+        target_reason = target_source_url_reason(platform, str(g.get("canonical_url") or g.get("normalized_url") or ""))
         resolve_status = str(g.get("resolve_status") or "")
         prev_status = str(g.get("frontier_status") or "")
-        if platform == "vk":
+        if target_reason != "ok":
+            stage = "unsupported"
+            status = "unsupported_source_url"
+        elif platform == "vk":
             stage = "vk_not_configured"
             status = "vk_wall_setup_required"
         elif platform and not platform.startswith("telegram"):
@@ -1714,8 +1774,10 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
             "frontier_stage": stage,
             "frontier_status": status,
             "source_candidate_score": round(priority, 3),
+            "target_source_url_status": target_reason,
+            "active_scan_allowed": str(target_reason == "ok").lower(),
             "next_action": "probe_later" if stage in {"unresolved", "probe_due"} else ("fetch_history_when_selected" if stage == "history_due" else ("configure_vk_wall_reader" if stage == "vk_not_configured" else "keep_in_low_quality_pool")),
-            "rejection_or_skip_reason": "" if priority >= 0.35 else "low source candidate score; retained as inactive low-quality pool, not a blocking status",
+            "rejection_or_skip_reason": target_reason if target_reason != "ok" else ("" if priority >= 0.35 else "low source candidate score; retained as inactive low-quality pool, not a blocking status"),
         })
         g.update(classify_source_profile({
             "source_title": g.get("title_guess"),
@@ -2091,13 +2153,26 @@ def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source
     return final[:100]
 
 
+def _source_queue_seed_rejection_reason(row: dict[str, Any]) -> str:
+    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
+    if platform not in {"telegram", "vk"}:
+        return "unsupported_platform_for_source_queue"
+    url = canonical_source_url(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
+    if not url:
+        return "missing_source_url"
+    return target_source_url_reason(platform, url)
+
+
 def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str = "") -> dict[str, Any] | None:
-    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("raw_url") or ""))
+    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
     if platform not in {"telegram", "vk"}:
         return None
     url = canonical_source_url(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
     ckey = str(row.get("canonical_source_key") or canonical_source_key(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), url))
     if not url or not ckey:
+        return None
+    target_reason = target_source_url_reason(platform, url)
+    if target_reason != "ok":
         return None
     added_from = default_added_from or str(row.get("discovery_type") or row.get("edge_type") or row.get("source_kind") or row.get("source_type") or "unknown")
     return {
@@ -2146,10 +2221,14 @@ def build_unified_source_queue(
     previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     prev_cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     entries: dict[str, dict[str, Any]] = {}
+    skipped_non_target_queue_rows = 0
 
     def merge_existing(row: dict[str, Any]) -> None:
+        nonlocal skipped_non_target_queue_rows
         seed = _source_queue_seed_from_row(row)
         if not seed:
+            if _source_queue_seed_rejection_reason(row) != "missing_source_url":
+                skipped_non_target_queue_rows += 1
             return
         key = seed["canonical_source_key"]
         order = int(row.get("queue_order") or 0)
@@ -2159,8 +2238,11 @@ def build_unified_source_queue(
         merge_existing(row)
 
     def append_or_update(row: dict[str, Any], *, added_from: str) -> bool:
+        nonlocal skipped_non_target_queue_rows
         seed = _source_queue_seed_from_row(row, default_added_from=added_from)
         if not seed:
+            if _source_queue_seed_rejection_reason(row) != "missing_source_url":
+                skipped_non_target_queue_rows += 1
             return False
         key = seed["canonical_source_key"]
         if key in entries:
@@ -2227,11 +2309,48 @@ def build_unified_source_queue(
         sampled = posts_by_source.get(sid, []) if sid else []
         ko_posts = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
         candidate_posts = sum(1 for r in sampled if r.get("current_stage") in CANDIDATE_MEMORY_STAGES)
+        image_quality_min_n = getenv_int("REGION_TALK_SOURCE_IMAGE_MIN_ACTUAL_SCORED", 3)
+        try:
+            image_quality_min_score = float(os.getenv("REGION_TALK_SOURCE_IMAGE_MIN_AVG_SCORE", "0.55"))
+        except Exception:
+            image_quality_min_score = 0.55
+        visual_rows = [
+            r for r in sampled
+            if r.get("kaliningrad_oblast_only_scope") and not r.get("is_ad_or_promo") and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
+        ]
+        actual_scores: list[float] = []
+        for vr in visual_rows:
+            if str(vr.get("image_model_input_type") or "") != "actual_image":
+                continue
+            try:
+                actual_scores.append(float(vr.get("overall_media_score") or 0))
+            except Exception:
+                pass
+        actual_n = len(actual_scores) if actual_scores else int(rec.get("actual_images_scored_count") or 0)
+        avg_score = round(sum(actual_scores) / len(actual_scores), 3) if actual_scores else rec.get("avg_actual_image_score", "")
+        low_count = sum(1 for x in actual_scores if x < image_quality_min_score) if actual_scores else int(rec.get("low_actual_image_count") or 0)
+        if candidate_posts > 0 and actual_n >= image_quality_min_n and avg_score != "" and float(avg_score) < image_quality_min_score:
+            image_quality_source_status = "exclude_low_image_quality"
+            monitoring_exclusion_reason = "kaliningrad_posts_found_but_actual_images_systematically_low_score"
+        elif candidate_posts > 0 and actual_n > 0:
+            image_quality_source_status = "monitor_candidate_image_quality_ok"
+            monitoring_exclusion_reason = ""
+        elif candidate_posts > 0:
+            image_quality_source_status = "needs_more_actual_image_evidence"
+            monitoring_exclusion_reason = ""
+        elif ko_posts > 0:
+            image_quality_source_status = "ko_posts_no_candidate_images_yet"
+            monitoring_exclusion_reason = ""
+        else:
+            image_quality_source_status = "no_ko_posts_yet"
+            monitoring_exclusion_reason = ""
         fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
         scanned = bool(fetch_status)
         if scanned:
             processed_orders.append(int(rec.get("queue_order") or 0))
-        if scanned and (ko_posts > 0 or candidate_posts > 0):
+        if scanned and image_quality_source_status == "exclude_low_image_quality":
+            qstatus, color, next_action = "processed_found_ko_low_image_quality", "yellow_retry", "exclude_from_monitoring_candidates_but_keep_posts_for_review"
+        elif scanned and (ko_posts > 0 or candidate_posts > 0):
             qstatus, color, next_action = "processed_found_ko_candidate", "green_found_ko", "prioritize_delta_rescan_or_manual_review_posts"
         elif scanned and fetch_status == "ok":
             qstatus, color, next_action = "processed_no_ko", "red_no_ko", "rescan_later_or_deprioritize"
@@ -2251,6 +2370,13 @@ def build_unified_source_queue(
             "posts_scanned": int(srow.get("posts_scanned") or len(sampled) or rec.get("posts_scanned") or 0),
             "ko_posts_found": ko_posts,
             "candidate_posts_found": candidate_posts,
+            "actual_images_scored_count": actual_n,
+            "avg_actual_image_score": avg_score,
+            "low_actual_image_count": low_count,
+            "source_image_quality_status": image_quality_source_status,
+            "source_image_quality_min_actual_scored": image_quality_min_n,
+            "source_image_quality_min_avg_score": image_quality_min_score,
+            "monitoring_exclusion_reason": monitoring_exclusion_reason,
             "next_action": next_action,
         })
     cursor_position = max([prev_cursor] + processed_orders) if out else 0
@@ -2274,7 +2400,14 @@ def build_unified_source_queue(
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
+        "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
+        "source_queue_vk_total": sum(1 for r in out if r.get("platform") == "vk"),
+        "source_queue_pending_telegram_total": sum(1 for r in out if r.get("platform") == "telegram" and r.get("source_queue_status") == "pending_scan"),
+        "source_queue_pending_vk_total": sum(1 for r in out if r.get("platform") == "vk" and r.get("source_queue_status") == "pending_scan"),
+        "source_queue_non_target_skipped_this_run": skipped_non_target_queue_rows,
+        "source_queue_low_image_quality_excluded_total": sum(1 for r in out if r.get("source_image_quality_status") == "exclude_low_image_quality"),
         "source_queue_only_telegram_vk": str(all(r.get("platform") in {"telegram", "vk"} for r in out)).lower(),
+        "source_queue_only_target_source_urls": str(all(is_target_source_url(str(r.get("platform") or ""), str(r.get("canonical_url") or r.get("source_url") or "")) for r in out)).lower(),
     }
     return display_rows, metrics
 
@@ -4546,16 +4679,26 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     active_frontier_tg_vk = [
         r for r in source_frontier_unique
         if normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")) in {"telegram", "vk"}
+        and target_source_url_reason(
+            normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")),
+            str(r.get("canonical_url") or r.get("normalized_url") or ""),
+        ) == "ok"
         and str(r.get("frontier_stage") or "") not in {"unsupported", "inactive_low_quality"}
     ]
     external_links_quarantine = [
         {
             **r,
-            "quarantine_reason": r.get("external_quarantine_reason") or "non_target_platform_for_region_talk_active_scan",
+            "quarantine_reason": r.get("external_quarantine_reason") or target_source_url_reason(
+                normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")),
+                str(r.get("canonical_url") or r.get("normalized_url") or ""),
+            ),
             "active_scan_allowed": "false",
         }
         for r in source_frontier_unique
-        if normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")) not in {"telegram", "vk"}
+        if target_source_url_reason(
+            normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")),
+            str(r.get("canonical_url") or r.get("normalized_url") or ""),
+        ) != "ok"
     ]
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
@@ -5120,7 +5263,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "history_cursor_advanced", "delta_cursor_advanced", "keyword_query_cursor_advanced",
         "source_queue_total", "source_queue_pending_total", "source_queue_processed_total", "source_queue_retry_total",
         "source_queue_cursor_position", "source_queue_keyword_inserted_this_run", "source_queue_catalog_sources_total",
-        "source_queue_only_telegram_vk", "image_queue_total", "image_queue_cursor_position",
+        "source_queue_telegram_total", "source_queue_vk_total", "source_queue_pending_telegram_total", "source_queue_pending_vk_total",
+        "source_queue_non_target_skipped_this_run", "source_queue_low_image_quality_excluded_total",
+        "source_queue_only_telegram_vk", "source_queue_only_target_source_urls", "image_queue_total", "image_queue_cursor_position",
         "image_queue_target_this_run", "image_queue_selected_next_batch", "image_queue_actual_scored_total",
         "image_queue_needs_actual_fetch_total",
     ]:

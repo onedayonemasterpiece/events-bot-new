@@ -303,7 +303,18 @@ must contain **only** Telegram channels and VK community/wall URLs. It is
 deduped by `canonical_source_key`, carries one `queue_order` cursor, and exposes
 `added_at`, `added_from`, `source_queue_status`, `status_color_hint`,
 `last_scan_status`, `posts_scanned`, `ko_posts_found`,
-`candidate_posts_found` and `next_action`.
+`candidate_posts_found`, `actual_images_scored_count`,
+`avg_actual_image_score`, `source_image_quality_status`,
+`monitoring_exclusion_reason` and `next_action`.
+
+Strict source URL policy: Telegram rows must be public channel roots like
+`t.me/<channel>` only; Telegram post/search/view URLs (`t.me/<channel>/<id>`,
+`t.me/s/...`, `tgstat.ru/search?...`) are not durable sources. VK rows must be
+community/wall roots like `vk.com/<domain>`, `vk.com/club...`,
+`vk.com/public...` or wall owner URLs; VK media/search/result pages such as
+`vk.com/video`, `vk.com/video-*`, `vk.com/clip-*`, `vk.com/photo-*` are not
+durable sources. Non-source URLs are skipped from `12_source_queue` and surfaced
+through diagnostics/quarantine only.
 
 Insertion policy:
 
@@ -311,12 +322,21 @@ Insertion policy:
 - new Telegram sources discovered by Telegram keyword search are inserted
   immediately after the saved cursor so they are scanned next;
 - catalog/static/similar/link discoveries are appended to the tail;
-- non-Telegram/VK URLs stay out of this sheet and may only appear in diagnostic
-  quarantine sheets.
+- non-Telegram/VK URLs and TG/VK non-source pages stay out of this sheet and may
+  only appear in diagnostic quarantine sheets.
+
+A source with Kaliningrad-region candidate posts can still be excluded from the
+future monitoring-candidate pool when actual-image evidence is systematically
+weak. The default rule marks `source_image_quality_status=exclude_low_image_quality`
+when at least `REGION_TALK_SOURCE_IMAGE_MIN_ACTUAL_SCORED=3` actual images have
+been scored and their average is below
+`REGION_TALK_SOURCE_IMAGE_MIN_AVG_SCORE=0.55`; the row remains in the queue for
+auditability, with `monitoring_exclusion_reason` explaining the exclusion.
 
 Visual colors are part of the XLSX contract: white = pending scan, yellow =
-retry/rescan needed, green = processed with Kaliningrad/candidate hits, red =
-processed with no Kaliningrad hits, blue = cursor marker.
+retry/rescan needed or low image-quality exclusion, green = processed with
+Kaliningrad/candidate hits, red = processed with no Kaliningrad hits, blue =
+cursor marker.
 
 ### `12b_telegram_similar_channels`
 
@@ -542,8 +562,11 @@ but reviewer acceptance starts with `12_source_queue`.
 
 Summary metrics include `source_queue_total`, pending/processed/retry counts,
 `source_queue_cursor_position`, `source_queue_keyword_inserted_this_run`,
-`source_queue_catalog_sources_total`, `source_queue_only_telegram_vk`,
-`image_queue_total`, `image_queue_cursor_position`,
+`source_queue_catalog_sources_total`, `source_queue_telegram_total`,
+`source_queue_vk_total`, `source_queue_pending_telegram_total`,
+`source_queue_pending_vk_total`, `source_queue_non_target_skipped_this_run`,
+`source_queue_low_image_quality_excluded_total`, `source_queue_only_telegram_vk`,
+`source_queue_only_target_source_urls`, `image_queue_total`, `image_queue_cursor_position`,
 `image_queue_target_this_run`, `image_queue_selected_next_batch`,
 `image_queue_actual_scored_total` and `image_queue_needs_actual_fetch_total`.
 

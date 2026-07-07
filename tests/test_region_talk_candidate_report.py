@@ -534,6 +534,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "unified_source_queue": {
                 "telegram:old": {"canonical_source_key": "telegram:old", "platform": "telegram", "source_url": "https://t.me/old", "queue_order": 1, "source_queue_status": "processed_no_ko"},
                 "telegram:tail": {"canonical_source_key": "telegram:tail", "platform": "telegram", "source_url": "https://t.me/tail", "queue_order": 2, "source_queue_status": "pending_scan"},
+                "telegram:https://tgstat.ru/search?q=x": {"canonical_source_key": "telegram:https://tgstat.ru/search?q=x", "platform": "telegram", "source_url": "https://tgstat.ru/search?q=x", "queue_order": 3, "source_queue_status": "pending_scan"},
             },
         }
         rows, metrics = mod.build_unified_source_queue(
@@ -542,23 +543,63 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             [{"source_id": "src_old", "platform": "telegram", "canonical_url": "https://t.me/old", "canonical_source_key": "telegram:old", "fetch_status": "ok", "posts_scanned": 2}],
             [
                 {"platform": "dzen", "canonical_url": "https://dzen.ru/nope", "canonical_source_key": "dzen:nope"},
+                {"platform": "telegram", "canonical_url": "https://tgstat.ru/search?query=travel", "canonical_source_key": "telegram:https://tgstat.ru/search?query=travel"},
+                {"platform": "telegram", "canonical_url": "https://t.me/channel/123", "canonical_source_key": "telegram:channel", "source_candidate_score": 0.8},
+                {"platform": "vk", "canonical_url": "https://vk.com/video", "canonical_source_key": "vk:video", "source_candidate_score": 0.5},
+                {"platform": "vk", "canonical_url": "https://vk.com/video-123_456", "canonical_source_key": "vk:video-123_456", "source_candidate_score": 0.5},
+                {"platform": "vk", "canonical_url": "https://vk.com/wall-123_456", "canonical_source_key": "vk:wall-123_456", "source_candidate_score": 0.5},
                 {"platform": "vk", "canonical_url": "https://vk.com/vktravel", "canonical_source_key": "vk:vktravel", "source_candidate_score": 0.5},
+                {"platform": "telegram", "canonical_url": "https://t.me/similar_tail", "recommended_username": "similar_tail", "canonical_source_key": "telegram:similar_tail", "edge_type": "telegram_similar_channel", "source_candidate_score": 0.8},
             ],
             [{"platform": "telegram", "canonical_url": "https://t.me/seedtg", "canonical_source_key": "telegram:seedtg", "discovery_type": "public_travel_blogger_catalog"}],
             [{"platform": "telegram", "recommended_canonical_url": "https://t.me/keynew", "recommended_username": "keynew", "canonical_source_key": "telegram:keynew"}],
-            [],
+            [{"keyword_hit_source_url": "https://t.me/keypost", "platform": "telegram", "canonical_source_key": "telegram:keypost"}],
             {"src_old": [{"kaliningrad_oblast_only_scope": False, "current_stage": "dropped_text_gate"}]},
             "run-q",
             "2026-07-07T00:00:00+00:00",
         )
         self.assertTrue(rows)
         self.assertEqual(metrics["source_queue_only_telegram_vk"], "true")
-        self.assertNotIn("youtube", {r["platform"] for r in rows})
-        self.assertNotIn("dzen", {r["platform"] for r in rows})
+        self.assertEqual(metrics["source_queue_only_target_source_urls"], "true")
+        urls = {r["source_url"] for r in rows}
+        self.assertNotIn("https://youtube.com/x", urls)
+        self.assertNotIn("https://dzen.ru/nope", urls)
+        self.assertFalse(any("tgstat.ru/search" in u for u in urls))
+        self.assertFalse(any("vk.com/video" in u for u in urls))
+        self.assertFalse(any("vk.com/wall-123_456" in u for u in urls))
+        self.assertFalse(any(u.rstrip("/").endswith("/123") for u in urls))
         orders = {r["canonical_source_key"]: r["queue_order"] for r in rows}
         self.assertEqual(orders["telegram:keynew"], 2)
-        self.assertGreater(orders["telegram:tail"], orders["telegram:keynew"])
+        self.assertEqual(orders["telegram:keypost"], 3)
+        self.assertGreater(orders["telegram:tail"], orders["telegram:keypost"])
+        self.assertGreater(orders["telegram:similar_tail"], orders["telegram:tail"])
         self.assertEqual(len([r for r in rows if r["canonical_source_key"] == "telegram:seedtg"]), 1)
+        self.assertGreaterEqual(metrics["source_queue_non_target_skipped_this_run"], 5)
+
+    def test_source_queue_marks_low_image_quality_sources_for_monitoring_exclusion(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "unified_source_queue": {
+                "telegram:weakpics": {"canonical_source_key": "telegram:weakpics", "platform": "telegram", "source_url": "https://t.me/weakpics", "queue_order": 1, "source_queue_status": "pending_scan"},
+            },
+        }
+        posts = [
+            {"kaliningrad_oblast_only_scope": True, "is_ad_or_promo": False, "current_stage": "semantic_candidate", "image_model_input_type": "actual_image", "overall_media_score": score}
+            for score in (0.22, 0.31, 0.40)
+        ]
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [],
+            [{"source_id": "src_weak", "platform": "telegram", "canonical_url": "https://t.me/weakpics", "canonical_source_key": "telegram:weakpics", "fetch_status": "ok", "posts_scanned": 3}],
+            [], [], [], [],
+            {"src_weak": posts},
+            "run-q", "2026-07-07T00:00:00+00:00",
+        )
+        row = next(r for r in rows if r["canonical_source_key"] == "telegram:weakpics")
+        self.assertEqual(row["source_image_quality_status"], "exclude_low_image_quality")
+        self.assertEqual(row["source_queue_status"], "processed_found_ko_low_image_quality")
+        self.assertEqual(row["monitoring_exclusion_reason"], "kaliningrad_posts_found_but_actual_images_systematically_low_score")
+        self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 1)
 
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
