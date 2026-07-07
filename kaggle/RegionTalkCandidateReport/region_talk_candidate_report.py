@@ -783,7 +783,7 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
     requested_backend = region_talk_state_backend_requested()
     if requested_backend == "ydb":
         ydb_state, ydb_meta = load_region_talk_ydb_state()
-        if ydb_state:
+        if ydb_state or ydb_meta.get("ydb_read_status") == "empty":
             return ydb_state, ydb_meta
         if getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
             raise RuntimeError("REGION_TALK_REQUIRE_YDB_STATE=1 but YDB state is unavailable: " + str(ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status")))
