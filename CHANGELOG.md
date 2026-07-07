@@ -7,7 +7,9 @@
   config, sends a slim `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS`-bounded prompt
   with text/summary fallback and compact image/vector evidence, and records
   timeout as `llm_gate_status=error` so the notebook can continue to YDB/report
-  writes instead of hanging with no new heartbeats.
+  writes instead of hanging with no new heartbeats. Image-not-ready rows now
+  emit non-blocking `final_verifier_deferred_until_image_scoring` and the
+  post-verifier queue assembly path has explicit YDB checkpoints.
 - **Region Talk Channel / image-gated final verifier**: CandidateReport no
   longer calls Gemini Lite final verification for text-only vector candidates;
   final LLM checks are deferred until ImageDiagnostic has produced actual-image

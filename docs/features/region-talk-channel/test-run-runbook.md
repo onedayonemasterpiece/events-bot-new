@@ -355,6 +355,14 @@ The XLSX has:
   `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS` (default 1800) and must use compact
   text/summary fallback plus slim actual-image/vector evidence, not raw row
   payloads or debug blobs.
+- If image scoring is not ready, CandidateReport emits
+  `final_verifier_deferred_until_image_scoring` with `blocking_wait=false`,
+  `llm_calls=0` and `next_action=run_region_talk_image_diagnostic`; this is a
+  skip/defer marker, not an in-notebook wait. The following queue-assembly
+  phases must also heartbeat (`source_profile_*`, `source_frontier_*`,
+  `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
+  `publication_queue_*`, then `state_write_*`) so a run never stays silent after
+  deferring the final verifier.
 - Source scanning must be cursor/due driven, not “top seeds every run”.
   `source_queue_item.source_queue_status=processed_*` plus `_ydb_updated_at`/
   `source_cursors.next_history_scan_at` suppresses immediate re-scan until the

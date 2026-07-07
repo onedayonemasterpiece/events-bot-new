@@ -22,6 +22,10 @@ The prompt is deliberately slim: `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS`
 defaults to 1800, falls back from `text` to `text_excerpt`/summary fields when
 row-level YDB image rows do not carry full text, and sends only the compact
 image/vector evidence fields required by the final decision.
+When actual-image evidence is missing, the event name is
+`final_verifier_deferred_until_image_scoring` and its payload must make clear
+that this is non-blocking (`blocking_wait=false`, `llm_calls=0`,
+`next_action=run_region_talk_image_diagnostic`).
 
 ## Input
 

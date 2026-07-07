@@ -6679,7 +6679,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         and not row_has_final_verifier_image_evidence(r)
     )
     if final_verifier_image_wait_count:
-        report_event("final_verifier_waiting_for_image_scoring", phase="final_llm_verifier", status="deferred", final_verifier_waiting_for_image_scoring=final_verifier_image_wait_count, final_verifier_queue_count=len(final_verifier_queue_rows))
+        report_event(
+            "final_verifier_deferred_until_image_scoring",
+            phase="final_llm_verifier",
+            status="deferred",
+            final_verifier_deferred_until_image_scoring=final_verifier_image_wait_count,
+            final_verifier_waiting_for_image_scoring=final_verifier_image_wait_count,
+            final_verifier_queue_count=len(final_verifier_queue_rows),
+            llm_calls=0,
+            blocking_wait="false",
+            next_action="run_region_talk_image_diagnostic",
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
     final_verifier_limit = getenv_int("REGION_TALK_MAX_LLM_FINAL_VERIFY", 10)
     if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", 90)):
         report_event("runtime_budget_final_verifier_skip", phase="final_llm_verifier", status="deferred", final_verifier_queue_count=len(final_verifier_queue_rows), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
@@ -6724,7 +6735,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             r["new_or_seen"] = "NEW"
         favorites = [r for r in review_queue if r.get("current_stage") == "favorite"]
 
+    report_event(
+        "post_verifier_queue_assembly_started",
+        phase="queue_assembly",
+        status="running",
+        posts_fetched=len(posts),
+        current_run_posts=len(new_posts),
+        review_queue_count=len(review_queue),
+        final_verifier_llm_calls=final_verifier_llm_calls,
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+    )
     # Source profile probe MVP: derive probe metrics from fetched sample; sources are not automatically monitored from discovery.
+    report_event("source_profile_build_started", phase="queue_assembly", status="running", source_rows=len(source_rows), posts_fetched=len(posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     posts_by_source: dict[str, list[dict[str, Any]]] = {}
     for row in new_posts:
         posts_by_source.setdefault(str(row.get("source_id") or ""), []).append(row)
@@ -6757,7 +6779,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     source_class_by_id = {str(s.get("source_id") or ""): {k: s.get(k) for k in ["source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]} for s in source_rows}
     for r in new_posts:
         r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})
+    report_event("source_profile_build_done", phase="queue_assembly", status="running", source_rows=len(source_rows), posts_by_source=len(posts_by_source), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
 
+    report_event("source_frontier_build_started", phase="queue_assembly", status="running", discovered_rows=len(discovered_rows), previous_discovered=len(updated_discovered_state), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     for drow in discovered_rows:
         platform_norm = normalize_source_platform(str(drow.get("platform") or drow.get("platform_guess") or ""), str(drow.get("canonical_url") or drow.get("normalized_url") or drow.get("raw_url") or ""))
         canonical_url = canonical_source_url(platform_norm, str(drow.get("username_or_handle") or drow.get("recommended_username") or ""), str(drow.get("canonical_url") or drow.get("normalized_url") or ""))
@@ -6846,10 +6870,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             str(r.get("canonical_url") or r.get("normalized_url") or ""),
         ) != "ok"
     ]
+    report_event("source_frontier_build_done", phase="queue_assembly", status="running", source_frontier_unique=len(source_frontier_unique), active_frontier_tg_vk=len(active_frontier_tg_vk), external_links_quarantine=len(external_links_quarantine), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("candidate_memory_build_started", phase="queue_assembly", status="running", previous_candidate_memory=len(previous_state.get("candidate_memory") or {}) if isinstance(previous_state.get("candidate_memory"), dict) else 0, new_posts=len(new_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
     online_candidate_items_written = write_region_talk_online_candidate_items(candidate_memory_rows, run_id=run_id, stage="candidate_memory_built")
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
+    report_event("candidate_memory_build_done", phase="queue_assembly", status="running", candidate_memory_rows=len(candidate_memory_rows), candidate_memory_active_rows=len(candidate_memory_active_rows), online_candidate_items_written=online_candidate_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
 
     def _memory_recheck_text(row: dict[str, Any]) -> str:
         return str(row.get("short_summary") or row.get("text_excerpt") or row.get("post_url") or "")
@@ -6941,6 +6968,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     source_delta_scan_sheet = build_source_delta_scan_sheet(source_rows, previous_state, run_id)
     source_yield_metrics_sheet = build_source_yield_metrics(source_rows, posts_by_source, new_posts)
     early_keyword_post_hit_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows") or [])
+    report_event("source_queue_build_started", phase="queue_assembly", status="running", source_frontier_unique=len(source_frontier_unique), source_rows=len(source_rows), candidate_memory_rows=len(candidate_memory_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     unified_source_queue_sheet, unified_source_queue_metrics = build_unified_source_queue(
         previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
         keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
@@ -6974,6 +7002,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "retry_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "needs_rescan_or_retry"),
         "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
+    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), online_source_queue_items_written=online_source_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("image_queue_build_started", phase="queue_assembly", status="running", new_posts=len(new_posts), candidate_memory_rows=len(candidate_memory_rows), media_rows=len(media_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
         previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
     )
@@ -6998,8 +7028,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "actual_scored_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "actual_scored"),
         "progress_label": f"image queue cursor {image_queue_metrics.get('image_queue_cursor_position', 0)}/{len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
+    report_event("image_queue_build_done", phase="queue_assembly", status="running", image_queue_total=len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), image_queue_selected_next_batch=image_queue_metrics.get("image_queue_selected_next_batch"), image_queue_actual_scored_total=image_queue_metrics.get("image_queue_actual_scored_total"), online_image_queue_items_written=online_image_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
     previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
+    report_event("publication_queue_build_started", phase="queue_assembly", status="running", candidate_memory_product_rows=len(candidate_memory_product_rows), image_queue_total=len(image_candidate_queue_sheet), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     publication_candidate_rows, publication_goal = build_publication_candidate_queue(
         candidate_memory_product_rows,
         image_candidate_queue_sheet,
@@ -7020,6 +7052,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         run_id=run_id,
         stage="publication_queue_built",
     )
+    report_event("publication_queue_build_done", phase="queue_assembly", status="running", publication_candidate_rows=len(publication_candidate_rows), online_publication_candidate_items_written=online_publication_candidate_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     state_to_write = {
         "run_id": run_id,
         "state_schema_version": "region-talk-state-v2",
