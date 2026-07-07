@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / embedding timeout terminal state**: CandidateReport now
+  treats dual text-embedding batch failure as a bounded `partial` run, writes
+  deferred post rows/live artifacts and stops the report tail instead of
+  continuing into heavy queue/report work after the runtime budget is exhausted.
 - **Region Talk Channel / Kaggle session guard**: CandidateReport and
   ImageDiagnostic launchers now refuse to push a new run while either Region
   Talk Kaggle kernel is active, protecting the shared Discovery Telethon bundle

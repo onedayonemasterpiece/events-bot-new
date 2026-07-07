@@ -1294,6 +1294,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as td:
                 report = mod.build_report(seeds, [], posts, "embed-timeout-run", Path(td))
+                self.assertEqual(report.get("status"), "partial")
+                self.assertEqual(report["summary"]["partial_reason"], "text_embedding_batch_deferred")
                 self.assertEqual(report["summary"]["posts_scored"], 0)
                 self.assertEqual(report["summary"]["posts_deferred_by_runtime_budget"], 1)
         finally:

@@ -6133,20 +6133,108 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     runtime_deferred_posts = posts[len(posts_for_scoring):]
     report_event("report_build_started", phase="report", status="running", posts_fetched=len(posts), posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), ydb_read_status=state_meta.get("ydb_read_status"))
 
+    def _write_partial_runtime_report(reason: str, *, text_embedding_error: str = "") -> dict[str, Any]:
+        """Write a compact terminal artifact when the 20-minute budget is gone.
+
+        The semi-manual product loop prefers a truthful partial terminal state to
+        a Kaggle kernel that keeps running after its runtime budget. Row-level
+        source writes have already happened during fetch; this function also
+        marks fetched posts as deferred so live YDB remains inspectable.
+        """
+        partial_now = utc_now_iso()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        partial_post_limit = getenv_int("REGION_TALK_PARTIAL_POST_ROWS_MAX", 300)
+        for prow in posts[:max(0, partial_post_limit)]:
+            try:
+                row = dict(prow)
+                row.setdefault("current_stage", "deferred_text_embedding")
+                row.setdefault("defer_reason", reason)
+                row.setdefault("vector_gate_status", "deferred_text_embedding")
+                row.setdefault("llm_status", "not_called_runtime_partial")
+                write_region_talk_online_post_item(row, run_id=run_id, stage="partial_runtime_deferred", status="deferred_text_embedding")
+            except Exception:
+                pass
+        summary_row = {
+            "run_id": run_id,
+            "started_at": RUN_STARTED_AT.isoformat(),
+            "finished_at": partial_now,
+            "status": "partial",
+            "partial_reason": reason,
+            "posts_fetched": len(posts),
+            "posts_scored": 0,
+            "posts_deferred_by_runtime_budget": len(posts),
+            "sources_scanned": len(source_rows),
+            "candidates_created": 0,
+            "favorites_created": 0,
+            "state_backend": region_talk_state_backend_requested(),
+            "ydb_read_status": state_meta.get("ydb_read_status"),
+            "ydb_write_status": "partial_row_level",
+            "runtime_elapsed_seconds": round(runtime_elapsed_seconds(), 1),
+            "runtime_remaining_seconds": round(runtime_remaining_seconds(), 1),
+            "text_embedding_error": text_embedding_error,
+        }
+        payload = {
+            "ok": True,
+            "status": "partial",
+            "run_id": run_id,
+            "summary": summary_row,
+            "sheets": {
+                "00_product_summary": [{"metric": k, "value": v} for k, v in summary_row.items()],
+                "02b_runtime_deferred_posts": [
+                    {
+                        "post_id": r.get("post_id"),
+                        "post_url": r.get("post_url"),
+                        "post_date": r.get("post_date"),
+                        "source_title": r.get("source_title"),
+                        "defer_reason": reason,
+                        "next_action": "retry in next bounded run after embeddings are available",
+                    }
+                    for r in posts[:500]
+                ],
+            },
+            "latest_xlsx": "",
+            "xlsx_path": "",
+        }
+        (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": partial_now, "status": "partial", "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (output_dir / f"region-talk-candidates-{run_id}.md").write_text(render_md(payload), encoding="utf-8")
+        (output_dir / f"region-talk-candidates-{run_id}.html").write_text(render_html(payload), encoding="utf-8")
+        if status is not None and hasattr(status, "events"):
+            try:
+                (output_dir / "run_events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in getattr(status, "events") or []), encoding="utf-8")
+            except Exception:
+                pass
+        (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "status": "partial", "run_id": run_id, "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
+
     semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "vector_first_final_llm").strip().lower()
     early_llm_enabled = getenv_bool("REGION_TALK_ENABLE_EARLY_LLM", False)
     vector_gates_enabled = getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
     deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
     precomputed_embedding_scores: list[dict[str, Any]] = []
+    embedding_batch_deferred_error = ""
     if vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
         try:
             precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
         except Exception as exc:
             err = f"{type(exc).__name__}: {str(exc)[:260]}"
+            embedding_batch_deferred_error = err
             report_event("text_embedding_batch_deferred", phase="text_embedding", status="deferred", text_embedding_error=err, posts_to_score=len(posts_for_scoring), posts_deferred=len(posts))
             runtime_deferred_posts = posts
             posts_for_scoring = []
             precomputed_embedding_scores = []
+    if embedding_batch_deferred_error and getenv_bool("REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER", True):
+        report_event(
+            "report_tail_aborted_after_text_embedding_deferred",
+            phase="report",
+            status="partial",
+            posts_fetched=len(posts),
+            posts_deferred=len(posts),
+            runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1),
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            text_embedding_error=embedding_batch_deferred_error,
+        )
+        return _write_partial_runtime_report("text_embedding_batch_deferred", text_embedding_error=embedding_batch_deferred_error)
 
     posts_scored_count = 0
     scoring_stopped_by_runtime_budget = False
@@ -7809,7 +7897,8 @@ async def amain() -> int:
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
     payload = build_report(seeds, source_rows, posts, run_id, out_dir, status=status)
     summary = payload.get('summary', {})
-    status.event('report_written', phase='report', status='done', run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'))
+    terminal_status = 'partial' if str(payload.get('status') or summary.get('status') or '').lower() == 'partial' else 'done'
+    status.event('report_written', phase='report', status=terminal_status, run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'), partial_reason=summary.get('partial_reason'))
     return 0
 
 

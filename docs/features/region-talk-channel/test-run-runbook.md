@@ -304,8 +304,11 @@ The XLSX has:
   Hugging Face Hub timeouts are set before import
   (`REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT`, `REGION_TALK_HF_HUB_ETAG_TIMEOUT`,
   `REGION_TALK_HF_HUB_DISABLE_XET`). If a pass times out, CandidateReport emits
-  `text_embedding_batch_deferred`, writes state/report, and defers scoring
-  rather than silently replacing the accepted dual-vector process.
+  `text_embedding_batch_deferred`, marks fetched posts as deferred in live YDB,
+  writes compact `partial` artifacts and stops the report tail by default
+  (`REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER=1`) rather than silently
+  replacing the accepted dual-vector process or hanging after the 20-minute
+  budget.
 - For true live-YDB product runs, the CandidateReport Kaggle runner performs a
   local YDB preflight when `REGION_TALK_REQUIRE_YDB_STATE=1`; set
   `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` for production-like
