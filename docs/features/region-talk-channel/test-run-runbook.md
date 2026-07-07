@@ -274,3 +274,16 @@ The XLSX has:
 - VK read-only wall fetch should use `VK_SERVICE_KEY`/`VK_SERVICE_TOKEN` before IP-bound user tokens (`REGION_TALK_VK_READ_SERVICE_FIRST=1`). `error_code=5` from `VK_ACCESS_TOKEN` means the token is bound to another IP and is not suitable for Kaggle wall reads.
 - VK catalog/search/private pages are not global failures: they should be reported as `domain_missing` or `access_denied`. Acceptance for smoke is at least one real `vk_wall_probe_status=ok` when a public VK wall source is selected.
 - Kaggle status events must include factual `state_backend`, `ydb_read_status`, `ydb_write_status`, `ydb_state_mode`, `vk_wall_probe_status` in preflight/report logs so failures can be diagnosed without opening the workbook.
+
+## z9 product-loop run additions
+
+After the YDB/VK smoke fix, the next product dry-run is expected to use full discovery/scoring budgets rather than a shortened smoke profile. The report now includes explicit product-loop observability:
+
+- `12a_active_tg_vk_frontier` — active scan frontier restricted to Telegram/VK.
+- `12g_external_links_quarantine` — website/YouTube/Dzen/Rutube and other non-target links retained for observability but excluded from active scan metrics.
+- `12e_keyword_posts` — Telegram keyword post hits with source URL, post URL, query and pipeline note; keyword hits are discovery/context only and do not auto-accept posts.
+- `04k_keyword_hit_candidates` — keyword-hit sources that classification ranks into the nonlocal product-priority pool.
+- `09_image_quality` — actual-image rows only; metadata/fallback rows go to `09c_image_debug_fallback`.
+- `candidate_found.jsonl` includes `new_nonlocal_ko_channel_found`, `keyword_hit_candidate_found`, `reviewable_image_candidate_found`, `publication_ready_candidate_found` in addition to retry/debug events.
+
+The full product dry-run should keep `REGION_TALK_DISABLE_PUBLISH=1`, but should not artificially lower source, keyword, similar-channel or actual-image targets unless debugging a broken infrastructure path.
