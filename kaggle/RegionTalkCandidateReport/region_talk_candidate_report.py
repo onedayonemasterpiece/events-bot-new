@@ -457,6 +457,14 @@ EXTERNAL_REGION_TERMS = [
     "владивосток", "краснодарский край", "адыгея", "эльбрус", "чечня", "ингушетия", "осетия",
     "башкирия", "пермский край", "самара", "саратов", "волгоград", "астрахань", "тюмень",
     "челябинск", "челябинская область", "якутия", "саха",
+    "новосибирск", "новосибирская область", "омск", "омская область", "томск", "томская область",
+    "кемерово", "кемеровская область", "красноярск", "красноярский край", "иркутск", "иркутская область",
+    "алтайский край", "республика алтай", "бурятия", "забайкальский край", "хабаровский край",
+    "амурская область", "магаданская область", "чукотка", "курганская область", "свердловская область",
+    "оренбургская область", "ульяновская область", "пензенская область", "рязанская область",
+    "тверская область", "тула", "тульская область", "калуга", "калужская область", "смоленская область",
+    "брянская область", "орловская область", "курская область", "воронежская область", "липецкая область",
+    "тамбовская область", "белгородская область", "ростовская область", "ставропольский край",
 ]
 EXTERNAL_COUNTRY_TERMS = [
     "польша", "литва", "латвия", "эстония", "германия", "беларусь", "грузия", "армения", "турция",
@@ -5474,7 +5482,15 @@ def _embedding_model_pass_worker(model_id: str, texts: list[str], flat_labels: l
         release_text_embedding_model(model_id)
 
 
-def _run_embedding_model_pass_bounded(model_id: str, texts: list[str], flat_labels: list[str], flat_texts: list[str], semantic_bank_version: str, bank_hash: str) -> dict[str, Any]:
+def _run_embedding_model_pass_bounded(
+    model_id: str,
+    texts: list[str],
+    flat_labels: list[str],
+    flat_texts: list[str],
+    semantic_bank_version: str,
+    bank_hash: str,
+    report_event: Any | None = None,
+) -> dict[str, Any]:
     if not getenv_bool("REGION_TALK_TEXT_EMBEDDING_SUBPROCESS", True):
         cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
         if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
@@ -5490,11 +5506,37 @@ def _run_embedding_model_pass_bounded(model_id: str, texts: list[str], flat_labe
         return {"ok": True, "scores": [{label: max([float(sim2) for label2, sim2 in zip(flat_labels, sims) if label2 == label] or [-1.0]) for label in sorted(set(flat_labels))} for sims in sims_rows]}
     import multiprocessing as mp
     timeout = max(30, getenv_int("REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS", 300))
+    if runtime_remaining_seconds() > 0:
+        timeout = max(30, min(timeout, int(max(30, runtime_remaining_seconds() - getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", 120)))))
     ctx = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn")
     queue: Any = ctx.Queue(maxsize=1)
     proc = ctx.Process(target=_embedding_model_pass_worker, args=(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, queue), daemon=True)
     proc.start()
-    proc.join(timeout)
+    started = time.monotonic()
+    heartbeat_every = max(10, getenv_int("REGION_TALK_TEXT_EMBEDDING_MODEL_HEARTBEAT_SECONDS", 30))
+    last_heartbeat = 0.0
+    while proc.is_alive():
+        elapsed = time.monotonic() - started
+        if elapsed >= timeout:
+            break
+        wait_for = min(5.0, max(0.5, timeout - elapsed))
+        proc.join(wait_for)
+        elapsed = time.monotonic() - started
+        if callable(report_event) and (elapsed - last_heartbeat >= heartbeat_every or last_heartbeat == 0.0):
+            last_heartbeat = elapsed
+            try:
+                report_event(
+                    "text_embedding_model_pass_alive",
+                    phase="text_embedding",
+                    status="running",
+                    text_embedding_model_id=model_id,
+                    texts_to_score=len(texts),
+                    text_embedding_elapsed_seconds=round(elapsed, 1),
+                    text_embedding_timeout_seconds=timeout,
+                    runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                )
+            except Exception:
+                pass
     if proc.is_alive():
         proc.terminate()
         proc.join(10)
@@ -5573,7 +5615,7 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
         started = time.monotonic()
         emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_to_score=len(texts))
         try:
-            result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash)
+            result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, report_event=report_event)
             if not result.get("ok"):
                 raise RuntimeError(str(result.get("error") or "embedding subprocess failed"))
             for i, scores in enumerate(result.get("scores") or []):
@@ -5681,14 +5723,19 @@ def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any
     ad_promo = float(ts.get("ad_score") or 0)
     if bool(ad_gate.get("is_ad_or_promo")):
         ad_promo += 0.50
-    roundup = 0.60 if scope.get("external_geo_mentions") else 0.0
-    if any(w in low for w in ["подборка", "топ-", "топ ", "куда поехать", "мест россии", "регионов россии", "направлений"]):
+    explicit_external_geo = bool(scope.get("external_geo_mentions"))
+    roundup = 0.60 if explicit_external_geo else 0.0
+    multi_item_words = [
+        "подборка", "топ-", "топ ", "куда поехать", "мест россии", "регионов россии", "направлений",
+        "собрали места", "места, где", "мест, где", "где можно", "в эти выходные", "афиша",
+    ]
+    if any(w in low for w in multi_item_words):
         roundup += 0.25
     # Ambiguous lexicon hits such as Светлый/Пионерский/Сокольники must not create a strong KO vector positive by themselves.
     ambiguous_place_penalty = 0.18 if scope.get("matched_place_names") and not scope.get("matched_place_accepted_as_region_evidence") else 0.0
     low_substance = max(0.0, 0.65 - float(substance.get("text_substance_score") or 0) + ambiguous_place_penalty)
     other_region = 0.0
-    if scope.get("external_geo_mentions"):
+    if explicit_external_geo:
         other_region = max(other_region, 0.75)
     # Full-text external evidence catches cases where hashtags/boilerplate were removed from geo-main-content.
     full_norm = normalize_geo_text(text)
@@ -5696,6 +5743,8 @@ def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any
     full_external_countries = [term for term in EXTERNAL_COUNTRY_TERMS if term_in_text(normalize_geo_text(term), full_norm)]
     if full_external_regions or full_external_countries:
         other_region = max(other_region, 0.75)
+        if any(w in low for w in multi_item_words):
+            roundup = max(roundup, 0.85)
     if not scope.get("kaliningrad_oblast_only_scope"):
         other_region = max(other_region, 0.55 if scope.get("matched_place_names") else 0.62)
     negative = max(news_event, ad_promo, roundup, low_substance, other_region)
@@ -5713,10 +5762,24 @@ def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any
     }
 
 
-def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any], embedding_scores: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Vector-first text gate with deterministic evidence as fallback only."""
+def text_vector_gate(
+    text: str,
+    ts: dict[str, Any],
+    scope: dict[str, Any],
+    ad_gate: dict[str, Any],
+    substance: dict[str, Any],
+    embedding_scores: dict[str, Any] | None = None,
+    *,
+    allow_embedding_fallback: bool = True,
+) -> dict[str, Any]:
+    """Vector-first text gate with deterministic evidence as fallback only.
+
+    `embedding_scores` should be precomputed in bounded batches for product
+    runs. `allow_embedding_fallback=False` is used in secondary rechecks so a
+    missing batch row cannot silently reload E5+BGE once per candidate.
+    """
     proto = _prototype_vector_scores(text, ts, scope, ad_gate, substance)
-    embed = embedding_scores if embedding_scores is not None else dual_model_semantic_scores(text)
+    embed = embedding_scores if embedding_scores is not None else (dual_model_semantic_scores(text) if allow_embedding_fallback else None)
     negative_class = ""
     if embed and embed.get("vector_negative_class"):
         positive = float(embed.get("vector_positive_semantic_score") or 0)
@@ -5746,16 +5809,22 @@ def text_vector_gate(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_ga
         negative, negative_class = float(proto["other_region"]), "other_region_travel"
     if proto["roundup"] >= 0.60 and negative < proto["roundup"]:
         negative, negative_class = float(proto["roundup"]), "multi_region_roundup"
+    if (scope.get("external_geo_mentions") or proto["roundup"] >= 0.85) and proto["other_region"] >= 0.75 and positive < 0.82:
+        negative = max(float(negative), float(proto["other_region"]), float(proto["roundup"]))
+        negative_class = "multi_region_roundup" if proto["roundup"] >= 0.75 else "other_region_travel"
     if proto["news_event"] >= 0.65 and negative < proto["news_event"]:
         negative, negative_class = float(proto["news_event"]), "event_announcement"
     if proto["ad_promo"] >= 0.65 and negative < proto["ad_promo"]:
         negative, negative_class = float(proto["ad_promo"]), "ad_or_promo"
+    if (scope.get("external_geo_mentions") or proto["roundup"] >= 0.85) and proto["roundup"] >= 0.75 and positive < 0.82:
+        negative = max(float(negative), float(proto["roundup"]), float(proto["other_region"]))
+        negative_class = "multi_region_roundup"
     margin = round(max(0.0, min(1.0, positive)) - max(0.0, min(1.0, negative)), 3)
     status = "vector_ambiguous_keep_for_ranking"
     reason = ""
-    if negative_class == "other_region_travel" and negative >= 0.55 and positive < 0.68:
+    if negative_class == "other_region_travel" and negative >= 0.55 and (positive < 0.68 or (scope.get("external_geo_mentions") and positive < 0.82)):
         status, reason, content_type = "vector_reject_not_kaliningrad_oblast", "other-region semantic class dominates Kaliningrad fit", "other_region_travel"
-    elif negative_class == "multi_region_roundup" and negative >= 0.55 and positive < 0.68:
+    elif negative_class == "multi_region_roundup" and negative >= 0.55 and (positive < 0.68 or ((scope.get("external_geo_mentions") or proto["roundup"] >= 0.75) and positive < 0.82)):
         status, reason, content_type = "vector_reject_multi_region_roundup", "multi-region roundup semantic class dominates", "multi_region_roundup"
     elif negative_class in {"news_report", "event_announcement"} and negative >= 0.55 and positive < 0.68:
         status, reason, content_type = "vector_reject_news_event", "news/event/announcement semantic class dominates", "news_or_event"
@@ -6507,20 +6576,32 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
 
-    def memory_product_vector_ok(row: dict[str, Any]) -> bool:
+    def _memory_recheck_text(row: dict[str, Any]) -> str:
+        return str(row.get("short_summary") or row.get("text_excerpt") or row.get("post_url") or "")
+
+    def memory_product_vector_ok(row: dict[str, Any], embedding_scores: dict[str, Any] | None = None) -> bool:
         existing_status = str(row.get("vector_gate_status") or "")
         if existing_status.startswith("vector_reject"):
             row["memory_product_exclusion_reason"] = existing_status
             return False
-        sample_text = str(row.get("short_summary") or row.get("text_excerpt") or row.get("post_url") or "")
+        sample_text = _memory_recheck_text(row)
         if not sample_text.strip():
             row["memory_product_exclusion_reason"] = "missing_text_for_memory_vector_recheck"
             return False
         scope2 = kaliningrad_oblast_only_scope_gate(sample_text, lexicon)
-        gate2 = text_vector_gate(sample_text, score_text(sample_text), scope2, ad_promo_gate(sample_text), score_substance(sample_text))
+        gate2 = text_vector_gate(
+            sample_text,
+            score_text(sample_text),
+            scope2,
+            ad_promo_gate(sample_text),
+            score_substance(sample_text),
+            embedding_scores=embedding_scores,
+            allow_embedding_fallback=False,
+        )
         row["memory_vector_recheck_status"] = gate2.get("vector_gate_status")
         row["memory_vector_recheck_negative_class"] = gate2.get("vector_negative_class")
         row["memory_vector_recheck_reason"] = gate2.get("vector_rejection_reason")
+        row["memory_vector_recheck_runtime"] = gate2.get("text_embedding_runtime")
         if str(gate2.get("vector_gate_status") or "").startswith("vector_reject"):
             row["memory_product_exclusion_reason"] = str(gate2.get("vector_gate_status") or "")
             return False
@@ -6533,13 +6614,44 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
 
     candidate_memory_product_rows = []
     memory_recheck_limit = getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", 100)
-    for memory_idx, row in enumerate(candidate_memory_active_rows[:max(0, memory_recheck_limit)], start=1):
+    memory_recheck_rows = candidate_memory_active_rows[:max(0, memory_recheck_limit)]
+    memory_embedding_scores: list[dict[str, Any]] = []
+    if (
+        memory_recheck_rows
+        and vector_gates_enabled
+        and getenv_bool("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", True)
+        and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}
+        and runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_MEMORY_EMBEDDING_SECONDS", 240))
+    ):
+        try:
+            report_event(
+                "memory_vector_recheck_batch_started",
+                phase="memory_vector_recheck",
+                status="running",
+                memory_recheck_total=len(memory_recheck_rows),
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
+            memory_embedding_scores = dual_model_semantic_scores_batch([_memory_recheck_text(r) for r in memory_recheck_rows], report_event=report_event)
+            report_event(
+                "memory_vector_recheck_batch_done",
+                phase="memory_vector_recheck",
+                status="running",
+                memory_recheck_total=len(memory_recheck_rows),
+                memory_recheck_embeddings=len(memory_embedding_scores),
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
+        except Exception as exc:
+            err = f"{type(exc).__name__}: {str(exc)[:260]}"
+            report_event("memory_vector_recheck_batch_deferred", phase="memory_vector_recheck", status="deferred", memory_recheck_total=len(memory_recheck_rows), text_embedding_error=err)
+            memory_embedding_scores = []
+    for memory_idx, row in enumerate(memory_recheck_rows, start=1):
         if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
             report_event("runtime_budget_memory_vector_recheck_stop", phase="memory_vector_recheck", status="deferred", memory_recheck_done=memory_idx - 1, memory_recheck_total=len(candidate_memory_active_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
             break
         if memory_idx == 1 or memory_idx % max(1, getenv_int("REGION_TALK_MEMORY_VECTOR_RECHECK_HEARTBEAT_EVERY_ROWS", 10)) == 0:
             report_event("memory_vector_recheck_alive", phase="memory_vector_recheck", status="running", memory_recheck_done=memory_idx - 1, memory_recheck_total=len(candidate_memory_active_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
-        if memory_product_vector_ok(row):
+        embedding_scores = memory_embedding_scores[memory_idx - 1] if memory_idx - 1 < len(memory_embedding_scores) else None
+        if memory_product_vector_ok(row, embedding_scores=embedding_scores):
             candidate_memory_product_rows.append(row)
     candidate_memory_top = sorted(candidate_memory_product_rows, key=lambda r: (
         str(r.get("not_refetched_this_run") or "") == "true",

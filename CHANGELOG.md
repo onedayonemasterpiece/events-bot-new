@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / memory vector runaway fix**: traced the cancelled
+  CandidateReport run to candidate-memory recheck calling the dual embedding
+  loader per row after the main batch, added no-fallback/batched memory vector
+  rechecks with heartbeat events, and tightened multi-region Russian
+  region/city evidence so mixed roundups such as `puteshestvuem_rf/14637` are
+  rejected before the image/publication queue.
 - **Region Talk Channel / YDB size retention**: measured compact YDB payload
   growth, documented the 1 GB sidecar budget policy, and added retention pruning
   for large per-run snapshots plus ephemeral business events, stats and cursor

@@ -159,6 +159,59 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
 
+    def test_vector_gate_rejects_ivan_kupala_multi_region_event_roundup(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        text = (
+            "Иван Купала — старинный народный праздник. "
+            "А еще мы собрали места, где можно отпраздновать Ивана Купалу в эти выходные: "
+            "Мира Парк — 4–5 июля, Новосибирская область. "
+            "Поселение викингов «Кауп» — 4 июля, Калининградская область. "
+            "Сплетете венок, поучаствуете в старинных играх и попробуете блюда средневековой кухни."
+        )
+        scope = mod.kaliningrad_oblast_only_scope_gate(text, lexicon)
+        self.assertFalse(scope["kaliningrad_oblast_only_scope"])
+        self.assertIn("новосибирская область", scope["external_geo_mentions"])
+        gate = mod.text_vector_gate(
+            text,
+            mod.score_text(text),
+            scope,
+            mod.ad_promo_gate(text),
+            mod.score_substance(text),
+            embedding_scores={
+                "vector_positive_semantic_score": 0.71,
+                "vector_negative_score": 0.10,
+                "vector_negative_class": "low_substance",
+                "vector_positive_semantic_class": "ko_route_useful",
+                "text_embedding_runtime": "unit_dual_embedding_stub",
+                "text_embedding_model_id": "unit/e5+unit/bge",
+            },
+        )
+        self.assertEqual(gate["vector_gate_status"], "vector_reject_multi_region_roundup")
+
+
+    def test_vector_gate_can_disable_per_row_embedding_fallback(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        text = "Калининград и Светлогорск: прогулка, море, личные впечатления и полезный маршрут."
+        old_dual = mod.dual_model_semantic_scores
+        def boom(_text: str):
+            raise AssertionError("per-row embedding fallback must not be called")
+        try:
+            mod.dual_model_semantic_scores = boom
+            gate = mod.text_vector_gate(
+                text,
+                mod.score_text(text),
+                mod.kaliningrad_oblast_only_scope_gate(text, lexicon),
+                mod.ad_promo_gate(text),
+                mod.score_substance(text),
+                allow_embedding_fallback=False,
+            )
+        finally:
+            mod.dual_model_semantic_scores = old_dual
+        self.assertIn(gate["vector_gate_status"], {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"})
+        self.assertEqual(gate["text_embedding_runtime"], "kaggle_local_prototype_vector_gate")
+
     def test_visit_classifier_populates_story_fields(self) -> None:
         mod = load_module()
         fields = mod.infer_visit_semantic_fields(

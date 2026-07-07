@@ -637,7 +637,12 @@ CandidateReport must run them as sequential model passes: load E5, batch-score
 the bounded post set, release the model and collect memory, then load BGE-M3,
 batch-score the same post set, release it and fuse the two model score maps.
 This preserves the E5+BGE-M3 decision while avoiding simultaneous resident model
-weights in Kaggle CPU memory. `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=1` keeps
+weights in Kaggle CPU memory. The same rule applies to secondary candidate-memory
+rechecks: memory rows must be scored by one bounded batch pass (or by the
+prototype/gazetteer safety fallback if embeddings are unavailable), never by
+calling the dual model loader once per memory row. `text_embedding_model_pass_alive`
+and `memory_vector_recheck_batch_*` events are the expected heartbeat evidence
+while a subprocess is loading or scoring a model. `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=1` keeps
 production runs fail-loud if either model cannot produce scores; prototype
 vector fallback is a debug/offline mode, not a silent product fallback.
 
@@ -698,6 +703,7 @@ After the z10b workbook review, `04a_final_shortlist` must be treated as product
 
 - positive classes: Kaliningrad Oblast visit/impression, useful route, visual place card;
 - negative classes: other-region primary topic/homonym, multi-region roundup, news/report, event announcement, ad/promo, local institution PR/event report, low-substance chat/test output;
+- Russian external-region/city evidence is maintained as a compact gazetteer before vector scoring: multi-region event/place roundups such as “Новосибирская область + Калининградская область” must be rejected even if one listed item is a valid Kaliningrad place;
 - deterministic place/regex/keyword checks are only evidence or last-resort safety fallback;
 - LLM remains final verifier only and must not be used for broad corpus classification.
 
