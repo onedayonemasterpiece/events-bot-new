@@ -422,6 +422,61 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:
     return dst
 
 
+ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
+TERMINAL_KERNEL_STATUSES = {"COMPLETE", "ERROR", "FAILED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}
+
+
+def _kernel_status_raw(client: Any, kernel_ref: str) -> str:
+    status = client.get_kernel_status(kernel_ref)
+    return str(status.get("status") or "").upper()
+
+
+def assert_region_talk_kaggle_slots_free(
+    client: Any,
+    kernel_refs: list[str],
+    *,
+    allow_active: bool = False,
+    auth_bundle_env: str = "",
+) -> None:
+    """Refuse to push over an active Region Talk kernel or shared auth bundle.
+
+    Kaggle does not provide a safe local cancel path. Region Talk candidate and
+    image diagnostic kernels normally share TELEGRAM_AUTH_BUNDLE_DISCOVERY, so a
+    second push while either kernel is RUNNING can duplicate the Telethon auth key
+    and corrupt the product run.
+    """
+    if allow_active or getenv_bool("REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE", False):
+        print("[region-talk-kaggle] WARNING active-kernel guard bypassed by explicit override", flush=True)
+        return
+    checked: list[str] = []
+    active: list[tuple[str, str]] = []
+    errors: list[str] = []
+    for kernel_ref in list(dict.fromkeys([r for r in kernel_refs if str(r).strip()])):
+        try:
+            raw = _kernel_status_raw(client, str(kernel_ref))
+            checked.append(f"{kernel_ref}={raw or 'UNKNOWN'}")
+            if raw in ACTIVE_KERNEL_STATUSES:
+                active.append((str(kernel_ref), raw))
+        except Exception as exc:
+            errors.append(f"{kernel_ref}:{type(exc).__name__}:{str(exc)[:180]}")
+    if active:
+        refs = ", ".join(f"{ref}({status})" for ref, status in active)
+        bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+        raise RuntimeError(
+            "Region Talk Kaggle launch refused: active kernel(s) detected "
+            f"{refs}; auth bundle {bundle} must not be used concurrently. "
+            "Cancel/finish the active Kaggle run first, or set "
+            "REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1 only after manual resource audit."
+        )
+    if errors and not getenv_bool("REGION_TALK_ALLOW_UNVERIFIED_KAGGLE_SLOT", False):
+        raise RuntimeError(
+            "Region Talk Kaggle launch refused: could not verify active kernel slots: "
+            + "; ".join(errors)
+            + "; set REGION_TALK_ALLOW_UNVERIFIED_KAGGLE_SLOT=1 only after manual Kaggle UI audit."
+        )
+    print(f"[region-talk-kaggle] active slot check OK: {', '.join(checked) or 'no refs'}", flush=True)
+
+
 def poll_kernel(client: Any, kernel_ref: str, *, timeout_minutes: int, poll_interval_seconds: int) -> dict[str, Any]:
     deadline = time.monotonic() + max(60, timeout_minutes * 60)
     last: dict[str, Any] = {}
@@ -449,6 +504,7 @@ def main() -> int:
     ap.add_argument("--download-output", action="store_true", default=True)
     ap.add_argument("--max-sources", type=int, default=220)
     ap.add_argument("--keep-input-datasets", action="store_true", help="Do not delete temporary Kaggle config/secret input datasets after a waited run.")
+    ap.add_argument("--allow-active-region-talk-kernel", action="store_true", help="Bypass active-kernel/session guard after a manual Kaggle UI audit.")
     args = ap.parse_args()
     load_env_file(args.env_file)
     run_id = args.run_id or "region-talk-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -534,8 +590,15 @@ def main() -> int:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME is required")
-    dataset_sources = build_input_datasets(client, run_id=run_id, username=username)
     kernel_ref = kernel_ref_from_meta(kernel_path, kernel_slug=args.kernel_slug)
+    image_kernel_ref = f"{username}/region-talk-image-diagnostic"
+    assert_region_talk_kaggle_slots_free(
+        client,
+        [kernel_ref, image_kernel_ref],
+        allow_active=bool(args.allow_active_region_talk_kernel),
+        auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
+    )
+    dataset_sources = build_input_datasets(client, run_id=run_id, username=username)
     print(f"[region-talk-kaggle] pushing {kernel_ref} run_id={run_id} datasets={len(dataset_sources)}", flush=True)
     client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
     if args.no_wait:

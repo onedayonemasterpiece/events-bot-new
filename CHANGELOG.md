@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Kaggle session guard**: CandidateReport and
+  ImageDiagnostic launchers now refuse to push a new run while either Region
+  Talk Kaggle kernel is active, protecting the shared Discovery Telethon bundle
+  from concurrent notebook use unless explicitly overridden after manual audit.
 - **Region Talk Channel / processed-source frontier**: changed processed-source
   rescan scheduling from a 24-hour fallback to a two-week default and made
   CandidateReport finish pending/retry/never-scanned publics before looping back

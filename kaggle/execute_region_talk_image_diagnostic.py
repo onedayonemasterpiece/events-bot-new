@@ -23,6 +23,7 @@ wait_dataset_ready = _candidate_executor.wait_dataset_ready
 build_input_datasets = _candidate_executor.build_input_datasets
 poll_kernel = _candidate_executor.poll_kernel
 preflight_ydb_access = _candidate_executor.preflight_ydb_access
+assert_region_talk_kaggle_slots_free = _candidate_executor.assert_region_talk_kaggle_slots_free
 
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkImageDiagnostic"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-image-diagnostic"
@@ -70,7 +71,7 @@ def stage_kernel(run_id: str, kernel_slug: str) -> Path:
     return dst
 
 def main() -> int:
-    ap=argparse.ArgumentParser(); ap.add_argument("--env-file",type=Path,default=PROJECT_ROOT/".env"); ap.add_argument("--run-id",default=""); ap.add_argument("--queue-xlsx",type=Path,default=None); ap.add_argument("--source",choices=["ydb","xlsx"],default="ydb"); ap.add_argument("--top-n",type=int,default=50); ap.add_argument("--max-items-per-run",type=int,default=50); ap.add_argument("--batch-size",type=int,default=30); ap.add_argument("--wait-initial-seconds",type=int,default=600); ap.add_argument("--wait-after-drain-seconds",type=int,default=600); ap.add_argument("--image-poll-interval-seconds",type=int,default=60); ap.add_argument("--timeout-minutes",type=int,default=60); ap.add_argument("--poll-interval-seconds",type=int,default=20); ap.add_argument("--kernel-slug",default="region-talk-image-diagnostic"); ap.add_argument("--keep-input-datasets",action="store_true")
+    ap=argparse.ArgumentParser(); ap.add_argument("--env-file",type=Path,default=PROJECT_ROOT/".env"); ap.add_argument("--run-id",default=""); ap.add_argument("--queue-xlsx",type=Path,default=None); ap.add_argument("--source",choices=["ydb","xlsx"],default="ydb"); ap.add_argument("--top-n",type=int,default=50); ap.add_argument("--max-items-per-run",type=int,default=50); ap.add_argument("--batch-size",type=int,default=30); ap.add_argument("--wait-initial-seconds",type=int,default=600); ap.add_argument("--wait-after-drain-seconds",type=int,default=600); ap.add_argument("--image-poll-interval-seconds",type=int,default=60); ap.add_argument("--timeout-minutes",type=int,default=60); ap.add_argument("--poll-interval-seconds",type=int,default=20); ap.add_argument("--kernel-slug",default="region-talk-image-diagnostic"); ap.add_argument("--keep-input-datasets",action="store_true"); ap.add_argument("--allow-active-region-talk-kernel",action="store_true")
     args=ap.parse_args(); load_env_file(args.env_file)
     run_id=args.run_id or "region-talk-image-diagnostic-"+time.strftime("%Y%m%dT%H%M%SZ",time.gmtime())
     os.environ["REGION_TALK_RUN_ID"]=run_id; os.environ.setdefault("REGION_TALK_DRY_RUN","1"); os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH","1"); os.environ.setdefault("REGION_TALK_AUTH_BUNDLE_ENV","TELEGRAM_AUTH_BUNDLE_DISCOVERY")
@@ -113,6 +114,8 @@ def main() -> int:
     wait_dataset_ready(client, diag_ref, expected_files=["image_diag_input.json", "region_talk_run_config.json"])
     dataset_sources=build_input_datasets(client, run_id=run_id, username=username)+[diag_ref]
     kernel_path=stage_kernel(run_id,args.kernel_slug); kernel_ref=f"{username}/{args.kernel_slug}"
+    candidate_kernel_ref=f"{username}/region-talk-candidate-report"
+    assert_region_talk_kaggle_slots_free(client,[kernel_ref,candidate_kernel_ref],allow_active=bool(args.allow_active_region_talk_kernel),auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV","TELEGRAM_AUTH_BUNDLE_DISCOVERY"))
     print(f"[region-talk-image-diagnostic] pushing {kernel_ref} run_id={run_id} source={args.source} queue_rows={total} top_n={args.top_n if args.source=='ydb' else len(rows)} max_items={args.max_items_per_run} batch_size={args.batch_size}", flush=True)
     client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
     completed=False

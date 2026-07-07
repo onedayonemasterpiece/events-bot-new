@@ -1307,5 +1307,36 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = old_require
 
 
+class RegionTalkKaggleLauncherTests(unittest.TestCase):
+    def test_active_slot_guard_refuses_running_sibling_kernel(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+
+        class FakeClient:
+            def get_kernel_status(self, ref: str) -> dict[str, str]:
+                return {"status": "RUNNING" if ref.endswith("image") else "COMPLETE"}
+
+        with self.assertRaisesRegex(RuntimeError, "active kernel"):
+            mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+
+    def test_active_slot_guard_allows_terminal_kernels(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+
+        class FakeClient:
+            def get_kernel_status(self, ref: str) -> dict[str, str]:
+                return {"status": "COMPLETE"}
+
+        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+
+
 if __name__ == "__main__":
     unittest.main()
