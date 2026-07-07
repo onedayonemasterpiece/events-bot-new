@@ -179,12 +179,14 @@ def getenv_bool(name: str, default: bool = False) -> bool:
 def preflight_ydb_access() -> None:
     if (os.environ.get("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return
-    if not getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
-        return
     endpoint = (os.environ.get("REGION_TALK_YDB_ENDPOINT") or "").strip().split("?")[0].rstrip("/")
     database = (os.environ.get("REGION_TALK_YDB_DATABASE") or "").strip()
     if not endpoint or not database:
-        raise RuntimeError("Region Talk YDB preflight failed: REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE are required")
+        raise RuntimeError(
+            "Region Talk YDB preflight failed: REGION_TALK_STATE_BACKEND=ydb "
+            "requires REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE before "
+            "pushing a Kaggle run; refusing json_fallback live run"
+        )
     if getenv_bool("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", False) and not (os.environ.get("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip():
         if getenv_bool("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", False):
             print("[region-talk-kaggle] YDB local preflight skipped: explicit REGION_TALK_ALLOW_KAGGLE_YDB_SECRET=1; Kaggle notebook must load REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON from UserSecretsClient", flush=True)
@@ -238,7 +240,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DRY_RUN": "1",
         "REGION_TALK_DISABLE_PUBLISH": "1",
         "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "json"),
-        "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get("REGION_TALK_REQUIRE_YDB_STATE", "0"),
+        "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get(
+            "REGION_TALK_REQUIRE_YDB_STATE",
+            "1" if os.environ.get("REGION_TALK_STATE_BACKEND", "").strip().lower() == "ydb" else "0",
+        ),
         "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL": os.environ.get("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0"),
         "REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_PREFLIGHT_TIMEOUT_SECONDS", "20"),
         "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET": os.environ.get("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", "0"),
@@ -487,7 +492,10 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_VK_READ_SERVICE_FIRST", "1")
     os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
-    os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
+    if (os.environ.get("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb":
+        os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")
+    else:
+        os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
     os.environ.setdefault("REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "0")
     os.environ.setdefault("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", "0")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")

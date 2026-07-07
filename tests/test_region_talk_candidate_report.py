@@ -44,6 +44,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
 
+    def test_runner_ydb_backend_refuses_missing_config_without_json_fallback(self) -> None:
+        mod = load_runner_module()
+        old = {k: os.environ.get(k) for k in [
+            "REGION_TALK_STATE_BACKEND",
+            "REGION_TALK_REQUIRE_YDB_STATE",
+            "REGION_TALK_YDB_ENDPOINT",
+            "REGION_TALK_YDB_DATABASE",
+        ]}
+        try:
+            os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+            os.environ.pop("REGION_TALK_REQUIRE_YDB_STATE", None)
+            os.environ.pop("REGION_TALK_YDB_ENDPOINT", None)
+            os.environ.pop("REGION_TALK_YDB_DATABASE", None)
+            with self.assertRaisesRegex(RuntimeError, "refusing json_fallback live run"):
+                mod.preflight_ydb_access()
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_seed_csv_and_report_workbook(self) -> None:
         mod = load_module()
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")

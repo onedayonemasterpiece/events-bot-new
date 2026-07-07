@@ -12,6 +12,14 @@ Configuration:
 - `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON` or equivalent least-privilege secret lane
 - `REGION_TALK_YDB_TLS=true`
 
+For semi-manual live product runs, `REGION_TALK_STATE_BACKEND=ydb` is a
+fail-fast contract, not a preference. CandidateReport/ImageDiagnostic launchers
+must refuse to push a Kaggle run if `REGION_TALK_YDB_ENDPOINT` or
+`REGION_TALK_YDB_DATABASE` is missing, and they default
+`REGION_TALK_REQUIRE_YDB_STATE=1` for YDB-backed runs. A run that falls back to a
+local JSON state file is an offline/debug run and must not be treated as live
+YDB progress.
+
 Operational requirements:
 
 - least-privilege credentials for Region Talk tables only;

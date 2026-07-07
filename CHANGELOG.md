@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / live YDB fail-fast**: verified Kaggle→YDB row writes
+  with a minimal encrypted-bundle probe and tightened CandidateReport live-YDB
+  launcher behavior so `REGION_TALK_STATE_BACKEND=ydb` refuses missing
+  endpoint/database config instead of allowing an accidental JSON fallback.
 - **Region Talk Channel / bounded dual text embeddings**: wrapped each required
   E5/BGE-M3 text-embedding pass in a separate bounded subprocess with
   Hugging Face Hub timeout env defaults; if a model pass stalls, CandidateReport
