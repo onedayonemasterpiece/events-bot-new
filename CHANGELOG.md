@@ -10,6 +10,7 @@
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
+- **Incident / VK event quality degradation (INC-2026-07-07)**: added LLM-first VK intake prompt constraints and fail-closed guards for ungrounded venues, schedule-fragment titles, structured-footer date conflicts, VK contact links, and mixed multi-event raw-gallery media fallback after the vector identity gate allowed bad creates.
 
 - **Incident / retrospective future teaser guard (INC-2026-07-02 / E6691)**: Smart Update now fail-closes recap posts that mostly describe a finished event but only thinly tease a next exhibition/market while the extracted venue/address is not present in the source text; the shape is also routed through the LLM-first eventness review.
 - **LLM gateway / reserve overflow alert noise**: stopped sending operator-facing `reserve_overflow_used` incidents when the scoped Google lane is out of RPD but a configured spare key is successfully borrowed; successful borrows remain in structured logs.

@@ -26,6 +26,18 @@ Smart Update по умолчанию строит публичный текст 
 
 - чувствительные LLM-факты из linked-source merge/create (возрастные ограничения, лимиты группы/мест, длительность, концертно-музыкальные утверждения и т.п.) попадают в `event_source_fact` и публичный fact-first narrative только если подтверждаются `source_text` / `raw_excerpt` / OCR этого же кандидата; неподтверждённые факты отбрасываются как hallucination-prone.
 
+
+## VK intake quality boundary (INC-2026-07-07)
+
+Vector identity recall is not a quality approval. For VK-originated candidates, the LLM remains responsible for semantic extraction, but the intake boundary now adds narrow fail-closed guardrails before Smart Update create/fanout:
+
+- prompt guidance requires a structured footer like `📅 31 июля, начало в 21:00` to override contextual prose dates, forbids schedule fragments such as `пятница 22:00` as titles, and tells the model to leave unsupported `location_name` empty instead of inferring a known venue;
+- unsupported venue names are cleared when neither source text, OCR, source title/default hint nor location hint contains the venue evidence; this prevents an identity/vector `allow_create` from publishing a hallucinated place;
+- VK contact mentions that arrive as `tg://user?id=...` are converted to public `https://vk.com/id...` links for VK-source events;
+- for multi-event VK posts, if OCR/relevance cannot confidently assign a photo to a specific child event, the child no longer receives the whole raw source gallery as fallback.
+
+These guards do not rewrite event meaning. They either pass source-grounded LLM output through, normalize transport-safe links, or fail closed/drop ambiguous media until the LLM/source provides grounded evidence.
+
 ## Что реализовано
 
 - Матчинг кандидата с существующими событиями:

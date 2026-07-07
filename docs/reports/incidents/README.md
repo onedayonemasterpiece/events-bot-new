@@ -18,6 +18,7 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-07-new-event-quality-degradation.md` — New event quality degradation after vector identity rollout; VK/Smart Update source-grounding, media and public fanout regression contract.
 - `INC-2026-07-05-guide-visual-digest-stale-vk-booking-link.md`
   - Scope: guide excursions visual digest `visual_schedule`, LLM extraction of `booking_url` from multi-event schedule links, and VK/Telegram caption primary-link selection.
   - Must not regress: a future schedule occurrence must not expose a historical source wall post as the primary booking/details link; repeated-route inline links must be validated against current occurrence context or demoted to source/current post fallback.

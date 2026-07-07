@@ -1453,12 +1453,191 @@ class EventDraft:
     links: List[str] | None = None
     source_text: str | None = None
     poster_media: list[PosterMedia] = field(default_factory=list)
+    allow_raw_photo_fallback: bool = True
     poster_summary: str | None = None
     ocr_tokens_spent: int = 0
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None
     search_digest: str | None = None
     reject_reason: str | None = None
+
+
+_VK_GENERIC_LOCATION_TOKENS = {
+    "калининград",
+    "кенигсберг",
+    "область",
+    "город",
+    "г",
+    "ул",
+    "улица",
+    "проспект",
+    "дом",
+    "д",
+    "бар",
+    "кафе",
+    "клуб",
+    "театр",
+    "музей",
+    "зал",
+    "центр",
+    "дом",
+    "дворец",
+    "студия",
+}
+
+
+def _vk_grounding_norm(value: str | None) -> str:
+    text = unicodedata.normalize("NFKC", value or "")
+    text = text.replace("\xa0", " ").casefold().replace("ё", "е")
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"[^0-9a-zа-я]+", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _vk_grounding_tokens(value: str | None) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[0-9a-zа-я]{2,}", _vk_grounding_norm(value), flags=re.IGNORECASE)
+        if token not in _VK_GENERIC_LOCATION_TOKENS
+    }
+
+
+def _vk_location_value_ungrounded(
+    location_name: str | None,
+    *,
+    source_text: str | None,
+    source_name: str | None = None,
+    location_hint: str | None = None,
+    poster_texts: Sequence[str] | None = None,
+) -> bool:
+    """Return True when a VK-extracted venue name has no source support.
+
+    This is a fail-closed guardrail, not a semantic venue chooser: it only
+    removes unsupported LLM facts before Smart Update/vector identity can create
+    a public card. The LLM still owns extracting the venue when the source text,
+    source title/default hint, or OCR actually supports it.
+    """
+
+    name = (location_name or "").strip()
+    if not name:
+        return False
+    name_norm = _vk_grounding_norm(name)
+    if not name_norm:
+        return False
+
+    probes = [
+        source_text or "",
+        source_name or "",
+        location_hint or "",
+        "\n".join(p for p in list(poster_texts or []) if isinstance(p, str) and p.strip()),
+    ]
+    probe_norm = _vk_grounding_norm("\n".join(probes))
+    if not probe_norm:
+        return True
+    if name_norm in probe_norm:
+        return False
+
+    significant = _vk_grounding_tokens(name)
+    if not significant:
+        return False
+    probe_tokens = _vk_grounding_tokens(probe_norm)
+    return significant.isdisjoint(probe_tokens)
+
+
+_VK_WEEKDAY_TITLE_RE = re.compile(
+    r"^\s*(?:[^\wа-яё]+)?(?:пн|вт|ср|чт|пт|сб|вс|"
+    r"понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)"
+    r"(?:\s+\d{1,2}[:.]\d{2}(?:\s*[-–—]\s*\d{1,2}[:.]\d{2})?)?\s*$",
+    re.IGNORECASE | re.U,
+)
+
+
+def _vk_title_is_schedule_fragment(title: str | None) -> bool:
+    """Detect non-title snippets such as ``пятница 22:00``.
+
+    The guard does not invent a replacement title; it only routes the draft to
+    low-confidence/fail-closed handling if the LLM did not recover a real name.
+    """
+
+    raw = unicodedata.normalize("NFKC", title or "").replace("\xa0", " ").strip()
+    if not raw:
+        return False
+    raw = re.sub(r"\s+", " ", raw)
+    return bool(_VK_WEEKDAY_TITLE_RE.match(raw))
+
+
+def _sanitize_vk_ticket_link_for_source(ticket_link: str | None, source_url: str | None) -> str | None:
+    """Keep VK contact links public on VK-originated events."""
+
+    raw = (ticket_link or "").strip()
+    if not raw:
+        return None
+    if not re.search(r"(?i)(?:^|//)(?:m\.)?vk\.com/", source_url or "") and not re.search(
+        r"(?i)vk\.com/wall", source_url or ""
+    ):
+        return raw
+    m = re.match(r"(?i)^tg://user\?id=(\d+)$", raw)
+    if m:
+        return f"https://vk.com/id{m.group(1)}"
+    return raw
+
+
+def _extract_vk_structured_footer_datetime(
+    source_text: str | None,
+    *,
+    anchor_year: int,
+) -> tuple[str, str] | None:
+    """Extract one explicit structured footer anchor such as ``📅 31 июля, начало в 21:00``.
+
+    This is used only as a contradiction guard. It does not rewrite the event:
+    if the LLM chooses a conflicting prose/context date, the draft becomes
+    low-confidence and is skipped instead of publishing the wrong day.
+    """
+
+    text = unicodedata.normalize("NFKC", source_text or "").replace("\xa0", " ")
+    if not text:
+        return None
+
+    month_aliases: dict[str, int] = {}
+    for word, num in MONTHS_RU.items():
+        try:
+            month_aliases[unicodedata.normalize("NFKC", str(word)).casefold().replace("ё", "е")] = int(num)
+        except Exception:
+            continue
+    if not month_aliases:
+        return None
+    month_re = "|".join(re.escape(k) for k in sorted(month_aliases, key=len, reverse=True) if k)
+    if not month_re:
+        return None
+
+    anchors: list[tuple[str, str]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        # Require a structured marker so prose dates remain LLM-owned.
+        if not re.search(r"(?iu)(?:📅|^|\s)(?:дата|когда|начало|двери)\b|📅", line):
+            continue
+        norm_line = unicodedata.normalize("NFKC", line).casefold().replace("ё", "е")
+        match = re.search(
+            rf"\b(?P<day>\d{{1,2}})\s+(?P<month>{month_re})\b"
+            rf".{{0,80}}?\b(?P<time>[0-2]?\d[:.][0-5]\d)\b",
+            norm_line,
+            flags=re.IGNORECASE | re.U,
+        )
+        if not match:
+            continue
+        try:
+            day = int(match.group("day"))
+            month = month_aliases[unicodedata.normalize("NFKC", match.group("month")).casefold().replace("ё", "е")]
+            d_obj = date(anchor_year, month, day)
+            time_val = match.group("time").replace(".", ":")
+            hh, mm = time_val.split(":", 1)
+            anchors.append((d_obj.isoformat(), f"{int(hh):02d}:{int(mm):02d}"))
+        except Exception:
+            continue
+    unique = list(dict.fromkeys(anchors))
+    return unique[0] if len(unique) == 1 else None
 
 
 @dataclass(frozen=True)
@@ -1962,7 +2141,13 @@ async def build_event_drafts_from_vk(
         "источником для date/time/location и обязательно перенеси эти значения в событие. "
         "Но если сам текст поста явно пишет точную календарную дату (`18 июня`, `18.06`), "
         "не считай афишу автоматически сильнее этой явной даты. "
-        "Не оставляй time пустым, когда афиша явно содержит время начала."
+        "Не оставляй time пустым, когда афиша явно содержит время начала. "
+        "Если в посте есть контекстная/сюжетная дата в прозе и отдельная структурная строка "
+        "с `📅 DD месяц, начало в HH:MM`, датой события является структурная строка `📅`, "
+        "а не дата из описания. Не используй фрагменты расписания вроде `пятница 22:00` "
+        "как title: восстанови название события из заголовка/поста/афиши или верни пустой title. "
+        "Не придумывай venue из похожих известных мест: если пост, OCR, название источника или "
+        "location hint не подтверждают площадку, оставь location_name пустым."
     )
     room_probe = "\n".join(
         part
@@ -2172,6 +2357,10 @@ async def build_event_drafts_from_vk(
     poster_datetime_anchor = _extract_single_poster_datetime_anchor(
         poster_texts,
         anchor_date=anchor_dt.date(),
+    )
+    structured_footer_datetime_anchor = _extract_vk_structured_footer_datetime(
+        combined_text,
+        anchor_year=anchor_dt.year,
     )
     source_has_relative_date_anchor = _source_text_has_relative_date_anchor(text)
     source_has_absolute_date_anchor = _source_text_has_absolute_date_anchor(text)
@@ -2430,6 +2619,23 @@ async def build_event_drafts_from_vk(
                 venue_value = poster_datetime_anchor.venue
             if poster_datetime_anchor.address:
                 address_value = poster_datetime_anchor.address
+        if _vk_location_value_ungrounded(
+            venue_value,
+            source_text=combined_text,
+            source_name=source_name,
+            location_hint=location_hint,
+            poster_texts=poster_texts,
+        ):
+            logger.warning(
+                "vk_intake.location_ungrounded_cleared venue=%s source=%s",
+                venue_value,
+                source_name or "vk",
+            )
+            venue_value = None
+            # The address may still be source-grounded, but without a supported
+            # venue name it can bind the event to a wrong nearby place. Let Smart
+            # Update/source defaults fill a safe location later if available.
+            address_value = None
 
         drafts.append(
             EventDraft(
@@ -2458,6 +2664,25 @@ async def build_event_drafts_from_vk(
                 search_digest=clean_str(data.get("search_digest")),
             )
         )
+
+        draft = drafts[-1]
+        if _vk_title_is_schedule_fragment(draft.title):
+            draft.reject_reason = "Слабый заголовок-расписание без названия события"
+        if structured_footer_datetime_anchor and not (draft.reject_reason or "").strip():
+            footer_date, footer_time = structured_footer_datetime_anchor
+            draft_date = (draft.date or "").split("..", 1)[0].strip()
+            draft_time = (draft.time or "").strip().replace(".", ":")
+            if draft_date and draft_date != footer_date:
+                draft.reject_reason = (
+                    f"Дата противоречит структурной строке источника: {draft_date} != {footer_date}"
+                )
+            elif draft_time and re.match(r"^\d{1,2}:\d{2}$", draft_time):
+                hh, mm = draft_time.split(":", 1)
+                draft_time_norm = f"{int(hh):02d}:{int(mm):02d}"
+                if draft_time_norm != footer_time:
+                    draft.reject_reason = (
+                        f"Время противоречит структурной строке источника: {draft_time_norm} != {footer_time}"
+                    )
 
     # If a single VK post describes multiple events, do not blindly attach the whole
     # poster gallery to every event: this often results in the wrong cover/poster
@@ -2596,8 +2821,15 @@ async def build_event_drafts_from_vk(
             for idx, draft in enumerate(drafts):
                 draft.poster_media = list(assigned.get(idx) or [])
                 draft.poster_summary = build_poster_summary(draft.poster_media)
+                if not draft.poster_media:
+                    # Multi-event VK posts can mix unrelated photo sets. If OCR
+                    # cannot confidently attach a photo to this draft, do not
+                    # fall back to the whole raw gallery.
+                    draft.allow_raw_photo_fallback = False
         except Exception:
             logging.warning("vk_intake: poster assignment failed", exc_info=True)
+            for draft in drafts:
+                draft.allow_raw_photo_fallback = False
 
     def _venue_looks_like_organizer_not_place(venue: str | None, address: str | None) -> bool:
         name = (venue or "").strip()
@@ -3674,6 +3906,11 @@ async def persist_event_and_pages(
 
     vk_source_chat_id, vk_source_message_id = _vk_wall_source_ids_from_url(source_post_url)
 
+    ticket_link = _sanitize_vk_ticket_link_for_source(
+        (draft.links[0] if draft.links else None),
+        source_post_url,
+    )
+
     candidate = EventCandidate(
         source_type="vk",
         source_url=source_post_url,
@@ -3691,7 +3928,7 @@ async def persist_event_and_pages(
         location_name=draft.venue or "",
         location_address=draft.location_address or None,
         city=draft.city or None,
-        ticket_link=(draft.links[0] if draft.links else None),
+        ticket_link=ticket_link,
         ticket_price_min=draft.ticket_price_min,
         ticket_price_max=draft.ticket_price_max,
         event_type=normalized_event_type,
@@ -3826,7 +4063,9 @@ def _build_smart_update_posters(
     same `catbox_url` field consumed by the unified event-page pipeline.
     """
     poster_urls = [m.catbox_url for m in draft.poster_media if m.catbox_url]
-    photo_urls = poster_urls or list(photos or [])
+    photo_urls = poster_urls or (
+        list(photos or []) if bool(getattr(draft, "allow_raw_photo_fallback", True)) else []
+    )
     posters: list[object] = []
     for idx, item in enumerate(draft.poster_media):
         url = (item.catbox_url or "").strip()
