@@ -496,16 +496,90 @@ URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+|\bt\.me/[A-Za-z0-9_+/.-]+|\bv
 HANDLE_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,}")
 STATE_FILE_NAME = "region-talk-state.json"
 
-def selected_sources_for_run(seeds: list[Seed], max_sources: int) -> list[Seed]:
+def _source_cursor_for_seed(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    state = previous_state if isinstance(previous_state, dict) else {}
+    cursors = state.get("source_cursors") if isinstance(state.get("source_cursors"), dict) else {}
+    direct = cursors.get(seed.source_id)
+    if isinstance(direct, dict):
+        return direct
+    key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+    for item in cursors.values():
+        if isinstance(item, dict) and str(item.get("canonical_source_key") or "") == key:
+            return item
+    return {}
+
+
+def _source_queue_row_for_seed(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    state = previous_state if isinstance(previous_state, dict) else {}
+    queue = state.get("unified_source_queue") if isinstance(state.get("unified_source_queue"), dict) else {}
+    key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+    direct = queue.get(key)
+    if isinstance(direct, dict):
+        return direct
+    for item in queue.values():
+        if isinstance(item, dict) and str(item.get("canonical_source_key") or "") == key:
+            return item
+    return {}
+
+
+def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    cursor = _source_cursor_for_seed(seed, previous_state)
+    qrow = _source_queue_row_for_seed(seed, previous_state)
+    now = datetime.now(timezone.utc)
+    due_at_raw = cursor.get("next_history_scan_at") or cursor.get("next_delta_scan_at") or qrow.get("next_history_scan_at") or qrow.get("next_delta_scan_at")
+    due_at = parse_iso_datetime(due_at_raw)
+    status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
+    needs_retry = status in {"pending_scan", "needs_rescan_or_retry", "retry", "error", "selected_or_observed"} or status.startswith(("error", "skipped_telegram_unresolved"))
+    scanned_before = bool(cursor.get("primary_scan_completed_at") or cursor.get("last_history_fetch_at") or qrow.get("_ydb_updated_at") or status.startswith("processed"))
+    if due_at and due_at <= now:
+        return {"due": True, "reason": "due_by_next_history_scan_at", "cursor": cursor, "queue_row": qrow}
+    if needs_retry:
+        return {"due": True, "reason": "pending_or_retry_status", "cursor": cursor, "queue_row": qrow}
+    if not scanned_before:
+        return {"due": True, "reason": "no_previous_scan_cursor", "cursor": cursor, "queue_row": qrow}
+    last_raw = cursor.get("last_history_fetch_at") or cursor.get("last_successful_delta_scan_at") or qrow.get("last_history_fetch_at") or qrow.get("_ydb_updated_at")
+    last_dt = parse_iso_datetime(last_raw)
+    cooldown = getenv_int("REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS", 24 * 3600)
+    if last_dt and (now - last_dt).total_seconds() >= cooldown:
+        return {"due": True, "reason": "processed_rescan_cooldown_elapsed", "cursor": cursor, "queue_row": qrow}
+    return {"due": False, "reason": "processed_recently_or_not_due", "cursor": cursor, "queue_row": qrow}
+
+
+def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state: dict[str, Any] | None = None) -> list[Seed]:
     enabled = [s for s in seeds if s.monitoring_enabled]
     fallback = [s for s in seeds if not s.monitoring_enabled]
-    ordered = sorted(enabled, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id)))
-    seen = {s.source_seed_id for s in ordered}
-    for seed in sorted(fallback, key=lambda s: (s.priority, seed_sort_number(s.source_seed_id))):
-        if seed.source_seed_id not in seen:
-            ordered.append(seed)
-            seen.add(seed.source_seed_id)
-    return ordered[:max(0, max_sources)]
+    all_rows = enabled + fallback
+    seen_urls: set[str] = set()
+    unique: list[Seed] = []
+    for seed in all_rows:
+        key = seed.canonical_url
+        if key in seen_urls:
+            continue
+        seen_urls.add(key)
+        unique.append(seed)
+    annotated = []
+    for seed in unique:
+        due = _seed_scan_due_state(seed, previous_state)
+        annotated.append((seed, due))
+    # Product runs should spend Telegram budget on unscanned/due queue items first.
+    # Processed sources remain candidates for future delta scans, but are not re-read every run.
+    ordered = sorted(annotated, key=lambda item: (
+        not bool(item[1].get("due")),
+        item[0].priority,
+        str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+        seed_sort_number(item[0].source_seed_id),
+        item[0].canonical_url,
+    ))
+    selected = [seed for seed, due in ordered if bool(due.get("due"))]
+    if len(selected) < max(0, max_sources) and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False):
+        selected.extend([seed for seed, due in ordered if not bool(due.get("due")) and seed not in selected])
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_due_total"] = sum(1 for _seed, due in annotated if bool(due.get("due")))
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
+        {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
+        for seed, due in annotated if not bool(due.get("due"))
+    ][:20]
+    return selected[:max(0, max_sources)]
 
 
 def seed_from_frontier_row(row: dict[str, Any], idx: int) -> Seed | None:
@@ -1495,7 +1569,7 @@ def ydb_select_kind_items(session: Any, ydb: Any, table_path: str, kind: str, *,
         query = session.prepare(f"""
 DECLARE $kind AS Utf8;
 DECLARE $after AS Utf8;
-SELECT pk, payload_json FROM `{table_path}`
+SELECT pk, payload_json, updated_at FROM `{table_path}`
 WHERE kind = $kind AND pk > $after
 ORDER BY pk
 LIMIT {min(page_size, max_items - len(out))};
@@ -1509,6 +1583,8 @@ LIMIT {min(page_size, max_items - len(out))};
             payload = row.payload_json
             data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
             if isinstance(data, dict):
+                data.setdefault("_ydb_pk", pk)
+                data.setdefault("_ydb_updated_at", str(getattr(row, "updated_at", "") or ""))
                 out[pk] = data
             after = pk
         if len(rows) < page_size:
@@ -4741,7 +4817,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         if s.canonical_url not in seen_seed_urls:
             all_seed_candidates.append(s)
             seen_seed_urls.add(s.canonical_url)
-    selected = selected_sources_for_run(all_seed_candidates, max_sources)
+    selected = selected_sources_for_run(all_seed_candidates, max_sources, previous_state=previous_state)
     _REGION_TALK_TELEGRAM_RUNTIME["dynamic_frontier_seed_count"] = len(dynamic)
     _REGION_TALK_TELEGRAM_RUNTIME["unified_queue_dynamic_seed_count"] = len(queue_dynamic)
     _REGION_TALK_TELEGRAM_RUNTIME["history_sources_target"] = governor.max_history_sources

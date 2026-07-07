@@ -693,9 +693,13 @@ Legacy queue-like structures such as `source_frontier_queue_next` and
 remain XLSX/report artifacts only. The writer runs a bounded prune pass
 (`REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS=1`) that rewrites old compact
 snapshots to this contract without deleting source/post or candidate data.
-Row-level reads are paginated to avoid YDB `TruncatedResponseError`. Row-level
-writes default to changed/current-run queue items; full rewrites are an explicit
-maintenance mode, not normal notebook behavior.
+Row-level reads are paginated to avoid YDB `TruncatedResponseError` and preserve
+YDB row `updated_at` as `_ydb_updated_at` for scan scheduling. Row-level writes
+default to changed/current-run queue items; full rewrites are an explicit
+maintenance mode, not normal notebook behavior. Already processed publics are
+not selected again every run: `processed_*` queue rows are held until
+`next_history_scan_at`/`next_delta_scan_at`, retry status, or the processed-source
+rescan cooldown says they are due.
 
 ## Vector-first product quality correction
 

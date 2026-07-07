@@ -312,6 +312,11 @@ The XLSX has:
   YDB heartbeat/row-level write. Do not use this mode as completion evidence
   until live YDB rows are observed.
 - Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
+- Source scanning must be cursor/due driven, not “top seeds every run”.
+  `source_queue_item.source_queue_status=processed_*` plus `_ydb_updated_at`/
+  `source_cursors.next_history_scan_at` suppresses immediate re-scan until the
+  delta due time or `REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS` elapses;
+  `pending_scan` / `needs_rescan_or_retry` rows stay eligible.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and

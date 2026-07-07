@@ -159,6 +159,57 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(bad["kaliningrad_oblast_only_scope"])
         self.assertIn("байкал", bad["external_geo_mentions"])
 
+
+    def test_source_selection_skips_recently_processed_publics_until_due(self) -> None:
+        mod = load_module()
+        processed = mod.Seed(
+            source_seed_id="unified_queue_processed", platform="telegram", source_title="Путешествуем.РФ",
+            handle="@puteshestvuem_rf", url="https://t.me/puteshestvuem_rf", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        pending = mod.Seed(
+            source_seed_id="unified_queue_pending", platform="telegram", source_title="Новый тревел",
+            handle="@new_travel", url="https://t.me/new_travel", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="pending", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {
+            "unified_source_queue": {
+                "telegram:puteshestvuem_rf": {
+                    "canonical_source_key": "telegram:puteshestvuem_rf",
+                    "source_url": "https://t.me/puteshestvuem_rf",
+                    "source_queue_status": "processed_found_ko",
+                    "_ydb_updated_at": mod.utc_now_iso(),
+                    "queue_order": 1,
+                },
+                "telegram:new_travel": {
+                    "canonical_source_key": "telegram:new_travel",
+                    "source_url": "https://t.me/new_travel",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 2,
+                },
+            }
+        }
+        selected = mod.selected_sources_for_run([processed, pending], 2, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/new_travel"])
+        self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"], 1)
+
+    def test_source_selection_rescans_processed_public_when_due(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="unified_queue_processed_due", platform="telegram", source_title="Путешествуем.РФ",
+            handle="@puteshestvuem_rf", url="https://t.me/puteshestvuem_rf", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {"source_cursors": {seed.source_id: {"next_history_scan_at": "2020-01-01T00:00:00+00:00", "primary_scan_completed_at": "2020-01-01T00:00:00+00:00"}}}
+        selected = mod.selected_sources_for_run([seed], 1, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/puteshestvuem_rf"])
+
     def test_vector_gate_rejects_ivan_kupala_multi_region_event_roundup(self) -> None:
         mod = load_module()
         lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")

@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / source rescan budget**: CandidateReport now carries
+  YDB row `updated_at` into loaded queue rows and selects source scans by
+  due/retry cursor state, so already processed publics such as
+  `puteshestvuem_rf` are not re-scanned every semi-manual run unless their
+  delta scan is due.
 - **Region Talk Channel / memory vector runaway fix**: traced the cancelled
   CandidateReport run to candidate-memory recheck calling the dual embedding
   loader per row after the main batch, added no-fallback/batched memory vector
