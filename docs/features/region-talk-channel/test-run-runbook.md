@@ -289,7 +289,7 @@ The XLSX has:
   (`TELEGRAM_AUTH_BUNDLE_S22` unless explicitly changed) and ImageDiagnostic
   with a different discovery/image bundle. Never run two Kaggle kernels against
   the same Telethon auth key.
-- CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage.
+- CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, text-embedding model pass events, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage. Real E5+BGE-M3 scoring is sequential by model pass (load/score/release E5, then load/score/release BGE-M3) so Kaggle does not hold both text encoders in memory simultaneously.
 - Semantic prototype vectors are cached in YDB as `semantic_bank_embedding`
   rows keyed by semantic-bank hash and embedding model, so only fresh post query
   vectors are recomputed every run.

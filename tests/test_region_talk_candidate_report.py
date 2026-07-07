@@ -663,6 +663,58 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(calls[0]["phase"], "fetch")
         self.assertIn("event_seq", calls[0])
 
+    def test_dual_embedding_batch_releases_each_model(self) -> None:
+        mod = load_module()
+
+        class FakeMatrix:
+            def __init__(self, rows):
+                self.rows = rows
+            @property
+            def T(self):
+                return FakeMatrix([list(col) for col in zip(*self.rows)])
+            def __matmul__(self, other):
+                return FakeMatrix([[sum(a * b for a, b in zip(row, col)) for col in other.rows] for row in self.rows])
+            def tolist(self):
+                return self.rows
+
+        old_models = mod.TEXT_EMBEDDING_MODELS
+        old_embed = mod.embed_texts_for_model
+        old_release = mod.release_text_embedding_model
+        old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
+        old_require = os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS")
+        old_ydb_cache = os.environ.get("REGION_TALK_YDB_SEMANTIC_BANK_CACHE")
+        calls = []
+        def fake_embed(model_id, texts, *, query=False):
+            calls.append(("embed", model_id, query, len(texts)))
+            base = 1.0 if model_id == "model_a" else 0.5
+            return FakeMatrix([[base, 1.0 - base] for _ in texts])
+        def fake_release(model_id):
+            calls.append(("release", model_id))
+        try:
+            mod.TEXT_EMBEDDING_MODELS = ["model_a", "model_b"]
+            mod.embed_texts_for_model = fake_embed
+            mod.release_text_embedding_model = fake_release
+            os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "dual"
+            os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = "1"
+            os.environ["REGION_TALK_YDB_SEMANTIC_BANK_CACHE"] = "0"
+            rows = mod.dual_model_semantic_scores_batch(["текст 1", "текст 2"])
+        finally:
+            mod.TEXT_EMBEDDING_MODELS = old_models
+            mod.embed_texts_for_model = old_embed
+            mod.release_text_embedding_model = old_release
+            if old_mode is None: os.environ.pop("REGION_TALK_TEXT_VECTOR_MODE", None)
+            else: os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = old_mode
+            if old_require is None: os.environ.pop("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", None)
+            else: os.environ["REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS"] = old_require
+            if old_ydb_cache is None: os.environ.pop("REGION_TALK_YDB_SEMANTIC_BANK_CACHE", None)
+            else: os.environ["REGION_TALK_YDB_SEMANTIC_BANK_CACHE"] = old_ydb_cache
+        self.assertEqual(len(rows), 2)
+        self.assertIn(("release", "model_a"), calls)
+        self.assertIn(("release", "model_b"), calls)
+        model_b_first_embed = next(i for i, call in enumerate(calls) if call[0] == "embed" and call[1] == "model_b" and call[2] is False)
+        self.assertLess(calls.index(("release", "model_a")), model_b_first_embed)
+        self.assertEqual(rows[0]["text_embedding_runtime"], "kaggle_local_dual_text_embeddings_sequential")
+
     def test_compact_business_payload_keeps_vector_counters(self) -> None:
         mod = load_module()
         compact = mod._compact_business_payload({

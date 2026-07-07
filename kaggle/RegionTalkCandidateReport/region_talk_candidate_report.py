@@ -5,6 +5,7 @@ import asyncio
 import atexit
 import base64
 import csv
+import gc
 import hashlib
 import html
 import json
@@ -4283,6 +4284,121 @@ def embed_texts_for_model(model_id: str, texts: list[str], *, query: bool = Fals
     return torch.nn.functional.normalize(pooled, p=2, dim=1).detach().cpu()
 
 
+def release_text_embedding_model(model_id: str) -> None:
+    item = _REGION_TALK_TEXT_MODELS.pop(model_id, None)
+    if not item:
+        return
+    try:
+        _tokenizer, model, torch, _device = item
+        del model
+        if getattr(torch, "cuda", None) and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    gc.collect()
+
+
+def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[str, list[str]], semantic_bank_version: str, bank_hash: str, errors: list[str]) -> dict[str, Any]:
+    labels = sorted(bank)
+    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
+    negative_labels = set(labels) - positive_labels
+    fused = {label: sum(scores.get(label, 0.0) for scores in per_model.values()) / max(1, len(per_model)) for label in labels}
+    pos_label, pos_score = max(((l, fused.get(l, 0.0)) for l in positive_labels), key=lambda x: x[1])
+    neg_label, neg_score = max(((l, fused.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
+    model_summaries: dict[str, Any] = {}
+    top_labels = []
+    for model_id, scores in per_model.items():
+        mtop_label, mtop_score = max(scores.items(), key=lambda x: x[1])
+        mneg_label, mneg_score = max(((l, scores.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
+        short = "e5" if model_id.startswith("intfloat/") else "bge_m3" if model_id == "BAAI/bge-m3" else stable_hash(model_id, length=8)
+        model_summaries[f"{short}_top_class"] = mtop_label
+        model_summaries[f"{short}_top_score"] = round(float(mtop_score), 3)
+        model_summaries[f"{short}_negative_class"] = mneg_label
+        model_summaries[f"{short}_negative_score"] = round(float(mneg_score), 3)
+        top_labels.append(mtop_label)
+    reason = "both_models" if len(set(top_labels)) == 1 and len(per_model) == 2 else ("model_disagreement" if len(per_model) == 2 else "single_model_fallback")
+    return {
+        **model_summaries,
+        "text_embedding_runtime": "kaggle_local_dual_text_embeddings_sequential",
+        "semantic_bank_version": semantic_bank_version,
+        "semantic_bank_hash": bank_hash[:16],
+        "text_embedding_model_id": "+".join(per_model.keys()),
+        "vector_fusion_reason": reason,
+        "vector_top_class": pos_label if pos_score >= neg_score else neg_label,
+        "vector_top_score": round(max(pos_score, neg_score), 3),
+        "vector_negative_class": neg_label,
+        "vector_negative_score": round(float(neg_score), 3),
+        "vector_positive_semantic_class": pos_label,
+        "vector_positive_semantic_score": round(float(pos_score), 3),
+        "vector_margin_positive_vs_negative": round(float(pos_score - neg_score), 3),
+        "embedding_error": "; ".join(errors)[:500],
+    }
+
+
+def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None = None) -> list[dict[str, Any]]:
+    mode = _text_vector_mode()
+    if mode not in {"dual_embeddings", "embeddings", "real", "dual"}:
+        return [{} for _ in texts]
+    bank = semantic_bank_v1()
+    semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
+    flat_labels: list[str] = []
+    flat_texts: list[str] = []
+    for label, examples in bank.items():
+        for ex in examples:
+            flat_labels.append(label)
+            flat_texts.append(ex)
+    per_text: list[dict[str, dict[str, float]]] = [dict() for _ in texts]
+    errors: list[str] = []
+    require_dual = getenv_bool("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", True)
+
+    def emit(name: str, **payload: Any) -> None:
+        if callable(report_event):
+            try:
+                report_event(name, phase="text_embedding", **payload)
+            except Exception:
+                pass
+
+    for model_index, model_id in enumerate(TEXT_EMBEDDING_MODELS, start=1):
+        started = time.monotonic()
+        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_to_score=len(texts))
+        try:
+            cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
+            if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
+                cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
+                if cached_proto is not None:
+                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
+                else:
+                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
+                    ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
+            proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
+            query_vecs = embed_texts_for_model(model_id, texts, query=True)
+            sims_rows = (query_vecs @ proto.T).tolist()
+            for i, sims in enumerate(sims_rows):
+                scores: dict[str, float] = {}
+                for label, sim in zip(flat_labels, sims):
+                    scores[label] = max(scores.get(label, -1.0), float(sim))
+                per_text[i][model_id] = scores
+            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+        except Exception as exc:
+            err = f"{model_id}:{type(exc).__name__}:{str(exc)[:180]}"
+            errors.append(err)
+            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+        finally:
+            release_text_embedding_model(model_id)
+            emit("text_embedding_model_released", status="running", text_embedding_model_id=model_id)
+    if require_dual and any(len(item) != len(TEXT_EMBEDDING_MODELS) for item in per_text):
+        message = "; ".join(errors)[:700] or "not all dual text embedding models produced scores"
+        emit("text_embedding_dual_requirement_failed", status="error", text_embedding_models_loaded=min((len(item) for item in per_text), default=0), text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_error=message)
+        raise RuntimeError("Region Talk dual text embeddings required but not fully available: " + message)
+    out: list[dict[str, Any]] = []
+    for item in per_text:
+        if item:
+            out.append(_fuse_dual_model_scores(item, bank, semantic_bank_version, bank_hash, errors))
+        else:
+            out.append({"embedding_error": "; ".join(errors)[:500], "text_embedding_runtime": "dual_embedding_failed_fallback"})
+    return out
+
+
 def semantic_bank_version_and_hash(bank: dict[str, list[str]]) -> tuple[str, str]:
     payload = json.dumps(bank, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return "semantic_bank_v1", hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -4339,75 +4455,8 @@ def ydb_save_semantic_bank_embedding(model_id: str, labels: list[str], texts: li
 
 
 def dual_model_semantic_scores(text: str) -> dict[str, Any] | None:
-    mode = _text_vector_mode()
-    if mode not in {"dual_embeddings", "embeddings", "real", "dual"}:
-        return None
-    bank = semantic_bank_v1()
-    semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
-    flat_labels: list[str] = []
-    flat_texts: list[str] = []
-    for label, examples in bank.items():
-        for ex in examples:
-            flat_labels.append(label)
-            flat_texts.append(ex)
-    per_model: dict[str, dict[str, float]] = {}
-    errors: list[str] = []
-    for model_id in TEXT_EMBEDDING_MODELS:
-        try:
-            cache_key = model_id + ":" + semantic_bank_version + ":" + bank_hash
-            if cache_key not in _REGION_TALK_TEXT_PROTOTYPE_CACHE:
-                cached_proto = ydb_load_semantic_bank_embedding(model_id, flat_labels, bank_hash)
-                if cached_proto is not None:
-                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = cached_proto
-                else:
-                    _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key] = embed_texts_for_model(model_id, flat_texts, query=False)
-                    ydb_save_semantic_bank_embedding(model_id, flat_labels, flat_texts, bank_hash, _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key])
-            proto = _REGION_TALK_TEXT_PROTOTYPE_CACHE[cache_key]
-            query_vec = embed_texts_for_model(model_id, [text], query=True)[0]
-            # embeddings are already normalized; dot product is cosine similarity.
-            sims = (proto @ query_vec).tolist()
-            scores: dict[str, float] = {}
-            for label, sim in zip(flat_labels, sims):
-                scores[label] = max(scores.get(label, -1.0), float(sim))
-            per_model[model_id] = scores
-        except Exception as exc:
-            errors.append(f"{model_id}:{type(exc).__name__}:{str(exc)[:120]}")
-    if not per_model:
-        return {"embedding_error": "; ".join(errors)[:500], "text_embedding_runtime": "dual_embedding_failed_fallback"}
-    labels = sorted(bank)
-    fused = {label: sum(scores.get(label, 0.0) for scores in per_model.values()) / max(1, len(per_model)) for label in labels}
-    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
-    negative_labels = set(labels) - positive_labels
-    pos_label, pos_score = max(((l, fused.get(l, 0.0)) for l in positive_labels), key=lambda x: x[1])
-    neg_label, neg_score = max(((l, fused.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
-    model_summaries: dict[str, Any] = {}
-    top_labels = []
-    for model_id, scores in per_model.items():
-        mtop_label, mtop_score = max(scores.items(), key=lambda x: x[1])
-        mneg_label, mneg_score = max(((l, scores.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
-        short = "e5" if model_id.startswith("intfloat/") else "bge_m3" if model_id == "BAAI/bge-m3" else stable_hash(model_id, length=8)
-        model_summaries[f"{short}_top_class"] = mtop_label
-        model_summaries[f"{short}_top_score"] = round(float(mtop_score), 3)
-        model_summaries[f"{short}_negative_class"] = mneg_label
-        model_summaries[f"{short}_negative_score"] = round(float(mneg_score), 3)
-        top_labels.append(mtop_label)
-    reason = "both_models" if len(set(top_labels)) == 1 and len(per_model) == 2 else ("model_disagreement" if len(per_model) == 2 else "single_model_fallback")
-    return {
-        **model_summaries,
-        "text_embedding_runtime": "kaggle_local_dual_text_embeddings",
-        "semantic_bank_version": semantic_bank_version,
-        "semantic_bank_hash": bank_hash[:16],
-        "text_embedding_model_id": "+".join(per_model.keys()),
-        "vector_fusion_reason": reason,
-        "vector_top_class": pos_label if pos_score >= neg_score else neg_label,
-        "vector_top_score": round(max(pos_score, neg_score), 3),
-        "vector_negative_class": neg_label,
-        "vector_negative_score": round(float(neg_score), 3),
-        "vector_positive_semantic_class": pos_label,
-        "vector_positive_semantic_score": round(float(pos_score), 3),
-        "vector_margin_positive_vs_negative": round(float(pos_score - neg_score), 3),
-        "embedding_error": "; ".join(errors)[:500],
-    }
+    rows = dual_model_semantic_scores_batch([text])
+    return rows[0] if rows else None
 
 
 def _prototype_vector_scores(text: str, ts: dict[str, Any], scope: dict[str, Any], ad_gate: dict[str, Any], substance: dict[str, Any]) -> dict[str, Any]:
@@ -4720,6 +4769,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     runtime_deferred_posts = posts[len(posts_for_scoring):]
     report_event("report_build_started", phase="report", status="running", posts_fetched=len(posts), posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), ydb_read_status=state_meta.get("ydb_read_status"))
 
+    semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "vector_first_final_llm").strip().lower()
+    early_llm_enabled = getenv_bool("REGION_TALK_ENABLE_EARLY_LLM", False)
+    vector_gates_enabled = getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
+    deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
+    precomputed_embedding_scores: list[dict[str, Any]] = []
+    if vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
+        precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
+
     for idx, p in enumerate(posts_for_scoring, start=1):
         if idx == 1 or idx % max(1, getenv_int("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", 25)) == 0:
             report_event("vector_scoring_alive", phase="vector_scoring", status="running", progress_label=f"posts {idx}/{len(posts_for_scoring)}", posts_scored=idx, posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts))
@@ -4744,10 +4801,6 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         current_stage = ""
         gate_trace: list[str] = []
 
-        semantic_gate_mode = (os.getenv("REGION_TALK_SEMANTIC_GATE_MODE") or "vector_first_final_llm").strip().lower()
-        early_llm_enabled = getenv_bool("REGION_TALK_ENABLE_EARLY_LLM", False)
-        vector_gates_enabled = getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
-        deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
         if not fresh["fresh_enough"]:
             drop_gate, rejection = "freshness_gate", "reject_stale_or_missing_date"
             visual_skip_reason = fresh["freshness_reason"]
@@ -4771,7 +4824,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         gate_trace.append("ad_promo_announcement_gate:evidence_only")
         gate_trace.append("content_substance_visit_impression_gate:evidence_only")
         gate_trace.append("not_news_not_trash_gate:evidence_only")
-        vector_gate = text_vector_gate(text, ts, scope, ad_gate, substance) if vector_gates_enabled else {
+        embedding_scores = precomputed_embedding_scores[idx - 1] if idx - 1 < len(precomputed_embedding_scores) else None
+        vector_gate = text_vector_gate(text, ts, scope, ad_gate, substance, embedding_scores=embedding_scores) if vector_gates_enabled else {
             "text_embedding_model_id": "", "text_embedding_runtime": "disabled", "vector_gate_status": "disabled",
             "vector_content_type": "", "vector_positive_score": "", "vector_news_event_score": "", "vector_ad_promo_score": "",
             "vector_roundup_score": "", "vector_low_substance_score": "", "vector_visit_impression_score": "",

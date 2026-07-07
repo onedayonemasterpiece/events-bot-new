@@ -608,6 +608,15 @@ fetched beyond the scoring budget are not stored as raw YDB payloads; they are
 visible in the XLSX-only `02b_runtime_deferred_posts` sheet with links/metadata
 so the next bounded run can score them.
 
+Real dual text embeddings remain the required product path when enabled, but
+CandidateReport must run them as sequential model passes: load E5, batch-score
+the bounded post set, release the model and collect memory, then load BGE-M3,
+batch-score the same post set, release it and fuse the two model score maps.
+This preserves the E5+BGE-M3 decision while avoiding simultaneous resident model
+weights in Kaggle CPU memory. `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=1` keeps
+production runs fail-loud if either model cannot produce scores; prototype
+vector fallback is a debug/offline mode, not a silent product fallback.
+
 YDB compact state is process state, not a mirror of every XLSX/debug tab.
 Schema `region-talk-ydb-compact-v3` persists the single Telegram/VK
 `unified_source_queue`, the downstream text-confirmed `image_candidate_queue`,
