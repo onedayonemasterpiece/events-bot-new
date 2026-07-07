@@ -180,6 +180,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
         "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "220"),
         "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "50"),
+        "REGION_TALK_FETCH_TELEGRAM": os.environ.get("REGION_TALK_FETCH_TELEGRAM", "1"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
         "REGION_TALK_TG_GOVERNOR_ENABLED": os.environ.get("REGION_TALK_TG_GOVERNOR_ENABLED", "1"),
@@ -364,6 +365,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH", "1")
     os.environ.setdefault("REGION_TALK_MAX_SOURCES", str(args.max_sources))
     os.environ.setdefault("REGION_TALK_MAX_POSTS_PER_SOURCE", "50")
+    os.environ.setdefault("REGION_TALK_FETCH_TELEGRAM", "1")
     os.environ.setdefault("REGION_TALK_MAX_IMAGES_PER_POST", "8")
     os.environ.setdefault("REGION_TALK_MAX_VLM_CALLS", "0")
     os.environ.setdefault("REGION_TALK_TG_GOVERNOR_ENABLED", "1")
