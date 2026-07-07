@@ -601,6 +601,26 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["monitoring_exclusion_reason"], "kaliningrad_posts_found_but_actual_images_systematically_low_score")
         self.assertEqual(metrics["source_queue_low_image_quality_excluded_total"], 1)
 
+    def test_status_event_writes_business_heartbeat_hook(self) -> None:
+        mod = load_module()
+        calls = []
+        mod.write_region_talk_business_heartbeat = lambda payload: calls.append(dict(payload))
+        old_run = os.environ.get("REGION_TALK_RUN_ID")
+        os.environ["REGION_TALK_RUN_ID"] = "heartbeat-unit"
+        try:
+            status = mod.Status()
+            status.event("alive", phase="fetch", progress_label="источники 1/2 · Source", current_source_title="Source")
+        finally:
+            if old_run is None:
+                os.environ.pop("REGION_TALK_RUN_ID", None)
+            else:
+                os.environ["REGION_TALK_RUN_ID"] = old_run
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["event_name"], "alive")
+        self.assertEqual(calls[0]["run_id"], "heartbeat-unit")
+        self.assertEqual(calls[0]["phase"], "fetch")
+        self.assertIn("event_seq", calls[0])
+
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [

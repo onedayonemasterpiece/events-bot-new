@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import base64
 import csv
 import hashlib
@@ -279,6 +280,7 @@ def load_split_runtime_from_kaggle_input() -> dict[str, Any]:
 class Status:
     def __init__(self) -> None:
         self.client = None
+        self.seq = 0
         try:
             from kaggle_status_client import KaggleStatusClient  # type: ignore
             self.client = KaggleStatusClient.discover()
@@ -287,11 +289,18 @@ class Status:
         self.events: list[dict[str, Any]] = []
 
     def event(self, name: str, **payload: Any) -> None:
+        self.seq += 1
         clean = {k: v for k, v in payload.items() if v is not None}
         clean.setdefault("event_name", name)
+        clean.setdefault("run_id", os.getenv("REGION_TALK_RUN_ID") or "")
+        clean.setdefault("event_seq", self.seq)
         clean.setdefault("created_at", utc_now_iso())
         self.events.append(clean)
         print(f"[region-talk] {name} {json.dumps({k:v for k,v in clean.items() if k not in {'token'}}, ensure_ascii=False)[:800]}", flush=True)
+        try:
+            write_region_talk_business_heartbeat(clean)
+        except Exception as exc:
+            print(f"[region-talk] business_heartbeat_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         if self.client:
             try:
                 self.client.event(name, phase=clean.get("phase"), status=clean.get("status"), progress_json=clean)
@@ -661,7 +670,10 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "image_queue_id", "image_queue_order", "image_queue_status",
     "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
-    "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
+    "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+    "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
+    "is_ad_or_promo", "current_stage", "current_lifecycle_status", "vector_gate_status",
+    "vector_content_type", "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
     "image_model_input_type", "image_model_type", "media_acquisition_status",
     "media_acquisition_error_type", "images_scored_actual_count", "next_action",
 ]
@@ -677,7 +689,10 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
     "publication_story_score", "nonlocal_value_score", "manual_decision", "last_seen_run_id",
-    "first_seen_run_id", "seen_run_count", "short_summary", "why_selected",
+    "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
+    "external_geo_mentions", "mentioned_external_regions", "is_ad_or_promo",
+    "vector_gate_status", "vector_content_type", "first_seen_run_id", "seen_run_count",
+    "short_summary", "why_selected",
 ]
 
 
@@ -833,6 +848,89 @@ def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
         .with_primary_key("pk")
     )
     session.create_table(table_path, desc)
+
+
+
+_YDB_BUSINESS_HEARTBEAT_CACHE: dict[str, Any] = {"ydb": None, "driver": None, "pool": None, "table_path": "", "last_alive_at": 0.0}
+
+
+def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed = [
+        "run_id", "event_seq", "event_name", "created_at", "phase", "status", "progress_label",
+        "sources_done", "sources_total", "source_index", "source_id", "current_source_title",
+        "current_source_url", "current_source_handle", "current_source_platform", "fetch_status",
+        "telegram_resolve_status", "posts_scanned", "last_seen_post_date", "history_fetch_runtime_seconds",
+        "posts_fetched", "sources_scanned", "candidates_created", "favorites_created",
+        "current_run_reviewable_candidates", "state_backend", "ydb_read_status", "ydb_write_status",
+        "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
+        "image_queue_rejected_non_region_inputs", "image_queue_text_region_confirmed_total",
+        "fetch_error_code", "fetch_error_message", "xlsx",
+    ]
+    out = {k: compact_scalar(payload.get(k), max_len=900) for k in allowed if payload.get(k) not in (None, "", [], {})}
+    out.setdefault("run_id", os.getenv("REGION_TALK_RUN_ID") or "")
+    out.setdefault("updated_at", utc_now_iso())
+    return out
+
+
+def _business_heartbeat_enabled() -> bool:
+    if os.getenv("REGION_TALK_YDB_BUSINESS_HEARTBEAT") is not None:
+        return getenv_bool("REGION_TALK_YDB_BUSINESS_HEARTBEAT", True)
+    return (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() == "ydb"
+
+
+def _get_business_heartbeat_pool() -> tuple[Any, Any, Any, str]:
+    cache = _YDB_BUSINESS_HEARTBEAT_CACHE
+    if cache.get("pool") is not None and cache.get("ydb") is not None and cache.get("table_path"):
+        return cache["ydb"], cache["driver"], cache["pool"], str(cache["table_path"])
+    ydb, driver, cfg = ydb_connect()
+    table_path = ydb_kv_table_path(cfg)
+    pool = ydb.SessionPool(driver)
+    cache.update({"ydb": ydb, "driver": driver, "pool": pool, "table_path": table_path})
+    return ydb, driver, pool, table_path
+
+
+def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
+    """Persist online business-stage progress to YDB while Kaggle is still running.
+
+    This is deliberately separate from the final compact state snapshot: it makes
+    a running notebook observable even when Kaggle live logs are empty.
+    """
+    if not _business_heartbeat_enabled():
+        return
+    event_name = str(payload.get("event_name") or "")
+    now_monotonic = time.monotonic()
+    min_interval = max(0, getenv_int("REGION_TALK_YDB_HEARTBEAT_MIN_INTERVAL_SECONDS", 5))
+    if event_name == "alive" and now_monotonic - float(_YDB_BUSINESS_HEARTBEAT_CACHE.get("last_alive_at") or 0) < min_interval:
+        return
+    if event_name == "alive":
+        _YDB_BUSINESS_HEARTBEAT_CACHE["last_alive_at"] = now_monotonic
+    compact = _compact_business_payload(payload)
+    run_id = str(compact.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
+    seq = int(compact.get("event_seq") or 0)
+    updated_at = str(compact.get("created_at") or utc_now_iso())
+    ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+    def op(session: Any) -> None:
+        ensure_ydb_kv_table(ydb, session, table_path)
+        ydb_upsert_json(session, ydb, table_path, "business_heartbeat:" + run_id, "business_heartbeat", compact, updated_at)
+        ydb_upsert_json(session, ydb, table_path, "latest_business_heartbeat", "business_heartbeat", compact, updated_at)
+        if getenv_bool("REGION_TALK_YDB_BUSINESS_EVENT_LOG", True):
+            ydb_upsert_json(session, ydb, table_path, f"business_event:{run_id}:{seq:06d}", "business_event", compact, updated_at)
+
+    pool.retry_operation_sync(op)
+
+
+def close_region_talk_business_heartbeat() -> None:
+    driver = _YDB_BUSINESS_HEARTBEAT_CACHE.get("driver")
+    if driver is not None:
+        try:
+            driver.stop(timeout=5)
+        except Exception:
+            pass
+    _YDB_BUSINESS_HEARTBEAT_CACHE.update({"ydb": None, "driver": None, "pool": None, "table_path": "", "last_alive_at": 0.0})
+
+
+atexit.register(close_region_talk_business_heartbeat)
 
 
 def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str) -> None:

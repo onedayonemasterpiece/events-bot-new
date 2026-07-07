@@ -275,9 +275,11 @@ such as Krasnodar/Buryatia official posts must not be sent to image diagnostics.
 Rows include `image_queue_order`, `cursor_marker`,
 `selected_for_next_image_batch`, `image_queue_status`,
 `text_region_confirmation_status`, `kaliningrad_oblast_only_scope`,
-`kaliningrad_mention_role`, `vector_gate_status`, `matched_place_names`,
-`media_acquisition_status`, `media_acquisition_error_type`, post/source URLs and
-the latest scoring fields. The default human-sized processing target is
+`kaliningrad_mention_role`, `vector_gate_status`, `vector_content_type`,
+`matched_place_names`, `external_geo_mentions`, `media_acquisition_status`,
+`media_acquisition_error_type`, post/source URLs and the latest scoring fields.
+These proof fields are part of the compact YDB allow-list, so queue rows remain
+auditable after state round-trips. The default human-sized processing target is
 `REGION_TALK_IMAGE_QUEUE_TARGET_PER_RUN=30`.
 
 ### `09d_image_driven_top`
@@ -587,6 +589,15 @@ canonical artifact path when running in a linked worktree, and delete temporary
 `region-talk-config-*` / `rt-secret-bundle-*` datasets after a waited run has
 downloaded output. Use `--keep-input-datasets` only for debugging a still-running
 kernel.
+
+YDB business heartbeat: when `REGION_TALK_STATE_BACKEND=ydb`, every
+`Status.event(...)` also upserts compact online progress to
+`latest_business_heartbeat`, `business_heartbeat:<run_id>` and, by default,
+`business_event:<run_id>:<seq>`. This is the primary live observability channel
+for manual Kaggle runs because Kaggle `kernels_logs` can be empty while the
+kernel is still `RUNNING`. Heartbeat payloads include phase/status,
+`progress_label`, current source title/url/handle, source counters, fetch status,
+post counters and final YDB/write summary fields; no secrets are persisted.
 
 YDB compact state is process state, not a mirror of every XLSX/debug tab.
 Schema `region-talk-ydb-compact-v2` persists `unified_source_queue` +
