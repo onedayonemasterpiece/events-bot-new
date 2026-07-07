@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / state-write observability**: CandidateReport now
+  emits `state_write_started` / `state_write_done` and skips final row-level
+  entity rewrites by default, relying on live YDB row upserts so bounded runs do
+  not hang in the tail while rewriting unchanged compact rows.
 - **Region Talk Channel / discovery tail budget**: capped the default keyword
   search fan-out, added keyword-discovery heartbeat events, and gated
   similar/keyword discovery with a 420-second runtime reserve so a 20-minute

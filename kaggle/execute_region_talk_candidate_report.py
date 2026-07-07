@@ -257,6 +257,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", "5000"),
         "REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS": os.environ.get("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1"),
         "REGION_TALK_YDB_PRUNE_MAX_ROWS": os.environ.get("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200"),
+        "REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE": os.environ.get("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", "1"),
         "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
         "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
@@ -506,6 +507,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_ALLOW_KAGGLE_YDB_SECRET", "0")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200")
+    os.environ.setdefault("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", "1")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14")
     os.environ.setdefault("REGION_TALK_DELTA_OVERLAP_POSTS", "50")

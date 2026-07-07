@@ -1915,7 +1915,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at)
                 row_items: list[tuple[str, str, dict[str, Any]]] = []
                 row_write_mode = (os.getenv("REGION_TALK_YDB_ROW_WRITE_MODE") or "changed").strip().lower()
-                skip_row_rewrite = getenv_bool("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", False)
+                skip_row_rewrite = getenv_bool("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", True)
                 current_run_id = str(compact.get("run_id") or "")
                 def should_write_queue_item(item: dict[str, Any], *, item_type: str) -> bool:
                     if skip_row_rewrite:
@@ -6852,7 +6852,28 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     }
     all_time_metrics = build_all_time_metrics(state_to_write, source_frontier_unique, candidate_memory_rows)
     state_to_write["all_time_metrics"] = all_time_metrics
+    report_event(
+        "state_write_started",
+        phase="state_write",
+        status="running",
+        posts_fetched=len(posts),
+        candidates_created=len(candidates),
+        image_queue_total=len(image_candidate_queue_sheet),
+        state_backend=(os.getenv("REGION_TALK_STATE_BACKEND") or "json"),
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+    )
+    state_write_started_at = time.monotonic()
     state_write_meta = save_region_talk_state(output_dir, state_to_write)
+    report_event(
+        "state_write_done",
+        phase="state_write",
+        status="running" if state_write_meta.get("state_write_status") == "ok" else "error",
+        state_backend=state_write_meta.get("state_backend"),
+        ydb_write_status=state_write_meta.get("ydb_write_status"),
+        ydb_state_mode=state_write_meta.get("ydb_state_mode"),
+        state_write_seconds=round(time.monotonic() - state_write_started_at, 3),
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+    )
 
     stage_counts = {stage: sum(1 for r in new_posts if r.get("current_stage") == stage) for stage in sorted({str(r.get("current_stage") or "") for r in new_posts})}
     fresh_rows = [r for r in new_posts if r.get("fresh_enough")]

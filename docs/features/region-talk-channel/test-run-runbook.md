@@ -333,7 +333,11 @@ The XLSX has:
   `candidate_memory_item` after memory build, and image/publication queue rows
   immediately after queue assembly. ImageDiagnostic must upsert every image
   lease, media-fetch result and final score/status per row, not only at notebook
-  end.
+  end. Final state snapshot writes emit `state_write_started` /
+  `state_write_done`; row-level entity rewrites are skipped by default
+  (`REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE=1`) because live row upserts are the
+  authoritative online state and the snapshot should not spend the tail of a
+  20-minute run rewriting thousands of unchanged rows.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
 - The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session to send confirmed links to the operator chat and mark them as sent.
 - Semantic prototype vectors are cached in YDB as `semantic_bank_embedding`
