@@ -8017,6 +8017,8 @@ def run_vector_probe(run_id: str, output_dir: Path, status: Any | None = None) -
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": result["status"], "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     ydb_ok = _write_vector_probe_result_to_ydb(result)
     result["summary"]["ydb_write_status"] = "ok" if ydb_ok else "error"
+    if ydb_ok:
+        _write_vector_probe_result_to_ydb(result)
     (output_dir / "vector_probe_result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": result["status"], "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     (Path.cwd() / "output.json").write_text(json.dumps({"ok": ok, "status": result["status"], "run_id": run_id, "summary": result["summary"]}, ensure_ascii=False, indent=2), encoding="utf-8")

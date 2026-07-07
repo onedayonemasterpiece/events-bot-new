@@ -226,12 +226,14 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 return ({"candidate_memory": {"c1": {"candidate_memory_id": "c1", "post_url": "https://t.me/a/1", "short_summary": "Личный отзыв о Калининграде"}}}, {"ydb_read_status": "ok"})
             mod.load_region_talk_state = fake_load
             mod.dual_model_semantic_scores_batch = lambda texts, report_event=None: [{"text_embedding_model_id": "+".join(mod.TEXT_EMBEDDING_MODELS), "vector_top_class": "ko_visit_impression", "vector_top_score": 0.9}]
-            mod._write_vector_probe_result_to_ydb = lambda result: True
+            ydb_writes = []
+            mod._write_vector_probe_result_to_ydb = lambda result: ydb_writes.append(result["summary"].get("ydb_write_status")) or True
             with tempfile.TemporaryDirectory() as td:
                 out = mod.run_vector_probe("probe-unit", Path(td), status=None)
                 self.assertTrue(calls and calls[0] == Path(td))
                 self.assertTrue(out["ok"])
                 self.assertEqual(out["summary"]["ydb_write_status"], "ok")
+                self.assertEqual(ydb_writes, ["pending", "ok"])
                 self.assertTrue((Path(td) / "vector_probe_result.json").exists())
         finally:
             mod.load_region_talk_state = old_load
