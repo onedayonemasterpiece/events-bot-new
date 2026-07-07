@@ -12,6 +12,13 @@
   post-verifier queue assembly path has explicit YDB checkpoints; historical
   candidate-memory dual-embedding rechecks are disabled by default for the
   image-queue CandidateReport phase.
+- **Region Talk Channel / live image-queue handoff**: CandidateReport now writes
+  `image_queue_item` rows immediately after bounded text/vector scoring and can
+  skip the operator-only report/XLSX/source-profile tail via
+  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1` so
+  RegionTalkImageDiagnostic is not blocked by report generation. Kaggle stdout
+  heartbeat/callback spam is quiet by default while live JSONL events, bounded
+  YDB writes and stack-watchdog tracebacks preserve diagnostics for stalls.
 - **Region Talk Channel / image-gated final verifier**: CandidateReport no
   longer calls Gemini Lite final verification for text-only vector candidates;
   final LLM checks are deferred until ImageDiagnostic has produced actual-image

@@ -360,11 +360,24 @@ The XLSX has:
 - If image scoring is not ready, CandidateReport emits
   `final_verifier_deferred_until_image_scoring` with `blocking_wait=false`,
   `llm_calls=0` and `next_action=run_region_talk_image_diagnostic`; this is a
-  skip/defer marker, not an in-notebook wait. The following queue-assembly
+  skip/defer marker, not an in-notebook wait. CandidateReport must then write
+  the live `image_queue_item` handoff before any operator-only report tail:
+  `early_image_queue_handoff_started` →
+  `early_image_queue_handoff_done`. In the bounded discovery pass the default is
+  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1`, so a successful
+  handoff may end with `report_tail_skipped_after_live_image_queue_handoff`
+  instead of source-profile enrichment, XLSX generation or state snapshot
+  rewrites. If report-tail is explicitly enabled, the following queue-assembly
   phases must also heartbeat (`source_profile_*`, `source_frontier_*`,
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
   `publication_queue_*`, then `state_write_*`) so a run never stays silent after
   deferring the final verifier.
+- Kaggle stdout should stay readable: heartbeat/callback spam is suppressed by
+  default (`REGION_TALK_STDOUT_HEARTBEATS=0`,
+  `REGION_TALK_KAGGLE_STATUS_STDOUT=0`). For post-mortem diagnostics, inspect
+  `/kaggle/working/region_talk_run_events_live.jsonl`, YDB
+  `business_event:<run_id>:*`, and stack-watchdog tracebacks rather than relying
+  on noisy heartbeat lines.
 - The image-queue CandidateReport phase must not spend time on historical
   candidate-memory dual-embedding rechecks. Defaults are
   `REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0` and

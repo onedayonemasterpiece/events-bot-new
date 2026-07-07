@@ -5,6 +5,7 @@ import asyncio
 import atexit
 import base64
 import csv
+import faulthandler
 import gc
 import hashlib
 import html
@@ -42,6 +43,7 @@ apply_huggingface_runtime_env_defaults()
 
 RUN_STARTED_AT = datetime.now(timezone.utc)
 RUN_STARTED_MONOTONIC = time.monotonic()
+_REGION_TALK_STACK_WATCHDOG_STARTED = False
 DEFAULT_ANCHORS = ["Калининград", "Калининградская область", "Куршская коса", "Зеленоградск", "Светлогорск", "Балтийское море", "Кёнигсберг", "Краснолесье", "Виштынец", "Роминтенская пуща", "Балтийская коса", "Янтарный", "Балтийск", "Советск", "Неман", "Правдинск", "Черняховск"]
 TELEGRAM_KEYWORD_DISCOVERY_TERMS = [
     "Калининград", "Кёнигсберг", "Зеленоградск", "Светлогорск", "Янтарный", "Балтийск", "Пионерский",
@@ -102,6 +104,26 @@ def runtime_remaining_seconds() -> float:
 
 def runtime_budget_ok(*, reserve_seconds: int = 120) -> bool:
     return runtime_remaining_seconds() > reserve_seconds
+
+
+def start_region_talk_stack_watchdog() -> None:
+    """Emit Python stack dumps during opaque Kaggle stalls."""
+    global _REGION_TALK_STACK_WATCHDOG_STARTED
+    if _REGION_TALK_STACK_WATCHDOG_STARTED:
+        return
+    if not getenv_bool("REGION_TALK_ENABLE_STACK_WATCHDOG", True):
+        return
+    interval = getenv_int("REGION_TALK_STACK_WATCHDOG_SECONDS", 120)
+    if interval <= 0:
+        return
+    try:
+        faulthandler.enable(file=sys.stderr, all_threads=True)
+        faulthandler.dump_traceback_later(interval, repeat=True, file=sys.stderr)
+        atexit.register(lambda: faulthandler.cancel_dump_traceback_later())
+        _REGION_TALK_STACK_WATCHDOG_STARTED = True
+        print(f"[region-talk] stack_watchdog_enabled interval_seconds={interval}", flush=True)
+    except Exception as exc:
+        print(f"[region-talk] stack_watchdog_enable_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
 def stable_hash(*parts: Any, length: int = 16) -> str:
@@ -346,10 +368,48 @@ class Status:
         self.seq = 0
         try:
             from kaggle_status_client import KaggleStatusClient  # type: ignore
-            self.client = KaggleStatusClient.discover()
+            if getenv_bool("REGION_TALK_KAGGLE_STATUS_STDOUT", False):
+                self.client = KaggleStatusClient.discover()
+            else:
+                self.client = KaggleStatusClient.discover(log=lambda _message: None)
         except Exception:
             self.client = None
         self.events: list[dict[str, Any]] = []
+        live_path = os.getenv("REGION_TALK_LIVE_EVENT_LOG_PATH") or "/kaggle/working/region_talk_run_events_live.jsonl"
+        if live_path.startswith("/kaggle/") and not Path("/kaggle").exists():
+            live_path = str(Path.cwd() / "region_talk_run_events_live.jsonl")
+        self.live_events_path = Path(live_path)
+
+    def _append_live_event(self, clean: dict[str, Any]) -> None:
+        """Write an immediate local event log independent of YDB/callbacks."""
+        try:
+            self.live_events_path.parent.mkdir(parents=True, exist_ok=True)
+            safe = {k: v for k, v in clean.items() if k.lower() not in {"token", "callback_token"}}
+            with self.live_events_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(safe, ensure_ascii=False, sort_keys=True) + "\n")
+                fh.flush()
+                try:
+                    os.fsync(fh.fileno())
+                except Exception:
+                    pass
+        except Exception as exc:
+            print(f"[region-talk] live_event_log_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+
+    def _should_print_event(self, name: str) -> bool:
+        if getenv_bool("REGION_TALK_STDOUT_ALL_EVENTS", False):
+            return True
+        heartbeat_names = {
+            "alive",
+            "text_embedding_model_pass_alive",
+            "vector_scoring_alive",
+            "final_verifier_alive",
+            "source_profile_build_alive",
+            "keyword_discovery_alive",
+            "similar_discovery_alive",
+        }
+        if name in heartbeat_names:
+            return getenv_bool("REGION_TALK_STDOUT_HEARTBEATS", False)
+        return True
 
     def event(self, name: str, **payload: Any) -> None:
         self.seq += 1
@@ -359,7 +419,9 @@ class Status:
         clean.setdefault("event_seq", self.seq)
         clean.setdefault("created_at", utc_now_iso())
         self.events.append(clean)
-        print(f"[region-talk] {name} {json.dumps({k:v for k,v in clean.items() if k not in {'token'}}, ensure_ascii=False)[:800]}", flush=True)
+        if self._should_print_event(name):
+            print(f"[region-talk] {name} {json.dumps({k:v for k,v in clean.items() if k not in {'token'}}, ensure_ascii=False)[:800]}", flush=True)
+        self._append_live_event(clean)
         try:
             write_region_talk_business_heartbeat(clean)
         except Exception as exc:
@@ -1098,6 +1160,31 @@ def ydb_connect() -> tuple[Any, Any, dict[str, str]]:
     return ydb, driver, cfg
 
 
+def ydb_request_settings(ydb: Any, *, timeout_seconds: int | None = None) -> Any:
+    """Return bounded YDB request settings for Kaggle online reads/writes.
+
+    A Region Talk notebook must never become opaque just because an
+    observability/state upsert is waiting inside the YDB SDK. Keep every YDB
+    request bounded; callers that are only writing heartbeats can pass a shorter
+    timeout than product-state writes.
+    """
+    timeout = max(1, int(timeout_seconds or getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8)))
+    settings = ydb.BaseRequestSettings()
+    settings = settings.with_timeout(timeout)
+    settings = settings.with_operation_timeout(timeout)
+    return settings
+
+
+def ydb_retry_settings(ydb: Any, *, timeout_seconds: int | None = None, max_retries: int | None = None) -> Any:
+    timeout = max(1, int(timeout_seconds or getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8)))
+    retries = max(0, int(max_retries if max_retries is not None else getenv_int("REGION_TALK_YDB_MAX_RETRIES", 2)))
+    return ydb.RetrySettings(
+        max_retries=retries,
+        max_session_acquire_timeout=timeout,
+        get_session_client_timeout=timeout,
+    )
+
+
 def ydb_kv_table_path(cfg: dict[str, str]) -> str:
     return cfg["database"].rstrip("/") + "/" + ydb_table_name("state_kv")
 
@@ -1134,6 +1221,10 @@ def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "current_run_reviewable_candidates", "state_backend", "ydb_read_status", "ydb_write_status",
         "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
         "image_queue_rejected_non_region_inputs", "image_queue_text_region_confirmed_total",
+        "source_rows", "source_rows_done", "posts_by_source", "review_queue_count",
+        "final_verifier_queue_count", "final_verifier_deferred_until_image_scoring",
+        "final_verifier_waiting_for_image_scoring", "llm_calls", "blocking_wait",
+        "next_action", "runtime_remaining_seconds", "runtime_elapsed_seconds",
         "fetch_error_code", "fetch_error_message", "xlsx",
     ]
     out = {k: compact_scalar(payload.get(k), max_len=900) for k in allowed if payload.get(k) not in (None, "", [], {})}
@@ -1179,15 +1270,27 @@ def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
     seq = int(compact.get("event_seq") or 0)
     updated_at = str(compact.get("created_at") or utc_now_iso())
     ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+    timeout_seconds = getenv_int(
+        "REGION_TALK_YDB_HEARTBEAT_REQUEST_TIMEOUT_SECONDS",
+        getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 5),
+    )
+    retry_settings = ydb_retry_settings(
+        ydb,
+        timeout_seconds=timeout_seconds,
+        max_retries=getenv_int("REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES", 0),
+    )
 
     def op(session: Any) -> None:
         ensure_ydb_kv_table(ydb, session, table_path)
-        ydb_upsert_json(session, ydb, table_path, "business_heartbeat:" + run_id, "business_heartbeat", compact, updated_at)
-        ydb_upsert_json(session, ydb, table_path, "latest_business_heartbeat", "business_heartbeat", compact, updated_at)
+        rows = [
+            ("business_heartbeat:" + run_id, "business_heartbeat", compact),
+            ("latest_business_heartbeat", "business_heartbeat", compact),
+        ]
         if getenv_bool("REGION_TALK_YDB_BUSINESS_EVENT_LOG", True):
-            ydb_upsert_json(session, ydb, table_path, f"business_event:{run_id}:{seq:06d}", "business_event", compact, updated_at)
+            rows.append((f"business_event:{run_id}:{seq:06d}", "business_event", compact))
+        ydb_upsert_json_many(session, ydb, table_path, rows, updated_at, chunk_size=len(rows), timeout_seconds=timeout_seconds)
 
-    pool.retry_operation_sync(op)
+    pool.retry_operation_sync(op, retry_settings=retry_settings)
 
 
 def _online_source_key(row: dict[str, Any]) -> str:
@@ -1343,12 +1446,18 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
         if not items:
             return 0
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 1),
+        )
 
         def op(session: Any) -> int:
             ensure_ydb_kv_table(ydb, session, table_path)
-            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100), timeout_seconds=timeout_seconds)
 
-        return int(pool.retry_operation_sync(op) or 0)
+        return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
         print(f"[region-talk] online_candidate_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
@@ -1533,7 +1642,8 @@ def close_region_talk_business_heartbeat() -> None:
 atexit.register(close_region_talk_business_heartbeat)
 
 
-def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str) -> None:
+def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str, *, timeout_seconds: int | None = None) -> None:
+    settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
     query = session.prepare(f"""
 DECLARE $pk AS Utf8;
 DECLARE $kind AS Utf8;
@@ -1541,17 +1651,19 @@ DECLARE $payload_json AS Json;
 DECLARE $updated_at AS Utf8;
 UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at)
 VALUES ($pk, $kind, $payload_json, $updated_at);
-""")
+""", settings=settings)
     session.transaction(ydb.SerializableReadWrite()).execute(
         query,
         {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at},
         commit_tx=True,
+        settings=settings,
     )
 
 
-def ydb_upsert_json_many(session: Any, ydb: Any, table_path: str, rows: list[tuple[str, str, dict[str, Any]]], updated_at: str, *, chunk_size: int = 100) -> int:
+def ydb_upsert_json_many(session: Any, ydb: Any, table_path: str, rows: list[tuple[str, str, dict[str, Any]]], updated_at: str, *, chunk_size: int = 100, timeout_seconds: int | None = None) -> int:
     if not rows:
         return 0
+    settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
     query = session.prepare(f"""
 DECLARE $pk AS Utf8;
 DECLARE $kind AS Utf8;
@@ -1559,15 +1671,15 @@ DECLARE $payload_json AS Json;
 DECLARE $updated_at AS Utf8;
 UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at)
 VALUES ($pk, $kind, $payload_json, $updated_at);
-""")
+""", settings=settings)
     written = 0
     chunk_size = max(1, int(chunk_size or 100))
     for start in range(0, len(rows), chunk_size):
         tx = session.transaction(ydb.SerializableReadWrite())
         for pk, kind, payload in rows[start:start + chunk_size]:
-            tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False)
+            tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False, settings=settings)
             written += 1
-        tx.commit()
+        tx.commit(settings=settings)
     return written
 
 
@@ -1576,6 +1688,7 @@ def ydb_select_kind_items(session: Any, ydb: Any, table_path: str, kind: str, *,
     page_size = max(1, min(max_items, getenv_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200)))
     out: dict[str, dict[str, Any]] = {}
     after = ""
+    settings = ydb_request_settings(ydb)
     while len(out) < max_items:
         query = session.prepare(f"""
 DECLARE $kind AS Utf8;
@@ -1584,8 +1697,8 @@ SELECT pk, payload_json, updated_at FROM `{table_path}`
 WHERE kind = $kind AND pk > $after
 ORDER BY pk
 LIMIT {min(page_size, max_items - len(out))};
-""")
-        result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$kind": kind, "$after": after}, commit_tx=True)
+""", settings=settings)
+        result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$kind": kind, "$after": after}, commit_tx=True, settings=settings)
         rows = result_sets[0].rows if result_sets else []
         if not rows:
             break
@@ -1604,9 +1717,11 @@ LIMIT {min(page_size, max_items - len(out))};
 
 
 def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
+    settings = ydb_request_settings(ydb)
     result_sets = session.transaction(ydb.StaleReadOnly()).execute(
         f"SELECT payload_json FROM `{table_path}` WHERE pk = 'latest_state';",
         commit_tx=True,
+        settings=settings,
     )
     rows = result_sets[0].rows if result_sets else []
     if not rows:
@@ -6621,6 +6736,94 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         posts_for_scoring = posts_for_scoring[:posts_scored_count]
         precomputed_embedding_scores = precomputed_embedding_scores[:posts_scored_count]
 
+    if getenv_bool("REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY", True):
+        report_event(
+            "early_image_queue_handoff_started",
+            phase="queue_assembly",
+            status="running",
+            new_posts=len(new_posts),
+            media_rows=len(media_rows),
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
+        early_image_queue_rows, _early_image_top_rows, early_image_queue_metrics = build_image_candidate_queue(
+            previous_state, new_posts, [], media_rows, run_id, run_now,
+        )
+        early_image_rows_to_write = [r for r in early_image_queue_rows if isinstance(r, dict) and not r.get("_sheet_note")]
+        early_image_items_written = write_region_talk_online_queue_items(
+            early_image_rows_to_write,
+            kind="image_queue_item",
+            id_fields=["image_queue_id", "post_url"],
+            fields=IMAGE_QUEUE_STATE_FIELDS,
+            run_id=run_id,
+            stage="early_image_queue_handoff",
+        )
+        write_region_talk_live_cursor("image", {
+            "run_id": run_id,
+            "queue_name": "image_candidate_queue",
+            "phase": "early_image_queue_handoff",
+            "status": "running",
+            "cursor_position": early_image_queue_metrics.get("image_queue_cursor_position", 0),
+            "total": len(early_image_rows_to_write),
+            "needs_actual_fetch_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "needs_actual_image_fetch"),
+            "in_progress_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "image_analysis_in_progress"),
+            "actual_scored_total": sum(1 for r in early_image_rows_to_write if r.get("image_queue_status") == "actual_scored"),
+            "progress_label": f"early image queue {len(early_image_rows_to_write)}",
+        })
+        report_event(
+            "early_image_queue_handoff_done",
+            phase="queue_assembly",
+            status="running",
+            image_queue_total=len(early_image_rows_to_write),
+            image_queue_selected_next_batch=early_image_queue_metrics.get("image_queue_selected_next_batch"),
+            image_queue_actual_scored_total=early_image_queue_metrics.get("image_queue_actual_scored_total"),
+            online_image_queue_items_written=early_image_items_written,
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
+        if getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False):
+            partial_now = utc_now_iso()
+            summary_row = {
+                "run_id": run_id,
+                "status": "partial",
+                "partial_reason": "live_image_queue_handoff_done_report_tail_skipped",
+                "posts_fetched": len(posts),
+                "posts_scored": posts_scored_count,
+                "posts_deferred": len(runtime_deferred_posts),
+                "candidates_created": len(candidates),
+                "favorites_created": len(favorites) if 'favorites' in locals() else 0,
+                "image_queue_total": len(early_image_rows_to_write),
+                "online_image_queue_items_written": early_image_items_written,
+                "state_backend": region_talk_state_backend_requested(),
+                "ydb_read_status": state_meta.get("ydb_read_status"),
+                "ydb_write_status": "ok" if early_image_items_written or region_talk_state_backend_requested() != "ydb" else "no_image_queue_rows_written",
+            }
+            payload = {
+                "run_id": run_id,
+                "generated_at": partial_now,
+                "status": "partial",
+                "summary": summary_row,
+                "sheets": {
+                    "01_run_summary": [summary_row],
+                    "04m_image_queue": early_image_rows_to_write[:200],
+                    "02_runtime_deferred_posts": runtime_deferred_posts[:200],
+                },
+                "latest_xlsx": "",
+                "xlsx_path": "",
+            }
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": partial_now, "status": "partial", "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+            (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "status": "partial", "run_id": run_id, "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+            report_event(
+                "report_tail_skipped_after_live_image_queue_handoff",
+                phase="queue_assembly",
+                status="partial",
+                image_queue_total=len(early_image_rows_to_write),
+                online_image_queue_items_written=early_image_items_written,
+                next_action="run_region_talk_image_diagnostic",
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
+            return payload
+
     similar_channel_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows") or [])
     similar_channel_edges = list(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_edges") or [])
     keyword_discovery_rows = list(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_rows") or [])
@@ -6745,41 +6948,52 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         final_verifier_llm_calls=final_verifier_llm_calls,
         runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
     )
-    # Source profile probe MVP: derive probe metrics from fetched sample; sources are not automatically monitored from discovery.
-    report_event("source_profile_build_started", phase="queue_assembly", status="running", source_rows=len(source_rows), posts_fetched=len(posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     posts_by_source: dict[str, list[dict[str, Any]]] = {}
     for row in new_posts:
         posts_by_source.setdefault(str(row.get("source_id") or ""), []).append(row)
-    enriched_source_rows: list[dict[str, Any]] = []
-    for srow in source_rows:
-        sid = str(srow.get("source_id") or "")
-        sampled = posts_by_source.get(sid, [])
-        n = len(sampled)
-        kal_hits = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
-        ad_hits = sum(1 for r in sampled if r.get("is_ad_or_promo"))
-        news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
-        trash_hits = sum(1 for r in sampled if float(r.get("trash_score") or 0) >= 0.35)
-        original_media = sum(1 for r in sampled if r.get("has_media"))
-        link_richness = sum(int(r.get("discovery_edges_count") or 0) for r in sampled)
-        monitor_score = round((kal_hits / max(1, n))*0.35 + (original_media/max(1,n))*0.20 + min(1, link_richness/10)*0.15 + max(0, 1-ad_hits/max(1,n))*0.15 + max(0, 1-news_hits/max(1,n))*0.10, 3) if n else 0.0
-        status = "probed" if n else ("profile_resolved" if srow.get("fetch_status") == "ok" else "blocked")
-        source_class = classify_source_profile(srow, sampled)
-        enriched_source_rows.append({**srow,
-            "source_probe_status": status, "sampled_post_count": n, "kaliningrad_hit_count": kal_hits,
-            "russia_travel_score": round(kal_hits/max(1,n),3), "authorial_voice_score": 0.5,
-            "original_media_score": round(original_media/max(1,n),3), "ad_ratio": round(ad_hits/max(1,n),3),
-            "news_ratio": round(news_hits/max(1,n),3), "trash_ratio": round(trash_hits/max(1,n),3),
-            "image_prevalence": round(original_media/max(1,n),3), "link_richness_score": round(min(1, link_richness/10),3),
-            "forwarded_origin_richness_score": round(sum(1 for r in sampled if r.get("is_forwarded_or_repost"))/max(1,n),3),
-            "source_graph_value_score": round(min(1, link_richness/10),3), "monitor_priority_score": monitor_score,
-            **source_class,
-            "source_probe_reason": "derived from recent fetched posts; no automatic monitoring without manual/probe acceptance",
-        })
-    source_rows = enriched_source_rows
+    # Source profile enrichment is useful for source-monitoring lists, but it is
+    # not allowed to block the image/publication queue handoff. A bounded
+    # CandidateReport run must first produce image_queue_item rows for
+    # RegionTalkImageDiagnostic; profile enrichment can be re-enabled for a
+    # dedicated source-maintenance pass.
+    source_profile_enabled = getenv_bool("REGION_TALK_SOURCE_PROFILE_BUILD_ENABLED", False)
+    if source_profile_enabled:
+        report_event("source_profile_build_started", phase="queue_assembly", status="running", source_rows=len(source_rows), posts_fetched=len(posts), posts_by_source=len(posts_by_source), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+        enriched_source_rows: list[dict[str, Any]] = []
+        source_profile_heartbeat_every = max(1, getenv_int("REGION_TALK_SOURCE_PROFILE_HEARTBEAT_EVERY_ROWS", 25))
+        for source_idx, srow in enumerate(source_rows, start=1):
+            if source_idx == 1 or source_idx % source_profile_heartbeat_every == 0:
+                report_event("source_profile_build_alive", phase="queue_assembly", status="running", source_rows=len(source_rows), source_rows_done=source_idx - 1, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+            sid = str(srow.get("source_id") or "")
+            sampled = posts_by_source.get(sid, [])
+            n = len(sampled)
+            kal_hits = sum(1 for r in sampled if r.get("kaliningrad_oblast_only_scope"))
+            ad_hits = sum(1 for r in sampled if r.get("is_ad_or_promo"))
+            news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
+            trash_hits = sum(1 for r in sampled if float(r.get("trash_score") or 0) >= 0.35)
+            original_media = sum(1 for r in sampled if r.get("has_media"))
+            link_richness = sum(int(r.get("discovery_edges_count") or 0) for r in sampled)
+            monitor_score = round((kal_hits / max(1, n))*0.35 + (original_media/max(1,n))*0.20 + min(1, link_richness/10)*0.15 + max(0, 1-ad_hits/max(1,n))*0.15 + max(0, 1-news_hits/max(1,n))*0.10, 3) if n else 0.0
+            status = "probed" if n else ("profile_resolved" if srow.get("fetch_status") == "ok" else "blocked")
+            source_class = classify_source_profile(srow, sampled)
+            enriched_source_rows.append({**srow,
+                "source_probe_status": status, "sampled_post_count": n, "kaliningrad_hit_count": kal_hits,
+                "russia_travel_score": round(kal_hits/max(1,n),3), "authorial_voice_score": 0.5,
+                "original_media_score": round(original_media/max(1,n),3), "ad_ratio": round(ad_hits/max(1,n),3),
+                "news_ratio": round(news_hits/max(1,n),3), "trash_ratio": round(trash_hits/max(1,n),3),
+                "image_prevalence": round(original_media/max(1,n),3), "link_richness_score": round(min(1, link_richness/10),3),
+                "forwarded_origin_richness_score": round(sum(1 for r in sampled if r.get("is_forwarded_or_repost"))/max(1,n),3),
+                "source_graph_value_score": round(min(1, link_richness/10),3), "monitor_priority_score": monitor_score,
+                **source_class,
+                "source_probe_reason": "derived from recent fetched posts; no automatic monitoring without manual/probe acceptance",
+            })
+        source_rows = enriched_source_rows
+        report_event("source_profile_build_done", phase="queue_assembly", status="running", source_rows=len(source_rows), source_rows_done=len(source_rows), posts_by_source=len(posts_by_source), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    else:
+        report_event("source_profile_build_skipped", phase="queue_assembly", status="deferred", source_rows=len(source_rows), posts_by_source=len(posts_by_source), next_action="build_image_queue", runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     source_class_by_id = {str(s.get("source_id") or ""): {k: s.get(k) for k in ["source_geo_class", "source_topic_class", "ko_mention_ratio_recent", "travel_blogger_score", "personal_voice_score", "nonlocal_value_score", "source_priority_reason"]} for s in source_rows}
     for r in new_posts:
         r.update({k: v for k, v in source_class_by_id.get(str(r.get("source_id") or ""), {}).items() if v != "" and v is not None})
-    report_event("source_profile_build_done", phase="queue_assembly", status="running", source_rows=len(source_rows), posts_by_source=len(posts_by_source), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
 
     report_event("source_frontier_build_started", phase="queue_assembly", status="running", discovered_rows=len(discovered_rows), previous_discovered=len(updated_discovered_state), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     for drow in discovered_rows:
@@ -8158,6 +8372,7 @@ async def amain() -> int:
             os.environ[str(k)] = str(v)
     run_id = str(config.get('run_id') or os.getenv('REGION_TALK_RUN_ID') or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}")
     os.environ["REGION_TALK_RUN_ID"] = run_id
+    start_region_talk_stack_watchdog()
     if not getenv_bool('REGION_TALK_DRY_RUN', True):
         raise RuntimeError('REGION_TALK_DRY_RUN=1 is required for MVP-1')
     if not getenv_bool('REGION_TALK_DISABLE_PUBLISH', True):

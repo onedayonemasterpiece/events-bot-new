@@ -260,6 +260,17 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS": os.environ.get("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1"),
         "REGION_TALK_YDB_PRUNE_MAX_ROWS": os.environ.get("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200"),
         "REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE": os.environ.get("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", "1"),
+        "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", "8"),
+        "REGION_TALK_YDB_HEARTBEAT_REQUEST_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_HEARTBEAT_REQUEST_TIMEOUT_SECONDS", "5"),
+        "REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES": os.environ.get("REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES", "0"),
+        "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", "8"),
+        "REGION_TALK_YDB_QUEUE_MAX_RETRIES": os.environ.get("REGION_TALK_YDB_QUEUE_MAX_RETRIES", "1"),
+        "REGION_TALK_ENABLE_STACK_WATCHDOG": os.environ.get("REGION_TALK_ENABLE_STACK_WATCHDOG", "1"),
+        "REGION_TALK_STACK_WATCHDOG_SECONDS": os.environ.get("REGION_TALK_STACK_WATCHDOG_SECONDS", "90"),
+        "REGION_TALK_LIVE_EVENT_LOG_PATH": os.environ.get("REGION_TALK_LIVE_EVENT_LOG_PATH", "/kaggle/working/region_talk_run_events_live.jsonl"),
+        "REGION_TALK_STDOUT_HEARTBEATS": os.environ.get("REGION_TALK_STDOUT_HEARTBEATS", "0"),
+        "REGION_TALK_STDOUT_ALL_EVENTS": os.environ.get("REGION_TALK_STDOUT_ALL_EVENTS", "0"),
+        "REGION_TALK_KAGGLE_STATUS_STDOUT": os.environ.get("REGION_TALK_KAGGLE_STATUS_STDOUT", "0"),
         "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
         "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
@@ -333,6 +344,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MAX_LLM_FINAL_VERIFY": os.environ.get("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10"),
         "REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS": os.environ.get("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", "0"),
         "REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS": os.environ.get("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", "0"),
+        "REGION_TALK_SOURCE_PROFILE_BUILD_ENABLED": os.environ.get("REGION_TALK_SOURCE_PROFILE_BUILD_ENABLED", "0"),
+        "REGION_TALK_SOURCE_PROFILE_HEARTBEAT_EVERY_ROWS": os.environ.get("REGION_TALK_SOURCE_PROFILE_HEARTBEAT_EVERY_ROWS", "25"),
+        "REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY": os.environ.get("REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY", "1"),
+        "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": os.environ.get("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", "1"),
         "GOOGLE_AI_ALLOW_RESERVE_FALLBACK": "0",
         "GOOGLE_AI_LOCAL_LIMITER_FALLBACK": "0",
         "GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR": "0",
@@ -590,6 +605,17 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")
     os.environ.setdefault("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200")
     os.environ.setdefault("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", "1")
+    os.environ.setdefault("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", "8")
+    os.environ.setdefault("REGION_TALK_YDB_HEARTBEAT_REQUEST_TIMEOUT_SECONDS", "5")
+    os.environ.setdefault("REGION_TALK_YDB_HEARTBEAT_MAX_RETRIES", "0")
+    os.environ.setdefault("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", "8")
+    os.environ.setdefault("REGION_TALK_YDB_QUEUE_MAX_RETRIES", "1")
+    os.environ.setdefault("REGION_TALK_ENABLE_STACK_WATCHDOG", "1")
+    os.environ.setdefault("REGION_TALK_STACK_WATCHDOG_SECONDS", "90")
+    os.environ.setdefault("REGION_TALK_LIVE_EVENT_LOG_PATH", "/kaggle/working/region_talk_run_events_live.jsonl")
+    os.environ.setdefault("REGION_TALK_STDOUT_HEARTBEATS", "0")
+    os.environ.setdefault("REGION_TALK_STDOUT_ALL_EVENTS", "0")
+    os.environ.setdefault("REGION_TALK_KAGGLE_STATUS_STDOUT", "0")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14")
     os.environ.setdefault("REGION_TALK_DELTA_OVERLAP_POSTS", "50")
@@ -602,6 +628,10 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")
     os.environ.setdefault("REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS", "0")
     os.environ.setdefault("REGION_TALK_MEMORY_VECTOR_RECHECK_BATCH_EMBEDDINGS", "0")
+    os.environ.setdefault("REGION_TALK_SOURCE_PROFILE_BUILD_ENABLED", "0")
+    os.environ.setdefault("REGION_TALK_SOURCE_PROFILE_HEARTBEAT_EVERY_ROWS", "25")
+    os.environ.setdefault("REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY", "1")
+    os.environ.setdefault("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", "1")
     os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3")
     os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60")

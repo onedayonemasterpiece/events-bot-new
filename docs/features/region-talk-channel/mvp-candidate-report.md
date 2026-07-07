@@ -544,6 +544,17 @@ second dual-embedding pass after already scoring the current posts. A final
 publication pass may explicitly enable a small recheck limit after
 ImageDiagnostic has written `actual_scored` rows.
 
+The live-YDB handoff to ImageDiagnostic is earlier than the XLSX/report tail.
+After the bounded text/vector scoring loop, CandidateReport writes
+`image_queue_item` rows and an image queue cursor immediately
+(`REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY=1`). For the bounded discovery
+pass, `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1` is the default:
+once the image queue is durable in YDB, the notebook may finish with
+`report_tail_skipped_after_live_image_queue_handoff` instead of loading
+operator-only workbooks, source-profile enrichment, XLSX generation or state
+snapshot rewrites. Those report artifacts remain best-effort/operator outputs
+and must not block the downstream ImageDiagnostic notebook.
+
 `04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.
 
 ## MVP-1.z6 throughput / hard-region / recursive discovery correction
@@ -625,6 +636,12 @@ phase/status, `progress_label`, current source title/url/handle, source counters
 fetch status, post counters, vector/report counters (`posts_to_score`,
 `posts_scored`, `posts_deferred`) and final YDB/write summary fields; no secrets
 are persisted.
+Heartbeat stdout is quiet by default
+(`REGION_TALK_STDOUT_HEARTBEATS=0`,
+`REGION_TALK_KAGGLE_STATUS_STDOUT=0`) so Kaggle Logs remain readable. Events are
+still persisted immediately to `/kaggle/working/region_talk_run_events_live.jsonl`
+and YDB, and `REGION_TALK_ENABLE_STACK_WATCHDOG=1` emits periodic Python stack
+traces during opaque stalls.
 
 CandidateReport discovery tail is budget-gated before report assembly:
 `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)
