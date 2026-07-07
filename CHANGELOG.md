@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / bounded Gemini verifier calls**: CandidateReport now
+  wraps final Gemini/Lite verifier calls with `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS`
+  (default 60s), propagates `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` into Kaggle run
+  config, sends a slim `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS`-bounded prompt
+  with text/summary fallback and compact image/vector evidence, and records
+  timeout as `llm_gate_status=error` so the notebook can continue to YDB/report
+  writes instead of hanging with no new heartbeats.
 - **Region Talk Channel / image-gated final verifier**: CandidateReport no
   longer calls Gemini Lite final verification for text-only vector candidates;
   final LLM checks are deferred until ImageDiagnostic has produced actual-image

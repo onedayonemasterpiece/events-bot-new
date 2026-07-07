@@ -640,6 +640,69 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(result["llm_gate_status"], "ok")
         self.assertEqual(result["llm_decision"], "accept")
 
+    def test_llm_call_timeout_returns_structured_error(self) -> None:
+        mod = load_module()
+        old = {k: os.environ.get(k) for k in ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "REGION_TALK_AUTO_INSTALL"]}
+        class FakeClient:
+            provider_timeout_seconds = 0.0
+            async def generate_content_async(self, **kwargs):
+                await __import__("asyncio").sleep(1)
+                return '{"decision":"accept","reason":"late"}', object()
+        client = FakeClient()
+        mod.get_region_talk_llm_gateway = lambda default_env_var_name: client
+        try:
+            os.environ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"] = "0.05"
+            os.environ["REGION_TALK_AUTO_INSTALL"] = "0"
+            os.environ.pop("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", None)
+            started = __import__("time").monotonic()
+            result = mod.call_region_talk_semantic_llm({"text":"Калининград"}, {}, model="fake", default_env_var_name="GOOGLE_API_KEY3")
+            elapsed = __import__("time").monotonic() - started
+            self.assertLess(elapsed, 3.0)
+            self.assertEqual(result["llm_gate_status"], "error")
+            self.assertIn("TimeoutError", result["llm_reason"])
+            self.assertEqual(os.environ.get("GOOGLE_AI_PROVIDER_TIMEOUT_SEC"), "0.05")
+            self.assertEqual(client.provider_timeout_seconds, 0.05)
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_llm_prompt_is_compact_and_uses_text_fallbacks(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS")
+        try:
+            os.environ["REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS"] = "900"
+            prompt = mod.llm_text_gate_prompt(
+                {
+                    "source_title": "Уютная Россия",
+                    "post_url": "https://t.me/example/1",
+                    "post_date": "2026-07-07",
+                    "text": "",
+                    "text_excerpt": "Калининград и Зеленоградск: " + ("очень красивый маршрут " * 200),
+                    "short_summary": "fallback summary",
+                    "debug_blob": "x" * 20000,
+                },
+                {
+                    "stage": "publication_queue_final_verifier",
+                    "overall_media_score": 0.88,
+                    "postcardness_score": 0.77,
+                    "large_unused_debug": "x" * 20000,
+                },
+            )
+            data = json.loads(prompt)
+            self.assertLess(len(prompt.encode("utf-8")), 3500)
+            self.assertIn("text_excerpt:", data["post"]["text"])
+            self.assertLessEqual(len(data["post"]["text"]), 900)
+            self.assertNotIn("large_unused_debug", prompt)
+            self.assertNotIn("debug_blob", prompt)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS", None)
+            else:
+                os.environ["REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS"] = old
+
     def test_ad_promo_rubrika_is_not_ruble_price(self) -> None:
         mod = load_module()
         gate = mod.ad_promo_gate("В рубрике про Зеленоградск — прогулка, море и красивые детали маршрута")
@@ -1471,6 +1534,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 class RegionTalkKaggleLauncherTests(unittest.TestCase):
+    def test_launcher_config_propagates_llm_timeouts(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+        old = {k: os.environ.get(k) for k in ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"]}
+        captured: dict[str, dict] = {}
+        def fake_create(_client, _username, slug, _title, writer):
+            with tempfile.TemporaryDirectory() as td:
+                folder = Path(td)
+                writer(folder)
+                cfg = folder / "region_talk_run_config.json"
+                if cfg.exists():
+                    captured["config"] = json.loads(cfg.read_text(encoding="utf-8"))
+            return "zigomaro/" + slug
+        try:
+            os.environ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"] = "47"
+            os.environ.pop("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", None)
+            mod.create_or_replace_dataset = fake_create
+            mod.wait_dataset_ready = lambda *args, **kwargs: None
+            refs = mod.build_input_datasets(object(), run_id="unit-timeout", username="zigomaro")
+            self.assertEqual(len(refs), 2)
+            env = captured["config"]["env"]
+            self.assertEqual(env["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"], "47")
+            self.assertEqual(env["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"], "47")
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_active_slot_guard_refuses_running_sibling_kernel(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")

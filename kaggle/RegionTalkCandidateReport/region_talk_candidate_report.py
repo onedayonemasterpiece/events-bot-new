@@ -5097,48 +5097,60 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
 
 
 
+def _region_talk_llm_text(post: dict[str, Any]) -> str:
+    limit = getenv_int("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS", 1800)
+    parts = []
+    for key in (
+        "text",
+        "text_excerpt",
+        "short_summary",
+        "why_this_is_about_kaliningrad",
+        "why_selected",
+        "semantic_summary",
+        "image_report_short",
+        "model_short_explanation",
+    ):
+        value = str(post.get(key) or "").strip()
+        if value:
+            parts.append(f"{key}: " + re.sub(r"\s+", " ", value))
+    text = "\n".join(parts)
+    return text[:max(300, limit)]
+
+
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
-    text = str(post.get("text") or "")[:6000]
+    text = _region_talk_llm_text(post)
+    slim_evidence = {
+        key: evidence.get(key)
+        for key in [
+            "stage",
+            "overall_media_score",
+            "postcardness_score",
+            "aesthetic_score",
+            "image_model_input_type",
+            "image_queue_status",
+            "vector_gate_status",
+            "source_geo_class",
+            "source_topic_class",
+            "publication_text_story_score",
+        ]
+        if evidence.get(key) not in (None, "")
+    }
     payload = {
-        "task": "Decide whether this Telegram/VK post is a reviewable Region Talk candidate.",
+        "task": "Return JSON: final Region Talk verifier for one Telegram/VK post.",
         "rules": [
-            "Accept only if the main subject is Kaliningrad Oblast, not one item in a multi-region/country digest.",
-            "Reject ads, promos, registrations, contests, paid/service CTAs, app-download promos, event announcements, and news digests.",
-            "Prefer visit impressions, route/useful observations, emotional or memorable details about visiting the region.",
-            "For evidence_hints_not_decisions.stage=publication_queue_final_verifier, accept only when supplied visual evidence says this is an actual-image candidate with strong postcard/aesthetic scores; otherwise return needs_review or reject.",
-            "A single-location Kaliningrad Oblast card is NOT a multi-region roundup even if it belongs to a source rubric; classify it as single_location_photo_card or encyclopedic_card_candidate, not reject_multi_region_roundup.",
-            "Encyclopedic/single-location cards may be research candidates but weaker than firsthand visit impressions; pure visual dumps or passing mentions are not publication candidates.",
-            "Return JSON only.",
+            "accept only if Kaliningrad Oblast is the main subject",
+            "reject ads/promos/events/news/trash and multi-region roundups where Kaliningrad is one item",
+            "needs_review if text or actual-image evidence is insufficient",
+            "single Kaliningrad location/photo card is not a multi-region roundup",
         ],
-        "evidence_hints_not_decisions": evidence,
+        "evidence": slim_evidence,
         "post": {
             "source_title": post.get("source_title"),
             "post_url": post.get("post_url"),
             "post_date": post.get("post_date"),
             "text": text,
         },
-        "schema": {
-            "decision": "accept|needs_review|reject",
-            "whole_post_about_kaliningrad_oblast_score": "0..1",
-            "kaliningrad_mention_role": "main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear",
-            "is_digest_or_roundup": "boolean",
-            "is_multi_region_roundup": "boolean",
-            "is_multi_topic_digest": "boolean",
-            "is_single_location_card": "boolean",
-            "is_author_visit_impression": "boolean",
-            "is_official_route_material": "boolean",
-            "is_photo_card_from_subscriber": "boolean",
-            "is_ad_or_promo": "boolean",
-            "is_news_or_trash": "boolean",
-            "content_type": "visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject",
-            "visit_evidence_type": "firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown",
-            "has_firsthand_visit_evidence": "boolean",
-            "emotion_or_impression_evidence": "boolean",
-            "review_or_opinion_evidence": "boolean",
-            "memorable_detail_evidence": "boolean",
-            "original_photo_evidence": "boolean",
-            "reason": "short Russian explanation",
-        },
+        "schema": "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru",
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -5327,6 +5339,13 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
     model = (model or os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite").strip()
     default_env_var_name = (default_env_var_name or os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3").strip()
     try:
+        llm_call_timeout = max(0.001, float(os.getenv("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS") or os.getenv("REGION_TALK_LLM_TIMEOUT_SECONDS") or "60"))
+    except Exception:
+        llm_call_timeout = 60.0
+    provider_timeout_raw = (os.getenv("GOOGLE_AI_PROVIDER_TIMEOUT_SEC") or "").strip()
+    if not provider_timeout_raw:
+        os.environ["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"] = str(llm_call_timeout)
+    try:
         from google_ai.exceptions import RateLimitError, ProviderError, ReservationError  # type: ignore
     except Exception:
         class RateLimitError(Exception): pass
@@ -5340,6 +5359,16 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "google-genai"])
         prompt = llm_text_gate_prompt(post, evidence)
         client = get_region_talk_llm_gateway(default_env_var_name)
+        if hasattr(client, "provider_timeout_seconds"):
+            try:
+                current_provider_timeout = float(getattr(client, "provider_timeout_seconds") or 0.0)
+            except Exception:
+                current_provider_timeout = 0.0
+            if current_provider_timeout <= 0 or current_provider_timeout > llm_call_timeout:
+                try:
+                    setattr(client, "provider_timeout_seconds", llm_call_timeout)
+                except Exception:
+                    pass
 
         async def _call() -> tuple[str, Any]:
             return await client.generate_content_async(
@@ -5352,12 +5381,28 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
-        if running_loop is not None:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                text, usage = pool.submit(lambda: asyncio.run(_call())).result()
-        else:
-            text, usage = asyncio.run(_call())
+        import concurrent.futures
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="region-talk-llm")
+        future = pool.submit(lambda: asyncio.run(_call()))
+        timed_out = False
+        try:
+            text, usage = future.result(timeout=llm_call_timeout)
+        except concurrent.futures.TimeoutError:
+            timed_out = True
+            future.cancel()
+            pool.shutdown(wait=False, cancel_futures=True)
+            loop_mode = "active_event_loop" if running_loop is not None else "sync"
+            return {
+                "llm_gate_status": "error",
+                "llm_provider": "google_gemini",
+                "llm_model": model,
+                "llm_default_env_var_name": default_env_var_name,
+                "llm_limit_source": "supabase_google_ai_reserve",
+                "llm_reason": f"TimeoutError: Region Talk LLM call exceeded {llm_call_timeout:.1f}s ({loop_mode}); GOOGLE_AI_PROVIDER_TIMEOUT_SEC={os.getenv('GOOGLE_AI_PROVIDER_TIMEOUT_SEC') or ''}",
+            }
+        finally:
+            if not timed_out:
+                pool.shutdown(wait=True, cancel_futures=False)
         data = parse_llm_json(text)
         decision = str(data.get("decision") or "needs_review").strip().lower()
         if decision not in {"accept", "needs_review", "reject"}:

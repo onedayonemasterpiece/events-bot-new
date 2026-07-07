@@ -320,6 +320,11 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm"),
         "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
         "REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME": os.environ.get("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3"),
+        "REGION_TALK_LLM_CALL_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60"),
+        "GOOGLE_AI_PROVIDER_TIMEOUT_SEC": os.environ.get(
+            "GOOGLE_AI_PROVIDER_TIMEOUT_SEC",
+            os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60"),
+        ),
         "REGION_TALK_ENABLE_EARLY_LLM": os.environ.get("REGION_TALK_ENABLE_EARLY_LLM", "0"),
         "REGION_TALK_ENABLE_VECTOR_GATES": os.environ.get("REGION_TALK_ENABLE_VECTOR_GATES", "1"),
         "REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1"),
@@ -595,6 +600,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")
     os.environ.setdefault("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite")
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3")
+    os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60")
+    os.environ.setdefault("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "60"))
     os.environ.setdefault("GOOGLE_AI_ALLOW_RESERVE_FALLBACK", "0")
     os.environ.setdefault("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "0")
     os.environ.setdefault("GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR", "0")

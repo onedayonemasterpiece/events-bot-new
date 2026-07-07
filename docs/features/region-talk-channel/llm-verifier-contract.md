@@ -12,6 +12,17 @@ Call verifier only for:
 
 Never call verifier for the raw corpus. Cache by `post_id`, `text_hash`, selected media hashes, `semantic_bank_version`, `verifier_policy_version` and `model_id`.
 
+Each verifier call must be bounded. CandidateReport sets
+`REGION_TALK_LLM_CALL_TIMEOUT_SECONDS=60` by default and propagates the same
+value to `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` unless an explicit provider timeout is
+already configured. If the Gemini/Lite call exceeds that window, the row is
+recorded as `llm_gate_status=error` with a timeout reason and the notebook must
+continue to write YDB/report state instead of hanging without new heartbeats.
+The prompt is deliberately slim: `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS`
+defaults to 1800, falls back from `text` to `text_excerpt`/summary fields when
+row-level YDB image rows do not carry full text, and sends only the compact
+image/vector evidence fields required by the final decision.
+
 ## Input
 
 - source metadata and `rights_policy`;

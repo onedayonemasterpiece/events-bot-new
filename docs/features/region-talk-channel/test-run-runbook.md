@@ -65,6 +65,9 @@ REGION_TALK_MAX_IMAGES_PER_POST=8
 REGION_TALK_MAX_VLM_CALLS=10
 REGION_TALK_LLM_MODEL=gemini-3.1-flash-lite
 REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME=GOOGLE_API_KEY3
+REGION_TALK_LLM_CALL_TIMEOUT_SECONDS=60
+REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS=1800
+GOOGLE_AI_PROVIDER_TIMEOUT_SEC=60
 REGION_TALK_IMAGE_SCORING_MODE=cv_aesthetic_clip
 REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=1
 REGION_TALK_MIN_POST_DATE=2026-01-01
@@ -343,6 +346,15 @@ The XLSX has:
   YDB heartbeat/row-level write. Do not use this mode as completion evidence
   until live YDB rows are observed.
 - Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
+- Gemini/Lite verifier calls must never be an unbounded stop-the-world section.
+  CandidateReport uses `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS` (default 60s) as a
+  per-call wrapper and mirrors it to `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` for the
+  shared Google AI client. Timeout is a row-level `llm_gate_status=error`
+  outcome that keeps the notebook moving to state/report writes; it is not a
+  reason to freeze heartbeats. The verifier prompt is also bounded by
+  `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS` (default 1800) and must use compact
+  text/summary fallback plus slim actual-image/vector evidence, not raw row
+  payloads or debug blobs.
 - Source scanning must be cursor/due driven, not “top seeds every run”.
   `source_queue_item.source_queue_status=processed_*` plus `_ydb_updated_at`/
   `source_cursors.next_history_scan_at` suppresses immediate re-scan until the
