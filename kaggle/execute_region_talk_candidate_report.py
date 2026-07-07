@@ -358,7 +358,7 @@ def poll_kernel(client: Any, kernel_ref: str, *, timeout_minutes: int, poll_inte
         print(f"[region-talk-kaggle] status={raw} raw={status}", flush=True)
         if raw == "COMPLETE":
             return status
-        if raw in {"ERROR", "FAILED", "CANCELLED"}:
+        if raw in {"ERROR", "FAILED", "CANCELLED", "CANCEL_ACKNOWLEDGED"}:
             raise RuntimeError(f"Kaggle Region Talk run failed: {status}")
     raise TimeoutError(f"Kaggle Region Talk timeout; last_status={last}")
 
