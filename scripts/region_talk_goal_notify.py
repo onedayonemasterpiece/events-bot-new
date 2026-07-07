@@ -160,6 +160,7 @@ def build_stats_message(limit: int = 20000) -> str:
         candidates = read_kind_rows(pool, ydb, table, "candidate_memory_item", limit)
         images = read_kind_rows(pool, ydb, table, "image_queue_item", limit)
         publications = read_kind_rows(pool, ydb, table, "publication_candidate_item", limit)
+        cursors = read_kind_rows(pool, ydb, table, "queue_cursor", 200)
     finally:
         driver.stop()
     rejected_status_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
@@ -173,6 +174,20 @@ def build_stats_message(limit: int = 20000) -> str:
     strong_images = [r for r in actual_images if float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.66]
     confirmed = [r for r in publications if str(r.get("publication_candidate_status") or "") in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}]
     ready_to_send = [r for r in publications if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"]
+    cursor_by_name: dict[str, dict[str, Any]] = {}
+    for row in cursors:
+        name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+        if name and ":" not in name:
+            cursor_by_name[name] = row
+    cursor_lines = []
+    for name in ["source_scan", "unified_source_queue", "source", "image_candidate_queue", "image", "image_diagnostic"]:
+        row = cursor_by_name.get(name)
+        if not row:
+            continue
+        pos = row.get("cursor_position") or row.get("done") or 0
+        total = row.get("total") or ""
+        label = row.get("progress_label") or f"{name}: {pos}" + (f"/{total}" if total else "")
+        cursor_lines.append(f"Курсор {name}: {label}")
     return "\n".join([
         "📊 Region Talk live YDB stats",
         f"Каналов/пабликов в базе: {len(sources)}",
@@ -187,6 +202,7 @@ def build_stats_message(limit: int = 20000) -> str:
         f"Сильных картинок: {len(strong_images)}",
         f"Gemini-confirmed publication candidates: {len(confirmed)}",
         f"Готово к отправке ссылок: {len(ready_to_send)}",
+        *cursor_lines,
         f"updated_at: {datetime.now(timezone.utc).isoformat()}",
     ])
 

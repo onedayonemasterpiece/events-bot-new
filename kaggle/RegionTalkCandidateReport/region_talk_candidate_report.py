@@ -1360,6 +1360,35 @@ def write_region_talk_online_stats(payload: dict[str, Any]) -> None:
         print(f"[region-talk] online_stats_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
+def write_region_talk_live_cursor(name: str, payload: dict[str, Any]) -> None:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return
+    if not getenv_bool("REGION_TALK_YDB_ONLINE_CURSOR_WRITES", True):
+        return
+    safe_name = re.sub(r"[^A-Za-z0-9_:-]+", "_", str(name or "cursor")).strip("_") or "cursor"
+    try:
+        now = utc_now_iso()
+        item = compact_record({**payload, "updated_at": now}, [
+            "run_id", "updated_at", "queue_name", "phase", "status", "progress_label",
+            "cursor_position", "cursor_key", "total", "done", "pending_total",
+            "processed_total", "retry_total", "needs_actual_fetch_total",
+            "in_progress_total", "actual_scored_total", "current_source_url",
+            "current_source_title", "current_post_url", "current_image_queue_id",
+        ], max_len=700)
+        item.setdefault("queue_name", safe_name)
+        run_id = str(item.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> None:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            ydb_upsert_json(session, ydb, table_path, "queue_cursor:" + safe_name, "queue_cursor", item, now)
+            ydb_upsert_json(session, ydb, table_path, f"queue_cursor:{safe_name}:{run_id}", "queue_cursor", item, now)
+
+        pool.retry_operation_sync(op)
+    except Exception as exc:
+        print(f"[region-talk] live_cursor_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+
+
 def append_source_row_online(source_rows: list[dict[str, Any]], row: dict[str, Any], *, run_id: str, stage: str, sources_total: int | None = None) -> None:
     source_rows.append(row)
     write_region_talk_online_source_item(row, run_id=run_id, stage=stage)
@@ -1377,6 +1406,19 @@ def append_source_row_online(source_rows: list[dict[str, Any]], row: dict[str, A
         "sources_with_ko_posts_this_run": with_ko,
         "ko_candidate_posts_this_run": ko_posts,
         "progress_label": f"online discovery sources {len(source_rows)}" + (f"/{sources_total}" if sources_total else ""),
+    })
+    write_region_talk_live_cursor("source_scan", {
+        "run_id": run_id,
+        "queue_name": "source_scan",
+        "phase": stage,
+        "status": "running",
+        "cursor_position": len(source_rows),
+        "cursor_key": row.get("canonical_source_key") or row.get("source_id") or row.get("source_url") or row.get("canonical_url") or "",
+        "total": sources_total or "",
+        "done": len(source_rows),
+        "current_source_url": row.get("canonical_url") or row.get("source_url") or "",
+        "current_source_title": row.get("source_title") or row.get("resolved_title") or "",
+        "progress_label": f"source scan {len(source_rows)}" + (f"/{sources_total}" if sources_total else ""),
     })
 
 
@@ -1510,6 +1552,76 @@ def merge_ydb_source_queue_status_items(
             merged += 1
     data["unified_source_queue"] = q
     return merged
+
+
+def ydb_prune_kind_keep_latest(
+    session: Any,
+    ydb: Any,
+    table_path: str,
+    kind: str,
+    keep_last: int,
+    *,
+    protected_pks: set[str] | None = None,
+) -> int:
+    """Bound non-product YDB rows by count.
+
+    Durable product rows are stable-key compact records and should not be
+    pruned here. This helper is only for large run snapshots and ephemeral
+    per-run observability rows so the 1 GB sidecar remains usable long-term.
+    """
+    keep_last = max(0, int(keep_last))
+    protected = set(protected_pks or set())
+    query = session.prepare(f"""
+DECLARE $kind AS Utf8;
+SELECT pk, updated_at FROM `{table_path}`
+WHERE kind = $kind
+ORDER BY updated_at DESC, pk DESC
+LIMIT 10000;
+""")
+    result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$kind": kind}, commit_tx=True)
+    rows = result_sets[0].rows if result_sets else []
+    deletable = [str(row.pk) for row in rows if str(row.pk) not in protected]
+    to_delete = deletable[keep_last:]
+    if not to_delete:
+        return 0
+    delete_query = session.prepare(f"DECLARE $pk AS Utf8; DELETE FROM `{table_path}` WHERE pk = $pk;")
+    deleted = 0
+    chunk_size = 100
+    for start in range(0, len(to_delete), chunk_size):
+        tx = session.transaction(ydb.SerializableReadWrite())
+        for pk in to_delete[start:start + chunk_size]:
+            tx.execute(delete_query, {"$pk": pk}, commit_tx=False)
+            deleted += 1
+        tx.commit()
+    return deleted
+
+
+def ydb_prune_compact_retention(session: Any, ydb: Any, table_path: str) -> dict[str, int]:
+    if not getenv_bool("REGION_TALK_YDB_RETENTION_PRUNE", True):
+        return {}
+    plan = {
+        "run_state_snapshot": getenv_int("REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST", 2),
+        "run_metrics": getenv_int("REGION_TALK_YDB_RUN_METRICS_KEEP_LAST", 20),
+        "business_event": getenv_int("REGION_TALK_YDB_BUSINESS_EVENT_KEEP_LAST", 500),
+        "business_heartbeat": getenv_int("REGION_TALK_YDB_BUSINESS_HEARTBEAT_KEEP_LAST", 50),
+        "online_stats": getenv_int("REGION_TALK_YDB_ONLINE_STATS_KEEP_LAST", 50),
+        "queue_cursor": getenv_int("REGION_TALK_YDB_CURSOR_HISTORY_KEEP_LAST", 100),
+    }
+    protected = {
+        "business_heartbeat": {"latest_business_heartbeat"},
+        "online_stats": {"online_stats:latest"},
+        "queue_cursor": {"queue_cursor:source", "queue_cursor:image", "queue_cursor:source_scan", "queue_cursor:image_diagnostic"},
+    }
+    out: dict[str, int] = {}
+    for kind, keep in plan.items():
+        try:
+            deleted = ydb_prune_kind_keep_latest(session, ydb, table_path, kind, keep, protected_pks=protected.get(kind, set()))
+            if deleted:
+                out[kind] = deleted
+        except Exception as exc:
+            out["error_" + kind] = -1
+            print(f"[region-talk] ydb_retention_prune_failed kind={kind} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+    return out
 
 
 def ydb_prune_legacy_queue_payloads(session: Any, ydb: Any, table_path: str) -> int:
@@ -1780,9 +1892,10 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 compact["_ydb_row_level_publication_candidate_items_written"] = len(compact.get("publication_candidate_queue") or {})
                 compact["_ydb_row_level_items_written"] = ydb_upsert_json_many(session, ydb, table_path, row_items, updated_at, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
+                compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -6416,6 +6529,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         run_id=run_id,
         stage="unified_source_queue_built",
     )
+    write_region_talk_live_cursor("source", {
+        "run_id": run_id,
+        "queue_name": "unified_source_queue",
+        "phase": "unified_source_queue_built",
+        "status": "running",
+        "cursor_position": unified_source_queue_metrics.get("source_queue_cursor_position", 0),
+        "cursor_key": unified_source_queue_metrics.get("source_queue_cursor_key", ""),
+        "total": len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
+        "pending_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "pending_scan"),
+        "processed_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and str(r.get("source_queue_status") or "").startswith("processed")),
+        "retry_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "needs_rescan_or_retry"),
+        "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
+    })
     image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
         previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
     )
@@ -6427,6 +6553,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         run_id=run_id,
         stage="image_candidate_queue_built",
     )
+    write_region_talk_live_cursor("image", {
+        "run_id": run_id,
+        "queue_name": "image_candidate_queue",
+        "phase": "image_candidate_queue_built",
+        "status": "running",
+        "cursor_position": image_queue_metrics.get("image_queue_cursor_position", 0),
+        "cursor_key": next((str(r.get("image_queue_id") or "") for r in image_candidate_queue_sheet if isinstance(r, dict) and int(r.get("image_queue_order") or 0) == int(image_queue_metrics.get("image_queue_cursor_position") or 0)), ""),
+        "total": len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
+        "needs_actual_fetch_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "needs_actual_image_fetch"),
+        "in_progress_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "image_analysis_in_progress"),
+        "actual_scored_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "actual_scored"),
+        "progress_label": f"image queue cursor {image_queue_metrics.get('image_queue_cursor_position', 0)}/{len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
+    })
     previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
     previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
     publication_candidate_rows, publication_goal = build_publication_candidate_queue(

@@ -182,6 +182,41 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, $ki
     try: pool.retry_operation_sync(op)
     finally: driver.stop(timeout=5)
 
+def ydb_upsert_cursor(name: str, payload: dict):
+    if (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").lower() != "ydb" and not os.getenv("REGION_TALK_YDB_ENDPOINT"): return
+    safe = re.sub(r"[^A-Za-z0-9_:-]+", "_", str(name or "image_diagnostic")).strip("_") or "image_diagnostic"
+    driver = None
+    try:
+        ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
+        item = {k: v for k, v in {
+            "run_id": RUN_ID,
+            "updated_at": now,
+            "queue_name": safe,
+            "phase": payload.get("phase"),
+            "status": payload.get("status"),
+            "reason": payload.get("reason"),
+            "attempt": payload.get("attempt"),
+            "cursor_position": payload.get("cursor_position"),
+            "cursor_key": payload.get("cursor_key"),
+            "total": payload.get("total"),
+            "leased": payload.get("leased"),
+            "remaining_budget": payload.get("remaining_budget"),
+            "progress_label": payload.get("progress_label"),
+        }.items() if v not in (None, "", [], {})}
+        def op(session):
+            query=session.prepare(f"""DECLARE $pk AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'queue_cursor', $payload_json, $updated_at);""")
+            tx=session.transaction(ydb.SerializableReadWrite())
+            for pk in ["queue_cursor:"+safe, "queue_cursor:"+safe+":"+RUN_ID]:
+                tx.execute(query,{"$pk":pk,"$payload_json":json.dumps(item,ensure_ascii=False),"$updated_at":now},commit_tx=False)
+            tx.commit()
+        pool.retry_operation_sync(op)
+    except Exception as exc: log_event("ydb_cursor_write_failed", phase="poll", error=type(exc).__name__ + ": " + str(exc)[:240])
+    finally:
+        if driver is not None:
+            driver.stop(timeout=5)
+
 def ydb_select_kind(kind: str, limit_n: int):
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver)
     def op(session):
@@ -362,6 +397,18 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
             batch, total = ydb_rows_for_diagnostic(limit_n)
             input_payload["queue_rows_total"] = total
             log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n)
+            ydb_upsert_cursor("image_diagnostic", {
+                "phase": "poll",
+                "status": "running",
+                "reason": reason,
+                "attempt": attempt,
+                "cursor_position": len(batch),
+                "cursor_key": str(batch[-1].get("image_queue_id") or batch[-1].get("post_url") or "") if batch else "",
+                "total": total,
+                "leased": len(batch),
+                "remaining_budget": limit_n,
+                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}",
+            })
             if batch:
                 return batch, total
         except Exception as exc:

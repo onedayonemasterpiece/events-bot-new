@@ -191,6 +191,65 @@ main records as soon as they are selected, discovered, fetched, scored or
 reclassified. Heartbeats remain observability-only and are not sufficient proof
 that a source/post/image/candidate exists in the product state.
 
+## Live product funnel contract
+
+Operator-visible live YDB state must answer product questions, not just expose
+technical heartbeats. The core Region Talk funnel is:
+
+1. **Source discovered** — a public/channel/community was found from catalog,
+   similar-channel discovery, keyword discovery, post links or forwarded/repost
+   evidence.
+2. **Source status decided** — the source was selected for scan, accepted into
+   the queue, skipped/rejected/deferred, marked regional-only, or failed with an
+   error/reason.
+3. **Source cursor advanced** — the current scan/queue cursor and current source
+   are visible while the notebook is still running.
+4. **Post fetched/scored** — compact post rows are written without raw full text
+   or raw platform payloads.
+5. **Region/text candidate** — the post passed/failed Kaliningrad-only,
+   non-ad/non-news/text-value gates and candidate memory is updated.
+6. **Image queue** — text-confirmed posts with media are queued for
+   ImageDiagnostic.
+7. **Image worker status** — image rows show lease, media fetch result, retry
+   reason or actual-image score, plus image-worker cursor.
+8. **Publication queue** — text/vector/source evidence joins actual-image scores
+   into ranked publication candidates.
+9. **Final verifier/operator notification** — Gemini Lite decision and local
+   notification status are visible per candidate.
+
+Comments are source-discovery evidence only: if comment discovery is enabled,
+YDB stores a redacted `comment_link_item` with comment/link/status hashes and
+canonical extracted source URL. Raw comment bodies, personal ids and raw payloads
+must not be stored.
+
+Cursor rows are live rows, not end-of-run artifacts. CandidateReport must write
+`queue_cursor:source_scan` while scanning selected sources and
+`queue_cursor:source` / `queue_cursor:image` when source/image queues are
+rebuilt. ImageDiagnostic must write `queue_cursor:image_diagnostic` while
+polling/leasing image rows.
+
+## Size and retention policy
+
+The 1 GB YDB sidecar budget is shared with other acquisition/discovery work, so
+Region Talk must keep row-level product state compact:
+
+- durable rows are stable-key upserts, not per-run append logs:
+  `source_queue_item`, `source_status_item`, `source_candidate_item`,
+  `source_edge_item`, `comment_link_item`, `processed_post_item`,
+  `candidate_memory_item`, `image_queue_item`, `publication_candidate_item`;
+- full post text, raw comment text, raw Telegram/VK payloads and media bytes are
+  excluded from YDB;
+- row payloads use compact field allow-lists and short excerpts/hashes only;
+- large `run_state_snapshot` rows are retention-limited
+  (`REGION_TALK_YDB_RUN_SNAPSHOT_KEEP_LAST`, default `2`) because the durable
+  source/post/image/candidate rows already carry the live product state;
+- ephemeral observability rows are retention-limited:
+  `business_event`, per-run `business_heartbeat`, per-run `online_stats`,
+  per-run `queue_cursor`, and `run_metrics`;
+- protected latest rows such as `latest_state`, `latest_business_heartbeat`,
+  `online_stats:latest`, `queue_cursor:source`, `queue_cursor:image`,
+  `queue_cursor:source_scan` and `queue_cursor:image_diagnostic` are kept.
+
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
   canonical Telegram/VK source queue row with `queue_order`, status, status-change
