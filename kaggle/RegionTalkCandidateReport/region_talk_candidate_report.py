@@ -3129,10 +3129,25 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         raise RuntimeError("Telethon client is not authorized")
     try:
         for idx, seed in enumerate(monitored, start=1):
-            status.event("alive", phase="fetch", progress_label=f"источники {idx}/{len(monitored)}", sources_done=idx-1, sources_total=len(monitored))
+            source_progress = {
+                "phase": "fetch",
+                "progress_label": f"источники {idx}/{len(monitored)} · {seed.source_title or seed.handle or seed.canonical_url}",
+                "sources_done": idx - 1,
+                "sources_total": len(monitored),
+                "source_index": idx,
+                "source_id": seed.source_id,
+                "current_source_title": seed.source_title,
+                "current_source_url": seed.canonical_url,
+                "current_source_handle": seed.handle,
+                "current_source_platform": seed.platform,
+                "event_name": "alive",
+            }
+            status.event("alive", **source_progress)
             handle = seed.handle.lstrip("@")
             if not handle or "/" in handle or handle.startswith("http"):
-                source_rows.append(source_status_row(seed, "skipped_telegram_handle_not_configured", vk_wall_probe_status="not_applicable"))
+                skipped = source_status_row(seed, "skipped_telegram_handle_not_configured", vk_wall_probe_status="not_applicable")
+                source_rows.append(skipped)
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · skipped · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": skipped.get("fetch_status"), "posts_scanned": 0})
                 continue
             src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
             entity, resolve_meta = await governor.resolve_entity(client, seed)
@@ -3140,15 +3155,18 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             if entity is None:
                 src_row.setdefault("fetch_status", resolve_meta.get("fetch_status") or "skipped_telegram_unresolved_deferred")
                 source_rows.append(src_row)
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · unresolved · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "telegram_resolve_status": src_row.get("telegram_resolve_status"), "posts_scanned": 0, "fetch_error_code": src_row.get("last_resolve_error_code", ""), "fetch_error_message": src_row.get("last_resolve_error_message_short", "")})
                 continue
             if history_scan_mode == "off" or discovery_mode in {"similar_only", "keyword_only"}:
                 src_row.update({"fetch_status": "profile_resolved_history_disabled", "fetch_attempted": "false", "source_probe_reason": f"history scan disabled by discovery_mode={discovery_mode} history_scan_mode={history_scan_mode}", "history_fetch_mode": "history_disabled_discovery_only", "posts_scanned": 0})
                 source_rows.append(src_row)
                 entity_by_source[seed.source_id] = entity
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · history disabled · {src_row.get('resolved_title') or seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             if governor.history_sources_attempted >= governor.max_history_sources:
                 src_row.update({"fetch_status": "skipped_telegram_budget_exhausted", "fetch_attempted": "false", "source_probe_reason": "history source budget exhausted"})
                 source_rows.append(src_row)
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · budget exhausted · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
                 continue
             entity_by_source[seed.source_id] = entity
             governor.history_sources_attempted += 1
@@ -3240,6 +3258,18 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 src_row["fetch_error_code"] = type(exc).__name__
                 src_row["fetch_error_message"] = str(exc)[:180]
             source_rows.append(src_row)
+            status.event("alive", **{
+                **source_progress,
+                "progress_label": f"источники {idx}/{len(monitored)} · done · {src_row.get('resolved_title') or seed.source_title or seed.canonical_url}",
+                "sources_done": idx,
+                "fetch_status": src_row.get("fetch_status"),
+                "telegram_resolve_status": src_row.get("telegram_resolve_status"),
+                "posts_scanned": src_row.get("posts_scanned", 0),
+                "last_seen_post_date": src_row.get("last_seen_post_date", ""),
+                "history_fetch_runtime_seconds": src_row.get("history_fetch_runtime_seconds", ""),
+                "fetch_error_code": src_row.get("fetch_error_code", ""),
+                "fetch_error_message": src_row.get("fetch_error_message", ""),
+            })
         similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
         keyword_rows, keyword_edges = await discover_telegram_keyword_sources(client, governor, run_id)
         _REGION_TALK_TELEGRAM_RUNTIME["similar_rows"] = similar_rows
