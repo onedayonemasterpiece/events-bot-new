@@ -641,7 +641,10 @@ Heartbeat stdout is quiet by default
 `REGION_TALK_KAGGLE_STATUS_STDOUT=0`) so Kaggle Logs remain readable. Events are
 still persisted immediately to `/kaggle/working/region_talk_run_events_live.jsonl`
 and YDB, and `REGION_TALK_ENABLE_STACK_WATCHDOG=1` emits periodic Python stack
-traces during opaque stalls.
+traces during opaque stalls. The default watchdog interval is intentionally
+longer than normal model materialization
+(`REGION_TALK_STACK_WATCHDOG_SECONDS=300`), and Hugging Face/tqdm progress bars
+are disabled by default so model loading does not drown the stage logs.
 
 CandidateReport discovery tail is budget-gated before report assembly:
 `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)

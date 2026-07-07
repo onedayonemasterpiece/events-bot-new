@@ -266,7 +266,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", "8"),
         "REGION_TALK_YDB_QUEUE_MAX_RETRIES": os.environ.get("REGION_TALK_YDB_QUEUE_MAX_RETRIES", "1"),
         "REGION_TALK_ENABLE_STACK_WATCHDOG": os.environ.get("REGION_TALK_ENABLE_STACK_WATCHDOG", "1"),
-        "REGION_TALK_STACK_WATCHDOG_SECONDS": os.environ.get("REGION_TALK_STACK_WATCHDOG_SECONDS", "90"),
+        "REGION_TALK_STACK_WATCHDOG_SECONDS": os.environ.get("REGION_TALK_STACK_WATCHDOG_SECONDS", "300"),
+        "REGION_TALK_HF_HUB_DISABLE_PROGRESS_BARS": os.environ.get("REGION_TALK_HF_HUB_DISABLE_PROGRESS_BARS", "1"),
+        "REGION_TALK_TQDM_DISABLE": os.environ.get("REGION_TALK_TQDM_DISABLE", "1"),
+        "REGION_TALK_TRANSFORMERS_VERBOSITY": os.environ.get("REGION_TALK_TRANSFORMERS_VERBOSITY", "error"),
         "REGION_TALK_LIVE_EVENT_LOG_PATH": os.environ.get("REGION_TALK_LIVE_EVENT_LOG_PATH", "/kaggle/working/region_talk_run_events_live.jsonl"),
         "REGION_TALK_STDOUT_HEARTBEATS": os.environ.get("REGION_TALK_STDOUT_HEARTBEATS", "0"),
         "REGION_TALK_STDOUT_ALL_EVENTS": os.environ.get("REGION_TALK_STDOUT_ALL_EVENTS", "0"),
@@ -611,7 +614,10 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", "8")
     os.environ.setdefault("REGION_TALK_YDB_QUEUE_MAX_RETRIES", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_STACK_WATCHDOG", "1")
-    os.environ.setdefault("REGION_TALK_STACK_WATCHDOG_SECONDS", "90")
+    os.environ.setdefault("REGION_TALK_STACK_WATCHDOG_SECONDS", "300")
+    os.environ.setdefault("REGION_TALK_HF_HUB_DISABLE_PROGRESS_BARS", "1")
+    os.environ.setdefault("REGION_TALK_TQDM_DISABLE", "1")
+    os.environ.setdefault("REGION_TALK_TRANSFORMERS_VERBOSITY", "error")
     os.environ.setdefault("REGION_TALK_LIVE_EVENT_LOG_PATH", "/kaggle/working/region_talk_run_events_live.jsonl")
     os.environ.setdefault("REGION_TALK_STDOUT_HEARTBEATS", "0")
     os.environ.setdefault("REGION_TALK_STDOUT_ALL_EVENTS", "0")

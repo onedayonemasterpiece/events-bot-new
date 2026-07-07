@@ -37,6 +37,9 @@ def apply_huggingface_runtime_env_defaults() -> None:
     os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", os.getenv("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"))
     os.environ.setdefault("HF_HUB_DISABLE_XET", os.getenv("REGION_TALK_HF_HUB_DISABLE_XET", "1"))
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", os.getenv("REGION_TALK_HF_HUB_DISABLE_PROGRESS_BARS", "1"))
+    os.environ.setdefault("TQDM_DISABLE", os.getenv("REGION_TALK_TQDM_DISABLE", "1"))
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", os.getenv("REGION_TALK_TRANSFORMERS_VERBOSITY", "error"))
 
 
 apply_huggingface_runtime_env_defaults()
