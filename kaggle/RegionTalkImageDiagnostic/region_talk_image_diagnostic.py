@@ -180,6 +180,18 @@ def text_region_confirmed(r):
     if str(r.get("external_geo_mentions") or r.get("mentioned_external_regions") or "").strip(): return False
     return True
 
+def stale_image_lease(r):
+    if str(r.get("image_queue_status") or "") != "image_analysis_in_progress":
+        return False
+    lease_at = str(r.get("lease_at") or "")
+    try:
+        dt = datetime.fromisoformat(lease_at.replace("Z", "+00:00"))
+        if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return True
+    ttl = int(os.getenv("REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS") or "1800")
+    return (datetime.now(timezone.utc) - dt).total_seconds() >= max(0, ttl)
+
 def ydb_upsert_image_rows(batch, *, stage: str):
     if not batch or (os.getenv("REGION_TALK_IMAGE_DIAG_WRITE_YDB") or "1").lower() in {"0","false","no"}: return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
@@ -277,7 +289,11 @@ def ydb_rows_for_diagnostic(limit_n: int):
         status=str(r.get("image_queue_status") or "")
         lease=str(r.get("lease_run_id") or "")
         if status == "actual_scored": continue
-        if status == "image_analysis_in_progress" and lease and lease != RUN_ID: continue
+        if status == "image_analysis_in_progress" and lease and lease != RUN_ID and not stale_image_lease(r): continue
+        if status == "image_analysis_in_progress" and lease and lease != RUN_ID and stale_image_lease(r):
+            r["previous_image_queue_status"] = status
+            r["stale_lease_reclaimed_from_run_id"] = lease
+            r["stale_lease_reclaimed_at"] = datetime.now(timezone.utc).isoformat()
         pending.append(r)
     pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
     now=datetime.now(timezone.utc).isoformat()
