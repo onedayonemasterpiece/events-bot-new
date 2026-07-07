@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "kaggle" / "RegionTalkCandidateReport" / "region_talk_candidate_report.py"
+RUNNER_MODULE_PATH = ROOT / "kaggle" / "execute_region_talk_candidate_report.py"
 
 
 def load_module():
@@ -22,7 +23,27 @@ def load_module():
     return module
 
 
+def load_runner_module():
+    spec = importlib.util.spec_from_file_location("execute_region_talk_candidate_report", RUNNER_MODULE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def test_runner_secret_names_only_include_selected_auth_bundle(self) -> None:
+        mod = load_runner_module()
+        names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+        self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
+        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
+        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", names)
+
+        names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_S22")
+        self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)
+        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
+
     def test_seed_csv_and_report_workbook(self) -> None:
         mod = load_module()
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")

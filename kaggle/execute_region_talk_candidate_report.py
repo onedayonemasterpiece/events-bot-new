@@ -149,6 +149,26 @@ def run_dataset_slug(run_id: str) -> str:
     return f"{base}-{digest}"[:31].strip("-")
 
 
+def region_talk_secret_names(auth_bundle_env: str | None = None) -> list[str]:
+    """Return the minimal secret allow-list needed for this Region Talk run.
+
+    Telegram auth bundles are role-scoped. S22 is reserved for production
+    monitoring, so Region Talk candidate/image runs must not ship it unless the
+    caller explicitly selects it as the active REGION_TALK_AUTH_BUNDLE_ENV.
+    """
+    selected_auth_bundle = (auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
+    names = [
+        "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
+        "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
+        "GOOGLE_API_KEY", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
+        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "REGION_TALK_YDB_IAM_TOKEN", "YC_IAM_TOKEN", "YDB_ACCESS_TOKEN",
+        "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_TOKEN",
+    ]
+    if selected_auth_bundle:
+        names.append(selected_auth_bundle)
+    return list(dict.fromkeys(names))
+
+
 def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str]:
     from cryptography.fernet import Fernet
     safe_slug = run_dataset_slug(run_id)
@@ -236,14 +256,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_FRESHNESS_HALF_LIFE_DAYS": os.environ.get("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30"),
         "REGION_TALK_OUTPUT_DIR": f"artifacts/region-talk/runs/{run_id}",
     }
-    secret_names = [
-        "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
-        "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
-        "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
-        "GOOGLE_API_KEY", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
-        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "REGION_TALK_YDB_IAM_TOKEN", "YC_IAM_TOKEN", "YDB_ACCESS_TOKEN",
-        "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_TOKEN",
-    ]
+    secret_names = region_talk_secret_names(env.get("REGION_TALK_AUTH_BUNDLE_ENV"))
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
     encrypted = Fernet(key).encrypt(json.dumps(secrets, ensure_ascii=False).encode("utf-8"))
