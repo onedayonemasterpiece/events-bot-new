@@ -1,6 +1,6 @@
 # Сигналы обсуждения события
 
-> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **MVP-1 Kaggle probe runner**; production YDB sidecar, static-site UI and optional LLM verifier are still not implemented. The current runnable slice is `scripts/run_event_comment_feedback_kaggle.py` + `kaggle/EventCommentFeedback/` for an offline Kaggle CPU probe/export.
+> Canonical slug: `event-comment-feedback`. English working name: **Event Comment Feedback**. Status: **MVP-6 P1.7 Kaggle probe runner**; production YDB sidecar, static-site UI and optional LLM verifier are still not implemented. The current runnable slice is `scripts/run_event_comment_feedback_kaggle.py` + `kaggle/EventCommentFeedback/` for an offline Kaggle CPU probe/export.
 
 **Короткое название фичи:** **Сигналы обсуждения**. Оно намеренно не использует слово “отзывы”: фича показывает не оценки посетителей и не рейтинг, а агрегированные смысловые сигналы из открытых комментариев к источникам события.
 
@@ -419,6 +419,18 @@ The second probe revision addresses the first-run quality gaps before any static
 
 
 
+
+
+### MVP-6 P1.7 product coverage signal layer
+
+P1.7 raises useful site-review coverage without adding per-comment LLM calls or UI code:
+
+- the phrase bank has an explicit `signal_layer` for every class: `social_proof`, `practical_question`, `friction_problem`, `past_praise`, `reputation_claim`, `context_only`, `suppression`, plus internal single-user social signal classes used by the probe;
+- practical/friction atomic classes were added for ticket-sale start, registration timing/closure, sector availability, extra dates, time conflicts, transfer and lineup questions;
+- exact practical/friction signals may become site-ready from one user comment only when the phrase has direct lexical anchors and a question/problem marker; official/context rows still never count as evidence;
+- site export statuses are now typed: `site_public_ready_social_proof`, `site_public_ready_practical_single`, `site_public_ready_friction_single`, `site_public_ready_social_single`; downstream UI must treat these as review/export candidates, not as unattended publication;
+- reports add the `missed_signal_review` sheet with suggested atomic class/layer for site-eligible comments that look useful but did not publish;
+- summary adds product-funnel counters: future/site-eligible totals, site-eligible events with comments, known/reused/new comments, commentable posts, typed site-ready events and missed practical/social signal events.
 
 ### MVP-5 P1.6 report/status/state semantics
 

@@ -604,6 +604,10 @@ def parse_phrase_bank(path: Path):
             p.setdefault('positive_prototypes', [])
             p.setdefault('hard_negatives', [])
             p.setdefault('singular_safe', False)
+            p.setdefault('signal_layer', 'context_only' if not p.get('publishable') else 'social_proof')
+            p.setdefault('min_evidence_policy', p.get('signal_layer') or 'social_proof')
+            p.setdefault('anchors_any', [])
+            p.setdefault('question_required', False)
         return phrases
     return parse_phrase_bank_markdown(path)
 
@@ -669,6 +673,42 @@ GUARDS={
     'sector_or_seat_question':[r'сектор|мест|ряд|танцпол|сидяч'],
     'crowd_management_concern':[r'толп|очеред|много\s+люд|вход'],
 }
+def phrase_anchors_present(text: str, p: dict[str, Any]) -> bool:
+    anchors=[str(a).strip() for a in (p.get('anchors_any') or []) if str(a).strip()]
+    if not anchors: return True
+    t=low(text)
+    return any(low(a) in t or re.search(re.escape(low(a)).replace('\\ ', r'\s+'), t, re.I) for a in anchors)
+
+def phrase_requires_question_gate(p: dict[str, Any]) -> bool:
+    return p.get('signal_layer') == 'practical_question' or p.get('question_required') is True
+
+def classify_site_ready_kind(p: dict[str, Any]) -> str:
+    layer=p.get('signal_layer') or 'social_proof'
+    if layer == 'practical_question': return 'practical_single'
+    if layer == 'friction_problem': return 'friction_single'
+    if layer in {'single_social_signal','past_praise'}: return 'social_single'
+    return 'social_proof'
+
+def audit_suggested_signal(text: str) -> tuple[str | None, str | None, str | None]:
+    t=low(text)
+    checks=[
+        ('ticket_sales_start_question','practical_question',r'когда.*(?:продаж|билет)|старт продаж|поступят.*продаж'),
+        ('registration_timing_question','practical_question',r'когда.*(?:регистрац|запис)|как.*(?:зарегистр|запис)'),
+        ('registration_friction_or_closed','friction_problem',r'не успева.*(?:регистрац|запис)|регистрац.*закрыт|мест нет'),
+        ('ticket_sector_availability_question','practical_question',r'сектор|места?.*(?:билет|продаж)|билет.*сектор'),
+        ('additional_dates_question','practical_question',r'другие даты|еще даты|ещё даты|повтор|другой день'),
+        ('time_conflict_question','practical_question',r'на билете|в паблике|во сколько|время начала|начнется|начнётся'),
+        ('transfer_question','practical_question',r'трансфер|автобус|общественный транспорт|как добраться|добираться домой'),
+        ('lineup_announcement_question','practical_question',r'состав артистов|кто будет|программа|участники'),
+        ('single_intent_to_attend','single_social_signal',r'\b(пойду|иду)\b|надо идт|хочу попасть|жд[её]м с нетерпением|жду с нетерпением'),
+        ('single_anticipation_signal','single_social_signal',r'отличная новость|ура|классно|жд[уеё]'),
+        ('past_visit_repeat_intent','past_praise',r'снова|второй раз|третий раз|уже были|понравилось'),
+    ]
+    for pid,layer,pat in checks:
+        if re.search(pat,t,re.I):
+            return pid, layer, 'exact_anchor_or_marker'
+    return None, None, None
+
 def guard(text,pid):
     t=low(text); reasons=[]
     if pid in QUESTION_IDS:
@@ -681,6 +721,17 @@ def guard(text,pid):
         reasons.append('accessibility_confused_with_ticket_purchase')
     pats=GUARDS.get(pid)
     if pats and not any(re.search(p,t,re.I) for p in pats): reasons.append('phrase_lexical_guard')
+    return reasons
+
+def guard_phrase(text: str, p: dict[str, Any]) -> list[str]:
+    pid=str(p.get('id') or '')
+    reasons=guard(text, pid)
+    t=low(text)
+    if phrase_requires_question_gate(p) and not (has_direct_question_marker(t) or has_explicit_problem_report(t)):
+        if 'question_phrase_without_direct_question_or_problem' not in reasons:
+            reasons.append('question_phrase_without_direct_question_or_problem')
+    if (p.get('signal_layer') in {'practical_question','friction_problem','single_social_signal','past_praise'} or p.get('anchors_any')) and not phrase_anchors_present(text, p):
+        reasons.append('exact_anchor_missing')
     return reasons
 
 def encode_with_loaded_model(model_name, model, texts, is_query):
@@ -768,7 +819,7 @@ def score(comments, manifest, phrases):
                 e5_score=float(e5_row.get('score') or 0.0); bge_score=float(bge_row.get('score') or 0.0)
                 neg=max(float(e5_row.get('negative_score') or 0.0), float(bge_row.get('negative_score') or 0.0))
                 ss=cos_counter(sparse_counter(c['text']), sparse.get(pid, Counter()))
-                reasons=guard(c['text'],pid)
+                reasons=guard_phrase(c['text'],p)
                 if ss < 0.006: reasons.append('sparse_support_low')
                 positive_margin=max(e5_score,bge_score)-neg
                 if positive_margin < -0.01: reasons.append('negative_margin_low')
@@ -792,10 +843,15 @@ def score(comments, manifest, phrases):
             public_comments=[c for c in g['comments'] if c.get('candidate',{}).get('public_gate_pass') and c.get('comment_role') == 'user_feedback']
             public_authors={c.get('author_hash') or '' for c in public_comments if c.get('comment_role') == 'user_feedback'}
             pev=len(public_comments); pau=len(public_authors)
-            if pev>=min_ev and pau>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low':
-                status='semantic_public_ready_dual_kaggle'; semantic_status='semantic_public_gate_pass'
+            layer=p.get('signal_layer') or 'social_proof'
+            site_ready_kind=classify_site_ready_kind(p)
+            exact_single_layer=layer in {'practical_question','friction_problem','single_social_signal','past_praise'}
+            if exact_single_layer and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}:
+                status=f'semantic_public_ready_{site_ready_kind}_dual_kaggle'; semantic_status='semantic_public_gate_pass'
+            elif pev>=min_ev and pau>=min_au and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk')=='low':
+                status='semantic_public_ready_social_proof_dual_kaggle'; semantic_status='semantic_public_gate_pass'
             elif p.get('singular_safe') and pev>=1 and pau>=1 and p.get('vector_only_allowed') and not p.get('requires_llm_verification') and p.get('risk') in {'low','medium'}:
-                status='semantic_public_ready_singular_dual_kaggle'; semantic_status='semantic_public_gate_pass'
+                status=f'semantic_public_ready_{site_ready_kind}_dual_kaggle'; semantic_status='semantic_public_gate_pass'
             elif ev>=min_ev and au>=min_au:
                 status='needs_review_dual_kaggle'; semantic_status='semantic_needs_review'
             else:
@@ -806,16 +862,20 @@ def score(comments, manifest, phrases):
             display_ev=pev if public_status else ev
             display_au=pau if public_status else au
             feedback_scope='event_series' if max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]) > 1 else 'event_instance'
-            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'user_evidence_count':pev if public_status else ev,'user_unique_authors_count':pau if public_status else au,'official_context_count':len(official_context),'evidence_count':display_ev,'unique_authors_count':display_au,'raw_group_evidence_count':ev+len(official_context),'raw_group_unique_authors_count':au,'sources_count':len(g['sources']),'feedback_scope':feedback_scope,'source_post_event_link_count':max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]),'status':status,'semantic_status':semantic_status,'site_export_status':None,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'text_snippet':c['text'][:220]} for c in cs[:4]]}
-            for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,'semantic_status':semantic_status,'site_export_status':None,**c['candidate'],'comment_key':c['comment_key'],'comment_type':c.get('comment_type'),'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'text_snippet':c['text'][:220]})
+            rec={'phrase_id':pid,'tone':p.get('tone'),'risk_class':p.get('risk'),'public_sentence':p.get('public_sentence'),'card_title':p.get('card_title'),'card_text':p.get('card_text'),'singular_safe':bool(p.get('singular_safe')),'signal_layer':p.get('signal_layer'),'site_ready_kind':site_ready_kind,'public_gate_evidence_count':pev,'public_gate_unique_authors_count':pau,'user_evidence_count':pev if public_status else ev,'user_unique_authors_count':pau if public_status else au,'official_context_count':len(official_context),'evidence_count':display_ev,'unique_authors_count':display_au,'raw_group_evidence_count':ev+len(official_context),'raw_group_unique_authors_count':au,'sources_count':len(g['sources']),'feedback_scope':feedback_scope,'source_post_event_link_count':max([int(c.get('source_post_event_link_count') or 1) for c in g['comments']] or [1]),'status':status,'semantic_status':semantic_status,'site_export_status':None,'evidence_snippets':[c['text'][:220] for c in cs[:4]],'score_samples':[{**c['candidate'],'comment_key':c['comment_key'],'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'signal_layer':p.get('signal_layer'),'site_ready_kind':site_ready_kind,'text_snippet':c['text'][:220]} for c in cs[:4]]}
+            for c in cs[:4]: evidence.append({'event_id':eid,'phrase_id':pid,'status':status,'semantic_status':semantic_status,'site_export_status':None,**c['candidate'],'comment_key':c['comment_key'],'comment_type':c.get('comment_type'),'comment_role':c.get('comment_role'),'filter_reason':c.get('filter_reason'),'guard_reasons':c.get('guard_reasons'),'is_user_evidence':c.get('is_user_evidence',False),'is_official_context':False,'parent_comment_key':c.get('parent_comment_key'),'parent_text_available':c.get('parent_text_available',False),'thread_context_used':c.get('thread_context_used',False),'source_post_event_link_count':c.get('source_post_event_link_count'),'feedback_scope':feedback_scope,'shared_source_evidence':feedback_scope=='event_series','risk_class':p.get('risk'),'tone':p.get('tone'),'signal_layer':p.get('signal_layer'),'site_ready_kind':site_ready_kind,'text_snippet':c['text'][:220]})
             (accepted if semantic_status == 'semantic_public_gate_pass' else other).append(rec)
         event_results[str(eid)]={'event':manifest['events'].get(str(eid),{'id':eid}),'comments_seen_count':len(rows),'dedup_comments_count':len(seen),'accepted_items':accepted,'review_or_suppressed_items':other,'official_context_count':sum(len(v) for (event_id,_src),v in context_by_event_source.items() if event_id==eid),'suppressed_internal_samples':suppressed_internal[:20]}
     return event_results,evidence,filter_payload
 
-def site_export_status_for(semantic_status: str, flags: dict[str, Any]) -> tuple[str, str]:
+def site_export_status_for(semantic_status: str, flags: dict[str, Any], signal_layer: str | None = None, site_ready_kind: str | None = None) -> tuple[str, str]:
     if semantic_status == 'semantic_public_gate_pass':
         if flags.get('eligible_for_site_export') and not flags.get('is_past_event'):
-            return 'site_public_ready', 'site_public_ready_dual_kaggle'
+            kind = site_ready_kind or classify_site_ready_kind({'signal_layer': signal_layer or 'social_proof'})
+            if kind == 'practical_single': return 'site_public_ready_practical_single', 'site_public_ready_practical_single'
+            if kind == 'friction_single': return 'site_public_ready_friction_single', 'site_public_ready_friction_single'
+            if kind == 'social_single': return 'site_public_ready_social_single', 'site_public_ready_social_single'
+            return 'site_public_ready_social_proof', 'site_public_ready_social_proof'
         if flags.get('is_past_event'):
             return 'site_ineligible_past_event', 'site_ineligible_past_gate_pass'
         return 'site_ineligible_not_site_event', 'site_ineligible_not_site_event'
@@ -833,24 +893,38 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
         for it in (res.get('accepted_items') or []) + (res.get('review_or_suppressed_items') or []):
             it['is_site_eligible_event']=flags['eligible_for_site_export']
             it['run_date']=flags['run_date']; it['run_datetime']=flags['run_datetime']; it['is_past_event']=flags['is_past_event']
-            site_status, public_status = site_export_status_for(str(it.get('semantic_status') or ''), flags)
+            site_status, public_status = site_export_status_for(str(it.get('semantic_status') or ''), flags, it.get('signal_layer'), it.get('site_ready_kind'))
             it['site_export_status']=site_status; it['status']=public_status
     for e in evidence:
         flags=event_site_flags((manifest.get('events') or {}).get(str(e.get('event_id')), {}), generated_at)
-        site_status, public_status = site_export_status_for(str(e.get('semantic_status') or ''), flags)
+        site_status, public_status = site_export_status_for(str(e.get('semantic_status') or ''), flags, e.get('signal_layer'), e.get('site_ready_kind'))
         e.update({'run_date':flags['run_date'],'run_datetime':flags['run_datetime'],'is_past_event':flags['is_past_event'],'eligible_for_site_export':flags['eligible_for_site_export'],'is_site_eligible_event':flags['eligible_for_site_export'],'site_export_status':site_status,'status':public_status})
     filtered_total=sum(int(v.get('count') or 0) for v in ((comment_filter_summary or {}).get('buckets') or {}).values()) if isinstance(comment_filter_summary, dict) else 0
     candidate_rows_total=len(evidence)
     semantic_public_gate_pass_rows_total=sum(1 for e in evidence if e.get('public_gate_pass'))
     semantic_public_ready=[e for e in evidence if e.get('semantic_status') == 'semantic_public_gate_pass']
-    site_public_ready=[e for e in evidence if e.get('site_export_status') == 'site_public_ready' and e.get('is_user_evidence') and not e.get('is_official_context') and e.get('model_agreement')]
-    non_public_gate_pass=[e for e in evidence if e.get('public_gate_pass') and e.get('site_export_status') != 'site_public_ready']
+    site_public_ready=[e for e in evidence if str(e.get('site_export_status') or '').startswith('site_public_ready') and e.get('is_user_evidence') and not e.get('is_official_context') and e.get('model_agreement')]
+    non_public_gate_pass=[e for e in evidence if e.get('public_gate_pass') and not str(e.get('site_export_status') or '').startswith('site_public_ready')]
     past_public_gate=[e for e in evidence if e.get('public_gate_pass') and e.get('is_past_event')]
-    low_risk_suppressed=[e for e in evidence if e.get('eligible_for_site_export') and not e.get('is_past_event') and e.get('model_agreement') and int(e.get('e5_rank') or 999)==1 and int(e.get('bge_rank') or 999)==1 and not e.get('is_official_context') and e.get('risk_class')=='low' and e.get('site_export_status')!='site_public_ready']
+    low_risk_suppressed=[e for e in evidence if e.get('eligible_for_site_export') and not e.get('is_past_event') and e.get('model_agreement') and int(e.get('e5_rank') or 999)==1 and int(e.get('bge_rank') or 999)==1 and not e.get('is_official_context') and e.get('risk_class')=='low' and not str(e.get('site_export_status') or '').startswith('site_public_ready')]
+    missed_signal_review=[]
+    for e in evidence:
+        if not e.get('eligible_for_site_export') or e.get('is_past_event') or str(e.get('site_export_status') or '').startswith('site_public_ready'):
+            continue
+        suggested, layer, why = audit_suggested_signal(e.get('text_snippet') or '')
+        if suggested:
+            ev=(manifest.get('events') or {}).get(str(e.get('event_id')), {})
+            missed_signal_review.append({'event_id':e.get('event_id'),'title':ev.get('title'),'date':ev.get('date'),'comment_key':e.get('comment_key'),'text_snippet':e.get('text_snippet'),'current_phrase_id':e.get('phrase_id'),'suggested_phrase_id':suggested,'suggested_signal_layer':layer,'why_not_published':e.get('status'),'manual_audit_bucket':why})
+    site_ready_social_proof_events={e.get('event_id') for e in evidence if e.get('site_export_status')=='site_public_ready_social_proof'}
+    site_ready_practical_single_events={e.get('event_id') for e in evidence if e.get('site_export_status')=='site_public_ready_practical_single'}
+    site_ready_friction_events={e.get('event_id') for e in evidence if e.get('site_export_status')=='site_public_ready_friction_single'}
+    site_ready_total_events={e.get('event_id') for e in evidence if str(e.get('site_export_status') or '').startswith('site_public_ready')}
+    site_eligible_events={str(eid) for eid,ev in (manifest.get('events') or {}).items() if event_site_flags(ev, generated_at).get('eligible_for_site_export')}
+    site_eligible_events_with_comments={str(eid) for eid,r in event_results.items() if str(eid) in site_eligible_events and int(r.get('comments_seen_count') or 0)>0}
     official_context_rows=sum(int(r.get('official_context_count') or 0) for r in event_results.values())
     user_evidence_rows=sum(1 for e in evidence if e.get('is_user_evidence'))
     state_stats=state_stats or {'state_mode':'one_off_non_cumulative','comments_known_before':0,'comments_known_after':len(comments),'new_comments_this_run':len(comments),'comments_reused_from_cache':0,'source_capabilities_loaded':0,'source_capabilities_updated':len((source_capability_cache or {}).get('sources') or [])}
-    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':generated_at.isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'comments_fetched_this_run':len(comments),'comments_known_total':state_stats.get('comments_known_after'),'new_comments_this_run':state_stats.get('new_comments_this_run'),'comments_reused_from_cache':state_stats.get('comments_reused_from_cache'),'source_posts_known_total':manifest.get('source_post_count'),'source_posts_checked_this_run':manifest.get('source_post_count'),'source_posts_skipped_by_capability':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('kind')=='skipped' and str(r.get('last_status') or '').startswith('capability_')),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':len({e.get('event_id') for e in site_public_ready}),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['site_export_status']=='site_ineligible_review_required' for i in r.get('review_or_suppressed_items',[]))),'candidate_rows_total':candidate_rows_total,'candidate_rows_public_gate_pass':semantic_public_gate_pass_rows_total,'public_ready_evidence_rows':len(site_public_ready),'public_ready_events':len({e.get('event_id') for e in site_public_ready}),'semantic_public_gate_pass_rows_total':semantic_public_gate_pass_rows_total,'semantic_public_ready_rows_all_events':len(semantic_public_ready),'site_export_public_ready_rows':len(site_public_ready),'site_export_public_ready_events':len({e.get('event_id') for e in site_public_ready}),'past_public_gate_pass_rows':len(past_public_gate),'site_ineligible_public_gate_pass_rows':len(non_public_gate_pass),'non_public_rows_with_public_gate_pass':len(non_public_gate_pass),'low_risk_site_eligible_suppressed_rows':len(low_risk_suppressed),'filtered_comments_total':filtered_total,'scored_comments_total':len(comments)-filtered_total,'official_context_rows':official_context_rows,'user_evidence_rows':user_evidence_rows,'source_capability_rows':len((source_capability_cache or {}).get('sources') or []),**state_stats}
+    summary={'schema_version':RUN_SCHEMA_VERSION,'generated_at':generated_at.isoformat(),'embedding_api_allowed':False,'provider_calls_total_this_process':0,'read_mode':READ_MODE,'models':REQUIRED_MODELS,'events_in_manifest':manifest.get('event_count'),'source_links':manifest.get('source_link_count'),'source_posts':manifest.get('source_post_count'),'comments_fetched':len(comments),'comments_fetched_this_run':len(comments),'comments_known_total':state_stats.get('comments_known_after'),'new_comments_this_run':state_stats.get('new_comments_this_run'),'comments_reused_from_cache':state_stats.get('comments_reused_from_cache'),'source_posts_known_total':manifest.get('source_post_count'),'source_posts_checked_this_run':manifest.get('source_post_count'),'source_posts_skipped_by_capability':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('kind')=='skipped' and str(r.get('last_status') or '').startswith('capability_')),'events_with_comments':len(event_results),'fetch_errors':len(errors),'fetch_error_buckets':len((fetch_error_summary or {}).get('buckets') or []),'events_with_public_ready':len({e.get('event_id') for e in site_public_ready}),'events_with_review_candidates':sum(1 for r in event_results.values() if any(i['site_export_status']=='site_ineligible_review_required' for i in r.get('review_or_suppressed_items',[]))),'candidate_rows_total':candidate_rows_total,'candidate_rows_public_gate_pass':semantic_public_gate_pass_rows_total,'public_ready_evidence_rows':len(site_public_ready),'public_ready_events':len({e.get('event_id') for e in site_public_ready}),'semantic_public_gate_pass_rows_total':semantic_public_gate_pass_rows_total,'semantic_public_ready_rows_all_events':len(semantic_public_ready),'site_export_public_ready_rows':len(site_public_ready),'site_export_public_ready_events':len({e.get('event_id') for e in site_public_ready}),'past_public_gate_pass_rows':len(past_public_gate),'site_ineligible_public_gate_pass_rows':len(non_public_gate_pass),'non_public_rows_with_public_gate_pass':len(non_public_gate_pass),'low_risk_site_eligible_suppressed_rows':len(low_risk_suppressed),'filtered_comments_total':filtered_total,'scored_comments_total':len(comments)-filtered_total,'official_context_rows':official_context_rows,'user_evidence_rows':user_evidence_rows,'source_capability_rows':len((source_capability_cache or {}).get('sources') or []),'future_events_total':sum(1 for ev in (manifest.get('events') or {}).values() if not event_site_flags(ev, generated_at).get('is_past_event')),'site_eligible_events_total':len(site_eligible_events),'site_eligible_events_with_comments':len(site_eligible_events_with_comments),'commentable_source_posts':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('comments_capability')=='available'),'commentable_source_posts_checked':sum(1 for r in ((source_capability_cache or {}).get('sources') or []) if r.get('comments_capability')=='available'),'site_ready_social_proof_events':len(site_ready_social_proof_events),'site_ready_practical_single_events':len(site_ready_practical_single_events),'site_ready_friction_events':len(site_ready_friction_events),'site_ready_total_events':len(site_ready_total_events),'missed_practical_signal_events':len({r.get('event_id') for r in missed_signal_review if r.get('suggested_signal_layer')=='practical_question'}),'missed_social_signal_events':len({r.get('event_id') for r in missed_signal_review if r.get('suggested_signal_layer') in {'single_social_signal','past_praise'}}),**state_stats}
     (WORK/'event_comment_feedback_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     (WORK/'event_comment_feedback_probe.json').write_text(json.dumps({**summary,'events':event_results}, ensure_ascii=False, indent=2), encoding='utf-8')
     rows=[]
@@ -859,7 +933,11 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
         def join(site_status,tone=None):
             vals=[]
             for it in items:
-                if it.get('site_export_status') != site_status: continue
+                if site_status == 'site_public_ready':
+                    ok=str(it.get('site_export_status') or '').startswith('site_public_ready')
+                else:
+                    ok=it.get('site_export_status') == site_status
+                if not ok: continue
                 if tone and it.get('tone')!=tone: continue
                 vals.append(f"{it.get('card_title') or it.get('public_sentence')} — {it.get('card_text') or ''} ({it['evidence_count']}/{it['unique_authors_count']}; {it.get('feedback_scope','event_instance')})")
             return '\n'.join(vals[:6])
@@ -889,6 +967,7 @@ def write_reports(manifest, comments, errors, event_results, evidence, fetch_err
     add_sheet('public_ready_evidence_only', site_public_ready[:2000])
     add_sheet('public_gate_pass_not_published', non_public_gate_pass[:2000])
     add_sheet('low_risk_site_eligible_suppressed', low_risk_suppressed[:2000])
+    add_sheet('missed_signal_review', missed_signal_review[:2000])
     if fetch_error_summary:
         add_sheet('fetch_error_buckets', (fetch_error_summary.get('buckets') or [])[:1000])
     if comment_filter_summary:

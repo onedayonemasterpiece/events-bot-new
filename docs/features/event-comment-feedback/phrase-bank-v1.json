@@ -31,7 +31,9 @@
       "card_text": "В обсуждении много ожидания и радостных реакций",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 2,
@@ -62,7 +64,9 @@
       "card_text": "В комментариях отмечают, что событие давно ждали",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 3,
@@ -94,7 +98,9 @@
       "card_text": "В комментариях заметна радостная реакция на анонс события",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 4,
@@ -126,7 +132,9 @@
       "card_text": "Пишут, что планируют сходить на событие",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 5,
@@ -157,7 +165,9 @@
       "card_text": "В комментариях пишут, что уже планируют посетить событие",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 6,
@@ -188,7 +198,9 @@
       "card_text": "В комментариях отмечают интерес к посещению компанией",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 7,
@@ -219,7 +231,9 @@
       "card_text": "В комментариях обсуждают посещение события с семьёй",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 8,
@@ -233,8 +247,8 @@
       "requires_llm_verification": true,
       "publishable": true,
       "public_sentence": "В комментариях отмечают желание прийти на событие снова",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "были в прошлый раз, хотим снова",
         "обязательно придём ещё раз",
@@ -250,7 +264,9 @@
       "card_text": "В комментариях отмечают желание прийти на событие снова",
       "family": "Ожидание и желание прийти",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "past_praise",
+      "min_evidence_policy": "past_praise"
     },
     {
       "num": 9,
@@ -282,7 +298,9 @@
       "card_text": "В комментариях отмечают, что артист особенно любим аудиторией",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 10,
@@ -313,7 +331,9 @@
       "card_text": "В комментариях отмечают, что актёр особенно любим аудиторией",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 11,
@@ -344,7 +364,9 @@
       "card_text": "В комментариях отмечают интерес к выступающему",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 12,
@@ -375,7 +397,9 @@
       "card_text": "В комментариях отмечают интерес к программе события",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 13,
@@ -406,7 +430,9 @@
       "card_text": "В комментариях отмечают актуальность темы события",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 14,
@@ -437,7 +463,9 @@
       "card_text": "В комментариях отмечают интерес к формату события",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 15,
@@ -468,7 +496,9 @@
       "card_text": "В комментариях отмечают, что формат события воспринимают как необычный",
       "family": "Артисты, участники, программа, тема",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 16,
@@ -482,8 +512,8 @@
       "requires_llm_verification": true,
       "publishable": true,
       "public_sentence": "В комментариях отмечают, что прошлое событие оставило хорошее впечатление",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "в прошлый раз было отлично",
         "были в прошлом году, понравилось",
@@ -499,7 +529,9 @@
       "card_text": "В комментариях отмечают, что прошлое событие оставило хорошее впечатление",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "past_praise",
+      "min_evidence_policy": "past_praise"
     },
     {
       "num": 17,
@@ -530,7 +562,9 @@
       "card_text": "В комментариях отмечают доверие к организаторам",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 18,
@@ -562,7 +596,9 @@
       "card_text": "В комментариях отмечают высокий уровень работы организаторов",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 19,
@@ -593,7 +629,9 @@
       "card_text": "В комментариях отмечают приятную атмосферу события",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 20,
@@ -624,7 +662,9 @@
       "card_text": "В комментариях отмечают, что площадка хорошо подходит для события",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 21,
@@ -655,7 +695,9 @@
       "card_text": "В комментариях отмечают интерес к самой площадке",
       "family": "Прошлый опыт, организаторы, атмосфера, площадка",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "reputation_claim",
+      "min_evidence_policy": "reputation_claim"
     },
     {
       "num": 22,
@@ -688,7 +730,9 @@
       "card_text": "В комментариях отмечают высокий интерес к билетам и свободным местам",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 23,
@@ -702,8 +746,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о наличии билетов",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "билеты ещё есть?",
         "есть свободные места?",
@@ -719,7 +763,10 @@
       "card_text": "Уточняют, остались ли места или билеты",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 24,
@@ -733,8 +780,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях уточняют условия регистрации",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "как зарегистрироваться?",
         "нужна регистрация?",
@@ -750,7 +797,10 @@
       "card_text": "В комментариях уточняют условия регистрации",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 25,
@@ -764,8 +814,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о дополнительных местах",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "будут ещё места?",
         "добавят места?",
@@ -781,7 +831,10 @@
       "card_text": "В комментариях спрашивают о дополнительных местах",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 26,
@@ -795,8 +848,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях просят добавить ещё одну дату события",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "добавьте ещё дату",
         "будет повтор?",
@@ -812,7 +865,10 @@
       "card_text": "В комментариях просят добавить ещё одну дату события",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 27,
@@ -843,7 +899,9 @@
       "card_text": "В обсуждении говорят, что места или регистрация закончились",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 28,
@@ -857,8 +915,8 @@
       "requires_llm_verification": true,
       "publishable": true,
       "public_sentence": "В комментариях расстраиваются, что билеты быстро закончились",
-      "min_evidence_count": 3,
-      "min_unique_authors": 3,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "нет билетов, очень жаль",
         "не успели купить",
@@ -877,7 +935,9 @@
       "card_text": "Жалеют, что не успели попасть",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem"
     },
     {
       "num": 29,
@@ -891,8 +951,8 @@
       "requires_llm_verification": true,
       "publishable": true,
       "public_sentence": "В комментариях видно, что событие вызвало высокий интерес к билетам",
-      "min_evidence_count": 4,
-      "min_unique_authors": 3,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "много кто спрашивает про билеты",
         "места быстро разбирают",
@@ -909,7 +969,9 @@
       "card_text": "По комментариям видно, что попасть сложно",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem"
     },
     {
       "num": 30,
@@ -940,7 +1002,9 @@
       "card_text": "В комментариях интересуются листом ожидания",
       "family": "Билеты, спрос, sold-out, регистрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 31,
@@ -954,8 +1018,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях уточняют время начала и входа",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "во сколько начало?",
         "когда вход?",
@@ -971,7 +1035,10 @@
       "card_text": "Люди спрашивают, когда приходить и во сколько старт",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 32,
@@ -985,8 +1052,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о длительности события",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "сколько длится?",
         "до скольки будет?",
@@ -1002,7 +1069,10 @@
       "card_text": "В комментариях спрашивают о длительности события",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 33,
@@ -1016,8 +1086,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о возрастных ограничениях",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "какое возрастное ограничение?",
         "18+?",
@@ -1033,7 +1103,10 @@
       "card_text": "В комментариях спрашивают о возрастных ограничениях",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 34,
@@ -1047,8 +1120,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях уточняют, можно ли прийти с детьми",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "можно с ребёнком?",
         "детям подойдёт?",
@@ -1064,7 +1137,10 @@
       "card_text": "Уточняют, можно ли прийти с ребёнком",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 35,
@@ -1078,8 +1154,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях уточняют, как добраться до площадки",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "как добраться?",
         "где это находится?",
@@ -1095,7 +1171,10 @@
       "card_text": "В комментариях уточняют, как добраться до площадки",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 36,
@@ -1109,8 +1188,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о парковке и проезде",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "где парковаться?",
         "есть парковка?",
@@ -1126,7 +1205,10 @@
       "card_text": "В комментариях спрашивают о парковке и проезде",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 37,
@@ -1157,7 +1239,10 @@
       "card_text": "Уточняют условия для маломобильных посетителей",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 38,
@@ -1171,8 +1256,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях задают вопросы об оплате и льготах",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "как оплатить?",
         "есть скидки?",
@@ -1188,7 +1273,10 @@
       "card_text": "В комментариях задают вопросы об оплате и льготах",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 39,
@@ -1202,8 +1290,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают о возможности оплаты Пушкинской картой",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "по Пушкинской карте можно?",
         "Пушкинская карта действует?",
@@ -1219,7 +1307,10 @@
       "card_text": "В комментариях спрашивают о возможности оплаты Пушкинской картой",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 40,
@@ -1233,8 +1324,8 @@
       "requires_llm_verification": false,
       "publishable": true,
       "public_sentence": "В комментариях интересуются записью или онлайн-форматом события",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "будет запись?",
         "можно посмотреть онлайн?",
@@ -1250,7 +1341,10 @@
       "card_text": "В комментариях интересуются записью или онлайн-форматом события",
       "family": "Практические вопросы",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 41,
@@ -1282,7 +1376,9 @@
       "card_text": "В обсуждении есть сомнения по стоимости",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 42,
@@ -1313,7 +1409,9 @@
       "card_text": "В комментариях отмечают, что время проведения подходит не всем",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 43,
@@ -1344,7 +1442,9 @@
       "card_text": "В комментариях обсуждают возможные неудобства площадки",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 44,
@@ -1375,7 +1475,9 @@
       "card_text": "В комментариях опасаются очередей или нехватки мест",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 45,
@@ -1406,7 +1508,9 @@
       "card_text": "Уточняют, состоится ли событие при плохой погоде",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 46,
@@ -1437,7 +1541,9 @@
       "card_text": "В комментариях отмечают отдельные вопросы к организации события",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 47,
@@ -1468,7 +1574,9 @@
       "card_text": "В комментариях уточняют формат проведения события",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 48,
@@ -1499,7 +1607,9 @@
       "card_text": "В комментариях отмечают, что по событию не хватает практических деталей",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 49,
@@ -1530,7 +1640,9 @@
       "card_text": "В комментариях обращают внимание на возможные сложности доступности площадки",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 50,
@@ -1544,8 +1656,8 @@
       "requires_llm_verification": true,
       "publishable": true,
       "public_sentence": "В комментариях спрашивают об обмене или возврате билетов",
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "можно вернуть билет?",
         "как обменять билет?",
@@ -1561,7 +1673,10 @@
       "card_text": "В комментариях спрашивают об обмене или возврате билетов",
       "family": "Сомнения, барьеры, фрустрация",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 51,
@@ -1592,7 +1707,9 @@
       "card_text": "В комментариях отмечают интерес события для местного сообщества",
       "family": "Социальная значимость и локальный интерес",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 52,
@@ -1623,7 +1740,9 @@
       "card_text": "В комментариях отмечают ностальгический интерес к программе",
       "family": "Социальная значимость и локальный интерес",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 53,
@@ -1654,7 +1773,9 @@
       "card_text": "В комментариях отмечают, что событие может быть интересно детям",
       "family": "Социальная значимость и локальный интерес",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 54,
@@ -1685,7 +1806,9 @@
       "card_text": "В комментариях отмечают интерес к бесплатному входу или льготам",
       "family": "Социальная значимость и локальный интерес",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 55,
@@ -1716,7 +1839,9 @@
       "card_text": "В комментариях отмечают социальную значимость события",
       "family": "Социальная значимость и локальный интерес",
       "runtime_enabled": true,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 56,
@@ -1744,7 +1869,9 @@
       "card_text": "Spam_ticket_resale",
       "family": "spam",
       "runtime_enabled": false,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 57,
@@ -1772,7 +1899,9 @@
       "card_text": "Off_topic_discussion",
       "family": "off",
       "runtime_enabled": false,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 58,
@@ -1799,7 +1928,9 @@
       "card_text": "Sarcasm_or_negation",
       "family": "sarcasm",
       "runtime_enabled": false,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 59,
@@ -1824,7 +1955,9 @@
       "card_text": "Factual_conflict_ticket_status",
       "family": "factual",
       "runtime_enabled": false,
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 60,
@@ -1857,7 +1990,9 @@
         "ищу билет",
         "билеты закончились"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem"
     },
     {
       "num": 61,
@@ -1889,7 +2024,9 @@
         "где ссылка",
         "куплю билет"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem"
     },
     {
       "num": 62,
@@ -1921,7 +2058,9 @@
         "где регистрация",
         "продам билет"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem"
     },
     {
       "num": 63,
@@ -1951,7 +2090,10 @@
       "hard_negatives": [
         "продам электронный билет"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 64,
@@ -1981,7 +2123,10 @@
         "начало в 19",
         "во сколько начало"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 65,
@@ -2011,7 +2156,10 @@
       "hard_negatives": [
         "свободный вход"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 66,
@@ -2042,7 +2190,10 @@
         "водное шоу",
         "напитки в кафе"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 67,
@@ -2072,7 +2223,10 @@
       "hard_negatives": [
         "безопасное мероприятие"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 68,
@@ -2102,7 +2256,10 @@
       "hard_negatives": [
         "место проведения"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 69,
@@ -2132,7 +2289,9 @@
       "hard_negatives": [
         "много людей хотят пойти"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 70,
@@ -2162,7 +2321,10 @@
         "инвалидная коляска",
         "коляска для инвалидов"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 71,
@@ -2192,7 +2354,10 @@
       "hard_negatives": [
         "детская коляска"
       ],
-      "singular_safe": true
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "num": 72,
@@ -2222,7 +2387,9 @@
       "hard_negatives": [
         "можно ли с детьми"
       ],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 73,
@@ -2251,7 +2418,9 @@
       "hard_negatives": [
         "можно ли взрослым с детьми"
       ],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 74,
@@ -2269,8 +2438,8 @@
       "card_text": "Отмечают сильную постановку или исполнение",
       "family": "Отзывы о показе / постановке",
       "runtime_enabled": true,
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "замечательная постановка",
         "прекрасная постановка",
@@ -2281,7 +2450,9 @@
       "hard_negatives": [
         "когда постановка"
       ],
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "past_praise",
+      "min_evidence_policy": "past_praise"
     },
     {
       "num": 75,
@@ -2299,8 +2470,8 @@
       "card_text": "Пишут, что событие стоит посетить",
       "family": "Отзывы о показе / постановке",
       "runtime_enabled": true,
-      "min_evidence_count": 2,
-      "min_unique_authors": 2,
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
       "positive_prototypes": [
         "рекомендую сходить",
         "советую посетить",
@@ -2311,7 +2482,9 @@
       "hard_negatives": [
         "хочу сходить"
       ],
-      "singular_safe": false
+      "singular_safe": true,
+      "signal_layer": "past_praise",
+      "min_evidence_policy": "past_praise"
     },
     {
       "num": 76,
@@ -2341,7 +2514,9 @@
       "hard_negatives": [
         "будет красиво"
       ],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "social_proof",
+      "min_evidence_policy": "social_proof"
     },
     {
       "num": 77,
@@ -2369,7 +2544,9 @@
         "победитель розыгрыша"
       ],
       "hard_negatives": [],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 78,
@@ -2397,7 +2574,9 @@
         "с кем пойти"
       ],
       "hard_negatives": [],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "num": 79,
@@ -2425,7 +2604,9 @@
         "официальная программа"
       ],
       "hard_negatives": [],
-      "singular_safe": false
+      "singular_safe": false,
+      "signal_layer": "suppression",
+      "min_evidence_policy": "suppression"
     },
     {
       "vector_only_allowed": true,
@@ -2456,7 +2637,10 @@
         "можно купить напитки на месте",
         "будет ли еда во время концерта"
       ],
-      "num": 80
+      "num": 80,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
     },
     {
       "vector_only_allowed": true,
@@ -2488,7 +2672,482 @@
         "можно с пауэрбанком",
         "что можно взять на стадион"
       ],
-      "num": 81
+      "num": 81,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "question_required": true
+    },
+    {
+      "num": 82,
+      "id": "ticket_sales_start_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "ticket_sales_start_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о старте продаж билетов",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "когда продажа билетов начнется",
+        "когда начнутся продажи",
+        "старт продаж билетов",
+        "билеты поступят в продажу",
+        "когда продажа"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Спрашивают, когда начнутся продажи",
+      "card_text": "В обсуждении уточняют старт продажи билетов",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "когда продажа",
+        "когда начн",
+        "старт продаж",
+        "поступят в продажу",
+        "билет"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 83,
+      "id": "registration_timing_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "registration_timing_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о регистрации",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "когда регистрация",
+        "как зарегистрироваться",
+        "когда можно записаться",
+        "когда откроется запись"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Уточняют регистрацию",
+      "card_text": "Спрашивают, когда и как можно зарегистрироваться",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "запись",
+        "регистрация",
+        "зарегистрироваться",
+        "записаться"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 84,
+      "id": "registration_friction_or_closed",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "registration_friction_or_closed",
+      "tone": "concern",
+      "icon": "⚠️",
+      "risk": "medium",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть сложность с регистрацией",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "не успеваю зарегистрироваться",
+        "не успели записаться",
+        "регистрация закрыта",
+        "мест нет на регистрацию",
+        "не получается зарегистрироваться"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Не успевают зарегистрироваться",
+      "card_text": "В обсуждении жалеют, что регистрация быстро закрывается",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "friction_problem",
+      "min_evidence_policy": "friction_problem",
+      "anchors_any": [
+        "не успева",
+        "регистрация",
+        "запис",
+        "мест нет",
+        "закрыта"
+      ],
+      "question_required": false
+    },
+    {
+      "num": 85,
+      "id": "ticket_sector_availability_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "ticket_sector_availability_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о местах и секторах",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "сектора будут в продаже",
+        "будет ли открыта продажа в сектора",
+        "места в секторе",
+        "билеты в сектор"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Спрашивают про места и сектора",
+      "card_text": "Уточняют доступность билетов в отдельных секторах",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "сектор",
+        "места",
+        "мест",
+        "билеты",
+        "продажа"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 86,
+      "id": "additional_dates_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "additional_dates_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о других датах",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "будут ли другие даты",
+        "будет повтор",
+        "еще даты показа",
+        "другой день будет",
+        "повторение будет"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Спрашивают о других датах",
+      "card_text": "В обсуждении уточняют, будут ли ещё показы или повторы",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "другие даты",
+        "еще даты",
+        "ещё даты",
+        "еще раз",
+        "ещё раз",
+        "повтор",
+        "другой день"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 87,
+      "id": "time_conflict_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "time_conflict_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о времени начала",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "на билете одно время в паблике другое",
+        "во сколько начнется",
+        "время начала отличается",
+        "на билете 16 30 в паблике 18"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Уточняют время начала",
+      "card_text": "В обсуждении замечают разные версии времени начала",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "на билете",
+        "в паблике",
+        "во сколько",
+        "время начала",
+        "начнется",
+        "начало"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 88,
+      "id": "transfer_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "transfer_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о трансфере",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "как будет организован трансфер",
+        "будет трансфер",
+        "как добраться домой",
+        "автобус после события",
+        "общественный транспорт"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Спрашивают про трансфер",
+      "card_text": "Уточняют, как будет организован трансфер до или после события",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "трансфер",
+        "автобус",
+        "общественный транспорт",
+        "добираться домой",
+        "как добраться"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 89,
+      "id": "lineup_announcement_question",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "lineup_announcement_question",
+      "tone": "neutral",
+      "icon": "❔",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть вопрос о программе или участниках",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "когда будет известен состав артистов",
+        "кто будет выступать",
+        "когда объявят программу",
+        "состав участников"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Ждут состав участников",
+      "card_text": "В обсуждении спрашивают, когда объявят артистов или программу",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "practical_question",
+      "min_evidence_policy": "practical_question",
+      "anchors_any": [
+        "состав артистов",
+        "кто будет",
+        "программа",
+        "участники",
+        "когда будет известен состав"
+      ],
+      "question_required": true
+    },
+    {
+      "num": 90,
+      "id": "single_intent_to_attend",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "single_intent_to_attend",
+      "tone": "positive",
+      "icon": "🙂",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть явное намерение прийти",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "пойду на событие",
+        "иду обязательно",
+        "надо идти",
+        "хочу попасть",
+        "жду с нетерпением",
+        "билеты купили ждем"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Собираются прийти",
+      "card_text": "В обсуждении есть явное намерение посетить событие",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "single_social_signal",
+      "min_evidence_policy": "single_social_signal",
+      "anchors_any": [
+        "пойду",
+        "иду",
+        "надо идти",
+        "запланирую",
+        "хочу попасть",
+        "жду с нетерпением"
+      ],
+      "question_required": false
+    },
+    {
+      "num": 91,
+      "id": "single_anticipation_signal",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "single_anticipation_signal",
+      "tone": "positive",
+      "icon": "🙂",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть позитивное ожидание",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "отличная новость",
+        "ура наконец",
+        "классно очень жду",
+        "ждем с нетерпением"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Радуются анонсу",
+      "card_text": "В обсуждении есть явная радостная реакция на событие",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "single_social_signal",
+      "min_evidence_policy": "single_social_signal",
+      "anchors_any": [
+        "отличная новость",
+        "ура",
+        "классно",
+        "жду",
+        "ждем",
+        "ждём"
+      ],
+      "question_required": false
+    },
+    {
+      "num": 92,
+      "id": "past_visit_repeat_intent",
+      "category": "Atomic practical/product coverage",
+      "signal_type": "past_visit_repeat_intent",
+      "tone": "positive",
+      "icon": "🙂",
+      "risk": "low",
+      "vector_only_allowed": true,
+      "requires_llm_verification": false,
+      "publishable": true,
+      "public_sentence": "Есть намерение прийти снова",
+      "min_evidence_count": 1,
+      "min_unique_authors": 1,
+      "positive_prototypes": [
+        "иду второй раз",
+        "приду снова",
+        "третий раз пойду",
+        "уже были понравилось"
+      ],
+      "hard_negatives": [
+        "продам билет",
+        "куплю билет",
+        "розыгрыш",
+        "подработка"
+      ],
+      "card_title": "Хотят прийти снова",
+      "card_text": "В обсуждении пишут о повторном посещении или прошлом хорошем опыте",
+      "family": "product_coverage_atomic",
+      "runtime_enabled": true,
+      "singular_safe": true,
+      "signal_layer": "past_praise",
+      "min_evidence_policy": "past_praise",
+      "anchors_any": [
+        "снова",
+        "второй раз",
+        "третий раз",
+        "уже были",
+        "понравилось"
+      ],
+      "question_required": false
     }
   ]
 }

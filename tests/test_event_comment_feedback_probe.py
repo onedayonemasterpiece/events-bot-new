@@ -170,5 +170,46 @@ def test_p16_site_status_for_past_gate_pass(tmp_path, monkeypatch):
     assert site_status == "site_ineligible_past_event"
     assert not public_status.startswith("public_ready")
     site_status, public_status = mod.site_export_status_for("semantic_public_gate_pass", {"eligible_for_site_export": True, "is_past_event": False})
-    assert site_status == "site_public_ready"
-    assert public_status == "site_public_ready_dual_kaggle"
+    assert site_status == "site_public_ready_social_proof"
+    assert public_status == "site_public_ready_social_proof"
+
+
+def test_p17_phrase_bank_signal_layers_and_atomic_classes(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    phrases = mod.parse_phrase_bank(ROOT / "docs/features/event-comment-feedback/phrase-bank-v1.json")
+    by_id = {p["id"]: p for p in phrases}
+    expected = {
+        "ticket_sales_start_question",
+        "registration_timing_question",
+        "registration_friction_or_closed",
+        "ticket_sector_availability_question",
+        "additional_dates_question",
+        "time_conflict_question",
+        "transfer_question",
+        "lineup_announcement_question",
+        "single_intent_to_attend",
+        "single_anticipation_signal",
+        "past_visit_repeat_intent",
+    }
+    assert expected <= set(by_id)
+    assert all(p.get("signal_layer") for p in phrases)
+    assert by_id["ticket_sales_start_question"]["signal_layer"] == "practical_question"
+    assert by_id["registration_friction_or_closed"]["signal_layer"] == "friction_problem"
+    assert by_id["single_intent_to_attend"]["signal_layer"] == "single_social_signal"
+
+
+def test_p17_exact_practical_gate_and_site_statuses(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    phrases = {p["id"]: p for p in mod.parse_phrase_bank(ROOT / "docs/features/event-comment-feedback/phrase-bank-v1.json")}
+    assert mod.guard_phrase("А когда начнется продажа билетов?", phrases["ticket_sales_start_question"]) == []
+    assert "exact_anchor_missing" in mod.guard_phrase("А можно ли узнать подробности?", phrases["ticket_sales_start_question"])
+    assert "question_phrase_without_direct_question_or_problem" in mod.guard_phrase("Продажа билетов стартовала", phrases["ticket_sales_start_question"])
+    flags = {"eligible_for_site_export": True, "is_past_event": False}
+    assert mod.site_export_status_for("semantic_public_gate_pass", flags, "practical_question", "practical_single")[0] == "site_public_ready_practical_single"
+    assert mod.site_export_status_for("semantic_public_gate_pass", flags, "friction_problem", "friction_single")[0] == "site_public_ready_friction_single"
+
+
+def test_p17_missed_signal_audit_suggestions(tmp_path, monkeypatch):
+    mod = load_module(tmp_path, monkeypatch)
+    assert mod.audit_suggested_signal("А повтор будет? Другие даты планируются?")[:2] == ("additional_dates_question", "practical_question")
+    assert mod.audit_suggested_signal("Не успела на регистрацию, мест нет")[:2] == ("registration_friction_or_closed", "friction_problem")
