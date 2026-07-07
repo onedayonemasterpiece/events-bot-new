@@ -412,6 +412,62 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             if old_require is None: os.environ.pop("REGION_TALK_REQUIRE_YDB_STATE", None)
             else: os.environ["REGION_TALK_REQUIRE_YDB_STATE"] = old_require
 
+    def test_ydb_config_parses_endpoint_database_and_compacts_state(self) -> None:
+        mod = load_module()
+        old_endpoint = os.environ.get("REGION_TALK_YDB_ENDPOINT")
+        old_database = os.environ.get("REGION_TALK_YDB_DATABASE")
+        old_namespace = os.environ.get("REGION_TALK_YDB_NAMESPACE")
+        try:
+            os.environ["REGION_TALK_YDB_ENDPOINT"] = "grpcs://ydb.serverless.yandexcloud.net:2135/?database=/ru-central1/cloud/db"
+            os.environ.pop("REGION_TALK_YDB_DATABASE", None)
+            os.environ["REGION_TALK_YDB_NAMESPACE"] = "region-talk/test"
+            cfg = mod.ydb_config_status()
+            self.assertEqual(cfg["endpoint"], "grpcs://ydb.serverless.yandexcloud.net:2135")
+            self.assertEqual(cfg["database"], "/ru-central1/cloud/db")
+            self.assertEqual(mod.ydb_table_name("state_kv"), "region_talk_test_state_kv")
+            compact = mod.compact_region_talk_state_for_ydb({
+                "run_id": "r1",
+                "state_schema_version": "full",
+                "updated_at": "now",
+                "posts": {"p1": {"post_id": "p1", "post_url": "https://t.me/x/1", "text": "RAW TEXT MUST NOT BE STORED", "candidate_score": 0.7, "overall_media_score": 0.8, "image_quality_bucket": "reviewable"}},
+                "region_talk_sources": {"s1": {"source_id": "s1", "canonical_url": "https://t.me/x", "source_title": "X", "description": "RAW SOURCE DESC"}},
+                "candidate_memory": {"c1": {"candidate_memory_id": "c1", "post_url": "https://t.me/x/1", "short_summary": "ok", "raw_payload_json": "NO"}},
+                "source_cursors": {"s1": {"last_seen_post_key": "1"}},
+                "all_time_metrics": {"posts": 1},
+            })
+        finally:
+            if old_endpoint is None: os.environ.pop("REGION_TALK_YDB_ENDPOINT", None)
+            else: os.environ["REGION_TALK_YDB_ENDPOINT"] = old_endpoint
+            if old_database is None: os.environ.pop("REGION_TALK_YDB_DATABASE", None)
+            else: os.environ["REGION_TALK_YDB_DATABASE"] = old_database
+            if old_namespace is None: os.environ.pop("REGION_TALK_YDB_NAMESPACE", None)
+            else: os.environ["REGION_TALK_YDB_NAMESPACE"] = old_namespace
+        blob = json.dumps(compact, ensure_ascii=False)
+        self.assertIn("processed_posts", compact)
+        self.assertIn("https://t.me/x/1", blob)
+        self.assertNotIn("RAW TEXT MUST NOT BE STORED", blob)
+        self.assertNotIn("RAW SOURCE DESC", blob)
+        self.assertNotIn("raw_payload_json", blob)
+
+    def test_vk_wall_uses_service_key_first_and_skips_catalog_paths(self) -> None:
+        mod = load_module()
+        old = {k: os.environ.get(k) for k in ["VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_ACCESS_TOKEN", "REGION_TALK_VK_READ_SERVICE_FIRST"]}
+        try:
+            os.environ.pop("VK_SERVICE_TOKEN", None)
+            os.environ["VK_SERVICE_KEY"] = "service"
+            os.environ["VK_ACCESS_TOKEN"] = "user"
+            os.environ["REGION_TALK_VK_READ_SERVICE_FIRST"] = "1"
+            self.assertEqual(mod.vk_wall_token(), "service")
+            self.assertEqual(mod.vk_wall_token_kind(), "VK_SERVICE_KEY")
+            seed = mod.Seed("s", "vk", "Search", "", "https://vk.com/search?c[q]=x", "", "", 1, "", "", "", "", "", "", True, "", "")
+            self.assertEqual(mod.vk_domain_from_seed(seed), "")
+            wall = mod.Seed("s2", "vkvideo", "Wall", "@intravel39", "https://vk.com/intravel39", "", "", 1, "", "", "", "", "", "", True, "", "")
+            self.assertEqual(mod.vk_domain_from_seed(wall), "intravel39")
+        finally:
+            for k, v in old.items():
+                if v is None: os.environ.pop(k, None)
+                else: os.environ[k] = v
+
     def test_source_frontier_dedupes_by_canonical_key_across_discovery_types(self) -> None:
         mod = load_module()
         rows = [

@@ -162,6 +162,9 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_DATABASE": os.environ.get("REGION_TALK_YDB_DATABASE", ""),
         "REGION_TALK_YDB_NAMESPACE": os.environ.get("REGION_TALK_YDB_NAMESPACE", "region_talk"),
         "REGION_TALK_YDB_STATE_SNAPSHOT_FILE": os.environ.get("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", ""),
+        "REGION_TALK_YDB_MAX_POST_ROWS": os.environ.get("REGION_TALK_YDB_MAX_POST_ROWS", "20000"),
+        "REGION_TALK_YDB_MAX_SOURCE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_SOURCE_ROWS", "5000"),
+        "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", "5000"),
         "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
         "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
@@ -196,6 +199,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_MEDIA_RETRY_FIRST": os.environ.get("REGION_TALK_MEDIA_RETRY_FIRST", "1"),
         "REGION_TALK_ACTUAL_IMAGE_TARGET": os.environ.get("REGION_TALK_ACTUAL_IMAGE_TARGET", "60"),
         "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1"),
+        "REGION_TALK_VK_READ_SERVICE_FIRST": os.environ.get("REGION_TALK_VK_READ_SERVICE_FIRST", "1"),
+        "REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK": os.environ.get("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1"),
         "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm"),
         "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
@@ -221,7 +226,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "TELEGRAM_AUTH_BUNDLE_DISCOVERY", "TELEGRAM_AUTH_BUNDLE_E2E", "TELEGRAM_AUTH_BUNDLE_S22", "TG_SESSION", "TELEGRAM_SESSION",
         "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
         "GOOGLE_API_KEY", "GOOGLE_API_KEY3", "GOOGLE_API_KEY_3",
-        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN", "VK_TOKEN",
+        "REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", "REGION_TALK_YDB_IAM_TOKEN", "YC_IAM_TOKEN", "YDB_ACCESS_TOKEN",
+        "VK_ACCESS_TOKEN", "VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_TOKEN",
     ]
     secrets = {name: os.environ.get(name) for name in secret_names if (os.environ.get(name) or "").strip()}
     key = Fernet.generate_key()
@@ -354,6 +360,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_MEDIA_RETRY_FIRST", "1")
     os.environ.setdefault("REGION_TALK_ACTUAL_IMAGE_TARGET", "60")
     os.environ.setdefault("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "1")
+    os.environ.setdefault("REGION_TALK_VK_READ_SERVICE_FIRST", "1")
+    os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")

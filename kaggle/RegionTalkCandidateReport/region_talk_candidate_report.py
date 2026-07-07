@@ -494,6 +494,9 @@ def region_talk_state_backend_requested() -> str:
 def ydb_config_status() -> dict[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
+    if "?database=" in endpoint and not database:
+        endpoint, database = endpoint.split("?database=", 1)
+    endpoint = endpoint.rstrip("/")
     namespace = (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk"
     missing = [k for k, v in {"REGION_TALK_YDB_ENDPOINT": endpoint, "REGION_TALK_YDB_DATABASE": database}.items() if not v]
     return {"endpoint": endpoint, "database": database, "namespace": namespace, "missing": ",".join(missing)}
@@ -501,10 +504,189 @@ def ydb_config_status() -> dict[str, str]:
 
 def ydb_table_plan() -> str:
     return ";".join([
-        "region_talk_sources", "region_talk_source_edges", "region_talk_telegram_entity_cache",
-        "region_talk_similar_seed_cursor", "region_talk_posts", "region_talk_candidate_memory",
-        "region_talk_run_artifacts", "region_talk_state_snapshots",
+        "region_talk_state_kv(compact)", "region_talk_sources(compact)", "region_talk_processed_posts(compact)",
+        "region_talk_image_metrics(compact)", "region_talk_run_metrics(compact)",
     ])
+
+
+def ydb_table_name(suffix: str = "state_kv") -> str:
+    namespace = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk").strip("_") or "region_talk"
+    return f"{namespace}_{suffix}"
+
+
+def compact_scalar(value: Any, *, max_len: int = 500) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    text = str(value)
+    return text if len(text) <= max_len else text[:max_len]
+
+
+def compact_record(row: dict[str, Any], fields: Iterable[str], *, max_len: int = 500) -> dict[str, Any]:
+    return {field: compact_scalar(row.get(field), max_len=max_len) for field in fields if row.get(field) not in (None, "", [], {})}
+
+
+SOURCE_STATE_FIELDS = [
+    "source_id", "source_seed_id", "source_candidate_id", "frontier_source_id", "canonical_source_key",
+    "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
+    "source_url", "frontier_status", "scan_status", "fetch_status", "vk_wall_probe_status",
+    "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
+    "confidence", "frontier_priority", "next_action", "blocked_reason", "updated_at", "last_run_id",
+]
+POST_STATE_FIELDS = [
+    "post_id", "source_id", "source_title", "platform", "platform_post_key", "post_url", "post_date",
+    "current_stage", "fresh_enough", "kaliningrad_oblast_only_scope", "matched_place_names",
+    "candidate_score", "media_score", "overall_media_score", "image_quality_bucket",
+    "image_model_input_type", "image_download_status", "image_reviewable", "image_publication_ready",
+    "vector_gate_status", "llm_gate_status", "llm_decision", "llm_reason", "content_type",
+    "is_forwarded_or_repost", "forwarded_from_post_url",
+]
+CANDIDATE_MEMORY_STATE_FIELDS = [
+    "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
+    "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
+    "publication_story_score", "nonlocal_value_score", "manual_decision", "last_seen_run_id",
+    "first_seen_run_id", "seen_run_count", "short_summary", "why_selected",
+]
+
+
+def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
+    """Keep only durable, valuable state in YDB; no raw post text or media bytes.
+
+    Telegram/VK posts can be re-fetched by URL/key, so the YDB sidecar stores
+    cursors, source/post links, candidate lifecycle, run metrics and image
+    scoring metrics. The full JSON backup remains a local/Kaggle artifact only.
+    """
+    posts = state.get("posts") if isinstance(state.get("posts"), dict) else {}
+    sources = state.get("region_talk_sources") if isinstance(state.get("region_talk_sources"), dict) else {}
+    if not sources:
+        sources = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
+    candidate_memory = state.get("candidate_memory") if isinstance(state.get("candidate_memory"), dict) else {}
+    max_posts = getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000)
+    max_sources = getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000)
+    max_candidates = getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000)
+    compact_posts = {
+        str(k): compact_record(v, POST_STATE_FIELDS, max_len=700)
+        for k, v in list(posts.items())[-max_posts:]
+        if isinstance(v, dict)
+    }
+    compact_sources = {
+        str(k): compact_record(v, SOURCE_STATE_FIELDS, max_len=700)
+        for k, v in list(sources.items())[-max_sources:]
+        if isinstance(v, dict)
+    }
+    compact_candidates = {
+        str(k): compact_record(v, CANDIDATE_MEMORY_STATE_FIELDS, max_len=900)
+        for k, v in list(candidate_memory.items())[-max_candidates:]
+        if isinstance(v, dict)
+    }
+    return {
+        "run_id": state.get("run_id"),
+        "state_schema_version": "region-talk-ydb-compact-v1",
+        "full_state_schema_version": state.get("state_schema_version"),
+        "updated_at": state.get("updated_at"),
+        "all_time_metrics": state.get("all_time_metrics") or {},
+        "source_cursors": state.get("source_cursors") or {},
+        "telegram_entity_cache": state.get("telegram_entity_cache") or {},
+        "telegram_cooldowns": state.get("telegram_cooldowns") or {},
+        "sources": compact_sources,
+        "processed_posts": compact_posts,
+        "candidate_memory": compact_candidates,
+        "source_frontier_queue_next": {
+            str(k): compact_record(v, SOURCE_STATE_FIELDS + ["queue_rank", "queue_reason"], max_len=700)
+            for k, v in list((state.get("source_frontier_queue_next") or {}).items())[:max_sources]
+            if isinstance(v, dict)
+        },
+        "similar_seed_queue": {
+            str(k): compact_record(v, SOURCE_STATE_FIELDS + ["similar_seed_id", "seed_rank"], max_len=700)
+            for k, v in list((state.get("similar_seed_queue") or {}).items())[:max_sources]
+            if isinstance(v, dict)
+        },
+    }
+
+
+def ensure_ydb_module() -> Any:
+    try:
+        import ydb  # type: ignore
+        return ydb
+    except Exception:
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "ydb[yc]"])
+            import ydb  # type: ignore
+            return ydb
+        raise
+
+
+def ydb_credentials(ydb: Any) -> Any:
+    token = (os.getenv("REGION_TALK_YDB_IAM_TOKEN") or os.getenv("YC_IAM_TOKEN") or os.getenv("YDB_ACCESS_TOKEN") or "").strip()
+    if token:
+        return ydb.AccessTokenCredentials(token)
+    key_json = (os.getenv("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip()
+    if key_json:
+        import tempfile
+        import ydb.iam  # type: ignore
+        fd, path = tempfile.mkstemp(prefix="region-talk-ydb-sa-", suffix=".json")
+        os.close(fd)
+        Path(path).write_text(key_json, encoding="utf-8")
+        return ydb.iam.ServiceAccountCredentials.from_file(path)
+    if os.getenv("YDB_USER"):
+        return ydb.StaticCredentials.from_user_password(os.getenv("YDB_USER"), os.getenv("YDB_PASSWORD", ""))
+    return ydb.credentials_from_env_variables()
+
+
+def ydb_connect() -> tuple[Any, Any, dict[str, str]]:
+    cfg = ydb_config_status()
+    ydb = ensure_ydb_module()
+    driver = ydb.Driver(endpoint=cfg["endpoint"], database=cfg["database"], credentials=ydb_credentials(ydb))
+    driver.wait(timeout=getenv_int("REGION_TALK_YDB_CONNECT_TIMEOUT_SECONDS", 20), fail_fast=True)
+    return ydb, driver, cfg
+
+
+def ydb_kv_table_path(cfg: dict[str, str]) -> str:
+    return cfg["database"].rstrip("/") + "/" + ydb_table_name("state_kv")
+
+
+def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
+    try:
+        session.describe_table(table_path)
+        return
+    except Exception:
+        pass
+    desc = (
+        ydb.TableDescription()
+        .with_column(ydb.Column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8)))
+        .with_column(ydb.Column("kind", ydb.OptionalType(ydb.PrimitiveType.Utf8)))
+        .with_column(ydb.Column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json)))
+        .with_column(ydb.Column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8)))
+        .with_primary_key("pk")
+    )
+    session.create_table(table_path, desc)
+
+
+def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str) -> None:
+    query = session.prepare(f"""
+DECLARE $pk AS Utf8;
+DECLARE $kind AS Utf8;
+DECLARE $payload_json AS Json;
+DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at)
+VALUES ($pk, $kind, $payload_json, $updated_at);
+""")
+    session.transaction(ydb.SerializableReadWrite()).execute(
+        query,
+        {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at},
+        commit_tx=True,
+    )
+
+
+def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str, Any]:
+    result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+        f"SELECT payload_json FROM `{table_path}` WHERE pk = 'latest_state';",
+        commit_tx=True,
+    )
+    rows = result_sets[0].rows if result_sets else []
+    if not rows:
+        return {}
+    payload = rows[0].payload_json
+    return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
 
 
 def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -514,17 +696,39 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
         meta.update({"ydb_read_status": "missing_config", "ydb_error": "missing " + cfg["missing"]})
         return {}, meta
     try:
-        import ydb  # type: ignore
+        ydb, driver, cfg = ydb_connect()
     except Exception as exc:
-        meta.update({"ydb_read_status": "sdk_missing", "ydb_error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+        meta.update({"ydb_read_status": "connect_error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}"})
         return {}, meta
-    # MVP contract gate: do not invent a new production schema if the snapshot table/path is not explicitly configured.
-    # Full table upserts are represented in the exported snapshot and documented table plan; production enablement
-    # must provide REGION_TALK_YDB_STATE_SNAPSHOT_FILE or a future SDK-backed table adapter.
     snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
     if not snapshot:
-        meta.update({"ydb_read_status": "adapter_not_configured", "ydb_error": "YDB SDK import ok but REGION_TALK_YDB_STATE_SNAPSHOT_FILE/table adapter is not configured"})
-        return {}, meta
+        table_path = ydb_kv_table_path(cfg)
+        try:
+            pool = ydb.SessionPool(driver)
+            def op(session: Any) -> dict[str, Any]:
+                ensure_ydb_kv_table(ydb, session, table_path)
+                return ydb_select_latest_state(session, ydb, table_path)
+            data = pool.retry_operation_sync(op)
+            driver.stop(timeout=5)
+            if not isinstance(data, dict) or not data:
+                meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path})
+                return {}, meta
+            if "posts" not in data and isinstance(data.get("processed_posts"), dict):
+                data["posts"] = data.get("processed_posts") or {}
+            if "region_talk_sources" not in data and isinstance(data.get("sources"), dict):
+                data["region_talk_sources"] = data.get("sources") or {}
+            raw = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            state_hash = hashlib.sha256(raw).hexdigest()
+            data["_loaded_from_path"] = "ydb:" + table_path + "#latest_state"
+            meta.update({"ydb_read_status": "ok", "previous_state_loaded": "true", "increment_state_loaded": "true", "previous_state_source": "ydb:" + table_path, "increment_state_path": "ydb:" + table_path, "previous_state_run_id": data.get("run_id", ""), "previous_run_id": data.get("run_id", ""), "previous_state_hash": state_hash, "state_schema_version_previous": data.get("state_schema_version", ""), "previous_seen_post_count": len(data.get("processed_posts") or data.get("posts") or {}), "previous_candidate_memory_count": len(data.get("candidate_memory") or {}), "ydb_table_path": table_path, "ydb_state_mode": "compact_kv"})
+            return data, meta
+        except Exception as exc:
+            try:
+                driver.stop(timeout=5)
+            except Exception:
+                pass
+            meta.update({"ydb_read_status": "error", "ydb_error": f"{type(exc).__name__}: {str(exc)[:220]}"})
+            return {}, meta
     path = Path(snapshot)
     try:
         raw = path.read_bytes()
@@ -547,7 +751,24 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
         return {**meta, "ydb_write_status": "missing_config", "state_write_status": "error", "state_write_error": "missing " + cfg["missing"]}
     snapshot = (os.getenv("REGION_TALK_YDB_STATE_SNAPSHOT_FILE") or "").strip()
     if not snapshot:
-        return {**meta, "ydb_write_status": "adapter_not_configured", "state_write_status": "error", "state_write_error": "YDB snapshot/table adapter is not configured"}
+        try:
+            ydb, driver, cfg = ydb_connect()
+            table_path = ydb_kv_table_path(cfg)
+            compact = compact_region_talk_state_for_ydb(state)
+            updated_at = str(compact.get("updated_at") or utc_now_iso())
+            payload = json.dumps(compact, ensure_ascii=False, sort_keys=True)
+            state_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            pool = ydb.SessionPool(driver)
+            def op(session: Any) -> None:
+                ensure_ydb_kv_table(ydb, session, table_path)
+                ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at)
+                ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at)
+                ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at)
+            pool.retry_operation_sync(op)
+            driver.stop(timeout=5)
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {})}
+        except Exception as exc:
+            return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
         target = Path(snapshot)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2219,14 +2440,29 @@ def _clip_image_scores(image_path: str, text_score: dict[str, Any]) -> dict[str,
 
 
 def vk_wall_token() -> str:
-    return (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_TOKEN") or "").strip()
+    if getenv_bool("REGION_TALK_VK_READ_SERVICE_FIRST", True):
+        return (os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_SERVICE_KEY") or os.getenv("VK_TOKEN") or os.getenv("VK_ACCESS_TOKEN") or "").strip()
+    return (os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_SERVICE_KEY") or os.getenv("VK_TOKEN") or "").strip()
+
+
+def vk_wall_token_kind() -> str:
+    token = vk_wall_token()
+    if not token:
+        return "missing"
+    for name in ["VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_TOKEN", "VK_ACCESS_TOKEN"]:
+        if token == (os.getenv(name) or "").strip():
+            return name
+    return "configured"
 
 
 def vk_domain_from_seed(seed: Seed) -> str:
     raw = (seed.url or seed.handle or "").strip()
     m = re.search(r"vk\.com/(?:club|public)?([A-Za-z0-9_.-]+)", raw, re.I)
     if m:
-        return m.group(1)
+        domain = m.group(1)
+        if domain.lower() in {"search", "video", "clips", "feed", "places", "market", "groups", "public"}:
+            return canonical_handle(seed.handle).lstrip("@")
+        return domain
     return canonical_handle(seed.handle).lstrip("@")
 
 
@@ -2238,7 +2474,7 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
         return src, []
     domain = vk_domain_from_seed(seed)
     if not domain:
-        src.update({"fetch_status": "skipped_vk_wall_domain_missing", "vk_wall_probe_status": "domain_missing", "source_probe_reason": "Cannot extract VK domain from seed"})
+        src.update({"fetch_status": "skipped_vk_wall_domain_missing", "vk_wall_probe_status": "domain_missing", "source_probe_reason": "Cannot extract VK wall domain from seed/catalog/search URL"})
         return src, []
     try:
         import urllib.parse, urllib.request
@@ -2247,7 +2483,10 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
             payload = json.loads(resp.read().decode("utf-8"))
         if payload.get("error"):
             err = payload["error"] or {}
-            src.update({"fetch_status": "error_vk_wall_api", "vk_wall_probe_status": "error", "fetch_error_code": err.get("error_code"), "fetch_error_message": str(err.get("error_msg") or "")[:180]})
+            code = int(err.get("error_code") or 0)
+            status = "skipped_vk_wall_access_denied" if code in {15, 18, 30} else "error_vk_wall_api"
+            probe = "access_denied" if code in {15, 18, 30} else "error"
+            src.update({"fetch_status": status, "vk_wall_probe_status": probe, "fetch_error_code": err.get("error_code"), "fetch_error_message": str(err.get("error_msg") or "")[:180], "vk_token_kind": vk_wall_token_kind()})
             return src, []
         response = payload.get("response") or {}
         items = response.get("items") or []
@@ -2294,7 +2533,7 @@ def fetch_vk_wall_for_seed(seed: Seed, output_dir: Path, max_posts: int) -> tupl
             group = groups.get(str(abs(int(owner_id))) if str(owner_id).lstrip("-").isdigit() else "") or {}
             title = str(group.get("name") or seed.source_title or domain)
             posts.append({"post_id":"post_"+stable_hash("vk", owner_id, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"vk", "handle": seed.handle or domain, "post_url": post_url, "platform_post_key": f"vk:{owner_id}:{mid}", "post_date": dt, "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": bool(photo_url), "media_count": 1 if photo_url else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(forwarded_url), "forwarded_from_source_title": "", "forwarded_from_source_id": "src_" + stable_hash("vk_forward", forwarded_url) if forwarded_url else "", "forwarded_from_platform": "vk" if forwarded_url else "", "forwarded_from_handle": "", "forwarded_from_url": forwarded_url, "forwarded_from_post_url": forwarded_url, "forwarded_from_confidence": 0.75 if forwarded_url else 0.0, "original_source_candidate_id": "src_cand_" + stable_hash("vk", forwarded_url) if forwarded_url else ""})
-        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "minimal VK wall.get fetch; text/photos/copy_history origins"})
+        src.update({"fetch_status": "ok", "vk_wall_probe_status": "ok", "posts_scanned": len(posts), "history_fetch_mode": "vk_wall_primary_scan", "history_fetch_runtime_seconds": "", "last_seen_post_date": max([p.get("post_date") or "" for p in posts] or [""]), "source_probe_reason": "minimal VK wall.get fetch; text/photos/copy_history origins", "vk_token_kind": vk_wall_token_kind()})
         return src, posts
     except Exception as exc:
         src.update({"fetch_status": "error_vk_wall_fetch", "vk_wall_probe_status": "error", "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]})
@@ -2357,7 +2596,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 status_value = "skipped_vk_wall_not_configured" if not vk_wall_token() else "skipped_fetch_disabled"
                 source_rows.append(source_status_row(seed, status_value, vk_wall_probe_status="fetch_disabled", source_probe_reason="VK wall fetch disabled by REGION_TALK_FETCH_TELEGRAM=0"))
         elif seed.platform == "vkvideo":
-            source_rows.append(source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."))
+            if fetch_enabled and getenv_bool("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", True) and "vk.com/" in seed.url.lower() and "/video" not in seed.url.lower():
+                vk_row, vk_posts = fetch_vk_wall_for_seed(seed, output_dir, max_posts)
+                vk_row["platform"] = "vk"
+                vk_row["source_probe_reason"] = (vk_row.get("source_probe_reason") or "") + "; source row was marked vkvideo but has a public vk.com wall URL, fetched as VK wall fallback"
+                source_rows.append(vk_row)
+                posts.extend(vk_posts)
+            else:
+                source_rows.append(source_status_row(seed, "skipped_vkvideo_auxiliary_not_implemented", vk_wall_probe_status="not_applicable_vkvideo_auxiliary", source_probe_reason="VK Video is auxiliary for discovery/media, not a wall fetch source in this MVP run."))
         else:
             source_rows.append(source_status_row(seed, "skipped_unsupported_platform", vk_wall_probe_status="not_applicable", source_probe_reason="Non-Telegram source is tracked for coverage/discovery, not fetched in this MVP run."))
     if not fetch_enabled:
@@ -4315,12 +4561,13 @@ async def amain() -> int:
     seed_path = find_seed_file(config)
     seeds = load_seeds(seed_path)
     out_dir = Path(os.getenv('REGION_TALK_OUTPUT_DIR') or str(config.get('output_dir') or f"artifacts/region-talk/runs/{run_id}"))
-    status.event('preflight_ok', phase='preflight', status='running', run_id=run_id, seeds=len(seeds), seed_file=str(seed_path), dry_run=True, disable_publish=True)
+    ydb_cfg = ydb_config_status()
+    status.event('preflight_ok', phase='preflight', status='running', run_id=run_id, seeds=len(seeds), seed_file=str(seed_path), dry_run=True, disable_publish=True, state_backend=region_talk_state_backend_requested(), ydb_config_status="missing_config" if ydb_cfg.get("missing") else "configured", ydb_missing=ydb_cfg.get("missing"), vk_token_kind=vk_wall_token_kind())
     source_rows, posts = await fetch_telegram_posts(seeds, status, out_dir)
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
     payload = build_report(seeds, source_rows, posts, run_id, out_dir)
     summary = payload.get('summary', {})
-    status.event('report_written', phase='report', status='done', run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')))
+    status.event('report_written', phase='report', status='done', run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'))
     return 0
 
 

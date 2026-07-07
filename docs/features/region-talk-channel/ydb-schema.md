@@ -154,3 +154,13 @@ Fields: `cache_key` PK, `post_id`, `candidate_id`, `verifier_model`, `verifier_p
 Run/audit table.
 
 Fields: `run_id` PK, `started_at`, `finished_at`, `status`, `sources_checked`, `source_candidates_found`, `posts_fetched`, `posts_region_relevant`, `posts_with_strong_media`, `candidates_created`, `favorites_exported`, `llm_calls`, `telegram_published`, `vk_published`, `errors_json`, `artifacts_json`.
+
+## MVP compact YDB state adapter
+
+For the 1 GB sidecar budget, the MVP adapter writes a compact `region_talk_state_kv` table rather than raw Telegram/VK payloads. The keys are:
+
+- `latest_state` — compact cumulative state pointer for the next run;
+- `run:<run_id>` — compact run snapshot;
+- `metrics:<run_id>` — run/all-time metrics only.
+
+The compact payload keeps source/channel URLs, source cursors, post URLs/platform keys, candidate lifecycle and image scoring metrics. It deliberately excludes raw post text, raw API payload JSON and media bytes because posts/images can be re-fetched from external URLs when needed.
