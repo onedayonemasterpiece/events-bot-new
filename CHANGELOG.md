@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / full live YDB discovery registry**: extended online
+  row-level writes beyond final queues to include `source_candidate_item`,
+  `source_edge_item` and reserved redacted `comment_link_item` rows, so newly
+  discovered publics/channels and their statuses/edges are visible in YDB before
+  notebook completion.
 - **Region Talk Channel / live YDB online queues**: changed CandidateReport discovery/scoring to upsert source/public status rows, fetched/scored post rows, candidate-memory rows, image queue rows and publication candidates during the run instead of waiting for final XLSX/state save; ImageDiagnostic now persists per-image media-fetch and score status immediately, and the local notifier can send live YDB stats, so semi-manual monitoring can see live YDB progress.
 - **Region Talk Channel / product publication queue**: added a CandidateReport-owned `publication_candidate_item` queue with YDB row-level writes, goal/budget counters for 20 Gemini-confirmed candidates under a 100-call limit, XLSX sheets `04p_publication_queue` / `04q_publication_confirmed`, Kaggle status progress fix, and a local E2E-only Telegram notifier for sending confirmed links to the operator chat.
 - **Region Talk Channel / YDB candidate-link vector probe**: added a CandidateReport input mode that reads already selected `candidate_memory_item` / `image_queue_item` post links from YDB, refetches only those public Telegram posts through the Discovery session, skips source discovery/history expansion, and runs the normal sequential E5+BGE-M3 vector/report stage for model validation; Region Talk Kaggle secret bundles now include only the selected Telegram auth bundle instead of packaging S22/E2E/Discovery together.

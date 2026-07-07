@@ -191,6 +191,17 @@ that a source/post/image/candidate exists in the product state.
   source/public registry alias for statistics and operator views; written when a
   source is selected for a run, discovered by similar/keyword discovery, skipped,
   rejected, resolved, scanned or later enriched by final queue scoring;
+- kind `source_candidate_item`, pk
+  `source_candidate_item:<source_candidate_id|canonical_source_key>` — the
+  discovery-frontier public/channel candidate as soon as discovery sees it
+  (similar channels, keyword hits, post links, catalog rows), before final queue
+  assembly;
+- kind `source_edge_item`, pk `source_edge_item:<edge_id>` — source-discovery
+  graph evidence such as forward origins, post-text links and similar/keyword
+  source edges;
+- kind `comment_link_item`, pk `comment_link_item:<comment_link_id|edge_id>` —
+  redacted comment-link discovery evidence when comment scanning is enabled;
+  comments are source-discovery evidence only and never publication candidates;
 - kind `processed_post_item`, pk `processed_post_item:<post_id>` and
   `post_live_item:<post_id>` — compact fetched/scored post state without raw text
   or raw API payloads; text is represented only by hashes/excerpts already allowed

@@ -292,7 +292,16 @@ The XLSX has:
   Telethon auth key.
 - CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, text-embedding model pass events, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage. Real E5+BGE-M3 scoring is sequential by model pass (load/score/release E5, then load/score/release BGE-M3) so Kaggle does not hold both text encoders in memory simultaneously. For model/runtime validation without discovery, run CandidateReport with `REGION_TALK_POST_INPUT_MODE=ydb_candidate_links`, `REGION_TALK_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_DISCOVERY`, `REGION_TALK_DISCOVERY_MODE=off` and a local/non-YDB state backend; this reads only existing YDB candidate/image post links and refetches those public Telegram posts for text.
 - Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
-- In semi-manual discovery mode, online YDB row-level writes are mandatory: CandidateReport must upsert `source_status_item`/`source_queue_item` when sources are selected/discovered/status-changed, `processed_post_item`/`post_live_item` when posts are fetched/scored, `candidate_memory_item` after memory build, and image/publication queue rows immediately after queue assembly. ImageDiagnostic must upsert every image lease, media-fetch result and final score/status per row, not only at notebook end.
+- In semi-manual discovery mode, online YDB row-level writes are mandatory:
+  CandidateReport must upsert `source_status_item`/`source_queue_item` when
+  sources are selected/discovered/status-changed, `source_candidate_item` and
+  `source_edge_item` when discovery sees a new public/channel/edge,
+  `comment_link_item` for redacted comment-link evidence if comment discovery is
+  enabled, `processed_post_item`/`post_live_item` when posts are fetched/scored,
+  `candidate_memory_item` after memory build, and image/publication queue rows
+  immediately after queue assembly. ImageDiagnostic must upsert every image
+  lease, media-fetch result and final score/status per row, not only at notebook
+  end.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
 - The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session to send confirmed links to the operator chat and mark them as sent.
 - Semantic prototype vectors are cached in YDB as `semantic_bank_embedding`

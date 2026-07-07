@@ -981,6 +981,49 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertTrue({"run_id", "event_at", "source_id", "post_url", "stage", "next_action", "short_summary"}.issubset(rows[0]))
         self.assertIn("fresh_ko_post_found", {r["event_type"] for r in rows})
 
+    def test_compact_ydb_state_keeps_discovery_graph_rows(self) -> None:
+        mod = load_module()
+        compact = mod.compact_region_talk_state_for_ydb({
+            "run_id": "disc-run",
+            "updated_at": "2026-07-07T00:00:00+00:00",
+            "source_candidates": {
+                "sc1": {
+                    "source_candidate_id": "sc1",
+                    "canonical_source_key": "telegram:@travel",
+                    "source_title": "Travel",
+                    "canonical_url": "https://t.me/travel",
+                    "candidate_source_status": "source_frontier",
+                    "raw_private_field": "drop",
+                }
+            },
+            "source_edges": {
+                "e1": {
+                    "edge_id": "e1",
+                    "from_source_id": "src1",
+                    "to_source_candidate_id": "sc1",
+                    "edge_type": "post_text_link",
+                    "evidence_url": "https://t.me/travel",
+                    "evidence_context_short": "link evidence",
+                }
+            },
+            "comment_discovery": {
+                "c1": {
+                    "comment_link_id": "c1",
+                    "post_url": "https://t.me/src/1",
+                    "from_comment_id_hash": "h",
+                    "comment_text_redacted": "redacted",
+                    "normalized_url": "https://t.me/travel",
+                }
+            },
+        })
+        self.assertIn("source_candidates", compact)
+        self.assertIn("source_edges", compact)
+        self.assertIn("comment_discovery", compact)
+        self.assertEqual(compact["source_candidates"]["sc1"]["source_candidate_id"], "sc1")
+        self.assertNotIn("raw_private_field", compact["source_candidates"]["sc1"])
+        self.assertEqual(compact["source_edges"]["e1"]["edge_id"], "e1")
+        self.assertEqual(compact["comment_discovery"]["c1"]["comment_link_id"], "c1")
+
 
 if __name__ == "__main__":
     unittest.main()

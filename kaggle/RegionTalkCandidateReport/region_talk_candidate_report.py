@@ -718,6 +718,28 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "source_image_quality_min_avg_score", "monitoring_exclusion_reason",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
+SOURCE_CANDIDATE_STATE_FIELDS = [
+    "source_candidate_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
+    "canonical_source_key", "platform", "platform_guess", "handle", "recommended_username",
+    "username_or_handle", "source_title", "recommended_title", "resolved_title", "raw_url",
+    "normalized_url", "canonical_url", "source_url", "discovered_from_source",
+    "discovered_from_post_url", "discovered_from_comment_hash", "discovery_type",
+    "edge_type", "candidate_source_status", "frontier_status", "frontier_stage",
+    "frontier_action", "frontier_reason", "source_candidate_score", "frontier_priority",
+    "confidence", "active_scan_allowed", "quarantine_reason", "source_probe_reason",
+]
+SOURCE_EDGE_STATE_FIELDS = [
+    "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
+    "from_source_id", "from_source_title", "from_post_id", "to_source_candidate_id",
+    "to_source_title", "edge_type", "evidence_url", "evidence_context_short",
+    "confidence", "discovery_depth", "discovered_from_comment_hash",
+]
+COMMENT_DISCOVERY_STATE_FIELDS = [
+    "comment_link_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
+    "source_id", "source_title", "post_id", "post_url", "from_comment_id_hash",
+    "comment_text_redacted", "normalized_url", "canonical_url", "platform_guess",
+    "source_candidate_id", "edge_id", "discovery_type", "edge_type", "confidence",
+]
 IMAGE_QUEUE_STATE_FIELDS = [
     "image_queue_id", "image_queue_order", "display_order", "image_queue_status", "previous_image_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
@@ -790,6 +812,11 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     if not sources:
         sources = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
     candidate_memory = state.get("candidate_memory") if isinstance(state.get("candidate_memory"), dict) else {}
+    source_candidates = state.get("source_candidates") if isinstance(state.get("source_candidates"), dict) else {}
+    if not source_candidates:
+        source_candidates = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
+    source_edges = state.get("source_edges") if isinstance(state.get("source_edges"), dict) else {}
+    comment_discovery = state.get("comment_discovery") if isinstance(state.get("comment_discovery"), dict) else {}
     publication_candidates = state.get("publication_candidate_queue") if isinstance(state.get("publication_candidate_queue"), dict) else {}
     max_posts = getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000)
     max_sources = getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000)
@@ -852,6 +879,21 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "telegram_entity_cache": state.get("telegram_entity_cache") or {},
         "telegram_cooldowns": state.get("telegram_cooldowns") or {},
         "sources": compact_sources,
+        "source_candidates": {
+            str(k): compact_record(v, SOURCE_CANDIDATE_STATE_FIELDS, max_len=700)
+            for k, v in list(source_candidates.items())[:max_sources]
+            if isinstance(v, dict)
+        },
+        "source_edges": {
+            str(k): compact_record(v, SOURCE_EDGE_STATE_FIELDS, max_len=900)
+            for k, v in list(source_edges.items())[:max_candidates]
+            if isinstance(v, dict)
+        },
+        "comment_discovery": {
+            str(k): compact_record(v, COMMENT_DISCOVERY_STATE_FIELDS, max_len=900)
+            for k, v in list(comment_discovery.items())[:max_candidates]
+            if isinstance(v, dict)
+        },
         "processed_posts": compact_posts,
         "candidate_memory": compact_candidates,
         "publication_goal": state.get("publication_goal") or {},
@@ -1198,6 +1240,48 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         return 0
 
 
+def write_region_talk_online_discovery_items(
+    source_candidates: list[dict[str, Any]] | None = None,
+    source_edges: list[dict[str, Any]] | None = None,
+    comment_links: list[dict[str, Any]] | None = None,
+    *,
+    run_id: str,
+    stage: str,
+) -> dict[str, int]:
+    """Live-write discovery graph rows, not just final assembled queues.
+
+    A newly discovered public/channel must be visible in YDB immediately, before
+    the final `unified_source_queue` is built. Comments, when enabled, are
+    redacted source-discovery evidence only and never publication candidates.
+    """
+    return {
+        "source_candidate_item": write_region_talk_online_queue_items(
+            [r for r in (source_candidates or []) if isinstance(r, dict)],
+            kind="source_candidate_item",
+            id_fields=["source_candidate_id", "canonical_source_key", "canonical_url", "normalized_url"],
+            fields=SOURCE_CANDIDATE_STATE_FIELDS,
+            run_id=run_id,
+            stage=stage,
+        ),
+        "source_edge_item": write_region_talk_online_queue_items(
+            [r for r in (source_edges or []) if isinstance(r, dict)],
+            kind="source_edge_item",
+            id_fields=["edge_id", "to_source_candidate_id", "evidence_url"],
+            fields=SOURCE_EDGE_STATE_FIELDS,
+            run_id=run_id,
+            stage=stage,
+        ),
+        "comment_link_item": write_region_talk_online_queue_items(
+            [r for r in (comment_links or []) if isinstance(r, dict)],
+            kind="comment_link_item",
+            id_fields=["comment_link_id", "edge_id", "source_candidate_id", "normalized_url"],
+            fields=COMMENT_DISCOVERY_STATE_FIELDS,
+            run_id=run_id,
+            stage=stage,
+        ),
+    }
+
+
 def write_region_talk_online_stats(payload: dict[str, Any]) -> None:
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return
@@ -1393,6 +1477,9 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 publication_items = ydb_select_kind_items(session, ydb, table_path, "publication_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 post_items = ydb_select_kind_items(session, ydb, table_path, "processed_post_item", limit=getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000))
                 candidate_items = ydb_select_kind_items(session, ydb, table_path, "candidate_memory_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                source_candidate_items = ydb_select_kind_items(session, ydb, table_path, "source_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                source_edge_items = ydb_select_kind_items(session, ydb, table_path, "source_edge_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
                     if post_items:
@@ -1431,6 +1518,38 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["unified_source_queue"] = q
                         data0["ydb_row_level_source_queue_items_loaded"] = len(source_items)
+                    if source_candidate_items:
+                        q = data0.get("discovered_sources") if isinstance(data0.get("discovered_sources"), dict) else {}
+                        q = dict(q)
+                        frontier = data0.get("source_frontier_unique") if isinstance(data0.get("source_frontier_unique"), dict) else {}
+                        frontier = dict(frontier)
+                        for _pk, item in source_candidate_items.items():
+                            key = str(item.get("source_candidate_id") or item.get("canonical_source_key") or _pk.replace("source_candidate_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                                frontier[key] = {**frontier.get(key, {}), **item}
+                        data0["discovered_sources"] = q
+                        data0["source_frontier_unique"] = frontier
+                        data0["source_candidates"] = q
+                        data0["ydb_row_level_source_candidate_items_loaded"] = len(source_candidate_items)
+                    if source_edge_items:
+                        q = data0.get("source_edges") if isinstance(data0.get("source_edges"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in source_edge_items.items():
+                            key = str(item.get("edge_id") or _pk.replace("source_edge_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["source_edges"] = q
+                        data0["ydb_row_level_source_edge_items_loaded"] = len(source_edge_items)
+                    if comment_link_items:
+                        q = data0.get("comment_discovery") if isinstance(data0.get("comment_discovery"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in comment_link_items.items():
+                            key = str(item.get("comment_link_id") or item.get("edge_id") or _pk.replace("comment_link_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["comment_discovery"] = q
+                        data0["ydb_row_level_comment_link_items_loaded"] = len(comment_link_items)
                     if publication_items:
                         q = data0.get("publication_candidate_queue") if isinstance(data0.get("publication_candidate_queue"), dict) else {}
                         q = dict(q)
@@ -1543,6 +1662,21 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or "")
                         if key:
                             row_items.append(("candidate_memory_item:" + key, "candidate_memory_item", item))
+                for item in (compact.get("source_candidates") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("source_candidate_id") or item.get("canonical_source_key") or item.get("canonical_url") or item.get("normalized_url") or "")
+                        if key:
+                            row_items.append(("source_candidate_item:" + key, "source_candidate_item", item))
+                for item in (compact.get("source_edges") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("edge_id") or item.get("to_source_candidate_id") or item.get("evidence_url") or "")
+                        if key:
+                            row_items.append(("source_edge_item:" + key, "source_edge_item", item))
+                for item in (compact.get("comment_discovery") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("comment_link_id") or item.get("edge_id") or item.get("source_candidate_id") or item.get("normalized_url") or "")
+                        if key:
+                            row_items.append(("comment_link_item:" + key, "comment_link_item", item))
                 for item in (compact.get("publication_candidate_queue") or {}).values():
                     if isinstance(item, dict):
                         key = str(item.get("publication_candidate_id") or item.get("post_url") or "")
@@ -1563,7 +1697,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:
@@ -5604,6 +5738,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         link_rows, edge_rows = discover_links_for_post(p, run_id)
         discovered_rows.extend(link_rows)
         graph_edges.extend(edge_rows)
+        write_region_talk_online_discovery_items(link_rows, edge_rows, run_id=run_id, stage="post_link_discovery")
 
         cid = "cand_" + stable_hash(p["post_id"], "region-talk-semantic-bank-v1", text[:120])
         mid = "media_" + stable_hash(p["post_id"], p.get("post_url"), "media0")
@@ -5890,6 +6025,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     discovered_rows.extend(public_blogger_rows)
     graph_edges.extend(similar_channel_edges)
     graph_edges.extend(keyword_discovery_edges)
+    write_region_talk_online_discovery_items(
+        similar_channel_rows + keyword_discovery_rows + public_blogger_rows,
+        similar_channel_edges + keyword_discovery_edges,
+        run_id=run_id,
+        stage="telegram_discovery_merged",
+    )
 
     review_queue = sorted(candidates + pre_candidates, key=lambda r: (r.get("current_stage") not in {"favorite", "semantic_candidate"}, -float(r.get("candidate_score") or 0), int(r.get("post_age_days") or 9999)))
     for i, r in enumerate(review_queue, start=1):
@@ -6039,6 +6180,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "cursor_strategy": "fresh_first_min_post_date_then_anchor_search",
         }
     source_frontier_unique = build_source_frontier_unique(discovered_rows, updated_discovered_state, run_id)
+    write_region_talk_online_discovery_items(source_frontier_unique, [], run_id=run_id, stage="source_frontier_unique_built")
     active_frontier_tg_vk = [
         r for r in source_frontier_unique
         if normalize_source_platform(str(r.get("platform") or r.get("platform_guess") or ""), str(r.get("canonical_url") or r.get("normalized_url") or "")) in {"telegram", "vk"}
@@ -6165,6 +6307,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "updated_at": run_now,
         "posts": updated_posts_state,
         "discovered_sources": updated_discovered_state,
+        "source_candidates": {str(r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")): r for r in source_frontier_unique if r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")},
+        "source_edges": {str(r.get("edge_id") or stable_hash(r.get("from_source_id"), r.get("to_source_candidate_id"), r.get("evidence_url"), r.get("edge_type"))): r for r in graph_edges if r.get("edge_id") or r.get("to_source_candidate_id") or r.get("evidence_url")},
+        "comment_discovery": {},
         "source_cursors": source_cursors,
         "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
         "region_talk_sources": {str(r.get("canonical_source_key") or r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},

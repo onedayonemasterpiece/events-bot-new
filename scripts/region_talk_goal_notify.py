@@ -153,6 +153,9 @@ def build_stats_message(limit: int = 20000) -> str:
             if key:
                 by_source[key] = {**by_source.get(key, {}), **row}
         sources = list(by_source.values())
+        source_candidates = read_kind_rows(pool, ydb, table, "source_candidate_item", limit)
+        source_edges = read_kind_rows(pool, ydb, table, "source_edge_item", limit)
+        comment_links = read_kind_rows(pool, ydb, table, "comment_link_item", limit)
         posts = read_kind_rows(pool, ydb, table, "processed_post_item", limit)
         candidates = read_kind_rows(pool, ydb, table, "candidate_memory_item", limit)
         images = read_kind_rows(pool, ydb, table, "image_queue_item", limit)
@@ -173,6 +176,9 @@ def build_stats_message(limit: int = 20000) -> str:
     return "\n".join([
         "📊 Region Talk live YDB stats",
         f"Каналов/пабликов в базе: {len(sources)}",
+        f"Дискавери-кандидатов пабликов: {len(source_candidates)}",
+        f"Граф discovery-связей: {len(source_edges)}",
+        f"Comment-link discovery rows: {len(comment_links)}",
         f"Каналов отброшено/скрыто/ошибка: {len(rejected_sources)}",
         f"Каналов с постами о Калининградской области: {len(ko_sources)}",
         f"Постов-кандидатов про Калининградскую область: {len(candidates)}",
