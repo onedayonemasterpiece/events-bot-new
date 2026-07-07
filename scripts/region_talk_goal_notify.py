@@ -145,9 +145,14 @@ def build_stats_message(limit: int = 20000) -> str:
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
     try:
-        sources = read_kind_rows(pool, ydb, table, "source_status_item", limit)
-        if not sources:
-            sources = read_kind_rows(pool, ydb, table, "source_queue_item", limit)
+        source_queue = read_kind_rows(pool, ydb, table, "source_queue_item", limit)
+        source_status = read_kind_rows(pool, ydb, table, "source_status_item", limit)
+        by_source: dict[str, dict[str, Any]] = {}
+        for row in source_queue + source_status:
+            key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_id") or row.get("source_url") or row.get("_ydb_pk") or "")
+            if key:
+                by_source[key] = {**by_source.get(key, {}), **row}
+        sources = list(by_source.values())
         posts = read_kind_rows(pool, ydb, table, "processed_post_item", limit)
         candidates = read_kind_rows(pool, ydb, table, "candidate_memory_item", limit)
         images = read_kind_rows(pool, ydb, table, "image_queue_item", limit)
