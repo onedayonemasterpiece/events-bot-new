@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / processed-source frontier**: changed processed-source
+  rescan scheduling from a 24-hour fallback to a two-week default and made
+  CandidateReport finish pending/retry/never-scanned publics before looping back
+  to already processed sources with cursor-based delta scans.
 - **Region Talk Channel / state-write observability**: CandidateReport now
   emits `state_write_started` / `state_write_done` and skips final row-level
   entity rewrites by default, relying on live YDB row upserts so bounded runs do

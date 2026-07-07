@@ -322,8 +322,15 @@ The XLSX has:
 - Source scanning must be cursor/due driven, not “top seeds every run”.
   `source_queue_item.source_queue_status=processed_*` plus `_ydb_updated_at`/
   `source_cursors.next_history_scan_at` suppresses immediate re-scan until the
-  delta due time or `REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS` elapses;
-  `pending_scan` / `needs_rescan_or_retry` rows stay eligible.
+  delta due time or `REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS` elapses.
+  The default processed-source cooldown is two weeks
+  (`REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS=1209600`), not 24 hours.
+  `pending_scan` / `needs_rescan_or_retry` rows stay eligible, and the runner
+  must finish that primary unscanned/retry frontier before spending source-scan
+  budget on any processed-source delta rescans. Only after the current frontier
+  is exhausted can it loop back over already processed publics; that pass uses
+  the per-source cursor/delta window and overlap, so it scans only new or
+  near-boundary posts rather than replaying the whole public history.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and

@@ -210,6 +210,48 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([seed], 1, previous_state=previous_state)
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/puteshestvuem_rf"])
 
+
+    def test_source_selection_finishes_pending_queue_before_processed_rescans(self) -> None:
+        mod = load_module()
+        processed_due = mod.Seed(
+            source_seed_id="processed_due", platform="telegram", source_title="Старый обработанный",
+            handle="@old_done", url="https://t.me/old_done", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        pending = mod.Seed(
+            source_seed_id="pending_new", platform="telegram", source_title="Непройденный",
+            handle="@pending_new", url="https://t.me/pending_new", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=10, discovered_from="unit", discovered_from_url="",
+            why_seeded="pending", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {
+            "source_cursors": {processed_due.source_id: {"next_history_scan_at": "2020-01-01T00:00:00+00:00", "primary_scan_completed_at": "2020-01-01T00:00:00+00:00"}},
+            "unified_source_queue": {
+                "telegram:old_done": {"canonical_source_key": "telegram:old_done", "source_url": "https://t.me/old_done", "source_queue_status": "processed_found_ko", "queue_order": 1},
+                "telegram:pending_new": {"canonical_source_key": "telegram:pending_new", "source_url": "https://t.me/pending_new", "source_queue_status": "pending_scan", "queue_order": 2},
+            },
+        }
+        selected = mod.selected_sources_for_run([processed_due, pending], 2, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/pending_new"])
+
+    def test_source_selection_default_processed_rescan_interval_is_two_weeks(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="processed_recent", platform="telegram", source_title="Недавно обработанный",
+            handle="@recent_done", url="https://t.me/recent_done", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        recent = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        previous_state = {"unified_source_queue": {"telegram:recent_done": {"canonical_source_key": "telegram:recent_done", "source_url": "https://t.me/recent_done", "source_queue_status": "processed_found_ko", "_ydb_updated_at": recent, "queue_order": 1}}}
+        selected = mod.selected_sources_for_run([seed], 1, previous_state=previous_state)
+        self.assertEqual(selected, [])
+
     def test_vector_gate_rejects_ivan_kupala_multi_region_event_roundup(self) -> None:
         mod = load_module()
         lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")

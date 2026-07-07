@@ -522,6 +522,13 @@ def _source_queue_row_for_seed(seed: Seed, previous_state: dict[str, Any] | None
     return {}
 
 
+def source_delta_rescan_interval_seconds() -> int:
+    return getenv_int(
+        "REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS",
+        getenv_int("REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS", 14 * 86400),
+    )
+
+
 def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
     cursor = _source_cursor_for_seed(seed, previous_state)
     qrow = _source_queue_row_for_seed(seed, previous_state)
@@ -531,18 +538,18 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
     needs_retry = status in {"pending_scan", "needs_rescan_or_retry", "retry", "error", "selected_or_observed"} or status.startswith(("error", "skipped_telegram_unresolved"))
     scanned_before = bool(cursor.get("primary_scan_completed_at") or cursor.get("last_history_fetch_at") or qrow.get("_ydb_updated_at") or status.startswith("processed"))
-    if due_at and due_at <= now:
-        return {"due": True, "reason": "due_by_next_history_scan_at", "cursor": cursor, "queue_row": qrow}
     if needs_retry:
-        return {"due": True, "reason": "pending_or_retry_status", "cursor": cursor, "queue_row": qrow}
+        return {"due": True, "reason": "pending_or_retry_status", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     if not scanned_before:
-        return {"due": True, "reason": "no_previous_scan_cursor", "cursor": cursor, "queue_row": qrow}
+        return {"due": True, "reason": "no_previous_scan_cursor", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
+    if due_at and due_at <= now:
+        return {"due": True, "reason": "processed_rescan_due_by_next_history_scan_at", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     last_raw = cursor.get("last_history_fetch_at") or cursor.get("last_successful_delta_scan_at") or qrow.get("last_history_fetch_at") or qrow.get("_ydb_updated_at")
     last_dt = parse_iso_datetime(last_raw)
-    cooldown = getenv_int("REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS", 24 * 3600)
+    cooldown = source_delta_rescan_interval_seconds()
     if last_dt and (now - last_dt).total_seconds() >= cooldown:
-        return {"due": True, "reason": "processed_rescan_cooldown_elapsed", "cursor": cursor, "queue_row": qrow}
-    return {"due": False, "reason": "processed_recently_or_not_due", "cursor": cursor, "queue_row": qrow}
+        return {"due": True, "reason": "processed_rescan_cooldown_elapsed", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
+    return {"due": False, "reason": "processed_recently_or_not_due", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
 
 
 def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state: dict[str, Any] | None = None) -> list[Seed]:
@@ -570,7 +577,11 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         seed_sort_number(item[0].source_seed_id),
         item[0].canonical_url,
     ))
-    selected = [seed for seed, due in ordered if bool(due.get("due"))]
+    primary_due = [seed for seed, due in ordered if bool(due.get("due")) and not bool(due.get("is_rescan"))]
+    rescan_due = [seed for seed, due in ordered if bool(due.get("due")) and bool(due.get("is_rescan"))]
+    # First complete the unscanned/retry queue. Only when there are no primary
+    # pending publics left do we spend budget on processed-source delta rescans.
+    selected = primary_due if primary_due else rescan_due
     if len(selected) < max(0, max_sources) and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False):
         selected.extend([seed for seed, due in ordered if not bool(due.get("due")) and seed not in selected])
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_due_total"] = sum(1 for _seed, due in annotated if bool(due.get("due")))
@@ -6617,9 +6628,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "primary_scan_post_count": int(prev_cursor.get("primary_scan_post_count") or 0) or (int(srow.get("posts_scanned") or 0) if scanned_ok and is_new_source else 0),
             "last_successful_delta_scan_at": run_now if scanned_ok and not is_new_source else prev_cursor.get("last_successful_delta_scan_at", ""),
             "delta_scan_count_total": int(prev_cursor.get("delta_scan_count_total") or 0) + (1 if scanned_ok and not is_new_source else 0),
-            "source_scan_tier": srow.get("source_scan_tier") or ("high_daily" if float(srow.get("monitor_priority_score") or 0) >= 0.5 else "medium_weekly" if sampled else "keyword_probe"),
-            "next_history_scan_at": iso_after_seconds(86400 if float(srow.get("monitor_priority_score") or 0) >= 0.5 else 7 * 86400),
-            "next_delta_scan_at": iso_after_seconds(86400 if float(srow.get("monitor_priority_score") or 0) >= 0.5 else 7 * 86400),
+            "source_scan_tier": srow.get("source_scan_tier") or ("delta_rescan" if prev_cursor.get("primary_scan_completed_at") else "keyword_probe"),
+            "next_history_scan_at": iso_after_seconds(source_delta_rescan_interval_seconds()),
+            "next_delta_scan_at": iso_after_seconds(source_delta_rescan_interval_seconds()),
             "delta_scanned_this_run": str(bool(scanned_ok and not is_new_source)).lower(),
             "delta_scan_window_days": getenv_int("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", 14),
             "delta_overlap_posts": getenv_int("REGION_TALK_DELTA_OVERLAP_POSTS", 10),

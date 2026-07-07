@@ -706,7 +706,14 @@ spend its tail rewriting thousands of unchanged rows. Full rewrites are an
 explicit maintenance mode, not normal notebook behavior. Already processed publics are
 not selected again every run: `processed_*` queue rows are held until
 `next_history_scan_at`/`next_delta_scan_at`, retry status, or the processed-source
-rescan cooldown says they are due.
+rescan cooldown says they are due. The default processed-source cooldown is two
+weeks (`REGION_TALK_SOURCE_DELTA_RESCAN_INTERVAL_SECONDS=1209600`, overridable
+by `REGION_TALK_SOURCE_RESCAN_PROCESSED_AFTER_SECONDS`). Even when a processed
+public is technically due, CandidateReport first spends scan slots on
+`pending_scan` / retry / never-scanned publics; processed-source delta rescans
+start only after the primary frontier is exhausted. That later monitoring loop is
+cursor-based: it uses the stored per-source history cursor, delta window and
+overlap to fetch new or boundary posts, not to repeat the original full scan.
 
 ## Vector-first product quality correction
 
