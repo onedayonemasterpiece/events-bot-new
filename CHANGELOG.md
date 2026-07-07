@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / image-gated final verifier**: CandidateReport no
+  longer calls Gemini Lite final verification for text-only vector candidates;
+  final LLM checks are deferred until ImageDiagnostic has produced actual-image
+  postcard/aesthetic evidence or the row is in the publication-queue base gate.
 - **Region Talk Channel / vector-first runtime profile**: CandidateReport now
   prioritizes the accepted E5+BGE-M3 dual-vector pass over similar/keyword
   discovery tail, floors accidental tiny embedding timeouts to the vector-priority

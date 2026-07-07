@@ -6599,6 +6599,22 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         r["status_badge"] = "READY" if r["current_stage"] == "favorite" else "NEEDS_REVIEW"
         r["new_or_seen"] = "NEW"
     favorites = [r for r in review_queue if r.get("current_stage") == "favorite"]
+
+    def row_has_final_verifier_image_evidence(row: dict[str, Any]) -> bool:
+        # Gemini Lite is a final publication verifier, not a bulk text filter.
+        # Do not call it until ImageDiagnostic has confirmed an actual strong
+        # image or the row is already publication-queue ready.
+        if not getenv_bool("REGION_TALK_FINAL_VERIFIER_REQUIRE_ACTUAL_IMAGE", True):
+            return True
+        image_input = str(row.get("image_model_input_type") or "")
+        image_status = str(row.get("image_queue_status") or row.get("image_status") or "")
+        actual = image_input == "actual_image" or image_status == "actual_scored" or str(row.get("visual_confirmation_source") or "").startswith("RegionTalkImageDiagnostic")
+        visual = max(_rt_float(row.get("overall_media_score")), _rt_float(row.get("final_visual_score")), _rt_float(row.get("best_media_score_ever")), _rt_float(row.get("media_score_current")))
+        postcard = max(_rt_float(row.get("postcardness_score")), _rt_float(row.get("clip_postcardness_score")), _rt_float(row.get("cv_postcardness_score")))
+        min_visual = _rt_float(os.getenv("REGION_TALK_FINAL_VERIFIER_MIN_OVERALL_MEDIA_SCORE"), _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE"), 0.66))
+        min_postcard = _rt_float(os.getenv("REGION_TALK_FINAL_VERIFIER_MIN_POSTCARDNESS_SCORE"), _rt_float(os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE"), 0.55))
+        return bool(actual and visual >= min_visual and postcard >= min_postcard)
+
     final_verifier_llm_calls = 0
     final_verifier_queue_rows = [
         r for r in review_queue
@@ -6608,7 +6624,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         and str(r.get("kaliningrad_mention_role") or "main_subject") in {"", "main_subject"}
         and not r.get("is_ad_or_promo")
         and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
+        and row_has_final_verifier_image_evidence(r)
     ]
+    final_verifier_image_wait_count = sum(
+        1 for r in review_queue
+        if getenv_bool("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", False)
+        and str(r.get("needs_llm_final_verify") or "").lower() == "true"
+        and r.get("current_stage") in CANDIDATE_MEMORY_STAGES
+        and not row_has_final_verifier_image_evidence(r)
+    )
+    if final_verifier_image_wait_count:
+        report_event("final_verifier_waiting_for_image_scoring", phase="final_llm_verifier", status="deferred", final_verifier_waiting_for_image_scoring=final_verifier_image_wait_count, final_verifier_queue_count=len(final_verifier_queue_rows))
     final_verifier_limit = getenv_int("REGION_TALK_MAX_LLM_FINAL_VERIFY", 10)
     if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_LLM_SECONDS", 90)):
         report_event("runtime_budget_final_verifier_skip", phase="final_llm_verifier", status="deferred", final_verifier_queue_count=len(final_verifier_queue_rows), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))

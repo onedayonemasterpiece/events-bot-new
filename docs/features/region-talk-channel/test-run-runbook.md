@@ -324,6 +324,12 @@ The XLSX has:
   and XLSX report building, reads a small text batch from live YDB, runs E5 then
   BGE-M3 sequentially, writes `vector_probe_result` rows/heartbeats to YDB and
   exits.
+- Gemini Lite final verification is image-gated. CandidateReport must not call
+  the final verifier for text-only review rows after vector scoring. It may run
+  only after `RegionTalkImageDiagnostic` has written actual-image evidence
+  (`image_model_input_type=actual_image`, `image_queue_status=actual_scored`)
+  with publication-level visual/postcard scores, or inside the publication queue
+  path whose base gate already requires that actual image evidence.
 - For true live-YDB product runs, the CandidateReport Kaggle runner performs a
   local YDB preflight when `REGION_TALK_REQUIRE_YDB_STATE=1`; set
   `REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1` for production-like

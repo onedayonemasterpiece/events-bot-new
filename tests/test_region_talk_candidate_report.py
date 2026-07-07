@@ -214,6 +214,72 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 
+
+    def test_final_verifier_waits_for_actual_image_scoring(self) -> None:
+        mod = load_module()
+        old_mode = os.environ.get("REGION_TALK_TEXT_VECTOR_MODE")
+        old_enable = os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER")
+        old_timeout = os.environ.get("REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER")
+        os.environ["REGION_TALK_TEXT_VECTOR_MODE"] = "prototype"
+        os.environ["REGION_TALK_ENABLE_FINAL_LLM_VERIFIER"] = "1"
+        os.environ["REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER"] = "0"
+        calls = []
+        old_call = mod.call_region_talk_semantic_llm
+        old_gate = mod.text_vector_gate
+        old_blogger = mod.load_public_blogger_links
+        old_xlsx = mod.write_xlsx
+        try:
+            mod.load_public_blogger_links = lambda previous_state: []
+            mod.write_xlsx = lambda path, sheets: Path(path).write_text("xlsx skipped in unit", encoding="utf-8")
+            mod.call_region_talk_semantic_llm = lambda *args, **kwargs: calls.append(args) or {"llm_gate_status": "ok", "llm_decision": "accept", "llm_reason": "unit", "llm_model": "unit"}
+            def fake_gate(text, ts, scope, ad_gate, substance, embedding_scores=None, allow_embedding_fallback=True):
+                return {
+                    "vector_gate_status": "vector_accept_candidate",
+                    "vector_content_type": "visit_impression_candidate",
+                    "vector_positive_score": 0.9,
+                    "vector_news_event_score": 0.1,
+                    "vector_ad_promo_score": 0.1,
+                    "vector_roundup_score": 0.1,
+                    "vector_low_substance_score": 0.1,
+                    "vector_visit_impression_score": 0.9,
+                    "vector_route_useful_score": 0.2,
+                    "vector_emotion_observation_score": 0.8,
+                    "vector_margin_positive_vs_negative": 0.5,
+                    "vector_rejection_reason": "",
+                    "vector_gate_confidence": "high",
+                    "needs_llm_final_verify": "true",
+                    "llm_status": "not_called_until_final_verifier",
+                    "llm_not_called_reason": "",
+                    "text_embedding_model_id": "unit",
+                    "text_embedding_runtime": "unit",
+                }
+            mod.text_vector_gate = fake_gate
+            seed = mod.Seed("s", "telegram", "Travel", "@travel", "https://t.me/travel", "travel_media", "", 1, "unit", "", "", "", "", "pending_scan", True, "unknown", "")
+            post = {
+                "post_id": "p1", "source_id": seed.source_id, "source_seed_id": seed.source_seed_id,
+                "source_title": "Travel", "platform": "telegram", "handle": "@travel",
+                "post_url": "https://t.me/travel/1", "platform_post_key": "tg:travel:1",
+                "post_date": "2026-06-01T12:00:00+00:00",
+                "text": "Личный отзыв о поездке в Калининградскую область: Куршская коса, море, эмоции и советы.",
+                "has_media": True, "media_count": 1, "rights_policy": "unknown",
+                "source_kind": "travel_media", "source_type": "travel_media", "source_url": "https://t.me/travel",
+            }
+            with tempfile.TemporaryDirectory() as td:
+                report = mod.build_report([seed], [], [post], "final-image-wait-unit", Path(td))
+            self.assertEqual(calls, [])
+            events = report.get("summary", {})
+            self.assertEqual(events.get("final_verifier_llm_calls"), 0)
+        finally:
+            mod.call_region_talk_semantic_llm = old_call
+            mod.text_vector_gate = old_gate
+            mod.load_public_blogger_links = old_blogger
+            mod.write_xlsx = old_xlsx
+            for key, val in [("REGION_TALK_TEXT_VECTOR_MODE", old_mode), ("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", old_enable), ("REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER", old_timeout)]:
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
+
     def test_vector_probe_loads_state_with_output_dir_and_writes_result(self) -> None:
         mod = load_module()
         old_load = mod.load_region_talk_state
