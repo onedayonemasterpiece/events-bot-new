@@ -20,8 +20,24 @@ description: Operate MAX Web Messenger through Playwright for QR login, persiste
    - set `locale: ru-RU`, timezone `Europe/Moscow`, and a normal desktop viewport.
 2. Open `https://web.max.ru/`.
 3. If MAX shows `Войдите в MAX по QR-коду`, screenshot the page and show the QR to the user.
-4. Wait for the user to confirm scanning, then verify the page contains chat lists (`Чаты`, `Каналы`, `Избранное`) instead of the QR login page.
-5. Keep the session open if the user says another command will follow.
+4. If the user permits Telegram delivery, decode the QR image locally and send only the extracted authorization link to Telegram Saved Messages/`Избранное` through an approved `telegram-human-session`.
+   - Do not print the decoded auth link in logs or chat.
+   - Treat the decoded QR payload as a short-lived secret.
+   - If decoding fails, fall back to a screenshot of the QR.
+5. Wait for the user to confirm scanning, then verify the page contains chat lists (`Чаты`, `Каналы`, `Избранное`) instead of the QR login page.
+6. Keep the session open only while a follow-up command is expected. At the end of the task, close the browser/context/controller so the Playwright session is not left running.
+
+## QR link handoff through Telegram
+
+When QR authorization is needed in a headless environment:
+
+1. Save a screenshot or cropped QR image under `artifacts/codex/<task>/`.
+2. Decode the QR locally with an available tool such as `zbarimg`, `pyzbar`, or OpenCV QR detector.
+3. Send the decoded MAX authorization link to Telegram Saved Messages using an approved local human Telethon session.
+4. Include a short neutral caption such as `MAX Web login link`; do not include secrets in terminal output.
+5. If the user reports successful scan/open, continue with MAX Web verification.
+
+Never reuse Telegram bundles outside their scoped purpose and never send QR payloads to third parties.
 
 ## Finding chats and channels
 
@@ -97,3 +113,4 @@ Notes:
 - Before sending to a channel, take a screenshot of the draft and inspect it.
 - For live channel posts, prefer drafting/editing in scheduled/postponed messages when supported so subscribers do not see intermediate mistakes.
 - If a public mistake is made, use `Редактировать` immediately rather than posting a correction unless the user asks for a separate post.
+- On completion, close the Playwright browser context/controller unless the user explicitly asks to keep it open for the next command.
