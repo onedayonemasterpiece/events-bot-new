@@ -173,6 +173,8 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_MAX_POST_ROWS": os.environ.get("REGION_TALK_YDB_MAX_POST_ROWS", "20000"),
         "REGION_TALK_YDB_MAX_SOURCE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_SOURCE_ROWS", "5000"),
         "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", "5000"),
+        "REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS": os.environ.get("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1"),
+        "REGION_TALK_YDB_PRUNE_MAX_ROWS": os.environ.get("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200"),
         "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
         "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
@@ -392,6 +394,8 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "json")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "0")
+    os.environ.setdefault("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1")
+    os.environ.setdefault("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14")
     os.environ.setdefault("REGION_TALK_DELTA_OVERLAP_POSTS", "50")
@@ -424,23 +428,25 @@ def main() -> int:
     if args.no_wait:
         print(f"[region-talk-kaggle] pushed {kernel_ref}; not waiting; temporary input datasets retained until run completion: {dataset_sources}", flush=True)
         return 0
-    poll_kernel(client, kernel_ref, timeout_minutes=args.timeout_minutes, poll_interval_seconds=args.poll_interval_seconds)
-    out_dir = ARTIFACT_ROOT / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-    output_file_pattern = os.environ.get(
-        "REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN",
-        r"(^|/)(candidates-latest\.xlsx|output\.json|stage_status\.json|run_events\.jsonl|candidate_found\.jsonl|telegram-request-ledger\.jsonl|region-talk-state\.json|[^/]+\.(xlsx|json|jsonl|md|html|log|csv))$",
-    )
-    files = client.download_kernel_output(kernel_ref, path=out_dir, force=True, file_pattern=output_file_pattern)
-    print(f"[region-talk-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
-    latest = out_dir / "candidates-latest.xlsx"
-    if latest.exists():
-        public_latest = PROJECT_ROOT / "artifacts" / "region-talk" / "candidates-latest.xlsx"
-        public_latest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(latest, public_latest)
-        print(f"[region-talk-kaggle] latest workbook: {public_latest}", flush=True)
-    if not args.keep_input_datasets:
-        cleanup_input_datasets(client, dataset_sources)
+    try:
+        poll_kernel(client, kernel_ref, timeout_minutes=args.timeout_minutes, poll_interval_seconds=args.poll_interval_seconds)
+        out_dir = ARTIFACT_ROOT / run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_file_pattern = os.environ.get(
+            "REGION_TALK_KAGGLE_OUTPUT_FILE_PATTERN",
+            r"(^|/)(candidates-latest\.xlsx|output\.json|stage_status\.json|run_events\.jsonl|candidate_found\.jsonl|telegram-request-ledger\.jsonl|region-talk-state\.json|[^/]+\.(xlsx|json|jsonl|md|html|log|csv))$",
+        )
+        files = client.download_kernel_output(kernel_ref, path=out_dir, force=True, file_pattern=output_file_pattern)
+        print(f"[region-talk-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
+        latest = out_dir / "candidates-latest.xlsx"
+        if latest.exists():
+            public_latest = PROJECT_ROOT / "artifacts" / "region-talk" / "candidates-latest.xlsx"
+            public_latest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(latest, public_latest)
+            print(f"[region-talk-kaggle] latest workbook: {public_latest}", flush=True)
+    finally:
+        if not args.keep_input_datasets:
+            cleanup_input_datasets(client, dataset_sources)
     return 0
 
 

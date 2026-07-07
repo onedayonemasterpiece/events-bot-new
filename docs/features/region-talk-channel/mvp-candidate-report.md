@@ -553,3 +553,14 @@ canonical artifact path when running in a linked worktree, and delete temporary
 `region-talk-config-*` / `rt-secret-bundle-*` datasets after a waited run has
 downloaded output. Use `--keep-input-datasets` only for debugging a still-running
 kernel.
+
+YDB compact state is process state, not a mirror of every XLSX/debug tab.
+Schema `region-talk-ydb-compact-v2` persists `unified_source_queue` +
+`unified_source_queue_cursor_*`, `image_candidate_queue` +
+`image_candidate_queue_cursor_*`, compact source cursors/links, processed post
+links/keys, candidate lifecycle and metrics. Legacy queue-like structures such
+as `source_frontier_queue_next`, `similar_seed_queue`, XLSX-only color fields and
+frontier/debug columns must not be durable YDB queue state. The writer runs a
+bounded prune pass (`REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS=1`) that
+rewrites old compact snapshots to this contract without deleting source/post or
+candidate data.

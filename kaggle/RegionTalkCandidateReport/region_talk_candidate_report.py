@@ -587,20 +587,20 @@ def compact_record(row: dict[str, Any], fields: Iterable[str], *, max_len: int =
 
 
 SOURCE_STATE_FIELDS = [
-    "source_id", "source_seed_id", "source_candidate_id", "frontier_source_id", "canonical_source_key",
+    "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
-    "source_url", "frontier_status", "scan_status", "fetch_status", "vk_wall_probe_status",
+    "source_url", "fetch_status", "vk_wall_probe_status",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
-    "confidence", "frontier_priority", "next_action", "blocked_reason", "updated_at", "last_run_id",
+    "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
-    "source_queue_id", "queue_order", "source_queue_status", "status_color_hint", "added_at",
+    "source_queue_id", "queue_order", "source_queue_status", "added_at",
     "added_from", "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "posts_scanned", "ko_posts_found", "candidate_posts_found", "next_action",
 ]
 IMAGE_QUEUE_STATE_FIELDS = [
-    "image_queue_id", "image_queue_order", "image_queue_status", "status_color_hint",
+    "image_queue_id", "image_queue_order", "image_queue_status",
     "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
     "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
@@ -631,7 +631,11 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
     scoring metrics. The full JSON backup remains a local/Kaggle artifact only.
     """
     posts = state.get("posts") if isinstance(state.get("posts"), dict) else {}
+    if not posts:
+        posts = state.get("processed_posts") if isinstance(state.get("processed_posts"), dict) else {}
     sources = state.get("region_talk_sources") if isinstance(state.get("region_talk_sources"), dict) else {}
+    if not sources:
+        sources = state.get("sources") if isinstance(state.get("sources"), dict) else {}
     if not sources:
         sources = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
     candidate_memory = state.get("candidate_memory") if isinstance(state.get("candidate_memory"), dict) else {}
@@ -654,10 +658,41 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         if isinstance(v, dict)
     }
     source_queue = state.get("unified_source_queue") if isinstance(state.get("unified_source_queue"), dict) else {}
+    if not source_queue and isinstance(state.get("canonical_source_queue"), dict):
+        source_queue = state.get("canonical_source_queue") or {}
+    if not source_queue:
+        synthetic: dict[str, dict[str, Any]] = {}
+        synthetic_rows: list[dict[str, Any]] = []
+        for value in [sources, state.get("source_frontier_queue_next"), state.get("source_frontier_unique")]:
+            if isinstance(value, dict):
+                synthetic_rows.extend([v for v in value.values() if isinstance(v, dict)])
+            elif isinstance(value, list):
+                synthetic_rows.extend([v for v in value if isinstance(v, dict)])
+        for row in synthetic_rows:
+            seed = _source_queue_seed_from_row(row) if "_source_queue_seed_from_row" in globals() else None
+            if not seed:
+                continue
+            key = str(seed.get("canonical_source_key") or "")
+            if not key or key in synthetic:
+                continue
+            order = len(synthetic) + 1
+            synthetic[key] = {
+                **seed,
+                "source_queue_id": "srcq_" + stable_hash(key),
+                "queue_order": order,
+                "source_queue_status": row.get("source_queue_status") or row.get("scan_status") or row.get("frontier_status") or "pending_scan",
+                "added_at": row.get("added_at") or row.get("updated_at") or state.get("updated_at") or "",
+                "added_from": row.get("added_from") or row.get("discovery_types") or row.get("discovery_type") or "legacy_ydb_queue_migration",
+                "last_scan_status": row.get("last_scan_status") or row.get("fetch_status") or row.get("frontier_status") or "",
+                "posts_scanned": row.get("posts_scanned") or 0,
+                "next_action": row.get("next_action") or "scan_when_cursor_reaches_source",
+            }
+        source_queue = synthetic
     image_queue = state.get("image_candidate_queue") if isinstance(state.get("image_candidate_queue"), dict) else {}
     return {
         "run_id": state.get("run_id"),
-        "state_schema_version": "region-talk-ydb-compact-v1",
+        "state_schema_version": "region-talk-ydb-compact-v2",
+        "queue_contract_version": "unified_source_queue_v1_and_image_candidate_queue_v1",
         "full_state_schema_version": state.get("state_schema_version"),
         "updated_at": state.get("updated_at"),
         "all_time_metrics": state.get("all_time_metrics") or {},
@@ -679,16 +714,6 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "image_candidate_queue": {
             str(k): compact_record(v, IMAGE_QUEUE_STATE_FIELDS, max_len=700)
             for k, v in list(image_queue.items())[:max_candidates]
-            if isinstance(v, dict)
-        },
-        "source_frontier_queue_next": {
-            str(k): compact_record(v, SOURCE_STATE_FIELDS + ["queue_rank", "queue_reason"], max_len=700)
-            for k, v in list((state.get("source_frontier_queue_next") or {}).items())[:max_sources]
-            if isinstance(v, dict)
-        },
-        "similar_seed_queue": {
-            str(k): compact_record(v, SOURCE_STATE_FIELDS + ["similar_seed_id", "seed_rank"], max_len=700)
-            for k, v in list((state.get("similar_seed_queue") or {}).items())[:max_sources]
             if isinstance(v, dict)
         },
     }
@@ -780,6 +805,32 @@ def ydb_select_latest_state(session: Any, ydb: Any, table_path: str) -> dict[str
     return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
 
 
+def ydb_prune_legacy_queue_payloads(session: Any, ydb: Any, table_path: str) -> int:
+    """Rewrite compact state rows to the current queue contract without deleting data."""
+    if not getenv_bool("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", True):
+        return 0
+    max_rows = getenv_int("REGION_TALK_YDB_PRUNE_MAX_ROWS", 200)
+    result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+        f"SELECT pk, kind, payload_json, updated_at FROM `{table_path}` "
+        f"WHERE kind IN ('state_snapshot', 'run_state_snapshot') LIMIT {max(1, max_rows)};",
+        commit_tx=True,
+    )
+    rows = result_sets[0].rows if result_sets else []
+    changed = 0
+    for row in rows:
+        pk = str(row.pk)
+        kind = str(row.kind)
+        payload = row.payload_json
+        data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+        if not isinstance(data, dict):
+            continue
+        pruned = compact_region_talk_state_for_ydb(data)
+        if data.get("source_frontier_queue_next") or data.get("similar_seed_queue") or data.get("canonical_source_queue") or data.get("state_schema_version") != pruned.get("state_schema_version"):
+            ydb_upsert_json(session, ydb, table_path, pk, kind, pruned, str(row.updated_at or pruned.get("updated_at") or utc_now_iso()))
+            changed += 1
+    return changed
+
+
 def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
     cfg = ydb_config_status()
     meta = {"state_backend_requested": "ydb", "state_backend": "ydb", "state_fallback_used": "false", "ydb_namespace": cfg["namespace"], "ydb_tables_expected": ydb_table_plan(), "ydb_read_status": "not_started", "ydb_write_status": "not_started"}
@@ -855,9 +906,10 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at)
                 ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at)
                 ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at)
+                compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
-            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {})}
+            return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {})}
         except Exception as exc:
             return {**meta, "ydb_write_status": "error", "state_write_status": "error", "state_write_error": f"{type(exc).__name__}: {str(exc)[:220]}"}
     try:

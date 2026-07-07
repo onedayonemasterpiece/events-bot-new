@@ -168,3 +168,11 @@ Telegram/VK `unified_source_queue` + cursor, post URLs/platform keys, candidate
 lifecycle, the `image_candidate_queue` + cursor and image scoring metrics. It
 deliberately excludes raw post text, raw API payload JSON and media bytes
 because posts/images can be re-fetched from external URLs when needed.
+
+Current compact state schema is `region-talk-ydb-compact-v2`. YDB must not carry
+parallel durable queue processes such as `source_frontier_queue_next` or
+`similar_seed_queue`; those are XLSX/debug/report artifacts only. XLSX-only
+columns (`status_color_hint`, `row_fill_color`) and frontier/debug columns are
+also pruned from durable YDB queue payloads. The Kaggle writer may rewrite old
+compact state rows through the v2 compactor to remove those parasite fields
+without deleting URLs/posts/candidates.

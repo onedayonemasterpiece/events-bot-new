@@ -440,9 +440,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "state_schema_version": "full",
                 "updated_at": "now",
                 "posts": {"p1": {"post_id": "p1", "post_url": "https://t.me/x/1", "text": "RAW TEXT MUST NOT BE STORED", "candidate_score": 0.7, "overall_media_score": 0.8, "image_quality_bucket": "reviewable"}},
-                "region_talk_sources": {"s1": {"source_id": "s1", "canonical_url": "https://t.me/x", "source_title": "X", "description": "RAW SOURCE DESC"}},
+                "region_talk_sources": {"s1": {"source_id": "s1", "canonical_url": "https://t.me/x", "source_title": "X", "description": "RAW SOURCE DESC", "frontier_status": "legacy_noise"}},
                 "candidate_memory": {"c1": {"candidate_memory_id": "c1", "post_url": "https://t.me/x/1", "short_summary": "ok", "raw_payload_json": "NO"}},
                 "source_cursors": {"s1": {"last_seen_post_key": "1"}},
+                "unified_source_queue": {"telegram:x": {"source_queue_id": "srcq1", "queue_order": 1, "canonical_source_key": "telegram:x", "platform": "telegram", "source_url": "https://t.me/x", "source_queue_status": "pending_scan", "status_color_hint": "white_pending", "row_fill_color": "white_pending"}},
+                "image_candidate_queue": {"imgq1": {"image_queue_id": "imgq1", "image_queue_order": 1, "post_url": "https://t.me/x/1", "image_queue_status": "needs_actual_image_fetch", "status_color_hint": "yellow_retry"}},
+                "source_frontier_queue_next": {"legacy": {"canonical_url": "https://t.me/legacy"}},
+                "similar_seed_queue": {"legacy": {"canonical_url": "https://t.me/similar"}},
                 "all_time_metrics": {"posts": 1},
             })
         finally:
@@ -454,10 +458,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else: os.environ["REGION_TALK_YDB_NAMESPACE"] = old_namespace
         blob = json.dumps(compact, ensure_ascii=False)
         self.assertIn("processed_posts", compact)
+        self.assertEqual(compact["state_schema_version"], "region-talk-ydb-compact-v2")
+        self.assertIn("unified_source_queue", compact)
+        self.assertIn("image_candidate_queue", compact)
+        self.assertNotIn("source_frontier_queue_next", compact)
+        self.assertNotIn("similar_seed_queue", compact)
         self.assertIn("https://t.me/x/1", blob)
         self.assertNotIn("RAW TEXT MUST NOT BE STORED", blob)
         self.assertNotIn("RAW SOURCE DESC", blob)
         self.assertNotIn("raw_payload_json", blob)
+        self.assertNotIn("frontier_status", blob)
+        self.assertNotIn("status_color_hint", blob)
+        self.assertNotIn("row_fill_color", blob)
 
     def test_vk_wall_uses_service_key_first_and_skips_catalog_paths(self) -> None:
         mod = load_module()
