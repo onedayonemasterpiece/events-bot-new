@@ -109,13 +109,31 @@ def _json_row_payload(row: Any) -> dict[str, Any]:
 
 
 def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> list[dict[str, Any]]:
-    q = f"DECLARE $kind AS Utf8; SELECT pk, payload_json FROM `{table}` WHERE kind=$kind LIMIT {max(1, int(limit))};"
-    rows = pool.retry_operation_sync(lambda s: s.transaction(ydb.StaleReadOnly()).execute(q, {"$kind": kind}, commit_tx=True))[0].rows
+    if not re.fullmatch(r"[A-Za-z0-9_:-]+", kind):
+        raise ValueError(f"unsafe YDB kind: {kind!r}")
     out = []
-    for row in rows:
-        item = _json_row_payload(row)
-        item["_ydb_pk"] = str(row.pk)
-        out.append(item)
+    max_items = max(1, int(limit))
+    page_size = max(1, min(200, max_items))
+    after = ""
+    while len(out) < max_items:
+        q = (
+            f"DECLARE $after AS Utf8; "
+            f"SELECT pk, payload_json FROM `{table}` WHERE kind='{kind}' AND pk > $after "
+            f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
+        )
+        def op(session: Any):
+            query = session.prepare(q)
+            return session.transaction(ydb.StaleReadOnly()).execute(query, {"$after": after}, commit_tx=True)
+        rows = pool.retry_operation_sync(op)[0].rows
+        if not rows:
+            break
+        for row in rows:
+            after = str(row.pk)
+            item = _json_row_payload(row)
+            item["_ydb_pk"] = after
+            out.append(item)
+        if len(rows) < page_size:
+            break
     return out
 
 
