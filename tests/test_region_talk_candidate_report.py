@@ -663,6 +663,25 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(calls[0]["phase"], "fetch")
         self.assertIn("event_seq", calls[0])
 
+    def test_compact_business_payload_keeps_vector_counters(self) -> None:
+        mod = load_module()
+        compact = mod._compact_business_payload({
+            "run_id": "heartbeat-unit",
+            "event_name": "vector_scoring_alive",
+            "phase": "vector_scoring",
+            "status": "running",
+            "progress_label": "posts 25/180",
+            "posts_fetched": 653,
+            "posts_to_score": 180,
+            "posts_scored": 25,
+            "posts_deferred": 473,
+            "raw_post_text": "must not be persisted",
+        })
+        self.assertEqual(compact["posts_to_score"], 180)
+        self.assertEqual(compact["posts_scored"], 25)
+        self.assertEqual(compact["posts_deferred"], 473)
+        self.assertNotIn("raw_post_text", compact)
+
     def test_candidate_report_delegates_image_scoring_to_ydb_worker_by_default(self) -> None:
         mod = load_module()
         old_mode = os.environ.get("REGION_TALK_IMAGE_SCORING_MODE")

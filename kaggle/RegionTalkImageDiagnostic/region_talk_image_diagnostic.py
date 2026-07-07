@@ -10,8 +10,17 @@ RUN_ID = os.getenv("REGION_TALK_RUN_ID") or os.getenv("RT_IMAGE_DIAG_RUN_ID") or
 OUT = Path(os.getenv("REGION_TALK_IMAGE_DIAG_OUTPUT_DIR") or f"/kaggle/working/{RUN_ID}")
 MEDIA = OUT / "media"
 THUMBS = OUT / "contact_sheet_assets"
-for p in (OUT, MEDIA, THUMBS):
-    p.mkdir(parents=True, exist_ok=True)
+
+def refresh_run_paths() -> None:
+    global RUN_ID, OUT, MEDIA, THUMBS
+    RUN_ID = os.getenv("REGION_TALK_RUN_ID") or os.getenv("RT_IMAGE_DIAG_RUN_ID") or RUN_ID or "region-talk-image-diagnostic"
+    OUT = Path(os.getenv("REGION_TALK_IMAGE_DIAG_OUTPUT_DIR") or f"/kaggle/working/{RUN_ID}")
+    MEDIA = OUT / "media"
+    THUMBS = OUT / "contact_sheet_assets"
+    for path in (OUT, MEDIA, THUMBS):
+        path.mkdir(parents=True, exist_ok=True)
+
+refresh_run_paths()
 
 def log_event(name: str, **payload):
     payload.setdefault("event_name", name)
@@ -86,6 +95,7 @@ def load_secrets() -> dict:
     return {"ok": False, "error": locals().get("last", "no secrets pair")}
 
 runtime_config = load_runtime_config()
+refresh_run_paths()
 input_payload = load_json_file("image_diag_input.json")
 secret_status = load_secrets()
 rows = input_payload.get("rows") or []

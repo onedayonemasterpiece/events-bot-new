@@ -115,7 +115,7 @@ Implementation entrypoints added for the first Candidate Report Only run:
 - Kaggle launcher: `kaggle/execute_region_talk_candidate_report.py`;
 - focused smoke tests: `tests/test_region_talk_candidate_report.py`.
 
-Telegram source monitoring is explicitly **Telethon-based**. MVP-1 prefers `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for Region Talk discovery and can fall back to `TELEGRAM_AUTH_BUNDLE_S22` when deliberately configured for Kaggle-style remote monitoring. It does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
+Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` defaults to `TELEGRAM_AUTH_BUNDLE_S22`, `RegionTalkImageDiagnostic` defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY`, and local Telegram Saved Messages delivery uses only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`). Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
 
 ### Reuse existing Kaggle infrastructure
 

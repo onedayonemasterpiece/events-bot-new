@@ -904,7 +904,8 @@ def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "sources_done", "sources_total", "source_index", "source_id", "current_source_title",
         "current_source_url", "current_source_handle", "current_source_platform", "fetch_status",
         "telegram_resolve_status", "posts_scanned", "last_seen_post_date", "history_fetch_runtime_seconds",
-        "posts_fetched", "sources_scanned", "candidates_created", "favorites_created",
+        "posts_fetched", "posts_scanned", "posts_for_scoring", "posts_to_score", "posts_scored",
+        "posts_deferred", "sources_scanned", "candidates_created", "favorites_created",
         "current_run_reviewable_candidates", "state_backend", "ydb_read_status", "ydb_write_status",
         "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
         "image_queue_rejected_non_region_inputs", "image_queue_text_region_confirmed_total",
@@ -3667,7 +3668,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             for s in monitored:
                 source_rows.append(source_status_row(s, "skipped_telethon_not_installed"))
             return source_rows, posts
-    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
+    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_S22").strip()
     raw = (os.getenv(bundle_env) or "").strip()
     api_id = int((os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID") or "0").strip() or 0)
     api_hash = (os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH") or "").strip()
@@ -4678,7 +4679,7 @@ def build_all_time_metrics(state_to_write: dict[str, Any], source_frontier_uniqu
     }
 
 
-def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: list[dict[str, Any]], run_id: str, output_dir: Path) -> dict[str, Any]:
+def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: list[dict[str, Any]], run_id: str, output_dir: Path, status: Any | None = None) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     run_now = utc_now_iso()
     lexicon_path = find_place_lexicon_file({})
@@ -4707,7 +4708,21 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     updated_posts_state: dict[str, Any] = dict(previous_posts)
     updated_discovered_state: dict[str, Any] = dict(previous_discovered)
 
-    for p in posts:
+    def report_event(name: str, **payload: Any) -> None:
+        if status is not None and hasattr(status, "event"):
+            try:
+                status.event(name, run_id=run_id, **payload)
+            except Exception:
+                pass
+
+    max_posts_to_score = getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180)
+    posts_for_scoring = posts[:max_posts_to_score] if max_posts_to_score > 0 else posts
+    runtime_deferred_posts = posts[len(posts_for_scoring):]
+    report_event("report_build_started", phase="report", status="running", posts_fetched=len(posts), posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), ydb_read_status=state_meta.get("ydb_read_status"))
+
+    for idx, p in enumerate(posts_for_scoring, start=1):
+        if idx == 1 or idx % max(1, getenv_int("REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS", 25)) == 0:
+            report_event("vector_scoring_alive", phase="vector_scoring", status="running", progress_label=f"posts {idx}/{len(posts_for_scoring)}", posts_scored=idx, posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts))
         seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or '')) or (seeds[0] if seeds else None)
         text = p.get("text") or ""
         ts = score_text(text)
@@ -5763,6 +5778,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "00_readme":[{"field":"what","value":"Region Talk MVP-1.x Candidate Report Only; vector/local gates first, image scoring for non-ad Kaliningrad rows, optional final LLM verifier via Supabase google_ai limiter; no Telegram/VK publishing."},{"field":"run_id","value":run_id},{"field":"generated_at","value":run_now}],
         "01_run_summary":run_summary,
         "02_increment":increment,
+        "02b_runtime_deferred_posts":[{"post_id": r.get("post_id"), "post_url": r.get("post_url"), "post_date": r.get("post_date"), "source_title": r.get("source_title"), "defer_reason":"runtime_vector_budget", "next_action":"score_in_next_bounded_run"} for r in runtime_deferred_posts[:500]],
         "03_funnel":funnel,
         "03b_gate_counts":independent_gate_counts,
         "04_review_queue":review_queue,
@@ -5815,7 +5831,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "23_vk_wall_setup":vk_wall_setup_sheet,
         "24_source_yield_metrics":source_yield_metrics_sheet,
     }
+    report_event("vector_scoring_done", phase="vector_scoring", status="running", posts_scored=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet))
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
+    report_event("report_write_started", phase="report", status="running", xlsx=str(xlsx), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet))
     write_xlsx(xlsx, sheets)
     candidate_event_rows = []
     def _candidate_event(stage: str, r: dict[str, Any]) -> dict[str, Any]:
@@ -6139,7 +6157,7 @@ async def amain() -> int:
     status.event('preflight_ok', phase='preflight', status='running', run_id=run_id, seeds=len(seeds), seed_file=str(seed_path), dry_run=True, disable_publish=True, state_backend=region_talk_state_backend_requested(), ydb_config_status="missing_config" if ydb_cfg.get("missing") else "configured", ydb_missing=ydb_cfg.get("missing"), vk_token_kind=vk_wall_token_kind())
     source_rows, posts = await fetch_telegram_posts(seeds, status, out_dir)
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
-    payload = build_report(seeds, source_rows, posts, run_id, out_dir)
+    payload = build_report(seeds, source_rows, posts, run_id, out_dir, status=status)
     summary = payload.get('summary', {})
     status.event('report_written', phase='report', status='done', run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'))
     return 0

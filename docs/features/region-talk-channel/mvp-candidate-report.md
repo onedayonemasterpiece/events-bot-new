@@ -597,8 +597,16 @@ YDB business heartbeat: when `REGION_TALK_STATE_BACKEND=ydb`, every
 watch a running Kaggle job when `kernels_logs` are empty, but it is not the
 source of truth for queues, scores or cursor state. Heartbeat payloads include
 phase/status, `progress_label`, current source title/url/handle, source counters,
-fetch status, post counters and final YDB/write summary fields; no secrets are
-persisted.
+fetch status, post counters, vector/report counters (`posts_to_score`,
+`posts_scored`, `posts_deferred`) and final YDB/write summary fields; no secrets
+are persisted.
+
+CandidateReport report assembly is bounded by
+`REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) with periodic
+`REGION_TALK_VECTOR_HEARTBEAT_EVERY_POSTS` (default `25`) heartbeats. Posts
+fetched beyond the scoring budget are not stored as raw YDB payloads; they are
+visible in the XLSX-only `02b_runtime_deferred_posts` sheet with links/metadata
+so the next bounded run can score them.
 
 YDB compact state is process state, not a mirror of every XLSX/debug tab.
 Schema `region-talk-ydb-compact-v3` persists the single Telegram/VK

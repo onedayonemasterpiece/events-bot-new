@@ -192,7 +192,9 @@ into the same KV table:
   model (`intfloat/multilingual-e5-base` or `BAAI/bge-m3`), keyed by
   `semantic_bank_version + bank_hash + model_id`;
 - kind `business_heartbeat`, pk `latest_business_heartbeat` and
-  `business_heartbeat:<run_id>` — CandidateReport live status only;
+  `business_heartbeat:<run_id>` — CandidateReport live status only, including
+  compact fetch/vector/report counters such as `posts_fetched`,
+  `posts_to_score`, `posts_scored`, `posts_deferred` and `progress_label`;
 - kind `business_heartbeat_image_diagnostic`, pk
   `latest_business_heartbeat:image_diagnostic` and
   `business_heartbeat:image_diagnostic:<run_id>` — ImageDiagnostic live status
