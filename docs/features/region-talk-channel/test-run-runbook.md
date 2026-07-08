@@ -387,6 +387,11 @@ The XLSX has:
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
   `publication_queue_*`, then `state_write_*`) so a run never stays silent after
   deferring the final verifier.
+  In the default live-handoff launcher, vector scoring keeps a smaller reserve
+  (`REGION_TALK_RUNTIME_RESERVE_DURING_SCORING_SECONDS=30`) because there is no
+  required workbook tail after the YDB queue write; leaving the old 120-second
+  tail reserve can stop scoring after only a few posts even though the live YDB
+  handoff would still have time to finish.
 - In this live-YDB mode, the processing-start event is
   `live_candidate_processing_started` with `live_ydb_source_of_truth=true` and
   `build_report_required=false`. A `report_build_started` event should only mean
