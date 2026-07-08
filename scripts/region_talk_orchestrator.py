@@ -60,6 +60,23 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_YDB_SELECT_PAGE_SIZE": "100",
     "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "12",
     "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "12",
+    # Keep main runs short enough to reach the discovery tail, but still gentle
+    # toward Telegram: a few similar-channel seeds and a couple of keyword
+    # queries per run are enough to make the public/source frontier grow.
+    "REGION_TALK_HISTORY_SOURCES_TARGET": "70",
+    "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": "12",
+    "REGION_TALK_TG_SIMILAR_ENABLED": "1",
+    "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": "5",
+    "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": "5",
+    "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": "5",
+    "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": "30",
+    "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": "30",
+    "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": "1",
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "2",
+    "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
+    "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "240",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "180",
 }
 
 ORCHESTRATOR_YDB_METRIC_LIMITS = {
@@ -606,7 +623,7 @@ def build_decision_plan(
     if include_main:
         actions.append(_action(
             "launch_candidate_report",
-            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "220", "--no-wait"],
+            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "70", "--no-wait"],
             "continue main discovery/E5 producer in parallel when DISCOVERY1 is free",
             resource="telegram:DISCOVERY1",
             parallel_safe=True,
@@ -616,7 +633,7 @@ def build_decision_plan(
     if int(metrics.get("image_actual_scored_total") or 0) > int(metrics.get("publication_candidate_total") or 0):
         actions.append(_action("run_finalizer", ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"], "actual images exist beyond publication rows", resource="local:gemini", timeout_seconds=900))
     if not actions:
-        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "220", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
+        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "70", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
     return actions
 
 

@@ -9,6 +9,11 @@
   `--execute-ready` cycle, runs local finalizer/notifier maintenance, forces the
   CandidateReport child env to live-YDB E5-only + external BGE fusion, and uses
   the orchestrator venv Python for child launchers.
+- **Region Talk Channel / gentle source discovery growth**: CandidateReport
+  launches from the orchestrator now reserve time for discovery tail and cap it
+  conservatively (70 source scans, 5 similar-channel seeds, 5 recs/seed and 2
+  keyword queries) so the source/public frontier can grow on each healthy run
+  without aggressive Telegram crawling.
 - **Region Talk Channel / E5+BGE production fusion**: CandidateReport now keeps
   the main Kaggle run E5-only by default, writes durable E5
   `text_vector_enrichment_item` rows, consumes external BGE-M3 YDB rows for

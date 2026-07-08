@@ -152,6 +152,11 @@ Important invariants:
   image/finalizer work can hide the text-vector backlog.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
+- Main CandidateReport uses a non-aggressive discovery profile by default:
+  about 70 source scans per run, 5 similar-channel seeds, up to 5
+  recommendations per seed, and 2 keyword-discovery queries. This keeps
+  `publics_total` / source frontier growth visible on every healthy run without
+  turning the Telegram session into an aggressive crawler.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
