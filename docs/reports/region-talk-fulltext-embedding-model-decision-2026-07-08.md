@@ -81,6 +81,26 @@ EmbeddingGemma model-only averages:
 - travel/emotion/review score: 0.293358;
 - useful-story score: 0.264626.
 
+
+## Configuration-level comparison
+
+The actual product question is not “which single embedding model is best?”. The tested decision is whether to keep the dual baseline `E5+BGE` or add one or more extra CPU text lanes to it.
+
+| Configuration | Rows comparable | Accepted union | Increment vs E5+BGE | Increment after safety/manual review | Anti/external accepted signal | Ad/promo accepted signal | Runtime / practicality | Decision |
+|---|---:|---:|---:|---:|---:|---:|---|---|
+| `E5+BGE` | 500 | 137 | baseline | baseline | 40/137 = 29.2% vector-risk signal | 26/137 = 19.0% vector-risk signal | E5 547s + BGE 1897s for 500 | **Keep production baseline** |
+| `E5+BGE+EmbeddingGemma` | 500 | 168 | +31 raw accepts = +22.6% | only 2/31 strong KO travel/review after manual review; 9/31 safety-filtered high-confidence | 49/168 = 29.2% vector-risk signal; manual Gemma-only external/irrelevant 17/31 | 26/168 = 15.5% vector-risk signal; manual Gemma-only weak/ad/promo 3/31 | Gemma adds 681s for 500 | **Do not promote; shadow/larger-validation only** |
+| `E5+BGE+Qwen3 0.6B` | Qwen present for 64 only | 144 over the 500 table, but Qwen coverage is partial | +7 Qwen-only accepts in the 64-row probe = +5.1% vs full baseline count | not enough full coverage; runtime blocks promotion | 41/144 = 28.5% vector-risk signal on partial Qwen coverage | 26/144 = 18.1% vector-risk signal | Qwen 64 rows = 2459s; projected ~3.2h/300 | **CPU-not-practical** |
+| `E5+BGE+EmbeddingGemma+Qwen3 0.6B` | Qwen partial only | 172 | +35 raw accepts, but Qwen incomplete and Gemma manual quality fails | no production-grade gain: Gemma-only strong KO travel/review 2 rows; Qwen runtime blocker | 50/172 = 29.1% vector-risk signal | 26/172 = 15.1% vector-risk signal | Qwen makes combined CPU lane impractical | **Do not add both** |
+
+Interpretation:
+
+- Adding EmbeddingGemma to `E5+BGE` does find additional rows, but most incremental accepts are not the desired “strong KO travel/review/useful-story” rows. The production-quality incremental gain is about **2 rows over 137 baseline accepts = 1.5%**, not the raw +22.6%.
+- EmbeddingGemma does **not** clearly solve filtering either. As a standalone lane it accepts fewer rows than the baseline and misses 52 baseline accepts; as an added union lane it adds many external/irrelevant rows. A separate complex veto/fusion policy would be needed, and the measured gain does not justify that complexity yet.
+- Qwen3 0.6B did start and produce scores, but it cannot be evaluated as a full extra production lane because CPU runtime is already outside budget on the 64-row full-text probe.
+
+Therefore the final answer to the configuration question is: keep `E5+BGE`; do not add Gemma or Qwen to production fusion now.
+
 ## Manual review of EmbeddingGemma-only accepted rows
 
 Manual review scope: 31 rows accepted by EmbeddingGemma and not accepted by baseline E5+BGE.
