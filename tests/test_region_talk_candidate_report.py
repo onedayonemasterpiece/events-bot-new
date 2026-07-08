@@ -1464,6 +1464,45 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len([r for r in rows if r["canonical_source_key"] == "telegram:seedtg"]), 1)
         self.assertGreaterEqual(metrics["source_queue_non_target_skipped_this_run"], 5)
 
+    def test_unified_source_queue_reprioritizes_existing_keyword_hit_after_cursor(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:hittravel": {
+                    "canonical_source_key": "telegram:hittravel",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/hittravel",
+                    "queue_order": 50,
+                    "source_queue_status": "pending_scan",
+                    "added_from": "frontier",
+                },
+                "telegram:tail": {
+                    "canonical_source_key": "telegram:tail",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/tail",
+                    "queue_order": 51,
+                    "source_queue_status": "pending_scan",
+                },
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [],
+            [],
+            [{"keyword_hit_source_url": "https://t.me/hittravel", "platform": "telegram", "canonical_source_key": "telegram:hittravel"}],
+            {},
+            "run-q",
+            "2026-07-07T00:00:00+00:00",
+        )
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:hittravel"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:hittravel"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:hittravel"]["keyword_discovery_status"], "keyword_evidence")
+        self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:hittravel"]["queue_order"])
+        self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 0)
+        self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
+        self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
+
     def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
         mod = load_module()
         previous = {

@@ -318,8 +318,21 @@ accept/reject production candidates.
 `publics_keyword_discovered_total`, `publics_keyword_scanned_with_posts_total`,
 `publics_keyword_with_ko_candidates_total`,
 `publics_keyword_pending_after_cursor_total` and
-`publics_keyword_ko_yield_percent`; keyword-discovered rows are sorted ahead of
-generic product-priority rows after insertion so the next scan actually tests
-the channels where keyword search saw a Kaliningrad hit. If keyword-discovered
-channels do not show a high KO yield after scanning, the keyword query/frontier
-insertion logic needs review.
+`publics_keyword_ko_yield_percent`; the same block also exposes
+`publics_keyword_queue_rows_total`, `publics_keyword_edge_targets_total` and
+`publics_keyword_queue_missing_total` so keyword hits that were already present
+in the frontier cannot disappear from monitoring. Keyword-discovered rows,
+including existing pending frontier rows with fresh keyword evidence, are
+reinserted immediately after the persisted source cursor so the next scan
+actually tests the channels where keyword search saw a Kaliningrad hit. If
+keyword-discovered channels do not show a high KO yield after scanning, the
+keyword query/frontier insertion logic needs review.
+
+Source-level monitoring totals must not rely only on the latest compact source
+row, because a historical partial run can leave stale/lower source counters.
+The orchestrator therefore reports repaired totals plus raw source-row and
+repair-delta counters: `publics_scanned_with_posts_*`,
+`publics_with_ko_candidates_*` and `source_queue_posts_scanned_*`. The repaired
+`source_queue_posts_scanned_total` is at least `processed_posts_unique_total`,
+and `publics_with_ko_candidates_total` is at least the number of sources
+observed in text/image/publication candidate rows.

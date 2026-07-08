@@ -232,6 +232,38 @@ def _source_merge_key(row: dict[str, Any]) -> str:
     return key
 
 
+def _post_source_merge_key(row: dict[str, Any]) -> str:
+    raw = (
+        row.get("source_id")
+        or row.get("canonical_source_key")
+        or row.get("source_url")
+        or row.get("canonical_url")
+        or ""
+    )
+    key = str(raw or "").strip().rstrip("/")
+    if key.startswith(("source_queue_item:", "source_status_item:", "online_source_item:")):
+        key = key.split(":", 1)[1]
+    return key
+
+
+def _row_has_ko_candidate_evidence(row: dict[str, Any]) -> bool:
+    return (
+        str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
+        or str(row.get("text_region_confirmation_status") or "") == "text_confirmed_ko_only_for_image_analysis"
+        or str(row.get("vector_gate_status") or "") == "vector_accept_candidate"
+        or is_confirmed_publication(row)
+    )
+
+
+def _ko_candidate_source_keys(rows: Iterable[dict[str, Any]]) -> set[str]:
+    keys: set[str] = set()
+    for row in rows:
+        key = _post_source_merge_key(row)
+        if key and _row_has_ko_candidate_evidence(row):
+            keys.add(key)
+    return keys
+
+
 def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
     for rows in row_lists:
@@ -517,21 +549,49 @@ def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
     )
 
 
-def _keyword_source_metrics(source_rows: list[dict[str, Any]], cursor_position: int) -> dict[str, int]:
-    keyword_rows = [r for r in source_rows if _is_keyword_discovered_source(r)]
-    keyword_scanned = [r for r in keyword_rows if _safe_int(r.get("posts_scanned")) > 0 or str(r.get("source_queue_status") or "").startswith("processed")]
-    keyword_ko = [r for r in keyword_rows if _source_has_ko_candidate(r)]
-    keyword_pending_after_cursor = [
-        r for r in keyword_rows
-        if int(float(r.get("queue_order") or 0)) > cursor_position
-        and str(r.get("source_queue_status") or r.get("queue_status") or "pending_scan") in {"", "pending_scan", "needs_rescan_or_retry"}
-    ]
+def _keyword_source_metrics(
+    source_rows: list[dict[str, Any]],
+    cursor_position: int,
+    source_candidates: list[dict[str, Any]] | None = None,
+    source_edges: list[dict[str, Any]] | None = None,
+) -> dict[str, int]:
+    source_by_key = {_source_merge_key(r): r for r in source_rows if _source_merge_key(r)}
+    keyword_row_keys = {_source_merge_key(r) for r in source_rows if _is_keyword_discovered_source(r) and _source_merge_key(r)}
+    candidate_key_by_id = {
+        str(r.get("source_candidate_id") or ""): _source_merge_key(r)
+        for r in (source_candidates or [])
+        if str(r.get("source_candidate_id") or "") and _source_merge_key(r)
+    }
+    keyword_edge_target_keys = {
+        candidate_key_by_id.get(str(r.get("to_source_candidate_id") or ""))
+        for r in (source_edges or [])
+        if _is_keyword_discovered_source(r)
+    }
+    keyword_edge_target_keys = {k for k in keyword_edge_target_keys if k}
+    keyword_evidence_keys = keyword_row_keys | keyword_edge_target_keys
+    keyword_scanned_keys = {
+        k for k in keyword_evidence_keys
+        if k in source_by_key and (
+            _safe_int(source_by_key[k].get("posts_scanned")) > 0
+            or str(source_by_key[k].get("source_queue_status") or "").startswith("processed")
+        )
+    }
+    keyword_ko_keys = {k for k in keyword_evidence_keys if k in source_by_key and _source_has_ko_candidate(source_by_key[k])}
+    keyword_pending_after_cursor_keys = {
+        k for k in keyword_evidence_keys
+        if k in source_by_key
+        and int(float(source_by_key[k].get("queue_order") or 0)) > cursor_position
+        and str(source_by_key[k].get("source_queue_status") or source_by_key[k].get("queue_status") or "pending_scan") in {"", "pending_scan", "needs_rescan_or_retry"}
+    }
     return {
-        "publics_keyword_discovered_total": len(keyword_rows),
-        "publics_keyword_scanned_with_posts_total": len(keyword_scanned),
-        "publics_keyword_with_ko_candidates_total": len(keyword_ko),
-        "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor),
-        "publics_keyword_ko_yield_percent": int(round((len(keyword_ko) / len(keyword_scanned)) * 100)) if keyword_scanned else 0,
+        "publics_keyword_discovered_total": len(keyword_evidence_keys),
+        "publics_keyword_queue_rows_total": len(keyword_row_keys),
+        "publics_keyword_edge_targets_total": len(keyword_edge_target_keys),
+        "publics_keyword_queue_missing_total": len(keyword_evidence_keys - set(source_by_key)),
+        "publics_keyword_scanned_with_posts_total": len(keyword_scanned_keys),
+        "publics_keyword_with_ko_candidates_total": len(keyword_ko_keys),
+        "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor_keys),
+        "publics_keyword_ko_yield_percent": int(round((len(keyword_ko_keys) / len(keyword_scanned_keys)) * 100)) if keyword_scanned_keys else 0,
     }
 
 
@@ -835,7 +895,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         r for r, status in zip(source_rows, source_statuses)
         if status and status != "pending_scan"
     ]
+    processed_post_rows = rows_by_kind["processed_post_item"]
+    processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
+    source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
     source_primary_unscanned_pending = [
         r for r, status in zip(source_rows, source_statuses)
         if status in {"", "pending_scan"} and _safe_int(r.get("posts_scanned")) <= 0 and not str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip()
@@ -853,6 +916,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         or _safe_int(r.get("ko_posts_found")) > 0
         or _safe_int(r.get("candidate_posts_found")) > 0
     ]
+    ko_candidate_source_keys = _ko_candidate_source_keys([*candidates, *images, *publications])
+    source_ko_candidates_count = max(len(source_ko_candidates), len(ko_candidate_source_keys))
     rejected_status_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
     rejected_sources = [
         r for r in source_rows
@@ -865,7 +930,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if name and ":" not in name:
             cursor_by_name[name] = row
     source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
-    keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position)
+    keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position, source_candidates, source_edges)
     strong_images_ge_066 = [
         r for r in images
         if str(r.get("image_queue_status") or "") == "actual_scored"
@@ -883,6 +948,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if str(r.get("publication_candidate_status") or "") in {"publication_ready", "accepted_for_publication"}
         or str(r.get("publication_status") or "") == "publication_ready"
     ]
+    source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
+    processed_posts_unique_total = len(processed_post_rows)
+    source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
     history_depth_rows = [r for r in source_rows if _safe_float(r.get("history_avg_post_age_days")) is not None]
     latest_history_run = max([str(r.get("last_scan_run_id") or r.get("run_id") or "") for r in history_depth_rows] or [""])
     latest_history_depth_rows = [
@@ -895,19 +963,25 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_touched_or_not_pending_total": len(source_touched),
         "publics_terminal_processed_total": len(source_terminal),
         "publics_needs_rescan_or_retry_total": len(source_retry),
-        "publics_scanned_with_posts_total": len(source_with_posts),
+        "publics_scanned_with_posts_total": source_with_posts_count,
+        "publics_scanned_with_posts_source_rows_total": len(source_with_posts),
+        "publics_scanned_with_posts_repair_delta_total": max(0, source_with_posts_count - len(source_with_posts)),
         "publics_primary_unscanned_pending_total": len(source_primary_unscanned_pending),
         "publics_pending_with_scan_evidence_waiting_rescan_total": len(source_pending_with_scan_evidence),
         "publics_processed_no_ko_total": len(source_processed_no_ko),
         "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
         "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
-        "publics_with_ko_candidates_total": len(source_ko_candidates),
+        "publics_with_ko_candidates_total": source_ko_candidates_count,
+        "publics_with_ko_candidates_source_rows_total": len(source_ko_candidates),
+        "publics_with_ko_candidates_repair_delta_total": max(0, source_ko_candidates_count - len(source_ko_candidates)),
         **keyword_source_metrics,
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
         "rejected_sources_total": len(rejected_sources),
-        "source_queue_posts_scanned_total": sum(_safe_int(r.get("posts_scanned")) for r in source_rows),
+        "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
+        "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,
+        "source_queue_posts_scanned_repair_delta_total": max(0, source_posts_scanned_effective_total - source_posts_scanned_raw_total),
         "history_depth_sources_total": len(history_depth_rows),
         "history_depth_latest_run_sources_total": len(latest_history_depth_rows),
         "history_avg_post_age_days_avg": _avg_numeric(history_depth_rows, "history_avg_post_age_days"),
@@ -916,7 +990,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "history_latest_run_avg_post_age_days_avg": _avg_numeric(latest_history_depth_rows, "history_avg_post_age_days"),
         "history_latest_run_newest_post_age_days_min": _min_numeric(latest_history_depth_rows, "history_newest_post_age_days"),
         "history_latest_run_oldest_post_age_days_max": _max_numeric(latest_history_depth_rows, "history_oldest_post_age_days"),
-        "processed_posts_unique_total": len(rows_by_kind["processed_post_item"]),
+        "processed_posts_unique_total": processed_posts_unique_total,
         "candidate_memory_total": len(candidates),
         "image_queue_total": len(images),
         "image_pending_total": len(image_pending),

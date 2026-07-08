@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / keyword-yield observability**: keyword-search source
+  metrics now count keyword edge targets as well as queue rows, expose
+  queue-row/edge-target/missing breakdowns, and CandidateReport re-prioritizes
+  existing pending frontier rows with fresh keyword evidence immediately after
+  the source cursor instead of only inserting brand-new keyword rows.
+- **Region Talk Channel / repaired source funnel metrics**: orchestrator source
+  counters now expose raw source-row totals, repaired totals and repair deltas
+  for scanned publics, KO-candidate publics and scanned posts, using processed
+  posts plus candidate/image/publication evidence as lower bounds so historical
+  compact-row drift cannot hide funnel movement.
 - **Region Talk Channel / source-state read window**: main CandidateReport
   orchestrator launches now read up to 6000 source rows/text-vector rows from
   YDB so the source queue is not rebuilt from a truncated 1500-row state after

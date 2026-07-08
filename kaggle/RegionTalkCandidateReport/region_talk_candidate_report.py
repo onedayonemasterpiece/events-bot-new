@@ -3976,31 +3976,62 @@ def build_unified_source_queue(
             append_or_update(row, added_from=origin)
 
     keyword_inserted = 0
+    keyword_prioritized = 0
+    keyword_existing_promoted = 0
     keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or [])
-    missing_keyword: list[dict[str, Any]] = []
+    keyword_priority: list[tuple[dict[str, Any], bool]] = []
     seen_keyword: set[str] = set()
     for row in keyword_candidates:
         seed = _source_queue_seed_from_row(row, default_added_from="telegram_keyword_search")
-        if not seed or seed["platform"] != "telegram" or seed["canonical_source_key"] in entries or seed["canonical_source_key"] in seen_keyword:
+        if not seed or seed["platform"] != "telegram" or seed["canonical_source_key"] in seen_keyword:
             continue
         seen_keyword.add(seed["canonical_source_key"])
-        missing_keyword.append(seed)
-    if missing_keyword:
+        key = seed["canonical_source_key"]
+        existing = entries.get(key)
+        if existing:
+            existing.update({k: v for k, v in seed.items() if v not in ("", None)})
+            existing["keyword_discovery_status"] = "keyword_evidence"
+            existing["keyword_evidence_run_id"] = run_id
+            existing["keyword_evidence_at"] = run_now
+            existing["insertion_policy"] = existing.get("insertion_policy") or "keyword_prioritized_existing"
+            status = str(existing.get("source_queue_status") or "")
+            if status.startswith("processed") or source_terminal_rejected_status(status):
+                continue
+            keyword_priority.append((seed, True))
+        else:
+            keyword_priority.append((seed, False))
+    if keyword_priority:
+        keyword_priority_keys = {seed["canonical_source_key"] for seed, _ in keyword_priority}
         for rec in entries.values():
-            if int(rec.get("queue_order") or 0) > prev_cursor:
-                rec["queue_order"] = int(rec.get("queue_order") or 0) + len(missing_keyword)
-        for offset, seed in enumerate(missing_keyword, start=1):
+            if int(rec.get("queue_order") or 0) > prev_cursor and rec.get("canonical_source_key") not in keyword_priority_keys:
+                rec["queue_order"] = int(rec.get("queue_order") or 0) + len(keyword_priority)
+        for offset, (seed, existed) in enumerate(keyword_priority, start=1):
             key = seed["canonical_source_key"]
-            entries[key] = {
-                **seed,
-                "source_queue_id": "srcq_" + stable_hash(key),
-                "queue_order": prev_cursor + offset,
-                "added_at": run_now,
-                "added_from": "telegram_keyword_search",
-                "first_seen_run_id": run_id,
-                "insertion_policy": "insert_after_cursor",
-            }
-            keyword_inserted += 1
+            if existed:
+                entries[key].update({
+                    **{k: v for k, v in seed.items() if v not in ("", None)},
+                    "queue_order": prev_cursor + offset,
+                    "keyword_discovery_status": "keyword_evidence",
+                    "keyword_evidence_run_id": run_id,
+                    "keyword_evidence_at": run_now,
+                    "insertion_policy": "keyword_reinsert_after_cursor",
+                })
+                keyword_existing_promoted += 1
+            else:
+                entries[key] = {
+                    **seed,
+                    "source_queue_id": "srcq_" + stable_hash(key),
+                    "queue_order": prev_cursor + offset,
+                    "added_at": run_now,
+                    "added_from": "telegram_keyword_search",
+                    "first_seen_run_id": run_id,
+                    "keyword_discovery_status": "keyword_evidence",
+                    "keyword_evidence_run_id": run_id,
+                    "keyword_evidence_at": run_now,
+                    "insertion_policy": "insert_after_cursor",
+                }
+                keyword_inserted += 1
+            keyword_prioritized += 1
 
     source_by_key: dict[str, dict[str, Any]] = {}
     for srow in source_rows:
@@ -4149,6 +4180,8 @@ def build_unified_source_queue(
         "source_queue_cursor_position": cursor_position,
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,
+        "source_queue_keyword_prioritized_this_run": keyword_prioritized,
+        "source_queue_keyword_existing_promoted_this_run": keyword_existing_promoted,
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
         "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
         "source_queue_vk_total": sum(1 for r in out if r.get("platform") == "vk"),
