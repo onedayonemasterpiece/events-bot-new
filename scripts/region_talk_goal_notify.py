@@ -137,6 +137,27 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
     return out
 
 
+def is_confirmed_publication(row: dict[str, Any]) -> bool:
+    """Backward-compatible live-YDB confirmed marker.
+
+    Older finalizer rows used `publication_status=gemini_accept`; newer rows use
+    the more explicit `publication_candidate_status=llm_confirmed|sent_to_chat`.
+    Treat both as confirmed so notification stats and sending do not depend on
+    an operator XLSX/report-tail rewrite.
+    """
+    candidate_status = str(row.get("publication_candidate_status") or "")
+    publication_status = str(row.get("publication_status") or "")
+    return candidate_status in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"} or publication_status == "gemini_accept"
+
+
+def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
+    if not is_confirmed_publication(row):
+        return False
+    if str(row.get("publication_candidate_status") or "") == "sent_to_chat":
+        return False
+    return str(row.get("sent_to_chat") or "").lower() != "true"
+
+
 def build_stats_message(limit: int = 20000) -> str:
     import ydb  # type: ignore
     endpoint, database = ydb_endpoint_database()
@@ -172,8 +193,8 @@ def build_stats_message(limit: int = 20000) -> str:
     ko_sources = [r for r in sources if int(float(r.get("ko_posts_found") or 0)) > 0]
     actual_images = [r for r in images if str(r.get("image_model_input_type") or "") == "actual_image" or str(r.get("image_queue_status") or "") == "actual_scored"]
     strong_images = [r for r in actual_images if float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.66]
-    confirmed = [r for r in publications if str(r.get("publication_candidate_status") or "") in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}]
-    ready_to_send = [r for r in publications if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"]
+    confirmed = [r for r in publications if is_confirmed_publication(r)]
+    ready_to_send = [r for r in publications if is_unsent_confirmed_publication(r)]
     cursor_by_name: dict[str, dict[str, Any]] = {}
     for row in cursors:
         name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
@@ -212,9 +233,21 @@ def upsert_sent(pool: Any, ydb: Any, table: str, row: dict[str, Any], message_id
     item = dict(row)
     pk = str(item.pop("_ydb_pk", "")) or "publication_candidate_item:" + str(item.get("publication_candidate_id") or item.get("post_url"))
     item.update({"sent_to_chat": "true", "sent_message_id": str(message_id), "sent_at": now, "publication_candidate_status": "sent_to_chat"})
-    query = f"DECLARE $pk AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8; UPSERT INTO `{table}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'publication_candidate_item', $payload_json, $updated_at);"
+    query_text = f"""
+DECLARE $pk AS Utf8;
+DECLARE $kind AS Utf8;
+DECLARE $payload_json AS Json;
+DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table}` (pk, kind, payload_json, updated_at)
+VALUES ($pk, $kind, $payload_json, $updated_at);
+"""
     def op(session: Any) -> None:
-        session.transaction(ydb.SerializableReadWrite()).execute(query, {"$pk": pk, "$payload_json": json.dumps(item, ensure_ascii=False), "$updated_at": now}, commit_tx=True)
+        query = session.prepare(query_text)
+        session.transaction(ydb.SerializableReadWrite()).execute(
+            query,
+            {"$pk": pk, "$kind": "publication_candidate_item", "$payload_json": json.dumps(item, ensure_ascii=False), "$updated_at": now},
+            commit_tx=True,
+        )
     pool.retry_operation_sync(op)
 
 
@@ -223,7 +256,7 @@ def candidate_message(row: dict[str, Any]) -> str:
     url = row.get("post_url") or ""
     why = row.get("why_selected") or "выбран по тексту, визуальному score и Gemini-проверке"
     summary = row.get("short_summary") or ""
-    reason = str(row.get("publication_llm_reason") or "")[:280]
+    reason = str(row.get("publication_llm_reason") or row.get("llm_reason") or row.get("final_verifier_reason") or "")[:280]
     return "\n".join([
         f"✅ Region Talk candidate #{rank}",
         str(url),
@@ -270,7 +303,7 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         messages = [args.message]
     else:
         ydb, driver, pool, table, rows = read_publication_rows(args.limit)
-        rows = [r for r in rows if str(r.get("publication_candidate_status") or "") == "llm_confirmed" and str(r.get("sent_to_chat") or "").lower() != "true"][: args.limit]
+        rows = [r for r in rows if is_unsent_confirmed_publication(r)][: args.limit]
         messages = [candidate_message(r) for r in rows]
     client = TelegramClient(StringSession(auth["session"]), auth["api_id"], auth["api_hash"], **auth.get("device", {}))
     await client.connect()

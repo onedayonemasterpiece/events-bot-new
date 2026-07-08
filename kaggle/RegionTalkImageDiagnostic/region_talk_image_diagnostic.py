@@ -373,8 +373,16 @@ def ydb_rows_for_diagnostic(limit_n: int):
     for r in raw:
         if not text_region_confirmed(r): continue
         status=str(r.get("image_queue_status") or "")
+        input_type=str(r.get("image_model_input_type") or "")
         lease=str(r.get("lease_run_id") or "")
-        if status == "actual_scored": continue
+        if status == "actual_scored" and input_type == "actual_image": continue
+        if status in {"not_reviewable_no_media", "rejected_text_gate"}: continue
+        if status == "actual_scored" and input_type != "actual_image":
+            r["previous_image_queue_status"] = status
+            r["previous_image_model_input_type"] = input_type
+            r["image_queue_status"] = "needs_actual_image_fetch"
+            r["media_acquisition_status"] = "needs_actual_image_fetch"
+            r["actual_image_retry_reason"] = "metadata_only_actual_scored_is_not_final_visual_evidence"
         if status == "image_analysis_in_progress" and lease and lease != RUN_ID and not stale_image_lease(r): continue
         if status == "image_analysis_in_progress" and lease and lease != RUN_ID and stale_image_lease(r):
             r["previous_image_queue_status"] = status

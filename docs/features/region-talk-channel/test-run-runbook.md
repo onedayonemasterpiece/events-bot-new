@@ -358,6 +358,11 @@ The XLSX has:
   `build_report`/XLSX tail is best-effort only after
   `early_image_queue_handoff_done`; do not block the product pipeline waiting
   for it.
+- ImageDiagnostic completion for publication requires actual image evidence.
+  A row is final only when `image_queue_status=actual_scored` **and**
+  `image_model_input_type=actual_image`. Historical metadata-only pseudo-scores
+  must be treated as `needs_actual_image_fetch` on the next image-worker pass,
+  not as completed publication visual evidence.
 - Gemini/Lite verifier calls must never be an unbounded stop-the-world section.
   CandidateReport uses `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS` (default 60s) as a
   per-call wrapper and mirrors it to `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` for the

@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
+  treats a row as visually complete only when `image_queue_status=actual_scored`
+  and `image_model_input_type=actual_image`; historical metadata-only pseudo
+  scores remain eligible for an actual-image retry. The local goal notifier also
+  treats legacy `publication_status=gemini_accept` rows as confirmed, falls back
+  to `llm_reason` in Telegram messages, and writes prepared YDB JSON upserts
+  when marking confirmed links as sent.
 - **Region Talk Channel / live-YDB publication finalizer**: added
   `scripts/region_talk_publication_finalizer.py` so the post-image-scoring
   product shortlist can be built from live YDB rows without waiting for the

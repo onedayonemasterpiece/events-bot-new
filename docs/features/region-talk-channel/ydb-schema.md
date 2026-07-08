@@ -319,6 +319,10 @@ rollup on matching `source_queue_item` and `source_status_item` rows, waits
 bounded intervals for an empty or just-drained queue, and exits after its fixed
 per-run item budget. Heartbeat rows remain observability-only and must not be
 used as durable queue state.
+For publication readiness, metadata-only visual estimates are not final image
+evidence: `actual_scored` is complete only together with
+`image_model_input_type=actual_image`. Metadata-only rows with old
+`actual_scored` statuses must stay eligible for an actual-image retry.
 The two notebooks must run with different Telethon auth bundles and must not
 share one Telegram session concurrently.
 
