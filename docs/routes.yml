@@ -149,6 +149,17 @@ features:
       - video_announce/scenario.py
       - kaggle/execute_crumple_test.py
       - kaggle/CrumpleVideo/crumple_video.ipynb
+  excursion_video_announce:
+    status: design_spec
+    docs: docs/features/excursion-video-announce/README.md
+    related_cherryflash: docs/features/cherryflash/README.md
+    local_artifacts: artifacts/features/excursion-video-announce/
+    reference_branch: hotfix/cherryflash-guide-blender-prod
+    reference_sha: 3a2ebd0d0afbdaaa54c86767cd69ddd1204b7753
+    entrypoints:
+      - video_announce/cherryflash_excursions.py
+      - video_announce/scenario.py
+      - kaggle/CherryFlash/cherryflash.ipynb
   kaggle_status_framework:
     status: implementing
     docs: docs/features/kaggle-status-framework/README.md

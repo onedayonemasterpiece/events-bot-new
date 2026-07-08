@@ -7,6 +7,7 @@
 
 ### Added
 
+- **Excursion video announce**: documented the standalone guide-excursion video concept with a CherryFlash/Blender 3D opening, pinned the `hotfix/cherryflash-guide-blender-prod` SHA, and moved the local prototype MP4 into a feature-scoped artifacts folder.
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
 
 ### Fixed
