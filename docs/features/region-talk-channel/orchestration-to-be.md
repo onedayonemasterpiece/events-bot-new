@@ -168,7 +168,9 @@ Important invariants:
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
-  `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`).
+  `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`). Source/text-vector
+  YDB read windows are 6000 rows so queue counters are not rebuilt from a
+  truncated source state once the frontier exceeds 1500 rows.
 - `RegionTalkBgeM3Enrichment` uses `--batch-limit 12 --batch-size 4` so the row
   count and in-memory batch size are separate. Production launches set
   `REGION_TALK_BGE_E5_ONLY=1`,

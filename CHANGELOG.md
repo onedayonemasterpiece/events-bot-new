@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / source-state read window**: main CandidateReport
+  orchestrator launches now read up to 6000 source rows/text-vector rows from
+  YDB so the source queue is not rebuilt from a truncated 1500-row state after
+  the live frontier grows beyond that size.
 - **Region Talk Channel / BGE backlog scan window**: orchestrator BGE launches
   now force `REGION_TALK_BGE_YDB_SCAN_LIMIT=6000` so the isolated BGE notebook
   sees E5 rows beyond legacy BGE rows in `text_vector_enrichment_item` and can
