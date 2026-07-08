@@ -302,6 +302,14 @@ Region Talk must keep row-level product state compact:
   `bge_m3_enrichment_result:<run_id>` and `bge_m3_enrichment_result:latest` —
   BGE worker run evidence: loaded rows, scored rows, written rows, encoder
   contract, device/backend, bank hashes, elapsed time and error summary;
+- kind `qwen3_embedding_0_6b_enrichment_item`, pk
+  `qwen3_embedding_0_6b_enrichment_item:<post_id>:qwen3_embedding_0_6b:<text_hash>` —
+  research-only Qwen3-Embedding-0.6B per-text enrichment. It mirrors BGE semantic
+  and KO-vs-external geo scores for comparison but is not consumed by production
+  fusion until explicitly promoted;
+- kind `qwen3_embedding_0_6b_enrichment_result`, pk
+  `qwen3_embedding_0_6b_enrichment_result:<run_id>` and
+  `qwen3_embedding_0_6b_enrichment_result:latest` — Qwen3 research run evidence;
 - kind `vector_bank_embedding_item`, pk
   `vector_bank_embedding_item:<bank_hash>:<model_short>:<encoder_contract>` —
   target cache for semantic-bank, Kaliningrad geo-bank and external geo-bank
@@ -311,9 +319,11 @@ Region Talk must keep row-level product state compact:
 - kind `publication_semantic_history_item`, pk
   `publication_semantic_history_item:<publication_candidate_id|post_id>` —
   target history row for semantic anti-vector diversity. It references/stores
-  the E5/BGE vector fingerprints for already Gemini-confirmed, sent or
+  the E5+BGE vector fingerprints for already Gemini-confirmed, sent or
   published posts so later ranking can penalize nearest-neighbour semantic
-  overlap instead of only same-source/place heuristics;
+  overlap instead of only same-source/place heuristics. If Qwen3 is promoted
+  after the research gate, its fingerprint may be stored here as an additional
+  or replacement model slot; the anti-vector is not E5-only;
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.

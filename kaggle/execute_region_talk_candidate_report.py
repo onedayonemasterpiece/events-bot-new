@@ -156,7 +156,7 @@ def region_talk_secret_names(auth_bundle_env: str | None = None) -> list[str]:
     monitoring, so Region Talk candidate/image runs must not ship it unless the
     caller explicitly selects it as the active REGION_TALK_AUTH_BUNDLE_ENV.
     """
-    selected_auth_bundle = (auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
+    selected_auth_bundle = (auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1").strip()
     names = [
         "TG_API_ID", "TG_API_HASH", "TELEGRAM_API_ID", "TELEGRAM_API_HASH",
         "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY", "SUPABASE_SCHEMA",
@@ -350,7 +350,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING": os.environ.get("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", "0"),
         "REGION_TALK_VK_READ_SERVICE_FIRST": os.environ.get("REGION_TALK_VK_READ_SERVICE_FIRST", "1"),
         "REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK": os.environ.get("REGION_TALK_FETCH_VKVIDEO_WALL_FALLBACK", "1"),
-        "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
+        "REGION_TALK_AUTH_BUNDLE_ENV": os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"),
         "REGION_TALK_SEMANTIC_GATE_MODE": os.environ.get("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm"),
         "REGION_TALK_LLM_MODEL": os.environ.get("REGION_TALK_LLM_MODEL", "gemini-3.1-flash-lite"),
         "REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME": os.environ.get("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", "GOOGLE_API_KEY3"),
@@ -494,9 +494,9 @@ def assert_region_talk_kaggle_slots_free(
     """Refuse to push over an active Region Talk kernel or shared auth bundle.
 
     Kaggle does not provide a safe local cancel path. Region Talk candidate and
-    image diagnostic kernels normally share TELEGRAM_AUTH_BUNDLE_DISCOVERY, so a
-    second push while either kernel is RUNNING can duplicate the Telethon auth key
-    and corrupt the product run.
+    image diagnostic kernels use separate Discovery bundles by default, but an
+    operator may override the bundle mapping for a run; a second push while a
+    kernel with the same Telethon auth key is RUNNING can corrupt the product run.
     """
     if allow_active or getenv_bool("REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE", False):
         print("[region-talk-kaggle] WARNING active-kernel guard bypassed by explicit override", flush=True)
@@ -521,7 +521,7 @@ def assert_region_talk_kaggle_slots_free(
                 errors.append(msg)
     if active:
         refs = ", ".join(f"{ref}({status})" for ref, status in active)
-        bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY"
+        bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
         raise RuntimeError(
             "Region Talk Kaggle launch refused: active kernel(s) detected "
             f"{refs}; auth bundle {bundle} must not be used concurrently. "
@@ -704,7 +704,7 @@ def main() -> int:
         [kernel_ref],
         optional_kernel_refs=[image_kernel_ref],
         allow_active=bool(args.allow_active_region_talk_kernel),
-        auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY"),
+        auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"),
     )
     dataset_sources = build_input_datasets(client, run_id=run_id, username=username)
     print(f"[region-talk-kaggle] pushing {kernel_ref} run_id={run_id} datasets={len(dataset_sources)}", flush=True)

@@ -12,9 +12,12 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
 - `kaggle/execute_region_talk_candidate_report.py` — Kaggle push/poll/download launcher using private encrypted input datasets for secrets.
 - `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py` — no-Telegram BGE-M3 vectorization-only worker over live YDB rows.
 - `kaggle/execute_region_talk_bge_m3_enrichment.py` — Kaggle push/poll/download launcher for BGE-M3 enrichment; it packages only YDB credentials and never Telegram auth bundles.
+- `kaggle/RegionTalkQwen3Embedding06BEnrichment/region_talk_qwen3_embedding_06b_enrichment.py` — no-Telegram Qwen3-Embedding-0.6B research vectorization worker over the same live YDB rows.
+- `kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py` — Kaggle launcher for Qwen3 research batches; it writes separate `qwen3_embedding_0_6b_enrichment_item` rows and does not feed production fusion.
+- `scripts/region_talk_embedding_quality_compare.py` — local live-YDB comparison of BGE and Qwen research rows against confident candidate/image/publication labels.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
-Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic, and only the E2E human session for local Saved Messages delivery. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
+Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic, and only the E2E human session for local Saved Messages delivery. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
 
 For the queue-driven To-Be flow, provision two Discovery roles before
 parallelizing Telegram-dependent notebooks:
@@ -22,7 +25,9 @@ parallelizing Telegram-dependent notebooks:
 - `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` — CandidateReport source/post discovery;
 - `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` — ImageDiagnostic media fetches.
 
-`RegionTalkBgeM3Enrichment` uses `REGION_TALK_AUTH_BUNDLE_ENV=REGION_TALK_NO_TELEGRAM_BUNDLE` and can run without a Telegram session.
+`RegionTalkBgeM3Enrichment` and `RegionTalkQwen3Embedding06BEnrichment` use
+`REGION_TALK_AUTH_BUNDLE_ENV=REGION_TALK_NO_TELEGRAM_BUNDLE` and can run without
+a Telegram session.
 
 ## Hard stop rules
 
@@ -149,7 +154,7 @@ REGION_TALK_REQUIRE_PREVIOUS_STATE=1
 
 ## Telegram session and human-like discovery constraints
 
-Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the shared Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
+Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the configured Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
 
 The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. Telethon API reads are paced by `REGION_TALK_TG_HUMANLIKE_PACING_ENABLED` and delay knobs for resolves, recommendations, history queries, media downloads and source pauses; if the runtime reserve would be consumed, the operation is deferred instead of bypassing the pause. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
 
@@ -347,13 +352,15 @@ The XLSX has:
   `latest_business_heartbeat` for source/text processing and
   `latest_business_heartbeat:image_diagnostic` for image scoring. Poll both while
   the notebooks run.
-- Run notebooks sequentially when launching manually. For Region Talk validation,
-  CandidateReport and ImageDiagnostic default to the Discovery bundle
-  (`TELEGRAM_AUTH_BUNDLE_DISCOVERY`), so do not overlap them on Kaggle. Keep
+- Run notebooks sequentially when launching manually unless the operator has
+  confirmed that the active Telegram-dependent notebooks use different auth
+  bundles. CandidateReport defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and
+  ImageDiagnostic defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`; do not overlap
+  them if an operator explicitly maps both to one auth key. Keep
   `TELEGRAM_AUTH_BUNDLE_S22` reserved for production Kaggle/remote monitoring
   unless explicitly changed. Never run two Kaggle kernels against the same
   Telethon auth key.
-- CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, text-embedding model pass events, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage. Real E5+BGE-M3 scoring is sequential by model pass (load/score/release E5, then load/score/release BGE-M3) so Kaggle does not hold both text encoders in memory simultaneously. For model/runtime validation without discovery, run CandidateReport with `REGION_TALK_POST_INPUT_MODE=ydb_candidate_links`, `REGION_TALK_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_DISCOVERY`, `REGION_TALK_DISCOVERY_MODE=off` and a local/non-YDB state backend; this reads only existing YDB candidate/image post links and refetches those public Telegram posts for text.
+- CandidateReport vector/report assembly is bounded by `REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN` (default `180`) and emits `report_build_started`, text-embedding model pass events, periodic `vector_scoring_alive`, `vector_scoring_done` and `report_write_started` business heartbeats. Rows beyond the per-run scoring cap are listed in `02b_runtime_deferred_posts` for the next bounded run; this is report visibility, not raw-post durable YDB storage. Real E5+BGE-M3 scoring is sequential by model pass (load/score/release E5, then load/score/release BGE-M3) so Kaggle does not hold both text encoders in memory simultaneously. For model/runtime validation without discovery, run CandidateReport with `REGION_TALK_POST_INPUT_MODE=ydb_candidate_links`, `REGION_TALK_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_DISCOVERY1`, `REGION_TALK_DISCOVERY_MODE=off` and a local/non-YDB state backend; this reads only existing YDB candidate/image post links and refetches those public Telegram posts for text.
 - Similar/keyword discovery must leave enough budget for report/vector stages.
   `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` (default `420`)
   gates the discovery tail, and keyword discovery emits `keyword_discovery_alive`
@@ -385,6 +392,26 @@ The XLSX has:
   and XLSX report building, reads a small text batch from live YDB, runs E5 then
   BGE-M3 sequentially, writes `vector_probe_result` rows/heartbeats to YDB and
   exits.
+- For Qwen3 research validation, run the separate no-Telegram worker instead of
+  CandidateReport:
+
+```bash
+python kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py \
+  --run-id "region-talk-qwen3-embedding-06b-probe-$(date -u +%Y%m%dT%H%M%SZ)" \
+  --batch-limit 4 \
+  --batch-size 1 \
+  --max-length 2048
+```
+
+  Then compare only rows that have both BGE and Qwen evidence:
+
+```bash
+python scripts/region_talk_embedding_quality_compare.py --limit 2000
+```
+
+  Treat the comparison as research evidence only. Promotion to production
+  fusion requires enough Gemini/image-confirmed positives and rejected controls,
+  not merely a successful model-load probe.
 - Gemini Lite final verification is image-gated. CandidateReport must not call
   the final verifier for text-only review rows after vector scoring. It may run
   only after `RegionTalkImageDiagnostic` has written actual-image evidence

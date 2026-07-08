@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Qwen3 embedding research**: added a separate
+  no-Telegram `RegionTalkQwen3Embedding06BEnrichment` Kaggle worker and launcher
+  for `Qwen/Qwen3-Embedding-0.6B`, writing research-only
+  `qwen3_embedding_0_6b_enrichment_item` rows; added a live-YDB BGE-vs-Qwen
+  comparison helper and documented that semantic anti-vector diversity is
+  dual-model (E5+BGE, with Qwen only if promoted), not E5-only.
+- **Region Talk Channel / role-scoped Discovery sessions**: CandidateReport now
+  defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1`, ImageDiagnostic defaults to
+  `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`, and no-Telegram vector workers explicitly
+  avoid packaging Discovery/E2E/S22 Telegram sessions.
 - **Region Talk Channel / BGE-M3 isolated enrichment**: documented the queue-driven
   To-Be orchestration with no hard CandidateReport modes, YDB-triggered BGE/Image
   workers, vectorized non-region geo discrimination and true semantic anti-vector

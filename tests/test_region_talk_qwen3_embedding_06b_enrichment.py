@@ -6,12 +6,12 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BGE_MODULE_PATH = ROOT / "kaggle" / "RegionTalkBgeM3Enrichment" / "region_talk_bge_m3_enrichment.py"
-BGE_RUNNER_PATH = ROOT / "kaggle" / "execute_region_talk_bge_m3_enrichment.py"
+QWEN_MODULE_PATH = ROOT / "kaggle" / "RegionTalkQwen3Embedding06BEnrichment" / "region_talk_qwen3_embedding_06b_enrichment.py"
+QWEN_RUNNER_PATH = ROOT / "kaggle" / "execute_region_talk_qwen3_embedding_06b_enrichment.py"
 
 
-def load_bge_module():
-    spec = importlib.util.spec_from_file_location("region_talk_bge_m3_enrichment", BGE_MODULE_PATH)
+def load_qwen_module():
+    spec = importlib.util.spec_from_file_location("region_talk_qwen3_embedding_06b_enrichment", QWEN_MODULE_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -19,8 +19,8 @@ def load_bge_module():
     return module
 
 
-def load_bge_runner_module():
-    spec = importlib.util.spec_from_file_location("execute_region_talk_bge_m3_enrichment", BGE_RUNNER_PATH)
+def load_qwen_runner_module():
+    spec = importlib.util.spec_from_file_location("execute_region_talk_qwen3_embedding_06b_enrichment", QWEN_RUNNER_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -28,10 +28,10 @@ def load_bge_runner_module():
     return module
 
 
-class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
+class RegionTalkQwen3Embedding06BEnrichmentTests(unittest.TestCase):
     def test_secret_names_do_not_package_telegram_sessions(self) -> None:
-        mod = load_bge_runner_module()
-        names = mod.bge_secret_names()
+        mod = load_qwen_runner_module()
+        names = mod.qwen3_secret_names()
         self.assertIn("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", names)
@@ -40,8 +40,8 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_SESSION", names)
 
-    def test_collect_text_rows_prefers_publication_and_dedupes(self) -> None:
-        mod = load_bge_module()
+    def test_collect_text_rows_uses_research_kind_and_dedupes(self) -> None:
+        mod = load_qwen_module()
         items = {
             "candidate_memory_item": {
                 "candidate_memory_item:a": {"post_id": "p1", "post_url": "https://t.me/a/1", "short_summary": "Калининград и Куршская коса: личные впечатления от поездки."},
@@ -55,11 +55,11 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         }
         rows = mod.collect_text_rows(items, existing_pks=set(), limit=10)
         self.assertEqual([row["post_id"] for row in rows], ["p2", "p1"])
-        self.assertTrue(all(row.get("_enrichment_pk", "").startswith("text_vector_enrichment_item:") for row in rows))
+        self.assertTrue(all(row.get("_enrichment_pk", "").startswith("qwen3_embedding_0_6b_enrichment_item:") for row in rows))
         self.assertEqual(len(rows), 2)
 
-    def test_build_enrichment_payload_contains_geo_and_antivector_fields(self) -> None:
-        mod = load_bge_module()
+    def test_build_enrichment_payload_contains_qwen_research_fields(self) -> None:
+        mod = load_qwen_module()
         row = {
             "post_id": "p1",
             "post_url": "https://t.me/a/1",
@@ -81,11 +81,14 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
             embedding_dim=3,
             row_index=1,
         )
-        self.assertEqual(payload["model_id"], "BAAI/bge-m3")
-        self.assertEqual(payload["encoder_contract"], "bge_m3_flagembedding_dense_v1")
-        self.assertEqual(payload["bge_m3_positive_class"], "ko_visit_impression")
-        self.assertEqual(payload["bge_m3_ko_geo_top"], "Куршская коса")
-        self.assertEqual(payload["bge_m3_external_geo_top"], "Сочи")
+        self.assertEqual(payload["model_id"], "Qwen/Qwen3-Embedding-0.6B")
+        self.assertEqual(payload["encoder_contract"], "qwen3_embedding_0_6b_sentence_transformers_dense_1024_v1")
+        self.assertIn("qwen3_embedding_0_6b_enrichment_id", payload)
+        self.assertNotIn("text_vector_enrichment_id", payload)
+        self.assertEqual(payload["qwen3_embedding_0_6b_positive_class"], "ko_visit_impression")
+        self.assertEqual(payload["qwen3_embedding_0_6b_ko_geo_top"], "Куршская коса")
+        self.assertEqual(payload["qwen3_embedding_0_6b_external_geo_top"], "Сочи")
+        self.assertEqual(payload["vector_gate_status_qwen3_embedding_0_6b"], "qwen3_embedding_0_6b_accept_candidate")
         self.assertIn("embedding_vector", payload)
 
 

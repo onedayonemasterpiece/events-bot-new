@@ -5357,7 +5357,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             for s in monitored:
                 append_source_row_online(source_rows, source_status_row(s, "skipped_telethon_not_installed"), run_id=run_id, stage="source_fetch", sources_total=len(monitored))
             return source_rows, posts
-    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY").strip()
+    bundle_env = (os.getenv("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1").strip()
     raw = (os.getenv(bundle_env) or "").strip()
     api_id = int((os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID") or "0").strip() or 0)
     api_hash = (os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH") or "").strip()

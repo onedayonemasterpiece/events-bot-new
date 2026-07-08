@@ -36,14 +36,14 @@ def load_runner_module():
 class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_runner_secret_names_only_include_selected_auth_bundle(self) -> None:
         mod = load_runner_module()
-        names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY")
-        self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
+        names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
+        self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", names)
 
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_S22")
         self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)
-        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
+        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", names)
 
 
     def test_telegram_governor_humanlike_pacing_is_logged_and_observable(self) -> None:
@@ -1741,7 +1741,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 return {"status": "RUNNING" if ref.endswith("image") else "COMPLETE"}
 
         with self.assertRaisesRegex(RuntimeError, "active kernel"):
-            mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+            mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
 
 
     def test_active_slot_guard_ignores_unverified_optional_sibling(self) -> None:
@@ -1758,7 +1758,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                     raise ValueError("permission denied")
                 return {"status": "COMPLETE"}
 
-        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate"], optional_kernel_refs=["u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate"], optional_kernel_refs=["u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
 
     def test_active_slot_guard_allows_terminal_kernels(self) -> None:
         import importlib.util
@@ -1772,7 +1772,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             def get_kernel_status(self, ref: str) -> dict[str, str]:
                 return {"status": "COMPLETE"}
 
-        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY")
+        mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ This keeps every launch useful in several directions while still bounding one Ka
 
 ### 1. `RegionTalkCandidateReport` — main queue consumer/producer
 
-Uses Telegram only for source/post discovery and, when needed, public post refetch. Default auth role: `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` (current implementation still defaults to `TELEGRAM_AUTH_BUNDLE_DISCOVERY` until the second role is provisioned).
+Uses Telegram only for source/post discovery and, when needed, public post refetch. Default auth role: `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` (implemented default).
 
 Responsibilities:
 
@@ -58,7 +58,30 @@ Responsibilities:
 
 The first implementation is intentionally a probe/worker, not a full fusion engine. Fusion remains in the main CandidateReport because it owns the product gates and publication context.
 
-### 3. `RegionTalkImageDiagnostic` — actual image scorer
+### 3. `RegionTalkQwen3Embedding06BEnrichment` — research-only Qwen3 probe
+
+Uses no Telegram session and no image/LLM code. This worker is **not** part of
+production fusion until the quality comparison says it should be.
+
+Responsibilities:
+
+- read the same compact live-YDB text rows as the BGE worker;
+- load `Qwen/Qwen3-Embedding-0.6B` through `sentence-transformers`;
+- compute the same semantic-bank and KO-vs-external geo-bank scores so the
+  comparison is apples-to-apples against BGE;
+- write research rows as `qwen3_embedding_0_6b_enrichment_item`, not as
+  production `text_vector_enrichment_item`;
+- write run evidence as
+  `qwen3_embedding_0_6b_enrichment_result:<run_id>` and `:latest`.
+
+Quality comparison is a separate research gate. It joins BGE and Qwen rows by
+`post_url`/`post_id+text_hash`, overlays confident YDB labels
+(`publication_candidate_item`, `candidate_memory_item`, `image_queue_item`) and
+reports agreement, margin deltas and disagreements. Only if Qwen shows equal or
+better retrieval quality on enough confirmed/rejected rows should it become a
+third vector worker or replace BGE.
+
+### 4. `RegionTalkImageDiagnostic` — actual image scorer
 
 Uses a separate Telegram auth role when it has to download Telegram media. Target role: `TELEGRAM_AUTH_BUNDLE_DISCOVERY2`. It may run in parallel with CandidateReport only when it does not share the same Telegram auth key.
 
@@ -69,7 +92,7 @@ Responsibilities stay unchanged:
 - compute postcardness/aesthetic/technical/safety scores;
 - write `image_queue_status=actual_scored` with `image_model_input_type=actual_image`.
 
-### 4. Local/server orchestrator
+### 5. Local/server orchestrator
 
 A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook.
 
@@ -82,6 +105,10 @@ while confirmed_sent < 20 and llm_calls_used < 100 and progress_budget_ok:
   if bge_pending >= threshold and bge_kernel_free:
       notify operator chat: BGE-M3 batch started
       launch RegionTalkBgeM3Enrichment (no Telegram session)
+
+  if research_qwen_probe_enabled and qwen_pending >= threshold and qwen_kernel_free:
+      notify operator chat: Qwen3 research batch started
+      launch RegionTalkQwen3Embedding06BEnrichment (no Telegram session)
 
   if image_queue_pending >= threshold and image_kernel_free and DISCOVERY2 available:
       notify operator chat: image scoring started
@@ -124,7 +151,9 @@ To-Be vector rows:
 - `vector_bank_embedding_item:<bank_hash>:<model>:<encoder_contract>` — future cache for semantic, KO geo and external geo prototype banks using the exact same encoder contract as the worker.
 - `publication_semantic_history_item:<publication_candidate_id|post_id>` — vector reference for already confirmed/sent/published posts.
 
-BGE-M3 worker writes the first row kind now. CandidateReport should later consume both E5 and BGE rows and write fused decisions without loading BGE.
+BGE-M3 worker writes the first row kind now. Qwen3 writes a separate research
+row kind until accepted. CandidateReport should later consume both E5 and BGE
+rows and write fused decisions without loading BGE.
 
 ## Non-region geo discriminator
 
@@ -146,7 +175,7 @@ Search/scoring against already stored vectors is math-only and does not require 
 
 The current MVP penalty (`same source`, `same place`, `same content type`) is only a safety fallback. The target ranking must use semantic anti-overlap:
 
-1. When a candidate is Gemini-confirmed or sent to the operator chat, write/update `publication_semantic_history_item` with its E5/BGE vector refs.
+1. When a candidate is Gemini-confirmed or sent to the operator chat, write/update `publication_semantic_history_item` with its E5+BGE vector refs. The earlier shorthand “E5 durable vector rows” was incomplete: the anti-vector should be dual-model, and if Qwen3 wins the research gate its vector ref may be added/replaced under the same contract.
 2. For each new publication-ready candidate, compute cosine similarity against the confirmed/sent/published history.
 3. Prefer candidates with lower max similarity to the already selected history, while keeping minimum quality gates on image/text.
 4. Use MMR-style ranking:

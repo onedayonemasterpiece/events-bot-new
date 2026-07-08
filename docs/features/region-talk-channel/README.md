@@ -117,9 +117,12 @@ Implementation entrypoints added for the first Candidate Report Only run:
 - BGE-M3 enrichment script: `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py`;
 - BGE-M3 Kaggle metadata: `kaggle/RegionTalkBgeM3Enrichment/kernel-metadata.json`;
 - BGE-M3 launcher: `kaggle/execute_region_talk_bge_m3_enrichment.py`;
+- Qwen3-Embedding-0.6B research script: `kaggle/RegionTalkQwen3Embedding06BEnrichment/region_talk_qwen3_embedding_06b_enrichment.py`;
+- Qwen3 research launcher: `kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py`;
+- BGE-vs-Qwen quality comparison helper: `scripts/region_talk_embedding_quality_compare.py`;
 - focused smoke tests: `tests/test_region_talk_candidate_report.py`.
 
-Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY`, while local Telegram Saved Messages delivery uses only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`). `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
+Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` respectively, while local Telegram Saved Messages delivery uses only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`). `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.
 
 ### Reuse existing Kaggle infrastructure
 

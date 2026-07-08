@@ -493,7 +493,7 @@ def parse_vk(url: str):
     return (int(m.group(1)), int(m.group(2))) if m else (None, None)
 
 def decode_bundle():
-    b64 = (os.getenv(os.getenv("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY")) or os.getenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY") or "").strip()
+    b64 = (os.getenv(os.getenv("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY2")) or os.getenv("TELEGRAM_AUTH_BUNDLE_DISCOVERY2") or "").strip()
     if not b64: return None
     return json.loads(base64.urlsafe_b64decode(b64.encode("ascii")).decode("utf-8"))
 
