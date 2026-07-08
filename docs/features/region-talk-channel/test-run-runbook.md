@@ -412,6 +412,10 @@ The XLSX has:
   as `image_url_or_local_path`; RegionTalkImageDiagnostic may download that URL
   directly or scrape the public post HTML before falling back to Telethon media
   download. This is a cooldown workaround, not a separate product pipeline.
+  For bounded public-web rescue runs, the launcher may set
+  `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=0`: use all embedding models that
+  complete inside the 20-minute budget, but do not throw away 800+ fetched public
+  posts merely because the second model timed out.
 - The image-queue CandidateReport phase must not spend time on historical
   candidate-memory dual-embedding rechecks. Defaults are
   `REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0` and

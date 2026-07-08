@@ -351,6 +351,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_ENABLE_EARLY_LLM": os.environ.get("REGION_TALK_ENABLE_EARLY_LLM", "0"),
         "REGION_TALK_ENABLE_VECTOR_GATES": os.environ.get("REGION_TALK_ENABLE_VECTOR_GATES", "1"),
         "REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1"),
+        "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "1"),
         "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1"),
         "REGION_TALK_TARGET_LLM_CALLS": os.environ.get("REGION_TALK_TARGET_LLM_CALLS", "10"),
         "REGION_TALK_MAX_LLM_FINAL_VERIFY": os.environ.get("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10"),
@@ -642,6 +643,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_ENABLE_EARLY_LLM", "0")
     os.environ.setdefault("REGION_TALK_ENABLE_VECTOR_GATES", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1")
+    os.environ.setdefault("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1")
     os.environ.setdefault("REGION_TALK_TARGET_LLM_CALLS", "10")
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")
