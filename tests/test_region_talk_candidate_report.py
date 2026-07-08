@@ -1795,7 +1795,22 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 else:
                     os.environ[key] = value
 
-    def test_active_slot_guard_refuses_running_sibling_kernel(self) -> None:
+    def test_active_slot_guard_refuses_running_required_kernel(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+
+        class FakeClient:
+            def get_kernel_status(self, ref: str) -> dict[str, str]:
+                return {"status": "RUNNING" if ref.endswith("candidate") else "COMPLETE"}
+
+        with self.assertRaisesRegex(RuntimeError, "active kernel"):
+            mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
+
+    def test_active_slot_guard_allows_running_optional_sibling_with_different_bundle(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
         self.assertIsNotNone(spec)
@@ -1807,8 +1822,34 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             def get_kernel_status(self, ref: str) -> dict[str, str]:
                 return {"status": "RUNNING" if ref.endswith("image") else "COMPLETE"}
 
-        with self.assertRaisesRegex(RuntimeError, "active kernel"):
-            mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
+        mod.assert_region_talk_kaggle_slots_free(
+            FakeClient(),
+            ["u/candidate"],
+            optional_kernel_refs=["u/image"],
+            optional_kernel_auth_bundle_envs={"u/image": "TELEGRAM_AUTH_BUNDLE_DISCOVERY2"},
+            auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+        )
+
+    def test_active_slot_guard_refuses_optional_sibling_with_same_bundle(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rt_candidate_launcher", ROOT / "kaggle" / "execute_region_talk_candidate_report.py")
+        self.assertIsNotNone(spec)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+
+        class FakeClient:
+            def get_kernel_status(self, ref: str) -> dict[str, str]:
+                return {"status": "RUNNING" if ref.endswith("image") else "COMPLETE"}
+
+        with self.assertRaisesRegex(RuntimeError, "auth bundle TELEGRAM_AUTH_BUNDLE_DISCOVERY1"):
+            mod.assert_region_talk_kaggle_slots_free(
+                FakeClient(),
+                ["u/candidate"],
+                optional_kernel_refs=["u/image"],
+                optional_kernel_auth_bundle_envs={"u/image": "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"},
+                auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1",
+            )
 
 
     def test_active_slot_guard_ignores_unverified_optional_sibling(self) -> None:

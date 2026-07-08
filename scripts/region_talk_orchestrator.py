@@ -11,8 +11,11 @@ import argparse
 import importlib.util
 import json
 import os
+import asyncio
+import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +34,153 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     ydb_endpoint_database,
     ydb_has_direct_credential,
     ydb_table_path,
+    ydb_token,
 )
 
+
+ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
+UNVERIFIED_KERNEL_STATUS_PREFIXES = ("UNVERIFIED",)
+ACTION_KERNEL_SLUGS = {
+    "launch_candidate_report": "region-talk-candidate-report",
+    "launch_bge_m3": "region-talk-bge-m3-enrichment",
+    "launch_image_diagnostic": "region-talk-image-diagnostic",
+}
+
+MAIN_DISCOVERY_YDB_BUDGET_ENV = {
+    "REGION_TALK_STATE_BACKEND": "ydb",
+    "REGION_TALK_REQUIRE_YDB_STATE": "1",
+    "REGION_TALK_TEXT_EMBEDDING_MODEL_IDS": "intfloat/multilingual-e5-base",
+    "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
+    "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
+    "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
+    "REGION_TALK_YDB_MAX_POST_ROWS": "1500",
+    "REGION_TALK_YDB_MAX_SOURCE_ROWS": "1500",
+    "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": "1000",
+    "REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS": "3000",
+    "REGION_TALK_YDB_SELECT_PAGE_SIZE": "100",
+    "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "12",
+    "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "12",
+}
+
+ORCHESTRATOR_YDB_METRIC_LIMITS = {
+    "candidate_memory_item": 2500,
+    "image_queue_item": 2500,
+    "publication_candidate_item": 2500,
+    "text_vector_enrichment_item": 6000,
+    "processed_post_item": 10000,
+    "post_live_item": 10000,
+    "source_queue_item": 6000,
+    "source_status_item": 6000,
+    "online_source_item": 6000,
+}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
+
+
+def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
+    default_cap = ORCHESTRATOR_YDB_METRIC_LIMITS.get(kind, 2000)
+    key = "REGION_TALK_ORCHESTRATOR_YDB_MAX_" + re.sub(r"[^A-Za-z0-9]+", "_", kind).upper() + "_ROWS"
+    cap = _env_int(key, _env_int("REGION_TALK_ORCHESTRATOR_YDB_MAX_ROWS_PER_KIND", default_cap))
+    return max(1, min(max(1, int(requested_limit)), cap))
+
+
+def ensure_kaggle_username_env() -> str:
+    username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    if username:
+        return username
+    config_path = Path(os.getenv("KAGGLE_CONFIG_DIR") or (Path.home() / ".kaggle")) / "kaggle.json"
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        username = str(data.get("username") or "").strip()
+    except Exception:
+        username = ""
+    if username:
+        os.environ["KAGGLE_USERNAME"] = username
+    return username
+
+
+def ensure_child_ydb_env(*, allow_yc_fallback: bool) -> None:
+    endpoint, database = ydb_endpoint_database(allow_yc_fallback=allow_yc_fallback)
+    os.environ.setdefault("REGION_TALK_YDB_ENDPOINT", endpoint)
+    os.environ.setdefault("REGION_TALK_YDB_DATABASE", database)
+    if not ydb_has_direct_credential() and allow_yc_fallback:
+        os.environ.setdefault("YC_IAM_TOKEN", ydb_token(allow_yc_fallback=True))
+
+
+def _normalize_kaggle_status_payload(status: Any) -> str:
+    if isinstance(status, dict):
+        raw = status.get("status") or status.get("state") or ""
+    else:
+        raw = getattr(status, "status", None) or status
+    if hasattr(raw, "name"):
+        value = str(raw.name)
+    else:
+        value = str(raw or "")
+    return value.upper().replace("KERNELWORKERSTATUS.", "")
+
+
+def _make_kaggle_status_reader() -> Any:
+    try:
+        from video_announce.kaggle_client import KaggleClient  # type: ignore
+        client = KaggleClient()
+        return lambda ref: client.get_kernel_status(ref)
+    except Exception:
+        from kaggle.api.kaggle_api_extended import KaggleApi  # type: ignore
+        api = KaggleApi()
+        api.authenticate()
+        return lambda ref: api.kernels_status(ref)
+
+
+def read_kaggle_kernel_statuses(username: str) -> dict[str, str]:
+    """Read Region Talk kernel statuses through the shared Kaggle client path.
+
+    In slim local virtualenvs `video_announce.kaggle_client` may be unavailable
+    because app DB dependencies are not installed. Status polling must still be
+    reliable, so fall back to the official Kaggle API only for this read-only
+    status check. Notebook launchers still use the established launcher code.
+    """
+    if not username:
+        return {}
+    read_status = _make_kaggle_status_reader()
+    out: dict[str, str] = {}
+    for slug in ACTION_KERNEL_SLUGS.values():
+        ref = f"{username}/{slug}"
+        try:
+            out[slug] = _normalize_kaggle_status_payload(read_status(ref))
+        except Exception as exc:
+            out[slug] = f"UNVERIFIED:{type(exc).__name__}"
+    return out
+
+
+def filter_actions_for_active_kernels(
+    actions: list[dict[str, Any]],
+    kaggle_statuses: dict[str, str],
+    *,
+    block_unverified: bool = True,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not kaggle_statuses:
+        return actions, []
+    kept: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for action in actions:
+        slug = ACTION_KERNEL_SLUGS.get(str(action.get("action") or ""))
+        status = str(kaggle_statuses.get(slug or "") or "").upper()
+        if slug and status in ACTIVE_KERNEL_STATUSES:
+            skipped.append({"action": action.get("action"), "kernel_slug": slug, "status": status, "reason": "kernel_already_active"})
+            continue
+        if slug and block_unverified and status.startswith(UNVERIFIED_KERNEL_STATUS_PREFIXES):
+            skipped.append({"action": action.get("action"), "kernel_slug": slug, "status": status, "reason": "kernel_status_unverified"})
+            continue
+        kept.append(action)
+    return kept, skipped
 
 def _load_bge_module() -> Any:
     path = ROOT / "kaggle" / "RegionTalkBgeM3Enrichment" / "region_talk_bge_m3_enrichment.py"
@@ -48,11 +196,250 @@ def _rows_by_pk(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {str(r.get("_ydb_pk") or r.get("post_url") or r.get("post_id") or i): r for i, r in enumerate(rows)}
 
 
-def _run_cmd(cmd: list[str], *, dry_run: bool) -> dict[str, Any]:
+def _source_merge_key(row: dict[str, Any]) -> str:
+    raw = (
+        row.get("source_id")
+        or row.get("canonical_source_key")
+        or row.get("source_url")
+        or row.get("canonical_url")
+        or row.get("username")
+        or row.get("_ydb_pk")
+        or ""
+    )
+    key = str(raw or "").strip()
+    if key.startswith(("source_queue_item:", "source_status_item:", "online_source_item:")):
+        key = key.split(":", 1)[1]
+    return key
+
+
+def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for rows in row_lists:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = _source_merge_key(row)
+            if not key:
+                continue
+            current = dict(merged.get(key) or {})
+            current.update({k: v for k, v in row.items() if v not in (None, "")})
+            merged[key] = current
+    return list(merged.values())
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(float(value or 0))
+    except Exception:
+        return 0
+
+
+def _script_name(cmd: list[str]) -> str:
+    exe = Path(str(cmd[0] if cmd else "")).name
+    return str(cmd[1] if len(cmd) > 1 and exe.startswith("python") else cmd[0])
+
+
+def _supports_arg(cmd: list[str], arg: str) -> bool:
+    script = _script_name(cmd)
+    if arg == "--env-file":
+        return script in {
+            "kaggle/execute_region_talk_bge_m3_enrichment.py",
+            "kaggle/execute_region_talk_image_diagnostic.py",
+            "kaggle/execute_region_talk_candidate_report.py",
+            "scripts/region_talk_publication_finalizer.py",
+            "scripts/region_talk_goal_notify.py",
+        }
+    if arg == "--run-id":
+        return script in {
+            "kaggle/execute_region_talk_bge_m3_enrichment.py",
+            "kaggle/execute_region_talk_image_diagnostic.py",
+            "kaggle/execute_region_talk_candidate_report.py",
+            "scripts/region_talk_publication_finalizer.py",
+        }
+    return False
+
+
+def _insert_arg_if_missing(cmd: list[str], arg: str, value: str) -> list[str]:
+    if arg in cmd or not value or not _supports_arg(cmd, arg):
+        return list(cmd)
+    return [*cmd, arg, value]
+
+
+def _action_run_id(action: dict[str, Any]) -> str:
+    action_name = str(action.get("action") or "region-talk-action").replace("launch_", "")
+    safe = "".join(ch if ch.isalnum() or ch in "-" else "-" for ch in action_name).strip("-") or "action"
+    return f"region-talk-orchestrator-{safe}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+
+
+def prepare_action_command(action: dict[str, Any], *, env_file: str) -> tuple[list[str], str]:
+    run_id = str(action.get("run_id") or _action_run_id(action))
+    cmd = list(action.get("cmd") or [])
+    python_bin = (os.getenv("REGION_TALK_ORCHESTRATOR_PYTHON") or sys.executable or "python3").strip()
+    if cmd and Path(str(cmd[0])).name.startswith("python") and python_bin:
+        cmd[0] = python_bin
+    cmd = _insert_arg_if_missing(cmd, "--env-file", env_file)
+    cmd = _insert_arg_if_missing(cmd, "--run-id", run_id)
+    return cmd, run_id
+
+
+def _registry_call(coro: Any) -> None:
+    try:
+        asyncio.run(coro)
+    except RuntimeError:
+        # If called from an existing loop in a future server integration, skip
+        # sync registry mutation rather than blocking the orchestrator. Server
+        # code should call kaggle_registry directly from its own async context.
+        return
+    except Exception:
+        return
+
+
+def _kernel_ref_for_action(action: dict[str, Any]) -> str:
+    username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    slug = ACTION_KERNEL_SLUGS.get(str(action.get("action") or ""), "")
+    return f"{username}/{slug}" if username and slug else ""
+
+
+def _run_cmd(cmd: list[str], *, dry_run: bool, timeout_seconds: int = 300, action: dict[str, Any] | None = None, run_id: str = "") -> dict[str, Any]:
     if dry_run:
-        return {"cmd": cmd, "status": "dry_run"}
-    proc = subprocess.run(cmd, cwd=str(ROOT), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
-    return {"cmd": cmd, "status": "ok" if proc.returncode == 0 else "failed", "returncode": proc.returncode, "output_tail": proc.stdout[-4000:]}
+        return {"cmd": cmd, "status": "dry_run", "run_id": run_id}
+    action = action or {}
+    kernel_ref = _kernel_ref_for_action(action)
+    job_type = "region_talk" if kernel_ref else "region_talk_local"
+    try:
+        from kaggle_registry import register_job, update_job_meta  # type: ignore
+    except Exception:
+        register_job = update_job_meta = None  # type: ignore
+    if register_job and kernel_ref:
+        _registry_call(register_job(job_type, kernel_ref, meta={
+            "run_id": run_id,
+            "action": action.get("action"),
+            "resource": action.get("resource"),
+            "status": "launching",
+            "cmd": cmd,
+            "env_overrides": action.get("env") or {},
+            "started_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        }))
+    try:
+        child_env = os.environ.copy()
+        child_env.update({str(k): str(v) for k, v in dict(action.get("env") or {}).items()})
+        proc = subprocess.run(cmd, cwd=str(ROOT), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=max(30, int(timeout_seconds)), env=child_env)
+        status = "ok" if proc.returncode == 0 else "failed"
+        if update_job_meta and kernel_ref:
+            _registry_call(update_job_meta(job_type, kernel_ref, meta_updates={
+                "status": "launched" if status == "ok" else "launch_failed",
+                "returncode": proc.returncode,
+                "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                "output_tail": proc.stdout[-1000:],
+            }))
+        return {"cmd": cmd, "status": status, "returncode": proc.returncode, "run_id": run_id, "kernel_ref": kernel_ref, "output_tail": proc.stdout[-4000:]}
+    except Exception as exc:
+        if update_job_meta and kernel_ref:
+            _registry_call(update_job_meta(job_type, kernel_ref, meta_updates={
+                "status": "launch_exception",
+                "error": f"{type(exc).__name__}: {str(exc)[:500]}",
+                "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            }))
+        raise
+
+
+def _action(
+    action: str,
+    cmd: list[str],
+    reason: str,
+    *,
+    resource: str = "",
+    parallel_safe: bool = False,
+    timeout_seconds: int = 300,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "action": action,
+        "cmd": cmd,
+        "reason": reason,
+        "resource": resource,
+        "parallel_safe": parallel_safe,
+        "timeout_seconds": timeout_seconds,
+    }
+    if env:
+        payload["env"] = dict(env)
+    return payload
+
+
+def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready: bool, max_actions: int) -> list[dict[str, Any]]:
+    if not actions:
+        return []
+    if not execute_ready:
+        return [actions[0]]
+    max_count = max(1, int(max_actions or 1))
+    if str(actions[0].get("action") or "") == "stop":
+        return [actions[0]]
+    selected: list[dict[str, Any]] = []
+    used_resources: set[str] = set()
+    for action in actions:
+        if action.get("parallel_safe"):
+            continue
+        if str(action.get("action") or "") != "notify_confirmed":
+            continue
+        selected.append(action)
+        resource = str(action.get("resource") or "")
+        if resource:
+            used_resources.add(resource)
+        if len(selected) >= max_count:
+            return selected
+    for action in actions:
+        if not action.get("parallel_safe"):
+            continue
+        resource = str(action.get("resource") or "")
+        if resource and resource in used_resources:
+            continue
+        selected.append(action)
+        if resource:
+            used_resources.add(resource)
+        if len(selected) >= max_count:
+            return selected
+    for action in actions:
+        if action.get("parallel_safe"):
+            continue
+        if str(action.get("action") or "") == "notify_confirmed":
+            continue
+        resource = str(action.get("resource") or "")
+        if resource and resource in used_resources:
+            continue
+        if not (resource.startswith("local:") or str(action.get("action") or "") == "run_finalizer"):
+            continue
+        selected.append(action)
+        if resource:
+            used_resources.add(resource)
+        if len(selected) >= max_count:
+            break
+    if selected:
+        return selected
+    return [actions[0]]
+
+
+def _progress_signature(metrics: dict[str, Any]) -> tuple[int, ...]:
+    keys = (
+        "publication_sent_total",
+        "publication_confirmed_total",
+        "publication_candidate_total",
+        "image_actual_scored_total",
+        "image_pending_total",
+        "text_vector_e5_total",
+        "text_vector_bge_m3_total",
+        "bge_pending_sample_total",
+    )
+    out: list[int] = []
+    for key in keys:
+        try:
+            out.append(int(metrics.get(key) or 0))
+        except Exception:
+            out.append(0)
+    return tuple(out)
+
+
+def _has_active_region_talk_kernel(kaggle_statuses: dict[str, str]) -> bool:
+    return any(str(status or "").upper() in ACTIVE_KERNEL_STATUSES for status in kaggle_statuses.values())
 
 
 def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_yc_fallback: bool = False) -> dict[str, Any]:
@@ -65,6 +452,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     table = ydb_table_path(database)
     try:
         kinds = [
+            "source_queue_item",
+            "source_status_item",
+            "online_source_item",
             "candidate_memory_item",
             "image_queue_item",
             "publication_candidate_item",
@@ -72,7 +462,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "processed_post_item",
             "post_live_item",
         ]
-        rows_by_kind = {kind: read_kind_rows(pool, ydb, table, kind, limit) for kind in kinds}
+        rows_by_kind = {
+            kind: read_kind_rows(pool, ydb, table, kind, _orchestrator_kind_limit(kind, limit))
+            for kind in kinds
+        }
     finally:
         driver.stop()
 
@@ -80,6 +473,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     images = rows_by_kind["image_queue_item"]
     publications = rows_by_kind["publication_candidate_item"]
     vectors = rows_by_kind["text_vector_enrichment_item"]
+    source_rows = _merge_source_rows(
+        rows_by_kind["source_queue_item"],
+        rows_by_kind["source_status_item"],
+        rows_by_kind["online_source_item"],
+    )
     bge_mod = _load_bge_module()
     item_kinds_for_bge = {
         "text_vector_enrichment_item": _rows_by_pk(vectors),
@@ -103,14 +501,61 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     sent = [r for r in publications if str(r.get("sent_to_chat") or "").lower() == "true" or str(r.get("publication_candidate_status") or "") == "sent_to_chat"]
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
+    source_statuses = [str(r.get("source_queue_status") or r.get("queue_status") or r.get("fetch_status") or "") for r in source_rows]
+    source_terminal = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status.startswith("processed_")
+    ]
+    source_retry = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status in {"needs_rescan_or_retry", "retry", "error"} or status.startswith(("error", "skipped_telegram_unresolved"))
+    ]
+    source_touched = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status and status != "pending_scan"
+    ]
+    source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
+    source_processed_no_ko = [r for r, status in zip(source_rows, source_statuses) if status == "processed_no_ko"]
+    source_processed_ko_candidate = [r for r, status in zip(source_rows, source_statuses) if status == "processed_found_ko_candidate"]
+    source_processed_ko_low_image = [r for r, status in zip(source_rows, source_statuses) if status == "processed_found_ko_low_image_quality"]
+    source_ko_candidates = [
+        r for r in source_rows
+        if str(r.get("source_queue_status") or "") in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
+        or _safe_int(r.get("ko_posts_found")) > 0
+        or _safe_int(r.get("candidate_posts_found")) > 0
+    ]
+    strong_images = [
+        r for r in images
+        if str(r.get("image_queue_status") or "") == "actual_scored"
+        and str(r.get("image_model_input_type") or "") == "actual_image"
+        and float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.70
+    ]
+    publication_ready = [
+        r for r in publications
+        if str(r.get("publication_candidate_status") or "") in {"publication_ready", "accepted_for_publication"}
+        or str(r.get("publication_status") or "") == "publication_ready"
+    ]
 
     return {
+        "publics_total": len(source_rows),
+        "publics_touched_or_not_pending_total": len(source_touched),
+        "publics_terminal_processed_total": len(source_terminal),
+        "publics_needs_rescan_or_retry_total": len(source_retry),
+        "publics_scanned_with_posts_total": len(source_with_posts),
+        "publics_processed_no_ko_total": len(source_processed_no_ko),
+        "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
+        "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
+        "publics_with_ko_candidates_total": len(source_ko_candidates),
+        "source_queue_posts_scanned_total": sum(_safe_int(r.get("posts_scanned")) for r in source_rows),
+        "processed_posts_unique_total": len(rows_by_kind["processed_post_item"]),
         "candidate_memory_total": len(candidates),
         "image_queue_total": len(images),
         "image_pending_total": len(image_pending),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
+        "image_strong_actual_ge_0_70_total": len(strong_images),
         "publication_candidate_total": len(publications),
+        "publication_ready_total": len(publication_ready),
         "publication_confirmed_total": len(confirmed),
         "publication_sent_total": len(sent),
         "publication_unsent_confirmed_total": len(unsent_confirmed),
@@ -122,21 +567,119 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     }
 
 
-def build_decision_plan(metrics: dict[str, Any], *, target_confirmed: int, bge_threshold: int, image_threshold: int) -> list[dict[str, Any]]:
+def build_decision_plan(
+    metrics: dict[str, Any],
+    *,
+    target_confirmed: int,
+    bge_threshold: int,
+    image_threshold: int,
+    include_main: bool = True,
+) -> list[dict[str, Any]]:
     if int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed:
         return [{"action": "stop", "reason": "target_confirmed_reached"}]
     actions: list[dict[str, Any]] = []
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
-        actions.append({"action": "notify_confirmed", "cmd": ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "reason": "confirmed rows not sent to operator chat"})
-    if int(metrics.get("image_actual_scored_total") or 0) > int(metrics.get("publication_candidate_total") or 0):
-        actions.append({"action": "run_finalizer", "cmd": ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"], "reason": "actual images exist beyond publication rows"})
+        actions.append(_action("notify_confirmed", ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "confirmed rows not sent to operator chat", resource="telegram:e2e", timeout_seconds=180))
+
+    # Pipeline invariant: after the main notebook writes fresh E5 rows, BGE is
+    # the next required consumer. Do not let finalizer/image actions hide this
+    # backlog; BGE has no Telegram session and can run in parallel with both
+    # CandidateReport(DISCOVERY1) and ImageDiagnostic(DISCOVERY2).
     if int(metrics.get("bge_pending_sample_total") or 0) >= bge_threshold:
-        actions.append({"action": "launch_bge_m3", "cmd": ["python3", "kaggle/execute_region_talk_bge_m3_enrichment.py", "--batch-size", "12"], "reason": "pending E5/candidate text rows need BGE"})
+        actions.append(_action(
+            "launch_bge_m3",
+            ["python3", "kaggle/execute_region_talk_bge_m3_enrichment.py", "--batch-limit", "12", "--batch-size", "4", "--no-wait"],
+            "pending E5/candidate text rows need BGE immediately after main E5",
+            resource="kaggle:bge_m3",
+            parallel_safe=True,
+            timeout_seconds=300,
+        ))
     if int(metrics.get("image_pending_total") or 0) >= image_threshold:
-        actions.append({"action": "launch_image_diagnostic", "cmd": ["python3", "kaggle/execute_region_talk_image_diagnostic.py", "--source", "ydb", "--max-items-per-run", "30", "--batch-size", "10"], "reason": "text-confirmed image queue has pending rows"})
+        actions.append(_action(
+            "launch_image_diagnostic",
+            ["python3", "kaggle/execute_region_talk_image_diagnostic.py", "--source", "ydb", "--max-items-per-run", "30", "--batch-size", "10", "--no-wait"],
+            "text-confirmed image queue has pending rows; uses DISCOVERY2",
+            resource="telegram:DISCOVERY2",
+            parallel_safe=True,
+            timeout_seconds=300,
+        ))
+    if include_main:
+        actions.append(_action(
+            "launch_candidate_report",
+            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "220", "--no-wait"],
+            "continue main discovery/E5 producer in parallel when DISCOVERY1 is free",
+            resource="telegram:DISCOVERY1",
+            parallel_safe=True,
+            timeout_seconds=300,
+            env=MAIN_DISCOVERY_YDB_BUDGET_ENV,
+        ))
+    if int(metrics.get("image_actual_scored_total") or 0) > int(metrics.get("publication_candidate_total") or 0):
+        actions.append(_action("run_finalizer", ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"], "actual images exist beyond publication rows", resource="local:gemini", timeout_seconds=900))
     if not actions:
-        actions.append({"action": "launch_candidate_report", "cmd": ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "220"], "reason": "no ready consumer action; produce new E5/discovery rows"})
+        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "220", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
     return actions
+
+
+def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool, cycle_index: int) -> dict[str, Any]:
+    will_execute = bool(args.execute or args.execute_ready)
+    metrics = read_region_talk_queue_metrics(args.limit, bge_sample_limit=args.bge_sample_limit, allow_yc_fallback=allow_yc_fallback)
+    kaggle_statuses: dict[str, str] = {}
+    kaggle_status_error = ""
+    if not args.skip_kaggle_status:
+        try:
+            kaggle_statuses = read_kaggle_kernel_statuses((os.getenv("KAGGLE_USERNAME") or "").strip())
+        except Exception as exc:
+            kaggle_status_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+    if kaggle_statuses:
+        metrics["kaggle_kernel_statuses"] = kaggle_statuses
+    if kaggle_status_error:
+        metrics["kaggle_status_error"] = kaggle_status_error
+    actions = build_decision_plan(
+        metrics,
+        target_confirmed=args.target_confirmed,
+        bge_threshold=args.bge_threshold,
+        image_threshold=args.image_threshold,
+        include_main=not args.no_main,
+    )
+    actions, active_kernel_skips = filter_actions_for_active_kernels(
+        actions,
+        kaggle_statuses,
+        block_unverified=not bool(args.allow_unverified_kaggle_status),
+    )
+    result: dict[str, Any] = {
+        "ok": True,
+        "cycle": cycle_index,
+        "dry_run": not will_execute,
+        "metrics": metrics,
+        "actions": actions,
+    }
+    if active_kernel_skips:
+        result["active_kernel_skips"] = active_kernel_skips
+    if args.stats_message:
+        result["stats_message"] = build_stats_message(limit=args.limit)
+    if will_execute:
+        selected = select_actions_for_execution(
+            actions,
+            execute_ready=bool(args.execute_ready),
+            max_actions=args.max_actions_per_cycle,
+        )
+        result["selected_actions"] = [a.get("action") for a in selected]
+        executions = []
+        for action in selected:
+            if not action.get("cmd"):
+                continue
+            if str(action.get("action") or "") == "stop":
+                continue
+            cmd, run_id = prepare_action_command(action, env_file=str(Path(args.env_file)))
+            executions.append(_run_cmd(
+                cmd,
+                dry_run=False,
+                timeout_seconds=int(action.get("timeout_seconds") or 300),
+                action=action,
+                run_id=run_id,
+            ))
+        result["execution"] = executions
+    return result
 
 
 def main() -> int:
@@ -149,9 +692,20 @@ def main() -> int:
     parser.add_argument("--image-threshold", type=int, default=1)
     parser.add_argument("--stats-message", action="store_true", help="also include human stats text")
     parser.add_argument("--allow-yc-fallback", action="store_true", help="allow local /home/dev/yandex-cloud/bin/yc to discover endpoint/database and mint IAM token")
+    parser.add_argument("--no-main", action="store_true", help="do not include CandidateReport producer in the plan")
     parser.add_argument("--execute", action="store_true", help="execute the first planned action (default: dry-run only)")
+    parser.add_argument("--execute-ready", action="store_true", help="execute all non-conflicting parallel-safe launch actions in this cycle")
+    parser.add_argument("--max-actions-per-cycle", type=int, default=4)
+    parser.add_argument("--skip-kaggle-status", action="store_true", help="do not query Kaggle active kernel statuses before planning")
+    parser.add_argument("--allow-unverified-kaggle-status", action="store_true", help="allow Kaggle launches even when a Region Talk kernel status cannot be verified")
+    parser.add_argument("--loop", action="store_true", help="keep polling YDB/Kaggle and launching ready work until target/limits")
+    parser.add_argument("--cycle-sleep-seconds", type=int, default=180, help="sleep between loop cycles")
+    parser.add_argument("--max-cycles", type=int, default=0, help="maximum loop cycles; 0 means unlimited until other limits")
+    parser.add_argument("--max-runtime-minutes", type=int, default=0, help="maximum wall-clock loop runtime; 0 disables")
+    parser.add_argument("--no-progress-cycles", type=int, default=8, help="stop loop after this many idle no-progress cycles with no active kernels")
     args = parser.parse_args()
     load_env(Path(args.env_file))
+    ensure_kaggle_username_env()
     allow_yc_fallback = bool(args.allow_yc_fallback or (os.getenv("REGION_TALK_ALLOW_LOCAL_YC_FALLBACK") or "").strip().lower() in {"1", "true", "yes", "on"})
     missing = [
         name for name in ["REGION_TALK_YDB_ENDPOINT", "REGION_TALK_YDB_DATABASE"]
@@ -164,29 +718,71 @@ def main() -> int:
     if missing:
         print(json.dumps({
             "ok": False,
-            "dry_run": not args.execute,
+            "dry_run": not bool(args.execute or args.execute_ready),
             "error": "missing_ydb_config",
             "missing": missing,
             "next_action": "run from the configured server, export live YDB endpoint/database plus service-account/token credentials, or pass --allow-yc-fallback for local debug",
         }, ensure_ascii=False, indent=2))
         return 2
-    try:
-        metrics = read_region_talk_queue_metrics(args.limit, bge_sample_limit=args.bge_sample_limit, allow_yc_fallback=allow_yc_fallback)
-    except Exception as exc:
-        print(json.dumps({
-            "ok": False,
-            "dry_run": not args.execute,
-            "error": f"{type(exc).__name__}: {str(exc)[:500]}",
-            "next_action": "provide REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE and service-account/token credentials, or retry local debug with --allow-yc-fallback",
-        }, ensure_ascii=False, indent=2))
-        return 2
-    actions = build_decision_plan(metrics, target_confirmed=args.target_confirmed, bge_threshold=args.bge_threshold, image_threshold=args.image_threshold)
-    result: dict[str, Any] = {"ok": True, "dry_run": not args.execute, "metrics": metrics, "actions": actions}
-    if args.stats_message:
-        result["stats_message"] = build_stats_message(limit=args.limit)
-    if args.execute and actions and actions[0].get("cmd"):
-        result["execution"] = _run_cmd(list(actions[0]["cmd"]), dry_run=False)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if allow_yc_fallback:
+        try:
+            ensure_child_ydb_env(allow_yc_fallback=True)
+        except Exception:
+            # The metrics reader will return the detailed YDB/Yandex Cloud error
+            # below. Do not print credentials or partial tokens here.
+            pass
+    if not args.loop:
+        try:
+            result = run_orchestrator_cycle(args, allow_yc_fallback=allow_yc_fallback, cycle_index=1)
+        except Exception as exc:
+            print(json.dumps({
+                "ok": False,
+                "dry_run": not bool(args.execute or args.execute_ready),
+                "error": f"{type(exc).__name__}: {str(exc)[:500]}",
+                "next_action": "provide live YDB/Kaggle credentials, or retry local debug with --allow-yc-fallback; do not launch when Kaggle status is unverified unless manually audited",
+            }, ensure_ascii=False, indent=2))
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    started = time.monotonic()
+    max_runtime_seconds = max(0, int(args.max_runtime_minutes or 0)) * 60
+    last_signature: tuple[int, ...] | None = None
+    idle_no_progress = 0
+    cycle = 0
+    while True:
+        cycle += 1
+        try:
+            result = run_orchestrator_cycle(args, allow_yc_fallback=allow_yc_fallback, cycle_index=cycle)
+        except Exception as exc:
+            result = {
+                "ok": False,
+                "cycle": cycle,
+                "dry_run": not bool(args.execute or args.execute_ready),
+                "error": f"{type(exc).__name__}: {str(exc)[:500]}",
+            }
+            print(json.dumps(result, ensure_ascii=False), flush=True)
+            return 2
+        print(json.dumps(result, ensure_ascii=False), flush=True)
+        metrics = dict(result.get("metrics") or {})
+        actions = list(result.get("actions") or [])
+        if actions and actions[0].get("action") == "stop":
+            return 0
+        signature = _progress_signature(metrics)
+        active = _has_active_region_talk_kernel(dict(metrics.get("kaggle_kernel_statuses") or {}))
+        executed = bool(result.get("execution"))
+        if signature != last_signature or active or executed:
+            idle_no_progress = 0
+        else:
+            idle_no_progress += 1
+        last_signature = signature
+        if int(args.max_cycles or 0) and cycle >= int(args.max_cycles):
+            return 0
+        if max_runtime_seconds and (time.monotonic() - started) >= max_runtime_seconds:
+            return 0
+        if int(args.no_progress_cycles or 0) and idle_no_progress >= int(args.no_progress_cycles or 0):
+            return 0
+        time.sleep(max(5, int(args.cycle_sleep_seconds or 180)))
     return 0
 
 

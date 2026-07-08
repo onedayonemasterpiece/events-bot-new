@@ -522,46 +522,64 @@ def assert_region_talk_kaggle_slots_free(
     kernel_refs: list[str],
     *,
     optional_kernel_refs: list[str] | None = None,
+    optional_kernel_auth_bundle_envs: dict[str, str] | None = None,
     allow_active: bool = False,
     auth_bundle_env: str = "",
 ) -> None:
-    """Refuse to push over an active Region Talk kernel or shared auth bundle.
+    """Refuse to push over an active own kernel or same Telegram auth bundle.
 
-    Kaggle does not provide a safe local cancel path. Region Talk candidate and
-    image diagnostic kernels use separate Discovery bundles by default, but an
-    operator may override the bundle mapping for a run; a second push while a
-    kernel with the same Telethon auth key is RUNNING can corrupt the product run.
+    Region Talk production uses role-scoped sessions: CandidateReport defaults to
+    DISCOVERY1 and ImageDiagnostic defaults to DISCOVERY2. Those two notebooks
+    are expected to run in parallel. The guard therefore blocks required/own
+    active kernels, and blocks optional sibling kernels only when their declared
+    auth bundle equals the bundle of the launch being attempted.
     """
     if allow_active or getenv_bool("REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE", False):
         print("[region-talk-kaggle] WARNING active-kernel guard bypassed by explicit override", flush=True)
         return
+    own_bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+    optional_bundles = optional_kernel_auth_bundle_envs or {}
     checked: list[str] = []
-    active: list[tuple[str, str]] = []
+    active_required: list[tuple[str, str]] = []
+    active_same_bundle_optional: list[tuple[str, str, str]] = []
+    active_parallel_optional: list[tuple[str, str, str]] = []
     errors: list[str] = []
     required = list(dict.fromkeys([r for r in kernel_refs if str(r).strip()]))
     optional = [r for r in list(dict.fromkeys(optional_kernel_refs or [])) if str(r).strip() and r not in required]
     for kernel_ref in required + optional:
-        is_optional = kernel_ref in optional
+        ref = str(kernel_ref)
+        is_optional = ref in optional
         try:
-            raw = _kernel_status_raw(client, str(kernel_ref))
-            checked.append(f"{kernel_ref}={raw or 'UNKNOWN'}" + ("(optional)" if is_optional else ""))
+            raw = _kernel_status_raw(client, ref)
+            sibling_bundle = str(optional_bundles.get(ref) or "").strip()
+            suffix = "(optional" + (f",bundle={sibling_bundle}" if sibling_bundle else "") + ")" if is_optional else ""
+            checked.append(f"{ref}={raw or 'UNKNOWN'}{suffix}")
             if raw in ACTIVE_KERNEL_STATUSES:
-                active.append((str(kernel_ref), raw))
+                if not is_optional:
+                    active_required.append((ref, raw))
+                elif sibling_bundle and sibling_bundle == own_bundle:
+                    active_same_bundle_optional.append((ref, raw, sibling_bundle))
+                else:
+                    active_parallel_optional.append((ref, raw, sibling_bundle or "unknown"))
         except Exception as exc:
-            msg = f"{kernel_ref}:{type(exc).__name__}:{str(exc)[:180]}"
+            msg = f"{ref}:{type(exc).__name__}:{str(exc)[:180]}"
             if is_optional:
-                checked.append(f"{kernel_ref}=UNVERIFIED_OPTIONAL:{type(exc).__name__}")
+                checked.append(f"{ref}=UNVERIFIED_OPTIONAL:{type(exc).__name__}")
             else:
                 errors.append(msg)
-    if active:
-        refs = ", ".join(f"{ref}({status})" for ref, status in active)
-        bundle = auth_bundle_env or os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV") or "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"
+    if active_required or active_same_bundle_optional:
+        refs = ", ".join(f"{ref}({status})" for ref, status in active_required)
+        same_bundle = ", ".join(f"{ref}({status},bundle={bundle})" for ref, status, bundle in active_same_bundle_optional)
+        joined = ", ".join(x for x in [refs, same_bundle] if x)
         raise RuntimeError(
             "Region Talk Kaggle launch refused: active kernel(s) detected "
-            f"{refs}; auth bundle {bundle} must not be used concurrently. "
-            "Cancel/finish the active Kaggle run first, or set "
+            f"{joined}; auth bundle {own_bundle} must not be used concurrently. "
+            "Cancel/finish the conflicting run first, or set "
             "REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1 only after manual resource audit."
         )
+    if active_parallel_optional:
+        parallel = ", ".join(f"{ref}({status},bundle={bundle})" for ref, status, bundle in active_parallel_optional)
+        print(f"[region-talk-kaggle] parallel sibling active but allowed: {parallel}; own_bundle={own_bundle}", flush=True)
     if errors and not getenv_bool("REGION_TALK_ALLOW_UNVERIFIED_KAGGLE_SLOT", False):
         raise RuntimeError(
             "Region Talk Kaggle launch refused: could not verify active kernel slots: "
@@ -742,6 +760,7 @@ def main() -> int:
         client,
         [kernel_ref],
         optional_kernel_refs=[image_kernel_ref],
+        optional_kernel_auth_bundle_envs={image_kernel_ref: "TELEGRAM_AUTH_BUNDLE_DISCOVERY2"},
         allow_active=bool(args.allow_active_region_talk_kernel),
         auth_bundle_env=os.environ.get("REGION_TALK_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_DISCOVERY1"),
     )

@@ -304,18 +304,26 @@ def ydb_select_kind_items(session: Any, ydb: Any, table_path: str, kind: str, *,
     max_items = max(1, int(limit))
     page_size = max(1, min(max_items, getenv_int("REGION_TALK_YDB_SELECT_PAGE_SIZE", 200)))
     out: dict[str, dict[str, Any]] = {}
-    after = ""
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
     settings = ydb_request_settings(ydb)
     while len(out) < max_items:
         query = session.prepare(f"""
-DECLARE $kind AS Utf8;
+DECLARE $prefix AS Utf8;
+DECLARE $prefix_upper AS Utf8;
 DECLARE $after AS Utf8;
 SELECT pk, payload_json, updated_at FROM `{table_path}`
-WHERE kind = $kind AND pk > $after
+WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after
 ORDER BY pk
 LIMIT {min(page_size, max_items - len(out))};
 """, settings=settings)
-        result_sets = session.transaction(ydb.StaleReadOnly()).execute(query, {"$kind": kind, "$after": after}, commit_tx=True, settings=settings)
+        result_sets = session.transaction(ydb.StaleReadOnly()).execute(
+            query,
+            {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+            commit_tx=True,
+            settings=settings,
+        )
         rows = result_sets[0].rows if result_sets else []
         if not rows:
             break

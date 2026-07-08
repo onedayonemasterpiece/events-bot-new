@@ -1,6 +1,6 @@
 # О Калининграде говорят / Region Talk Channel
 
-> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP-0 docs-first design**; no Telegram channel, VK community, production crawler, YDB tables, tokens or publishing are created in this pass.
+> Canonical slug: `region-talk-channel`. User-facing working name: **«О Калининграде говорят»**. Product/implementation alias: **Kaliningrad-best-post-monitoring**. Status: **MVP live-YDB runner / production-candidate pipeline under supervised orchestration**. Telegram/VK public publishing remains disabled; the current product goal is a Gemini-confirmed operator queue and Telegram notifications with source links.
 
 ## Document map
 
@@ -186,11 +186,16 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
 
 ## Acceptance status for this docs pass
 
-- Production implementation: **not implemented**.
+- Production implementation: **partially implemented / supervised live-YDB pipeline**:
+  CandidateReport, isolated BGE-M3 enrichment, ImageDiagnostic, publication
+  finalizer/notifier and `scripts/region_talk_orchestrator.py` operate against
+  live YDB under dry-run/no-publication guardrails.
 - Channel/community creation: **not done**.
 - Real tokens/secrets: **not introduced**.
 - Publishing: **not performed**.
-- Next useful task: implement MVP-1 candidate-report-only job against manual seeds, YDB test credentials and XLSX artifacts.
+- Next useful task: keep the orchestrator loop running, watch the live funnel
+  metrics for growth, and fix whichever stage stops increasing before the
+  20-link Gemini-confirmed target is reached.
 
 
 ## MVP-1.x strict selection update

@@ -387,9 +387,11 @@ YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report
 artifacts only. The Kaggle writer may rewrite old compact state rows through the
 v3 compactor to remove parasite legacy queue payloads without deleting
-URLs/posts/candidates. Row-level queue reads must be paginated by `pk`
-(`REGION_TALK_YDB_SELECT_PAGE_SIZE`, default 200) to avoid YDB truncated response
-errors. Row-level queue writes default to changed/current-run rows only
+URLs/posts/candidates. Row-level queue reads must be paginated by primary-key
+prefix range (`pk >= '<kind>:' AND pk < '<kind>;'`, then `pk > after`) rather
+than table-wide `WHERE kind=...` scans, with
+`REGION_TALK_YDB_SELECT_PAGE_SIZE` (default 200) to avoid YDB truncated response
+and `RESOURCE_EXHAUSTED` errors. Row-level queue writes default to changed/current-run rows only
 (`REGION_TALK_YDB_ROW_WRITE_MODE=changed`); use `full` only for a deliberate
 maintenance rewrite, and `REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE=1` for
 snapshot-only recovery.

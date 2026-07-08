@@ -221,11 +221,11 @@ def ydb_select_kind(kind: str, limit_n: int):
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver)
     def op(session):
         max_items=max(1, int(limit_n)); page_size=max(1, min(max_items, int(os.getenv("REGION_TALK_YDB_SELECT_PAGE_SIZE") or "200")))
-        out=[]; after=""
+        out=[]; prefix=kind+":"; prefix_upper=kind+";"; after=prefix
         while len(out) < max_items:
-            query=session.prepare(f"""DECLARE $kind AS Utf8; DECLARE $after AS Utf8;
-SELECT pk, payload_json FROM `{table_path}` WHERE kind = $kind AND pk > $after ORDER BY pk LIMIT {min(page_size, max_items-len(out))};""")
-            rs=session.transaction(ydb.StaleReadOnly()).execute(query,{"$kind":kind,"$after":after}, commit_tx=True)
+            query=session.prepare(f"""DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8;
+SELECT pk, payload_json FROM `{table_path}` WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after ORDER BY pk LIMIT {min(page_size, max_items-len(out))};""")
+            rs=session.transaction(ydb.StaleReadOnly()).execute(query,{"$prefix":prefix,"$prefix_upper":prefix_upper,"$after":after}, commit_tx=True)
             rows=rs[0].rows if rs else []
             if not rows: break
             for row in rows:

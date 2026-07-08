@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / orchestrator control contour**: upgraded the local
+  orchestrator from a serial dry-run helper to a supervised ready-cycle runner:
+  it reads live YDB funnel metrics with primary-key prefix scans, polls Kaggle
+  kernel state through the shared Kaggle client path, skips only active
+  conflicting kernels, launches BGE/Image/CandidateReport in one non-conflicting
+  `--execute-ready` cycle, runs local finalizer/notifier maintenance, forces the
+  CandidateReport child env to live-YDB E5-only + external BGE fusion, and uses
+  the orchestrator venv Python for child launchers.
 - **Region Talk Channel / E5+BGE production fusion**: CandidateReport now keeps
   the main Kaggle run E5-only by default, writes durable E5
   `text_vector_enrichment_item` rows, consumes external BGE-M3 YDB rows for

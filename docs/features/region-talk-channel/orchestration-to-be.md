@@ -106,7 +106,63 @@ Responsibilities stay unchanged:
 
 ### 5. Local/server orchestrator
 
-A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook. The first implementation is `scripts/region_talk_orchestrator.py`: default mode is read-only/dry-run JSON (`metrics` + `actions`); it executes only the first planned action with explicit `--execute`. Server/production runs should pass explicit `REGION_TALK_YDB_ENDPOINT`, `REGION_TALK_YDB_DATABASE` and a least-privilege token/service-account secret. Local debugging may add `--allow-yc-fallback` to let `/home/dev/yandex-cloud/bin/yc` discover the YDB endpoint and mint a short-lived IAM token; this is deliberately opt-in so unattended runs do not open browser auth.
+A plain Python process, later inside `eventsbot`, controls short Kaggle launches
+by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle
+notebook. The implementation is `scripts/region_talk_orchestrator.py`: default
+mode is read-only/dry-run JSON (`metrics` + `actions`); `--execute` runs the
+first safe action, while the production/debug loop uses `--execute-ready` to run
+all non-conflicting ready work in one cycle.
+
+The orchestrator must reuse the same durable control contour as CherryFlash,
+Telegram Monitoring and Guide monitoring:
+
+- `video_announce.kaggle_client.KaggleClient` (or read-only official Kaggle API
+  fallback only for status polling) for kernel status/push control;
+- `kaggle_registry.register_job` / `update_job_meta` for local recovery metadata;
+- active-kernel checks before launches, with action resources:
+  `telegram:DISCOVERY1`, `telegram:DISCOVERY2`, `kaggle:bge_m3`,
+  `local:gemini`;
+- row-level YDB queue metrics read through primary-key prefix ranges, not
+  table-wide `kind` scans, so `ResourceExhausted` in one queue does not stall the
+  whole loop;
+- one Python runtime/venv for the orchestrator and child launchers, so local
+  preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
+
+Server/production runs should pass explicit `REGION_TALK_YDB_ENDPOINT`,
+`REGION_TALK_YDB_DATABASE` and a least-privilege token/service-account secret.
+Local debugging may add `--allow-yc-fallback` to let
+`/home/dev/yandex-cloud/bin/yc` discover the YDB endpoint and mint a short-lived
+IAM token; this is deliberately opt-in so unattended runs do not open browser
+auth.
+
+Current supervised command shape:
+
+```bash
+artifacts/codex/region-talk-ydb-venv/bin/python scripts/region_talk_orchestrator.py \
+  --env-file /home/dev/projects/events-bot-new/.env \
+  --allow-yc-fallback \
+  --execute-ready \
+  --max-actions-per-cycle 4 \
+  --limit 10000
+```
+
+Important invariants:
+
+- BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, before
+  image/finalizer work can hide the text-vector backlog.
+- CandidateReport is still included in the same ready cycle to keep
+  discovery/E5 growing in parallel while BGE/Image consume older queues.
+- CandidateReport child env is forced to live YDB, E5-only main embedding and
+  external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
+  `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
+  `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`).
+- `RegionTalkBgeM3Enrichment` uses `--batch-limit 12 --batch-size 4` so the row
+  count and in-memory batch size are separate.
+- If a Kaggle kernel is already active, that action is skipped but other
+  non-conflicting resources continue (for example active BGE does not block
+  ImageDiagnostic or CandidateReport).
+- Notifier/finalizer are local maintenance actions and may run while Kaggle
+  notebooks are active; newly Gemini-confirmed unsent rows are notified first.
 
 Pseudo-loop:
 

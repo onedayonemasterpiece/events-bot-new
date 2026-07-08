@@ -167,14 +167,7 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     driver.wait(timeout=20, fail_fast=True)
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
-    q = f"SELECT pk, payload_json FROM `{table}` WHERE kind='publication_candidate_item' LIMIT {max(1, int(limit) * 5)};"
-    rows = pool.retry_operation_sync(lambda s: s.transaction(ydb.StaleReadOnly()).execute(q, commit_tx=True))[0].rows
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        payload = row.payload_json
-        item = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
-        item["_ydb_pk"] = str(row.pk)
-        out.append(item)
+    out = read_kind_rows(pool, ydb, table, "publication_candidate_item", max(1, int(limit) * 5))
     out.sort(key=lambda r: (int(r.get("publication_rank") or 999999), -float(r.get("publication_score") or 0)))
     return ydb, driver, pool, table, out
 
@@ -189,17 +182,28 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
         raise ValueError(f"unsafe YDB kind: {kind!r}")
     out = []
     max_items = max(1, int(limit))
-    page_size = max(1, min(200, max_items))
-    after = ""
+    try:
+        configured_page = int(os.getenv("REGION_TALK_YDB_SELECT_PAGE_SIZE", "200") or "200")
+    except Exception:
+        configured_page = 200
+    page_size = max(1, min(200, configured_page, max_items))
+    prefix = kind + ":"
+    prefix_upper = kind + ";"
+    after = prefix
     while len(out) < max_items:
         q = (
-            f"DECLARE $after AS Utf8; "
-            f"SELECT pk, payload_json FROM `{table}` WHERE kind='{kind}' AND pk > $after "
+            f"DECLARE $prefix AS Utf8; DECLARE $prefix_upper AS Utf8; DECLARE $after AS Utf8; "
+            f"SELECT pk, payload_json FROM `{table}` "
+            f"WHERE pk >= $prefix AND pk < $prefix_upper AND pk > $after "
             f"ORDER BY pk LIMIT {min(page_size, max_items - len(out))};"
         )
         def op(session: Any):
             query = session.prepare(q)
-            return session.transaction(ydb.StaleReadOnly()).execute(query, {"$after": after}, commit_tx=True)
+            return session.transaction(ydb.StaleReadOnly()).execute(
+                query,
+                {"$prefix": prefix, "$prefix_upper": prefix_upper, "$after": after},
+                commit_tx=True,
+            )
         rows = pool.retry_operation_sync(op)[0].rows
         if not rows:
             break

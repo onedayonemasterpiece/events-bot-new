@@ -236,7 +236,7 @@ features:
       - promo.py
       - handlers/promo_cmd.py
   region_talk_channel:
-    status: design
+    status: mvp_live_ydb_runner
     docs: docs/features/region-talk-channel/README.md
     seed_sources_v1: docs/features/region-talk-channel/seed-sources-v1.md
     seed_sources_v1_csv: docs/features/region-talk-channel/seed-sources-v1.csv
