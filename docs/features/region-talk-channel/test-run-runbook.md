@@ -423,7 +423,10 @@ The XLSX has:
   `REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1` to temporarily put known
   `processed_found_ko_candidate` / KO-positive sources ahead of the pending
   frontier, so high-yield travel sources can be searched more deeply without
-  waiting for the entire backlog to drain.
+  waiting for the entire backlog to drain. These source-selection controls are
+  part of the Kaggle input config; they must be propagated by the local launcher
+  into the private input dataset, because local shell env alone is not visible
+  inside the Kaggle notebook.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and

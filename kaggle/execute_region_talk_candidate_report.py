@@ -277,6 +277,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_DELTA_SCAN_ENABLED": os.environ.get("REGION_TALK_DELTA_SCAN_ENABLED", "1"),
         "REGION_TALK_DELTA_SCAN_WINDOW_DAYS": os.environ.get("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14"),
         "REGION_TALK_DELTA_OVERLAP_POSTS": os.environ.get("REGION_TALK_DELTA_OVERLAP_POSTS", "50"),
+        "REGION_TALK_PRIORITIZE_TRAVEL_SOURCES": os.environ.get("REGION_TALK_PRIORITIZE_TRAVEL_SOURCES", "1"),
+        "REGION_TALK_SOURCE_QUEUE_SELECTION_POOL": os.environ.get("REGION_TALK_SOURCE_QUEUE_SELECTION_POOL", ""),
+        "REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER": os.environ.get("REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER", "10"),
+        "REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES": os.environ.get("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", "0"),
         "REGION_TALK_MAX_SOURCES": os.environ.get("REGION_TALK_MAX_SOURCES", "220"),
         "REGION_TALK_MAX_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_MAX_POSTS_PER_SOURCE", "50"),
         "REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN": os.environ.get("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", "180"),
@@ -625,6 +629,9 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_ENABLED", "1")
     os.environ.setdefault("REGION_TALK_DELTA_SCAN_WINDOW_DAYS", "14")
     os.environ.setdefault("REGION_TALK_DELTA_OVERLAP_POSTS", "50")
+    os.environ.setdefault("REGION_TALK_PRIORITIZE_TRAVEL_SOURCES", "1")
+    os.environ.setdefault("REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER", "10")
+    os.environ.setdefault("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", "0")
     os.environ.setdefault("REGION_TALK_SEMANTIC_GATE_MODE", "vector_first_final_llm")
     os.environ.setdefault("REGION_TALK_ENABLE_EARLY_LLM", "0")
     os.environ.setdefault("REGION_TALK_ENABLE_VECTOR_GATES", "1")

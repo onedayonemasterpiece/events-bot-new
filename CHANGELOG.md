@@ -11,7 +11,9 @@
   travel sources before choosing the run batch. A publication-goal mode
   (`REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1`) can also put known
   KO-positive processed sources ahead of the pending backlog for deeper searches
-  while trying to collect the 20 Gemini-confirmed links.
+  while trying to collect the 20 Gemini-confirmed links. The Kaggle launcher now
+  also ships these source-selection env controls into the notebook config instead
+  of leaving them only in the local shell.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo
