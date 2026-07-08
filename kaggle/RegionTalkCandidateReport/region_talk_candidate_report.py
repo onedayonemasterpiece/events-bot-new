@@ -18,6 +18,7 @@ import sys
 import time
 import zipfile
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1054,7 +1055,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "laion_aesthetic_score", "nima_quality_score", "final_visual_score", "final_visual_status",
     "model_disagreement_score", "image_width", "image_height",
     "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
-    "media_acquisition_error_type", "media_fetch_error", "images_scored_actual_count", "next_action",
+    "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
+    "images_scored_actual_count", "next_action",
 ]
 POST_STATE_FIELDS = [
     "post_id", "source_id", "source_title", "platform", "platform_post_key", "post_url", "post_date",
@@ -4888,6 +4890,155 @@ def parse_public_telegram_post_url(url: str) -> tuple[str, int] | None:
     return handle, int(m.group(2))
 
 
+def _telegram_public_web_get(url: str, *, timeout: int = 20) -> str:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 RegionTalkBot/1.0",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - public Telegram page fetch
+        raw = resp.read(2_000_000)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _telegram_public_web_blocks(page: str, handle: str) -> list[tuple[int, str]]:
+    out: list[tuple[int, str]] = []
+    for match in re.finditer(r'data-post="' + re.escape(handle) + r'/([0-9]+)"', page):
+        try:
+            mid = int(match.group(1))
+        except Exception:
+            continue
+        start = page.rfind('<div class="tgme_widget_message_wrap', 0, match.start())
+        if start < 0:
+            start = page.rfind('<div class="tgme_widget_message ', 0, match.start())
+        end = page.find('<div class="tgme_widget_message_wrap', match.end())
+        block = page[start if start >= 0 else match.start() : end if end > 0 else len(page)]
+        out.append((mid, block))
+    return out
+
+
+def _telegram_public_web_post_text(block: str) -> str:
+    text_match = re.search(r'<div class="tgme_widget_message_text js-message_text"[^>]*>(.*?)</div>', block, re.S)
+    if not text_match:
+        return ""
+    text = re.sub(r"<br\s*/?>", "\n", text_match.group(1), flags=re.I)
+    text = re.sub(r"<.*?>", "", text)
+    return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
+
+
+def _telegram_public_web_first_image_url(block: str) -> str:
+    urls = re.findall(r"background-image:url\(([^)]+)\)", block, flags=re.I)
+    if not urls:
+        urls = re.findall(r'<img[^>]+src="([^"]+)"', block, flags=re.I)
+    for raw in urls:
+        url = html.unescape(raw.strip().strip('"\''))
+        if url.startswith("//"):
+            url = "https:" + url
+        if url.startswith("http") and re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|$)", url, re.I):
+            return url
+    return ""
+
+
+def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_id: str, status: Any | None = None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Fetch public Telegram channel posts without Telethon resolve/history calls.
+
+    This is a bounded fallback for public t.me channels when the Discovery
+    Telethon session is in FloodWait/global cooldown. It keeps the CandidateReport
+    notebook productive and still writes the same live-YDB post rows; final media
+    bytes are fetched/scored by RegionTalkImageDiagnostic.
+    """
+    handle = canonical_handle(seed.handle or seed.url).lstrip("@")
+    src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="true")
+    src_row.update({"history_fetch_mode": "public_telegram_web_fallback", "telegram_resolve_status": "not_needed_public_web"})
+    if not handle or "/" in handle or handle.startswith("http"):
+        src_row.update({"fetch_status": "skipped_telegram_handle_not_configured", "posts_scanned": 0})
+        return src_row, []
+    max_pages = max(1, getenv_int("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", max(1, min(12, (max_posts + 17) // 18))))
+    timeout = max(5, getenv_int("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", 20))
+    posts: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    before = ""
+    started = time.monotonic()
+    try:
+        for page_index in range(max_pages):
+            if len(posts) >= max_posts:
+                break
+            url = f"https://t.me/s/{handle}" + (f"?before={before}" if before else "")
+            page = _telegram_public_web_get(url, timeout=timeout)
+            blocks = _telegram_public_web_blocks(page, handle)
+            if not blocks:
+                break
+            oldest_mid = None
+            for mid, block in blocks:
+                oldest_mid = mid if oldest_mid is None else min(oldest_mid, mid)
+                if mid in seen:
+                    continue
+                seen.add(mid)
+                text = _telegram_public_web_post_text(block)
+                if not text:
+                    continue
+                date_match = re.search(r'<time[^>]+datetime="([^"]+)"', block)
+                image_url = _telegram_public_web_first_image_url(block)
+                post_url = f"https://t.me/{handle}/{mid}"
+                post_row = {
+                    "post_id": "post_" + stable_hash("telegram_public_web", handle, mid),
+                    "source_id": seed.source_id,
+                    "source_seed_id": seed.source_seed_id,
+                    "source_title": seed.source_title or handle,
+                    "platform": "telegram",
+                    "handle": "@" + handle,
+                    "post_url": post_url,
+                    "platform_post_key": f"tg:{handle}:{mid}",
+                    "post_date": date_match.group(1) if date_match else "",
+                    "text": text,
+                    "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+                    "has_media": bool(image_url),
+                    "media_count": 1 if image_url else 0,
+                    "primary_media_path": image_url,
+                    "local_media_paths": image_url,
+                    "rights_policy": seed.rights_policy,
+                    "source_kind": seed.source_kind,
+                    "source_type": seed.source_kind,
+                    "source_url": seed.canonical_url,
+                    "is_forwarded_or_repost": False,
+                    "forwarded_from_source_title": "",
+                    "forwarded_from_source_id": "",
+                    "forwarded_from_platform": "",
+                    "forwarded_from_handle": "",
+                    "forwarded_from_url": "",
+                    "forwarded_from_post_url": "",
+                    "forwarded_from_confidence": 0.0,
+                    "original_source_candidate_id": "",
+                    "fetch_method": "telegram_public_web",
+                }
+                posts.append(post_row)
+                if len(posts) >= max_posts:
+                    break
+            if oldest_mid is None or str(oldest_mid) == before:
+                break
+            before = str(oldest_mid)
+            if status is not None and hasattr(status, "event"):
+                status.event("telegram_public_web_fetch_alive", phase="fetch", status="running", run_id=run_id, current_source_url=seed.canonical_url, posts_scanned=len(posts), source_id=seed.source_id, progress_label=f"public web {handle} posts {len(posts)}/{max_posts}")
+        src_row.update({
+            "fetch_status": "ok_public_web" if posts else "no_public_web_posts",
+            "posts_scanned": len(posts),
+            "last_seen_post_date": max([str(p.get("post_date") or "") for p in posts] or [""]),
+            "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
+            "source_probe_reason": "Fetched from public t.me/s HTML without Telethon because public-web fallback is enabled.",
+        })
+    except Exception as exc:
+        src_row.update({
+            "fetch_status": "error_public_telegram_web_fetch",
+            "fetch_error_code": type(exc).__name__,
+            "fetch_error_message": str(exc)[:180],
+            "posts_scanned": len(posts),
+            "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
+        })
+    return src_row, posts[:max_posts]
+
+
 def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
     cfg = ydb_config_status()
     if cfg.get("missing"):
@@ -5166,10 +5317,26 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 append_source_row_online(source_rows, skipped, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · skipped · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": skipped.get("fetch_status"), "posts_scanned": 0})
                 continue
+            if getenv_bool("REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST", False):
+                web_row, web_posts = fetch_public_telegram_web_posts_for_seed(seed, max_posts=max_posts, run_id=run_id, status=status)
+                for post_row in web_posts:
+                    append_post_online(posts, post_row, run_id=run_id, stage="telegram_public_web_fetch")
+                append_source_row_online(source_rows, web_row, run_id=run_id, stage="source_fetch_public_web", sources_total=len(monitored))
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · public web · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": web_row.get("fetch_status"), "telegram_resolve_status": web_row.get("telegram_resolve_status"), "posts_scanned": web_row.get("posts_scanned", 0), "last_seen_post_date": web_row.get("last_seen_post_date", ""), "history_fetch_runtime_seconds": web_row.get("history_fetch_runtime_seconds", ""), "fetch_error_code": web_row.get("fetch_error_code", ""), "fetch_error_message": web_row.get("fetch_error_message", "")})
+                continue
             src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
             entity, resolve_meta = await governor.resolve_entity(client, seed)
             src_row.update(resolve_meta)
             if entity is None:
+                if getenv_bool("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", True):
+                    web_row, web_posts = fetch_public_telegram_web_posts_for_seed(seed, max_posts=max_posts, run_id=run_id, status=status)
+                    web_row["telegram_resolve_status"] = src_row.get("telegram_resolve_status") or web_row.get("telegram_resolve_status")
+                    web_row["resolve_fetch_status"] = src_row.get("fetch_status") or ""
+                    for post_row in web_posts:
+                        append_post_online(posts, post_row, run_id=run_id, stage="telegram_public_web_fetch")
+                    append_source_row_online(source_rows, web_row, run_id=run_id, stage="source_fetch_public_web", sources_total=len(monitored))
+                    status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · public web fallback · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": web_row.get("fetch_status"), "telegram_resolve_status": web_row.get("telegram_resolve_status"), "posts_scanned": web_row.get("posts_scanned", 0), "last_seen_post_date": web_row.get("last_seen_post_date", ""), "history_fetch_runtime_seconds": web_row.get("history_fetch_runtime_seconds", ""), "fetch_error_code": web_row.get("fetch_error_code", ""), "fetch_error_message": web_row.get("fetch_error_message", "")})
+                    continue
                 src_row.setdefault("fetch_status", resolve_meta.get("fetch_status") or "skipped_telegram_unresolved_deferred")
                 append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_fetch", sources_total=len(monitored))
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · unresolved · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "telegram_resolve_status": src_row.get("telegram_resolve_status"), "posts_scanned": 0, "fetch_error_code": src_row.get("last_resolve_error_code", ""), "fetch_error_message": src_row.get("last_resolve_error_message_short", "")})
@@ -6513,7 +6680,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
     precomputed_embedding_scores: list[dict[str, Any]] = []
     embedding_batch_deferred_error = ""
-    if vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
+    if posts_for_scoring and vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
         try:
             precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
         except Exception as exc:

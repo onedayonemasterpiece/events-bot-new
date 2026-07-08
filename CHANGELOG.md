@@ -27,6 +27,12 @@
   now sort by high-yield/product score before static seed priority, so proven
   sources such as travel channels are scanned early in bounded 20-link goal
   runs.
+- **Region Talk Channel / Telegram cooldown fallback**: CandidateReport can now
+  fetch public Telegram channel pages via `t.me/s` when the Discovery Telethon
+  session is in FloodWait/global cooldown, preserving public CDN image URLs in
+  live YDB; ImageDiagnostic can download those URLs or scrape public post HTML
+  before falling back to Telethon media download. Empty post batches no longer
+  waste time loading embedding models.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

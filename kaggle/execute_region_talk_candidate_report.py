@@ -311,6 +311,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "50"),
         "REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "200"),
         "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "250"),
+        "REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST", "0"),
+        "REGION_TALK_TG_PUBLIC_WEB_FALLBACK": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "1"),
+        "REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", "10"),
+        "REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", "20"),
         "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": os.environ.get("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "200"),
         "REGION_TALK_MAX_NEW_SOURCE_PROBES": os.environ.get("REGION_TALK_MAX_NEW_SOURCE_PROBES", "100"),
         "REGION_TALK_DISCOVERY_MODE": os.environ.get("REGION_TALK_DISCOVERY_MODE", "mixed"),
@@ -657,6 +661,9 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
     os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
     os.environ.setdefault("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx")
+    os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "1")
+    os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", "10")
+    os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", "20")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
     os.environ.setdefault("REGION_TALK_FRESHNESS_HALF_LIFE_DAYS", "30")
     preflight_ydb_access()

@@ -402,6 +402,16 @@ The XLSX has:
   `/kaggle/working/region_talk_run_events_live.jsonl`, YDB
   `business_event:<run_id>:*`, and stack-watchdog tracebacks rather than relying
   on noisy heartbeat lines.
+- Public Telegram fallback: when the Discovery Telethon session is in
+  FloodWait/global cooldown, CandidateReport may fetch public channel history
+  through `https://t.me/s/<handle>` instead of spending resolve/history requests
+  (`REGION_TALK_TG_PUBLIC_WEB_FALLBACK=1`, or
+  `REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST=1` for deliberate cooldown-safe runs).
+  Public-web rows are still scored by the same vector/text gates and written to
+  live YDB. If public HTML exposes a CDN image URL, the image queue preserves it
+  as `image_url_or_local_path`; RegionTalkImageDiagnostic may download that URL
+  directly or scrape the public post HTML before falling back to Telethon media
+  download. This is a cooldown workaround, not a separate product pipeline.
 - The image-queue CandidateReport phase must not spend time on historical
   candidate-memory dual-embedding rechecks. Defaults are
   `REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0` and

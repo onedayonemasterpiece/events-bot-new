@@ -3,7 +3,7 @@ import asyncio, base64, html, json, os, re, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, median, pstdev
-from urllib.request import urlretrieve
+from urllib.request import Request, urlopen, urlretrieve
 
 RUN_STARTED = time.monotonic()
 RUN_ID = os.getenv("REGION_TALK_RUN_ID") or os.getenv("RT_IMAGE_DIAG_RUN_ID") or "region-talk-image-diagnostic"
@@ -453,6 +453,41 @@ def parse_tg(url: str):
     m = re.search(r"t\.me/(?:s/)?([^/?#]+)/([0-9]+)", url or "")
     return (m.group(1), int(m.group(2))) if m else (None, None)
 
+def _download_http_image(url: str, path: Path, *, timeout: int = 30) -> str:
+    if url.startswith("//"):
+        url = "https:" + url
+    req = Request(url, headers={"User-Agent":"Mozilla/5.0 RegionTalkImageDiagnostic/1.0","Accept":"image/avif,image/webp,image/apng,image/*,*/*;q=0.8"})
+    with urlopen(req, timeout=timeout) as resp:  # nosec B310 - public image URL from public post HTML/YDB row
+        data = resp.read(25_000_000)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return str(path)
+
+def _public_tg_post_image_url(handle: str, mid: int, *, timeout: int = 20) -> str:
+    if not handle or not mid:
+        return ""
+    page_url = f"https://t.me/s/{handle}/{mid}"
+    req = Request(page_url, headers={"User-Agent":"Mozilla/5.0 RegionTalkImageDiagnostic/1.0","Accept":"text/html,application/xhtml+xml"})
+    with urlopen(req, timeout=timeout) as resp:  # nosec B310 - public Telegram page
+        page = resp.read(2_000_000).decode("utf-8", errors="replace")
+    marker = f'data-post="{handle}/{mid}"'
+    idx = page.find(marker)
+    if idx < 0:
+        return ""
+    start = page.rfind('<div class="tgme_widget_message_wrap', 0, idx)
+    end = page.find('<div class="tgme_widget_message_wrap', idx + 10)
+    block = page[start if start >= 0 else idx : end if end > 0 else len(page)]
+    urls = re.findall(r"background-image:url\(([^)]+)\)", block, flags=re.I)
+    if not urls:
+        urls = re.findall(r'<img[^>]+src="([^"]+)"', block, flags=re.I)
+    for raw in urls:
+        url = html.unescape(raw.strip().strip('"\''))
+        if url.startswith("//"):
+            url = "https:" + url
+        if url.startswith("http") and re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|$)", url, re.I):
+            return url
+    return ""
+
 def parse_vk(url: str):
     m = re.search(r"vk\.com/wall(-?\d+)_(\d+)", url or "")
     return (int(m.group(1)), int(m.group(2))) if m else (None, None)
@@ -463,6 +498,29 @@ def decode_bundle():
     return json.loads(base64.urlsafe_b64decode(b64.encode("ascii")).decode("utf-8"))
 
 async def fetch_telegram(batch):
+    remaining = []
+    for r in batch:
+        direct_url = str(r.get("image_url_or_local_path") or r.get("primary_media_path") or "").strip()
+        if direct_url.startswith("http") or direct_url.startswith("//"):
+            t0 = time.monotonic()
+            try:
+                suffix = ".jpg"
+                m = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", direct_url, re.I)
+                if m:
+                    suffix = "." + m.group(1).lower().replace("jpeg", "jpg")
+                path = MEDIA / f"{r['image_queue_id']}_public_url{suffix}"
+                r["actual_media_path"] = _download_http_image(direct_url, path)
+                r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+                r["media_fetch_status"] = "downloaded_public_url"
+                log_event("image_fetch_result", phase="public_url_fetch", image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=True, seconds=r.get("media_download_seconds"))
+                continue
+            except Exception as exc:
+                r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+                r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]
+        remaining.append(r)
+    batch = remaining
+    if not batch:
+        return
     bundle = decode_bundle()
     api_id = os.getenv("TG_API_ID") or os.getenv("TELEGRAM_API_ID")
     api_hash = os.getenv("TG_API_HASH") or os.getenv("TELEGRAM_API_HASH")
@@ -485,7 +543,16 @@ async def fetch_telegram(batch):
             try:
                 msg = await client.get_messages(handle, ids=mid)
                 if not msg or not getattr(msg, "media", None):
-                    r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="telegram message has no direct media"; continue
+                    public_url = _public_tg_post_image_url(handle, mid)
+                    if public_url:
+                        path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
+                        r["actual_media_path"] = _download_http_image(public_url, path)
+                        r["media_fetch_status"]="downloaded_public_tg_html"
+                        r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+                        log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
+                        continue
+                    else:
+                        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="telegram message has no direct media"; continue
                 path = await client.download_media(msg, file=str(MEDIA / f"{r['image_queue_id']}_{handle}_{mid}"))
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
                 if path:
@@ -493,8 +560,17 @@ async def fetch_telegram(batch):
                 else:
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="download_media returned empty path"
             except Exception as exc:
+                try:
+                    public_url = _public_tg_post_image_url(handle, mid)
+                    if public_url:
+                        path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
+                        r["actual_media_path"] = _download_http_image(public_url, path)
+                        r["media_fetch_status"]="downloaded_public_tg_html"
+                    else:
+                        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]
+                except Exception as web_exc:
+                    r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:160] + "; public_html=" + type(web_exc).__name__ + ": " + str(web_exc)[:120]
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
-                r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]
             log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
             if idx % 10 == 0:
                 log_event("media_fetch_progress", phase="media_fetch", done=idx, total=len(batch), actual=sum(1 for x in batch if x.get("actual_media_path")))
