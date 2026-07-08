@@ -661,6 +661,17 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     return {"due": False, "reason": "processed_recently_or_not_due", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
 
 
+def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
+    row = queue_row if isinstance(queue_row, dict) else {}
+    haystack = " ".join(str(row.get(k) or "") for k in [
+        "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
+        "matched_query", "keyword_hit_post_url", "keyword_evidence_excerpt",
+    ]).lower()
+    if "keyword" in haystack or "telegram_keyword_search" in haystack:
+        return 0
+    return 1
+
+
 def source_product_priority_score(seed: Seed, queue_row: dict[str, Any] | None = None) -> float:
     """Prioritize travel/blogger pending sources for the Region Talk product goal.
 
@@ -740,6 +751,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     ordered = sorted(annotated, key=lambda item: (
         not bool(item[1].get("due")),
         item[0].priority,
+        source_queue_priority_bucket(item[1].get("queue_row")),
         -source_product_priority_score(item[0], item[1].get("queue_row")) if prioritize_product_sources else 0,
         str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
         seed_sort_number(item[0].source_seed_id),

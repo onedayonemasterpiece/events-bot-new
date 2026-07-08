@@ -617,6 +617,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([processed_due, pending], 2, previous_state=previous_state)
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/pending_new"])
 
+    def test_keyword_sources_inserted_after_cursor_win_over_product_priority(self) -> None:
+        mod = load_module()
+        keyword = mod.Seed(
+            source_seed_id="pending_keyword", platform="telegram", source_title="Случайный канал",
+            handle="@keyword_hit", url="https://t.me/keyword_hit", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="telegram_keyword_search", discovered_from_url="",
+            why_seeded="keyword", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        travel = mod.Seed(
+            source_seed_id="pending_travel", platform="telegram", source_title="Авторские путешествия по России",
+            handle="@author_travel", url="https://t.me/author_travel", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="pending", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {"unified_source_queue": {
+            "telegram:keyword_hit": {
+                "canonical_source_key": "telegram:keyword_hit", "source_url": "https://t.me/keyword_hit",
+                "source_title": "Случайный канал", "source_queue_status": "pending_scan",
+                "queue_order": 10, "added_from": "telegram_keyword_search", "insertion_policy": "insert_after_cursor",
+            },
+            "telegram:author_travel": {
+                "canonical_source_key": "telegram:author_travel", "source_url": "https://t.me/author_travel",
+                "source_title": "Авторские путешествия по России", "source_queue_status": "pending_scan",
+                "queue_order": 11, "added_from": "public_travel_blogger_catalog",
+            },
+        }}
+        selected = mod.selected_sources_for_run([travel, keyword], 2, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/keyword_hit", "https://t.me/author_travel"])
+
     def test_source_selection_prioritizes_pending_travel_sources(self) -> None:
         mod = load_module()
         travel = mod.Seed(

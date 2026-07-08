@@ -339,6 +339,202 @@ def _text_vector_pair_metrics(e5_vectors: list[dict[str, Any]], bge_vectors: lis
     }
 
 
+REGEX_KO_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])калининград(?:ск(?:ая|ой|ую|ую|ом|ими?)?|а|е|у|ом)?(?:\s+обл(?:асть|асти|астью|\.)?)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])к[её]нигсберг(?:а|е|ом|ский|ская|ское|ские)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])куршск(?:ая|ой|ую|ою)?\s+кос(?:а|ы|е|у|ой)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])балтийск(?:ое\s+море|ая\s+коса|ой\s+косе|ую\s+косу|ой\s+косой|а|е|ом)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])зеленоградск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])светлогорск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])янтарн(?:ый|ого|ом|ому|ым|ая|ое|ые|ых)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])балтийск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])советск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])неман(?:а|е|ом)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])черняховск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])правдинск(?:а|е|ом|ий|ая|ое|ие)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])виштынец(?:кое\s+озеро|кий|кого|ком)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])роминтенск(?:ая|ой|ую)?\s+пущ(?:а|и|е|у|ей)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])краснолесь(?:е|я|ю|ем)(?![а-яёa-z])",
+])
+REGEX_EXTERNAL_GEO_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])(?:байкал|дагестан|алтай|камчатк[аиуой]?|сахалин|кавказ|крым|сочи|казань|татарстан|суздаль|ярославль|кострома|псков|мурманск|териберк[аиуой]?|карели[яию]|архангельск|вологда|урал|сибирь|владивосток|краснодарск(?:ий\s+край)?|адыге[яию]|эльбрус)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])(?:москв[аеуойы]?|московск(?:ая|ой)\s+обл(?:асть|асти)?|санкт-петербург|петербург|ленинградск(?:ая|ой)\s+обл(?:асть|асти)?)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])(?:новосибирск|омск|томск|кемерово|красноярск|иркутск|буряти[яию]|хабаровск|магадан|чукотк[аиуой]?)(?:ая|ой|ую|им|ом|\s+обл(?:асть|асти)?|\s+край)?(?![а-яёa-z])",
+    r"(?<![а-яёa-z])(?:польш[аиуеой]?|литв[аиуеой]?|латви[яиюе]|эстони[яиюе]|германи[яиюе]|беларус[ьи]?|грузи[яиюе]|армени[яиюе]|турци[яиюе]|итали[яиюе]|франци[яиюе]|испани[яиюе]|китай)(?![а-яёa-z])",
+])
+REGEX_MULTI_REGION_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])(?:подборк[аиуой]?|топ\s*[-—]?\s*\d+|куда\s+поехать|мест[а]?\s+россии|регион(?:ы|ов)\s+россии|направлени[яй]|маршрут(?:ы|ов)?\s+по\s+россии)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])(?:от\s+калининграда\s+до|от\s+байкала\s+до|по\s+разным\s+регионам)(?![а-яёa-z])",
+])
+REGEX_AD_PROMO_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])(?:реклама|на\s+правах\s+рекламы|партн[её]рский\s+материал|промокод|скидк[аиуой]?|акци[ияю]|розыгрыш|конкурс)(?![а-яёa-z])",
+    r"(?<![а-яёa-z])(?:купить|заказать|забронировать|бронь|билеты?|регистраци[яию]|зарегистр(?:ироваться|ируйтесь)|приходите|участвуйте)(?![а-яёa-z])",
+    r"(?:\b\d[\d\s]*(?:₽|руб(?:\.|лей|ля|ль)?\b)|(?:стоимость|цена|оплата|оплатить)\b)",
+])
+REGEX_NEWS_EVENT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])(?:происшеств|дтп|авари[яию]|полици[яию]|суд|задержан|штраф|пожар|прокуратур|следств|уголовн|сообщили|официально|губернатор|администраци[яию]|анонс|афиша|состоится)(?![а-яёa-z])",
+])
+REGEX_SUBSTANCE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
+    r"(?<![а-яёa-z])(?:побывал[аи]?|посетил[аи]?|ездил[аи]?|поехал[аи]?|приехал[аи]?|гулял[аи]?|увидел[аи]?|запомнил(?:ось|ась|ся)?|впечатлен(?:и[ея])?|маршрут|добраться|совет|что\s+посмотреть|красив|атмосфер|удивител|особенно|неожиданно)(?![а-яёa-z])",
+])
+
+
+def _regex_hit_labels(text: str, patterns: tuple[re.Pattern[str], ...], *, max_labels: int = 8) -> list[str]:
+    labels: list[str] = []
+    for pattern in patterns:
+        match = pattern.search(text or "")
+        if match:
+            labels.append(match.group(0)[:80])
+            if len(labels) >= max_labels:
+                break
+    return labels
+
+
+def _regex_ko_diagnostic(text: str) -> dict[str, Any]:
+    ko_hits = _regex_hit_labels(text, REGEX_KO_PATTERNS)
+    external_hits = _regex_hit_labels(text, REGEX_EXTERNAL_GEO_PATTERNS)
+    multiregion_hits = _regex_hit_labels(text, REGEX_MULTI_REGION_PATTERNS)
+    ad_hits = _regex_hit_labels(text, REGEX_AD_PROMO_PATTERNS)
+    news_hits = _regex_hit_labels(text, REGEX_NEWS_EVENT_PATTERNS)
+    substance_hits = _regex_hit_labels(text, REGEX_SUBSTANCE_PATTERNS)
+    raw_ko = bool(ko_hits)
+    multiregion = bool(multiregion_hits or external_hits)
+    filtered_ko = raw_ko and not multiregion and not ad_hits and not news_hits and bool(substance_hits)
+    return {
+        "regex_ko_raw": raw_ko,
+        "regex_ko_filtered": filtered_ko,
+        "regex_has_external_geo": bool(external_hits),
+        "regex_is_multi_region": multiregion,
+        "regex_is_ad_or_promo": bool(ad_hits),
+        "regex_is_news_or_event": bool(news_hits),
+        "regex_has_substance": bool(substance_hits),
+        "regex_ko_hits": ko_hits,
+        "regex_external_hits": external_hits,
+        "regex_multiregion_hits": multiregion_hits,
+        "regex_filter_hits": {"ad": ad_hits, "news_event": news_hits, "substance": substance_hits},
+    }
+
+
+def _post_merge_key(row: dict[str, Any]) -> str:
+    post_url = str(row.get("post_url") or "").strip()
+    if post_url:
+        return "url:" + post_url
+    post_id = str(row.get("post_id") or row.get("candidate_memory_id") or row.get("publication_candidate_id") or "").strip()
+    if post_id:
+        return "id:" + post_id
+    return str(row.get("_ydb_pk") or "").strip()
+
+
+def _row_text_for_regex(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for field in ["text", "full_text", "text_excerpt", "short_summary", "why_this_is_about_kaliningrad", "why_keep_in_memory", "publication_story_reason", "model_short_explanation"]:
+        value = str(row.get(field) or "").strip()
+        if value and value not in parts:
+            parts.append(value)
+    return "\n".join(parts)
+
+
+def _merge_post_rows_for_diagnostics(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for rows in row_lists:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = _post_merge_key(row)
+            if not key:
+                continue
+            current = dict(merged.get(key) or {})
+            for k, v in row.items():
+                if v in (None, "", [], {}):
+                    continue
+                if k not in current or current.get(k) in (None, "", [], {}):
+                    current[k] = v
+                elif k in {"vector_gate_status", "text_region_confirmation_status", "kaliningrad_oblast_only_scope"}:
+                    # Prefer downstream enriched decisions over raw post rows.
+                    current[k] = v
+            merged[key] = current
+    return list(merged.values())
+
+
+def _is_vector_ko_candidate(row: dict[str, Any]) -> bool:
+    status = str(row.get("vector_gate_status") or "")
+    if status == "vector_accept_candidate":
+        return True
+    return bool(
+        str(row.get("text_region_confirmation_status") or "") == "text_confirmed_ko_only_for_image_analysis"
+        and str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
+    )
+
+
+def _regex_vector_comparison_metrics(rows: list[dict[str, Any]]) -> dict[str, int]:
+    rows_with_text: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for row in rows:
+        text = _row_text_for_regex(row)
+        if not text.strip():
+            continue
+        rows_with_text.append((row, _regex_ko_diagnostic(text)))
+    regex_raw_pairs = [(r, d) for r, d in rows_with_text if d["regex_ko_raw"]]
+    regex_raw = [r for r, _d in regex_raw_pairs]
+    regex_filtered = [r for r, d in regex_raw_pairs if d["regex_ko_filtered"]]
+    regex_external = [r for r, d in regex_raw_pairs if d["regex_has_external_geo"]]
+    regex_multi = [r for r, d in regex_raw_pairs if d["regex_is_multi_region"]]
+    regex_ad = [r for r, d in regex_raw_pairs if d["regex_is_ad_or_promo"]]
+    regex_news = [r for r, d in regex_raw_pairs if d["regex_is_news_or_event"]]
+    regex_thin = [r for r, d in regex_raw_pairs if not d["regex_has_substance"]]
+    vector_ko = [r for r in rows if _is_vector_ko_candidate(r)]
+    vector_keys = {_post_merge_key(r) for r in vector_ko if _post_merge_key(r)}
+    regex_filtered_keys = {_post_merge_key(r) for r in regex_filtered if _post_merge_key(r)}
+    return {
+        "regex_diagnostic_posts_with_text_total": len(rows_with_text),
+        "regex_ko_raw_posts_total": len(regex_raw),
+        "regex_ko_filtered_posts_total": len(regex_filtered),
+        "regex_ko_external_geo_filtered_posts_total": len(regex_external),
+        "regex_ko_multiregion_filtered_posts_total": len(regex_multi),
+        "regex_ko_ad_filtered_posts_total": len(regex_ad),
+        "regex_ko_news_event_filtered_posts_total": len(regex_news),
+        "regex_ko_low_substance_filtered_posts_total": len(regex_thin),
+        "vector_ko_candidate_posts_total": len(vector_ko),
+        "regex_filtered_without_vector_posts_total": len(regex_filtered_keys - vector_keys),
+        "vector_without_regex_filtered_posts_total": len(vector_keys - regex_filtered_keys),
+        "regex_to_vector_filtered_ratio_percent": int(round((len(regex_filtered_keys) / len(vector_keys)) * 100)) if vector_keys else 0,
+    }
+
+
+def _is_keyword_discovered_source(row: dict[str, Any]) -> bool:
+    haystack = " ".join(str(row.get(k) or "") for k in [
+        "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
+        "matched_query", "keyword_hit_post_url", "keyword_evidence_excerpt",
+    ]).lower()
+    return "keyword" in haystack or "telegram_keyword_search" in haystack
+
+
+def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
+    status = str(row.get("source_queue_status") or row.get("queue_status") or row.get("fetch_status") or "")
+    return bool(
+        status in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
+        or _safe_int(row.get("ko_posts_found")) > 0
+        or _safe_int(row.get("candidate_posts_found")) > 0
+    )
+
+
+def _keyword_source_metrics(source_rows: list[dict[str, Any]], cursor_position: int) -> dict[str, int]:
+    keyword_rows = [r for r in source_rows if _is_keyword_discovered_source(r)]
+    keyword_scanned = [r for r in keyword_rows if _safe_int(r.get("posts_scanned")) > 0 or str(r.get("source_queue_status") or "").startswith("processed")]
+    keyword_ko = [r for r in keyword_rows if _source_has_ko_candidate(r)]
+    keyword_pending_after_cursor = [
+        r for r in keyword_rows
+        if int(float(r.get("queue_order") or 0)) > cursor_position
+        and str(r.get("source_queue_status") or r.get("queue_status") or "pending_scan") in {"", "pending_scan", "needs_rescan_or_retry"}
+    ]
+    return {
+        "publics_keyword_discovered_total": len(keyword_rows),
+        "publics_keyword_scanned_with_posts_total": len(keyword_scanned),
+        "publics_keyword_with_ko_candidates_total": len(keyword_ko),
+        "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor),
+        "publics_keyword_ko_yield_percent": int(round((len(keyword_ko) / len(keyword_scanned)) * 100)) if keyword_scanned else 0,
+    }
+
+
 def _script_name(cmd: list[str]) -> str:
     exe = Path(str(cmd[0] if cmd else "")).name
     return str(cmd[1] if len(cmd) > 1 and exe.startswith("python") else cmd[0])
@@ -618,6 +814,14 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
     vector_pair_metrics = _text_vector_pair_metrics(e5_vectors, bge_vectors)
+    diagnostic_post_rows = _merge_post_rows_for_diagnostics(
+        rows_by_kind["processed_post_item"],
+        rows_by_kind["post_live_item"],
+        candidates,
+        images,
+        publications,
+    )
+    regex_vector_metrics = _regex_vector_comparison_metrics(diagnostic_post_rows)
     source_statuses = [str(r.get("source_queue_status") or r.get("queue_status") or r.get("fetch_status") or "") for r in source_rows]
     source_terminal = [
         r for r, status in zip(source_rows, source_statuses)
@@ -660,6 +864,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
         if name and ":" not in name:
             cursor_by_name[name] = row
+    source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
+    keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position)
     strong_images_ge_066 = [
         r for r in images
         if str(r.get("image_queue_status") or "") == "actual_scored"
@@ -696,6 +902,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
         "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
         "publics_with_ko_candidates_total": len(source_ko_candidates),
+        **keyword_source_metrics,
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
@@ -726,6 +933,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "text_vector_e5_total": len(e5_vectors),
         "text_vector_bge_m3_total": len(bge_vectors),
         **vector_pair_metrics,
+        **regex_vector_metrics,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
         **{

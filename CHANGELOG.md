@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / regex-vector diagnostics**: added deterministic
+  post-level KO regex diagnostics in the orchestrator: raw KO regex hits,
+  filtered KO hits after multiregion/external/ad/news/substance filters, vector
+  KO candidate counts, and regex-vs-vector deltas for monitoring vector recall.
 - **Region Talk Channel / history depth metrics**: CandidateReport now stores
   per-source history depth from post dates (`history_avg/newest/oldest_post_age_days`
   plus oldest/newest dates), and the orchestrator exposes aggregate/latest-run

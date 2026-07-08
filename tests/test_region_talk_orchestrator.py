@@ -133,6 +133,48 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(actions[0]["action"], "launch_bge_m3")
 
+    def test_regex_ko_diagnostic_keeps_filtered_ko_but_rejects_multiregion(self) -> None:
+        mod = load_module()
+        good = mod._regex_ko_diagnostic("Ездили в Зеленоградск и на Куршскую косу: дюны, море, особенно запомнилась прогулка.")
+        self.assertTrue(good["regex_ko_raw"])
+        self.assertTrue(good["regex_ko_filtered"])
+
+        roundup = mod._regex_ko_diagnostic("Куда поехать летом: Байкал, Сочи, Калининград и Дагестан — топ мест России.")
+        self.assertTrue(roundup["regex_ko_raw"])
+        self.assertFalse(roundup["regex_ko_filtered"])
+        self.assertTrue(roundup["regex_is_multi_region"])
+
+    def test_regex_vector_comparison_metrics_expose_delta(self) -> None:
+        mod = load_module()
+        rows = [
+            {"post_id": "r1", "text": "Ездили в Зеленоградск: красивое море, особенно запомнилась прогулка."},
+            {"post_id": "v1", "text": "Личная история про Куршскую косу и маршрут.", "vector_gate_status": "vector_accept_candidate"},
+            {"post_id": "m1", "text": "Куда поехать: Байкал и Калининград, подборка мест России."},
+        ]
+        metrics = mod._regex_vector_comparison_metrics(rows)
+        self.assertEqual(metrics["regex_ko_raw_posts_total"], 3)
+        self.assertEqual(metrics["regex_ko_filtered_posts_total"], 2)
+        self.assertEqual(metrics["regex_ko_external_geo_filtered_posts_total"], 1)
+        self.assertEqual(metrics["regex_ko_multiregion_filtered_posts_total"], 1)
+        self.assertEqual(metrics["vector_ko_candidate_posts_total"], 1)
+        self.assertEqual(metrics["regex_filtered_without_vector_posts_total"], 1)
+        self.assertEqual(metrics["vector_without_regex_filtered_posts_total"], 0)
+
+    def test_keyword_source_metrics_show_expected_keyword_yield(self) -> None:
+        mod = load_module()
+        rows = [
+            {"canonical_source_key": "telegram:k1", "added_from": "telegram_keyword_search", "queue_order": 11, "source_queue_status": "processed_found_ko_candidate", "posts_scanned": 20, "ko_posts_found": 1},
+            {"canonical_source_key": "telegram:k2", "added_from": "telegram_keyword_search", "queue_order": 12, "source_queue_status": "processed_no_ko", "posts_scanned": 20, "ko_posts_found": 0},
+            {"canonical_source_key": "telegram:k3", "added_from": "telegram_keyword_search", "queue_order": 13, "source_queue_status": "pending_scan", "posts_scanned": 0},
+            {"canonical_source_key": "telegram:s1", "added_from": "telegram_similar", "queue_order": 14, "source_queue_status": "processed_found_ko_candidate", "posts_scanned": 20, "ko_posts_found": 1},
+        ]
+        metrics = mod._keyword_source_metrics(rows, cursor_position=10)
+        self.assertEqual(metrics["publics_keyword_discovered_total"], 3)
+        self.assertEqual(metrics["publics_keyword_scanned_with_posts_total"], 2)
+        self.assertEqual(metrics["publics_keyword_with_ko_candidates_total"], 1)
+        self.assertEqual(metrics["publics_keyword_pending_after_cursor_total"], 1)
+        self.assertEqual(metrics["publics_keyword_ko_yield_percent"], 50)
+
     def test_execute_ready_selects_non_conflicting_parallel_launches(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(

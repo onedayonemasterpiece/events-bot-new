@@ -300,3 +300,21 @@ The architecture depends on BGE-M3 being stable when isolated in its own noteboo
    `text_vector_enrichment_item`: main defaults to E5-only, BGE rows are fused
    from YDB, and image queue rows require fused E5+BGE when production flag
    `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1` is enabled.
+
+The orchestrator also computes a deterministic regex diagnostic over merged post
+rows. It reports `regex_ko_raw_posts_total`, `regex_ko_filtered_posts_total`
+(after external-region/multiregion/ad/news/substance filters),
+`vector_ko_candidate_posts_total`, `regex_filtered_without_vector_posts_total`
+and `vector_without_regex_filtered_posts_total`. These regex numbers are a
+monitoring comparator only: if filtered regex KO volume is materially higher
+than vector KO volume, the vector gates/prototypes need review; regexes do not
+accept/reject production candidates.
+ Keyword-source queue health is monitored separately via
+`publics_keyword_discovered_total`, `publics_keyword_scanned_with_posts_total`,
+`publics_keyword_with_ko_candidates_total`,
+`publics_keyword_pending_after_cursor_total` and
+`publics_keyword_ko_yield_percent`; keyword-discovered rows are sorted ahead of
+generic product-priority rows after insertion so the next scan actually tests
+the channels where keyword search saw a Kaliningrad hit. If keyword-discovered
+channels do not show a high KO yield after scanning, the keyword query/frontier
+insertion logic needs review.
