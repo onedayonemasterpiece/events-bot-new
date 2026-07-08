@@ -5,7 +5,8 @@
   every numeric live metric in the orchestrator no-progress signature without
   manual omissions, fixed CandidateReport so an
   explicit discovery-tail reserve is honored instead of being silently raised to
-  the text-embedding reserve, added freshness cutoff
+  the text-embedding reserve, preserved source queue counter maxima across
+  shorter rescans so cumulative scan metrics cannot move backwards, added freshness cutoff
   (`REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365`) and terminal high-volume source
   rejection for feeds with 30+ text posts in one day, persisting the rejection
   reason/count/date in YDB source queue rows.

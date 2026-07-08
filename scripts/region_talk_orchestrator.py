@@ -242,7 +242,20 @@ def _merge_source_rows(*row_lists: list[dict[str, Any]]) -> list[dict[str, Any]]
             if not key:
                 continue
             current = dict(merged.get(key) or {})
-            current.update({k: v for k, v in row.items() if v not in (None, "")})
+            numeric_max_fields = {
+                "posts_scanned",
+                "ko_posts_found",
+                "candidate_posts_found",
+                "actual_images_scored_count",
+                "low_actual_image_count",
+            }
+            for k, v in row.items():
+                if v in (None, ""):
+                    continue
+                if k in numeric_max_fields:
+                    current[k] = max(_safe_int(current.get(k)), _safe_int(v))
+                else:
+                    current[k] = v
             merged[key] = current
     return list(merged.values())
 

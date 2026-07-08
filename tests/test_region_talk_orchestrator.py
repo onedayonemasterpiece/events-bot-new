@@ -76,6 +76,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
 
+    def test_source_merge_preserves_max_counter_values(self) -> None:
+        mod = load_module()
+        rows = mod._merge_source_rows(
+            [{"canonical_source_key": "telegram:x", "posts_scanned": 31, "ko_posts_found": 2}],
+            [{"canonical_source_key": "telegram:x", "posts_scanned": 17, "ko_posts_found": 1, "fetch_status": "ok"}],
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["posts_scanned"], 31)
+        self.assertEqual(rows[0]["ko_posts_found"], 2)
+        self.assertEqual(rows[0]["fetch_status"], "ok")
+
     def test_execute_ready_selects_non_conflicting_parallel_launches(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(

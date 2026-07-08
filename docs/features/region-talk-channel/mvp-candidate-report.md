@@ -767,7 +767,9 @@ Normal product runs also enforce freshness and high-volume source guardrails:
 `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS` defaults to 365, `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` is honored when explicitly set by the orchestrator, and `REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD` defaults to 30.
 If a source hits the daily text-post threshold, CandidateReport writes
 `rejected_high_volume_text_posts_per_day` with the triggering date/count and the
-source is not selected for future scans unless manually reset.
+source is not selected for future scans unless manually reset. Source-level
+scan counters such as `posts_scanned` are monotonic maxima across rescans; a
+shorter delta/rescan must not reduce cumulative monitoring metrics.
 
 ## Vector-first product quality correction
 

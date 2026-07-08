@@ -345,6 +345,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([seed], 1, previous_state=previous_state)
         self.assertEqual(selected, [])
 
+    def test_source_queue_posts_scanned_never_decreases_on_rescan(self) -> None:
+        mod = load_module()
+        previous = {"unified_source_queue": {"telegram:travel": {
+            "canonical_source_key": "telegram:travel", "platform": "telegram",
+            "source_url": "https://t.me/travel", "queue_order": 1,
+            "source_queue_status": "processed_no_ko", "posts_scanned": 31,
+        }}}
+        source_row = {
+            "source_id": "src_travel", "platform": "telegram", "canonical_url": "https://t.me/travel",
+            "canonical_source_key": "telegram:travel", "fetch_status": "ok", "posts_scanned": 17,
+        }
+        rows, _ = mod.build_unified_source_queue(previous, [], [source_row], [], [], [], [], {}, "run-q", "2026-07-08T00:00:00+00:00")
+        row = next(r for r in rows if r["canonical_source_key"] == "telegram:travel")
+        self.assertEqual(row["posts_scanned"], 31)
+
     def test_source_queue_preserves_high_volume_rejection(self) -> None:
         mod = load_module()
         previous = {"unified_source_queue": {"telegram:news24": {

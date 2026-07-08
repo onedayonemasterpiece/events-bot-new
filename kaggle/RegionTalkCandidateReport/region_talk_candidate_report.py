@@ -4017,7 +4017,7 @@ def build_unified_source_queue(
             "last_processed_at": run_now if scanned else rec.get("last_processed_at", ""),
             "last_scan_run_id": run_id if scanned else rec.get("last_scan_run_id", ""),
             "last_scan_status": fetch_status,
-            "posts_scanned": int(srow.get("posts_scanned") or len(sampled) or rec.get("posts_scanned") or 0),
+            "posts_scanned": max(int(rec.get("posts_scanned") or 0), int(srow.get("posts_scanned") or 0), len(sampled)),
             "ko_posts_found": ko_posts,
             "candidate_posts_found": candidate_posts,
             "actual_images_scored_count": actual_n,
