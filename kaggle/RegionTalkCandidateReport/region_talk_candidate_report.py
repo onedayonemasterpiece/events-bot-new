@@ -1307,6 +1307,7 @@ def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "posts_deferred", "sources_scanned", "candidates_created", "favorites_created",
         "current_run_reviewable_candidates", "state_backend", "ydb_read_status", "ydb_write_status",
         "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
+        "build_report_required", "live_ydb_source_of_truth",
         "image_queue_rejected_non_region_inputs", "image_queue_text_region_confirmed_total",
         "source_rows", "source_rows_done", "posts_by_source", "review_queue_count",
         "final_verifier_queue_count", "final_verifier_deferred_until_image_scoring",
