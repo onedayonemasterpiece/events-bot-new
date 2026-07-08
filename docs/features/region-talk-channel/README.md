@@ -14,6 +14,7 @@
 - [Kaliningrad place lexicon](kaliningrad-place-lexicon.md) + [CSV](kaliningrad-place-lexicon-v1.csv) — regional place recall/scope guardrail.
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
+- [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
 - [Implementation plan](implementation-plan.md) — MVP-0 → MVP-5 phases and readiness checklist.
@@ -113,6 +114,9 @@ Implementation entrypoints added for the first Candidate Report Only run:
 - local/Kaggle script: `kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py`;
 - Kaggle metadata: `kaggle/RegionTalkCandidateReport/kernel-metadata.json`;
 - Kaggle launcher: `kaggle/execute_region_talk_candidate_report.py`;
+- BGE-M3 enrichment script: `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py`;
+- BGE-M3 Kaggle metadata: `kaggle/RegionTalkBgeM3Enrichment/kernel-metadata.json`;
+- BGE-M3 launcher: `kaggle/execute_region_talk_bge_m3_enrichment.py`;
 - focused smoke tests: `tests/test_region_talk_candidate_report.py`.
 
 Telegram source monitoring is explicitly **Telethon-based**. Manual Kaggle handoff uses role-scoped sessions: `RegionTalkCandidateReport` and `RegionTalkImageDiagnostic` default to `TELEGRAM_AUTH_BUNDLE_DISCOVERY`, while local Telegram Saved Messages delivery uses only the E2E human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`). `TELEGRAM_AUTH_BUNDLE_S22` is reserved for production Kaggle/remote monitoring and must not be shipped with Region Talk runs unless explicitly selected for that one run. Never run two Kaggle kernels against the same Telethon auth key concurrently. Region Talk does not use Bot API for reading public channel history and it never calls Telegram/VK publication APIs.

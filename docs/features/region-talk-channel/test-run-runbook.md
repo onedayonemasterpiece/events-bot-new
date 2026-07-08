@@ -10,9 +10,19 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
 
 - `kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py` — Telethon-based bounded fetch/scoring/export script.
 - `kaggle/execute_region_talk_candidate_report.py` — Kaggle push/poll/download launcher using private encrypted input datasets for secrets.
+- `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py` — no-Telegram BGE-M3 vectorization-only worker over live YDB rows.
+- `kaggle/execute_region_talk_bge_m3_enrichment.py` — Kaggle push/poll/download launcher for BGE-M3 enrichment; it packages only YDB credentials and never Telegram auth bundles.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
 Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic, and only the E2E human session for local Saved Messages delivery. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
+
+For the queue-driven To-Be flow, provision two Discovery roles before
+parallelizing Telegram-dependent notebooks:
+
+- `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` — CandidateReport source/post discovery;
+- `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` — ImageDiagnostic media fetches.
+
+`RegionTalkBgeM3Enrichment` uses `REGION_TALK_AUTH_BUNDLE_ENV=REGION_TALK_NO_TELEGRAM_BUNDLE` and can run without a Telegram session.
 
 ## Hard stop rules
 
@@ -211,6 +221,41 @@ GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR=0
 REGION_TALK_IMAGE_SCORING_MODE=cv_aesthetic_clip
 REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING=1
 ```
+
+## BGE-M3 isolated batch validation
+
+The memory-safe hypothesis is that BGE-M3 is stable when isolated in a clean
+notebook. Run it before wiring stricter production fusion around the new rows.
+
+Small real-YDB probe:
+
+```bash
+RUN_ID="region-talk-bge-m3-probe-$(date -u +%Y%m%dT%H%M%SZ)"
+
+REGION_TALK_STATE_BACKEND=ydb \
+REGION_TALK_REQUIRE_YDB_STATE=1 \
+REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL=1 \
+REGION_TALK_AUTH_BUNDLE_ENV=REGION_TALK_NO_TELEGRAM_BUNDLE \
+python3 kaggle/execute_region_talk_bge_m3_enrichment.py \
+  --run-id "$RUN_ID" \
+  --batch-limit 8 \
+  --batch-size 2 \
+  --timeout-minutes 45
+```
+
+Then repeat with `--batch-limit 12 --batch-size 4` and, if stable,
+`--batch-limit 24 --batch-size 4`.
+
+Acceptance evidence for the BGE probe:
+
+- Kaggle kernel completes without loading any Telegram auth bundle;
+- `bge_m3_enrichment_result.json` exists in downloaded output;
+- YDB has `bge_m3_enrichment_result:<run_id>` and `text_vector_enrichment_item` rows;
+- summary shows `model_id=BAAI/bge-m3`,
+  `encoder_contract=bge_m3_flagembedding_dense_v1`, rows loaded/scored/written,
+  elapsed seconds, backend/device and no raw full post text storage;
+- CandidateReport is not yet allowed to skip product gates merely because BGE
+  enrichment exists.
 
 The XLSX has:
 

@@ -24,9 +24,21 @@ The final queue is produced by `RegionTalkCandidateReport`, because it is the on
 - postcardness;
 - text-story/emotion/usefulness evidence;
 - nonlocal source value;
-- a diversity penalty for same source/place/content overlap with already confirmed candidates.
+- semantic anti-overlap with already confirmed/sent/published candidates.
 
-This is an MVP anti-overlap penalty; it is intentionally isolated so it can later be replaced by nearest-neighbour vector diversity over confirmed/published posts.
+The old same-source/place/content-type penalty is only a fallback when vectors
+are missing. Target diversity is a real semantic anti-vector: store vectors for
+confirmed/sent/published rows in `publication_semantic_history_item`, compute
+the candidate's maximum cosine similarity to that history, and rank strong
+candidates by:
+
+```text
+publication_rank_score = quality_score - diversity_weight * max_similarity_to_history
+```
+
+This makes the next selected post meaningfully farther from what is already in
+the shortlist, while the full text/source/image/Gemini gates still decide
+whether it is eligible at all.
 
 ## YDB state
 

@@ -95,6 +95,35 @@ reused by later Kaggle runs instead of re-embedding the same prototypes. Per-pos
 query embeddings are still computed during the run because they depend on the
 fresh post text and are not persisted for rejected garbage rows.
 
+### BGE-M3 split worker and geo discriminator
+
+After the July 2026 Kaggle memory tests, the target runtime avoids loading E5
+and BGE-M3 in the same main notebook process. The main CandidateReport may keep
+the E5 lane, then enqueue/mark rows for a no-Telegram BGE worker. The clean
+worker is:
+
+- `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py`;
+- launcher: `kaggle/execute_region_talk_bge_m3_enrichment.py`;
+- YDB output kind: `text_vector_enrichment_item`;
+- BGE encoder contract: `bge_m3_flagembedding_dense_v1`.
+
+The worker is vectorization-only: it reads compact YDB text/excerpt rows,
+computes BGE-M3 dense vectors/scores, writes results back to YDB and exits. It
+does not use Telethon, images, Gemini or source discovery.
+
+The non-region discriminator is also vectorized. The BGE worker scores text
+against:
+
+- the finite semantic bank above;
+- a Kaliningrad Oblast geo bank built from `kaliningrad-place-lexicon-v1.csv`;
+- an external Russia geo bank;
+- an external country/travel geo bank.
+
+For each row/model it stores KO top score, external top score and margin. Later
+fusion can reject multi-region/other-region rows without loading BGE again.
+Vector search/scoring over already stored vectors is math-only; model loading is
+needed only for new text/bank embeddings.
+
 ## Candidate scoring
 
 ```text

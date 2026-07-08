@@ -289,6 +289,31 @@ Region Talk must keep row-level product state compact:
   `publication_candidate_status=llm_confirmed|sent_to_chat|filtered_before_llm|llm_needs_review|llm_rejected|llm_budget_deferred`,
   rank/score fields, the Gemini Lite verifier decision, goal-stop marker and
   local notification markers (`sent_to_chat`, `sent_message_id`);
+- kind `text_vector_enrichment_item`, pk
+  `text_vector_enrichment_item:<post_id>:<model_short>:<text_hash>` — durable
+  per-text/per-model vector enrichment written by dedicated vector notebooks.
+  The first external worker is `RegionTalkBgeM3Enrichment`, which writes
+  `model_id=BAAI/bge-m3`, `encoder_contract=bge_m3_flagembedding_dense_v1`,
+  semantic-bank scores, KO-vs-external geo-bank scores and, for bounded
+  candidate/history batches, an optional compact dense vector. CandidateReport
+  consumes these rows later for fusion and must not load BGE-M3 in the main
+  notebook when a matching enrichment row exists;
+- kind `bge_m3_enrichment_result`, pk
+  `bge_m3_enrichment_result:<run_id>` and `bge_m3_enrichment_result:latest` —
+  BGE worker run evidence: loaded rows, scored rows, written rows, encoder
+  contract, device/backend, bank hashes, elapsed time and error summary;
+- kind `vector_bank_embedding_item`, pk
+  `vector_bank_embedding_item:<bank_hash>:<model_short>:<encoder_contract>` —
+  target cache for semantic-bank, Kaliningrad geo-bank and external geo-bank
+  prototype vectors. This is separate from legacy `semantic_bank_embedding`
+  because the exact encoder contract matters: old AutoModel/mean-pool vectors
+  must not be mixed with BGE-M3 FlagEmbedding dense vectors;
+- kind `publication_semantic_history_item`, pk
+  `publication_semantic_history_item:<publication_candidate_id|post_id>` —
+  target history row for semantic anti-vector diversity. It references/stores
+  the E5/BGE vector fingerprints for already Gemini-confirmed, sent or
+  published posts so later ranking can penalize nearest-neighbour semantic
+  overlap instead of only same-source/place heuristics;
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.

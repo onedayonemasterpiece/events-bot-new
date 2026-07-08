@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / BGE-M3 isolated enrichment**: documented the queue-driven
+  To-Be orchestration with no hard CandidateReport modes, YDB-triggered BGE/Image
+  workers, vectorized non-region geo discrimination and true semantic anti-vector
+  diversity; added a clean `RegionTalkBgeM3Enrichment` Kaggle notebook plus
+  launcher that packages only YDB credentials, loads no Telegram session, reads
+  real live-YDB text rows, computes `BAAI/bge-m3` dense semantic/geo scores and
+  writes `text_vector_enrichment_item` / `bge_m3_enrichment_result` rows.
 - **Region Talk Channel / Telethon human-like pacing**: CandidateReport now applies conservative paced sleeps before expensive Telethon network calls (username resolve, similar-channel recommendations, history queries and media downloads), records the sleeps in the private request ledger and observability sheet, and defers the Telegram call instead of bypassing pacing when the runtime reserve is nearly exhausted. This keeps true Telethon discovery available while public `t.me/s` fallback remains a cooldown-safe path for already-known public channels.
 - **Region Talk Channel / bounded vector scoring priority**: CandidateReport now pre-orders fetched posts by Kaliningrad place evidence and media presence before the limited vector-scoring batch, so a 20-minute live-YDB run does not spend its scarce embedding window on unrelated recent posts while deferring stronger region candidates.
 - **Region Talk Channel / travel-source scan priority**: CandidateReport now

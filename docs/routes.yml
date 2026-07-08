@@ -129,6 +129,7 @@ sections:
     guide_excursions_fact_first_audit_2026_03_15: docs/reports/guide-excursions-fact-first-audit-2026-03-15.md
     gemma_4_migration_research_2026_04_19: docs/reports/gemma-4-migration-research-2026-04-19.md
     gemma_4_migration_status_2026_04_22: docs/reports/gemma-4-migration-status-2026-04-22.md
+    region_talk_bge_m3_validation_2026_07_08: docs/reports/region-talk-bge-m3-validation-2026-07-08.md
   tools:
     index: docs/tools/README.md
     codex_cli: docs/tools/codex-cli.md
@@ -245,6 +246,7 @@ features:
     mvp_candidate_report: docs/features/region-talk-channel/mvp-candidate-report.md
     llm_verifier_contract: docs/features/region-talk-channel/llm-verifier-contract.md
     publication_queue: docs/features/region-talk-channel/publication-queue.md
+    orchestration_to_be: docs/features/region-talk-channel/orchestration-to-be.md
     telegram_vk_publishing: docs/features/region-talk-channel/telegram-vk-publishing.md
     risk_register: docs/features/region-talk-channel/risk-register.md
     implementation_plan: docs/features/region-talk-channel/implementation-plan.md

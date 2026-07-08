@@ -65,7 +65,10 @@ If a later implementer cannot locate or reuse a specific Telegram Monitoring / C
 - Fetch recent posts under strict caps.
 - Run source discovery graph expansion but keep new sources as candidates.
 - Score text/media.
-- Use dual-model e5-base + bge-m3 recall enrichment/fusion.
+- Use dual-model E5 + BGE-M3 recall enrichment/fusion, but do not require both
+  models to be resident in one Kaggle process. CandidateReport may compute E5
+  in the main run and consume BGE-M3 rows written by the clean
+  `RegionTalkBgeM3Enrichment` worker.
 - Include selected image model reports.
 - Export cumulative/delta-aware XLSX and companion artifacts.
 - No publishing and no publication tokens.
@@ -136,7 +139,7 @@ The first test run can start only when:
 1. Canonical public brand/handle for Telegram/VK surfaces.
 2. Which YDB project/folder and credential lane should own the sidecar.
 3. Whether MVP-1 writes to real YDB dev/test or dry-run JSON first.
-4. Fusion policy for dual-model recall: top-K per model, score normalization, union/rerank weights and disagreement handling for e5-base + bge-m3 enrichment.
+4. Fusion policy for dual-model recall: top-K per model, score normalization, union/rerank weights and disagreement handling for e5-base + BGE-M3 enrichment rows.
 5. Final model id/default env lane and quota budget must be visible in Supabase limiter/report summary; `GOOGLE_API_KEY2` is not a default for Region Talk; current scoped default is the Supabase-registered reserve lane `GOOGLE_API_KEY3`.
 6. Media rights policy thresholds for `media_reuse_allowed`.
 7. First-run caps for `REGION_TALK_MAX_SOURCES` and post/image budgets.
