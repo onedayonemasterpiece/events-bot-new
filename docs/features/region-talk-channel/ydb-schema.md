@@ -310,6 +310,15 @@ Region Talk must keep row-level product state compact:
 - kind `qwen3_embedding_0_6b_enrichment_result`, pk
   `qwen3_embedding_0_6b_enrichment_result:<run_id>` and
   `qwen3_embedding_0_6b_enrichment_result:latest` — Qwen3 research run evidence;
+- kind `embeddinggemma_300m_enrichment_item`, pk
+  `embeddinggemma_300m_enrichment_item:<post_id>:embeddinggemma_300m:<text_hash>` —
+  research-only EmbeddingGemma-300M CPU per-text enrichment. It mirrors BGE
+  semantic and KO-vs-external geo scores for comparison but is not consumed by
+  production fusion until explicitly promoted;
+- kind `embeddinggemma_300m_enrichment_result`, pk
+  `embeddinggemma_300m_enrichment_result:<run_id>` and
+  `embeddinggemma_300m_enrichment_result:latest` — EmbeddingGemma research run
+  evidence;
 - kind `vector_bank_embedding_item`, pk
   `vector_bank_embedding_item:<bank_hash>:<model_short>:<encoder_contract>` —
   target cache for semantic-bank, Kaliningrad geo-bank and external geo-bank

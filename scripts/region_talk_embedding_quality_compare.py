@@ -151,13 +151,13 @@ def build_label_index(items_by_kind: dict[str, dict[str, dict[str, Any]]]) -> di
     return labels
 
 
-def compare_rows(bge_rows: dict[str, dict[str, Any]], qwen_rows: dict[str, dict[str, Any]], labels: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def compare_rows(bge_rows: dict[str, dict[str, Any]], qwen_rows: dict[str, dict[str, Any]], labels: dict[str, dict[str, Any]], *, qwen_prefix: str = "qwen3_embedding_0_6b") -> tuple[list[dict[str, Any]], dict[str, Any]]:
     pairs: list[dict[str, Any]] = []
     for key in sorted(set(bge_rows) & set(qwen_rows)):
         bge = bge_rows[key]
         qwen = qwen_rows[key]
         bge_m = model_metrics(bge, "bge_m3")
-        qwen_m = model_metrics(qwen, "qwen3_embedding_0_6b")
+        qwen_m = model_metrics(qwen, qwen_prefix)
         label = labels.get(key, {"label": "unlabeled", "label_source_kind": "", "label_status": "", "confidence": 0})
         pairs.append({
             "join_key": key,
@@ -233,11 +233,14 @@ def main() -> int:
     ap.add_argument("--env-file", type=Path, default=ROOT / ".env")
     ap.add_argument("--limit", type=int, default=2000)
     ap.add_argument("--output-dir", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-embedding-quality")
+    ap.add_argument("--qwen-model-short", default="qwen3_embedding_0_6b")
+    ap.add_argument("--qwen-kind", default="")
     args = ap.parse_args()
     load_dotenv(args.env_file)
+    qwen_kind = args.qwen_kind or f"{args.qwen_model_short}_enrichment_item"
     kinds = [
         "text_vector_enrichment_item",
-        "qwen3_embedding_0_6b_enrichment_item",
+        qwen_kind,
         "publication_candidate_item",
         "candidate_memory_item",
         "image_queue_item",
@@ -252,11 +255,13 @@ def main() -> int:
     }
     qwen_rows = {
         row_join_key(row): row
-        for row in items_by_kind.get("qwen3_embedding_0_6b_enrichment_item", {}).values()
-        if isinstance(row, dict)
+        for row in items_by_kind.get(qwen_kind, {}).values()
+        if isinstance(row, dict) and str(row.get("model_short") or args.qwen_model_short) == args.qwen_model_short
     }
-    labels = build_label_index({kind: rows for kind, rows in items_by_kind.items() if kind not in {"text_vector_enrichment_item", "qwen3_embedding_0_6b_enrichment_item"}})
-    pairs, summary = compare_rows(bge_rows, qwen_rows, labels)
+    labels = build_label_index({kind: rows for kind, rows in items_by_kind.items() if kind not in {"text_vector_enrichment_item", qwen_kind}})
+    pairs, summary = compare_rows(bge_rows, qwen_rows, labels, qwen_prefix=args.qwen_model_short)
+    summary["qwen_model_short"] = args.qwen_model_short
+    summary["qwen_kind"] = qwen_kind
     run_dir = args.output_dir / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "comparison.json").write_text(json.dumps({"summary": summary, "pairs": pairs}, ensure_ascii=False, indent=2), encoding="utf-8")

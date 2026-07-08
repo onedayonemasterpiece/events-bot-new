@@ -58,7 +58,7 @@ Responsibilities:
 
 The first implementation is intentionally a probe/worker, not a full fusion engine. Fusion remains in the main CandidateReport because it owns the product gates and publication context.
 
-### 3. `RegionTalkQwen3Embedding06BEnrichment` — research-only Qwen3 probe
+### 3. `RegionTalkQwen3Embedding06BEnrichment` — research-only embedding probes
 
 Uses no Telegram session and no image/LLM code. This worker is **not** part of
 production fusion until the quality comparison says it should be.
@@ -66,20 +66,24 @@ production fusion until the quality comparison says it should be.
 Responsibilities:
 
 - read the same compact live-YDB text rows as the BGE worker;
-- load `Qwen/Qwen3-Embedding-0.6B` through `sentence-transformers`;
+- load a research embedding model through `sentence-transformers`
+  (`Qwen/Qwen3-Embedding-0.6B` by default, `google/embeddinggemma-300m` in
+  `--model-size embeddinggemma` CPU probes);
 - compute the same semantic-bank and KO-vs-external geo-bank scores so the
   comparison is apples-to-apples against BGE;
-- write research rows as `qwen3_embedding_0_6b_enrichment_item`, not as
-  production `text_vector_enrichment_item`;
-- write run evidence as
-  `qwen3_embedding_0_6b_enrichment_result:<run_id>` and `:latest`.
+- write research rows such as `qwen3_embedding_0_6b_enrichment_item` or
+  `embeddinggemma_300m_enrichment_item`, not as production
+  `text_vector_enrichment_item`;
+- write matching run evidence as `<model_short>_enrichment_result:<run_id>` and
+  `:latest`.
 
-Quality comparison is a separate research gate. It joins BGE and Qwen rows by
-`post_url`/`post_id+text_hash`, overlays confident YDB labels
+Quality comparison is a separate research gate. It joins BGE and research-model
+rows by `post_url`/`post_id+text_hash`, overlays confident YDB labels
 (`publication_candidate_item`, `candidate_memory_item`, `image_queue_item`) and
-reports agreement, margin deltas and disagreements. Only if Qwen shows equal or
-better retrieval quality on enough confirmed/rejected rows should it become a
-third vector worker or replace BGE.
+reports agreement, margin deltas and disagreements. Only if a research model
+shows equal or better retrieval quality on enough confirmed/rejected rows should
+it become a third vector worker or replace BGE. The 2026-07-08 CPU probe kept
+Qwen 4B/8B out of the CPU plan and kept EmbeddingGemma-300M as research-only.
 
 ### 4. `RegionTalkImageDiagnostic` — actual image scorer
 

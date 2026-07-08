@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / EmbeddingGemma CPU research**: extended the
+  no-Telegram research embedding launcher to run `google/embeddinggemma-300m`
+  from Kaggle model source `google/embeddinggemma/Transformers/embeddinggemma-300m/1`
+  as `--model-size embeddinggemma`, writing research-only
+  `embeddinggemma_300m_enrichment_item` rows; documented CPU evidence showing
+  EmbeddingGemma can score 36 live-YDB rows plus full prototype banks in about
+  148s on Kaggle CPU, while Qwen3-Embedding-4B CPU is not practical for the
+  bounded pipeline.
 - **Region Talk Channel / Qwen3 embedding research**: added a separate
   no-Telegram `RegionTalkQwen3Embedding06BEnrichment` Kaggle worker and launcher
   for `Qwen/Qwen3-Embedding-0.6B`, writing research-only

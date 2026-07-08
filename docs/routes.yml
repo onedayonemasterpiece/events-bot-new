@@ -131,6 +131,7 @@ sections:
     gemma_4_migration_status_2026_04_22: docs/reports/gemma-4-migration-status-2026-04-22.md
     region_talk_bge_m3_validation_2026_07_08: docs/reports/region-talk-bge-m3-validation-2026-07-08.md
     region_talk_qwen3_embedding_06b_validation_2026_07_08: docs/reports/region-talk-qwen3-embedding-06b-validation-2026-07-08.md
+    region_talk_embeddinggemma_validation_2026_07_08: docs/reports/region-talk-embeddinggemma-validation-2026-07-08.md
   tools:
     index: docs/tools/README.md
     codex_cli: docs/tools/codex-cli.md

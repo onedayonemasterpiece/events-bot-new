@@ -71,6 +71,7 @@ def _extract_save_kernel_response(response: Any) -> dict[str, Any]:
         return None
 
     invalid_dataset_sources = _attr("invalidDatasetSources", "invalid_dataset_sources") or []
+    invalid_model_sources = _attr("invalidModelSources", "invalid_model_sources") or []
     return {
         "ref": _normalize_kernel_ref(_attr("ref")),
         "url": str(_attr("url") or "").strip(),
@@ -79,6 +80,11 @@ def _extract_save_kernel_response(response: Any) -> dict[str, Any]:
         "invalid_dataset_sources": [
             str(item).strip()
             for item in invalid_dataset_sources
+            if str(item).strip()
+        ],
+        "invalid_model_sources": [
+            str(item).strip()
+            for item in invalid_model_sources
             if str(item).strip()
         ],
     }
@@ -307,6 +313,11 @@ def _push_kernel_request_with_retries(
         for item in (meta_data.get("dataset_sources") or [])
         if str(item).strip()
     ]
+    requested_model_sources = [
+        str(item).strip()
+        for item in (meta_data.get("model_sources") or [])
+        if str(item).strip()
+    ]
     retry_deadline = (
         time.monotonic() + KERNEL_PUSH_INVALID_DATASET_RETRY_SECONDS
         if requested_sources
@@ -318,11 +329,12 @@ def _push_kernel_request_with_retries(
         response = api.kernels_push(str(tmp_path), timeout=timeout)
         response_info = _extract_save_kernel_response(response)
         logger.info(
-            "kaggle: kernels_push response ref=%s version=%s error=%s invalid_dataset_sources=%s",
+            "kaggle: kernels_push response ref=%s version=%s error=%s invalid_dataset_sources=%s invalid_model_sources=%s",
             response_info.get("ref"),
             response_info.get("version_number"),
             response_info.get("error"),
             response_info.get("invalid_dataset_sources"),
+            response_info.get("invalid_model_sources"),
         )
 
         error = str(response_info.get("error") or "").strip()
@@ -357,6 +369,16 @@ def _push_kernel_request_with_retries(
             raise RuntimeError(
                 "Kaggle kernels_push rejected dataset sources: "
                 + ", ".join(invalid_requested)
+            )
+        invalid_model_requested = [
+            item
+            for item in response_info.get("invalid_model_sources") or []
+            if item in requested_model_sources
+        ]
+        if invalid_model_requested:
+            raise RuntimeError(
+                "Kaggle kernels_push rejected model sources: "
+                + ", ".join(invalid_model_requested)
             )
 
         return response_info

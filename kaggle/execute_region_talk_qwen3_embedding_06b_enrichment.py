@@ -37,6 +37,49 @@ run_dataset_slug = _candidate_executor.run_dataset_slug
 KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkQwen3Embedding06BEnrichment"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-qwen3-embedding-06b-enrichment"
 ACTIVE_KERNEL_STATUSES = {"RUNNING", "PENDING", "QUEUED", "INITIALIZING"}
+QWEN_MODEL_SPECS = {
+    "0.6b": {
+        "model_id": "Qwen/Qwen3-Embedding-0.6B",
+        "model_short": "qwen3_embedding_0_6b",
+        "dimension": 1024,
+        "slug_token": "06b",
+        "title_token": "06B",
+        "kaggle_source": "qwen-lm/qwen-3-embedding/Transformers/0.6b/1",
+        "variation": "0.6b",
+    },
+    "4b": {
+        "model_id": "Qwen/Qwen3-Embedding-4B",
+        "model_short": "qwen3_embedding_4b",
+        "dimension": 2560,
+        "slug_token": "4b",
+        "title_token": "4B",
+        "kaggle_source": "qwen-lm/qwen-3-embedding/Transformers/4b/1",
+        "variation": "4b",
+    },
+    "8b": {
+        "model_id": "Qwen/Qwen3-Embedding-8B",
+        "model_short": "qwen3_embedding_8b",
+        "dimension": 4096,
+        "slug_token": "8b",
+        "title_token": "8B",
+        "kaggle_source": "qwen-lm/qwen-3-embedding/Transformers/8b/1",
+        "variation": "8b",
+    },
+    "embeddinggemma": {
+        "model_id": "google/embeddinggemma-300m",
+        "model_short": "embeddinggemma_300m",
+        "dimension": 768,
+        "slug_token": "embeddinggemma-300m",
+        "title_token": "EmbeddingGemma 300M",
+        "title": "RT EmbeddingGemma 300M Enrichment",
+        "kernel_slug": "rt-embeddinggemma-300m-enrichment",
+        "kaggle_source": "google/embeddinggemma/Transformers/embeddinggemma-300m/1",
+        "variation": "embeddinggemma-300m",
+        "sentence_transformers_package": "sentence-transformers>=5.1.0",
+        "transformers_package": "transformers>=4.56.0",
+        "force_model_package_install": "1",
+    },
+}
 
 
 def getenv_bool(name: str, default: bool = False) -> bool:
@@ -49,6 +92,27 @@ def getenv_bool(name: str, default: bool = False) -> bool:
 def slugify(value: str, *, max_len: int = 48) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return (slug or hashlib.sha1(value.encode("utf-8")).hexdigest()[:8])[:max_len].rstrip("-")
+
+
+def normalise_model_size(value: str) -> str:
+    raw = (value or "").strip().lower().replace("_", "").replace("-", "")
+    if raw in {"0.6b", "0.6", "06b", "06"}:
+        return "0.6b"
+    if raw in {"4b", "4"}:
+        return "4b"
+    if raw in {"8b", "8"}:
+        return "8b"
+    if raw in {"embeddinggemma", "embeddinggemma300m", "gemma", "gemma300m"}:
+        return "embeddinggemma"
+    raise ValueError(f"Unsupported Qwen3 embedding model size: {value!r}")
+
+
+def model_spec(args: argparse.Namespace) -> dict[str, Any]:
+    size = normalise_model_size(args.model_size)
+    spec = dict(QWEN_MODEL_SPECS[size])
+    spec["size"] = size
+    spec["encoder_contract"] = f"{spec['model_short']}_sentence_transformers_dense_{spec['dimension']}_v1"
+    return spec
 
 
 def qwen3_secret_names() -> list[str]:
@@ -80,7 +144,7 @@ def create_secret_bundle_dataset(client: Any, *, username: str, run_id: str) -> 
     return create_or_replace_dataset(client, username, f"rt-qwen3-secret-{safe_slug}", f"RT Qwen3 sec {safe_slug[:34]}", writer)
 
 
-def build_config_dataset(client: Any, *, username: str, run_id: str, args: argparse.Namespace) -> str:
+def build_config_dataset(client: Any, *, username: str, run_id: str, args: argparse.Namespace, spec: dict[str, Any]) -> str:
     safe_slug = run_dataset_slug(run_id)
     try:
         git_sha = os.popen("git rev-parse HEAD 2>/dev/null").read().strip()
@@ -114,6 +178,15 @@ def build_config_dataset(client: Any, *, username: str, run_id: str, args: argpa
         "REGION_TALK_QWEN3_STORE_DENSE_VECTORS": "1" if args.store_dense_vectors else os.environ.get("REGION_TALK_QWEN3_STORE_DENSE_VECTORS", "1"),
         "REGION_TALK_QWEN3_STORE_VECTOR_MAX_ROWS": str(args.store_vector_max_rows),
         "REGION_TALK_QWEN3_BACKEND": os.environ.get("REGION_TALK_QWEN3_BACKEND", "sentence_transformers"),
+        "REGION_TALK_QWEN3_MODEL_SIZE": spec["size"],
+        "REGION_TALK_QWEN3_MODEL_ID": os.environ.get("REGION_TALK_QWEN3_MODEL_ID", spec["model_id"]),
+        "REGION_TALK_QWEN3_MODEL_SHORT": os.environ.get("REGION_TALK_QWEN3_MODEL_SHORT", spec["model_short"]),
+        "REGION_TALK_QWEN3_ENCODER_CONTRACT": os.environ.get("REGION_TALK_QWEN3_ENCODER_CONTRACT", spec["encoder_contract"]),
+        "REGION_TALK_QWEN3_KAGGLE_MODEL_SOURCE": os.environ.get("REGION_TALK_QWEN3_KAGGLE_MODEL_SOURCE", spec["kaggle_source"] if args.attach_kaggle_model else ""),
+        "REGION_TALK_QWEN3_KAGGLE_MODEL_VARIATION": os.environ.get("REGION_TALK_QWEN3_KAGGLE_MODEL_VARIATION", spec["variation"]),
+        "REGION_TALK_QWEN3_SENTENCE_TRANSFORMERS_PACKAGE": os.environ.get("REGION_TALK_QWEN3_SENTENCE_TRANSFORMERS_PACKAGE", spec.get("sentence_transformers_package", "sentence-transformers>=2.7.0")),
+        "REGION_TALK_QWEN3_TRANSFORMERS_PACKAGE": os.environ.get("REGION_TALK_QWEN3_TRANSFORMERS_PACKAGE", spec.get("transformers_package", "transformers>=4.51.0")),
+        "REGION_TALK_QWEN3_FORCE_MODEL_PACKAGE_INSTALL": os.environ.get("REGION_TALK_QWEN3_FORCE_MODEL_PACKAGE_INSTALL", spec.get("force_model_package_install", "0")),
         "REGION_TALK_AUTO_INSTALL": os.environ.get("REGION_TALK_AUTO_INSTALL", "1"),
         "REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_DOWNLOAD_TIMEOUT", "60"),
         "REGION_TALK_HF_HUB_ETAG_TIMEOUT": os.environ.get("REGION_TALK_HF_HUB_ETAG_TIMEOUT", "20"),
@@ -130,18 +203,29 @@ def build_config_dataset(client: Any, *, username: str, run_id: str, args: argpa
     return create_or_replace_dataset(client, username, f"rt-qwen3-config-{safe_slug}", f"RT Qwen3 cfg {safe_slug[:34]}", writer)
 
 
-def prepared_kernel_path(*, run_id: str, kernel_slug: str) -> Path:
+def prepared_kernel_path(*, run_id: str, kernel_slug: str, spec: dict[str, Any], model_sources: list[str]) -> Path:
     tmp = Path(tempfile.mkdtemp(prefix="region-talk-qwen3-kernel-"))
     dst = tmp / KERNEL_PATH.name
     shutil.copytree(KERNEL_PATH, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"))
     meta_path = dst / "kernel-metadata.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    source_code = dst / str(meta.get("code_file") or "region_talk_qwen3_embedding_06b_enrichment.py")
+    slug_code_file = f"{kernel_slug.replace('-', '_')}.py"
+    if source_code.exists() and source_code.name != slug_code_file:
+        target_code = dst / slug_code_file
+        shutil.copy2(source_code, target_code)
+        meta["code_file"] = slug_code_file
+    elif source_code.exists():
+        meta["code_file"] = source_code.name
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if username:
         meta["id"] = f"{username}/{kernel_slug}"
     meta["slug"] = kernel_slug
-    meta["title"] = "Region Talk Qwen3 Embedding 06B Enrichment"
+    meta["title"] = spec.get("title") or f"Region Talk Qwen3 Embedding {spec['title_token']} Enrichment"
     meta["enable_gpu"] = getenv_bool("REGION_TALK_QWEN3_ENABLE_GPU", False)
+    if meta["enable_gpu"] and os.getenv("REGION_TALK_QWEN3_MACHINE_SHAPE"):
+        meta["machine_shape"] = os.getenv("REGION_TALK_QWEN3_MACHINE_SHAPE")
+    meta["model_sources"] = model_sources
     meta["enable_internet"] = True
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return dst
@@ -171,7 +255,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Run Region Talk Qwen3 Embedding 0.6B enrichment on Kaggle")
     ap.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env")
     ap.add_argument("--run-id", default="")
-    ap.add_argument("--kernel-slug", default="region-talk-qwen3-embedding-06b-enrichment")
+    ap.add_argument("--kernel-slug", default="")
+    ap.add_argument("--model-size", default=os.environ.get("REGION_TALK_QWEN3_MODEL_SIZE", "0.6b"), choices=["0.6b", "4b", "8b", "embeddinggemma"], help="Embedding model size/family to test")
+    ap.add_argument("--attach-kaggle-model", action="store_true", help="Attach Kaggle model source qwen-lm/qwen-3-embedding/transformers/<size>/1")
     ap.add_argument("--batch-limit", type=int, default=12)
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--max-length", type=int, default=2048)
@@ -188,7 +274,9 @@ def main() -> int:
     ap.add_argument("--no-wait", action="store_true")
     args = ap.parse_args()
     load_env_file(args.env_file)
-    run_id = args.run_id or "region-talk-qwen3-embedding-06b-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    spec = model_spec(args)
+    kernel_slug = args.kernel_slug or spec.get("kernel_slug") or f"region-talk-qwen3-embedding-{spec['slug_token']}-enrichment"
+    run_id = args.run_id or f"region-talk-qwen3-embedding-{spec['slug_token']}-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     os.environ["REGION_TALK_RUN_ID"] = run_id
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "ydb")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")
@@ -200,15 +288,16 @@ def main() -> int:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME is required")
-    kref = kernel_ref(username=username, kernel_slug=args.kernel_slug)
+    kref = kernel_ref(username=username, kernel_slug=kernel_slug)
     assert_qwen3_kernel_slot_free(client, kref, allow_active=bool(args.allow_active_qwen3_kernel))
-    config_ref = build_config_dataset(client, username=username, run_id=run_id, args=args)
+    config_ref = build_config_dataset(client, username=username, run_id=run_id, args=args, spec=spec)
     secret_ref = create_secret_bundle_dataset(client, username=username, run_id=run_id)
     wait_dataset_ready(client, config_ref, expected_files=["region_talk_run_config.json", "kaliningrad-place-lexicon-v1.csv"])
     wait_dataset_ready(client, secret_ref, expected_files=["region_talk_secrets.enc", "region_talk_fernet.key"])
-    kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=args.kernel_slug)
+    model_sources = [spec["kaggle_source"]] if args.attach_kaggle_model else []
+    kernel_path = prepared_kernel_path(run_id=run_id, kernel_slug=kernel_slug, spec=spec, model_sources=model_sources)
     dataset_sources = [config_ref, secret_ref]
-    print(f"[region-talk-qwen3] pushing {kref} run_id={run_id} batch_limit={args.batch_limit} batch_size={args.batch_size} datasets={len(dataset_sources)} no_telegram=1", flush=True)
+    print(f"[region-talk-qwen3] pushing {kref} run_id={run_id} model={spec['model_id']} batch_limit={args.batch_limit} batch_size={args.batch_size} datasets={len(dataset_sources)} model_sources={len(model_sources)} no_telegram=1", flush=True)
     client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
     if args.no_wait:
         print(f"[region-talk-qwen3] pushed {kref}; not waiting; input datasets retained: {dataset_sources}", flush=True)

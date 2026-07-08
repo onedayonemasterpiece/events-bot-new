@@ -15,9 +15,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+MODEL_SPECS = {
+    "0.6b": ("Qwen/Qwen3-Embedding-0.6B", "qwen3_embedding_0_6b", 1024),
+    "06b": ("Qwen/Qwen3-Embedding-0.6B", "qwen3_embedding_0_6b", 1024),
+    "4b": ("Qwen/Qwen3-Embedding-4B", "qwen3_embedding_4b", 2560),
+    "8b": ("Qwen/Qwen3-Embedding-8B", "qwen3_embedding_8b", 4096),
+    "embeddinggemma": ("google/embeddinggemma-300m", "embeddinggemma_300m", 768),
+    "embeddinggemma300m": ("google/embeddinggemma-300m", "embeddinggemma_300m", 768),
+    "gemma": ("google/embeddinggemma-300m", "embeddinggemma_300m", 768),
+}
+DEFAULT_MODEL_SIZE = "0.6b"
 MODEL_ID = "Qwen/Qwen3-Embedding-0.6B"
 MODEL_SHORT = "qwen3_embedding_0_6b"
 ENCODER_CONTRACT = "qwen3_embedding_0_6b_sentence_transformers_dense_1024_v1"
+ENRICHMENT_KIND = "qwen3_embedding_0_6b_enrichment_item"
+RESULT_KIND = "qwen3_embedding_0_6b_enrichment_result"
+HEARTBEAT_KIND = "business_heartbeat_qwen3_embedding_0_6b_enrichment"
 RUN_STARTED_AT = datetime.now(timezone.utc)
 RUN_STARTED_MONOTONIC = time.monotonic()
 
@@ -33,6 +46,37 @@ def apply_runtime_env_defaults() -> None:
 
 
 apply_runtime_env_defaults()
+
+
+def _normalise_qwen_model_size(value: str) -> str:
+    raw = (value or "").strip().lower().replace("_", "").replace("-", "")
+    if raw in {"0.6b", "06b", "0.6", "06"}:
+        return "0.6b"
+    if raw in {"4b", "4"}:
+        return "4b"
+    if raw in {"8b", "8"}:
+        return "8b"
+    if raw in {"embeddinggemma", "embeddinggemma300m", "gemma", "gemma300m"}:
+        return "embeddinggemma"
+    return DEFAULT_MODEL_SIZE
+
+
+def configure_model_from_env() -> None:
+    global MODEL_ID, MODEL_SHORT, ENCODER_CONTRACT, ENRICHMENT_KIND, RESULT_KIND, HEARTBEAT_KIND
+    requested_size = _normalise_qwen_model_size(os.getenv("REGION_TALK_QWEN3_MODEL_SIZE") or DEFAULT_MODEL_SIZE)
+    default_model_id, default_short, default_dim = MODEL_SPECS.get(requested_size, MODEL_SPECS[DEFAULT_MODEL_SIZE])
+    MODEL_ID = (os.getenv("REGION_TALK_QWEN3_MODEL_ID") or default_model_id).strip() or default_model_id
+    MODEL_SHORT = (os.getenv("REGION_TALK_QWEN3_MODEL_SHORT") or default_short).strip() or default_short
+    ENCODER_CONTRACT = (
+        os.getenv("REGION_TALK_QWEN3_ENCODER_CONTRACT")
+        or f"{MODEL_SHORT}_sentence_transformers_dense_{default_dim}_v1"
+    ).strip()
+    ENRICHMENT_KIND = f"{MODEL_SHORT}_enrichment_item"
+    RESULT_KIND = f"{MODEL_SHORT}_enrichment_result"
+    HEARTBEAT_KIND = f"business_heartbeat_{MODEL_SHORT}_enrichment"
+
+
+configure_model_from_env()
 
 
 def utc_now_iso() -> str:
@@ -377,9 +421,9 @@ def emit_event(name: str, **payload: Any) -> None:
             }}
             def op(session: Any) -> None:
                 ensure_ydb_kv_table(ydb, session, table_path)
-                ydb_upsert_json(session, ydb, table_path, "latest_business_heartbeat:qwen3_embedding_0_6b_enrichment", "business_heartbeat_qwen3_embedding_0_6b_enrichment", compact, row["created_at"], timeout_seconds=5)
+                ydb_upsert_json(session, ydb, table_path, f"latest_business_heartbeat:{MODEL_SHORT}_enrichment", HEARTBEAT_KIND, compact, row["created_at"], timeout_seconds=5)
                 if run_id:
-                    ydb_upsert_json(session, ydb, table_path, f"business_heartbeat:qwen3_embedding_0_6b_enrichment:{run_id}", "business_heartbeat_qwen3_embedding_0_6b_enrichment", compact, row["created_at"], timeout_seconds=5)
+                    ydb_upsert_json(session, ydb, table_path, f"business_heartbeat:{MODEL_SHORT}_enrichment:{run_id}", HEARTBEAT_KIND, compact, row["created_at"], timeout_seconds=5)
             pool.retry_operation_sync(op)
             driver.stop(timeout=5)
         except Exception:
@@ -522,6 +566,77 @@ class Qwen3EmbeddingEncoder:
         self.backend = "sentence_transformers"
         self.model: Any = None
         self.device = "unknown"
+        self.model_load_ref = MODEL_ID
+
+    def _find_kaggle_model_path(self) -> str:
+        explicit = (os.getenv("REGION_TALK_QWEN3_MODEL_LOCAL_PATH") or "").strip()
+        if explicit and (Path(explicit) / "config.json").exists():
+            return explicit
+        source = (os.getenv("REGION_TALK_QWEN3_KAGGLE_MODEL_SOURCE") or "").strip()
+        variation = (os.getenv("REGION_TALK_QWEN3_KAGGLE_MODEL_VARIATION") or "").strip().lower()
+        source_parts: list[str] = []
+        if source:
+            source_parts = [p for p in source.strip("/").split("/") if p]
+            if len(source_parts) >= 4:
+                variation = variation or source_parts[-2].lower()
+        roots = [Path("/kaggle/input"), Path.cwd()]
+        direct_suffixes: list[Path] = []
+        if variation:
+            if len(source_parts) >= 4:
+                model_slug = source_parts[1]
+                framework = source_parts[2]
+                version = source_parts[4] if len(source_parts) >= 5 else "1"
+                direct_suffixes.extend([
+                    Path(model_slug) / framework / variation / version,
+                    Path(model_slug) / framework.lower() / variation / version,
+                    Path(model_slug) / framework.capitalize() / variation / version,
+                    Path(model_slug) / variation / version,
+                ])
+            direct_suffixes.extend([
+                Path("qwen-3-embedding") / "transformers" / variation / "1",
+                Path("qwen-3-embedding") / "Transformers" / variation / "1",
+                Path("qwen3-embedding") / "transformers" / variation / "1",
+                Path("qwen3-embedding") / "Transformers" / variation / "1",
+                Path("qwen-3-embedding") / variation / "1",
+                Path("embeddinggemma") / "transformers" / variation / "1",
+                Path("embeddinggemma") / "Transformers" / variation / "1",
+            ])
+        for root in roots:
+            if not root.exists():
+                continue
+            for suffix in direct_suffixes:
+                candidate = root / suffix
+                if (candidate / "config.json").exists():
+                    return str(candidate)
+            if variation:
+                try:
+                    for config in root.rglob("config.json"):
+                        path_text = config.parent.as_posix().lower()
+                        model_slug = source_parts[1].lower() if len(source_parts) >= 2 else ""
+                        if variation in path_text and (not model_slug or model_slug in path_text or "qwen" in path_text or "gemma" in path_text):
+                            return str(config.parent)
+                except Exception:
+                    pass
+        if source and getenv_bool("REGION_TALK_QWEN3_USE_KAGGLEHUB_FALLBACK", True):
+            try:
+                import kagglehub  # type: ignore
+            except Exception:
+                if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "kagglehub"])
+                        import kagglehub  # type: ignore
+                    except Exception:
+                        return MODEL_ID
+                else:
+                    return MODEL_ID
+            try:
+                source_without_version = "/".join(source.strip("/").split("/")[:4])
+                model_dir = kagglehub.model_download(source_without_version)
+                if model_dir and (Path(model_dir) / "config.json").exists():
+                    return str(model_dir)
+            except Exception:
+                pass
+        return MODEL_ID
 
     def load(self) -> None:
         started = time.monotonic()
@@ -546,10 +661,14 @@ class Qwen3EmbeddingEncoder:
                 return True
             return st_version < (2, 7, 0) or transformers_version < (4, 51, 0)
 
-        if getenv_bool("REGION_TALK_AUTO_INSTALL", True) and _versions_need_upgrade():
+        st_package = os.getenv("REGION_TALK_QWEN3_SENTENCE_TRANSFORMERS_PACKAGE", "sentence-transformers>=2.7.0")
+        transformers_package = os.getenv("REGION_TALK_QWEN3_TRANSFORMERS_PACKAGE", "transformers>=4.51.0")
+        accel_package = os.getenv("REGION_TALK_QWEN3_ACCELERATE_PACKAGE", "accelerate")
+        force_install = getenv_bool("REGION_TALK_QWEN3_FORCE_MODEL_PACKAGE_INSTALL", False)
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True) and (force_install or _versions_need_upgrade()):
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install", "-q", "--upgrade",
-                "sentence-transformers>=2.7.0", "transformers>=4.51.0", "accelerate"
+                st_package, transformers_package, accel_package
             ])
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
@@ -557,7 +676,7 @@ class Qwen3EmbeddingEncoder:
             if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
                 subprocess.check_call([
                     sys.executable, "-m", "pip", "install", "-q", "--upgrade",
-                    "sentence-transformers>=2.7.0", "transformers>=4.51.0", "accelerate"
+                    st_package, transformers_package, accel_package
                 ])
                 from sentence_transformers import SentenceTransformer  # type: ignore
             else:
@@ -567,15 +686,40 @@ class Qwen3EmbeddingEncoder:
             self.device = "cuda" if getattr(torch, "cuda", None) and torch.cuda.is_available() else "cpu"
         except Exception:
             self.device = "cpu"
+        load_ref = self._find_kaggle_model_path()
+        self.model_load_ref = load_ref
+        constructor_kwargs: dict[str, Any] = {"trust_remote_code": True}
+        if self.device == "cuda" and getenv_bool("REGION_TALK_QWEN3_USE_GPU_MODEL_KWARGS", True):
+            try:
+                import torch  # type: ignore
+                model_kwargs: dict[str, Any] = {"torch_dtype": torch.float16}
+                device_map = (os.getenv("REGION_TALK_QWEN3_DEVICE_MAP") or "").strip()
+                if device_map:
+                    model_kwargs["device_map"] = device_map
+                constructor_kwargs["model_kwargs"] = model_kwargs
+                constructor_kwargs["tokenizer_kwargs"] = {"padding_side": "left"}
+            except Exception:
+                pass
         try:
-            self.model = SentenceTransformer(MODEL_ID, trust_remote_code=True)
+            self.model = SentenceTransformer(load_ref, **constructor_kwargs)
         except TypeError:
-            self.model = SentenceTransformer(MODEL_ID)
+            try:
+                self.model = SentenceTransformer(load_ref, trust_remote_code=True)
+            except TypeError:
+                self.model = SentenceTransformer(load_ref)
+        except Exception:
+            if constructor_kwargs.get("model_kwargs"):
+                try:
+                    self.model = SentenceTransformer(load_ref, trust_remote_code=True)
+                except TypeError:
+                    self.model = SentenceTransformer(load_ref)
+            else:
+                raise
         try:
             self.model.max_seq_length = max(64, getenv_int("REGION_TALK_QWEN3_MAX_LENGTH", 2048))
         except Exception:
             pass
-        emit_event("qwen3_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, backend=self.backend, device=self.device, elapsed_seconds=round(time.monotonic() - started, 3))
+        emit_event("qwen3_model_load_done", phase="model_load", status="running", run_id=os.getenv("REGION_TALK_RUN_ID") or "", model_id=MODEL_ID, model_load_ref=load_ref if load_ref == MODEL_ID else "kaggle_input", backend=self.backend, device=self.device, elapsed_seconds=round(time.monotonic() - started, 3))
 
     def encode(self, texts: list[str], *, batch_size: int, max_length: int, query: bool = False) -> Any:
         if self.model is None:
@@ -655,7 +799,7 @@ def text_from_row(row: dict[str, Any]) -> tuple[str, list[str]]:
 def enrichment_pk(post_id: str, post_url: str, text_sha: str, model_id: str = MODEL_ID) -> str:
     base = post_id or stable_hash(post_url, text_sha, length=16)
     model_key = MODEL_SHORT if model_id == MODEL_ID else stable_hash(model_id, length=8)
-    return f"qwen3_embedding_0_6b_enrichment_item:{base}:{model_key}:{text_sha[:12]}"
+    return f"{ENRICHMENT_KIND}:{base}:{model_key}:{text_sha[:12]}"
 
 
 def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, existing_pks: set[str], limit: int, include_existing: bool = False) -> list[dict[str, Any]]:
@@ -711,14 +855,14 @@ def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[d
         items_by_kind: dict[str, dict[str, dict[str, Any]]] = {}
         for kind in kinds:
             items_by_kind[kind] = ydb_select_kind_items(session, ydb, table_path, kind, limit=max_scan)
-        existing = ydb_select_kind_items(session, ydb, table_path, "qwen3_embedding_0_6b_enrichment_item", limit=max_scan)
+        existing = ydb_select_kind_items(session, ydb, table_path, ENRICHMENT_KIND, limit=max_scan)
         existing_pks = set(existing.keys())
         rows = collect_text_rows(items_by_kind, existing_pks=existing_pks, limit=limit, include_existing=include_existing)
         meta = {
             "table_path": table_path,
             "input_kinds": kinds,
             "loaded_by_kind": {kind: len(items_by_kind.get(kind) or {}) for kind in kinds},
-            "existing_qwen3_embedding_0_6b_enrichment_items": len(existing_pks),
+            f"existing_{ENRICHMENT_KIND}s": len(existing_pks),
         }
         return rows, meta
 
@@ -777,7 +921,7 @@ def build_enrichment_payload(
     post_id = str(row.get("post_id") or row.get("candidate_memory_id") or row.get("publication_candidate_id") or stable_hash(row.get("post_url"), text_sha, length=16))
     post_url = str(row.get("post_url") or "")
     payload: dict[str, Any] = {
-        "qwen3_embedding_0_6b_enrichment_id": str(row.get("_enrichment_pk") or enrichment_pk(post_id, post_url, text_sha)).replace("qwen3_embedding_0_6b_enrichment_item:", ""),
+        f"{MODEL_SHORT}_enrichment_id": str(row.get("_enrichment_pk") or enrichment_pk(post_id, post_url, text_sha)).replace(f"{ENRICHMENT_KIND}:", ""),
         "run_id": run_id,
         "created_at": utc_now_iso(),
         "source_kind": row.get("_source_kind") or "",
@@ -801,19 +945,19 @@ def build_enrichment_payload(
         "geo_bank_version": geo_bank_version,
         "geo_bank_hash": geo_bank_hash[:16],
         "semantic_scores_by_class": _round_scores(semantic_scores),
-        "qwen3_embedding_0_6b_top_class": top_class,
-        "qwen3_embedding_0_6b_top_score": round(float(top_score), 4),
-        "qwen3_embedding_0_6b_positive_class": pos_class,
-        "qwen3_embedding_0_6b_positive_score": round(float(pos_score), 4),
-        "qwen3_embedding_0_6b_negative_class": neg_class,
-        "qwen3_embedding_0_6b_negative_score": round(float(neg_score), 4),
-        "qwen3_embedding_0_6b_margin_positive_vs_negative": round(float(pos_score - neg_score), 4),
-        "qwen3_embedding_0_6b_ko_geo_top": ko_geo_class.replace("ko_geo:", ""),
-        "qwen3_embedding_0_6b_ko_geo_score": round(float(ko_geo_score), 4),
-        "qwen3_embedding_0_6b_external_geo_top": re.sub(r"^external_(?:ru_|country_)?geo:", "", external_geo_class),
-        "qwen3_embedding_0_6b_external_geo_score": round(float(external_geo_score), 4),
-        "qwen3_embedding_0_6b_ko_vs_external_geo_margin": round(float(ko_geo_score - external_geo_score), 4),
-        "vector_gate_status_qwen3_embedding_0_6b": "qwen3_embedding_0_6b_accept_candidate" if pos_score >= neg_score and (pos_score - neg_score) >= getenv_float("REGION_TALK_QWEN3_ACCEPT_MARGIN", 0.02) else "qwen3_embedding_0_6b_review_or_reject",
+        f"{MODEL_SHORT}_top_class": top_class,
+        f"{MODEL_SHORT}_top_score": round(float(top_score), 4),
+        f"{MODEL_SHORT}_positive_class": pos_class,
+        f"{MODEL_SHORT}_positive_score": round(float(pos_score), 4),
+        f"{MODEL_SHORT}_negative_class": neg_class,
+        f"{MODEL_SHORT}_negative_score": round(float(neg_score), 4),
+        f"{MODEL_SHORT}_margin_positive_vs_negative": round(float(pos_score - neg_score), 4),
+        f"{MODEL_SHORT}_ko_geo_top": ko_geo_class.replace("ko_geo:", ""),
+        f"{MODEL_SHORT}_ko_geo_score": round(float(ko_geo_score), 4),
+        f"{MODEL_SHORT}_external_geo_top": re.sub(r"^external_(?:ru_|country_)?geo:", "", external_geo_class),
+        f"{MODEL_SHORT}_external_geo_score": round(float(external_geo_score), 4),
+        f"{MODEL_SHORT}_ko_vs_external_geo_margin": round(float(ko_geo_score - external_geo_score), 4),
+        f"vector_gate_status_{MODEL_SHORT}": f"{MODEL_SHORT}_accept_candidate" if pos_score >= neg_score and (pos_score - neg_score) >= getenv_float("REGION_TALK_QWEN3_ACCEPT_MARGIN", 0.02) else f"{MODEL_SHORT}_review_or_reject",
         "dense_vector_stored": bool(dense_vector),
     }
     if dense_vector is not None:
@@ -827,7 +971,7 @@ def write_result_rows(rows: list[dict[str, Any]], summary: dict[str, Any]) -> in
     pool = ydb.SessionPool(driver)
     now = utc_now_iso()
     run_id = str(summary.get("run_id") or "")
-    ydb_rows = [(str(row.get("_pk") or "qwen3_embedding_0_6b_enrichment_item:" + row["qwen3_embedding_0_6b_enrichment_id"]), "qwen3_embedding_0_6b_enrichment_item", {k: v for k, v in row.items() if k != "_pk"}) for row in rows]
+    ydb_rows = [(str(row.get("_pk") or f"{ENRICHMENT_KIND}:" + row[f"{MODEL_SHORT}_enrichment_id"]), ENRICHMENT_KIND, {k: v for k, v in row.items() if k != "_pk"}) for row in rows]
 
     def op(session: Any) -> int:
         ensure_ydb_kv_table(ydb, session, table_path)
@@ -838,8 +982,8 @@ def write_result_rows(rows: list[dict[str, Any]], summary: dict[str, Any]) -> in
             "row_count": len(rows),
             "rows_without_vectors": [{k: v for k, v in row.items() if k != "embedding_vector"} for row in rows[:50]],
         }
-        ydb_upsert_json(session, ydb, table_path, f"qwen3_embedding_0_6b_enrichment_result:{run_id}", "qwen3_embedding_0_6b_enrichment_result", result_payload, now)
-        ydb_upsert_json(session, ydb, table_path, "qwen3_embedding_0_6b_enrichment_result:latest", "qwen3_embedding_0_6b_enrichment_result", result_payload, now)
+        ydb_upsert_json(session, ydb, table_path, f"{RESULT_KIND}:{run_id}", RESULT_KIND, result_payload, now)
+        ydb_upsert_json(session, ydb, table_path, f"{RESULT_KIND}:latest", RESULT_KIND, result_payload, now)
         return written
 
     try:
@@ -870,7 +1014,7 @@ def run_qwen3_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
             "ydb_meta": ydb_meta,
             "elapsed_seconds": round(runtime_elapsed_seconds(), 3),
         }
-        (output_dir / "qwen3_embedding_0_6b_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": []}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (output_dir / f"{MODEL_SHORT}_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": []}, ensure_ascii=False, indent=2), encoding="utf-8")
         (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "status": "no_rows", "run_id": run_id, "summary": summary}, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"ok": True, "status": "no_rows", "summary": summary, "rows": []}
 
@@ -932,7 +1076,7 @@ def run_qwen3_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
                 embedding_dim=int(query_vecs.shape[1]) if hasattr(query_vecs, "shape") and len(query_vecs.shape) > 1 else 0,
                 row_index=idx + 1,
             )
-            payload["_pk"] = str(row.get("_enrichment_pk") or "qwen3_embedding_0_6b_enrichment_item:" + payload["qwen3_embedding_0_6b_enrichment_id"])
+            payload["_pk"] = str(row.get("_enrichment_pk") or f"{ENRICHMENT_KIND}:" + payload[f"{MODEL_SHORT}_enrichment_id"])
             result_rows.append(payload)
         vectors_done = len(result_rows)
         emit_event("qwen3_batch_done", phase="vectorize", status="running", run_id=run_id, texts_done=vectors_done, texts_total=len(texts), qwen3_batch_size=len(batch_texts), progress_label=f"Qwen3 {vectors_done}/{len(texts)}")
@@ -972,10 +1116,10 @@ def run_qwen3_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
         emit_event("qwen3_ydb_write_failed", phase="write_ydb", status="error", run_id=run_id, error=summary["error"])
 
     public_rows = [{k: v for k, v in row.items() if k != "embedding_vector" and k != "_pk"} for row in result_rows]
-    (output_dir / "qwen3_embedding_0_6b_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": public_rows}, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "qwen3_embedding_0_6b_enrichment_rows.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in public_rows) + ("\n" if public_rows else ""), encoding="utf-8")
+    (output_dir / f"{MODEL_SHORT}_enrichment_result.json").write_text(json.dumps({"summary": summary, "rows": public_rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / f"{MODEL_SHORT}_enrichment_rows.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in public_rows) + ("\n" if public_rows else ""), encoding="utf-8")
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": utc_now_iso(), "status": summary["status"], "summary": summary}, ensure_ascii=False, indent=2), encoding="utf-8")
-    for p in [output_dir / "qwen3_embedding_0_6b_enrichment_result.json", output_dir / "qwen3_embedding_0_6b_enrichment_rows.jsonl", output_dir / "stage_status.json"]:
+    for p in [output_dir / f"{MODEL_SHORT}_enrichment_result.json", output_dir / f"{MODEL_SHORT}_enrichment_rows.jsonl", output_dir / "stage_status.json"]:
         target = Path.cwd() / p.name
         if target.resolve() != p.resolve():
             target.write_bytes(p.read_bytes())
@@ -987,7 +1131,8 @@ def run_qwen3_enrichment(run_id: str, output_dir: Path) -> dict[str, Any]:
 def main() -> int:
     load_dotenv(Path(".env"))
     config = load_split_runtime_from_kaggle_input()
-    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-qwen3-embedding-06b-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
+    configure_model_from_env()
+    run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{MODEL_SHORT.replace('_', '-')}-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
     os.environ.setdefault("REGION_TALK_RUN_ID", run_id)
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "ydb")
     os.environ.setdefault("REGION_TALK_REQUIRE_YDB_STATE", "1")

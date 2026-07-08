@@ -13,7 +13,7 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
 - `kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py` — no-Telegram BGE-M3 vectorization-only worker over live YDB rows.
 - `kaggle/execute_region_talk_bge_m3_enrichment.py` — Kaggle push/poll/download launcher for BGE-M3 enrichment; it packages only YDB credentials and never Telegram auth bundles.
 - `kaggle/RegionTalkQwen3Embedding06BEnrichment/region_talk_qwen3_embedding_06b_enrichment.py` — no-Telegram Qwen3-Embedding-0.6B research vectorization worker over the same live YDB rows.
-- `kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py` — Kaggle launcher for Qwen3 research batches; it writes separate `qwen3_embedding_0_6b_enrichment_item` rows and does not feed production fusion.
+- `kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py` — Kaggle launcher for Qwen3/EmbeddingGemma research batches; it writes separate research rows such as `qwen3_embedding_0_6b_enrichment_item` or `embeddinggemma_300m_enrichment_item` and does not feed production fusion.
 - `scripts/region_talk_embedding_quality_compare.py` — local live-YDB comparison of BGE and Qwen research rows against confident candidate/image/publication labels.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
@@ -392,8 +392,8 @@ The XLSX has:
   and XLSX report building, reads a small text batch from live YDB, runs E5 then
   BGE-M3 sequentially, writes `vector_probe_result` rows/heartbeats to YDB and
   exits.
-- For Qwen3 research validation, run the separate no-Telegram worker instead of
-  CandidateReport:
+- For Qwen3/EmbeddingGemma research validation, run the separate no-Telegram
+  worker instead of CandidateReport:
 
 ```bash
 python kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py \
@@ -409,9 +409,28 @@ python kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py \
 python scripts/region_talk_embedding_quality_compare.py --limit 2000
 ```
 
+  For CPU-only EmbeddingGemma research use:
+
+```bash
+python kaggle/execute_region_talk_qwen3_embedding_06b_enrichment.py \
+  --model-size embeddinggemma \
+  --attach-kaggle-model \
+  --run-id "region-talk-embeddinggemma-300m-cpu-probe-$(date -u +%Y%m%dT%H%M%SZ)" \
+  --batch-limit 36 \
+  --batch-size 8 \
+  --max-length 1024
+
+python scripts/region_talk_embedding_quality_compare.py \
+  --limit 5000 \
+  --qwen-model-short embeddinggemma_300m
+```
+
   Treat the comparison as research evidence only. Promotion to production
   fusion requires enough Gemini/image-confirmed positives and rejected controls,
-  not merely a successful model-load probe.
+  not merely a successful model-load probe. As of the 2026-07-08 CPU test,
+  Qwen3-Embedding-4B was not CPU-practical on Kaggle (stuck in the first
+  full-bank encode after 12+ minutes), while EmbeddingGemma-300M completed 36
+  CPU rows plus full prototype scoring in about 148 seconds.
 - Gemini Lite final verification is image-gated. CandidateReport must not call
   the final verifier for text-only review rows after vector scoring. It may run
   only after `RegionTalkImageDiagnostic` has written actual-image evidence

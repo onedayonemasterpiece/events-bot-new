@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import sys
 import unittest
@@ -39,6 +40,16 @@ class RegionTalkQwen3Embedding06BEnrichmentTests(unittest.TestCase):
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_SESSION", names)
+
+    def test_embeddinggemma_runner_spec_is_research_only_cpu_candidate(self) -> None:
+        mod = load_qwen_runner_module()
+        spec = mod.model_spec(argparse.Namespace(model_size="embeddinggemma"))
+        self.assertEqual(spec["model_id"], "google/embeddinggemma-300m")
+        self.assertEqual(spec["model_short"], "embeddinggemma_300m")
+        self.assertEqual(spec["encoder_contract"], "embeddinggemma_300m_sentence_transformers_dense_768_v1")
+        self.assertEqual(spec["kaggle_source"], "google/embeddinggemma/Transformers/embeddinggemma-300m/1")
+        self.assertEqual(spec["kernel_slug"], "rt-embeddinggemma-300m-enrichment")
+        self.assertLessEqual(len(spec["title"]), 50)
 
     def test_collect_text_rows_uses_research_kind_and_dedupes(self) -> None:
         mod = load_qwen_module()

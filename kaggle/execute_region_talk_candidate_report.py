@@ -51,7 +51,7 @@ class DirectKaggleClient:
             meta["dataset_sources"] = [str(x) for x in dataset_sources if str(x).strip()]
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         try:
-            self.api.kernels_push(str(kernel_path))
+            response = self.api.kernels_push(str(kernel_path))
         except Exception as exc:
             response = getattr(exc, "response", None)
             body = ""
@@ -61,6 +61,36 @@ class DirectKaggleClient:
                 except Exception:
                     body = ""
             raise RuntimeError("Kaggle kernels_push failed" + (f": {body}" if body else "")) from exc
+        response_dict = response.to_dict() if hasattr(response, "to_dict") else {}
+        error = str(response_dict.get("error") or getattr(response, "error", "") or "").strip()
+        if error:
+            raise RuntimeError(f"Kaggle kernels_push failed: {error}")
+        invalid_dataset_sources = [
+            str(item).strip()
+            for item in (
+                response_dict.get("invalidDatasetSources")
+                or response_dict.get("invalid_dataset_sources")
+                or getattr(response, "invalidDatasetSources", None)
+                or getattr(response, "invalid_dataset_sources", None)
+                or []
+            )
+            if str(item).strip()
+        ]
+        invalid_model_sources = [
+            str(item).strip()
+            for item in (
+                response_dict.get("invalidModelSources")
+                or response_dict.get("invalid_model_sources")
+                or getattr(response, "invalidModelSources", None)
+                or getattr(response, "invalid_model_sources", None)
+                or []
+            )
+            if str(item).strip()
+        ]
+        if invalid_dataset_sources:
+            raise RuntimeError("Kaggle kernels_push rejected dataset sources: " + ", ".join(invalid_dataset_sources))
+        if invalid_model_sources:
+            raise RuntimeError("Kaggle kernels_push rejected model sources: " + ", ".join(invalid_model_sources))
 
     def get_kernel_status(self, kernel_ref: str) -> dict[str, Any]:
         response = self.api.kernels_status(kernel_ref)
