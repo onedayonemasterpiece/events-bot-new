@@ -33,9 +33,10 @@
   live YDB; ImageDiagnostic can download those URLs or scrape public post HTML
   before falling back to Telethon media download. Empty post batches no longer
   waste time loading embedding models, and the launcher can propagate
-  `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=0` for bounded rescue runs that use
-  completed embedding-model passes instead of discarding all fetched posts when a
-  second model times out.
+  `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=0` plus
+  `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS` for bounded rescue runs that use
+  completed embedding-model passes instead of discarding all fetched posts when
+  a second model times out.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

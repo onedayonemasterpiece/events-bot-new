@@ -413,9 +413,10 @@ The XLSX has:
   directly or scrape the public post HTML before falling back to Telethon media
   download. This is a cooldown workaround, not a separate product pipeline.
   For bounded public-web rescue runs, the launcher may set
-  `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=0`: use all embedding models that
-  complete inside the 20-minute budget, but do not throw away 800+ fetched public
-  posts merely because the second model timed out.
+  `REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS=0` and, when the 20-minute budget is
+  tight, `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`:
+  use completed vector passes rather than throw away 800+ fetched public posts
+  because the second model timed out.
 - The image-queue CandidateReport phase must not spend time on historical
   candidate-memory dual-embedding rechecks. Defaults are
   `REGION_TALK_MEMORY_VECTOR_RECHECK_MAX_ROWS=0` and

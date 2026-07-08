@@ -5859,6 +5859,14 @@ def should_send_to_llm(fresh: dict[str, Any], scope: dict[str, Any], post: dict[
 TEXT_EMBEDDING_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
 
 
+def text_embedding_model_ids_for_run() -> list[str]:
+    raw = (os.getenv("REGION_TALK_TEXT_EMBEDDING_MODEL_IDS") or "").strip()
+    if not raw:
+        return list(TEXT_EMBEDDING_MODELS)
+    ids = [part.strip() for part in re.split(r"[,;+]", raw) if part.strip()]
+    return ids or list(TEXT_EMBEDDING_MODELS)
+
+
 def text_vector_priority_enabled() -> bool:
     return getenv_bool("REGION_TALK_PRIORITIZE_TEXT_VECTORS", True)
 
@@ -5871,7 +5879,7 @@ def text_embedding_model_timeout_seconds() -> int:
 
 
 def text_embedding_required_runtime_reserve_seconds() -> int:
-    model_budget = text_embedding_model_timeout_seconds() * len(TEXT_EMBEDDING_MODELS)
+    model_budget = text_embedding_model_timeout_seconds() * len(text_embedding_model_ids_for_run())
     tail_reserve = getenv_int("REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS", 120)
     return max(30, model_budget + tail_reserve)
 
@@ -6159,9 +6167,10 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
             except Exception:
                 pass
 
-    for model_index, model_id in enumerate(TEXT_EMBEDDING_MODELS, start=1):
+    model_ids = text_embedding_model_ids_for_run()
+    for model_index, model_id in enumerate(model_ids, start=1):
         started = time.monotonic()
-        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", texts_to_score=len(texts))
+        emit("text_embedding_model_pass_started", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_to_score=len(texts))
         try:
             result = _run_embedding_model_pass_bounded(model_id, texts, flat_labels, flat_texts, semantic_bank_version, bank_hash, report_event=report_event)
             if not result.get("ok"):
@@ -6169,17 +6178,17 @@ def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None 
             for i, scores in enumerate(result.get("scores") or []):
                 if i < len(per_text) and isinstance(scores, dict):
                     per_text[i][model_id] = {str(k): float(v) for k, v in scores.items()}
-            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=1, text_embedding_passes_completed=model_index, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_done", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=1, text_embedding_passes_completed=model_index, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", texts_scored=len(texts), text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         except Exception as exc:
             err = f"{model_id}:{type(exc).__name__}:{str(exc)[:180]}"
             errors.append(err)
-            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_execution_mode="sequential_one_model_in_memory", text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
+            emit("text_embedding_model_pass_failed", status="error", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index - 1, text_embedding_models_required=len(model_ids), text_embedding_execution_mode="sequential_one_model_in_memory", text_embedding_error=err, text_embedding_elapsed_seconds=round(time.monotonic() - started, 3))
         finally:
             release_text_embedding_model(model_id)
             emit("text_embedding_model_released", status="running", text_embedding_model_id=model_id, text_embedding_models_loaded=0, text_embedding_passes_completed=model_index, text_embedding_execution_mode="sequential_one_model_in_memory")
-    if require_dual and any(len(item) != len(TEXT_EMBEDDING_MODELS) for item in per_text):
+    if require_dual and any(len(item) != len(model_ids) for item in per_text):
         message = "; ".join(errors)[:700] or "not all dual text embedding models produced scores"
-        emit("text_embedding_dual_requirement_failed", status="error", text_embedding_models_loaded=min((len(item) for item in per_text), default=0), text_embedding_models_required=len(TEXT_EMBEDDING_MODELS), text_embedding_error=message)
+        emit("text_embedding_dual_requirement_failed", status="error", text_embedding_models_loaded=min((len(item) for item in per_text), default=0), text_embedding_models_required=len(model_ids), text_embedding_error=message)
         raise RuntimeError("Region Talk dual text embeddings required but not fully available: " + message)
     out: list[dict[str, Any]] = []
     for item in per_text:
@@ -8619,8 +8628,8 @@ def run_vector_probe(run_id: str, output_dir: Path, status: Any | None = None) -
             "texts_to_score": len(rows),
             "texts_scored": len(scores),
             "elapsed_seconds": round(time.monotonic() - started, 3),
-            "text_embedding_models_required": len(TEXT_EMBEDDING_MODELS),
-            "text_embedding_models": "+".join(TEXT_EMBEDDING_MODELS),
+            "text_embedding_models_required": len(text_embedding_model_ids_for_run()),
+            "text_embedding_models": "+".join(text_embedding_model_ids_for_run()),
             "text_embedding_model_timeout_seconds": text_embedding_model_timeout_seconds(),
             "error": error,
             "ydb_read_status": state_meta.get("ydb_read_status"),
