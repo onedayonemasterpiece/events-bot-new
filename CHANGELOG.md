@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / live-YDB publication finalizer**: added
+  `scripts/region_talk_publication_finalizer.py` so the post-image-scoring
+  product shortlist can be built from live YDB rows without waiting for the
+  legacy CandidateReport workbook tail. The finalizer joins
+  `candidate_memory_item` with `image_queue_item(actual_scored)`, fetches public
+  Telegram text only when compact YDB rows lack text, calls Gemini Lite through
+  the existing Supabase limiter for unverified top rows, writes
+  `publication_candidate_item`, skips already verified URLs by default, and
+  exports a lightweight XLSX/CSV operator artifact.
 - **Region Talk Channel / bounded Gemini verifier calls**: CandidateReport now
   wraps final Gemini/Lite verifier calls with `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS`
   (default 60s), propagates `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` into Kaggle run

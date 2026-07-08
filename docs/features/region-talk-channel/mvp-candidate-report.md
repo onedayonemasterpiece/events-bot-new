@@ -555,6 +555,25 @@ operator-only workbooks, source-profile enrichment, XLSX generation or state
 snapshot rewrites. Those report artifacts remain best-effort/operator outputs
 and must not block the downstream ImageDiagnostic notebook.
 
+In live-YDB mode the report tail is not a required product stage. The durable
+contract is:
+
+```text
+CandidateReport text/vector rows + image_queue_item
+  → RegionTalkImageDiagnostic actual_scored image_queue_item rows
+  → publication finalizer reads live YDB, verifies top actual-image rows,
+     writes publication_candidate_item, and optionally exports a lightweight
+     XLSX/CSV review artifact
+```
+
+`build_report(...)` may still be the historical function name around the
+bounded scoring code, but product completion must be judged from live YDB rows:
+`candidate_memory_item`, `image_queue_item`, `publication_candidate_item`,
+queue cursors and business events. A missing or skipped XLSX/build-report tail
+is acceptable after `early_image_queue_handoff_done`; a missing
+`image_queue_item` handoff is not acceptable because ImageDiagnostic then has no
+work item.
+
 `04a_final_shortlist` is now the cumulative active candidate-memory shortlist, while `04a_current_run_shortlist` remains current-run-only. Metadata-only/CV-only image fallback is never `publication_ready` or `reviewable`; rows needing real media bytes go to `09b_image_fetch_retry_queue`. `low_priority_defer` is replaced by `frontier_stage` values such as `unresolved`, `probe_due`, `history_due`, `vk_not_configured`, `unsupported`, and `inactive_low_quality`.
 
 ## MVP-1.z6 throughput / hard-region / recursive discovery correction

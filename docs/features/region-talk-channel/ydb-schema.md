@@ -322,6 +322,15 @@ used as durable queue state.
 The two notebooks must run with different Telethon auth bundles and must not
 share one Telegram session concurrently.
 
+Publication finalization may run as a lightweight live-YDB consumer after
+ImageDiagnostic, without requiring the CandidateReport workbook/report tail. The
+current script is `scripts/region_talk_publication_finalizer.py`: it reads
+row-level `candidate_memory_item`, `image_queue_item(actual_scored)` and
+existing `publication_candidate_item` rows, skips already Gemini-verified post
+URLs unless `--reverify-existing` is set, writes only new verifier results, and
+treats the XLSX/CSV shortlist as an operator artifact rather than persistent
+state.
+
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report
 artifacts only. The Kaggle writer may rewrite old compact state rows through the

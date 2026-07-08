@@ -347,7 +347,17 @@ The XLSX has:
   YDB driver preflight and shifts the proof requirement to the notebook's first
   YDB heartbeat/row-level write. Do not use this mode as completion evidence
   until live YDB rows are observed.
-- Final product queue assembly lives in CandidateReport, not ImageDiagnostic: CandidateReport joins text/vector/source evidence with `actual_scored` image rows from YDB, writes row-level `publication_candidate_item` records, and exposes `04p_publication_queue` / `04q_publication_confirmed`. ImageDiagnostic remains the visual scoring notebook.
+- Final product queue assembly consumes live YDB, not the operator report
+  workbook. CandidateReport owns source/text/vector work and the early
+  `image_queue_item` handoff; ImageDiagnostic owns actual image scoring; then
+  `scripts/region_talk_publication_finalizer.py` can read
+  `candidate_memory_item` + `image_queue_item(actual_scored)` rows, fetch public
+  Telegram text only for compact rows, call Gemini Lite through the Supabase
+  limiter, write row-level `publication_candidate_item` records, and optionally
+  export a lightweight XLSX/CSV shortlist. The legacy CandidateReport
+  `build_report`/XLSX tail is best-effort only after
+  `early_image_queue_handoff_done`; do not block the product pipeline waiting
+  for it.
 - Gemini/Lite verifier calls must never be an unbounded stop-the-world section.
   CandidateReport uses `REGION_TALK_LLM_CALL_TIMEOUT_SECONDS` (default 60s) as a
   per-call wrapper and mirrors it to `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` for the
