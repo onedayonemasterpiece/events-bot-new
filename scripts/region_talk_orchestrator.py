@@ -24,11 +24,13 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
     build_stats_message,
     is_confirmed_publication,
     is_unsent_confirmed_publication,
+    ensure_ydb_module,
     load_env,
     read_kind_rows,
+    ydb_credentials,
     ydb_endpoint_database,
+    ydb_has_direct_credential,
     ydb_table_path,
-    ydb_token,
 )
 
 
@@ -53,11 +55,11 @@ def _run_cmd(cmd: list[str], *, dry_run: bool) -> dict[str, Any]:
     return {"cmd": cmd, "status": "ok" if proc.returncode == 0 else "failed", "returncode": proc.returncode, "output_tail": proc.stdout[-4000:]}
 
 
-def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int) -> dict[str, Any]:
-    import ydb  # type: ignore
+def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_yc_fallback: bool = False) -> dict[str, Any]:
+    ydb = ensure_ydb_module()
 
-    endpoint, database = ydb_endpoint_database()
-    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb.AccessTokenCredentials(ydb_token()))
+    endpoint, database = ydb_endpoint_database(allow_yc_fallback=allow_yc_fallback)
+    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb, allow_yc_fallback=allow_yc_fallback))
     driver.wait(timeout=20, fail_fast=True)
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
@@ -146,32 +148,36 @@ def main() -> int:
     parser.add_argument("--bge-threshold", type=int, default=1)
     parser.add_argument("--image-threshold", type=int, default=1)
     parser.add_argument("--stats-message", action="store_true", help="also include human stats text")
+    parser.add_argument("--allow-yc-fallback", action="store_true", help="allow local /home/dev/yandex-cloud/bin/yc to discover endpoint/database and mint IAM token")
     parser.add_argument("--execute", action="store_true", help="execute the first planned action (default: dry-run only)")
     args = parser.parse_args()
     load_env(Path(args.env_file))
+    allow_yc_fallback = bool(args.allow_yc_fallback or (os.getenv("REGION_TALK_ALLOW_LOCAL_YC_FALLBACK") or "").strip().lower() in {"1", "true", "yes", "on"})
     missing = [
         name for name in ["REGION_TALK_YDB_ENDPOINT", "REGION_TALK_YDB_DATABASE"]
         if not (os.getenv(name) or "").strip()
     ]
-    if not (os.getenv("REGION_TALK_YDB_IAM_TOKEN") or os.getenv("YC_IAM_TOKEN") or os.getenv("YDB_ACCESS_TOKEN") or "").strip():
-        missing.append("REGION_TALK_YDB_IAM_TOKEN|YC_IAM_TOKEN|YDB_ACCESS_TOKEN")
+    if allow_yc_fallback:
+        missing = []
+    if not ydb_has_direct_credential() and not allow_yc_fallback:
+        missing.append("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON|REGION_TALK_YDB_IAM_TOKEN|YC_IAM_TOKEN|YDB_ACCESS_TOKEN|YDB_USER")
     if missing:
         print(json.dumps({
             "ok": False,
             "dry_run": not args.execute,
             "error": "missing_ydb_config",
             "missing": missing,
-            "next_action": "run from the configured server or export live YDB endpoint/database/token; orchestrator did not attempt interactive yc auth",
+            "next_action": "run from the configured server, export live YDB endpoint/database plus service-account/token credentials, or pass --allow-yc-fallback for local debug",
         }, ensure_ascii=False, indent=2))
         return 2
     try:
-        metrics = read_region_talk_queue_metrics(args.limit, bge_sample_limit=args.bge_sample_limit)
+        metrics = read_region_talk_queue_metrics(args.limit, bge_sample_limit=args.bge_sample_limit, allow_yc_fallback=allow_yc_fallback)
     except Exception as exc:
         print(json.dumps({
             "ok": False,
             "dry_run": not args.execute,
             "error": f"{type(exc).__name__}: {str(exc)[:500]}",
-            "next_action": "provide REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE and REGION_TALK_YDB_IAM_TOKEN (or run from a configured server)",
+            "next_action": "provide REGION_TALK_YDB_ENDPOINT/REGION_TALK_YDB_DATABASE and service-account/token credentials, or retry local debug with --allow-yc-fallback",
         }, ensure_ascii=False, indent=2))
         return 2
     actions = build_decision_plan(metrics, target_confirmed=args.target_confirmed, bge_threshold=args.bge_threshold, image_threshold=args.image_threshold)

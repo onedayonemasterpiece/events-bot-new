@@ -14,6 +14,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -51,15 +52,28 @@ def decode_e2e_bundle() -> dict[str, Any]:
     raise RuntimeError("TELEGRAM_AUTH_BUNDLE_E2E or TELEGRAM_SESSION is required for local notification")
 
 
-def ydb_endpoint_database() -> tuple[str, str]:
+def getenv_bool(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return True
+    if raw in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+def ydb_database_name() -> str:
+    return (os.getenv("REGION_TALK_YDB_DATABASE_NAME") or "events-bot-acq-discovery").strip() or "events-bot-acq-discovery"
+
+
+def ydb_endpoint_database(*, allow_yc_fallback: bool = True) -> tuple[str, str]:
     endpoint = (os.getenv("REGION_TALK_YDB_ENDPOINT") or "").strip()
     database = (os.getenv("REGION_TALK_YDB_DATABASE") or "").strip()
     if endpoint and database:
         return endpoint.split("?")[0].rstrip("/"), database
     yc = "/home/dev/yandex-cloud/bin/yc"
-    if Path(yc).exists():
+    if allow_yc_fallback and Path(yc).exists():
         try:
-            raw = subprocess.check_output([yc, "ydb", "database", "get", "events-bot-acq-discovery", "--format", "json"], text=True)
+            raw = subprocess.check_output([yc, "ydb", "database", "get", ydb_database_name(), "--format", "json"], text=True, stderr=subprocess.DEVNULL)
             data = json.loads(raw)
             import urllib.parse
             url = data["endpoint"]
@@ -69,14 +83,76 @@ def ydb_endpoint_database() -> tuple[str, str]:
     raise RuntimeError("REGION_TALK_YDB_ENDPOINT and REGION_TALK_YDB_DATABASE are required")
 
 
-def ydb_token() -> str:
-    token = (os.getenv("REGION_TALK_YDB_IAM_TOKEN") or os.getenv("YC_IAM_TOKEN") or os.getenv("YDB_ACCESS_TOKEN") or "").strip()
+def ydb_service_account_key_json() -> str:
+    return (os.getenv("REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON") or "").strip()
+
+
+def ydb_access_token() -> str:
+    return (os.getenv("REGION_TALK_YDB_IAM_TOKEN") or os.getenv("YC_IAM_TOKEN") or os.getenv("YDB_ACCESS_TOKEN") or "").strip()
+
+
+def ydb_token(*, allow_yc_fallback: bool = True) -> str:
+    token = ydb_access_token()
     if token:
         return token
     yc = "/home/dev/yandex-cloud/bin/yc"
-    if Path(yc).exists():
-        return subprocess.check_output([yc, "iam", "create-token"], text=True).strip()
-    raise RuntimeError("REGION_TALK_YDB_IAM_TOKEN/YC_IAM_TOKEN is required")
+    if allow_yc_fallback and Path(yc).exists():
+        return subprocess.check_output([yc, "iam", "create-token"], text=True, stderr=subprocess.DEVNULL).strip()
+    raise RuntimeError("REGION_TALK_YDB_IAM_TOKEN/YC_IAM_TOKEN/YDB_ACCESS_TOKEN is required")
+
+
+def ydb_credentials(ydb: Any, *, allow_yc_fallback: bool = True) -> Any:
+    token = ydb_access_token()
+    if token:
+        return ydb.AccessTokenCredentials(token)
+    key_json = ydb_service_account_key_json()
+    if key_json:
+        import tempfile
+        import ydb.iam  # type: ignore
+        fd, path = tempfile.mkstemp(prefix="region-talk-local-ydb-sa-", suffix=".json")
+        os.close(fd)
+        try:
+            Path(path).write_text(key_json, encoding="utf-8")
+            return ydb.iam.ServiceAccountCredentials.from_file(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    if os.getenv("YDB_USER"):
+        return ydb.StaticCredentials.from_user_password(os.getenv("YDB_USER"), os.getenv("YDB_PASSWORD", ""))
+    if allow_yc_fallback:
+        return ydb.AccessTokenCredentials(ydb_token(allow_yc_fallback=True))
+    return ydb.credentials_from_env_variables()
+
+
+def ydb_has_direct_credential() -> bool:
+    return bool(ydb_access_token() or ydb_service_account_key_json() or os.getenv("YDB_USER"))
+
+
+def ensure_ydb_module() -> Any:
+    try:
+        import ydb  # type: ignore
+        return ydb
+    except Exception as import_exc:
+        if getenv_bool("REGION_TALK_AUTO_INSTALL", True):
+            proc = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", "ydb[yc]"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            if proc.returncode != 0:
+                tail = (proc.stdout or "").strip().splitlines()[-8:]
+                raise RuntimeError(
+                    "Python package ydb is missing and auto-install failed; "
+                    "run the local orchestrator/notifier from a virtualenv with `pip install ydb[yc]`, "
+                    "or set REGION_TALK_AUTO_INSTALL=0 after installing dependencies. "
+                    "pip_tail=" + " | ".join(tail)[:700]
+                ) from import_exc
+            import ydb  # type: ignore
+            return ydb
+        raise
 
 
 def ydb_table_path(database: str) -> str:
@@ -85,9 +161,9 @@ def ydb_table_path(database: str) -> str:
 
 
 def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
-    import ydb  # type: ignore
+    ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
-    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb.AccessTokenCredentials(ydb_token()))
+    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb))
     driver.wait(timeout=20, fail_fast=True)
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
@@ -159,9 +235,9 @@ def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
 
 
 def build_stats_message(limit: int = 20000) -> str:
-    import ydb  # type: ignore
+    ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
-    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb.AccessTokenCredentials(ydb_token()))
+    driver = ydb.Driver(endpoint=endpoint, database=database, credentials=ydb_credentials(ydb))
     driver.wait(timeout=20, fail_fast=True)
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)

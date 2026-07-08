@@ -10,6 +10,7 @@ Configuration:
 - `REGION_TALK_YDB_DATABASE`
 - `REGION_TALK_YDB_AUTH_MODE=service_account|metadata|static_credentials`
 - `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON` or equivalent least-privilege secret lane
+- for local-only orchestrator/debug probes, `--allow-yc-fallback` may use a pre-authenticated `/home/dev/yandex-cloud/bin/yc` profile to discover `events-bot-acq-discovery` and mint a short-lived IAM token; Kaggle/server runs should not depend on this browser-auth path
 - `REGION_TALK_YDB_TLS=true`
 
 For semi-manual live product runs, `REGION_TALK_STATE_BACKEND=ydb` is a

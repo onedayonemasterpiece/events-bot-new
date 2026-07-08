@@ -106,7 +106,7 @@ Responsibilities stay unchanged:
 
 ### 5. Local/server orchestrator
 
-A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook. The first implementation is `scripts/region_talk_orchestrator.py`: default mode is read-only/dry-run JSON (`metrics` + `actions`); it executes only the first planned action with explicit `--execute`.
+A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook. The first implementation is `scripts/region_talk_orchestrator.py`: default mode is read-only/dry-run JSON (`metrics` + `actions`); it executes only the first planned action with explicit `--execute`. Server/production runs should pass explicit `REGION_TALK_YDB_ENDPOINT`, `REGION_TALK_YDB_DATABASE` and a least-privilege token/service-account secret. Local debugging may add `--allow-yc-fallback` to let `/home/dev/yandex-cloud/bin/yc` discover the YDB endpoint and mint a short-lived IAM token; this is deliberately opt-in so unattended runs do not open browser auth.
 
 Pseudo-loop:
 
@@ -135,6 +135,8 @@ while confirmed_sent < 20 and llm_calls_used < 100 and progress_budget_ok:
       send newly Gemini-confirmed links
       stop if no-progress cycles or operator limits are reached
 ```
+
+The local orchestrator/notifier depends on the Python `ydb[yc]` package. On Debian/Ubuntu hosts with PEP-668 externally managed Python, run it from a small virtualenv (for example under `artifacts/codex/region-talk-ydb-venv/`) instead of relying on system-wide auto-install.
 
 Suggested stop/trigger counters:
 

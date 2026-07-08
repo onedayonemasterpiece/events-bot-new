@@ -9,7 +9,10 @@
 - **Region Talk Channel / orchestrator dry-run**: added
   `scripts/region_talk_orchestrator.py` to read live YDB queue metrics, estimate
   BGE pending work, and print a JSON decision plan for notifier/finalizer/BGE,
-  ImageDiagnostic, or CandidateReport launches before any optional `--execute`.
+  ImageDiagnostic, or CandidateReport launches before any optional `--execute`;
+  local debug now supports explicit opt-in `--allow-yc-fallback` for a live
+  authenticated `yc` profile while production keeps service-account/token
+  credentials noninteractive.
 - **Region Talk Channel / EmbeddingGemma CPU research**: extended the
   no-Telegram research embedding launcher to run `google/embeddinggemma-300m`
   from Kaggle model source `google/embeddinggemma/Transformers/embeddinggemma-300m/1`
