@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / full-text embedding model decision**: redid the embedding-model comparison on 500 full Telegram texts fetched from existing YDB `post_url` rows via local E2E Telethon `get_messages` only (no public `t.me/s` fallback), added `fulltext_validation_item` dataset tooling and source-kind-locked comparison, and documented the final decision to keep E5+BGE in production, keep EmbeddingGemma shadow-only, and mark Qwen3 0.6B CPU-not-practical.
 - **Region Talk Channel / custom embedding research kernels**: the Qwen/Gemma research launcher now accepts `REGION_TALK_QWEN3_KERNEL_TITLE` so custom CPU embedding probes such as E5 can use a unique Kaggle title/slug while reusing the no-Telegram YDB worker.
 - **Region Talk Channel / embedding model decision report**: added a live-YDB, no-Telegram CPU research exporter that compares E5+BGE baseline enrichment against EmbeddingGemma and Qwen research rows, computes recall/false-positive/runtime decision metrics, and emits `comparison.json`, `comparison.csv`, `model_only_candidates.xlsx` and Markdown artifacts for the final model-selection call.
 - **Region Talk Channel / EmbeddingGemma CPU research**: extended the

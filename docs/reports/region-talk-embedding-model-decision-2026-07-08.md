@@ -1,3 +1,5 @@
+> Superseded: this report used compact `short_summary`/summary-like YDB rows and is not valid as the final model-quality decision. The full-text redo is recorded in `docs/reports/region-talk-fulltext-embedding-model-decision-2026-07-08.md`. Runtime-only evidence remains useful, but quality conclusions here are superseded.
+
 # Region Talk embedding model decision — 2026-07-08
 
 Status: CPU-only live-YDB research result. No Telegram discovery/session was used.

@@ -24,6 +24,7 @@ INPUT_KINDS = [
 ]
 MODEL_KINDS = {
     "e5_multilingual_base": "e5_multilingual_base_enrichment_item",
+    "e5_fulltext_multilingual_base": "e5_fulltext_multilingual_base_enrichment_item",
     "bge_m3": "text_vector_enrichment_item",
     "embeddinggemma_300m": "embeddinggemma_300m_enrichment_item",
     "qwen3_embedding_0_6b": "qwen3_embedding_0_6b_enrichment_item",
@@ -369,18 +370,36 @@ def main() -> int:
     ap.add_argument("--ydb-limit", type=int, default=10000)
     ap.add_argument("--output-dir", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-embedding-model-decision")
     ap.add_argument("--runtime-json", type=Path, default=None, help="Optional JSON map with per-model elapsed/projected seconds")
+    ap.add_argument("--base-kind", default="", help="If set, compare this YDB kind only, e.g. fulltext_validation_item")
+    ap.add_argument("--e5-prefix", default="e5_multilingual_base", help="E5 model prefix to use for baseline")
+    ap.add_argument("--require-model-source-kind", default="", help="If set, only use enrichment rows with this source_kind")
     args = ap.parse_args()
     load_dotenv(args.env_file)
-    kinds = INPUT_KINDS + list(MODEL_KINDS.values())
+    base_kinds = [args.base_kind] if args.base_kind else INPUT_KINDS
+    kinds = base_kinds + list(MODEL_KINDS.values())
     items_by_kind = load_ydb_items(kinds, args.ydb_limit)
-    base_rows = build_base_rows(items_by_kind, args.sample_limit)
-    model_indexes = {model: index_model_rows(items_by_kind[kind], model if model != "bge_m3" else "bge_m3") for model, kind in MODEL_KINDS.items()}
+    if args.base_kind:
+        # Reuse build_base_rows shape with a single requested kind.
+        old_input_kinds = list(INPUT_KINDS)
+        INPUT_KINDS[:] = [args.base_kind]
+        try:
+            base_rows = build_base_rows(items_by_kind, args.sample_limit)
+        finally:
+            INPUT_KINDS[:] = old_input_kinds
+    else:
+        base_rows = build_base_rows(items_by_kind, args.sample_limit)
+    model_indexes = {}
+    for model, kind in MODEL_KINDS.items():
+        rows_for_model = items_by_kind.get(kind, {})
+        if args.require_model_source_kind:
+            rows_for_model = {pk: row for pk, row in rows_for_model.items() if isinstance(row, dict) and str(row.get("source_kind") or "") == args.require_model_source_kind}
+        model_indexes[model] = index_model_rows(rows_for_model, model if model != "bge_m3" else "bge_m3")
     runtime = json.loads(args.runtime_json.read_text(encoding="utf-8")) if args.runtime_json and args.runtime_json.exists() else {}
     rows: list[dict[str, Any]] = []
     for key, base in base_rows.items():
         label, confidence, label_status = label_for_row(base)
         legacy_e5 = legacy_e5_metrics(base)
-        e5 = enrichment_metrics(model_indexes["e5_multilingual_base"].get(key), "e5_multilingual_base")
+        e5 = enrichment_metrics(model_indexes.get(args.e5_prefix, {}).get(key), args.e5_prefix)
         if not e5.get("present"):
             e5 = {**legacy_e5, "present": False, "gate": "legacy_" + str(legacy_e5.get("gate") or "unknown")}
         bge = enrichment_metrics(model_indexes["bge_m3"].get(key), "bge_m3")
@@ -403,13 +422,13 @@ def main() -> int:
             "label_status": label_status,
             "baseline_accept": baseline_accept,
             "baseline_gate": "accept" if baseline_accept else "review" if baseline_review else "reject",
-            "e5_multilingual_base_gate": e5.get("gate"),
+            f"{args.e5_prefix}_gate": e5.get("gate"),
             "legacy_vector_gate": legacy_e5["gate"],
             "bge_m3_gate": bge.get("gate", "missing"),
             "image_ready_or_score": image_ready,
             "text_excerpt": str(base.get("_embedding_text") or "")[:500],
         }
-        for name, metrics in {"e5_multilingual_base": e5, "legacy_vector": legacy_e5, "bge_m3": bge}.items():
+        for name, metrics in {args.e5_prefix: e5, "legacy_vector": legacy_e5, "bge_m3": bge}.items():
             for field, value in metrics.items():
                 if field != "text_excerpt":
                     out[f"{name}_{field}"] = value
