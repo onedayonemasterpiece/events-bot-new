@@ -23,6 +23,10 @@
   ships a 30-second vector-scoring reserve for default live-YDB handoff runs so
   source scans do not stop scoring after a handful of posts merely to protect a
   workbook/report tail that is intentionally skipped.
+- **Region Talk Channel / publication-goal rescans**: known-KO source rescans
+  now sort by high-yield/product score before static seed priority, so proven
+  sources such as travel channels are scanned early in bounded 20-link goal
+  runs.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

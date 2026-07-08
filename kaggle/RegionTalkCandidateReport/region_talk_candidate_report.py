@@ -712,9 +712,18 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     # First complete the unscanned/retry queue. Only when there are no primary
     # pending publics left do we spend budget on processed-source delta rescans.
     if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
-        high_yield_rescan = [
-            seed for seed, due in ordered
+        high_yield_rescan_pairs = [
+            (seed, due) for seed, due in annotated
             if bool(due.get("due")) and bool(due.get("is_rescan")) and str(due.get("reason") or "") == "publication_goal_known_ko_rescan"
+        ]
+        high_yield_rescan = [
+            seed for seed, due in sorted(high_yield_rescan_pairs, key=lambda item: (
+                -source_product_priority_score(item[0], item[1].get("queue_row")),
+                str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
+                item[0].priority,
+                seed_sort_number(item[0].source_seed_id),
+                item[0].canonical_url,
+            ))
         ]
         selected = high_yield_rescan + [seed for seed in primary_due if seed not in high_yield_rescan]
         if not selected:

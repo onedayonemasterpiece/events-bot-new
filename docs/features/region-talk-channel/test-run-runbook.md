@@ -432,7 +432,10 @@ The XLSX has:
   `REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1` to temporarily put known
   `processed_found_ko_candidate` / KO-positive sources ahead of the pending
   frontier, so high-yield travel sources can be searched more deeply without
-  waiting for the entire backlog to drain. These source-selection controls are
+  waiting for the entire backlog to drain. In this mode, known-KO rescans are
+  ordered by product/high-yield score before static seed priority so sources
+  that already produced useful nonlocal-KO posts are scanned early enough in a
+  bounded run. These source-selection controls are
   part of the Kaggle input config; they must be propagated by the local launcher
   into the private input dataset, because local shell env alone is not visible
   inside the Kaggle notebook.

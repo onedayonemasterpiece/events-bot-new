@@ -468,6 +468,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = old
 
+    def test_publication_goal_orders_known_ko_by_product_yield_before_seed_priority(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES")
+        os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = "1"
+        try:
+            high_yield = mod.Seed(
+                source_seed_id="known_high", platform="telegram", source_title="Путешествуем.РФ",
+                handle="@puteshestvuem_rf", url="https://t.me/puteshestvuem_rf", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=99, discovered_from="unit", discovered_from_url="",
+                why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            low_yield = mod.Seed(
+                source_seed_id="known_low", platform="telegram", source_title="Яндекс Путешествия",
+                handle="@yandex_travel", url="https://t.me/yandex_travel", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+                why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            previous_state = {"unified_source_queue": {
+                "telegram:yandex_travel": {"canonical_source_key": "telegram:yandex_travel", "source_url": "https://t.me/yandex_travel", "source_title": "Яндекс Путешествия", "source_queue_status": "processed_found_ko_candidate", "queue_order": 1, "ko_posts_found": 1, "candidate_posts_found": 1},
+                "telegram:puteshestvuem_rf": {"canonical_source_key": "telegram:puteshestvuem_rf", "source_url": "https://t.me/puteshestvuem_rf", "source_title": "Путешествуем.РФ", "source_queue_status": "processed_found_ko_candidate", "queue_order": 2, "ko_posts_found": 3, "candidate_posts_found": 3, "added_from": "public_travel_blogger_catalog"},
+            }}
+            selected = mod.selected_sources_for_run([low_yield, high_yield], 2, previous_state=previous_state)
+            self.assertEqual([s.canonical_url for s in selected], ["https://t.me/puteshestvuem_rf", "https://t.me/yandex_travel"])
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", None)
+            else:
+                os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = old
+
     def test_source_selection_default_processed_rescan_interval_is_two_weeks(self) -> None:
         from datetime import datetime, timedelta, timezone
         mod = load_module()
