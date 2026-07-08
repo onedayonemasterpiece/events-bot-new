@@ -582,6 +582,8 @@ The default Telegram governor is raised for the next MVP run: `REGION_TALK_TG_MA
 
 Every resolved Telegram channel can be persisted in `12d_similar_seed_queue`; previous frontier rows can be promoted into dynamic seeds for shallow probe/history scan, and `13b_source_delta_scan` records source-level cursor/delta state. The product acceptance target for the next real run is `sources_history_fetched_ok >= 25`; if the run cannot hit it, `00_product_summary`/`20_telegram_rate_observability` must explain the governor/FloodWait/cache blocker.
 
+For bounded live-YDB handoff runs, fetched posts are pre-ordered before the vector pass by Kaliningrad place evidence and media presence (`REGION_TALK_PRIORITIZE_REGION_TEXT_BEFORE_VECTOR=1`). This is only a runtime-budget priority so the embedding/vector scorer sees likely region posts first; it is not the final acceptance rule.
+
 Hard Kaliningrad-only region scope now runs before candidate memory and `04a_final_shortlist`: multi-region/non-Kaliningrad posts are rejected as `reject_not_kaliningrad_oblast_only` and cannot leak into product shortlist unless manually overridden with explicit region evidence. Image scoring remains only for selected non-ad Kaliningrad rows; broad LLM stays disabled (`wide_funnel_llm_calls=0`) and the optional LLM verifier is limited to top-N final rows through the Supabase limiter.
 
 ## MVP-1.z7 growth discovery / honest increment update

@@ -6717,8 +6717,34 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     max_posts_to_score = getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180)
     if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
         max_posts_to_score = min(max_posts_to_score, getenv_int("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", 40))
-    posts_for_scoring = posts[:max_posts_to_score] if max_posts_to_score > 0 else posts
-    runtime_deferred_posts = posts[len(posts_for_scoring):]
+    scoring_pool = list(posts)
+    if getenv_bool("REGION_TALK_PRIORITIZE_REGION_TEXT_BEFORE_VECTOR", True):
+        def _pre_vector_region_priority(row: dict[str, Any]) -> tuple[Any, ...]:
+            text = text_main_content_for_geo(str(row.get("text") or ""))
+            matches = match_kaliningrad_places(text, lexicon)
+            strong_matches = [m for m in matches if m.get("accepted_as_region_evidence") == "true"]
+            anchor_hits = sum(1 for a in DEFAULT_ANCHORS if term_in_text(normalize_geo_text(a), normalize_geo_text(text)))
+            has_media = bool(row.get("has_media") or row.get("primary_media_path") or row.get("image_url_or_local_path"))
+            return (
+                1 if strong_matches else 0,
+                min(12, len(strong_matches)),
+                min(12, anchor_hits),
+                1 if has_media else 0,
+                min(3000, len(text)),
+                str(row.get("post_date") or ""),
+            )
+        scoring_pool = sorted(scoring_pool, key=_pre_vector_region_priority, reverse=True)
+        report_event(
+            "pre_vector_region_priority_applied",
+            phase="candidate_processing",
+            status="running",
+            posts_fetched=len(posts),
+            posts_to_score=min(max_posts_to_score, len(scoring_pool)) if max_posts_to_score > 0 else len(scoring_pool),
+            prioritization="kaliningrad_place_evidence_before_vector",
+        )
+    posts_for_scoring = scoring_pool[:max_posts_to_score] if max_posts_to_score > 0 else scoring_pool
+    selected_keys = {str(p.get("post_id") or p.get("post_url") or p.get("platform_post_key") or id(p)) for p in posts_for_scoring}
+    runtime_deferred_posts = [p for p in scoring_pool if str(p.get("post_id") or p.get("post_url") or p.get("platform_post_key") or id(p)) not in selected_keys]
     live_queue_only = getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False)
     report_event(
         "live_candidate_processing_started" if live_queue_only else "report_build_started",
