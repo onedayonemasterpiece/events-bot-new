@@ -1,0 +1,6 @@
+interface:
+  display_name: "KGD80 Event Notifications"
+  short_description: "Safe KGD80 event notice workflow"
+  default_prompt: "Use $kgd80-event-notifications to prepare, test, send, or audit a KGD80 event participant notification."
+policy:
+  allow_implicit_invocation: true
