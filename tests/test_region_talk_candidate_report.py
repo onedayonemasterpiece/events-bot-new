@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import os
 import json
@@ -43,6 +44,60 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_S22")
         self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY", names)
+
+
+    def test_telegram_governor_humanlike_pacing_is_logged_and_observable(self) -> None:
+        mod = load_module()
+        old_env = {
+            key: os.environ.get(key)
+            for key in [
+                "REGION_TALK_TG_HUMANLIKE_PACING_ENABLED",
+                "UNIT_TG_DELAY_MIN",
+                "UNIT_TG_DELAY_MAX",
+            ]
+        }
+        old_sleep = mod.asyncio.sleep
+        old_uniform = mod.random.uniform
+        sleeps: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+
+        try:
+            os.environ["REGION_TALK_TG_HUMANLIKE_PACING_ENABLED"] = "1"
+            os.environ["UNIT_TG_DELAY_MIN"] = "0.1"
+            os.environ["UNIT_TG_DELAY_MAX"] = "0.1"
+            mod.asyncio.sleep = fake_sleep
+            mod.random.uniform = lambda a, b: 0.1
+            with tempfile.TemporaryDirectory() as td:
+                gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+                ok = asyncio.run(gov.humanlike_pause(
+                    "ResolveUsernameRequest",
+                    "src",
+                    "https://t.me/example",
+                    min_env="UNIT_TG_DELAY_MIN",
+                    max_env="UNIT_TG_DELAY_MAX",
+                    default_min=20.0,
+                    default_max=45.0,
+                    reserve_seconds=0,
+                ))
+                self.assertTrue(ok)
+                self.assertEqual(sleeps, [0.1])
+                self.assertEqual(gov.humanlike_sleep_count, 1)
+                self.assertAlmostEqual(gov.humanlike_sleep_total_seconds, 0.1)
+                self.assertEqual(gov.ledger[-1]["method_class"], "humanlike_pacing")
+                self.assertEqual(gov.ledger[-1]["decision"], "sleep")
+                obs = gov.observability_row("start", "finish")
+                self.assertEqual(obs["telegram_humanlike_pacing_enabled"], "true")
+                self.assertEqual(obs["telegram_humanlike_sleep_count"], 1)
+        finally:
+            mod.asyncio.sleep = old_sleep
+            mod.random.uniform = old_uniform
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
     def test_runner_ydb_backend_refuses_missing_config_without_json_fallback(self) -> None:
         mod = load_runner_module()
@@ -1642,7 +1697,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         mod = importlib.util.module_from_spec(spec)
         assert spec and spec.loader
         spec.loader.exec_module(mod)
-        old = {k: os.environ.get(k) for k in ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"]}
+        old = {k: os.environ.get(k) for k in ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"]}
         captured: dict[str, dict] = {}
         def fake_create(_client, _username, slug, _title, writer):
             with tempfile.TemporaryDirectory() as td:
@@ -1654,6 +1709,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             return "zigomaro/" + slug
         try:
             os.environ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"] = "47"
+            os.environ["REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"] = "11"
             os.environ.pop("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", None)
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
@@ -1662,6 +1718,9 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             env = captured["config"]["env"]
             self.assertEqual(env["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"], "47")
             self.assertEqual(env["GOOGLE_AI_PROVIDER_TIMEOUT_SEC"], "47")
+            self.assertEqual(env["REGION_TALK_TG_HUMANLIKE_PACING_ENABLED"], "1")
+            self.assertEqual(env["REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"], "11")
+            self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
         finally:
             for key, value in old.items():
                 if value is None:

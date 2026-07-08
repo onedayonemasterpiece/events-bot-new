@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Telethon human-like pacing**: CandidateReport now applies conservative paced sleeps before expensive Telethon network calls (username resolve, similar-channel recommendations, history queries and media downloads), records the sleeps in the private request ledger and observability sheet, and defers the Telegram call instead of bypassing pacing when the runtime reserve is nearly exhausted. This keeps true Telethon discovery available while public `t.me/s` fallback remains a cooldown-safe path for already-known public channels.
 - **Region Talk Channel / travel-source scan priority**: CandidateReport now
   prioritizes due/pending travel-blogger sources inside the live source queue
   (`REGION_TALK_PRIORITIZE_TRAVEL_SOURCES=1`) before plain queue order, so

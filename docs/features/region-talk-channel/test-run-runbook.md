@@ -97,6 +97,17 @@ REGION_TALK_MAX_NEW_SOURCE_PROBES=30
 REGION_TALK_TG_FLOODWAIT_MAX_SLEEP_SECONDS=60
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
+REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1
+REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS=20
+REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS=45
+REGION_TALK_TG_SIMILAR_DELAY_MIN_SECONDS=20
+REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS=45
+REGION_TALK_TG_HISTORY_QUERY_DELAY_MIN_SECONDS=2
+REGION_TALK_TG_HISTORY_QUERY_DELAY_MAX_SECONDS=6
+REGION_TALK_TG_MEDIA_DELAY_MIN_SECONDS=1
+REGION_TALK_TG_MEDIA_DELAY_MAX_SECONDS=4
+REGION_TALK_TG_SOURCE_PAUSE_MIN_SECONDS=4
+REGION_TALK_TG_SOURCE_PAUSE_MAX_SECONDS=12
 REGION_TALK_TG_SIMILAR_ENABLED=1
 REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=20
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
@@ -130,7 +141,7 @@ REGION_TALK_REQUIRE_PREVIOUS_STATE=1
 
 Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY` for CandidateReport and ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the shared Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
 
-The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
+The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. Telethon API reads are paced by `REGION_TALK_TG_HUMANLIKE_PACING_ENABLED` and delay knobs for resolves, recommendations, history queries, media downloads and source pauses; if the runtime reserve would be consumed, the operation is deferred instead of bypassing the pause. A `FloodWait` above `REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS` is recorded as cooldown/degraded mode and the workbook is still written. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
 
 For z6 throughput validation, the next real run should target at least `sources_history_fetched_ok >= 25` without bypassing FloodWait/cooldown evidence. If it misses, `00_product_summary` and `20_telegram_rate_observability` must show whether the blocker was network resolve budget, history source budget, cached entity coverage, FloodWait or Telegram errors.
 

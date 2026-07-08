@@ -183,6 +183,7 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
 - Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `8`).
+- Telethon network calls are paced by default (`REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1`): username resolves and similar-channel recommendation calls sleep before the call, history queries/media downloads/source-to-source scans use smaller pauses, and the call is deferred instead of skipping the pause when the runtime reserve is nearly exhausted. Public `t.me/s` fallback reads do not consume the Telethon user session and are not part of this pacing.
 - Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `40`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `60`).
 - Large `FloodWait` values (default threshold `300` seconds) are not slept through: record a cooldown/degraded mode, skip later resolves/history that would hit the same method/source, and still write the XLSX report.
 - Keep the private entity cache/cooldown ledger in state/artifacts only; public XLSX sheets may contain `private_state_key`, but never raw `channel_id`, `access_hash`, session strings or tokens.
@@ -205,6 +206,17 @@ REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN=100
 REGION_TALK_MAX_NEW_SOURCE_PROBES=30
 REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS=300
 REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
+REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1
+REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS=20
+REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS=45
+REGION_TALK_TG_SIMILAR_DELAY_MIN_SECONDS=20
+REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS=45
+REGION_TALK_TG_HISTORY_QUERY_DELAY_MIN_SECONDS=2
+REGION_TALK_TG_HISTORY_QUERY_DELAY_MAX_SECONDS=6
+REGION_TALK_TG_MEDIA_DELAY_MIN_SECONDS=1
+REGION_TALK_TG_MEDIA_DELAY_MAX_SECONDS=4
+REGION_TALK_TG_SOURCE_PAUSE_MIN_SECONDS=4
+REGION_TALK_TG_SOURCE_PAUSE_MAX_SECONDS=12
 REGION_TALK_TG_SIMILAR_ENABLED=1
 REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=100
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10

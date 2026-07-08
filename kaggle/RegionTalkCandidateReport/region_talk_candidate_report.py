@@ -97,6 +97,14 @@ def getenv_int(name: str, default: int) -> int:
         return default
 
 
+def getenv_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        return float(raw) if raw else default
+    except Exception:
+        return default
+
+
 def runtime_elapsed_seconds() -> float:
     return time.monotonic() - RUN_STARTED_MONOTONIC
 
@@ -2460,6 +2468,9 @@ class TelegramRequestGovernor:
         self.max_recommendation_calls = getenv_int("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", getenv_int("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", 100))
         self.floodwait_abort_threshold = getenv_int("REGION_TALK_TG_FLOODWAIT_ABORT_THRESHOLD_SECONDS", 300)
         self.floodwait_margin = getenv_int("REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS", 1800)
+        self.humanlike_pacing_enabled = getenv_bool("REGION_TALK_TG_HUMANLIKE_PACING_ENABLED", True)
+        self.humanlike_sleep_total_seconds = 0.0
+        self.humanlike_sleep_count = 0
 
     def cache_key(self, handle_or_url: str) -> str:
         raw = canonical_handle(str(handle_or_url or "").strip()).lstrip("@").lower()
@@ -2480,6 +2491,47 @@ class TelegramRequestGovernor:
             "source_id": source_id, "canonical_url": canonical_url, "decision": decision, **extra,
         }
         self.ledger.append(rec)
+
+    async def humanlike_pause(
+        self,
+        method_name: str,
+        source_id: str = "",
+        canonical_url: str = "",
+        *,
+        min_env: str,
+        max_env: str,
+        default_min: float,
+        default_max: float,
+        reserve_seconds: int = 120,
+    ) -> bool:
+        """Conservative Telethon pacing: slow down expensive API calls, do not evade limits."""
+        if not self.humanlike_pacing_enabled:
+            return True
+        min_seconds = max(0.0, getenv_float(min_env, default_min))
+        max_seconds = max(min_seconds, getenv_float(max_env, default_max))
+        remaining_after_reserve = runtime_remaining_seconds() - float(reserve_seconds)
+        if remaining_after_reserve <= 0:
+            self.log(
+                method_name,
+                "humanlike_pacing",
+                source_id,
+                canonical_url,
+                "skipped_runtime_budget_before_call",
+                ok=False,
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+                reserve_seconds=reserve_seconds,
+            )
+            return False
+        if max_seconds <= 0:
+            return True
+        sleep_seconds = random.uniform(min_seconds, max_seconds)
+        sleep_seconds = min(sleep_seconds, max(0.0, remaining_after_reserve))
+        if sleep_seconds > 0:
+            self.humanlike_sleep_count += 1
+            self.humanlike_sleep_total_seconds += sleep_seconds
+            self.log(method_name, "humanlike_pacing", source_id, canonical_url, "sleep", ok=True, sleep_seconds=round(sleep_seconds, 3))
+            await asyncio.sleep(sleep_seconds)
+        return True
 
     def mark_floodwait(self, method_name: str, source_id: str, canonical_url: str, seconds: int) -> str:
         cooldown_until = iso_after_seconds(seconds + self.floodwait_margin)
@@ -2527,6 +2579,17 @@ class TelegramRequestGovernor:
         if self.resolve_network_attempts >= self.max_network_resolves or not self.has_total_request_budget("ResolveUsernameRequest", source_id, canonical_url):
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
             return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
+        if not await self.humanlike_pause(
+            "ResolveUsernameRequest",
+            source_id,
+            canonical_url,
+            min_env="REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS",
+            max_env="REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS",
+            default_min=20.0,
+            default_max=45.0,
+            reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+        ):
+            return None, {"fetch_status": "skipped_runtime_budget_before_telegram_resolve", "telegram_resolve_status": "skipped_runtime_budget_before_call"}
         self.resolve_network_attempts += 1
         self.total_attempted += 1
         self.requests_by_method["ResolveUsernameRequest"] = self.requests_by_method.get("ResolveUsernameRequest", 0) + 1
@@ -2608,7 +2671,20 @@ class TelegramRequestGovernor:
             "history_posts_fetched": self.history_posts_fetched,
             "media_downloads_attempted": self.media_downloads_attempted,
             "media_downloads_ok": self.media_downloads_ok,
-            "telegram_governor_decisions_json": json.dumps({"max_network_resolves": self.max_network_resolves, "max_history_sources": self.max_history_sources, "max_recommendation_calls": self.max_recommendation_calls}, ensure_ascii=False),
+            "telegram_humanlike_pacing_enabled": str(self.humanlike_pacing_enabled).lower(),
+            "telegram_humanlike_sleep_count": self.humanlike_sleep_count,
+            "telegram_humanlike_sleep_total_seconds": round(self.humanlike_sleep_total_seconds, 3),
+            "telegram_governor_decisions_json": json.dumps({
+                "max_network_resolves": self.max_network_resolves,
+                "max_history_sources": self.max_history_sources,
+                "max_recommendation_calls": self.max_recommendation_calls,
+                "humanlike_pacing_enabled": self.humanlike_pacing_enabled,
+                "resolve_delay_seconds": [getenv_float("REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS", 20.0), getenv_float("REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS", 45.0)],
+                "similar_delay_seconds": [getenv_float("REGION_TALK_TG_SIMILAR_DELAY_MIN_SECONDS", 20.0), getenv_float("REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS", 45.0)],
+                "history_query_delay_seconds": [getenv_float("REGION_TALK_TG_HISTORY_QUERY_DELAY_MIN_SECONDS", 2.0), getenv_float("REGION_TALK_TG_HISTORY_QUERY_DELAY_MAX_SECONDS", 6.0)],
+                "media_delay_seconds": [getenv_float("REGION_TALK_TG_MEDIA_DELAY_MIN_SECONDS", 1.0), getenv_float("REGION_TALK_TG_MEDIA_DELAY_MAX_SECONDS", 4.0)],
+                "source_pause_seconds": [getenv_float("REGION_TALK_TG_SOURCE_PAUSE_MIN_SECONDS", 4.0), getenv_float("REGION_TALK_TG_SOURCE_PAUSE_MAX_SECONDS", 12.0)],
+            }, ensure_ascii=False),
         }
 
 
@@ -4263,10 +4339,22 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
         canonical = str(srow.get("canonical_url") or "")
         similar_seed_id = "similar_seed_" + stable_hash(canonical)
         entity = entity_by_source.get(source_id)
-        governor.recommendation_calls_attempted += 1
-        governor.total_attempted += 1
-        governor.requests_by_method["channels.getChannelRecommendations"] = governor.requests_by_method.get("channels.getChannelRecommendations", 0) + 1
         try:
+            if not await governor.humanlike_pause(
+                "channels.getChannelRecommendations",
+                source_id,
+                canonical,
+                min_env="REGION_TALK_TG_SIMILAR_DELAY_MIN_SECONDS",
+                max_env="REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS",
+                default_min=20.0,
+                default_max=45.0,
+                reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+            ):
+                _REGION_TALK_TELEGRAM_RUNTIME["telegram_similar_channels_status"] = "skipped_runtime_budget"
+                break
+            governor.recommendation_calls_attempted += 1
+            governor.total_attempted += 1
+            governor.requests_by_method["channels.getChannelRecommendations"] = governor.requests_by_method.get("channels.getChannelRecommendations", 0) + 1
             result = await client(request_cls(channel=entity))
             governor.total_ok += 1
             governor.recommendation_calls_ok += 1
@@ -5371,6 +5459,18 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         src_row.update({"fetch_status": "skipped_telegram_total_request_budget_exhausted", "source_probe_reason": "total Telegram request budget exhausted"})
                         break
                     per_query = max(3, min(max_posts, getenv_int("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", max_posts)) // len(queries) + 1)
+                    if not await governor.humanlike_pause(
+                        "iter_messages",
+                        seed.source_id,
+                        seed.canonical_url,
+                        min_env="REGION_TALK_TG_HISTORY_QUERY_DELAY_MIN_SECONDS",
+                        max_env="REGION_TALK_TG_HISTORY_QUERY_DELAY_MAX_SECONDS",
+                        default_min=2.0,
+                        default_max=6.0,
+                        reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                    ):
+                        src_row.update({"fetch_status": "skipped_runtime_budget_before_telegram_history", "source_probe_reason": "runtime budget exhausted before paced Telegram history call"})
+                        break
                     governor.total_attempted += 1
                     governor.requests_by_method["iter_messages"] = governor.requests_by_method.get("iter_messages", 0) + 1
                     async for msg in client.iter_messages(entity, limit=per_query, search=q):
@@ -5386,8 +5486,19 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
                         primary_media_path = ""
                         if has_media and getenv_bool("REGION_TALK_DOWNLOAD_MEDIA_FOR_SCORING", True) and governor.media_downloads_attempted < governor.max_media_downloads:
-                            governor.media_downloads_attempted += 1
                             try:
+                                if not await governor.humanlike_pause(
+                                    "download_media",
+                                    seed.source_id,
+                                    seed.canonical_url,
+                                    min_env="REGION_TALK_TG_MEDIA_DELAY_MIN_SECONDS",
+                                    max_env="REGION_TALK_TG_MEDIA_DELAY_MAX_SECONDS",
+                                    default_min=1.0,
+                                    default_max=4.0,
+                                    reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                                ):
+                                    raise TimeoutError("runtime budget exhausted before paced Telegram media download")
+                                governor.media_downloads_attempted += 1
                                 media_dir = output_dir / "media" / stable_hash("telegram", handle)
                                 media_dir.mkdir(parents=True, exist_ok=True)
                                 downloaded = await client.download_media(msg, file=str(media_dir / f"{mid}"))
@@ -5429,9 +5540,21 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 post_dates = [str(p.get("post_date") or "") for p in posts if p.get("source_id") == seed.source_id]
                 src_row["last_seen_post_date"] = max(post_dates or [""])
                 src_row["history_fetch_runtime_seconds"] = round(time.monotonic() - history_fetch_started, 3)
-                jitter = float(os.getenv("REGION_TALK_TG_HISTORY_SOURCE_JITTER_SECONDS") or "0.5")
-                if jitter > 0:
-                    await asyncio.sleep(random.uniform(0, jitter))
+                if governor.humanlike_pacing_enabled:
+                    await governor.humanlike_pause(
+                        "history_source_pause",
+                        seed.source_id,
+                        seed.canonical_url,
+                        min_env="REGION_TALK_TG_SOURCE_PAUSE_MIN_SECONDS",
+                        max_env="REGION_TALK_TG_SOURCE_PAUSE_MAX_SECONDS",
+                        default_min=getenv_float("REGION_TALK_TG_HISTORY_SOURCE_JITTER_SECONDS", 4.0),
+                        default_max=getenv_float("REGION_TALK_TG_HISTORY_SOURCE_JITTER_SECONDS", 12.0),
+                        reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                    )
+                else:
+                    jitter = float(os.getenv("REGION_TALK_TG_HISTORY_SOURCE_JITTER_SECONDS") or "0.5")
+                    if jitter > 0:
+                        await asyncio.sleep(random.uniform(0, jitter))
             except Exception as exc:
                 seconds = int(getattr(exc, "seconds", 0) or 0)
                 if type(exc).__name__ == "FloodWaitError" or seconds:
