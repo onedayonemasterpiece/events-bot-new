@@ -981,6 +981,7 @@ def build_decision_plan(
             env={
                 "REGION_TALK_BGE_E5_ONLY": "1",
                 "REGION_TALK_BGE_INPUT_KINDS": "text_vector_enrichment_item",
+                "REGION_TALK_BGE_YDB_SCAN_LIMIT": "6000",
             },
         ))
     if int(metrics.get("image_pending_total") or 0) >= image_threshold:

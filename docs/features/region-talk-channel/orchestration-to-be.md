@@ -171,9 +171,12 @@ Important invariants:
   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`).
 - `RegionTalkBgeM3Enrichment` uses `--batch-limit 12 --batch-size 4` so the row
   count and in-memory batch size are separate. Production launches set
-  `REGION_TALK_BGE_E5_ONLY=1` and
-  `REGION_TALK_BGE_INPUT_KINDS=text_vector_enrichment_item`: BGE consumes E5
-  rows only, preserves the paired E5 text hash, and never re-embeds BGE rows.
+  `REGION_TALK_BGE_E5_ONLY=1`,
+  `REGION_TALK_BGE_INPUT_KINDS=text_vector_enrichment_item` and
+  `REGION_TALK_BGE_YDB_SCAN_LIMIT=6000`: BGE consumes E5 rows only, preserves
+  the paired E5 text hash, and never re-embeds BGE rows. The scan limit is
+  intentionally larger than the batch limit because legacy BGE rows can sort
+  before E5 rows in YDB.
 - If a Kaggle kernel is already active, that action is skipped but other
   non-conflicting resources continue (for example active BGE does not block
   ImageDiagnostic or CandidateReport).

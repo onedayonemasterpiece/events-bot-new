@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / BGE backlog scan window**: orchestrator BGE launches
+  now force `REGION_TALK_BGE_YDB_SCAN_LIMIT=6000` so the isolated BGE notebook
+  sees E5 rows beyond legacy BGE rows in `text_vector_enrichment_item` and can
+  reduce `text_vector_e5_without_bge_*` backlog.
 - **Region Talk Channel / regex-vector diagnostics**: added deterministic
   post-level KO regex diagnostics in the orchestrator: raw KO regex hits,
   filtered KO hits after multiregion/external/ad/news/substance filters, vector

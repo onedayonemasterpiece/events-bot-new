@@ -49,6 +49,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("4", actions[1]["cmd"])
         self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_E5_ONLY"], "1")
         self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_INPUT_KINDS"], "text_vector_enrichment_item")
+        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_YDB_SCAN_LIMIT"], "6000")
         self.assertEqual(actions[3]["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
         self.assertEqual(actions[3]["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TEXT_EMBEDDING_MODEL_IDS"], "intfloat/multilingual-e5-base")
