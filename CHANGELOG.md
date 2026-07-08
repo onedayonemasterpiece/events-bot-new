@@ -6,7 +6,9 @@
   (`REGION_TALK_PRIORITIZE_TRAVEL_SOURCES=1`) before plain queue order, so
   bounded 20-minute product runs spend Telegram budget on likely nonlocal
   travel/blogger sources instead of unrelated general/business channels while
-  preserving the due/pending-before-rescan contract.
+  preserving the due/pending-before-rescan contract. The queue selection pool is
+  wider than the final per-run source cap so the priority can see enough pending
+  travel sources before choosing the run batch.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

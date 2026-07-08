@@ -415,7 +415,10 @@ The XLSX has:
   nonlocal travel/blogger sources (`REGION_TALK_PRIORITIZE_TRAVEL_SOURCES=1`)
   before plain queue order so a 20-minute pass does not spend scarce Telegram
   budget on unrelated general/business/public-official channels while many
-  travel sources are still pending.
+  travel sources are still pending. The selection pool is intentionally wider
+  than `REGION_TALK_MAX_SOURCES` (`REGION_TALK_SOURCE_QUEUE_SELECTION_POOL`, or
+  `REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER`, default `10`) so this
+  product priority is applied before the final per-run source cap.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and

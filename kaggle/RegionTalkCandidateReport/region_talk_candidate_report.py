@@ -5011,7 +5011,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     previous_state, _state_meta = load_region_talk_state(output_dir)
     governor = TelegramRequestGovernor(run_id, output_dir, previous_state)
     ydb_candidate_links_only = post_input_mode in {"ydb_candidate_links", "ydb_candidates", "candidate_links"}
-    queue_dynamic = [] if ydb_candidate_links_only else unified_queue_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_SOURCES", max_sources))
+    queue_selection_pool = max(
+        max_sources,
+        getenv_int(
+            "REGION_TALK_SOURCE_QUEUE_SELECTION_POOL",
+            max_sources * max(1, getenv_int("REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER", 10)),
+        ),
+    )
+    queue_dynamic = [] if ydb_candidate_links_only else unified_queue_dynamic_seeds(previous_state, queue_selection_pool)
     dynamic = [] if ydb_candidate_links_only else queue_dynamic + frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
     all_seed_candidates = list(seeds)
     seen_seed_urls = {s.canonical_url for s in all_seed_candidates}
@@ -5022,6 +5029,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     selected = selected_sources_for_run(all_seed_candidates, max_sources, previous_state=previous_state)
     _REGION_TALK_TELEGRAM_RUNTIME["dynamic_frontier_seed_count"] = len(dynamic)
     _REGION_TALK_TELEGRAM_RUNTIME["unified_queue_dynamic_seed_count"] = len(queue_dynamic)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_selection_pool"] = queue_selection_pool
     _REGION_TALK_TELEGRAM_RUNTIME["history_sources_target"] = governor.max_history_sources
     monitored = [s for s in selected if s.platform == "telegram" and (s.handle or "t.me/" in s.url.lower())]
     source_rows: list[dict[str, Any]] = []
