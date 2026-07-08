@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / custom embedding research kernels**: the Qwen/Gemma research launcher now accepts `REGION_TALK_QWEN3_KERNEL_TITLE` so custom CPU embedding probes such as E5 can use a unique Kaggle title/slug while reusing the no-Telegram YDB worker.
+- **Region Talk Channel / embedding model decision report**: added a live-YDB, no-Telegram CPU research exporter that compares E5+BGE baseline enrichment against EmbeddingGemma and Qwen research rows, computes recall/false-positive/runtime decision metrics, and emits `comparison.json`, `comparison.csv`, `model_only_candidates.xlsx` and Markdown artifacts for the final model-selection call.
 - **Region Talk Channel / EmbeddingGemma CPU research**: extended the
   no-Telegram research embedding launcher to run `google/embeddinggemma-300m`
   from Kaggle model source `google/embeddinggemma/Transformers/embeddinggemma-300m/1`

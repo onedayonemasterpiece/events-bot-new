@@ -221,7 +221,7 @@ def prepared_kernel_path(*, run_id: str, kernel_slug: str, spec: dict[str, Any],
     if username:
         meta["id"] = f"{username}/{kernel_slug}"
     meta["slug"] = kernel_slug
-    meta["title"] = spec.get("title") or f"Region Talk Qwen3 Embedding {spec['title_token']} Enrichment"
+    meta["title"] = (os.environ.get("REGION_TALK_QWEN3_KERNEL_TITLE") or spec.get("title") or f"Region Talk Qwen3 Embedding {spec['title_token']} Enrichment").strip()
     meta["enable_gpu"] = getenv_bool("REGION_TALK_QWEN3_ENABLE_GPU", False)
     if meta["enable_gpu"] and os.getenv("REGION_TALK_QWEN3_MACHINE_SHAPE"):
         meta["machine_shape"] = os.getenv("REGION_TALK_QWEN3_MACHINE_SHAPE")
