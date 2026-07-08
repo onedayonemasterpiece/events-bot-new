@@ -652,9 +652,18 @@ def enrichment_pk(post_id: str, post_url: str, text_sha: str, model_id: str = MO
     return f"text_vector_enrichment_item:{base}:{model_key}:{text_sha[:12]}"
 
 
+def _is_e5_text_vector_row(row: dict[str, Any]) -> bool:
+    return str(row.get("model_short") or "") == "e5" or str(row.get("model_id") or "").startswith("intfloat/multilingual-e5")
+
+
+def _is_bge_text_vector_row(row: dict[str, Any]) -> bool:
+    return str(row.get("model_short") or "") == MODEL_SHORT or str(row.get("model_id") or "") == MODEL_ID
+
+
 def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, existing_pks: set[str], limit: int, include_existing: bool = False) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen_text_or_url: set[str] = set()
+    e5_only = getenv_bool("REGION_TALK_BGE_E5_ONLY", True)
     priority = {
         "text_vector_enrichment_item": 0,
         "publication_candidate_item": 0,
@@ -668,12 +677,26 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
         for _pk, row in items.items():
             if not isinstance(row, dict):
                 continue
+            if kind == "text_vector_enrichment_item":
+                # BGE is the external consumer of E5 rows.  Never re-process
+                # BGE rows as input, otherwise the table accumulates BGE-on-BGE
+                # duplicates and raw BGE totals become larger than E5 totals.
+                if _is_bge_text_vector_row(row):
+                    continue
+                if e5_only and not _is_e5_text_vector_row(row):
+                    continue
+            elif e5_only:
+                # Production dual-model mode is E5 -> BGE.  Historical direct
+                # candidate/image/post rows can still be enabled explicitly for
+                # research via REGION_TALK_BGE_E5_ONLY=0.
+                continue
             text, used = text_from_row(row)
             if len(text) < getenv_int("REGION_TALK_BGE_MIN_TEXT_CHARS", 24):
                 continue
             post_url = str(row.get("post_url") or "").strip()
             post_id = str(row.get("post_id") or row.get("candidate_memory_id") or row.get("publication_candidate_id") or "").strip()
-            sha = text_hash(text)
+            source_text_hash = str(row.get("text_hash") or "").strip() if kind == "text_vector_enrichment_item" and _is_e5_text_vector_row(row) else ""
+            sha = source_text_hash or text_hash(text)
             pk = enrichment_pk(post_id, post_url, sha)
             if not include_existing and pk in existing_pks:
                 continue
@@ -686,6 +709,9 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
             rr["_embedding_text"] = text
             rr["_embedding_text_fields"] = used
             rr["_embedding_text_hash"] = sha
+            if source_text_hash:
+                rr["_paired_e5_text_hash"] = source_text_hash
+                rr["_paired_e5_enrichment_id"] = row.get("text_vector_enrichment_id") or str(row.get("_ydb_pk") or "").replace("text_vector_enrichment_item:", "")
             rr["_enrichment_pk"] = pk
             candidates.append((priority.get(kind, 9), str(row.get("post_date") or row.get("published_at") or ""), rr))
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=False)
@@ -714,6 +740,7 @@ def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[d
             "input_kinds": kinds,
             "loaded_by_kind": {kind: len(items_by_kind.get(kind) or {}) for kind in kinds},
             "existing_text_vector_enrichment_items": len(existing_pks),
+            "e5_only": getenv_bool("REGION_TALK_BGE_E5_ONLY", True),
         }
         return rows, meta
 
@@ -786,6 +813,8 @@ def build_enrichment_payload(
         "text_hash": text_sha,
         "text_excerpt": text[:500],
         "text_source_fields": row.get("_embedding_text_fields") or [],
+        "paired_e5_text_hash": row.get("_paired_e5_text_hash") or "",
+        "paired_e5_enrichment_id": row.get("_paired_e5_enrichment_id") or "",
         "model_id": MODEL_ID,
         "model_short": MODEL_SHORT,
         "encoder_contract": ENCODER_CONTRACT,

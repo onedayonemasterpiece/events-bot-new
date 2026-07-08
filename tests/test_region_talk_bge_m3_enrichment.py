@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -40,8 +41,10 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_SESSION", names)
 
-    def test_collect_text_rows_prefers_publication_and_dedupes(self) -> None:
+    def test_collect_text_rows_prefers_publication_and_dedupes_when_legacy_inputs_enabled(self) -> None:
         mod = load_bge_module()
+        old = os.environ.get("REGION_TALK_BGE_E5_ONLY")
+        os.environ["REGION_TALK_BGE_E5_ONLY"] = "0"
         items = {
             "candidate_memory_item": {
                 "candidate_memory_item:a": {"post_id": "p1", "post_url": "https://t.me/a/1", "short_summary": "Калининград и Куршская коса: личные впечатления от поездки."},
@@ -53,7 +56,13 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
                 "image_queue_item:dup": {"post_id": "p1", "post_url": "https://t.me/a/1", "text_excerpt": "Дубликат того же поста."},
             },
         }
-        rows = mod.collect_text_rows(items, existing_pks=set(), limit=10)
+        try:
+            rows = mod.collect_text_rows(items, existing_pks=set(), limit=10)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_BGE_E5_ONLY", None)
+            else:
+                os.environ["REGION_TALK_BGE_E5_ONLY"] = old
         self.assertEqual([row["post_id"] for row in rows], ["p2", "p1"])
         self.assertTrue(all(row.get("_enrichment_pk", "").startswith("text_vector_enrichment_item:") for row in rows))
         self.assertEqual(len(rows), 2)
@@ -74,7 +83,23 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["_source_kind"], "text_vector_enrichment_item")
         self.assertEqual(rows[0]["_embedding_text_hash"], sha)
+        self.assertEqual(rows[0]["_paired_e5_text_hash"], sha)
         self.assertIn(":bge_m3:", rows[0]["_enrichment_pk"])
+
+    def test_collect_text_rows_skips_bge_vector_rows_by_default(self) -> None:
+        mod = load_bge_module()
+        text = "BGE result should not be re-embedded as BGE input."
+        sha = mod.text_hash(text)
+        bge_row = {
+            "post_id": "p-bge",
+            "post_url": "https://t.me/bge/1",
+            "model_id": "BAAI/bge-m3",
+            "model_short": "bge_m3",
+            "text_hash": sha,
+            "text_excerpt": text,
+        }
+        rows = mod.collect_text_rows({"text_vector_enrichment_item": {"text_vector_enrichment_item:p-bge:bge": bge_row}}, existing_pks=set(), limit=5)
+        self.assertEqual(rows, [])
 
     def test_build_enrichment_payload_contains_geo_and_antivector_fields(self) -> None:
         mod = load_bge_module()

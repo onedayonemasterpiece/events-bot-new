@@ -769,7 +769,15 @@ If a source hits the daily text-post threshold, CandidateReport writes
 `rejected_high_volume_text_posts_per_day` with the triggering date/count and the
 source is not selected for future scans unless manually reset. Source-level
 scan counters such as `posts_scanned` are monotonic maxima across rescans; a
-shorter delta/rescan must not reduce cumulative monitoring metrics.
+shorter delta/rescan must not reduce cumulative monitoring metrics. A partial
+source scan that still has `pending_scan` status but already has scan evidence
+(`posts_scanned`, history fetch timestamp, or run id) is no longer selected as a
+fresh primary source; it waits for the rescan phase after the first queue pass.
+Each source fetch also stores history depth from post dates: `history_avg_post_age_days`,
+`history_newest_post_age_days`, `history_oldest_post_age_days`,
+`history_newest_post_date` and `history_oldest_post_date`. The orchestrator
+aggregates these for all known source rows and for the latest run so operators
+can tune how fresh/deep scanning should be.
 
 ## Vector-first product quality correction
 

@@ -252,6 +252,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/new_travel"])
         self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"], 1)
 
+    def test_pending_row_with_scan_evidence_waits_until_primary_queue_empty(self) -> None:
+        mod = load_module()
+        partially_scanned = mod.Seed(
+            source_seed_id="unified_queue_partial", platform="telegram", source_title="Частично просмотрен",
+            handle="@partial_travel", url="https://t.me/partial_travel", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="partial", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        never_scanned = mod.Seed(
+            source_seed_id="unified_queue_fresh", platform="telegram", source_title="Новый паблик",
+            handle="@fresh_travel", url="https://t.me/fresh_travel", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="fresh", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {"unified_source_queue": {
+            "telegram:partial_travel": {
+                "canonical_source_key": "telegram:partial_travel",
+                "source_url": "https://t.me/partial_travel",
+                "source_queue_status": "pending_scan",
+                "posts_scanned": 12,
+                "last_scan_run_id": "run-old",
+                "queue_order": 1,
+            },
+            "telegram:fresh_travel": {
+                "canonical_source_key": "telegram:fresh_travel",
+                "source_url": "https://t.me/fresh_travel",
+                "source_queue_status": "pending_scan",
+                "queue_order": 2,
+            },
+        }}
+        selected = mod.selected_sources_for_run([partially_scanned, never_scanned], 2, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/fresh_travel"])
+        partial_due = mod._seed_scan_due_state(partially_scanned, previous_state)
+        self.assertTrue(partial_due["is_rescan"])
+        self.assertNotEqual(partial_due["reason"], "no_previous_scan_cursor")
+
     def test_source_selection_rescans_processed_public_when_due(self) -> None:
         mod = load_module()
         seed = mod.Seed(
@@ -290,6 +328,21 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+    def test_post_age_days_summary_measures_history_depth(self) -> None:
+        mod = load_module()
+        now = mod.datetime(2026, 7, 8, 12, 0, tzinfo=mod.timezone.utc)
+        rows = [
+            {"post_date": "2026-07-08T00:00:00+00:00"},
+            {"post_date": "2026-07-06T12:00:00+00:00"},
+        ]
+        summary = mod.post_age_days_summary(rows, now=now)
+        self.assertEqual(summary["history_posts_with_dates"], 2)
+        self.assertEqual(summary["history_avg_post_age_days"], 1.25)
+        self.assertEqual(summary["history_newest_post_age_days"], 0.5)
+        self.assertEqual(summary["history_oldest_post_age_days"], 2.0)
+        self.assertEqual(summary["history_newest_post_date"], "2026-07-08T00:00:00+00:00")
+        self.assertEqual(summary["history_oldest_post_date"], "2026-07-06T12:00:00+00:00")
 
     def test_history_age_cutoff_defaults_to_one_year(self) -> None:
         mod = load_module()

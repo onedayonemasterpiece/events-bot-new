@@ -267,6 +267,78 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _avg_numeric(rows: list[dict[str, Any]], field: str) -> float:
+    values = [_safe_float(r.get(field)) for r in rows]
+    nums = [v for v in values if v is not None]
+    return round(sum(nums) / len(nums), 2) if nums else 0.0
+
+
+def _max_numeric(rows: list[dict[str, Any]], field: str) -> float:
+    values = [_safe_float(r.get(field)) for r in rows]
+    nums = [v for v in values if v is not None]
+    return round(max(nums), 2) if nums else 0.0
+
+
+def _min_numeric(rows: list[dict[str, Any]], field: str) -> float:
+    values = [_safe_float(r.get(field)) for r in rows]
+    nums = [v for v in values if v is not None]
+    return round(min(nums), 2) if nums else 0.0
+
+
+def _vector_post_key(row: dict[str, Any]) -> str:
+    post_url = str(row.get("post_url") or "").strip()
+    if post_url:
+        return "url:" + post_url
+    post_id = str(row.get("post_id") or "").strip()
+    if post_id:
+        return "id:" + post_id
+    text_sha = str(row.get("paired_e5_text_hash") or row.get("text_hash") or "").strip()
+    return "hash:" + text_sha if text_sha else ""
+
+
+def _vector_exact_text_key(row: dict[str, Any]) -> str:
+    post_url = str(row.get("post_url") or "").strip()
+    post_id = str(row.get("post_id") or "").strip()
+    text_sha = str(row.get("paired_e5_text_hash") or row.get("text_hash") or "").strip()
+    if not text_sha:
+        return _vector_post_key(row)
+    if post_url:
+        return f"url+hash:{post_url}|{text_sha}"
+    if post_id:
+        return f"id+hash:{post_id}|{text_sha}"
+    return "hash:" + text_sha
+
+
+def _text_vector_pair_metrics(e5_vectors: list[dict[str, Any]], bge_vectors: list[dict[str, Any]]) -> dict[str, int]:
+    e5_post = {k for k in (_vector_post_key(r) for r in e5_vectors) if k}
+    bge_post = {k for k in (_vector_post_key(r) for r in bge_vectors) if k}
+    e5_exact = {k for k in (_vector_exact_text_key(r) for r in e5_vectors) if k}
+    bge_exact = {k for k in (_vector_exact_text_key(r) for r in bge_vectors) if k}
+    post_paired = e5_post & bge_post
+    exact_paired = e5_exact & bge_exact
+    return {
+        "text_vector_e5_unique_posts_total": len(e5_post),
+        "text_vector_bge_m3_unique_posts_total": len(bge_post),
+        "text_vector_dual_post_paired_total": len(post_paired),
+        "text_vector_e5_without_bge_post_total": len(e5_post - bge_post),
+        "text_vector_bge_without_e5_post_total": len(bge_post - e5_post),
+        "text_vector_dual_exact_text_paired_total": len(exact_paired),
+        "text_vector_e5_without_bge_exact_text_total": len(e5_exact - bge_exact),
+        "text_vector_bge_without_e5_exact_text_total": len(bge_exact - e5_exact),
+        "text_vector_dual_post_coverage_percent": int(round((len(post_paired) / len(e5_post)) * 100)) if e5_post else 0,
+        "text_vector_dual_exact_text_coverage_percent": int(round((len(exact_paired) / len(e5_exact)) * 100)) if e5_exact else 0,
+    }
+
+
 def _script_name(cmd: list[str]) -> str:
     exe = Path(str(cmd[0] if cmd else "")).name
     return str(cmd[1] if len(cmd) > 1 and exe.startswith("python") else cmd[0])
@@ -491,12 +563,16 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "source_queue_item",
             "source_status_item",
             "online_source_item",
+            "source_candidate_item",
+            "source_edge_item",
+            "comment_link_item",
             "candidate_memory_item",
             "image_queue_item",
             "publication_candidate_item",
             "text_vector_enrichment_item",
             "processed_post_item",
             "post_live_item",
+            "queue_cursor",
         ]
         rows_by_kind = {
             kind: read_kind_rows(pool, ydb, table, kind, _orchestrator_kind_limit(kind, limit))
@@ -509,6 +585,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     images = rows_by_kind["image_queue_item"]
     publications = rows_by_kind["publication_candidate_item"]
     vectors = rows_by_kind["text_vector_enrichment_item"]
+    source_candidates = rows_by_kind["source_candidate_item"]
+    source_edges = rows_by_kind["source_edge_item"]
+    comment_links = rows_by_kind["comment_link_item"]
+    cursors = rows_by_kind["queue_cursor"]
     source_rows = _merge_source_rows(
         rows_by_kind["source_queue_item"],
         rows_by_kind["source_status_item"],
@@ -537,6 +617,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     sent = [r for r in publications if str(r.get("sent_to_chat") or "").lower() == "true" or str(r.get("publication_candidate_status") or "") == "sent_to_chat"]
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
+    vector_pair_metrics = _text_vector_pair_metrics(e5_vectors, bge_vectors)
     source_statuses = [str(r.get("source_queue_status") or r.get("queue_status") or r.get("fetch_status") or "") for r in source_rows]
     source_terminal = [
         r for r, status in zip(source_rows, source_statuses)
@@ -551,6 +632,14 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if status and status != "pending_scan"
     ]
     source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
+    source_primary_unscanned_pending = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status in {"", "pending_scan"} and _safe_int(r.get("posts_scanned")) <= 0 and not str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip()
+    ]
+    source_pending_with_scan_evidence = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status == "pending_scan" and (_safe_int(r.get("posts_scanned")) > 0 or str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip())
+    ]
     source_processed_no_ko = [r for r, status in zip(source_rows, source_statuses) if status == "processed_no_ko"]
     source_processed_ko_candidate = [r for r, status in zip(source_rows, source_statuses) if status == "processed_found_ko_candidate"]
     source_processed_ko_low_image = [r for r, status in zip(source_rows, source_statuses) if status == "processed_found_ko_low_image_quality"]
@@ -559,6 +648,23 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if str(r.get("source_queue_status") or "") in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
         or _safe_int(r.get("ko_posts_found")) > 0
         or _safe_int(r.get("candidate_posts_found")) > 0
+    ]
+    rejected_status_prefixes = ("skipped", "error", "reject", "rejected", "debug_self_loop_rejected")
+    rejected_sources = [
+        r for r in source_rows
+        if str(r.get("fetch_status") or r.get("source_queue_status") or r.get("queue_status") or r.get("frontier_action") or "").startswith(rejected_status_prefixes)
+        or bool(str(r.get("monitoring_exclusion_reason") or "").strip())
+    ]
+    cursor_by_name: dict[str, dict[str, Any]] = {}
+    for row in cursors:
+        name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+        if name and ":" not in name:
+            cursor_by_name[name] = row
+    strong_images_ge_066 = [
+        r for r in images
+        if str(r.get("image_queue_status") or "") == "actual_scored"
+        and str(r.get("image_model_input_type") or "") == "actual_image"
+        and float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.66
     ]
     strong_images = [
         r for r in images
@@ -571,6 +677,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if str(r.get("publication_candidate_status") or "") in {"publication_ready", "accepted_for_publication"}
         or str(r.get("publication_status") or "") == "publication_ready"
     ]
+    history_depth_rows = [r for r in source_rows if _safe_float(r.get("history_avg_post_age_days")) is not None]
+    latest_history_run = max([str(r.get("last_scan_run_id") or r.get("run_id") or "") for r in history_depth_rows] or [""])
+    latest_history_depth_rows = [
+        r for r in history_depth_rows
+        if latest_history_run and str(r.get("last_scan_run_id") or r.get("run_id") or "") == latest_history_run
+    ]
 
     return {
         "publics_total": len(source_rows),
@@ -578,17 +690,32 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_terminal_processed_total": len(source_terminal),
         "publics_needs_rescan_or_retry_total": len(source_retry),
         "publics_scanned_with_posts_total": len(source_with_posts),
+        "publics_primary_unscanned_pending_total": len(source_primary_unscanned_pending),
+        "publics_pending_with_scan_evidence_waiting_rescan_total": len(source_pending_with_scan_evidence),
         "publics_processed_no_ko_total": len(source_processed_no_ko),
         "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
         "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
         "publics_with_ko_candidates_total": len(source_ko_candidates),
+        "source_candidates_total": len(source_candidates),
+        "source_edges_total": len(source_edges),
+        "comment_link_rows_total": len(comment_links),
+        "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": sum(_safe_int(r.get("posts_scanned")) for r in source_rows),
+        "history_depth_sources_total": len(history_depth_rows),
+        "history_depth_latest_run_sources_total": len(latest_history_depth_rows),
+        "history_avg_post_age_days_avg": _avg_numeric(history_depth_rows, "history_avg_post_age_days"),
+        "history_newest_post_age_days_min": _min_numeric(history_depth_rows, "history_newest_post_age_days"),
+        "history_oldest_post_age_days_max": _max_numeric(history_depth_rows, "history_oldest_post_age_days"),
+        "history_latest_run_avg_post_age_days_avg": _avg_numeric(latest_history_depth_rows, "history_avg_post_age_days"),
+        "history_latest_run_newest_post_age_days_min": _min_numeric(latest_history_depth_rows, "history_newest_post_age_days"),
+        "history_latest_run_oldest_post_age_days_max": _max_numeric(latest_history_depth_rows, "history_oldest_post_age_days"),
         "processed_posts_unique_total": len(rows_by_kind["processed_post_item"]),
         "candidate_memory_total": len(candidates),
         "image_queue_total": len(images),
         "image_pending_total": len(image_pending),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
+        "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),
         "image_strong_actual_ge_0_70_total": len(strong_images),
         "publication_candidate_total": len(publications),
         "publication_ready_total": len(publication_ready),
@@ -598,8 +725,18 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "text_vector_enrichment_total": len(vectors),
         "text_vector_e5_total": len(e5_vectors),
         "text_vector_bge_m3_total": len(bge_vectors),
+        **vector_pair_metrics,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
+        **{
+            f"cursor_{name}_position": _safe_int(row.get("cursor_position") or row.get("done") or 0)
+            for name, row in cursor_by_name.items()
+        },
+        **{
+            f"cursor_{name}_total": _safe_int(row.get("total") or 0)
+            for name, row in cursor_by_name.items()
+            if row.get("total") not in (None, "")
+        },
     }
 
 
@@ -621,14 +758,22 @@ def build_decision_plan(
     # the next required consumer. Do not let finalizer/image actions hide this
     # backlog; BGE has no Telegram session and can run in parallel with both
     # CandidateReport(DISCOVERY1) and ImageDiagnostic(DISCOVERY2).
-    if int(metrics.get("bge_pending_sample_total") or 0) >= bge_threshold:
+    bge_backlog = max(
+        int(metrics.get("text_vector_e5_without_bge_exact_text_total") or 0),
+        int(metrics.get("bge_pending_sample_total") or 0),
+    )
+    if bge_backlog >= bge_threshold:
         actions.append(_action(
             "launch_bge_m3",
             ["python3", "kaggle/execute_region_talk_bge_m3_enrichment.py", "--batch-limit", "12", "--batch-size", "4", "--no-wait"],
-            "pending E5/candidate text rows need BGE immediately after main E5",
+            "pending E5 text-vector rows need paired BGE enrichment immediately after main E5",
             resource="kaggle:bge_m3",
             parallel_safe=True,
             timeout_seconds=300,
+            env={
+                "REGION_TALK_BGE_E5_ONLY": "1",
+                "REGION_TALK_BGE_INPUT_KINDS": "text_vector_enrichment_item",
+            },
         ))
     if int(metrics.get("image_pending_total") or 0) >= image_threshold:
         actions.append(_action(

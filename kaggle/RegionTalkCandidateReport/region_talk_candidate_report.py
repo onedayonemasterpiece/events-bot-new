@@ -603,6 +603,31 @@ def source_delta_rescan_interval_seconds() -> int:
     )
 
 
+def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, Any], status: str = "") -> bool:
+    """Return true once a source consumed Telegram history budget at least once.
+
+    A row can remain in ``pending_scan`` after a bounded/partial pass.  That must
+    not put it back into the primary queue ahead of never-scanned publics; delta
+    rescans are allowed only after the first pass over the whole queue.
+    """
+    def _positive_int(value: Any) -> bool:
+        try:
+            return int(float(value or 0)) > 0
+        except Exception:
+            return False
+
+    return bool(
+        cursor.get("primary_scan_completed_at")
+        or cursor.get("last_history_fetch_at")
+        or cursor.get("last_successful_delta_scan_at")
+        or qrow.get("last_history_fetch_at")
+        or qrow.get("last_scan_run_id")
+        or _positive_int(qrow.get("posts_scanned"))
+        or _positive_int(cursor.get("posts_scanned"))
+        or status.startswith("processed")
+    )
+
+
 def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = None) -> dict[str, Any]:
     cursor = _source_cursor_for_seed(seed, previous_state)
     qrow = _source_queue_row_for_seed(seed, previous_state)
@@ -612,18 +637,20 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
     if source_terminal_rejected_status(status):
         return {"due": False, "reason": "terminal_rejected_source", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
-    if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False) and (
+    scanned_before = _source_has_primary_scan_evidence(qrow, cursor, status)
+    if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False) and scanned_before and (
         status in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
         or int(float(qrow.get("ko_posts_found") or 0)) > 0
         or int(float(qrow.get("candidate_posts_found") or 0)) > 0
     ):
         return {"due": True, "reason": "publication_goal_known_ko_rescan", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
-    needs_retry = status in {"pending_scan", "needs_rescan_or_retry", "retry", "error", "selected_or_observed"} or status.startswith(("error", "skipped_telegram_unresolved"))
-    scanned_before = bool(cursor.get("primary_scan_completed_at") or cursor.get("last_history_fetch_at") or qrow.get("_ydb_updated_at") or status.startswith("processed"))
-    if needs_retry:
-        return {"due": True, "reason": "pending_or_retry_status", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
+    retry_status = status in {"needs_rescan_or_retry", "retry", "error", "selected_or_observed"} or status.startswith(("error", "skipped_telegram_unresolved"))
     if not scanned_before:
+        # Fresh pending sources are the primary objective: inspect as many new
+        # publics as possible before spending budget on any source delta rescan.
         return {"due": True, "reason": "no_previous_scan_cursor", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
+    if retry_status:
+        return {"due": True, "reason": "retry_after_primary_scan", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     if due_at and due_at <= now:
         return {"due": True, "reason": "processed_rescan_due_by_next_history_scan_at", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     last_raw = cursor.get("last_history_fetch_at") or cursor.get("last_successful_delta_scan_at") or qrow.get("last_history_fetch_at") or qrow.get("_ydb_updated_at")
@@ -744,6 +771,8 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     if len(selected) < max(0, max_sources) and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False):
         selected.extend([seed for seed, due in ordered if not bool(due.get("due")) and seed not in selected])
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_due_total"] = sum(1 for _seed, due in annotated if bool(due.get("due")))
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_primary_due_total"] = len(primary_due)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_rescan_due_total"] = len(rescan_due)
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_total"] = sum(1 for _seed, due in annotated if not bool(due.get("due")))
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_not_due_sample"] = [
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
@@ -1032,6 +1061,41 @@ def apply_high_volume_text_rejection(row: dict[str, Any], volume: dict[str, Any]
     })
 
 
+def post_age_days_summary(post_rows: list[dict[str, Any]], *, now: datetime | None = None) -> dict[str, Any]:
+    base = now or datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    dated: list[datetime] = []
+    for row in post_rows:
+        dt = normalize_post_datetime(row.get("post_date"))
+        if dt:
+            dated.append(dt)
+    if not dated:
+        return {
+            "history_posts_with_dates": 0,
+            "history_avg_post_age_days": "",
+            "history_newest_post_age_days": "",
+            "history_oldest_post_age_days": "",
+            "history_newest_post_date": "",
+            "history_oldest_post_date": "",
+        }
+    ages = [max(0.0, (base - dt).total_seconds() / 86400.0) for dt in dated]
+    newest = max(dated)
+    oldest = min(dated)
+    return {
+        "history_posts_with_dates": len(dated),
+        "history_avg_post_age_days": round(sum(ages) / len(ages), 2),
+        "history_newest_post_age_days": round(min(ages), 2),
+        "history_oldest_post_age_days": round(max(ages), 2),
+        "history_newest_post_date": newest.isoformat(),
+        "history_oldest_post_date": oldest.isoformat(),
+    }
+
+
+def apply_post_age_summary(row: dict[str, Any], post_rows: list[dict[str, Any]]) -> None:
+    row.update(post_age_days_summary(post_rows))
+
+
 def iso_after_seconds(seconds: int) -> str:
     return datetime.fromtimestamp(time.time() + max(0, seconds), timezone.utc).isoformat()
 
@@ -1114,6 +1178,9 @@ SOURCE_STATE_FIELDS = [
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
     "monitoring_exclusion_reason", "high_volume_text_posts_date",
     "high_volume_text_posts_count", "high_volume_text_posts_threshold",
+    "history_posts_with_dates", "history_avg_post_age_days",
+    "history_newest_post_age_days", "history_oldest_post_age_days",
+    "history_newest_post_date", "history_oldest_post_date",
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
@@ -1127,6 +1194,9 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "source_image_quality_status", "source_image_quality_min_actual_scored",
     "source_image_quality_min_avg_score", "monitoring_exclusion_reason", "source_probe_reason",
     "high_volume_text_posts_date", "high_volume_text_posts_count", "high_volume_text_posts_threshold",
+    "history_posts_with_dates", "history_avg_post_age_days",
+    "history_newest_post_age_days", "history_oldest_post_age_days",
+    "history_newest_post_date", "history_oldest_post_date",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
 SOURCE_CANDIDATE_STATE_FIELDS = [
@@ -1566,6 +1636,12 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "high_volume_text_posts_date": row.get("high_volume_text_posts_date") or "",
         "high_volume_text_posts_count": row.get("high_volume_text_posts_count") or 0,
         "high_volume_text_posts_threshold": row.get("high_volume_text_posts_threshold") or 0,
+        "history_posts_with_dates": row.get("history_posts_with_dates") or 0,
+        "history_avg_post_age_days": row.get("history_avg_post_age_days") or "",
+        "history_newest_post_age_days": row.get("history_newest_post_age_days") or "",
+        "history_oldest_post_age_days": row.get("history_oldest_post_age_days") or "",
+        "history_newest_post_date": row.get("history_newest_post_date") or "",
+        "history_oldest_post_date": row.get("history_oldest_post_date") or "",
     }
     return compact_record(payload, SOURCE_QUEUE_STATE_FIELDS + [
         "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "queue_status",
@@ -4031,6 +4107,12 @@ def build_unified_source_queue(
             "high_volume_text_posts_date": srow.get("high_volume_text_posts_date") or rec.get("high_volume_text_posts_date") or "",
             "high_volume_text_posts_count": int(srow.get("high_volume_text_posts_count") or rec.get("high_volume_text_posts_count") or 0),
             "high_volume_text_posts_threshold": int(srow.get("high_volume_text_posts_threshold") or rec.get("high_volume_text_posts_threshold") or 0),
+            "history_posts_with_dates": int(srow.get("history_posts_with_dates") or rec.get("history_posts_with_dates") or 0),
+            "history_avg_post_age_days": srow.get("history_avg_post_age_days") or rec.get("history_avg_post_age_days") or "",
+            "history_newest_post_age_days": srow.get("history_newest_post_age_days") or rec.get("history_newest_post_age_days") or "",
+            "history_oldest_post_age_days": srow.get("history_oldest_post_age_days") or rec.get("history_oldest_post_age_days") or "",
+            "history_newest_post_date": srow.get("history_newest_post_date") or rec.get("history_newest_post_date") or "",
+            "history_oldest_post_date": srow.get("history_oldest_post_date") or rec.get("history_oldest_post_date") or "",
             "next_action": next_action,
             "queue_item_updated_at": run_now,
         })
@@ -5454,6 +5536,7 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
                 "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
             })
         else:
+            apply_post_age_summary(src_row, posts)
             src_row.update({
                 "fetch_status": "ok_public_web" if posts else "no_public_web_posts",
                 "posts_scanned": len(posts),
@@ -5907,6 +5990,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                     src_row["posts_scanned"] = len(source_post_rows)
                     post_dates = [str(p.get("post_date") or "") for p in source_post_rows]
                     src_row["last_seen_post_date"] = max(post_dates or [""])
+                    apply_post_age_summary(src_row, source_post_rows)
                     if old_posts_cutoff_hit:
                         src_row["source_probe_reason"] = (src_row.get("source_probe_reason") or "") + " Stopped at the configured history age cutoff."
                 src_row["history_min_post_date"] = cutoff.isoformat() if cutoff else ""

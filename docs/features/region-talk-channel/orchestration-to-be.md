@@ -148,15 +148,17 @@ artifacts/codex/region-talk-ydb-venv/bin/python scripts/region_talk_orchestrator
 
 Important invariants:
 
-- BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, before
-  image/finalizer work can hide the text-vector backlog.
+- BGE-M3 is launched immediately when either `bge_pending_sample_total >= 1`
+  or `text_vector_e5_without_bge_exact_text_total >= 1`; the latter is the
+  production invariant for dual coverage and is not hidden by raw legacy BGE
+  totals.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and 2 keyword-discovery queries. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
-  turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image and publication counters are monitored together without manual omissions.
+  turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
 - CandidateReport history fetches are freshness-bounded by
   `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365` by default. It should not crawl
   deeper than one year for normal product monitoring. Sources with at least
@@ -168,7 +170,10 @@ Important invariants:
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`).
 - `RegionTalkBgeM3Enrichment` uses `--batch-limit 12 --batch-size 4` so the row
-  count and in-memory batch size are separate.
+  count and in-memory batch size are separate. Production launches set
+  `REGION_TALK_BGE_E5_ONLY=1` and
+  `REGION_TALK_BGE_INPUT_KINDS=text_vector_enrichment_item`: BGE consumes E5
+  rows only, preserves the paired E5 text hash, and never re-embeds BGE rows.
 - If a Kaggle kernel is already active, that action is skipped but other
   non-conflicting resources continue (for example active BGE does not block
   ImageDiagnostic or CandidateReport).

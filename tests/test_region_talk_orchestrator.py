@@ -47,6 +47,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("12", actions[1]["cmd"])
         self.assertIn("--batch-size", actions[1]["cmd"])
         self.assertIn("4", actions[1]["cmd"])
+        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_E5_ONLY"], "1")
+        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_INPUT_KINDS"], "text_vector_enrichment_item")
         self.assertEqual(actions[3]["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
         self.assertEqual(actions[3]["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TEXT_EMBEDDING_MODEL_IDS"], "intfloat/multilingual-e5-base")
@@ -86,6 +88,50 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(rows[0]["posts_scanned"], 31)
         self.assertEqual(rows[0]["ko_posts_found"], 2)
         self.assertEqual(rows[0]["fetch_status"], "ok")
+
+    def test_numeric_aggregate_helpers_for_history_depth(self) -> None:
+        mod = load_module()
+        rows = [{"age": "1.5"}, {"age": 2}, {"age": ""}]
+        self.assertEqual(mod._avg_numeric(rows, "age"), 1.75)
+        self.assertEqual(mod._min_numeric(rows, "age"), 1.5)
+        self.assertEqual(mod._max_numeric(rows, "age"), 2.0)
+
+    def test_text_vector_pair_metrics_separate_raw_and_paired_backlog(self) -> None:
+        mod = load_module()
+        e5 = [
+            {"model_short": "e5", "post_url": "https://t.me/a/1", "text_hash": "h1"},
+            {"model_short": "e5", "post_url": "https://t.me/b/2", "text_hash": "h2"},
+        ]
+        bge = [
+            {"model_short": "bge_m3", "post_url": "https://t.me/a/1", "paired_e5_text_hash": "h1", "text_hash": "h1"},
+            {"model_short": "bge_m3", "post_url": "https://t.me/legacy/9", "text_hash": "old"},
+        ]
+        metrics = mod._text_vector_pair_metrics(e5, bge)
+        self.assertEqual(metrics["text_vector_e5_unique_posts_total"], 2)
+        self.assertEqual(metrics["text_vector_bge_m3_unique_posts_total"], 2)
+        self.assertEqual(metrics["text_vector_dual_post_paired_total"], 1)
+        self.assertEqual(metrics["text_vector_e5_without_bge_exact_text_total"], 1)
+        self.assertEqual(metrics["text_vector_bge_without_e5_exact_text_total"], 1)
+        self.assertEqual(metrics["text_vector_dual_exact_text_coverage_percent"], 50)
+
+    def test_decision_launches_bge_from_e5_pair_backlog_even_when_sample_metric_missing(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_sent_total": 0,
+                "publication_confirmed_total": 0,
+                "publication_unsent_confirmed_total": 0,
+                "image_actual_scored_total": 0,
+                "publication_candidate_total": 0,
+                "bge_pending_sample_total": 0,
+                "text_vector_e5_without_bge_exact_text_total": 3,
+                "image_pending_total": 0,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        self.assertEqual(actions[0]["action"], "launch_bge_m3")
 
     def test_execute_ready_selects_non_conflicting_parallel_launches(self) -> None:
         mod = load_module()

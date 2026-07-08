@@ -109,6 +109,7 @@ def build_config_dataset(client: Any, *, username: str, run_id: str, args: argpa
         "REGION_TALK_BGE_MAX_LENGTH": str(args.max_length),
         "REGION_TALK_BGE_MAX_RUNTIME_SECONDS": str(args.max_runtime_seconds),
         "REGION_TALK_BGE_INPUT_KINDS": os.environ.get("REGION_TALK_BGE_INPUT_KINDS", args.input_kinds),
+        "REGION_TALK_BGE_E5_ONLY": os.environ.get("REGION_TALK_BGE_E5_ONLY", "1"),
         "REGION_TALK_BGE_YDB_SCAN_LIMIT": os.environ.get("REGION_TALK_BGE_YDB_SCAN_LIMIT", str(max(args.batch_limit * 5, 200))),
         "REGION_TALK_BGE_REPROCESS_EXISTING": "1" if args.reprocess_existing else os.environ.get("REGION_TALK_BGE_REPROCESS_EXISTING", "0"),
         "REGION_TALK_BGE_STORE_DENSE_VECTORS": "1" if args.store_dense_vectors else os.environ.get("REGION_TALK_BGE_STORE_DENSE_VECTORS", "1"),

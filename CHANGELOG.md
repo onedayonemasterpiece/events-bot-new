@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / history depth metrics**: CandidateReport now stores
+  per-source history depth from post dates (`history_avg/newest/oldest_post_age_days`
+  plus oldest/newest dates), and the orchestrator exposes aggregate/latest-run
+  depth metrics so scan freshness can be monitored and tuned instead of inferred
+  from post counts.
+- **Region Talk Channel / rescan and dual-vector invariants**: partial
+  `pending_scan` rows with scan evidence now wait for the rescan phase after
+  never-scanned publics; the BGE worker defaults to E5-only production input,
+  skips BGE-on-BGE re-embedding, preserves paired E5 text hashes, and the
+  orchestrator reports E5/BGE paired coverage/backlog separately from raw
+  historical vector-row totals.
 - **Region Talk Channel / full-funnel observability and scan guardrails**: kept
   every numeric live metric in the orchestrator no-progress signature without
   manual omissions, fixed CandidateReport so an
