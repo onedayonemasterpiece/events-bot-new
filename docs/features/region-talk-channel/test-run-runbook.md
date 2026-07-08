@@ -419,6 +419,11 @@ The XLSX has:
   than `REGION_TALK_MAX_SOURCES` (`REGION_TALK_SOURCE_QUEUE_SELECTION_POOL`, or
   `REGION_TALK_SOURCE_QUEUE_SELECTION_POOL_MULTIPLIER`, default `10`) so this
   product priority is applied before the final per-run source cap.
+  For the active 20-link publication goal, a dedicated run may set
+  `REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES=1` to temporarily put known
+  `processed_found_ko_candidate` / KO-positive sources ahead of the pending
+  frontier, so high-yield travel sources can be searched more deeply without
+  waiting for the entire backlog to drain.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and

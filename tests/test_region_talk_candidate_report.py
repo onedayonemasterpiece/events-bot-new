@@ -437,6 +437,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/author_travel", "https://t.me/corp_msp"])
         self.assertTrue(mod._REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"])
 
+    def test_publication_goal_can_rescan_known_ko_sources_before_pending(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES")
+        os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = "1"
+        try:
+            known = mod.Seed(
+                source_seed_id="known_ko", platform="telegram", source_title="Уютная Россия | Путешествия",
+                handle="@travel_yutturizm", url="https://t.me/travel_yutturizm", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+                why_seeded="processed", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            pending = mod.Seed(
+                source_seed_id="pending_new", platform="telegram", source_title="Pending source",
+                handle="@pending_new", url="https://t.me/pending_new", source_kind="unified_source_queue",
+                source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+                why_seeded="pending", expected_value="", known_risks="", initial_status="pending_scan",
+                monitoring_enabled=True, rights_policy="unknown", notes="",
+            )
+            previous_state = {"unified_source_queue": {
+                "telegram:travel_yutturizm": {"canonical_source_key": "telegram:travel_yutturizm", "source_url": "https://t.me/travel_yutturizm", "source_queue_status": "processed_found_ko_candidate", "queue_order": 1, "ko_posts_found": 4, "candidate_posts_found": 4},
+                "telegram:pending_new": {"canonical_source_key": "telegram:pending_new", "source_url": "https://t.me/pending_new", "source_queue_status": "pending_scan", "queue_order": 2},
+            }}
+            selected = mod.selected_sources_for_run([pending, known], 2, previous_state=previous_state)
+            self.assertEqual([s.canonical_url for s in selected], ["https://t.me/travel_yutturizm", "https://t.me/pending_new"])
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", None)
+            else:
+                os.environ["REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES"] = old
+
     def test_source_selection_default_processed_rescan_interval_is_two_weeks(self) -> None:
         from datetime import datetime, timedelta, timezone
         mod = load_module()

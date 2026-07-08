@@ -601,6 +601,12 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     due_at_raw = cursor.get("next_history_scan_at") or cursor.get("next_delta_scan_at") or qrow.get("next_history_scan_at") or qrow.get("next_delta_scan_at")
     due_at = parse_iso_datetime(due_at_raw)
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
+    if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False) and (
+        status in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
+        or int(float(qrow.get("ko_posts_found") or 0)) > 0
+        or int(float(qrow.get("candidate_posts_found") or 0)) > 0
+    ):
+        return {"due": True, "reason": "publication_goal_known_ko_rescan", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     needs_retry = status in {"pending_scan", "needs_rescan_or_retry", "retry", "error", "selected_or_observed"} or status.startswith(("error", "skipped_telegram_unresolved"))
     scanned_before = bool(cursor.get("primary_scan_completed_at") or cursor.get("last_history_fetch_at") or qrow.get("_ydb_updated_at") or status.startswith("processed"))
     if needs_retry:
@@ -705,7 +711,16 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     rescan_due = [seed for seed, due in ordered if bool(due.get("due")) and bool(due.get("is_rescan"))]
     # First complete the unscanned/retry queue. Only when there are no primary
     # pending publics left do we spend budget on processed-source delta rescans.
-    selected = primary_due if primary_due else rescan_due
+    if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False):
+        high_yield_rescan = [
+            seed for seed, due in ordered
+            if bool(due.get("due")) and bool(due.get("is_rescan")) and str(due.get("reason") or "") == "publication_goal_known_ko_rescan"
+        ]
+        selected = high_yield_rescan + [seed for seed in primary_due if seed not in high_yield_rescan]
+        if not selected:
+            selected = rescan_due
+    else:
+        selected = primary_due if primary_due else rescan_due
     if len(selected) < max(0, max_sources) and getenv_bool("REGION_TALK_ALLOW_NOT_DUE_SOURCE_FILL", False):
         selected.extend([seed for seed, due in ordered if not bool(due.get("due")) and seed not in selected])
     _REGION_TALK_TELEGRAM_RUNTIME["source_selection_due_total"] = sum(1 for _seed, due in annotated if bool(due.get("due")))
