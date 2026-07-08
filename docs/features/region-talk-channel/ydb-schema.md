@@ -258,6 +258,11 @@ Region Talk must keep row-level product state compact:
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
   canonical Telegram/VK source queue row with `queue_order`, status, status-change
   fields, cursor display markers, KO/candidate counters and image-quality rollup;
+  terminal high-volume rejections use
+  `source_queue_status=rejected_high_volume_text_posts_per_day` plus
+  `monitoring_exclusion_reason`, `source_probe_reason`,
+  `high_volume_text_posts_date/count/threshold` so news-like feeds are not
+  rescanned silently;
 - kind `source_status_item`, pk `source_status_item:<canonical_source_key>` — live
   source/public registry alias for statistics and operator views; written when a
   source is selected for a run, discovered by similar/keyword discovery, skipped,

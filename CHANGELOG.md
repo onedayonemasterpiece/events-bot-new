@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / full-funnel observability and scan guardrails**: kept
+  every numeric live metric in the orchestrator no-progress signature without
+  manual omissions, fixed CandidateReport so an
+  explicit discovery-tail reserve is honored instead of being silently raised to
+  the text-embedding reserve, added freshness cutoff
+  (`REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365`) and terminal high-volume source
+  rejection for feeds with 30+ text posts in one day, persisting the rejection
+  reason/count/date in YDB source queue rows.
 - **Region Talk Channel / orchestrator control contour**: upgraded the local
   orchestrator from a serial dry-run helper to a supervised ready-cycle runner:
   it reads live YDB funnel metrics with primary-key prefix scans, polls Kaggle

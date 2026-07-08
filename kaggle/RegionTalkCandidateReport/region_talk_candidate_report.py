@@ -610,6 +610,8 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     due_at_raw = cursor.get("next_history_scan_at") or cursor.get("next_delta_scan_at") or qrow.get("next_history_scan_at") or qrow.get("next_delta_scan_at")
     due_at = parse_iso_datetime(due_at_raw)
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
+    if source_terminal_rejected_status(status):
+        return {"due": False, "reason": "terminal_rejected_source", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False) and (
         status in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
         or int(float(qrow.get("ko_posts_found") or 0)) > 0
@@ -932,6 +934,104 @@ def parse_iso_datetime(value: Any) -> datetime | None:
         return None
 
 
+HIGH_VOLUME_TEXT_POSTS_STATUS = "rejected_high_volume_text_posts_per_day"
+HIGH_VOLUME_TEXT_POSTS_REASON = "text_posts_single_day_ge_threshold"
+
+
+def history_max_post_age_days() -> int:
+    return getenv_int(
+        "REGION_TALK_HISTORY_MAX_POST_AGE_DAYS",
+        getenv_int("REGION_TALK_TG_HISTORY_MAX_POST_AGE_DAYS", 365),
+    )
+
+
+def history_min_post_datetime(now: datetime | None = None) -> datetime | None:
+    days = history_max_post_age_days()
+    if days <= 0:
+        return None
+    base = now or datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    return datetime.fromtimestamp(base.timestamp() - days * 86400, timezone.utc)
+
+
+def normalize_post_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = parse_iso_datetime(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def is_history_post_older_than_cutoff(value: Any, cutoff: datetime | None) -> bool:
+    if cutoff is None:
+        return False
+    dt = normalize_post_datetime(value)
+    return bool(dt and dt < cutoff)
+
+
+def text_posts_per_day_reject_threshold() -> int:
+    return getenv_int(
+        "REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD",
+        getenv_int("REGION_TALK_SOURCE_MAX_TEXT_POSTS_PER_DATE", 30),
+    )
+
+
+def source_rejected_by_text_volume_status(status: Any) -> bool:
+    raw = str(status or "").strip().lower()
+    return raw == HIGH_VOLUME_TEXT_POSTS_STATUS or raw.startswith("rejected_high_volume")
+
+
+def source_terminal_rejected_status(status: Any) -> bool:
+    raw = str(status or "").strip().lower()
+    return source_rejected_by_text_volume_status(raw) or raw.startswith("rejected_")
+
+
+def text_post_utc_day_key(value: Any) -> str:
+    dt = normalize_post_datetime(value)
+    return dt.date().isoformat() if dt else "unknown_date"
+
+
+def record_text_post_volume(
+    counts_by_day: dict[str, int],
+    dt_value: Any,
+    *,
+    threshold: int | None = None,
+) -> dict[str, Any]:
+    threshold = text_posts_per_day_reject_threshold() if threshold is None else threshold
+    if threshold <= 0:
+        return {"rejected": False}
+    day_key = text_post_utc_day_key(dt_value)
+    counts_by_day[day_key] = int(counts_by_day.get(day_key, 0)) + 1
+    count = counts_by_day[day_key]
+    return {
+        "rejected": count >= threshold,
+        "day": day_key,
+        "count": count,
+        "threshold": threshold,
+    }
+
+
+def apply_high_volume_text_rejection(row: dict[str, Any], volume: dict[str, Any]) -> None:
+    row.update({
+        "fetch_status": HIGH_VOLUME_TEXT_POSTS_STATUS,
+        "source_queue_status": HIGH_VOLUME_TEXT_POSTS_STATUS,
+        "monitoring_exclusion_reason": HIGH_VOLUME_TEXT_POSTS_REASON,
+        "source_probe_reason": (
+            f"Rejected source: {volume.get('count')} text posts on {volume.get('day')} "
+            f"reaches threshold {volume.get('threshold')} for one day; likely high-volume/news feed."
+        ),
+        "high_volume_text_posts_date": str(volume.get("day") or ""),
+        "high_volume_text_posts_count": int(volume.get("count") or 0),
+        "high_volume_text_posts_threshold": int(volume.get("threshold") or 0),
+        "next_action": "do_not_rescan_high_volume_source",
+    })
+
+
 def iso_after_seconds(seconds: int) -> str:
     return datetime.fromtimestamp(time.time() + max(0, seconds), timezone.utc).isoformat()
 
@@ -1010,8 +1110,10 @@ def build_queue_cursor_state(state: dict[str, Any], source_queue: dict[str, Any]
 SOURCE_STATE_FIELDS = [
     "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
-    "source_url", "fetch_status", "vk_wall_probe_status",
+    "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
+    "monitoring_exclusion_reason", "high_volume_text_posts_date",
+    "high_volume_text_posts_count", "high_volume_text_posts_threshold",
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
@@ -1023,7 +1125,8 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "actual_images_scored_count", "avg_actual_image_score", "low_actual_image_count",
     "source_image_quality_status", "source_image_quality_min_actual_scored",
-    "source_image_quality_min_avg_score", "monitoring_exclusion_reason",
+    "source_image_quality_min_avg_score", "monitoring_exclusion_reason", "source_probe_reason",
+    "high_volume_text_posts_date", "high_volume_text_posts_count", "high_volume_text_posts_threshold",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
 SOURCE_CANDIDATE_STATE_FIELDS = [
@@ -1443,6 +1546,7 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "canonical_url": url,
         "source_url": url,
         "fetch_status": fetch_status,
+        "source_queue_status": row.get("source_queue_status") or (fetch_status if source_terminal_rejected_status(fetch_status) else ""),
         "queue_status": queue_status,
         "frontier_status": row.get("frontier_status") or "",
         "frontier_action": row.get("frontier_action") or "",
@@ -1458,6 +1562,10 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "fetch_error_message": row.get("fetch_error_message") or row.get("last_resolve_error_message_short") or row.get("method_error_message_short") or "",
         "confidence": row.get("confidence") or row.get("similarity_edge_confidence") or "",
         "source_probe_reason": row.get("source_probe_reason") or row.get("frontier_reason") or "",
+        "monitoring_exclusion_reason": row.get("monitoring_exclusion_reason") or "",
+        "high_volume_text_posts_date": row.get("high_volume_text_posts_date") or "",
+        "high_volume_text_posts_count": row.get("high_volume_text_posts_count") or 0,
+        "high_volume_text_posts_threshold": row.get("high_volume_text_posts_threshold") or 0,
     }
     return compact_record(payload, SOURCE_QUEUE_STATE_FIELDS + [
         "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "queue_status",
@@ -3873,14 +3981,23 @@ def build_unified_source_queue(
             monitoring_exclusion_reason = ""
         fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
         previous_queue_status = str(rec.get("source_queue_status") or "")
-        scanned = bool(fetch_status) or previous_queue_status.startswith("processed") or bool(rec.get("last_processed_at")) or actual_n > 0 or ko_posts > 0 or candidate_posts > 0
+        terminal_rejected_status = ""
+        if source_terminal_rejected_status(fetch_status):
+            terminal_rejected_status = fetch_status
+        elif source_terminal_rejected_status(previous_queue_status):
+            terminal_rejected_status = previous_queue_status
+        scanned = bool(terminal_rejected_status) or bool(fetch_status) or previous_queue_status.startswith("processed") or bool(rec.get("last_processed_at")) or actual_n > 0 or ko_posts > 0 or candidate_posts > 0
         if scanned:
             processed_orders.append(int(rec.get("queue_order") or 0))
-        if scanned and image_quality_source_status == "exclude_low_image_quality":
+        if terminal_rejected_status:
+            qstatus, color, next_action = terminal_rejected_status, "gray_rejected", "do_not_rescan_rejected_source"
+            image_quality_source_status = "source_rejected_before_candidate_scoring"
+            monitoring_exclusion_reason = str(srow.get("monitoring_exclusion_reason") or rec.get("monitoring_exclusion_reason") or HIGH_VOLUME_TEXT_POSTS_REASON)
+        elif scanned and image_quality_source_status == "exclude_low_image_quality":
             qstatus, color, next_action = "processed_found_ko_low_image_quality", "yellow_retry", "exclude_from_monitoring_candidates_but_keep_posts_for_review"
         elif scanned and (ko_posts > 0 or candidate_posts > 0):
             qstatus, color, next_action = "processed_found_ko_candidate", "green_found_ko", "prioritize_delta_rescan_or_manual_review_posts"
-        elif scanned and fetch_status == "ok":
+        elif scanned and fetch_status in {"ok", "ok_public_web"}:
             qstatus, color, next_action = "processed_no_ko", "red_no_ko", "rescan_later_or_deprioritize"
         elif scanned:
             qstatus, color, next_action = "needs_rescan_or_retry", "yellow_retry", "retry_or_fix_source_access"
@@ -3910,12 +4027,16 @@ def build_unified_source_queue(
             "source_image_quality_min_actual_scored": image_quality_min_n,
             "source_image_quality_min_avg_score": image_quality_min_score,
             "monitoring_exclusion_reason": monitoring_exclusion_reason,
+            "source_probe_reason": srow.get("source_probe_reason") or rec.get("source_probe_reason") or "",
+            "high_volume_text_posts_date": srow.get("high_volume_text_posts_date") or rec.get("high_volume_text_posts_date") or "",
+            "high_volume_text_posts_count": int(srow.get("high_volume_text_posts_count") or rec.get("high_volume_text_posts_count") or 0),
+            "high_volume_text_posts_threshold": int(srow.get("high_volume_text_posts_threshold") or rec.get("high_volume_text_posts_threshold") or 0),
             "next_action": next_action,
             "queue_item_updated_at": run_now,
         })
     cursor_position = max([prev_cursor] + processed_orders) if out else 0
     cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
-    display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" else 1, int(r.get("queue_order") or 0)))
+    display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" or source_terminal_rejected_status(r.get("source_queue_status")) else 1, int(r.get("queue_order") or 0)))
     next_pending_marked = False
     for idx, row in enumerate(display_rows, start=1):
         order = int(row.get("queue_order") or 0)
@@ -3930,6 +4051,7 @@ def build_unified_source_queue(
         "source_queue_pending_total": sum(1 for r in out if r.get("source_queue_status") == "pending_scan"),
         "source_queue_processed_total": sum(1 for r in out if str(r.get("source_queue_status") or "").startswith("processed")),
         "source_queue_retry_total": sum(1 for r in out if r.get("source_queue_status") == "needs_rescan_or_retry"),
+        "source_queue_rejected_high_volume_total": sum(1 for r in out if source_rejected_by_text_volume_status(r.get("source_queue_status"))),
         "source_queue_cursor_position": cursor_position,
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,
@@ -5248,6 +5370,9 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
     timeout = max(5, getenv_int("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", 20))
     posts: list[dict[str, Any]] = []
     seen: set[int] = set()
+    text_posts_by_day: dict[str, int] = {}
+    cutoff = history_min_post_datetime()
+    old_posts_cutoff_hit = False
     before = ""
     started = time.monotonic()
     try:
@@ -5269,6 +5394,16 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
                 if not text:
                     continue
                 date_match = re.search(r'<time[^>]+datetime="([^"]+)"', block)
+                post_date_raw = date_match.group(1) if date_match else ""
+                if is_history_post_older_than_cutoff(post_date_raw, cutoff):
+                    old_posts_cutoff_hit = True
+                    break
+                volume = record_text_post_volume(text_posts_by_day, post_date_raw)
+                if volume.get("rejected"):
+                    apply_high_volume_text_rejection(src_row, volume)
+                    posts = []
+                    old_posts_cutoff_hit = False
+                    break
                 image_url = _telegram_public_web_first_image_url(block)
                 post_url = f"https://t.me/{handle}/{mid}"
                 post_row = {
@@ -5280,7 +5415,7 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
                     "handle": "@" + handle,
                     "post_url": post_url,
                     "platform_post_key": f"tg:{handle}:{mid}",
-                    "post_date": date_match.group(1) if date_match else "",
+                    "post_date": post_date_raw,
                     "text": text,
                     "text_excerpt": re.sub(r"\s+", " ", text)[:500],
                     "has_media": bool(image_url),
@@ -5305,18 +5440,28 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
                 posts.append(post_row)
                 if len(posts) >= max_posts:
                     break
+            if source_terminal_rejected_status(src_row.get("fetch_status")) or old_posts_cutoff_hit:
+                break
             if oldest_mid is None or str(oldest_mid) == before:
                 break
             before = str(oldest_mid)
             if status is not None and hasattr(status, "event"):
                 status.event("telegram_public_web_fetch_alive", phase="fetch", status="running", run_id=run_id, current_source_url=seed.canonical_url, posts_scanned=len(posts), source_id=seed.source_id, progress_label=f"public web {handle} posts {len(posts)}/{max_posts}")
-        src_row.update({
-            "fetch_status": "ok_public_web" if posts else "no_public_web_posts",
-            "posts_scanned": len(posts),
-            "last_seen_post_date": max([str(p.get("post_date") or "") for p in posts] or [""]),
-            "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
-            "source_probe_reason": "Fetched from public t.me/s HTML without Telethon because public-web fallback is enabled.",
-        })
+        if source_terminal_rejected_status(src_row.get("fetch_status")):
+            src_row.update({
+                "posts_scanned": 0,
+                "last_seen_post_date": "",
+                "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
+            })
+        else:
+            src_row.update({
+                "fetch_status": "ok_public_web" if posts else "no_public_web_posts",
+                "posts_scanned": len(posts),
+                "last_seen_post_date": max([str(p.get("post_date") or "") for p in posts] or [""]),
+                "history_fetch_runtime_seconds": round(time.monotonic() - started, 3),
+                "source_probe_reason": "Fetched from public t.me/s HTML without Telethon because public-web fallback is enabled." + (" Stopped at the configured history age cutoff." if old_posts_cutoff_hit else ""),
+                "history_min_post_date": cutoff.isoformat() if cutoff else "",
+            })
     except Exception as exc:
         src_row.update({
             "fetch_status": "error_public_telegram_web_fetch",
@@ -5653,6 +5798,10 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
                 src_row["resolved_title"] = title
                 seen: set[int] = set()
+                source_post_rows: list[dict[str, Any]] = []
+                text_posts_by_day: dict[str, int] = {}
+                cutoff = history_min_post_datetime()
+                old_posts_cutoff_hit = False
                 anchor_cap = getenv_int("REGION_TALK_TG_MAX_ANCHOR_QUERIES_PER_SOURCE", 3)
                 queries = [None] + DEFAULT_ANCHORS[:max(0, anchor_cap)]
                 for q in queries:
@@ -5683,6 +5832,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         if not text:
                             continue
                         dt = getattr(msg, "date", None)
+                        if is_history_post_older_than_cutoff(dt, cutoff):
+                            old_posts_cutoff_hit = True
+                            break
+                        volume = record_text_post_volume(text_posts_by_day, dt)
+                        if volume.get("rejected"):
+                            apply_high_volume_text_rejection(src_row, volume)
+                            source_post_rows = []
+                            break
                         post_url = f"https://t.me/{handle}/{mid}"
                         has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
                         primary_media_path = ""
@@ -5729,17 +5886,30 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                             elif from_name:
                                 forwarded_from_confidence = 0.45
                         post_row = {"post_id":"post_"+stable_hash("telegram", handle, mid), "source_id": seed.source_id, "source_seed_id": seed.source_seed_id, "source_title": title, "platform":"telegram", "handle": seed.handle, "post_url": post_url, "platform_post_key": f"tg:{handle}:{mid}", "post_date": dt.isoformat() if dt else "", "text": text, "text_excerpt": re.sub(r"\s+", " ", text)[:500], "has_media": has_media, "media_count": 1 if has_media else 0, "primary_media_path": primary_media_path, "local_media_paths": primary_media_path, "rights_policy": seed.rights_policy, "source_kind": seed.source_kind, "source_type": seed.source_kind, "source_url": seed.canonical_url, "is_forwarded_or_repost": bool(fwd), "forwarded_from_source_title": forwarded_from_title, "forwarded_from_source_id": "src_" + stable_hash("telegram_forward", forwarded_from_url or forwarded_from_title) if fwd else "", "forwarded_from_platform": "telegram" if fwd else "", "forwarded_from_handle": forwarded_from_handle, "forwarded_from_url": forwarded_from_url, "forwarded_from_post_url": forwarded_from_post_url, "forwarded_from_confidence": forwarded_from_confidence, "original_source_candidate_id": "src_cand_" + stable_hash("telegram", forwarded_from_url or forwarded_from_title) if fwd else ""}
-                        append_post_online(posts, post_row, run_id=run_id, stage="telegram_history_fetch")
+                        source_post_rows.append(post_row)
                         if len(seen) >= max_posts:
                             break
+                    if source_terminal_rejected_status(src_row.get("fetch_status")):
+                        break
+                    if old_posts_cutoff_hit and q is None:
+                        break
                     if len(seen) >= max_posts:
                         break
                 governor.total_ok += 1
                 governor.history_sources_ok += 1
-                governor.history_posts_fetched += len(seen)
-                src_row["posts_scanned"] = len(seen)
-                post_dates = [str(p.get("post_date") or "") for p in posts if p.get("source_id") == seed.source_id]
-                src_row["last_seen_post_date"] = max(post_dates or [""])
+                if source_terminal_rejected_status(src_row.get("fetch_status")):
+                    src_row["posts_scanned"] = 0
+                    src_row["last_seen_post_date"] = ""
+                else:
+                    for post_row in source_post_rows:
+                        append_post_online(posts, post_row, run_id=run_id, stage="telegram_history_fetch")
+                    governor.history_posts_fetched += len(source_post_rows)
+                    src_row["posts_scanned"] = len(source_post_rows)
+                    post_dates = [str(p.get("post_date") or "") for p in source_post_rows]
+                    src_row["last_seen_post_date"] = max(post_dates or [""])
+                    if old_posts_cutoff_hit:
+                        src_row["source_probe_reason"] = (src_row.get("source_probe_reason") or "") + " Stopped at the configured history age cutoff."
+                src_row["history_min_post_date"] = cutoff.isoformat() if cutoff else ""
                 src_row["history_fetch_runtime_seconds"] = round(time.monotonic() - history_fetch_started, 3)
                 if governor.humanlike_pacing_enabled:
                     await governor.humanlike_pause(
@@ -6251,7 +6421,13 @@ def text_embedding_required_runtime_reserve_seconds() -> int:
 
 
 def discovery_tail_reserve_seconds() -> int:
-    configured = getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 930 if text_vector_priority_enabled() else 420)
+    explicit_raw = os.getenv("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS")
+    if explicit_raw is not None and str(explicit_raw).strip():
+        # Operator/orchestrator profile owns this budget. Do not silently promote
+        # it to the text-embedding reserve, otherwise a healthy run can scan
+        # sources but always skip similar/keyword discovery and channel growth.
+        return max(0, getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS", 240))
+    configured = 930 if text_vector_priority_enabled() else 420
     if text_vector_priority_enabled():
         configured = max(configured, text_embedding_required_runtime_reserve_seconds())
     return max(0, configured)

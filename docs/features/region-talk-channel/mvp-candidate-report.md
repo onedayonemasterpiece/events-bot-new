@@ -632,7 +632,8 @@ Summary metrics include `source_queue_total`, pending/processed/retry counts,
 `source_queue_catalog_sources_total`, `source_queue_telegram_total`,
 `source_queue_vk_total`, `source_queue_pending_telegram_total`,
 `source_queue_pending_vk_total`, `source_queue_non_target_skipped_this_run`,
-`source_queue_low_image_quality_excluded_total`, `source_queue_only_telegram_vk`,
+`source_queue_low_image_quality_excluded_total`,
+`source_queue_rejected_high_volume_total`, `source_queue_only_telegram_vk`,
 `source_queue_only_target_source_urls`, `image_queue_total`, `image_queue_cursor_position`,
 `image_queue_target_this_run`, `image_queue_selected_next_batch`,
 `image_queue_actual_scored_total`, `image_queue_needs_actual_fetch_total`,
@@ -762,6 +763,11 @@ public is technically due, CandidateReport first spends scan slots on
 start only after the primary frontier is exhausted. That later monitoring loop is
 cursor-based: it uses the stored per-source history cursor, delta window and
 overlap to fetch new or boundary posts, not to repeat the original full scan.
+Normal product runs also enforce freshness and high-volume source guardrails:
+`REGION_TALK_HISTORY_MAX_POST_AGE_DAYS` defaults to 365, `REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS` is honored when explicitly set by the orchestrator, and `REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD` defaults to 30.
+If a source hits the daily text-post threshold, CandidateReport writes
+`rejected_high_volume_text_posts_per_day` with the triggering date/count and the
+source is not selected for future scans unless manually reset.
 
 ## Vector-first product quality correction
 

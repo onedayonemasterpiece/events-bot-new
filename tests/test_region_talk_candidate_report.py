@@ -267,8 +267,104 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
 
 
+    def test_discovery_tail_reserve_honors_explicit_orchestrator_budget(self) -> None:
+        mod = load_module()
+        old = {
+            key: os.environ.get(key)
+            for key in [
+                "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS",
+                "REGION_TALK_PRIORITIZE_TEXT_VECTORS",
+                "REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS",
+                "REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS",
+            ]
+        }
+        try:
+            os.environ["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"] = "240"
+            os.environ["REGION_TALK_PRIORITIZE_TEXT_VECTORS"] = "1"
+            os.environ["REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS"] = "420"
+            os.environ["REGION_TALK_RUNTIME_RESERVE_DURING_TEXT_EMBEDDING_SECONDS"] = "120"
+            self.assertEqual(mod.discovery_tail_reserve_seconds(), 240)
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
+    def test_history_age_cutoff_defaults_to_one_year(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_HISTORY_MAX_POST_AGE_DAYS")
+        try:
+            os.environ.pop("REGION_TALK_HISTORY_MAX_POST_AGE_DAYS", None)
+            cutoff = mod.history_min_post_datetime(mod.datetime(2026, 7, 8, tzinfo=mod.timezone.utc))
+            self.assertEqual(cutoff.date().isoformat(), "2025-07-08")
+            self.assertTrue(mod.is_history_post_older_than_cutoff("2025-07-07T23:59:59+00:00", cutoff))
+            self.assertFalse(mod.is_history_post_older_than_cutoff("2025-07-08T00:00:01+00:00", cutoff))
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_HISTORY_MAX_POST_AGE_DAYS", None)
+            else:
+                os.environ["REGION_TALK_HISTORY_MAX_POST_AGE_DAYS"] = old
 
+    def test_text_post_volume_rejects_at_thirty_per_day(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD")
+        try:
+            os.environ["REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD"] = "30"
+            counts = {}
+            for _ in range(29):
+                decision = mod.record_text_post_volume(counts, "2026-07-08T10:00:00+00:00")
+                self.assertFalse(decision["rejected"])
+            decision = mod.record_text_post_volume(counts, "2026-07-08T23:59:00+00:00")
+            self.assertTrue(decision["rejected"])
+            self.assertEqual(decision["day"], "2026-07-08")
+            self.assertEqual(decision["count"], 30)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD", None)
+            else:
+                os.environ["REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD"] = old
+
+    def test_high_volume_source_queue_status_is_terminal_and_not_due(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="unified_queue_news", platform="telegram", source_title="Новости 24",
+            handle="@news24", url="https://t.me/news24", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="news", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {"unified_source_queue": {"telegram:news24": {
+            "canonical_source_key": "telegram:news24", "source_url": "https://t.me/news24",
+            "source_queue_status": mod.HIGH_VOLUME_TEXT_POSTS_STATUS, "queue_order": 1,
+            "_ydb_updated_at": "2020-01-01T00:00:00+00:00",
+        }}}
+        due = mod._seed_scan_due_state(seed, previous_state)
+        self.assertFalse(due["due"])
+        self.assertEqual(due["reason"], "terminal_rejected_source")
+        selected = mod.selected_sources_for_run([seed], 1, previous_state=previous_state)
+        self.assertEqual(selected, [])
+
+    def test_source_queue_preserves_high_volume_rejection(self) -> None:
+        mod = load_module()
+        previous = {"unified_source_queue": {"telegram:news24": {
+            "canonical_source_key": "telegram:news24", "platform": "telegram",
+            "source_url": "https://t.me/news24", "queue_order": 1, "source_queue_status": "pending_scan",
+        }}}
+        source_row = {
+            "source_id": "src_news", "platform": "telegram", "canonical_url": "https://t.me/news24",
+            "canonical_source_key": "telegram:news24", "fetch_status": mod.HIGH_VOLUME_TEXT_POSTS_STATUS,
+            "monitoring_exclusion_reason": mod.HIGH_VOLUME_TEXT_POSTS_REASON,
+            "high_volume_text_posts_date": "2026-07-08", "high_volume_text_posts_count": 30,
+            "high_volume_text_posts_threshold": 30, "posts_scanned": 0,
+        }
+        rows, metrics = mod.build_unified_source_queue(previous, [], [source_row], [], [], [], [], {}, "run-q", "2026-07-08T00:00:00+00:00")
+        row = next(r for r in rows if r["canonical_source_key"] == "telegram:news24")
+        self.assertEqual(row["source_queue_status"], mod.HIGH_VOLUME_TEXT_POSTS_STATUS)
+        self.assertEqual(row["monitoring_exclusion_reason"], mod.HIGH_VOLUME_TEXT_POSTS_REASON)
+        self.assertEqual(row["next_action"], "do_not_rescan_rejected_source")
+        self.assertEqual(row["high_volume_text_posts_count"], 30)
+        self.assertEqual(metrics["source_queue_rejected_high_volume_total"], 1)
 
     def test_final_verifier_waits_for_actual_image_scoring(self) -> None:
         mod = load_module()

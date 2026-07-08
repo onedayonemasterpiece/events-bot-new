@@ -65,6 +65,8 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # queries per run are enough to make the public/source frontier grow.
     "REGION_TALK_HISTORY_SOURCES_TARGET": "12",
     "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "30",
+    "REGION_TALK_HISTORY_MAX_POST_AGE_DAYS": "365",
+    "REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD": "30",
     "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": "12",
     "REGION_TALK_TG_SIMILAR_ENABLED": "1",
     "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": "5",
@@ -436,23 +438,26 @@ def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready
     return [actions[0]]
 
 
-def _progress_signature(metrics: dict[str, Any]) -> tuple[int, ...]:
-    keys = (
-        "publication_sent_total",
-        "publication_confirmed_total",
-        "publication_candidate_total",
-        "image_actual_scored_total",
-        "image_pending_total",
-        "text_vector_e5_total",
-        "text_vector_bge_m3_total",
-        "bge_pending_sample_total",
-    )
-    out: list[int] = []
-    for key in keys:
-        try:
-            out.append(int(metrics.get(key) or 0))
-        except Exception:
-            out.append(0)
+def _progress_signature(metrics: dict[str, Any]) -> tuple[tuple[str, int], ...]:
+    # Monitor the complete numeric funnel. If a metric is emitted as a scalar
+    # number, it participates in progress/no-progress decisions without manual
+    # allow-lists or omissions.
+    out: list[tuple[str, int]] = []
+    for key in sorted(metrics):
+        value = metrics.get(key)
+        if isinstance(value, bool):
+            out.append((key, int(value)))
+            continue
+        if isinstance(value, int):
+            out.append((key, value))
+            continue
+        if isinstance(value, float):
+            out.append((key, int(value)))
+            continue
+        if isinstance(value, str):
+            raw = value.strip()
+            if re.fullmatch(r"[-+]?\d+(?:\.0+)?", raw):
+                out.append((key, int(float(raw))))
     return tuple(out)
 
 

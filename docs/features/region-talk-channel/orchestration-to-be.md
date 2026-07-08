@@ -156,7 +156,13 @@ Important invariants:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and 2 keyword-discovery queries. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
-  turning the Telegram session into an aggressive crawler.
+  turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image and publication counters are monitored together without manual omissions.
+- CandidateReport history fetches are freshness-bounded by
+  `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365` by default. It should not crawl
+  deeper than one year for normal product monitoring. Sources with at least
+  `REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD=30` text posts
+  on one UTC day are terminally rejected as high-volume/news-like feeds before
+  spending more history budget.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,

@@ -58,6 +58,24 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "2")
         self.assertEqual(actions[3]["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "240")
 
+    def test_progress_signature_uses_all_numeric_metrics_without_classes(self) -> None:
+        mod = load_module()
+        base = {
+            "publics_total": 10,
+            "processed_posts_unique_total": 15,
+            "publication_sent_total": 0,
+            "some_future_numeric_metric": 1,
+            "kaggle_kernel_statuses": {"region-talk-candidate-report": "RUNNING"},
+            "non_numeric_status": "RUNNING",
+        }
+        more_publics = dict(base, publics_total=11)
+        more_future_metric = dict(base, some_future_numeric_metric=2)
+        self.assertIn(("publics_total", 10), mod._progress_signature(base))
+        self.assertIn(("some_future_numeric_metric", 1), mod._progress_signature(base))
+        self.assertNotIn(("non_numeric_status", 0), mod._progress_signature(base))
+        self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
+        self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
+
     def test_execute_ready_selects_non_conflicting_parallel_launches(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(
