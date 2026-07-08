@@ -153,7 +153,7 @@ Important invariants:
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
-  about 70 source scans per run, 5 similar-channel seeds, up to 5
+  about 12 source scans per run, 5 similar-channel seeds, up to 5
   recommendations per seed, and 2 keyword-discovery queries. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
   turning the Telegram session into an aggressive crawler.

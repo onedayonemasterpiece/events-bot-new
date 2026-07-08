@@ -11,7 +11,7 @@
   the orchestrator venv Python for child launchers.
 - **Region Talk Channel / gentle source discovery growth**: CandidateReport
   launches from the orchestrator now reserve time for discovery tail and cap it
-  conservatively (70 source scans, 5 similar-channel seeds, 5 recs/seed and 2
+  conservatively (12 source scans, 5 similar-channel seeds, 5 recs/seed and 2
   keyword queries) so the source/public frontier can grow on each healthy run
   without aggressive Telegram crawling.
 - **Region Talk Channel / E5+BGE production fusion**: CandidateReport now keeps
