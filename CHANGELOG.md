@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / travel-source scan priority**: CandidateReport now
+  prioritizes due/pending travel-blogger sources inside the live source queue
+  (`REGION_TALK_PRIORITIZE_TRAVEL_SOURCES=1`) before plain queue order, so
+  bounded 20-minute product runs spend Telegram budget on likely nonlocal
+  travel/blogger sources instead of unrelated general/business channels while
+  preserving the due/pending-before-rescan contract.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

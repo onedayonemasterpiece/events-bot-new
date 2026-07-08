@@ -617,6 +617,63 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     return {"due": False, "reason": "processed_recently_or_not_due", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
 
 
+def source_product_priority_score(seed: Seed, queue_row: dict[str, Any] | None = None) -> float:
+    """Prioritize travel/blogger pending sources for the Region Talk product goal.
+
+    The queue still keeps every source and every cursor; this score only decides
+    which due/pending sources are worth spending a bounded 20-minute run on
+    first. Post acceptance remains vector/LLM-owned.
+    """
+    row = queue_row if isinstance(queue_row, dict) else {}
+    text = " ".join(
+        str(x or "").lower()
+        for x in [
+            seed.source_title,
+            seed.canonical_url,
+            seed.handle,
+            seed.source_kind,
+            seed.source_scope_guess,
+            seed.discovered_from,
+            seed.expected_value,
+            seed.why_seeded,
+            row.get("source_title"),
+            row.get("source_url"),
+            row.get("source_topic_class"),
+            row.get("source_geo_class"),
+            row.get("source_priority_reason"),
+            row.get("added_from"),
+        ]
+    )
+    positive = [
+        ("travel", 3.0), ("traveler", 3.0), ("travellers", 3.0), ("travelers", 3.0),
+        ("путешеств", 3.0), ("туризм", 2.6), ("турист", 2.2), ("маршрут", 2.0),
+        ("поездк", 1.8), ("тревел", 2.8), ("гид", 1.5), ("отдых", 1.4),
+        ("блог", 1.7), ("авторск", 1.5), ("фото", 1.2), ("поход", 1.2),
+        ("росси", 0.8), ("города", 0.6),
+    ]
+    negative = [
+        ("калининград", 2.8), ("кёниг", 2.2), ("kenig", 2.2), ("kgd", 1.6),
+        ("афиша", 1.8), ("новости", 1.8), ("происшеств", 2.2), ("администрац", 1.6),
+        ("мэр", 1.2), ("губернатор", 1.2), ("бизнес", 1.0), ("экономик", 1.0),
+        ("финанс", 1.0), ("мсп", 1.0), ("издательство", 0.8),
+    ]
+    score = 0.0
+    for marker, weight in positive:
+        if marker in text:
+            score += weight
+    for marker, weight in negative:
+        if marker in text:
+            score -= weight
+    try:
+        score += min(3.0, float(row.get("candidate_posts_found") or 0) * 0.8)
+        score += min(2.0, float(row.get("ko_posts_found") or 0) * 0.4)
+    except Exception:
+        pass
+    if "public_travel_blogger_catalog" in text:
+        score += 2.5
+    return round(score, 3)
+
+
 def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state: dict[str, Any] | None = None) -> list[Seed]:
     enabled = [s for s in seeds if s.monitoring_enabled]
     fallback = [s for s in seeds if not s.monitoring_enabled]
@@ -635,9 +692,11 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         annotated.append((seed, due))
     # Product runs should spend Telegram budget on unscanned/due queue items first.
     # Processed sources remain candidates for future delta scans, but are not re-read every run.
+    prioritize_product_sources = getenv_bool("REGION_TALK_PRIORITIZE_TRAVEL_SOURCES", True)
     ordered = sorted(annotated, key=lambda item: (
         not bool(item[1].get("due")),
         item[0].priority,
+        -source_product_priority_score(item[0], item[1].get("queue_row")) if prioritize_product_sources else 0,
         str((_source_queue_row_for_seed(item[0], previous_state) or {}).get("queue_order") or "999999999").zfill(12),
         seed_sort_number(item[0].source_seed_id),
         item[0].canonical_url,
@@ -655,6 +714,16 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
         {"source_title": seed.source_title, "canonical_url": seed.canonical_url, "reason": str(due.get("reason") or "")}
         for seed, due in annotated if not bool(due.get("due"))
     ][:20]
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_travel_priority_enabled"] = bool(prioritize_product_sources)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_selection_top_product_priority"] = [
+        {
+            "source_title": seed.source_title,
+            "canonical_url": seed.canonical_url,
+            "priority_score": source_product_priority_score(seed, due.get("queue_row")),
+            "reason": str(due.get("reason") or ""),
+        }
+        for seed, due in ordered[:20]
+    ]
     return selected[:max(0, max_sources)]
 
 

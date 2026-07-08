@@ -411,6 +411,11 @@ The XLSX has:
   is exhausted can it loop back over already processed publics; that pass uses
   the per-source cursor/delta window and overlap, so it scans only new or
   near-boundary posts rather than replaying the whole public history.
+  Within the due/pending frontier, bounded product runs prioritize likely
+  nonlocal travel/blogger sources (`REGION_TALK_PRIORITIZE_TRAVEL_SOURCES=1`)
+  before plain queue order so a 20-minute pass does not spend scarce Telegram
+  budget on unrelated general/business/public-official channels while many
+  travel sources are still pending.
 - In semi-manual discovery mode, online YDB row-level writes are mandatory:
   CandidateReport must upsert `source_status_item`/`source_queue_item` when
   sources are selected/discovered/status-changed, `source_candidate_item` and
