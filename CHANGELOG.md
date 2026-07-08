@@ -14,6 +14,10 @@
   while trying to collect the 20 Gemini-confirmed links. The Kaggle launcher now
   also ships these source-selection env controls into the notebook config instead
   of leaving them only in the local shell.
+- **Region Talk Channel / live-YDB run observability**: in the default
+  report-tail-skipped mode CandidateReport now logs
+  `live_candidate_processing_started` with `build_report_required=false` instead
+  of implying that the legacy workbook build is the required product output.
 - **Region Talk Channel / actual-image readiness repair**: ImageDiagnostic now
   treats a row as visually complete only when `image_queue_status=actual_scored`
   and `image_model_input_type=actual_image`; historical metadata-only pseudo

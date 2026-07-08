@@ -6410,7 +6410,18 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         max_posts_to_score = min(max_posts_to_score, getenv_int("REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE", 40))
     posts_for_scoring = posts[:max_posts_to_score] if max_posts_to_score > 0 else posts
     runtime_deferred_posts = posts[len(posts_for_scoring):]
-    report_event("report_build_started", phase="report", status="running", posts_fetched=len(posts), posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), ydb_read_status=state_meta.get("ydb_read_status"))
+    live_queue_only = getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False)
+    report_event(
+        "live_candidate_processing_started" if live_queue_only else "report_build_started",
+        phase="candidate_processing" if live_queue_only else "report",
+        status="running",
+        posts_fetched=len(posts),
+        posts_to_score=len(posts_for_scoring),
+        posts_deferred=len(runtime_deferred_posts),
+        ydb_read_status=state_meta.get("ydb_read_status"),
+        build_report_required=not live_queue_only,
+        live_ydb_source_of_truth=live_queue_only,
+    )
 
     def _write_partial_runtime_report(reason: str, *, text_embedding_error: str = "") -> dict[str, Any]:
         """Write a compact terminal artifact when the 20-minute budget is gone.

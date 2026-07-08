@@ -387,6 +387,10 @@ The XLSX has:
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
   `publication_queue_*`, then `state_write_*`) so a run never stays silent after
   deferring the final verifier.
+- In this live-YDB mode, the processing-start event is
+  `live_candidate_processing_started` with `live_ydb_source_of_truth=true` and
+  `build_report_required=false`. A `report_build_started` event should only mean
+  the legacy operator report tail was explicitly enabled.
 - Kaggle stdout should stay readable: heartbeat/callback spam is suppressed by
   default (`REGION_TALK_STDOUT_HEARTBEATS=0`,
   `REGION_TALK_KAGGLE_STATUS_STDOUT=0`). For post-mortem diagnostics, inspect
