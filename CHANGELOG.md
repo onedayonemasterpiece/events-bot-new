@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / E5+BGE production fusion**: CandidateReport now keeps
+  the main Kaggle run E5-only by default, writes durable E5
+  `text_vector_enrichment_item` rows, consumes external BGE-M3 YDB rows for
+  E5+BGE fusion, defers image queue handoff until required BGE rows are present,
+  and lets the BGE worker read those E5 rows first without any Telegram session.
+- **Region Talk Channel / orchestrator dry-run**: added
+  `scripts/region_talk_orchestrator.py` to read live YDB queue metrics, estimate
+  BGE pending work, and print a JSON decision plan for notifier/finalizer/BGE,
+  ImageDiagnostic, or CandidateReport launches before any optional `--execute`.
 - **Region Talk Channel / EmbeddingGemma CPU research**: extended the
   no-Telegram research embedding launcher to run `google/embeddinggemma-300m`
   from Kaggle model source `google/embeddinggemma/Transformers/embeddinggemma-300m/1`

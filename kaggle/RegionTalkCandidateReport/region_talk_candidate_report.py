@@ -1058,7 +1058,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
     "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
     "is_ad_or_promo", "current_stage", "current_lifecycle_status", "vector_gate_status",
-    "vector_content_type", "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
+    "vector_content_type", "text_vector_fusion_status", "external_bge_m3_status",
+    "bge_m3_enrichment_id", "bge_m3_match_mode", "candidate_score", "overall_media_score", "postcardness_score", "aesthetic_score",
     "technical_quality_score", "publication_safety_score", "cv_overall_media_score", "clip_postcardness_score",
     "laion_aesthetic_score", "nima_quality_score", "final_visual_score", "final_visual_status",
     "model_disagreement_score", "image_width", "image_height",
@@ -1076,7 +1077,7 @@ POST_STATE_FIELDS = [
 ]
 POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
-    "media_count", "text_hash", "text_excerpt_hash", "source_url", "handle",
+    "media_count", "text_hash", "text_excerpt_hash", "text_excerpt", "short_summary", "source_url", "handle",
     "fetch_status", "post_observation_status",
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
@@ -1085,7 +1086,9 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "publication_story_score", "nonlocal_value_score", "manual_decision", "last_seen_run_id",
     "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
     "external_geo_mentions", "mentioned_external_regions", "is_ad_or_promo",
-    "vector_gate_status", "vector_content_type", "first_seen_run_id", "seen_run_count",
+    "vector_gate_status", "vector_content_type", "text_vector_fusion_status",
+    "external_bge_m3_status", "bge_m3_enrichment_id", "bge_m3_match_mode",
+    "first_seen_run_id", "seen_run_count",
     "short_summary", "why_selected", "final_verifier_status", "final_verifier_decision",
     "final_verifier_reason", "final_verifier_model", "llm_gate_status", "llm_decision",
     "image_model_input_type", "image_queue_status", "overall_media_score", "postcardness_score",
@@ -1601,6 +1604,96 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         return 0
 
 
+def build_e5_text_vector_enrichment_rows(
+    posts: list[dict[str, Any]],
+    embedding_scores: list[dict[str, Any]],
+    embedding_texts: list[str],
+    *,
+    run_id: str,
+) -> list[dict[str, Any]]:
+    bank = semantic_bank_v1()
+    semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
+    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
+    negative_labels = set(bank) - positive_labels
+    rows: list[dict[str, Any]] = []
+    for idx, post in enumerate(posts):
+        scores_row = embedding_scores[idx] if idx < len(embedding_scores) and isinstance(embedding_scores[idx], dict) else {}
+        scores = _scores_by_class_from_embedding_scores(scores_row, E5_TEXT_MODEL_ID)
+        if not scores:
+            continue
+        text = embedding_texts[idx] if idx < len(embedding_texts) else text_embedding_input_for_post(post)
+        text_sha = text_vector_text_hash(text)
+        post_id = str(post.get("post_id") or stable_hash(post.get("post_url"), text_sha, length=16))
+        post_url = str(post.get("post_url") or "")
+        pos_class, pos_score = max(((label, scores.get(label, 0.0)) for label in positive_labels), key=lambda x: x[1])
+        neg_class, neg_score = max(((label, scores.get(label, 0.0)) for label in negative_labels), key=lambda x: x[1])
+        top_class, top_score = max(scores.items(), key=lambda x: x[1])
+        pk = text_vector_enrichment_pk(post_id, post_url, text_sha, E5_TEXT_MODEL_ID)
+        rows.append({
+            "_pk": pk,
+            "text_vector_enrichment_id": pk.replace("text_vector_enrichment_item:", ""),
+            "run_id": run_id,
+            "created_at": utc_now_iso(),
+            "source_kind": "candidate_report_e5",
+            "row_index": idx + 1,
+            "post_id": post_id,
+            "post_url": post_url,
+            "source_id": post.get("source_id") or "",
+            "source_title": post.get("source_title") or "",
+            "source_url": post.get("source_url") or post.get("canonical_url") or "",
+            "post_date": post.get("post_date") or post.get("published_at") or "",
+            "text_hash": text_sha,
+            "text_excerpt": text[:getenv_int("REGION_TALK_TEXT_VECTOR_TEXT_EXCERPT_CHARS", 3000)],
+            "text_source_fields": ["text_embedding_input_for_post"],
+            "model_id": E5_TEXT_MODEL_ID,
+            "model_short": "e5",
+            "encoder_contract": E5_ENCODER_CONTRACT,
+            "embedding_kind": "semantic_bank_scores",
+            "embedding_dim": 0,
+            "semantic_bank_version": semantic_bank_version,
+            "semantic_bank_hash": bank_hash[:16],
+            "semantic_scores_by_class": {str(k): round(float(v), 4) for k, v in sorted(scores.items())},
+            "e5_top_class": top_class,
+            "e5_top_score": round(float(top_score), 4),
+            "e5_positive_class": pos_class,
+            "e5_positive_score": round(float(pos_score), 4),
+            "e5_negative_class": neg_class,
+            "e5_negative_score": round(float(neg_score), 4),
+            "e5_margin_positive_vs_negative": round(float(pos_score - neg_score), 4),
+            "dense_vector_stored": False,
+        })
+    return rows
+
+
+def write_region_talk_text_vector_enrichment_items(rows: list[dict[str, Any]], *, run_id: str, stage: str) -> int:
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return 0
+    if not rows or not getenv_bool("REGION_TALK_YDB_TEXT_VECTOR_ENRICHMENT_WRITES", True):
+        return 0
+    try:
+        now = utc_now_iso()
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for row in rows:
+            pk = str(row.get("_pk") or "text_vector_enrichment_item:" + str(row.get("text_vector_enrichment_id") or ""))
+            if not pk or pk == "text_vector_enrichment_item:":
+                continue
+            payload = {k: v for k, v in row.items() if k != "_pk"}
+            payload.update({"run_id": run_id, "updated_at": now, "last_seen_run_id": run_id, "online_update_stage": stage})
+            items.append((pk, "text_vector_enrichment_item", payload))
+        if not items:
+            return 0
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+
+        def op(session: Any) -> int:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+
+        return int(pool.retry_operation_sync(op) or 0)
+    except Exception as exc:
+        print(f"[region-talk] text_vector_enrichment_ydb_failed stage={stage} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+        return 0
+
+
 def write_region_talk_online_discovery_items(
     source_candidates: list[dict[str, Any]] | None = None,
     source_edges: list[dict[str, Any]] | None = None,
@@ -1998,6 +2091,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 source_candidate_items = ydb_select_kind_items(session, ydb, table_path, "source_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 source_edge_items = ydb_select_kind_items(session, ydb, table_path, "source_edge_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
                     if post_items:
@@ -2065,6 +2159,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["comment_discovery"] = q
                         data0["ydb_row_level_comment_link_items_loaded"] = len(comment_link_items)
+                    if text_vector_items:
+                        q = data0.get("text_vector_enrichment") if isinstance(data0.get("text_vector_enrichment"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in text_vector_items.items():
+                            key = str(item.get("text_vector_enrichment_id") or _pk.replace("text_vector_enrichment_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["text_vector_enrichment"] = q
+                        data0["ydb_row_level_text_vector_enrichment_items_loaded"] = len(text_vector_items)
                     if publication_items:
                         q = data0.get("publication_candidate_queue") if isinstance(data0.get("publication_candidate_queue"), dict) else {}
                         q = dict(q)
@@ -3107,11 +3210,11 @@ def build_source_frontier_unique(rows: list[dict[str, Any]], previous_discovered
 
 CANDIDATE_MEMORY_STAGES = {
     "favorite", "semantic_candidate", "needs_image_review", "image_fetch_retry_needed",
-    "good_text_weak_media", "low_substance_but_region_relevant", "manual_keep",
+    "good_text_weak_media", "low_substance_but_region_relevant", "dual_model_vector_enrichment_pending", "manual_keep",
 }
 ACTIVE_CANDIDATE_MEMORY_STATUSES = {
     "text_candidate_pending_image", "image_fetch_retry_needed", "image_reviewable",
-    "good_text_weak_media", "publication_ready_candidate", "manual_keep", "source_not_refetched_this_run",
+    "good_text_weak_media", "text_candidate_pending_bge_m3", "publication_ready_candidate", "manual_keep", "source_not_refetched_this_run",
 }
 VISIT_EVIDENCE_PATTERN = re.compile(r"\b(были|ездили|поехали|вернулись|посетили|гуляли|увидели|понравил|впечатлил|запомнил|ощущени|эмоци|отзыв|фотоотч[её]т)\b", re.I)
 EMOTION_PATTERN = re.compile(r"\b(понравил|впечатлил|запомнил|атмосфер|красив|удивил|эмоци|ощущени|восторг|любов|спокойн|магия)\b", re.I)
@@ -3258,6 +3361,8 @@ def candidate_lifecycle_status(row: dict[str, Any]) -> str:
         return "image_reviewable"
     if row.get("current_stage") == "good_text_weak_media":
         return "good_text_weak_media"
+    if row.get("current_stage") == "dual_model_vector_enrichment_pending" or str(row.get("vector_gate_status") or "") == "vector_defer_wait_bge_m3":
+        return "text_candidate_pending_bge_m3"
     if row.get("llm_decision") == "accept" or row.get("text_bucket") in {"research_candidate", "publication_candidate_text"}:
         return "text_candidate_pending_image"
     if row.get("current_stage") == "source_not_refetched_this_run":
@@ -3357,6 +3462,11 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "llm_gate_status": row.get("llm_gate_status", ""), "llm_decision": row.get("llm_decision", ""), "llm_reason": row.get("llm_reason", ""), "llm_model": row.get("llm_model", ""),
             "final_verifier_status": row.get("final_verifier_status", ""), "final_verifier_decision": row.get("final_verifier_decision", ""), "final_verifier_reason": row.get("final_verifier_reason", ""), "final_verifier_model": row.get("final_verifier_model", ""),
             "vector_gate_status": row.get("vector_gate_status", ""), "vector_positive_score": row.get("vector_positive_score", ""),
+            "text_vector_fusion_status": row.get("text_vector_fusion_status", prev.get("text_vector_fusion_status", "")),
+            "external_bge_m3_status": row.get("external_bge_m3_status", prev.get("external_bge_m3_status", "")),
+            "bge_m3_enrichment_id": row.get("bge_m3_enrichment_id", prev.get("bge_m3_enrichment_id", "")),
+            "bge_m3_match_mode": row.get("bge_m3_match_mode", prev.get("bge_m3_match_mode", "")),
+            "pending_bge_m3_text_hash": row.get("pending_bge_m3_text_hash", prev.get("pending_bge_m3_text_hash", "")),
             "has_firsthand_visit_evidence": row.get("has_firsthand_visit_evidence", ""), "visit_evidence_type": row.get("visit_evidence_type", ""),
             "first_person_markers": row.get("first_person_markers", prev.get("first_person_markers", "")),
             "emotion_or_impression_evidence": row.get("emotion_or_impression_evidence", ""), "review_or_opinion_evidence": row.get("review_or_opinion_evidence", ""),
@@ -3417,6 +3527,81 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
     for r in region_excluded:
         deltas.append({**r, "delta_bucket": "excluded_by_hard_region_gate", "current_run_id": run_id})
     return rows, not_refetched, deltas
+
+
+def apply_external_bge_m3_fusion_to_candidate_memory(
+    rows: list[dict[str, Any]],
+    *,
+    e5_index: dict[str, list[dict[str, Any]]],
+    bge_index: dict[str, list[dict[str, Any]]],
+    lexicon: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Promote pending candidate-memory rows once external BGE rows are available.
+
+    This lets the main notebook consume BGE results in a later run without
+    re-loading BGE or requiring the original source post to be fetched again.
+    """
+    if not getenv_bool("REGION_TALK_ENABLE_EXTERNAL_BGE_M3_MEMORY_PROMOTION", True):
+        return {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0}
+    stats = {"checked": 0, "promoted": 0, "rejected": 0, "missing": 0}
+    for row in rows:
+        vector_status = str(row.get("vector_gate_status") or "")
+        pending = (
+            vector_status == "vector_defer_wait_bge_m3"
+            or str(row.get("current_stage") or "") == "dual_model_vector_enrichment_pending"
+            or str(row.get("text_vector_fusion_status") or "") == "missing_bge_m3_enrichment"
+        )
+        if not pending:
+            continue
+        stats["checked"] += 1
+        text_sha = str(row.get("pending_bge_m3_text_hash") or "")
+        e5_row, _e5_mode = find_text_vector_enrichment_for_post(e5_index, row, text_hash=text_sha)
+        bge_row, bge_mode = find_text_vector_enrichment_for_post(bge_index, row, text_hash=text_sha)
+        if not e5_row or not bge_row:
+            stats["missing"] += 1
+            row["external_bge_m3_status"] = "pending"
+            row["next_action"] = "run_region_talk_bge_m3_enrichment"
+            continue
+        fused = fuse_e5_with_external_bge_m3(e5_row, bge_row, text_hash=str(e5_row.get("text_hash") or text_sha), match_mode=bge_mode)
+        sample_text = str(row.get("short_summary") or row.get("why_keep_in_memory") or row.get("post_url") or "")
+        if sample_text and sample_text.startswith("http"):
+            sample_text = str(row.get("matched_place_names") or "Калининградская область")
+        scope2 = kaliningrad_oblast_only_scope_gate(sample_text, lexicon) if sample_text else {
+            "kaliningrad_oblast_only_scope": str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"true", "1", "yes"},
+            "matched_place_names": row.get("matched_place_names", ""),
+            "external_geo_mentions": row.get("external_geo_mentions", ""),
+        }
+        if str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"true", "1", "yes"} and not scope2.get("kaliningrad_oblast_only_scope"):
+            scope2["kaliningrad_oblast_only_scope"] = True
+            scope2["matched_place_names"] = row.get("matched_place_names", scope2.get("matched_place_names", ""))
+            scope2["region_scope_reason"] = row.get("region_scope_reason", scope2.get("region_scope_reason", "stored candidate-memory KO scope"))
+        gate = text_vector_gate(
+            sample_text or str(row.get("short_summary") or ""),
+            score_text(sample_text),
+            scope2,
+            {"is_ad_or_promo": str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}},
+            score_substance(sample_text),
+            embedding_scores=fused,
+            allow_embedding_fallback=False,
+        )
+        row.update({k: v for k, v in gate.items() if v not in ("", None)})
+        row["bge_m3_enrichment_id"] = fused.get("bge_m3_enrichment_id", row.get("bge_m3_enrichment_id", ""))
+        row["bge_m3_match_mode"] = fused.get("bge_m3_match_mode", row.get("bge_m3_match_mode", ""))
+        if str(gate.get("vector_gate_status") or "").startswith("vector_reject"):
+            row["current_stage"] = "dropped_text_gate"
+            row["current_lifecycle_status"] = "vector_reject_after_bge_m3"
+            row["why_not_publication_ready"] = str(gate.get("vector_rejection_reason") or gate.get("vector_gate_status") or "")
+            row["next_action"] = "skip_after_external_bge_m3_fusion"
+            stats["rejected"] += 1
+        else:
+            row["current_stage"] = "image_fetch_retry_needed"
+            row["current_lifecycle_status"] = "image_fetch_retry_needed"
+            row["image_status"] = "needs_actual_image_fetch"
+            row["image_publication_ready"] = "false"
+            row["next_action"] = "run_region_talk_image_diagnostic"
+            row["why_not_publication_ready"] = "external E5+BGE text fusion passed; waiting for actual image scoring"
+            stats["promoted"] += 1
+    return stats
 
 
 def build_source_frontier_queue_next(frontier_rows: list[dict[str, Any]], source_rows: list[dict[str, Any]], candidate_memory: list[dict[str, Any]], run_id: str) -> list[dict[str, Any]]:
@@ -3765,6 +3950,10 @@ def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
     vector_status = str(row.get("vector_gate_status") or row.get("memory_vector_recheck_status") or "")
     if vector_status.startswith("vector_reject"):
         return False
+    if vector_status.startswith("vector_defer"):
+        return False
+    if require_external_bge_m3_for_image_queue() and str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+        return False
     if str(row.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"}:
         return False
     mention_role = str(row.get("kaliningrad_mention_role") or "main_subject")
@@ -3850,6 +4039,10 @@ def build_image_candidate_queue(
             "current_lifecycle_status": row.get("current_lifecycle_status", entries[key].get("current_lifecycle_status", "")),
             "vector_gate_status": row.get("vector_gate_status", entries[key].get("vector_gate_status", "")),
             "vector_content_type": row.get("vector_content_type", entries[key].get("vector_content_type", "")),
+            "text_vector_fusion_status": row.get("text_vector_fusion_status", entries[key].get("text_vector_fusion_status", "")),
+            "external_bge_m3_status": row.get("external_bge_m3_status", entries[key].get("external_bge_m3_status", "")),
+            "bge_m3_enrichment_id": row.get("bge_m3_enrichment_id", entries[key].get("bge_m3_enrichment_id", "")),
+            "bge_m3_match_mode": row.get("bge_m3_match_mode", entries[key].get("bge_m3_match_mode", "")),
             "text_region_confirmation_status": "text_confirmed_ko_only_for_image_analysis",
             "candidate_score": row.get("candidate_score") or row.get("candidate_score_current") or row.get("best_candidate_score_ever") or entries[key].get("candidate_score", ""),
             "overall_media_score": media.get("overall_media_score", row.get("overall_media_score", entries[key].get("overall_media_score", ""))),
@@ -5979,7 +6172,49 @@ def should_send_to_llm(fresh: dict[str, Any], scope: dict[str, Any], post: dict[
     return True
 
 
-TEXT_EMBEDDING_MODELS = ["intfloat/multilingual-e5-base", "BAAI/bge-m3"]
+E5_TEXT_MODEL_ID = "intfloat/multilingual-e5-base"
+BGE_M3_TEXT_MODEL_ID = "BAAI/bge-m3"
+BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
+E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
+TEXT_EMBEDDING_MODELS = [E5_TEXT_MODEL_ID, BGE_M3_TEXT_MODEL_ID]
+
+
+def text_embedding_input_for_post(row: dict[str, Any]) -> str:
+    """Compact deterministic text used for local E5 and sidecar BGE enrichment.
+
+    CandidateReport must not load BGE-M3 in the main notebook. It writes this
+    compact text lane as an E5 `text_vector_enrichment_item`; the BGE notebook can
+    then score the same text in isolation and CandidateReport can fuse both rows
+    on the next pass.
+    """
+    max_chars = getenv_int("REGION_TALK_TEXT_EMBEDDING_TEXT_MAX_CHARS", 3000)
+    raw = row.get("_embedding_text") or row.get("text") or row.get("full_text") or row.get("text_excerpt") or row.get("short_summary") or ""
+    return re.sub(r"\s+", " ", str(raw or "")).strip()[:max(100, max_chars)]
+
+
+def text_vector_text_hash(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def text_embedding_model_short(model_id: str) -> str:
+    if model_id.startswith("intfloat/multilingual-e5"):
+        return "e5"
+    if model_id == BGE_M3_TEXT_MODEL_ID:
+        return "bge_m3"
+    return stable_hash(model_id, length=8)
+
+
+def text_vector_enrichment_pk(post_id: str, post_url: str, text_sha: str, model_id: str) -> str:
+    base = post_id or stable_hash(post_url, text_sha, length=16)
+    return f"text_vector_enrichment_item:{base}:{text_embedding_model_short(model_id)}:{text_sha[:12]}"
+
+
+def external_bge_m3_fusion_enabled() -> bool:
+    return getenv_bool("REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED", True)
+
+
+def require_external_bge_m3_for_image_queue() -> bool:
+    return getenv_bool("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", False)
 
 
 def text_embedding_model_ids_for_run() -> list[str]:
@@ -6238,15 +6473,17 @@ def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[s
     pos_label, pos_score = max(((l, fused.get(l, 0.0)) for l in positive_labels), key=lambda x: x[1])
     neg_label, neg_score = max(((l, fused.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
     model_summaries: dict[str, Any] = {}
+    rounded_by_model: dict[str, dict[str, float]] = {}
     top_labels = []
     for model_id, scores in per_model.items():
         mtop_label, mtop_score = max(scores.items(), key=lambda x: x[1])
         mneg_label, mneg_score = max(((l, scores.get(l, 0.0)) for l in negative_labels), key=lambda x: x[1])
-        short = "e5" if model_id.startswith("intfloat/") else "bge_m3" if model_id == "BAAI/bge-m3" else stable_hash(model_id, length=8)
+        short = text_embedding_model_short(model_id)
         model_summaries[f"{short}_top_class"] = mtop_label
         model_summaries[f"{short}_top_score"] = round(float(mtop_score), 3)
         model_summaries[f"{short}_negative_class"] = mneg_label
         model_summaries[f"{short}_negative_score"] = round(float(mneg_score), 3)
+        rounded_by_model[model_id] = {str(k): round(float(v), 4) for k, v in sorted(scores.items())}
         top_labels.append(mtop_label)
     reason = "both_models" if len(set(top_labels)) == 1 and len(per_model) == 2 else ("model_disagreement" if len(per_model) == 2 else "single_model_fallback")
     return {
@@ -6255,6 +6492,7 @@ def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[s
         "semantic_bank_version": semantic_bank_version,
         "semantic_bank_hash": bank_hash[:16],
         "text_embedding_model_id": "+".join(per_model.keys()),
+        "text_embedding_scores_by_model": rounded_by_model,
         "vector_fusion_reason": reason,
         "vector_top_class": pos_label if pos_score >= neg_score else neg_label,
         "vector_top_score": round(max(pos_score, neg_score), 3),
@@ -6265,6 +6503,196 @@ def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[s
         "vector_margin_positive_vs_negative": round(float(pos_score - neg_score), 3),
         "embedding_error": "; ".join(errors)[:500],
     }
+
+
+def _dict_from_maybe_json(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str) and value.strip().startswith("{"):
+        try:
+            parsed = json.loads(value)
+            return dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _scores_by_class_from_embedding_scores(embedding_scores: dict[str, Any], model_id: str) -> dict[str, float]:
+    by_model = _dict_from_maybe_json(embedding_scores.get("text_embedding_scores_by_model") or embedding_scores.get("semantic_scores_by_model"))
+    candidates = [model_id, text_embedding_model_short(model_id)]
+    if model_id == E5_TEXT_MODEL_ID:
+        candidates.extend([k for k in by_model if str(k).startswith("intfloat/multilingual-e5")])
+    if model_id == BGE_M3_TEXT_MODEL_ID:
+        candidates.extend([k for k in by_model if str(k) in {"bge_m3", BGE_M3_TEXT_MODEL_ID}])
+    for key in candidates:
+        scores = _dict_from_maybe_json(by_model.get(key))
+        if scores:
+            return {str(k): float(v) for k, v in scores.items() if _rt_float(v, None) is not None}
+    scores = _dict_from_maybe_json(embedding_scores.get("semantic_scores_by_class"))
+    if scores:
+        return {str(k): float(v) for k, v in scores.items() if _rt_float(v, None) is not None}
+    out: dict[str, float] = {}
+    pos_class = str(embedding_scores.get("vector_positive_semantic_class") or embedding_scores.get(f"{text_embedding_model_short(model_id)}_positive_class") or "")
+    neg_class = str(embedding_scores.get("vector_negative_class") or embedding_scores.get(f"{text_embedding_model_short(model_id)}_negative_class") or "")
+    if pos_class:
+        out[pos_class] = float(embedding_scores.get("vector_positive_semantic_score") or embedding_scores.get("vector_positive_score") or 0)
+    if neg_class:
+        out[neg_class] = max(out.get(neg_class, 0.0), float(embedding_scores.get("vector_negative_score") or 0))
+    return out
+
+
+def _scores_by_class_from_bge_m3_row(row: dict[str, Any]) -> dict[str, float]:
+    scores = _dict_from_maybe_json(row.get("semantic_scores_by_class"))
+    if scores:
+        return {str(k): float(v) for k, v in scores.items() if _rt_float(v, None) is not None}
+    out: dict[str, float] = {}
+    pos_class = str(row.get("bge_m3_positive_class") or "")
+    neg_class = str(row.get("bge_m3_negative_class") or "")
+    top_class = str(row.get("bge_m3_top_class") or "")
+    if pos_class:
+        out[pos_class] = float(row.get("bge_m3_positive_score") or 0)
+    if neg_class:
+        out[neg_class] = max(out.get(neg_class, 0.0), float(row.get("bge_m3_negative_score") or 0))
+    if top_class:
+        out[top_class] = max(out.get(top_class, 0.0), float(row.get("bge_m3_top_score") or 0))
+    return out
+
+
+def _is_bge_m3_enrichment_row(row: dict[str, Any]) -> bool:
+    return (
+        str(row.get("model_id") or "") == BGE_M3_TEXT_MODEL_ID
+        or str(row.get("model_short") or "") == "bge_m3"
+        or str(row.get("encoder_contract") or "") == BGE_M3_ENCODER_CONTRACT
+    )
+
+
+def _is_e5_enrichment_row(row: dict[str, Any]) -> bool:
+    return str(row.get("model_id") or "").startswith("intfloat/multilingual-e5") or str(row.get("model_short") or "") == "e5"
+
+
+def _text_vector_enrichment_rows(previous_state: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = previous_state.get("text_vector_enrichment") if isinstance(previous_state.get("text_vector_enrichment"), dict) else {}
+    return [dict(v) for v in raw.values() if isinstance(v, dict)]
+
+
+def build_text_vector_enrichment_index(previous_state: dict[str, Any], *, model: str) -> dict[str, list[dict[str, Any]]]:
+    """Build lookup keys for durable E5/BGE vector rows loaded from YDB."""
+    predicate = _is_bge_m3_enrichment_row if model == "bge_m3" else _is_e5_enrichment_row
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in _text_vector_enrichment_rows(previous_state):
+        if not predicate(row):
+            continue
+        keys = []
+        post_url = str(row.get("post_url") or "").strip()
+        post_id = str(row.get("post_id") or "").strip()
+        text_sha = str(row.get("text_hash") or "").strip()
+        if post_url and text_sha:
+            keys.append(f"url+hash:{post_url}|{text_sha}")
+        if post_id and text_sha:
+            keys.append(f"id+hash:{post_id}|{text_sha}")
+        if post_url:
+            keys.append(f"url:{post_url}")
+        if post_id:
+            keys.append(f"id:{post_id}")
+        if text_sha:
+            keys.append(f"hash:{text_sha}")
+        for key in keys:
+            out.setdefault(key, []).append(row)
+    for rows in out.values():
+        rows.sort(key=lambda r: str(r.get("created_at") or r.get("_ydb_updated_at") or r.get("updated_at") or ""), reverse=True)
+    return out
+
+
+def find_text_vector_enrichment_for_post(
+    index: dict[str, list[dict[str, Any]]],
+    row: dict[str, Any],
+    *,
+    text_hash: str = "",
+) -> tuple[dict[str, Any] | None, str]:
+    post_url = str(row.get("post_url") or "").strip()
+    post_id = str(row.get("post_id") or row.get("candidate_memory_id") or "").strip()
+    lookups = []
+    if post_url and text_hash:
+        lookups.append((f"url+hash:{post_url}|{text_hash}", "post_url_text_hash"))
+    if post_id and text_hash:
+        lookups.append((f"id+hash:{post_id}|{text_hash}", "post_id_text_hash"))
+    if post_url:
+        lookups.append((f"url:{post_url}", "post_url"))
+    if post_id:
+        lookups.append((f"id:{post_id}", "post_id"))
+    if text_hash:
+        lookups.append((f"hash:{text_hash}", "text_hash_only"))
+    for key, mode in lookups:
+        rows = index.get(key) or []
+        if rows:
+            return rows[0], mode
+    return None, ""
+
+
+def fuse_e5_with_external_bge_m3(
+    e5_scores_or_row: dict[str, Any],
+    bge_row: dict[str, Any],
+    *,
+    text_hash: str = "",
+    match_mode: str = "",
+) -> dict[str, Any]:
+    bank = semantic_bank_v1()
+    semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
+    e5_scores = _scores_by_class_from_embedding_scores(e5_scores_or_row, E5_TEXT_MODEL_ID)
+    bge_scores = _scores_by_class_from_bge_m3_row(bge_row)
+    if not e5_scores or not bge_scores:
+        out = dict(e5_scores_or_row)
+        out.update({
+            "text_vector_fusion_status": "external_bge_m3_fusion_incomplete",
+            "external_bge_m3_status": "missing_scores",
+            "bge_m3_enrichment_id": bge_row.get("text_vector_enrichment_id", ""),
+            "bge_m3_match_mode": match_mode,
+        })
+        return out
+    fused = _fuse_dual_model_scores(
+        {E5_TEXT_MODEL_ID: e5_scores, BGE_M3_TEXT_MODEL_ID: bge_scores},
+        bank,
+        semantic_bank_version,
+        bank_hash,
+        [],
+    )
+    bge_text_hash = str(bge_row.get("text_hash") or "")
+    bge_ko_geo = _rt_float(bge_row.get("bge_m3_ko_geo_score"), 0.0)
+    bge_external_geo = _rt_float(bge_row.get("bge_m3_external_geo_score"), 0.0)
+    if bge_external_geo >= getenv_float("REGION_TALK_BGE_EXTERNAL_GEO_REJECT_SCORE", 0.55) and bge_external_geo > bge_ko_geo:
+        positive = float(fused.get("vector_positive_semantic_score") or 0)
+        if positive < getenv_float("REGION_TALK_BGE_EXTERNAL_GEO_POSITIVE_OVERRIDE_MIN", 0.82):
+            fused["vector_negative_class"] = "other_region_travel"
+            fused["vector_negative_score"] = round(max(float(fused.get("vector_negative_score") or 0), bge_external_geo), 3)
+            fused["vector_margin_positive_vs_negative"] = round(float(fused.get("vector_positive_semantic_score") or 0) - float(fused.get("vector_negative_score") or 0), 3)
+            fused["bge_m3_geo_gate_status"] = "external_geo_dominates"
+    fused.update({
+        "text_embedding_runtime": "kaggle_local_e5_plus_external_bge_m3_ydb",
+        "text_embedding_model_id": f"{E5_TEXT_MODEL_ID}+{BGE_M3_TEXT_MODEL_ID}",
+        "text_vector_fusion_status": "fused_e5_bge_m3",
+        "external_bge_m3_status": "present",
+        "bge_m3_enrichment_id": bge_row.get("text_vector_enrichment_id") or str(bge_row.get("_ydb_pk") or "").replace("text_vector_enrichment_item:", ""),
+        "bge_m3_match_mode": match_mode,
+        "bge_m3_text_hash": bge_text_hash,
+        "bge_m3_text_hash_match": str(bool(text_hash and bge_text_hash and text_hash == bge_text_hash)).lower(),
+        "bge_m3_ko_geo_score": bge_row.get("bge_m3_ko_geo_score", ""),
+        "bge_m3_external_geo_score": bge_row.get("bge_m3_external_geo_score", ""),
+        "bge_m3_ko_vs_external_geo_margin": bge_row.get("bge_m3_ko_vs_external_geo_margin", ""),
+    })
+    return fused
+
+
+def bge_m3_missing_vector_defer_payload(e5_scores: dict[str, Any] | None, *, text_hash: str = "") -> dict[str, Any]:
+    out = dict(e5_scores or {})
+    out.update({
+        "text_vector_fusion_status": "missing_bge_m3_enrichment",
+        "external_bge_m3_status": "pending",
+        "bge_m3_match_mode": "",
+        "bge_m3_text_hash": "",
+        "bge_m3_text_hash_match": "false",
+        "pending_bge_m3_text_hash": text_hash,
+    })
+    return out
 
 
 def dual_model_semantic_scores_batch(texts: list[str], report_event: Any | None = None) -> list[dict[str, Any]]:
@@ -6703,6 +7131,9 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     previous_posts = previous_state.get("posts") if isinstance(previous_state.get("posts"), dict) else {}
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
     previous_image_scores_by_url = {str(r.get("post_url") or ""): r for r in previous_image_queue_rows if str(r.get("post_url") or "")}
+    bge_m3_enrichment_index = build_text_vector_enrichment_index(previous_state, model="bge_m3") if external_bge_m3_fusion_enabled() else {}
+    e5_enrichment_index = build_text_vector_enrichment_index(previous_state, model="e5") if external_bge_m3_fusion_enabled() else {}
+    external_bge_required = require_external_bge_m3_for_image_queue()
     previous_discovered = previous_state.get("discovered_sources") if isinstance(previous_state.get("discovered_sources"), dict) else {}
     updated_posts_state: dict[str, Any] = dict(previous_posts)
     updated_discovered_state: dict[str, Any] = dict(previous_discovered)
@@ -6837,10 +7268,23 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     vector_gates_enabled = getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
     deterministic_override = getenv_bool("REGION_TALK_ALLOW_DETERMINISTIC_SEMANTIC_GATES", False)
     precomputed_embedding_scores: list[dict[str, Any]] = []
+    embedding_texts_for_scoring: list[str] = []
     embedding_batch_deferred_error = ""
     if posts_for_scoring and vector_gates_enabled and _text_vector_mode() in {"dual_embeddings", "embeddings", "real", "dual"}:
         try:
-            precomputed_embedding_scores = dual_model_semantic_scores_batch([str(p.get("text") or "") for p in posts_for_scoring], report_event=report_event)
+            embedding_texts_for_scoring = [text_embedding_input_for_post(p) for p in posts_for_scoring]
+            precomputed_embedding_scores = dual_model_semantic_scores_batch(embedding_texts_for_scoring, report_event=report_event)
+            e5_rows = build_e5_text_vector_enrichment_rows(posts_for_scoring, precomputed_embedding_scores, embedding_texts_for_scoring, run_id=run_id)
+            e5_rows_written = write_region_talk_text_vector_enrichment_items(e5_rows, run_id=run_id, stage="candidate_report_e5_scored")
+            if e5_rows or e5_rows_written:
+                report_event(
+                    "e5_text_vector_enrichment_written",
+                    phase="text_embedding",
+                    status="running",
+                    e5_text_vector_rows=len(e5_rows),
+                    e5_text_vector_rows_written=e5_rows_written,
+                    next_action="run_region_talk_bge_m3_enrichment",
+                )
         except Exception as exc:
             err = f"{type(exc).__name__}: {str(exc)[:260]}"
             embedding_batch_deferred_error = err
@@ -6848,6 +7292,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             runtime_deferred_posts = posts
             posts_for_scoring = []
             precomputed_embedding_scores = []
+            embedding_texts_for_scoring = []
     if embedding_batch_deferred_error and getenv_bool("REGION_TALK_ABORT_REPORT_TAIL_ON_EMBEDDING_DEFER", True):
         report_event(
             "report_tail_aborted_after_text_embedding_deferred",
@@ -6930,7 +7375,17 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         gate_trace.append("ad_promo_announcement_gate:evidence_only")
         gate_trace.append("content_substance_visit_impression_gate:evidence_only")
         gate_trace.append("not_news_not_trash_gate:evidence_only")
+        embedding_text = embedding_texts_for_scoring[idx - 1] if idx - 1 < len(embedding_texts_for_scoring) else text_embedding_input_for_post(p)
+        embedding_text_hash = text_vector_text_hash(embedding_text) if embedding_text else ""
         embedding_scores = precomputed_embedding_scores[idx - 1] if idx - 1 < len(precomputed_embedding_scores) else None
+        bge_row: dict[str, Any] | None = None
+        bge_match_mode = ""
+        if external_bge_m3_fusion_enabled() and embedding_scores:
+            bge_row, bge_match_mode = find_text_vector_enrichment_for_post(bge_m3_enrichment_index, p, text_hash=embedding_text_hash)
+            if bge_row:
+                embedding_scores = fuse_e5_with_external_bge_m3(embedding_scores, bge_row, text_hash=embedding_text_hash, match_mode=bge_match_mode)
+            elif external_bge_required:
+                embedding_scores = bge_m3_missing_vector_defer_payload(embedding_scores, text_hash=embedding_text_hash)
         vector_gate = text_vector_gate(text, ts, scope, ad_gate, substance, embedding_scores=embedding_scores) if vector_gates_enabled else {
             "text_embedding_model_id": "", "text_embedding_runtime": "disabled", "vector_gate_status": "disabled",
             "vector_content_type": "", "vector_positive_score": "", "vector_news_event_score": "", "vector_ad_promo_score": "",
@@ -6939,6 +7394,22 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "vector_rejection_reason": "", "vector_gate_confidence": "", "needs_llm_final_verify": "false",
             "llm_not_called_reason": "vector_gates_disabled", "llm_stage": "", "llm_status": "not_called_vector_disabled",
         }
+        if (
+            external_bge_required
+            and external_bge_m3_fusion_enabled()
+            and not bge_row
+            and not str(vector_gate.get("vector_gate_status") or "").startswith("vector_reject")
+        ):
+            vector_gate.update({
+                "vector_gate_status": "vector_defer_wait_bge_m3",
+                "vector_rejection_reason": "waiting_for_external_bge_m3_enrichment",
+                "needs_llm_final_verify": "false",
+                "llm_status": "not_called_waiting_bge_m3",
+                "llm_not_called_reason": "external_bge_m3_enrichment_pending",
+                "text_vector_fusion_status": "missing_bge_m3_enrichment",
+                "external_bge_m3_status": "pending",
+                "pending_bge_m3_text_hash": embedding_text_hash,
+            })
         gate_trace.append("news_event_vector_gate:" + str(vector_gate.get("vector_gate_status") or "not_run"))
 
         llm_gate = {
@@ -6965,6 +7436,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             rejection = str(vector_gate.get("vector_gate_status") or "vector_reject")
             visual_skip_reason = str(vector_gate.get("vector_rejection_reason") or rejection)
             current_stage = "dropped_text_gate"
+        elif not rejection and str(vector_gate.get("vector_gate_status") or "").startswith("vector_defer"):
+            drop_gate = "external_bge_m3_enrichment_gate"
+            rejection = str(vector_gate.get("vector_gate_status") or "vector_defer_wait_bge_m3")
+            visual_skip_reason = str(vector_gate.get("vector_rejection_reason") or "waiting for external BGE-M3 enrichment")
+            current_stage = "dual_model_vector_enrichment_pending"
         elif not rejection and not scope.get("kaliningrad_oblast_only_scope") and str(vector_gate.get("vector_gate_status") or "") != "vector_accept_candidate":
             # Last-resort safety fallback for rows with no Kaliningrad evidence when vector embeddings are unavailable/ambiguous.
             # This is not a positive/negative semantic classifier; product mass decisions should be made by vector_gate above.
@@ -7057,7 +7533,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         elif rejection:
             ms = image_scores_skipped(visual_skip_reason or rejection)
             score = 0.0
-            current_stage = "dropped_text_gate"
+            if current_stage != "dual_model_vector_enrichment_pending":
+                current_stage = "dropped_text_gate"
         else:
             gate_trace.append("semantic_dual_model_enrichment:vector_gate_passed")
             visual_stage = "scored_after_vector_text_gates_before_final_llm"
@@ -7127,7 +7604,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "rejection_reason_details": visual_skip_reason or str(llm_gate.get("llm_reason") or ""),
             "semantic_gate_mode": semantic_gate_mode,
             "deterministic_semantic_gate_override": str(deterministic_override).lower(),
-            "semantic_enrichment_stage": "final_llm_verifier_pending" if str(vector_gate.get("needs_llm_final_verify")) == "true" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media", "low_substance_but_region_relevant"} else ("dual_model_vector_enrichment_pending" if current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate"),
+            "semantic_enrichment_stage": "dual_model_vector_enrichment_pending" if current_stage == "dual_model_vector_enrichment_pending" else ("final_llm_verifier_pending" if str(vector_gate.get("needs_llm_final_verify")) == "true" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "image_fetch_retry_needed", "good_text_weak_media", "low_substance_but_region_relevant"} else ("text_vector_fusion_done" if str(vector_gate.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3" and current_stage in {"semantic_candidate", "favorite", "needs_image_review", "low_substance_but_region_relevant"} else "skipped_by_text_gate")),
         }
         row.pop("place_matches", None)
         new_posts.append(row)
@@ -7167,7 +7644,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         }
         if current_stage in {"favorite", "semantic_candidate"}:
             candidates.append(row)
-        elif current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "image_fetch_retry_needed", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic"}:
+        elif current_stage in {"pre_candidate_needs_llm", "needs_llm_retry", "needs_image_review", "image_fetch_retry_needed", "low_substance_but_region_relevant", "pre_candidate_debug_deterministic", "dual_model_vector_enrichment_pending"}:
             pre_candidates.append(row)
         else:
             dropped.append(row)
@@ -7220,7 +7697,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             online_image_queue_items_written=early_image_items_written,
             runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
         )
-        if getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False):
+        bge_deferred_new_posts = sum(1 for r in new_posts if str(r.get("vector_gate_status") or "") == "vector_defer_wait_bge_m3")
+        skip_tail_after_handoff = getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False)
+        if skip_tail_after_handoff and external_bge_required and bge_deferred_new_posts and not early_image_rows_to_write:
+            skip_tail_after_handoff = False
+            report_event(
+                "report_tail_continues_for_bge_m3_pending_memory",
+                phase="queue_assembly",
+                status="running",
+                bge_m3_deferred_posts=bge_deferred_new_posts,
+                next_action="write_candidate_memory_for_bge_m3_enrichment",
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
+        if skip_tail_after_handoff:
             partial_now = utc_now_iso()
             summary_row = {
                 "run_id": run_id,
@@ -7232,6 +7721,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
                 "candidates_created": len(candidates),
                 "favorites_created": len(favorites) if 'favorites' in locals() else 0,
                 "image_queue_total": len(early_image_rows_to_write),
+                "bge_m3_deferred_posts": bge_deferred_new_posts,
                 "online_image_queue_items_written": early_image_items_written,
                 "state_backend": region_talk_state_backend_requested(),
                 "ydb_read_status": state_meta.get("ydb_read_status"),
@@ -7528,6 +8018,19 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     report_event("source_frontier_build_done", phase="queue_assembly", status="running", source_frontier_unique=len(source_frontier_unique), active_frontier_tg_vk=len(active_frontier_tg_vk), external_links_quarantine=len(external_links_quarantine), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     report_event("candidate_memory_build_started", phase="queue_assembly", status="running", previous_candidate_memory=len(previous_state.get("candidate_memory") or {}) if isinstance(previous_state.get("candidate_memory"), dict) else 0, new_posts=len(new_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     candidate_memory_rows, previous_candidates_not_refetched, candidate_deltas = build_candidate_memory(previous_state, new_posts, source_rows, run_id, run_now)
+    bge_memory_fusion_stats = apply_external_bge_m3_fusion_to_candidate_memory(
+        candidate_memory_rows,
+        e5_index=e5_enrichment_index,
+        bge_index=bge_m3_enrichment_index,
+        lexicon=lexicon,
+    )
+    if bge_memory_fusion_stats.get("checked"):
+        report_event(
+            "external_bge_m3_memory_fusion_done",
+            phase="text_embedding",
+            status="running",
+            **{f"bge_m3_memory_{k}": v for k, v in bge_memory_fusion_stats.items()},
+        )
     online_candidate_items_written = write_region_talk_online_candidate_items(candidate_memory_rows, run_id=run_id, stage="candidate_memory_built")
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]

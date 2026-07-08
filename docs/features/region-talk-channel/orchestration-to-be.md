@@ -26,9 +26,14 @@ Responsibilities:
 - source discovery and source-status decisions;
 - bounded post discovery with human-like pacing;
 - E5 text vectorization in the main run, because earlier E5-only runs were stable enough;
-- writing `text_vector_enrichment_item` rows for E5 and `bge_m3_pending`/queue markers for BGE;
-- consuming BGE-M3 rows written by the external worker;
-- fusion/scoring after both E5 and BGE are present;
+- writing E5 `text_vector_enrichment_item` rows with compact text/hash so the
+  BGE worker can enrich the same post without Telegram or loading E5;
+- consuming BGE-M3 rows written by the external worker from
+  `text_vector_enrichment_item`;
+- fusion/scoring after both E5 and BGE are present; if BGE is required but
+  missing, CandidateReport keeps the row as
+  `dual_model_vector_enrichment_pending`/`text_candidate_pending_bge_m3` and
+  does not enqueue it for images;
 - full source/text gates before image scoring:
   - main subject is Kaliningrad Oblast;
   - not multi-region/other-region;
@@ -46,7 +51,10 @@ Uses no Telegram session and no image/LLM code. It may run in parallel with the 
 
 Responsibilities:
 
-- read compact text rows from YDB (`publication_candidate_item`, `candidate_memory_item`, `image_queue_item`, `processed_post_item`, `post_live_item`) or future explicit BGE queue rows;
+- read compact text rows from YDB (`text_vector_enrichment_item` E5 rows first,
+  then `publication_candidate_item`, `candidate_memory_item`,
+  `image_queue_item`, `processed_post_item`, `post_live_item`) or future
+  explicit BGE queue rows;
 - compute only BGE-M3 dense vectors and BGE-derived scores;
 - write `text_vector_enrichment_item` rows with:
   - `model_id=BAAI/bge-m3`;
@@ -98,7 +106,7 @@ Responsibilities stay unchanged:
 
 ### 5. Local/server orchestrator
 
-A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook.
+A plain Python process, later inside `eventsbot`, controls short Kaggle launches by reading YDB queue counts and Kaggle kernel status. It is not a Kaggle notebook. The first implementation is `scripts/region_talk_orchestrator.py`: default mode is read-only/dry-run JSON (`metrics` + `actions`); it executes only the first planned action with explicit `--execute`.
 
 Pseudo-loop:
 
@@ -155,9 +163,9 @@ To-Be vector rows:
 - `vector_bank_embedding_item:<bank_hash>:<model>:<encoder_contract>` — future cache for semantic, KO geo and external geo prototype banks using the exact same encoder contract as the worker.
 - `publication_semantic_history_item:<publication_candidate_id|post_id>` — vector reference for already confirmed/sent/published posts.
 
-BGE-M3 worker writes the first row kind now. Qwen3 writes a separate research
-row kind until accepted. CandidateReport should later consume both E5 and BGE
-rows and write fused decisions without loading BGE.
+BGE-M3 worker writes BGE rows, while CandidateReport writes E5 rows and consumes
+both E5+BGE rows for fused decisions without loading BGE in the main notebook.
+Qwen3/Gemma write separate research row kinds until accepted.
 
 ## Non-region geo discriminator
 
@@ -214,4 +222,7 @@ The architecture depends on BGE-M3 being stable when isolated in its own noteboo
 
 1. run `RegionTalkBgeM3Enrichment` with small real-YDB batches (`8`, `12`, `24` rows);
 2. check model load time, batch time, memory/runtime failures, YDB writes and row payload sizes;
-3. only after stable evidence, wire CandidateReport consumption/fusion around the new `text_vector_enrichment_item` rows.
+3. after stable evidence, CandidateReport consumption/fusion was wired around
+   `text_vector_enrichment_item`: main defaults to E5-only, BGE rows are fused
+   from YDB, and image queue rows require fused E5+BGE when production flag
+   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1` is enabled.

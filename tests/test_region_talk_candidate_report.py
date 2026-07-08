@@ -622,6 +622,73 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn(gate["vector_gate_status"], {"vector_accept_candidate", "vector_ambiguous_keep_for_ranking"})
         self.assertEqual(gate["text_embedding_runtime"], "kaggle_local_prototype_vector_gate")
 
+    def test_external_bge_m3_row_fuses_with_local_e5_without_loading_bge(self) -> None:
+        mod = load_module()
+        e5_scores = {
+            "text_embedding_model_id": mod.E5_TEXT_MODEL_ID,
+            "text_embedding_scores_by_model": {
+                mod.E5_TEXT_MODEL_ID: {
+                    "ko_visit_impression": 0.78,
+                    "ko_route_useful": 0.55,
+                    "ko_visual_place_card": 0.50,
+                    "other_region_travel": 0.11,
+                    "multi_region_roundup": 0.10,
+                    "news_report": 0.10,
+                    "event_announcement": 0.10,
+                    "ad_or_promo": 0.10,
+                    "low_substance": 0.10,
+                }
+            },
+        }
+        bge_row = {
+            "text_vector_enrichment_id": "p1:bge_m3:hash",
+            "model_id": mod.BGE_M3_TEXT_MODEL_ID,
+            "encoder_contract": mod.BGE_M3_ENCODER_CONTRACT,
+            "text_hash": "sha",
+            "semantic_scores_by_class": {
+                "ko_visit_impression": 0.82,
+                "ko_route_useful": 0.57,
+                "ko_visual_place_card": 0.61,
+                "other_region_travel": 0.12,
+                "multi_region_roundup": 0.11,
+                "news_report": 0.10,
+                "event_announcement": 0.10,
+                "ad_or_promo": 0.09,
+                "low_substance": 0.08,
+            },
+        }
+        fused = mod.fuse_e5_with_external_bge_m3(e5_scores, bge_row, text_hash="sha", match_mode="post_url_text_hash")
+        self.assertEqual(fused["text_vector_fusion_status"], "fused_e5_bge_m3")
+        self.assertEqual(fused["text_embedding_runtime"], "kaggle_local_e5_plus_external_bge_m3_ydb")
+        self.assertEqual(fused["bge_m3_text_hash_match"], "true")
+        self.assertGreater(float(fused["vector_positive_semantic_score"]), float(fused["vector_negative_score"]))
+
+    def test_image_queue_requires_fused_e5_bge_when_enabled(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")
+        os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = "1"
+        try:
+            base = {
+                "post_id": "p1",
+                "post_url": "https://t.me/src/1",
+                "has_media": True,
+                "is_ad_or_promo": False,
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "current_stage": "semantic_candidate",
+                "vector_gate_status": "vector_accept_candidate",
+            }
+            missing = dict(base)
+            fused = {**base, "post_id": "p2", "post_url": "https://t.me/src/2", "text_vector_fusion_status": "fused_e5_bge_m3"}
+            queue, _top, metrics = mod.build_image_candidate_queue({}, [missing, fused], [], [], "run-img", "2026-07-07T00:00:00+00:00")
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", None)
+            else:
+                os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = old
+        self.assertEqual([r["post_url"] for r in queue], ["https://t.me/src/2"])
+        self.assertEqual(metrics["image_queue_rejected_non_region_inputs"], 1)
+
     def test_visit_classifier_populates_story_fields(self) -> None:
         mod = load_module()
         fields = mod.infer_visit_semantic_fields(

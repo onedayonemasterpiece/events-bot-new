@@ -291,13 +291,16 @@ Region Talk must keep row-level product state compact:
   local notification markers (`sent_to_chat`, `sent_message_id`);
 - kind `text_vector_enrichment_item`, pk
   `text_vector_enrichment_item:<post_id>:<model_short>:<text_hash>` — durable
-  per-text/per-model vector enrichment written by dedicated vector notebooks.
-  The first external worker is `RegionTalkBgeM3Enrichment`, which writes
-  `model_id=BAAI/bge-m3`, `encoder_contract=bge_m3_flagembedding_dense_v1`,
-  semantic-bank scores, KO-vs-external geo-bank scores and, for bounded
-  candidate/history batches, an optional compact dense vector. CandidateReport
-  consumes these rows later for fusion and must not load BGE-M3 in the main
-  notebook when a matching enrichment row exists;
+  per-text/per-model vector enrichment. CandidateReport now writes E5 rows
+  (`model_id=intfloat/multilingual-e5-base`,
+  `encoder_contract=e5_semantic_bank_scores_v1`) with the compact text/hash it
+  scored locally. `RegionTalkBgeM3Enrichment` reads those E5 rows first, scores
+  the same compact text in isolation and writes BGE rows
+  (`model_id=BAAI/bge-m3`,
+  `encoder_contract=bge_m3_flagembedding_dense_v1`) with semantic-bank scores,
+  KO-vs-external geo-bank scores and, for bounded candidate/history batches, an
+  optional compact dense vector. CandidateReport then consumes E5+BGE rows for
+  fusion and must not load BGE-M3 in the main notebook;
 - kind `bge_m3_enrichment_result`, pk
   `bge_m3_enrichment_result:<run_id>` and `bge_m3_enrichment_result:latest` —
   BGE worker run evidence: loaded rows, scored rows, written rows, encoder

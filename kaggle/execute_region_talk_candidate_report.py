@@ -392,8 +392,12 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_ENABLE_EARLY_LLM": os.environ.get("REGION_TALK_ENABLE_EARLY_LLM", "0"),
         "REGION_TALK_ENABLE_VECTOR_GATES": os.environ.get("REGION_TALK_ENABLE_VECTOR_GATES", "1"),
         "REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1"),
-        "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "1"),
-        "REGION_TALK_TEXT_EMBEDDING_MODEL_IDS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_MODEL_IDS", ""),
+        # Production main notebook must keep only E5 in memory. BGE-M3 runs in
+        # RegionTalkBgeM3Enrichment and is consumed later from YDB.
+        "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": os.environ.get("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "0"),
+        "REGION_TALK_TEXT_EMBEDDING_MODEL_IDS": os.environ.get("REGION_TALK_TEXT_EMBEDDING_MODEL_IDS", "intfloat/multilingual-e5-base"),
+        "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": os.environ.get("REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED", "1"),
+        "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", "1"),
         "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": os.environ.get("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1"),
         "REGION_TALK_TARGET_LLM_CALLS": os.environ.get("REGION_TALK_TARGET_LLM_CALLS", "10"),
         "REGION_TALK_MAX_LLM_FINAL_VERIFY": os.environ.get("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10"),
@@ -696,7 +700,12 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_ENABLE_EARLY_LLM", "0")
     os.environ.setdefault("REGION_TALK_ENABLE_VECTOR_GATES", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_LOCAL_TEXT_EMBEDDINGS", "1")
-    os.environ.setdefault("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "1")
+    # Keep the main CandidateReport CPU run to E5 only; BGE-M3 is isolated in a
+    # separate Kaggle notebook and fused from durable YDB rows on later passes.
+    os.environ.setdefault("REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS", "0")
+    os.environ.setdefault("REGION_TALK_TEXT_EMBEDDING_MODEL_IDS", "intfloat/multilingual-e5-base")
+    os.environ.setdefault("REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED", "1")
+    os.environ.setdefault("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", "1")
     os.environ.setdefault("REGION_TALK_ENABLE_FINAL_LLM_VERIFIER", "1")
     os.environ.setdefault("REGION_TALK_TARGET_LLM_CALLS", "10")
     os.environ.setdefault("REGION_TALK_MAX_LLM_FINAL_VERIFY", "10")

@@ -178,7 +178,7 @@ def main() -> int:
     ap.add_argument("--max-runtime-seconds", type=int, default=25 * 60)
     ap.add_argument("--timeout-minutes", type=int, default=45)
     ap.add_argument("--poll-interval-seconds", type=int, default=30)
-    ap.add_argument("--input-kinds", default="publication_candidate_item,candidate_memory_item,image_queue_item,processed_post_item,post_live_item")
+    ap.add_argument("--input-kinds", default="text_vector_enrichment_item,publication_candidate_item,candidate_memory_item,image_queue_item,processed_post_item,post_live_item")
     ap.add_argument("--store-dense-vectors", action="store_true", default=True)
     ap.add_argument("--no-store-dense-vectors", action="store_false", dest="store_dense_vectors")
     ap.add_argument("--store-vector-max-rows", type=int, default=100)

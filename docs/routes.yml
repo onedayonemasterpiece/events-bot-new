@@ -259,6 +259,11 @@ features:
     storage: ydb_sidecar
     mvp_artifact: artifacts/region-talk/candidates-latest.xlsx
     planned_pipeline: region_talk_discovery
+    entrypoints:
+      - kaggle/RegionTalkCandidateReport/region_talk_candidate_report.py
+      - kaggle/RegionTalkBgeM3Enrichment/region_talk_bge_m3_enrichment.py
+      - kaggle/RegionTalkImageDiagnostic/region_talk_image_diagnostic.py
+      - scripts/region_talk_orchestrator.py
 
   static_site_pages:
     status: preview

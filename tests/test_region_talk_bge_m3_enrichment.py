@@ -58,6 +58,24 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertTrue(all(row.get("_enrichment_pk", "").startswith("text_vector_enrichment_item:") for row in rows))
         self.assertEqual(len(rows), 2)
 
+    def test_collect_text_rows_uses_e5_text_vector_items_as_bge_input(self) -> None:
+        mod = load_bge_module()
+        text = "Личный отзыв о поездке в Калининградскую область: море, дюны и Куршская коса."
+        sha = mod.text_hash(text)
+        e5_row = {
+            "post_id": "p-e5",
+            "post_url": "https://t.me/e5/1",
+            "model_id": "intfloat/multilingual-e5-base",
+            "model_short": "e5",
+            "text_hash": sha,
+            "text_excerpt": text,
+        }
+        rows = mod.collect_text_rows({"text_vector_enrichment_item": {"text_vector_enrichment_item:p-e5:e5": e5_row}}, existing_pks=set(), limit=5)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["_source_kind"], "text_vector_enrichment_item")
+        self.assertEqual(rows[0]["_embedding_text_hash"], sha)
+        self.assertIn(":bge_m3:", rows[0]["_enrichment_pk"])
+
     def test_build_enrichment_payload_contains_geo_and_antivector_fields(self) -> None:
         mod = load_bge_module()
         row = {

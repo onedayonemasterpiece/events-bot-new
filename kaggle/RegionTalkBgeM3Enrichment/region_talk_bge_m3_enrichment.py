@@ -631,7 +631,7 @@ def text_from_row(row: dict[str, Any]) -> tuple[str, list[str]]:
     parts: list[str] = []
     used: list[str] = []
     for field in TEXT_FIELDS:
-        raw = compact_text(row.get(field), max_len=1200)
+        raw = compact_text(row.get(field), max_len=getenv_int("REGION_TALK_BGE_FIELD_TEXT_MAX_CHARS", 3000))
         if raw and raw not in parts:
             parts.append(raw)
             used.append(field)
@@ -648,6 +648,7 @@ def collect_text_rows(items_by_kind: dict[str, dict[str, dict[str, Any]]], *, ex
     rows: list[dict[str, Any]] = []
     seen_text_or_url: set[str] = set()
     priority = {
+        "text_vector_enrichment_item": 0,
         "publication_candidate_item": 0,
         "candidate_memory_item": 1,
         "image_queue_item": 2,
@@ -690,7 +691,7 @@ def load_ydb_rows(limit: int, *, include_existing: bool = False) -> tuple[list[d
     table_path = ydb_kv_table_path(cfg)
     pool = ydb.SessionPool(driver)
     max_scan = max(limit * 5, getenv_int("REGION_TALK_BGE_YDB_SCAN_LIMIT", 1000))
-    kinds = [k.strip() for k in re.split(r"[,;+\s]+", os.getenv("REGION_TALK_BGE_INPUT_KINDS") or "publication_candidate_item,candidate_memory_item,image_queue_item,processed_post_item,post_live_item") if k.strip()]
+    kinds = [k.strip() for k in re.split(r"[,;+\s]+", os.getenv("REGION_TALK_BGE_INPUT_KINDS") or "text_vector_enrichment_item,publication_candidate_item,candidate_memory_item,image_queue_item,processed_post_item,post_live_item") if k.strip()]
 
     def op(session: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         ensure_ydb_kv_table(ydb, session, table_path)
