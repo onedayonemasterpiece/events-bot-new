@@ -132,7 +132,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             selected = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 0, "rejected": 0})
             self.assertEqual([r["candidate_memory_id"] for r in selected], ["fresh", "new"])
             selected_after_bge_change = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 1, "rejected": 0})
-            self.assertEqual(len(selected_after_bge_change), 3)
+            self.assertEqual([r["candidate_memory_id"] for r in selected_after_bge_change], ["fresh", "new"])
+            rows[0]["external_bge_m3_fusion_changed_this_run"] = "true"
+            selected_after_row_bge_change = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 1, "rejected": 0})
+            self.assertEqual([r["candidate_memory_id"] for r in selected_after_row_bge_change], ["old", "fresh", "new"])
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", None)
@@ -622,6 +625,24 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(item["priority_reason"], "global_keyword_search_exact_post")
         self.assertIn("postlink_", item["post_link_queue_id"])
         self.assertTrue(item["evidence_excerpt_hash"])
+
+    def test_post_link_queue_item_from_keyword_hit_terminally_rejects_local_source(self) -> None:
+        mod = load_module()
+        row = {
+            "keyword_hit_post_url": "https://t.me/kldevents/2158",
+            "keyword_hit_source_url": "https://t.me/kldevents",
+            "canonical_source_key": "telegram:kldevents",
+            "source_title": "Калининград Афиша",
+            "username_or_handle": "kldevents",
+            "matched_query": "Калининград",
+            "keyword_hit_text_excerpt": "Калининград сегодня",
+            "discovery_type": "telegram_keyword_search",
+        }
+        item = mod.post_link_queue_item_from_keyword_hit(row, run_id="unit-run")
+        self.assertEqual(item["post_link_status"], "terminal_source_rejected")
+        self.assertEqual(item["source_scope"], "local_region")
+        self.assertEqual(item["source_quick_class"], "local_region_source")
+        self.assertEqual(item["next_action"], "do_not_fetch_exact_post_from_rejected_source")
 
     def test_fast_check_queries_use_broad_anchor_plus_poi_under_two_query_budget(self) -> None:
         mod = load_module()

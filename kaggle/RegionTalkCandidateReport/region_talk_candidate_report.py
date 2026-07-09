@@ -2136,12 +2136,12 @@ def candidate_memory_rows_for_ydb_write(
 ) -> list[dict[str, Any]]:
     if not getenv_bool("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", True):
         return rows
-    stats = bge_memory_fusion_stats or {}
-    if int(stats.get("promoted") or 0) > 0 or int(stats.get("rejected") or 0) > 0:
-        return rows
     changed: list[dict[str, Any]] = []
     for row in rows:
         if str(row.get("not_refetched_this_run") or "").lower() != "true":
+            changed.append(row)
+            continue
+        if str(row.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true":
             changed.append(row)
             continue
         if str(row.get("last_refetched_run_id") or "") == run_id:
@@ -2218,7 +2218,7 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
         key = canonical_source_key("telegram", row.get("username_or_handle") or row.get("handle") or source_url, source_url)
     excerpt = re.sub(r"\s+", " ", str(row.get("keyword_hit_text_excerpt") or row.get("keyword_evidence_excerpt") or "")).strip()[:500]
     is_hashtag = bool(str(row.get("matched_hashtag") or "").strip()) or str(row.get("discovery_type") or "") == "telegram_hashtag_search"
-    return {
+    item = {
         "post_link_queue_id": "postlink_" + stable_hash(post_url or row.get("source_candidate_id") or key),
         "post_link_status": status,
         "post_link_priority": 0,
@@ -2250,6 +2250,28 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
         "run_id": run_id,
         "next_action": "fetch_exact_post_then_score_text_vectors" if status in {"", "pending_fetch", "retry_fetch", "fetch_error"} else "already_fetched_or_terminal",
     }
+    terminal = source_local_region_terminal_fields({**row, **item})
+    terminal_status = str(terminal.get("source_queue_status") or "")
+    if source_terminal_rejected_status(terminal_status) and status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
+        if terminal_status == LOCAL_REGION_SOURCE_STATUS:
+            reason = LOCAL_REGION_SOURCE_REASON
+            code = "source_local_region_rejected_before_exact_fetch"
+        else:
+            reason = SPAM_SOURCE_REASON
+            code = "source_spam_rejected_before_exact_fetch"
+        item.update({
+            **{k: v for k, v in terminal.items() if k in {
+                "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+                "source_surface_filter_version", "source_surface_filter_reason",
+                "source_local_hits", "source_spam_hits", "source_spam_hashtags",
+                "source_spoiler_entity_count", "monitoring_exclusion_reason",
+            }},
+            "post_link_status": "terminal_source_rejected",
+            "fetch_error_code": code,
+            "fetch_error_message": reason,
+            "next_action": "do_not_fetch_exact_post_from_rejected_source",
+        })
+    return item
 
 
 def write_region_talk_post_link_queue_items(rows: list[dict[str, Any]], *, run_id: str, stage: str) -> int:
@@ -3062,6 +3084,20 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                     if item_type == "image" and str(item.get("image_queue_status") or "") in {"image_analysis_in_progress", "actual_scored"}:
                         return True
                     return False
+                def should_write_candidate_memory_item(item: dict[str, Any]) -> bool:
+                    if skip_row_rewrite:
+                        return False
+                    if row_write_mode == "full":
+                        return True
+                    if not getenv_bool("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", True):
+                        return True
+                    if str(item.get("not_refetched_this_run") or "").lower() != "true":
+                        return True
+                    if str(item.get("external_bge_m3_fusion_changed_this_run") or "").lower() == "true":
+                        return True
+                    if current_run_id and current_run_id in {str(item.get("first_candidate_run_id") or ""), str(item.get("last_refetched_run_id") or "")}:
+                        return True
+                    return False
                 for item in (compact.get("image_candidate_queue") or {}).values():
                     if isinstance(item, dict) and should_write_queue_item(item, item_type="image"):
                         key = str(item.get("image_queue_id") or item.get("post_url") or "")
@@ -3073,7 +3109,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         if key:
                             row_items.append(("processed_post_item:" + key, "processed_post_item", item))
                 for item in (compact.get("candidate_memory") or {}).values():
-                    if isinstance(item, dict):
+                    if isinstance(item, dict) and should_write_candidate_memory_item(item):
                         key = str(item.get("candidate_memory_id") or item.get("post_id") or item.get("post_url") or "")
                         if key:
                             row_items.append(("candidate_memory_item:" + key, "candidate_memory_item", item))
@@ -4615,6 +4651,7 @@ def apply_external_bge_m3_fusion_to_candidate_memory(
         row.update({k: v for k, v in gate.items() if v not in ("", None)})
         row["bge_m3_enrichment_id"] = fused.get("bge_m3_enrichment_id", row.get("bge_m3_enrichment_id", ""))
         row["bge_m3_match_mode"] = fused.get("bge_m3_match_mode", row.get("bge_m3_match_mode", ""))
+        row["external_bge_m3_fusion_changed_this_run"] = "true"
         if str(gate.get("vector_gate_status") or "").startswith("vector_reject"):
             row["current_stage"] = "dropped_text_gate"
             row["current_lifecycle_status"] = "vector_reject_after_bge_m3"
@@ -7141,13 +7178,13 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
         return []
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url"}
+    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url", "terminal_source_rejected"}
 
     def rank(row: dict[str, Any]) -> tuple[int, str, str]:
         kind = str(row.get("_kind") or "")
         status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
         if kind == "post_link_queue_item":
-            if status in terminal_link_statuses:
+            if status in terminal_link_statuses or status.startswith("terminal_"):
                 pri = 9
             elif status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
                 pri = 0
@@ -7158,7 +7195,7 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
         return pri, str(row.get("post_date") or ""), str(row.get("updated_at") or "")
 
     for row in sorted(raw_rows, key=rank):
-        if str(row.get("_kind") or "") == "post_link_queue_item" and str(row.get("post_link_status") or "") in terminal_link_statuses:
+        if str(row.get("_kind") or "") == "post_link_queue_item" and (str(row.get("post_link_status") or "") in terminal_link_statuses or str(row.get("post_link_status") or "").startswith("terminal_")):
             continue
         url = str(row.get("post_url") or "").strip()
         if not url or url in seen:
@@ -7188,8 +7225,35 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
     posts: list[dict[str, Any]] = []
     source_stats: dict[str, dict[str, Any]] = {}
     entity_cache: dict[str, Any] = {}
+    exact_network_resolves = 0
+    exact_network_resolve_budget = max(0, getenv_int("REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN", 0))
     for idx, row in enumerate(rows, start=1):
         url = str(row.get("post_url") or "")
+        if str(row.get("_kind") or "") == "post_link_queue_item":
+            terminal = source_local_region_terminal_fields(row)
+            terminal_status = str(terminal.get("source_queue_status") or "")
+            if source_terminal_rejected_status(terminal_status):
+                terminal_row = {
+                    **row,
+                    **terminal,
+                    "post_link_status": "terminal_source_rejected",
+                    "last_attempt_run_id": run_id,
+                    "last_attempt_at": utc_now_iso(),
+                    "fetch_error_code": "source_rejected_before_exact_fetch",
+                    "fetch_error_message": str(terminal.get("monitoring_exclusion_reason") or terminal.get("source_probe_reason") or terminal_status)[:180],
+                }
+                write_region_talk_post_link_queue_items([terminal_row], run_id=run_id, stage=stage)
+                status.event(
+                    "telethon_exact_post_source_rejected",
+                    phase="fetch",
+                    status="deferred",
+                    run_id=run_id,
+                    post_url=url,
+                    current_source_handle=row.get("handle") or row.get("username_or_handle") or "",
+                    source_queue_status=terminal_status,
+                    progress_label=f"Exact post skipped: source rejected before fetch ({terminal_status})",
+                )
+                continue
         parsed = parse_public_telegram_post_url(url)
         if not parsed:
             if str(row.get("_kind") or "") == "post_link_queue_item":
@@ -7231,24 +7295,31 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
             if entity is None:
                 if governor is not None and governor.cached_entity_only:
-                    stat["errors"] += 1
-                    stat["last_error_code"] = "cached_entity_missing"
-                    stat["last_error_message"] = "exact post fetch is in cached-entity-only mode; username resolve forbidden"
-                    governor.resolve_skipped_by_cooldown += 1
-                    governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cached_entity_only_no_private_entity", cache_hit=False, network_call=False, ok=False)
-                    status.event(
-                        "telethon_exact_post_cache_miss_deferred",
-                        phase="fetch",
-                        status="deferred",
-                        run_id=run_id,
-                        post_url=url,
-                        current_source_handle=handle,
-                        current_source_url=canonical_url,
-                        progress_label=f"Telethon exact fetch skipped cache-miss {idx}/{len(rows)}; network resolve forbidden",
+                    allow_exact_resolve = (
+                        exact_network_resolves < exact_network_resolve_budget
+                        and governor.resolve_network_attempts < governor.max_network_resolves
+                        and governor.has_total_request_budget("get_entity.exact_post_link", "post_link_queue", canonical_url)
                     )
-                    if str(row.get("_kind") or "") == "post_link_queue_item":
-                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_wait_entity_cache", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "cached_entity_missing", "fetch_error_message": "cached-entity-only mode; no channel_id/access_hash for exact post source"}], run_id=run_id, stage=stage)
-                    continue
+                    if not allow_exact_resolve:
+                        stat["errors"] += 1
+                        stat["last_error_code"] = "cached_entity_missing"
+                        stat["last_error_message"] = "exact post fetch is in cached-entity-only mode; username resolve forbidden"
+                        governor.resolve_skipped_by_cooldown += 1
+                        governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cached_entity_only_no_private_entity", cache_hit=False, network_call=False, ok=False, exact_network_resolve_budget=exact_network_resolve_budget, exact_network_resolves=exact_network_resolves)
+                        status.event(
+                            "telethon_exact_post_cache_miss_deferred",
+                            phase="fetch",
+                            status="deferred",
+                            run_id=run_id,
+                            post_url=url,
+                            current_source_handle=handle,
+                            current_source_url=canonical_url,
+                            progress_label=f"Telethon exact fetch skipped cache-miss {idx}/{len(rows)}; network resolve forbidden",
+                        )
+                        if str(row.get("_kind") or "") == "post_link_queue_item":
+                            write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_wait_entity_cache", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "cached_entity_missing", "fetch_error_message": "cached-entity-only mode; no channel_id/access_hash for exact post source"}], run_id=run_id, stage=stage)
+                        continue
+                    governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "allowed_exact_post_entity_warmup", cache_hit=False, network_call=True, ok=True, exact_network_resolve_budget=exact_network_resolve_budget, exact_network_resolves=exact_network_resolves)
                 if governor is not None and not governor.has_total_request_budget("get_entity.exact_post_link", "post_link_queue", canonical_url):
                     status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact resolve deferred by cooldown/budget at {idx}/{len(rows)}")
                     if str(row.get("_kind") or "") == "post_link_queue_item":
@@ -7256,11 +7327,31 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     break
                 try:
                     if governor is not None:
+                        if governor.resolve_network_attempts >= governor.max_network_resolves:
+                            status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact resolve deferred by network-resolve budget at {idx}/{len(rows)}")
+                            if str(row.get("_kind") or "") == "post_link_queue_item":
+                                write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_fetch", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "telegram_resolve_budget_exhausted", "fetch_error_message": "exact post entity resolve skipped by network resolve budget"}], run_id=run_id, stage=stage)
+                            break
+                        if not await governor.humanlike_pause(
+                            "get_entity.exact_post_link",
+                            "post_link_queue",
+                            canonical_url,
+                            min_env="REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS",
+                            max_env="REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS",
+                            default_min=20.0,
+                            default_max=45.0,
+                            reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                        ):
+                            status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact resolve deferred before paced resolve {idx}/{len(rows)}")
+                            break
                         governor.total_attempted += 1
+                        governor.resolve_network_attempts += 1
+                        exact_network_resolves += 1
                         governor.requests_by_method["get_entity.exact_post_link"] = governor.requests_by_method.get("get_entity.exact_post_link", 0) + 1
                     entity = await telethon_await(client.get_entity(handle), "get_entity")
                     if governor is not None:
                         governor.total_ok += 1
+                        governor.resolve_network_ok += 1
                         governor.remember_entity(handle, entity, title=str(row.get("source_title") or handle), source="exact_post_link_fetch")
                 except Exception as exc:
                     stat["errors"] += 1

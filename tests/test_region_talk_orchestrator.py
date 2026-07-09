@@ -62,6 +62,9 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
         self.assertEqual(actions[3]["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
+        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "1")
+        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "6000")
         self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
         self.assertIn("--max-sources", actions[3]["cmd"])
@@ -127,6 +130,31 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertNotIn(("non_numeric_status", 0), mod._progress_signature(base))
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
+
+    def test_canonical_metric_aliases_include_snapshot_names(self) -> None:
+        mod = load_module()
+        metrics = mod.with_canonical_metric_aliases({
+            "publics_primary_unscanned_pending_total": 7,
+            "source_queue_posts_scanned_total": 101,
+            "processed_posts_unique_total": 55,
+            "candidate_memory_total": 9,
+            "publication_candidate_total": 3,
+        })
+        self.assertEqual(metrics["pending_scan"], 7)
+        self.assertEqual(metrics["source_posts_scanned_sum"], 101)
+        self.assertEqual(metrics["processed_post_rows"], 55)
+        self.assertEqual(metrics["candidate_memory_rows"], 9)
+        self.assertEqual(metrics["publication_queue_total"], 3)
+
+    def test_loop_goal_progress_tracks_delta_targets(self) -> None:
+        mod = load_module()
+        baseline = {"publics_total": 10, "processed_posts_unique_total": 20, "publics_with_ko_candidates_total": 2}
+        current = {"publics_total": 12, "processed_posts_unique_total": 23, "publics_with_ko_candidates_total": 3}
+        progress = mod.loop_goal_progress(current, baseline, {"new_publics": 2, "processed_posts": 4, "ko_sources": 1})
+        self.assertTrue(progress["active"])
+        self.assertFalse(progress["reached"])
+        self.assertTrue(progress["items"]["new_publics"]["reached"])
+        self.assertFalse(progress["items"]["processed_posts"]["reached"])
 
     def test_source_merge_preserves_max_counter_values(self) -> None:
         mod = load_module()

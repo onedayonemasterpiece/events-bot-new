@@ -155,6 +155,8 @@ artifacts/codex/region-talk-ydb-venv/bin/python scripts/region_talk_orchestrator
   --allow-yc-fallback \
   --execute-ready \
   --max-actions-per-cycle 4 \
+  --target-ko-sources 5 \
+  --target-processed-posts 50 \
   --limit 10000
 ```
 
@@ -176,6 +178,19 @@ Important invariants:
   mostly rediscover local/regional publics and hashtag spam. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
   turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
+- Debug/product loops can be goal-driven without hiding metrics. The
+  orchestrator still emits and monitors the full numeric funnel, but optional
+  delta targets (`--target-new-publics`, `--target-processed-posts`,
+  `--target-ko-sources`, `--target-image-queue`,
+  `--target-publication-candidates`) add an explicit stop condition against the
+  loop baseline. This prevents a bounded test run from being mistaken for the
+  long-running product goal while still allowing short, measurable debugging
+  sprints.
+- Orchestrator metric JSON includes both detailed names and snapshot-compatible
+  aliases (`pending_scan`, `source_posts_scanned_sum`, `processed_post_rows`,
+  `candidate_memory_rows`, `publication_queue_total`, ...). Audits should use
+  the canonical detailed names internally, but operator-facing comparisons may
+  use the aliases to avoid “same metric, different name” confusion.
 - CandidateReport history fetches are freshness-bounded by
   `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365` by default. It should not crawl
   deeper than one year for normal product monitoring. Sources with at least
@@ -202,6 +217,19 @@ Important invariants:
   as evidence but lower priority. This prevents the current failure mode where a
   keyword/global-search post is only source context and the exact post can be
   lost until a later deep scan.
+- Exact post-link queue hygiene is source-level: if the queued link belongs to
+  an obvious Kaliningrad-local public or hashtag-spam/commercial source, the
+  `post_link_queue_item` becomes terminal `terminal_source_rejected` before
+  Telethon fetch. This keeps local-source evidence for future monitoring but
+  prevents local channels such as regional afisha/news publics from consuming
+  the scarce external-publication exact-post budget.
+- During FloodWait recovery the default orchestrated CandidateReport remains
+  cached-entity-first. It may spend at most one explicit exact-post entity
+  warmup resolve per run (`REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN=1`,
+  bounded by `REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=1`) and only after
+  the shared cooldown gate says the method is available. Fast-check/history
+  still prefer cached `channel_id/access_hash` and do not silently bypass
+  cooldowns.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,

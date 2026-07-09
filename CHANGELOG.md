@@ -3,9 +3,12 @@
 ## [Unreleased]
 - **Region Talk Channel / hard cached-entity Telethon mode + bounded YDB handoff**:
   orchestrated CandidateReport runs now set `REGION_TALK_TG_CACHED_ENTITY_ONLY=1`
-  and `REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=0`, so exact post-link fetch
-  and fast-check defer cache-miss Telegram rows instead of calling
-  `client.get_entity(handle)`. Telegram FloodWait cooldowns are written
+  with a one-resolve exact-post warmup lane
+  (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=1`,
+  `REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN=1`), so cached
+  `channel_id/access_hash` is still preferred, fast-check remains cache-first,
+  and only one paced exact-post entity cache miss may call
+  `client.get_entity(handle)` after cooldown. Telegram FloodWait cooldowns are written
   immediately to live YDB cursor state for the next run. Source-queue live handoff
   no longer rewrites the full reordered tail, is capped to 80 rows in the
   orchestrator, and disables the duplicate `source_status_item` mirror by
@@ -17,6 +20,16 @@
   `source_queue_item` priority evidence (`fast_check_status=ko_hit`) and are
   treated as primary due sources on the next CandidateReport run, not just as
   exact-post link queue rows.
+- **Region Talk Channel / post-link queue hygiene and goal loop controls**:
+  exact keyword/fast-check post links from obvious Kaliningrad-local or spam
+  sources now become terminal `post_link_queue_item` rows before Telethon fetch,
+  preventing local channels from consuming the scarce exact-post/entity-cache
+  budget. Candidate-memory changed-only writes now persist only rows changed by
+  the current run or external BGE fusion instead of rewriting the full memory
+  when any BGE promotion exists. The orchestrator now emits snapshot-compatible
+  metric aliases and supports optional delta loop goals such as
+  `--target-ko-sources`, `--target-processed-posts`,
+  `--target-image-queue`, and `--target-publication-candidates`.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient

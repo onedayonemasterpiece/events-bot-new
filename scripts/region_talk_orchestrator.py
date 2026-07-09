@@ -113,9 +113,12 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
     "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "3",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
-    "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": "0",
+    "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": "1",
+    "REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN": "1",
     "REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS": "8",
     "REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS": "18",
+    "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS": "20",
+    "REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS": "45",
     "REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST": "0",
     "REGION_TALK_TG_PUBLIC_WEB_FALLBACK": "0",
     "REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS": "8",
@@ -998,6 +1001,66 @@ def _progress_signature(metrics: dict[str, Any]) -> tuple[tuple[str, int], ...]:
     return tuple(out)
 
 
+CANONICAL_METRIC_ALIASES = {
+    "pending_scan": "publics_primary_unscanned_pending_total",
+    "touched_or_left_pending": "publics_touched_or_not_pending_total",
+    "processed_terminal_total": "publics_terminal_processed_total",
+    "needs_rescan_or_retry": "publics_needs_rescan_or_retry_total",
+    "publics_scanned_with_posts": "publics_scanned_with_posts_total",
+    "source_posts_scanned_sum": "source_queue_posts_scanned_total",
+    "processed_post_rows": "processed_posts_unique_total",
+    "candidate_memory_rows": "candidate_memory_total",
+    "image_actual_scored": "image_actual_scored_total",
+    "image_strong_visual_score_ge_0_70": "image_strong_actual_ge_0_70_total",
+    "publication_queue_total": "publication_candidate_total",
+    "publication_ready": "publication_ready_total",
+}
+
+
+def with_canonical_metric_aliases(metrics: dict[str, Any]) -> dict[str, Any]:
+    out = dict(metrics)
+    for alias, canonical in CANONICAL_METRIC_ALIASES.items():
+        if alias not in out and canonical in out:
+            out[alias] = out.get(canonical)
+    return out
+
+
+GOAL_DELTA_METRICS = {
+    "new_publics": "publics_total",
+    "processed_posts": "processed_posts_unique_total",
+    "ko_sources": "publics_with_ko_candidates_total",
+    "image_queue": "image_queue_total",
+    "publication_candidates": "publication_candidate_total",
+    "confirmed": "publication_confirmed_total",
+}
+
+
+def loop_goal_progress(metrics: dict[str, Any], baseline: dict[str, Any], targets: dict[str, int]) -> dict[str, Any]:
+    progress: dict[str, Any] = {}
+    reached = True
+    active = False
+    for name, target in targets.items():
+        target = int(target or 0)
+        if target <= 0:
+            continue
+        active = True
+        metric = GOAL_DELTA_METRICS[name]
+        current = _safe_int(metrics.get(metric))
+        base = _safe_int(baseline.get(metric))
+        delta = current - base
+        ok = delta >= target
+        reached = reached and ok
+        progress[name] = {
+            "metric": metric,
+            "baseline": base,
+            "current": current,
+            "delta": delta,
+            "target_delta": target,
+            "reached": ok,
+        }
+    return {"active": active, "reached": bool(active and reached), "items": progress}
+
+
 def _has_active_region_talk_kernel(kaggle_statuses: dict[str, str]) -> bool:
     return any(str(status or "").upper() in ACTIVE_KERNEL_STATUSES for status in kaggle_statuses.values())
 
@@ -1189,7 +1252,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if latest_history_run and str(r.get("last_scan_run_id") or r.get("run_id") or "") == latest_history_run
     ]
 
-    return {
+    metrics = {
         "publics_total": len(source_rows),
         "publics_touched_or_not_pending_total": len(source_touched),
         "publics_terminal_processed_total": len(source_terminal),
@@ -1279,6 +1342,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             if row.get("total") not in (None, "")
         },
     }
+    return with_canonical_metric_aliases(metrics)
 
 
 def build_decision_plan(
@@ -1433,6 +1497,11 @@ def main() -> int:
     parser.add_argument("--max-cycles", type=int, default=0, help="maximum loop cycles; 0 means unlimited until other limits")
     parser.add_argument("--max-runtime-minutes", type=int, default=0, help="maximum wall-clock loop runtime; 0 disables")
     parser.add_argument("--no-progress-cycles", type=int, default=8, help="stop loop after this many idle no-progress cycles with no active kernels")
+    parser.add_argument("--target-new-publics", type=int, default=0, help="loop goal: stop after this many new source/public rows versus loop baseline")
+    parser.add_argument("--target-processed-posts", type=int, default=0, help="loop goal: stop after this many newly processed unique posts versus loop baseline")
+    parser.add_argument("--target-ko-sources", type=int, default=0, help="loop goal: stop after this many additional KO candidate sources versus loop baseline")
+    parser.add_argument("--target-image-queue", type=int, default=0, help="loop goal: stop after this many additional image queue rows versus loop baseline")
+    parser.add_argument("--target-publication-candidates", type=int, default=0, help="loop goal: stop after this many additional publication candidate rows versus loop baseline")
     args = parser.parse_args()
     load_env(Path(args.env_file))
     ensure_kaggle_username_env()
@@ -1480,6 +1549,16 @@ def main() -> int:
     last_signature: tuple[int, ...] | None = None
     idle_no_progress = 0
     cycle = 0
+    baseline_metrics: dict[str, Any] | None = None
+    loop_targets = {
+        "new_publics": int(args.target_new_publics or 0),
+        "processed_posts": int(args.target_processed_posts or 0),
+        "ko_sources": int(args.target_ko_sources or 0),
+        "image_queue": int(args.target_image_queue or 0),
+        "publication_candidates": int(args.target_publication_candidates or 0),
+    }
+    # --target-confirmed is an absolute product goal handled by build_decision_plan.
+    # Delta loop targets above are optional debug/product sprint goals.
     while True:
         cycle += 1
         try:
@@ -1493,10 +1572,17 @@ def main() -> int:
             }
             print(json.dumps(result, ensure_ascii=False), flush=True)
             return 2
-        print(json.dumps(result, ensure_ascii=False), flush=True)
         metrics = dict(result.get("metrics") or {})
+        if baseline_metrics is None:
+            baseline_metrics = dict(metrics)
+        goal_progress = loop_goal_progress(metrics, baseline_metrics, loop_targets)
+        if goal_progress.get("active"):
+            result["loop_goal_progress"] = goal_progress
+        print(json.dumps(result, ensure_ascii=False), flush=True)
         actions = list(result.get("actions") or [])
         if actions and actions[0].get("action") == "stop":
+            return 0
+        if goal_progress.get("reached"):
             return 0
         signature = _progress_signature(metrics)
         active = _has_active_region_talk_kernel(dict(metrics.get("kaggle_kernel_statuses") or {}))

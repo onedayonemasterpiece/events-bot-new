@@ -170,6 +170,12 @@ Implementation invariants:
 
 - hashtag rows use `discovery_type=edge_type=telegram_hashtag_search` and stay
   source/context evidence only;
+- exact post-link rows are not allowed to bypass source hygiene: before writing
+  or fetching a `post_link_queue_item`, the same local/spam surface classifier is
+  applied. Obvious Kaliningrad-local or spam sources are written as terminal
+  post-link rows (`terminal_source_rejected`) instead of `pending_fetch`, so
+  they remain auditable but do not consume Telethon exact-fetch or entity-cache
+  budget;
 - local/spam terminal rows remain visible in `source_queue_item` with
   `rejected_local_region_source` or `rejected_spam_source`, but are not selected
   for history scans;
