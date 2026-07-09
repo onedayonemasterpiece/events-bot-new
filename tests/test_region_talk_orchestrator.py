@@ -55,6 +55,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[3]["env"]["REGION_TALK_TEXT_EMBEDDING_MODEL_IDS"], "intfloat/multilingual-e5-base")
         self.assertEqual(actions[3]["env"]["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF"], "0")
+        self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "6000")
         self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
         self.assertIn("--max-sources", actions[3]["cmd"])

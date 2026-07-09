@@ -8531,6 +8531,58 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
     report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), online_source_queue_items_written=online_source_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    if (
+        region_talk_state_backend_requested() == "ydb"
+        and getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF", True)
+    ):
+        partial_now = utc_now_iso()
+        source_queue_rows_written = [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]
+        summary_row = {
+            "run_id": run_id,
+            "status": "partial",
+            "partial_reason": "live_source_queue_handoff_done_report_tail_skipped",
+            "posts_fetched": len(posts),
+            "posts_scored": posts_scored_count,
+            "posts_deferred": len(runtime_deferred_posts),
+            "source_queue_total": len(source_queue_rows_written),
+            "source_queue_cursor_position": unified_source_queue_metrics.get("source_queue_cursor_position", 0),
+            "source_queue_cursor_key": unified_source_queue_metrics.get("source_queue_cursor_key", ""),
+            "source_queue_keyword_prioritized_this_run": unified_source_queue_metrics.get("source_queue_keyword_prioritized_this_run", 0),
+            "source_queue_keyword_inserted_this_run": unified_source_queue_metrics.get("source_queue_keyword_inserted_this_run", 0),
+            "source_queue_keyword_existing_promoted_this_run": unified_source_queue_metrics.get("source_queue_keyword_existing_promoted_this_run", 0),
+            "online_source_queue_items_written": online_source_queue_items_written,
+            "state_backend": region_talk_state_backend_requested(),
+            "ydb_read_status": state_meta.get("ydb_read_status"),
+            "ydb_write_status": "ok" if online_source_queue_items_written or region_talk_state_backend_requested() != "ydb" else "no_source_queue_rows_written",
+        }
+        payload = {
+            "run_id": run_id,
+            "generated_at": partial_now,
+            "status": "partial",
+            "summary": summary_row,
+            "sheets": {
+                "01_run_summary": [summary_row],
+                "04s_unified_source_queue": source_queue_rows_written[:200],
+                "02_runtime_deferred_posts": runtime_deferred_posts[:200],
+            },
+            "latest_xlsx": "",
+            "xlsx_path": "",
+        }
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "stage_status.json").write_text(json.dumps({"run_id": run_id, "generated_at": partial_now, "status": "partial", "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (Path.cwd() / "output.json").write_text(json.dumps({"ok": True, "status": "partial", "run_id": run_id, "summary": summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
+        report_event(
+            "report_tail_skipped_after_live_source_queue_handoff",
+            phase="queue_assembly",
+            status="partial",
+            source_queue_total=len(source_queue_rows_written),
+            online_source_queue_items_written=online_source_queue_items_written,
+            source_queue_keyword_prioritized_this_run=unified_source_queue_metrics.get("source_queue_keyword_prioritized_this_run", 0),
+            next_action="run_region_talk_bge_m3_enrichment_or_next_candidate_report",
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
+        return payload
     report_event("image_queue_build_started", phase="queue_assembly", status="running", new_posts=len(new_posts), candidate_memory_rows=len(candidate_memory_rows), media_rows=len(media_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
         previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,

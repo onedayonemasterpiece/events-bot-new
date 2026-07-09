@@ -3,9 +3,12 @@
 ## [Unreleased]
 - **Region Talk Channel / source-queue tail after image handoff**: main
   CandidateReport launches now keep the source queue/discovery tail enabled
-  after early image handoff, and a requested tail skip is ignored when
+  after early image handoff, and a requested image-tail skip is ignored when
   similar/keyword discovery rows are pending, so keyword hits cannot remain
-  context-only rows without being promoted for real history scans.
+  context-only rows without being promoted for real history scans. After the
+  durable source queue handoff, the bounded live run may now exit partial via
+  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF=1` instead of doing
+  optional XLSX/report tail work.
 - **Region Talk Channel / keyword regex yield diagnostics**: orchestrator now
   reports keyword-sourced post regex-vs-vector counters
   (`publics_keyword_regex_*`, `publics_keyword_vector_*`) and CandidateReport

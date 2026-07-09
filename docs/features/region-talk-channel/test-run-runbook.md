@@ -483,7 +483,9 @@ python scripts/region_talk_embedding_quality_compare.py \
   `early_image_queue_handoff_done`. In the bounded discovery pass the default is
   `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=0`, so a successful
   handoff must continue through source-frontier/source-queue assembly before any
-  optional report/XLSX tail is skipped. If report-tail is explicitly shortened,
+  optional report/XLSX tail is skipped. After durable source queue handoff, the
+  bounded live run may end with
+  `report_tail_skipped_after_live_source_queue_handoff`. If report-tail is explicitly shortened,
   the following queue-assembly
   phases must also heartbeat (`source_profile_*`, `source_frontier_*`,
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,

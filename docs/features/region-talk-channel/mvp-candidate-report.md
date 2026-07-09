@@ -553,7 +553,10 @@ once the image queue is durable in YDB, the notebook still continues through
 the source-frontier/source-queue tail so similar-channel and keyword-search hits
 are promoted behind the source cursor for real history scans. Operator-only XLSX
 artifacts remain best-effort and must not block ImageDiagnostic, but source queue
-updates are a production stage.
+updates are a production stage. After source queue rows and the cursor are
+durable, bounded live runs may exit with
+`report_tail_skipped_after_live_source_queue_handoff`
+(`REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF=1`).
 
 In live-YDB mode the report tail is not a required product stage. The durable
 contract is:
