@@ -714,11 +714,36 @@ def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, An
         except Exception:
             return False
 
+    # Access-level deferrals (notably cached-entity-only mode while a Telegram
+    # resolve cooldown is active) are still a primary queue attempt.  If we do
+    # not count them here, the selector keeps burning every short run on the
+    # same unresolved rows and never reaches cache-resolvable publics behind
+    # them.
+    access_attempt_status = " ".join(
+        str(x or "")
+        for x in [
+            status,
+            qrow.get("last_scan_status"),
+            qrow.get("fetch_status"),
+            cursor.get("fetch_status"),
+        ]
+    ).lower()
+    access_attempted = any(
+        marker in access_attempt_status
+        for marker in [
+            "skipped_cached_entity_only_no_private_entity",
+            "skipped_telegram_resolve_cooldown",
+            "skipped_telegram_global_cooldown",
+            "error_floodwait_resolve",
+        ]
+    )
+
     return bool(
         cursor.get("primary_scan_completed_at")
         or cursor.get("last_history_fetch_at")
         or cursor.get("last_successful_delta_scan_at")
         or qrow.get("last_history_fetch_at")
+        or access_attempted
         or _positive_int(qrow.get("posts_scanned"))
         or _positive_int(cursor.get("posts_scanned"))
     )
@@ -1069,6 +1094,17 @@ def seed_from_unified_queue_row(row: dict[str, Any], idx: int) -> Seed | None:
     )
 
 
+def source_queue_row_has_cached_entity(row: dict[str, Any], previous_state: dict[str, Any]) -> bool:
+    """Return true when a Telegram queue row can be used without username resolve."""
+    entity_cache = previous_state.get("telegram_entity_cache") if isinstance(previous_state.get("telegram_entity_cache"), dict) else {}
+    handle = canonical_handle(str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or row.get("source_url") or row.get("canonical_url") or "")).lstrip("@").lower()
+    handle = re.sub(r"^https?://t\.me/", "", handle, flags=re.I).split("/", 1)[0].lower()
+    if not handle:
+        return False
+    cached = entity_cache.get("telegram:username:" + handle) or {}
+    return bool(cached.get("channel_id_private") and cached.get("access_hash_private"))
+
+
 def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     if not rows:
@@ -1078,8 +1114,15 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         r for r in rows
         if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) in {"telegram", "vk"}
     ]
+    cached_entity_only = telegram_cached_entity_only_enabled()
+    cached_rows = [r for r in rows if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) != "telegram" or source_queue_row_has_cached_entity(r, previous_state)]
+    if cached_entity_only and cached_rows:
+        rows = cached_rows
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_candidate_rows"] = len(cached_rows)
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_filter_applied"] = str(bool(cached_entity_only and cached_rows)).lower()
     rows = sorted(rows, key=lambda r: (
         source_queue_priority_bucket(r),
+        cached_entity_only and normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) == "telegram" and not source_queue_row_has_cached_entity(r, previous_state),
         str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
         int(r.get("queue_order") or 999999999) <= cursor,
         int(r.get("queue_order") or 999999999),
@@ -2026,6 +2069,7 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "canonical_url": url,
         "source_url": url,
         "fetch_status": fetch_status,
+        "fetch_attempted": row.get("fetch_attempted") or "",
         "source_queue_status": row.get("source_queue_status") or (fetch_status if source_terminal_rejected_status(fetch_status) else ""),
         "queue_status": queue_status,
         "frontier_status": row.get("frontier_status") or "",
@@ -2058,6 +2102,8 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "queue_status",
         "source_candidate_id", "platform", "handle", "resolved_title", "discovery_type",
         "edge_type", "frontier_status", "frontier_action", "frontier_reason", "confidence",
+        "fetch_status", "fetch_attempted", "telegram_resolve_status", "fetch_error_code",
+        "fetch_error_message",
     ], max_len=700)
 
 
@@ -5352,17 +5398,37 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             return 999999999
 
     selected: dict[str, dict[str, Any]] = {}
+    mandatory: dict[str, dict[str, Any]] = {}
 
     def add(row: dict[str, Any]) -> None:
         key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_url") or row.get("canonical_url") or len(selected))
         selected[key] = row
 
+    def add_mandatory(row: dict[str, Any]) -> None:
+        key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_url") or row.get("canonical_url") or len(mandatory))
+        mandatory[key] = row
+        selected[key] = row
+
+    def must_persist(row: dict[str, Any]) -> bool:
+        # These rows are the current run's actual state transition/evidence.
+        # They must survive the bounded YDB handoff even when a keyword insert
+        # also shifted a large tail of queue_order values.
+        return bool(
+            str(row.get("last_scan_run_id") or "") == run_id
+            or str(row.get("keyword_evidence_run_id") or "") == run_id
+            or str(row.get("last_fast_check_run_id") or "") == run_id
+            or str(row.get("status_changed_this_run") or "").lower() == "true"
+        )
+
     for row in clean:
-        if (
-            str(row.get("status_changed_this_run") or "").lower() == "true"
-            or str(row.get("queue_order_changed_this_run") or "").lower() == "true"
-            or str(row.get("last_scan_run_id") or "") == run_id
-            or str(row.get("first_seen_run_id") or "") == run_id
+        if must_persist(row):
+            add_mandatory(row)
+        elif (
+            # Bounded observability only: do not treat a shifted tail as
+            # mandatory, otherwise one keyword insert can force thousands of
+            # per-row upserts.  The forward slice below keeps the next backlog
+            # durable while mandatory rows preserve the current run evidence.
+            str(row.get("first_seen_run_id") or "") == run_id
             or str(row.get("last_seen_run_id") or "") == run_id
             or is_keyword(row)
         ):
@@ -5402,7 +5468,18 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             if len(selected) >= max_rows:
                 break
 
-    return sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))[:max_rows]
+    ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
+    if len(ordered_selected) <= max_rows:
+        return ordered_selected
+    mandatory_keys = {
+        str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("canonical_url") or "")
+        for r in mandatory.values()
+    }
+    mandatory_rows = [r for r in ordered_selected if str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("canonical_url") or "") in mandatory_keys]
+    optional_rows = [r for r in ordered_selected if str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("canonical_url") or "") not in mandatory_keys]
+    if len(mandatory_rows) >= max_rows:
+        return mandatory_rows
+    return sorted(mandatory_rows + optional_rows[: max_rows - len(mandatory_rows)], key=lambda r: (source_queue_priority_bucket(r), order(r)))
 
 
 def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
@@ -6365,16 +6442,6 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     if max_items <= 0:
         return []
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
-    entity_cache = previous_state.get("telegram_entity_cache") if isinstance(previous_state.get("telegram_entity_cache"), dict) else {}
-
-    def row_has_cached_entity(row: dict[str, Any]) -> bool:
-        handle = canonical_handle(str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or row.get("source_url") or row.get("canonical_url") or "")).lstrip("@").lower()
-        handle = re.sub(r"^https?://t\.me/", "", handle, flags=re.I).split("/", 1)[0].lower()
-        if not handle:
-            return False
-        cached = entity_cache.get("telegram:username:" + handle) or {}
-        return bool(cached.get("channel_id_private") and cached.get("access_hash_private"))
-
     cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     candidates: list[dict[str, Any]] = []
     for row in rows:
@@ -6389,11 +6456,11 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
             continue
         if str(row.get("fast_check_status") or "") in {"ko_hit", "no_hit", "local_region_source", "spam_source_reject"}:
             continue
-        if telegram_cached_entity_only_enabled() and not row_has_cached_entity(row):
+        if telegram_cached_entity_only_enabled() and not source_queue_row_has_cached_entity(row, previous_state):
             continue
         candidates.append(row)
     candidates = sorted(candidates, key=lambda r: (
-        not row_has_cached_entity(r),
+        not source_queue_row_has_cached_entity(r, previous_state),
         str(r.get("fast_check_status") or "") == "no_hit",
         source_queue_priority_bucket(r),
         int(r.get("queue_order") or 999999999),

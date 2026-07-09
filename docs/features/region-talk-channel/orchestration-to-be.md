@@ -203,9 +203,11 @@ Important invariants:
   spending more history budget.
 - CandidateReport keyword/hashtag discovery is breadth-first. Search hits that
   survive the cheap source-surface filter are physically reinserted immediately
-  after the persisted source cursor (`cursor+1...N`), and any tail reorder is
-  fully persisted on that handoff so YDB metrics/audits show the same queue the
-  selector will scan. Obvious local Kaliningrad publics are written as
+  after the persisted source cursor (`cursor+1...N`). The handoff must persist
+  the current run's actual scan/fast-check/keyword evidence even when the
+  reordered tail itself is too large to rewrite in one short debug run; bounded
+  handoff is acceptable, losing current-run status rows is not. Obvious local
+  Kaliningrad publics are written as
   `rejected_local_region_source` (separate future-monitoring list), and obvious
   hashtag-spam/commercial bait or repeated spoiler-hidden-text sources are
   written as `rejected_spam_source` before Telegram resolve/history calls.
@@ -250,8 +252,11 @@ Important invariants:
   warmup resolve per run (`REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN=1`,
   bounded by `REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=1`) and only after
   the shared cooldown gate says the method is available. Fast-check/history
-  still prefer cached `channel_id/access_hash` and do not silently bypass
-  cooldowns.
+  select cached `channel_id/access_hash` rows first and do not silently bypass
+  cooldowns. Rows that cannot be resolved in cached-entity-only mode are treated
+  as an access-level queue attempt (`skipped_cached_entity_only_no_private_entity`)
+  so they stop starving the primary backlog until a separate resolve/cache lane
+  can enrich them.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
@@ -453,8 +458,11 @@ every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with
 `REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL=0`. The bounded payload
 keeps changed/current-run rows, keyword-evidence rows, the forward cursor
-neighbourhood and pending/retry backlog, but a keyword reorder must not force a
-full queue rewrite. This keeps the 30-minute run contract realistic without
+neighbourhood and pending/retry backlog. Current-run scan rows
+(`last_scan_run_id`), fast-check rows and keyword-evidence rows are mandatory in
+the handoff; a mere `queue_order_changed_this_run` tail shift is not mandatory,
+otherwise one keyword insert can turn a short run into thousands of transactional
+YDB upserts. This keeps the 30-minute run contract realistic without
 hiding queue size: `source_queue_total` stays the full queue count, while
 `source_queue_handoff_rows` reports how many rows were actually written to
 `source_queue_item`; the duplicate `source_status_item` mirror is off by default

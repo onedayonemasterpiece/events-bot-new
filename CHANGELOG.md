@@ -19,7 +19,12 @@
   entire short debug run. Fast-check KO hits now immediately persist
   `source_queue_item` priority evidence (`fast_check_status=ko_hit`) and are
   treated as primary due sources on the next CandidateReport run, not just as
-  exact-post link queue rows.
+  exact-post link queue rows. CandidateReport now also selects cached-entity
+  source-queue rows first while cached-only mode is active, treats
+  `skipped_cached_entity_only_no_private_entity` as a primary access attempt so
+  unresolved rows stop starving the cursor, and makes current-run
+  scan/fast-check/keyword evidence mandatory in the bounded YDB handoff while
+  leaving large tail reorder rewrites bounded.
 - **Region Talk Channel / post-link queue hygiene and goal loop controls**:
   exact keyword/fast-check post links from obvious Kaliningrad-local or spam
   sources now become terminal `post_link_queue_item` rows before Telethon fetch,
