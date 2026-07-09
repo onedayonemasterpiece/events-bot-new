@@ -15,8 +15,17 @@ description: Operate MAX Web Messenger through Playwright for QR login, persiste
 
 ## Starting or restoring MAX Web
 
+### Known local session
+
+- Reuse the existing authorized MAX Web Chromium profile first:
+  - `/home/dev/projects/events-bot-new/artifacts/codex/max-web-playwright/profile`
+- Verified on 2026-07-09: opening `https://web.max.ru/` with this persistent profile showed the chat UI, not the QR login screen.
+- Treat everything inside the profile as secret browser session data. Do not print or copy cookies, Local Storage, IndexedDB, or QR/auth payloads.
+- A second local candidate, `artifacts/codex/max-vk-louisa-20260708/max_profile`, was checked on 2026-07-09 and showed the QR login screen; do not assume it is authorized unless re-verified.
+
 1. Launch Chromium/Playwright with a persistent profile:
-   - profile example: `artifacts/codex/max-web-playwright/profile`.
+   - default profile: `/home/dev/projects/events-bot-new/artifacts/codex/max-web-playwright/profile`;
+   - fallback new-task profile example: `artifacts/codex/<task>/profile`.
    - set `locale: ru-RU`, timezone `Europe/Moscow`, and a normal desktop viewport.
 2. Open `https://web.max.ru/`.
 3. If MAX shows `Войдите в MAX по QR-коду`, screenshot the page and show the QR to the user.
