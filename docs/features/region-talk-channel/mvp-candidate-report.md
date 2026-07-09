@@ -821,10 +821,12 @@ accept/reject production candidates.
 `publics_keyword_queue_rows_total`, `publics_keyword_edge_targets_total` and
 `publics_keyword_queue_missing_total` so keyword hits that were already present
 in the frontier cannot disappear from monitoring. Keyword-discovered rows,
-including existing pending frontier rows and fake legacy `processed_*` rows
-without scan evidence, are reinserted immediately after the persisted source
-cursor so the next scan actually tests the channels where keyword search saw a
-Kaliningrad hit. The orchestrator also reports keyword-sourced post diagnostics:
+including existing pending frontier rows, historical `source_edge_item` /
+`source_candidate_item` keyword evidence, context-only rows with just
+`canonical_source_key`+handle, and fake legacy `processed_*` rows without scan
+evidence, are reinserted immediately after the persisted source cursor so the
+next scan actually tests the channels where keyword search saw a Kaliningrad
+hit. The orchestrator also reports keyword-sourced post diagnostics:
 `publics_keyword_post_rows_with_text_total`, `publics_keyword_regex_ko_raw_posts_total`,
 `publics_keyword_regex_ko_filtered_posts_total`,
 `publics_keyword_vector_ko_candidate_posts_total`, source-level regex hit counts,

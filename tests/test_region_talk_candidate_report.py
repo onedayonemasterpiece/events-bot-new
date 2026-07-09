@@ -1570,6 +1570,82 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
 
+    def test_historical_keyword_edge_reinserts_fake_processed_after_cursor(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:edgehit": {
+                    "canonical_source_key": "telegram:edgehit",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/edgehit",
+                    "queue_order": 5,
+                    "source_queue_status": "processed_no_ko",
+                    "last_scan_run_id": "legacy-imageq-run",
+                    "posts_scanned": 0,
+                },
+                "telegram:tail": {
+                    "canonical_source_key": "telegram:tail",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/tail",
+                    "queue_order": 11,
+                    "source_queue_status": "pending_scan",
+                },
+            },
+            "source_candidates": {
+                "src_edgehit": {
+                    "source_candidate_id": "src_edgehit",
+                    "canonical_source_key": "telegram:edgehit",
+                    "handle": "edgehit",
+                    "platform_guess": "telegram",
+                }
+            },
+            "source_edges": {
+                "edge_keyword": {
+                    "edge_id": "edge_keyword",
+                    "to_source_candidate_id": "src_edgehit",
+                    "edge_type": "telegram_keyword_search",
+                    "from_source_id": "keyword:калининград",
+                }
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00"
+        )
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:edgehit"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:edgehit"]["source_queue_status"], "pending_scan")
+        self.assertEqual(by_key["telegram:edgehit"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:edgehit"]["fake_processed_without_scan_evidence"], "true")
+        self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:edgehit"]["queue_order"])
+        self.assertEqual(metrics["source_queue_historical_keyword_sources_total"], 1)
+        self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
+
+    def test_keyword_context_row_without_url_uses_canonical_key_handle(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 7,
+            "source_candidates": {
+                "src_kenigevents": {
+                    "source_candidate_id": "src_kenigevents",
+                    "canonical_source_key": "telegram:kenigevents",
+                    "handle": "kenigevents",
+                    "online_update_stage": "keyword_hit_source_context",
+                    "queue_status": "candidate",
+                }
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00"
+        )
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertIn("telegram:kenigevents", by_key)
+        self.assertEqual(by_key["telegram:kenigevents"]["source_url"], "https://t.me/kenigevents")
+        self.assertEqual(by_key["telegram:kenigevents"]["queue_order"], 8)
+        self.assertEqual(by_key["telegram:kenigevents"]["source_queue_status"], "pending_scan")
+        self.assertEqual(metrics["source_queue_historical_keyword_sources_total"], 1)
+        self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 1)
+
     def test_image_queue_preserves_terminal_unsupported_media_status(self) -> None:
         mod = load_module()
         previous = {

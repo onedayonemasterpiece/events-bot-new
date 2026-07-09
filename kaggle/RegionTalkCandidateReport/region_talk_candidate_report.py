@@ -3867,11 +3867,26 @@ def _source_queue_seed_rejection_reason(row: dict[str, Any]) -> str:
 
 
 def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str = "") -> dict[str, Any] | None:
-    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
+    url_fields = str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or "")
+    canonical_key_raw = str(row.get("canonical_source_key") or "").strip()
+    inferred_platform = ""
+    inferred_handle = ""
+    if canonical_key_raw.lower().startswith("telegram:"):
+        inferred_platform = "telegram"
+        candidate = canonical_key_raw.split(":", 1)[1].strip().lstrip("@")
+        if re.fullmatch(r"[A-Za-z0-9_]{4,}", candidate):
+            inferred_handle = candidate
+    elif canonical_key_raw.lower().startswith("vk:"):
+        inferred_platform = "vk"
+        candidate = canonical_key_raw.split(":", 1)[1].strip().lstrip("@")
+        if re.fullmatch(r"[A-Za-z0-9_.-]{3,}", candidate):
+            inferred_handle = candidate
+    platform = normalize_source_platform(str(row.get("platform") or row.get("platform_guess") or inferred_platform or ""), url_fields)
     if platform not in {"telegram", "vk"}:
         return None
-    url = canonical_source_url(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), str(row.get("canonical_url") or row.get("normalized_url") or row.get("source_url") or row.get("url") or row.get("keyword_hit_source_url") or row.get("recommended_canonical_url") or row.get("raw_url") or ""))
-    ckey = str(row.get("canonical_source_key") or canonical_source_key(platform, str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or ""), url))
+    handle_raw = str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or inferred_handle or "")
+    url = canonical_source_url(platform, handle_raw, url_fields)
+    ckey = str(row.get("canonical_source_key") or canonical_source_key(platform, handle_raw, url))
     if not url or not ckey:
         return None
     target_reason = target_source_url_reason(platform, url)
@@ -3883,7 +3898,7 @@ def _source_queue_seed_from_row(row: dict[str, Any], *, default_added_from: str 
         "platform": platform,
         "source_url": url,
         "canonical_url": url,
-        "handle": canonical_handle(str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or url)),
+        "handle": canonical_handle(str(handle_raw or url)),
         "source_title": row.get("source_title") or row.get("title_guess") or row.get("recommended_title") or row.get("resolved_title") or row.get("seed_channel_title") or row.get("source_seed_id") or url,
         "added_from": added_from,
         "source_candidate_id": row.get("source_candidate_id") or row.get("frontier_source_id") or "",
@@ -3900,6 +3915,88 @@ def _previous_rows_dict(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [dict(v) for v in value if isinstance(v, dict)]
     return []
+
+
+def _row_has_keyword_discovery_evidence(row: dict[str, Any]) -> bool:
+    text = " ".join(str(row.get(field) or "") for field in [
+        "added_from", "discovery_type", "discovery_types", "edge_type", "edge_types_all",
+        "from_source_id", "frontier_action", "keyword_discovery_status", "online_update_stage",
+        "source_probe_reason",
+    ]).lower()
+    return "keyword" in text or "telegram_keyword_search" in text
+
+
+def _historical_keyword_source_rows(previous_state: dict[str, Any], run_id: str, run_now: str) -> list[dict[str, Any]]:
+    """Recover durable keyword-hit sources from prior YDB rows for queue priority.
+
+    Keyword search creates two useful artifacts: source candidates/edges and, in
+    some older runs, context-only online source rows. If a later CandidateReport
+    run does not repeat the exact keyword query, those historical hit sources
+    must still be inserted just after the cursor until they get real scan
+    evidence.
+    """
+    candidate_rows = (
+        _previous_rows_dict(previous_state.get("source_candidates"))
+        + _previous_rows_dict(previous_state.get("source_frontier_unique"))
+        + _previous_rows_dict(previous_state.get("discovered_sources"))
+    )
+    queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    edge_rows = _previous_rows_dict(previous_state.get("source_edges"))
+    by_id: dict[str, dict[str, Any]] = {}
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in candidate_rows + queue_rows:
+        if not isinstance(row, dict):
+            continue
+        for field in ["source_candidate_id", "frontier_source_id"]:
+            value = str(row.get(field) or "").strip()
+            if value:
+                by_id[value] = {**by_id.get(value, {}), **row}
+        seed = _source_queue_seed_from_row(row, default_added_from="telegram_keyword_search")
+        if seed:
+            key = str(seed.get("canonical_source_key") or "")
+            by_key[key] = {**by_key.get(key, {}), **row, **seed}
+
+    out: dict[str, dict[str, Any]] = {}
+
+    def add_keyword_row(row: dict[str, Any], edge: dict[str, Any] | None = None) -> None:
+        payload = dict(row or {})
+        if edge:
+            payload = {**edge, **payload}
+        seed = _source_queue_seed_from_row(payload, default_added_from="telegram_keyword_search")
+        if not seed or seed.get("platform") != "telegram":
+            return
+        key = str(seed.get("canonical_source_key") or "")
+        out[key] = {
+            **payload,
+            **seed,
+            "added_from": "telegram_keyword_search",
+            "discovery_type": payload.get("discovery_type") or payload.get("edge_type") or "telegram_keyword_search",
+            "edge_type": payload.get("edge_type") or "telegram_keyword_search",
+            "keyword_discovery_status": "historical_keyword_evidence",
+            "keyword_evidence_run_id": run_id,
+            "keyword_evidence_at": run_now,
+        }
+
+    for row in candidate_rows + queue_rows:
+        if _row_has_keyword_discovery_evidence(row):
+            add_keyword_row(row)
+
+    for edge in edge_rows:
+        if not _row_has_keyword_discovery_evidence(edge):
+            continue
+        target_id = str(edge.get("to_source_candidate_id") or edge.get("target_source_candidate_id") or edge.get("source_candidate_id") or "").strip()
+        candidates: list[dict[str, Any]] = []
+        if target_id and target_id in by_id:
+            candidates.append(by_id[target_id])
+        for key, row in by_key.items():
+            if target_id and (target_id == key or target_id == str(row.get("source_candidate_id") or "")):
+                candidates.append(row)
+        if not candidates:
+            candidates.append(dict(edge))
+        for candidate in candidates:
+            add_keyword_row(candidate, edge)
+
+    return list(out.values())
 
 
 def build_unified_source_queue(
@@ -3976,7 +4073,8 @@ def build_unified_source_queue(
     keyword_inserted = 0
     keyword_prioritized = 0
     keyword_existing_promoted = 0
-    keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or [])
+    historical_keyword_rows = _historical_keyword_source_rows(previous_state, run_id, run_now)
+    keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or []) + historical_keyword_rows
     keyword_priority: list[tuple[dict[str, Any], bool]] = []
     seen_keyword: set[str] = set()
     for row in keyword_candidates:
@@ -4201,6 +4299,7 @@ def build_unified_source_queue(
         "source_queue_keyword_inserted_this_run": keyword_inserted,
         "source_queue_keyword_prioritized_this_run": keyword_prioritized,
         "source_queue_keyword_existing_promoted_this_run": keyword_existing_promoted,
+        "source_queue_historical_keyword_sources_total": len(historical_keyword_rows),
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
         "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
         "source_queue_vk_total": sum(1 for r in out if r.get("platform") == "vk"),

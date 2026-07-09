@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / historical keyword source promotion**: CandidateReport
+  now recovers historical keyword-search evidence from `source_edge_item` and
+  `source_candidate_item`, including context-only Telegram rows that have only a
+  `canonical_source_key`/handle, and promotes those sources after the cursor
+  until they receive real history-scan evidence.
 - **Region Talk Channel / source-queue tail after image handoff**: main
   CandidateReport launches now keep the source queue/discovery tail enabled
   after early image handoff, and a requested image-tail skip is ignored when
