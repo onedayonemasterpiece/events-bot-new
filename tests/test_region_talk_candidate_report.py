@@ -45,6 +45,55 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", names)
 
+    def test_runner_config_serializes_orchestrator_telethon_limits(self) -> None:
+        mod = load_runner_module()
+        old_env = {k: os.environ.get(k) for k in [
+            "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT",
+            "REGION_TALK_TG_PUBLIC_WEB_FALLBACK",
+            "REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS",
+            "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN",
+            "REGION_TALK_TELEGRAM_QUERY_SOURCE",
+            "REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR",
+        ]}
+        old_create = mod.create_or_replace_dataset
+        old_wait = mod.wait_dataset_ready
+        captured: dict[str, dict] = {}
+
+        def fake_create(_client, _username, slug, _title, writer):
+            with tempfile.TemporaryDirectory() as td:
+                folder = Path(td)
+                writer(folder)
+                cfg = folder / "region_talk_run_config.json"
+                if cfg.exists():
+                    captured[slug] = json.loads(cfg.read_text(encoding="utf-8"))
+            return "unit/" + slug
+
+        try:
+            os.environ["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"] = "3"
+            os.environ["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"] = "0"
+            os.environ["REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS"] = "8"
+            os.environ["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"] = "5"
+            os.environ["REGION_TALK_TELEGRAM_QUERY_SOURCE"] = "place_lexicon"
+            os.environ["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"] = "1"
+            mod.create_or_replace_dataset = fake_create
+            mod.wait_dataset_ready = lambda *args, **kwargs: None
+            mod.build_input_datasets(object(), run_id="unit-run", username="unit")
+            env = next(iter(captured.values()))["env"]
+            self.assertEqual(env["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+            self.assertEqual(env["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
+            self.assertEqual(env["REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS"], "8")
+            self.assertEqual(env["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "5")
+            self.assertEqual(env["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
+            self.assertEqual(env["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"], "1")
+        finally:
+            mod.create_or_replace_dataset = old_create
+            mod.wait_dataset_ready = old_wait
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
 
     def test_telegram_governor_humanlike_pacing_is_logged_and_observable(self) -> None:
         mod = load_module()

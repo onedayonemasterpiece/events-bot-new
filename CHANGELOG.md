@@ -6,8 +6,10 @@
   keyword post refetches to three paced Telethon calls, route exact-link fetch
   through the shared Telegram governor, and stop later Telegram phases when
   `FloodWait.seconds` opens a cooldown. Exact-link failures now emit concrete
-  Telethon reason events, and YDB `Unauthenticated` online-write failures trip a
-  circuit breaker instead of producing repeated noisy retries.
+  Telethon reason events, the CandidateReport launcher now serializes the
+  orchestrator-only Telethon/fast-check/YDB limit keys into Kaggle config, and
+  YDB `Unauthenticated` online-write failures trip a circuit breaker instead of
+  producing repeated noisy retries.
 - **Region Talk Channel / shorter debug cycles**: tightened orchestrator
   CandidateReport debug batches to six sources / shorter keyword-similar slices,
   bounded source-local fast-check and exact post-link fetch work, capped online
