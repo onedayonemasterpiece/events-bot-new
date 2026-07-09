@@ -197,6 +197,104 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 else:
                     sys.modules[name] = value
 
+    def test_telegram_governor_cached_entity_bypasses_resolve_cooldown(self) -> None:
+        mod = load_module()
+        class Entity:
+            id = 12345
+            access_hash = 67890
+            title = "Cached Travel"
+
+        old_modules = {name: sys.modules.get(name) for name in ["telethon", "telethon.tl", "telethon.tl.types"]}
+        fake_telethon = types.ModuleType("telethon")
+        fake_tl = types.ModuleType("telethon.tl")
+        fake_types = types.ModuleType("telethon.tl.types")
+        class InputPeerChannel:
+            def __init__(self, channel_id, access_hash):
+                self.channel_id = channel_id
+                self.access_hash = access_hash
+        fake_types.InputPeerChannel = InputPeerChannel
+        try:
+            sys.modules["telethon"] = fake_telethon
+            sys.modules["telethon.tl"] = fake_tl
+            sys.modules["telethon.tl.types"] = fake_types
+            with tempfile.TemporaryDirectory() as td:
+                gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+                self.assertTrue(gov.remember_entity("cachedtravel", Entity(), source="unit"))
+                gov.mark_floodwait("get_entity.exact_post_link", "post_link_queue", "https://t.me/other", 3600)
+                seed = mod.Seed(
+                    source_seed_id="seed_cached",
+                    platform="telegram",
+                    source_title="Cached Travel",
+                    handle="cachedtravel",
+                    url="https://t.me/cachedtravel",
+                    source_kind="channel",
+                    source_scope_guess="travel",
+                    priority=1,
+                    discovered_from="unit",
+                    discovered_from_url="",
+                    why_seeded="unit",
+                    expected_value="unit",
+                    known_risks="",
+                    initial_status="pending_scan",
+                    monitoring_enabled=True,
+                    rights_policy="manual_review",
+                    notes="",
+                )
+                entity, meta = asyncio.run(gov.resolve_entity(object(), seed))
+                self.assertIsNotNone(entity)
+                self.assertEqual(entity.channel_id, 12345)
+                self.assertEqual(meta["telegram_resolve_status"], "resolved_from_private_cache")
+                self.assertEqual(gov.ledger[-1]["decision"], "skipped_cache_hit")
+        finally:
+            for name, value in old_modules.items():
+                if value is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = value
+
+    def test_telegram_governor_exact_resolve_floodwait_blocks_network_resolve(self) -> None:
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+            cooldown_until = gov.mark_floodwait("get_entity.exact_post_link", "post_link_queue", "https://t.me/example", 123)
+            self.assertIn("method:ResolveUsernameRequest", gov.cooldowns)
+            self.assertIn("method:get_entity.exact_post_link", gov.cooldowns)
+            self.assertEqual(gov.cooldowns["method:ResolveUsernameRequest"]["cooldown_until"], cooldown_until)
+
+    def test_source_fast_check_backlog_prefers_cached_entities(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue_cursor_position": 0,
+            "telegram_entity_cache": {
+                "telegram:username:cached": {
+                    "channel_id_private": "12345",
+                    "access_hash_private": "67890",
+                }
+            },
+            "unified_source_queue": {
+                "telegram:username:uncached": {
+                    "canonical_source_key": "telegram:username:uncached",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/uncached",
+                    "canonical_url": "https://t.me/uncached",
+                    "handle": "uncached",
+                    "queue_order": 1,
+                    "source_queue_status": "pending_scan",
+                },
+                "telegram:username:cached": {
+                    "canonical_source_key": "telegram:username:cached",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/cached",
+                    "canonical_url": "https://t.me/cached",
+                    "handle": "cached",
+                    "queue_order": 2,
+                    "source_queue_status": "pending_scan",
+                },
+            },
+        }
+        seeds = mod.source_fast_check_backlog_seeds(state, 2)
+        self.assertEqual([s.handle for s in seeds], ["@cached", "@uncached"])
+
     def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
         mod = load_module()
         old_env = os.environ.get("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR")

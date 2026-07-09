@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / cached Telethon progress during FloodWait**:
+  CandidateReport now treats exact-link `get_entity` FloodWait as a shared
+  username-resolve cooldown, but attempts cached `channel_id/access_hash`
+  `InputPeerChannel` reads before the cooldown gate and prioritizes cached
+  backlog sources in fast-check-KO, allowing safe progress while uncached
+  resolves cool down.
 - **Region Talk Channel / Telethon operations skill**: added a project skill
   `region-talk-telethon-ops` that captures session-boundary rules, FloodWait
   handling, entity/access_hash cache requirements, public-web fallback limits,

@@ -3318,6 +3318,9 @@ class TelegramRequestGovernor:
         self.telegram_phase_status = "degraded_floodwait"
         self.degraded = True
         self.cooldowns[f"method:{method_name}"] = {"cooldown_until": cooldown_until, "last_error_seconds": seconds, "last_error_run_id": self.run_id}
+        if method_name in {"ResolveUsernameRequest", "get_entity.exact_post_link"}:
+            self.cooldowns["method:ResolveUsernameRequest"] = {"cooldown_until": cooldown_until, "last_error_seconds": seconds, "last_error_run_id": self.run_id}
+            self.cooldowns["method:get_entity.exact_post_link"] = {"cooldown_until": cooldown_until, "last_error_seconds": seconds, "last_error_run_id": self.run_id}
         if canonical_url:
             self.cooldowns[f"source:{canonical_url}"] = {"cooldown_until": cooldown_until, "reason": "telegram_floodwait", "last_error_seconds": seconds}
         self.log(method_name, "entity_resolve_expensive", source_id, canonical_url, "error_floodwait", ok=False, floodwait_seconds=seconds, cooldown_until=cooldown_until)
@@ -3341,19 +3344,25 @@ class TelegramRequestGovernor:
         source_id = seed.source_id
         handle = seed.handle.lstrip("@")
         key = self.cache_key(seed.handle or seed.url)
-        source_cd, source_until = self.cooldown_active(f"source:{canonical_url}")
-        method_cd, method_until = self.cooldown_active("method:ResolveUsernameRequest")
-        if self.degraded or source_cd or method_cd:
-            self.resolve_skipped_by_cooldown += 1
-            status = "skipped_telegram_global_cooldown" if self.degraded or method_cd else "skipped_telegram_resolve_cooldown"
-            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=method_until or source_until)
-            return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": method_until or source_until}
         cached = self.entity_cache.get(key) or {}
         entity_from_cache = self.cached_input_peer(seed.handle or seed.url)
         if entity_from_cache is not None:
             self.resolve_cache_hits += 1
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
             return entity_from_cache, {"telegram_resolve_status": "resolved_from_private_cache", "resolved_title": cached.get("title_last_seen", "")}
+        source_cd, source_until = self.cooldown_active(f"source:{canonical_url}")
+        method_cd, method_until = self.cooldown_active("method:ResolveUsernameRequest")
+        exact_resolve_cd, exact_resolve_until = self.cooldown_active("method:get_entity.exact_post_link")
+        if self.degraded or source_cd or method_cd:
+            self.resolve_skipped_by_cooldown += 1
+            status = "skipped_telegram_global_cooldown" if self.degraded or method_cd else "skipped_telegram_resolve_cooldown"
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=method_until or source_until)
+            return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": method_until or source_until}
+        if exact_resolve_cd:
+            self.resolve_skipped_by_cooldown += 1
+            status = "skipped_telegram_resolve_cooldown"
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=exact_resolve_until)
+            return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": exact_resolve_until}
         if self.resolve_network_attempts >= self.max_network_resolves or not self.has_total_request_budget("ResolveUsernameRequest", source_id, canonical_url):
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
             return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
@@ -6060,6 +6069,16 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
     if max_items <= 0:
         return []
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    entity_cache = previous_state.get("telegram_entity_cache") if isinstance(previous_state.get("telegram_entity_cache"), dict) else {}
+
+    def row_has_cached_entity(row: dict[str, Any]) -> bool:
+        handle = canonical_handle(str(row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or row.get("source_url") or row.get("canonical_url") or "")).lstrip("@").lower()
+        handle = re.sub(r"^https?://t\.me/", "", handle, flags=re.I).split("/", 1)[0].lower()
+        if not handle:
+            return False
+        cached = entity_cache.get("telegram:username:" + handle) or {}
+        return bool(cached.get("channel_id_private") and cached.get("access_hash_private"))
+
     cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
     candidates: list[dict[str, Any]] = []
     for row in rows:
@@ -6076,6 +6095,7 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
             continue
         candidates.append(row)
     candidates = sorted(candidates, key=lambda r: (
+        not row_has_cached_entity(r),
         str(r.get("fast_check_status") or "") == "no_hit",
         source_queue_priority_bucket(r),
         int(r.get("queue_order") or 999999999),
@@ -6931,6 +6951,11 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     governor.resolve_cache_hits += 1
                     governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
             if entity is None:
+                if governor is not None and not governor.has_total_request_budget("get_entity.exact_post_link", "post_link_queue", canonical_url):
+                    status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact resolve deferred by cooldown/budget at {idx}/{len(rows)}")
+                    if str(row.get("_kind") or "") == "post_link_queue_item":
+                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_fetch", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "telegram_resolve_cooldown_or_budget", "fetch_error_message": "exact post entity resolve skipped by cooldown/budget"}], run_id=run_id, stage=stage)
+                    break
                 try:
                     if governor is not None:
                         governor.total_attempted += 1
