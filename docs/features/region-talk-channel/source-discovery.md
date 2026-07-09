@@ -89,10 +89,18 @@ From a good source, discover nearby/related catalog entries, but keep them `cand
 ### 6a. Keyword / hashtag search expansion
 
 Telegram global search is a source-discovery signal, not a post acceptance
-signal. It can search both travel-intent phrases (`ездили в Калининград`,
-`Калининград что посмотреть`) and bounded hashtags (`#Калининград`,
-`#Зеленоградск`, `#Светлогорск`, `#КуршскаяКоса`). A source found this way must
-be either:
+signal. Query banks are generated from
+`kaliningrad-place-lexicon-v1.csv`, not from four hand-written place names:
+
+- global keyword search gets a small rotating slice of travel-intent phrases
+  and safe core/tourist/important toponyms;
+- global hashtag search gets a separate small rotating slice from the lexicon
+  hashtag bank (`#Калининград`, `#Балтийск`, `#Черняховск`,
+  `#Куршскаякоса`, `#Рыбнаядеревня`, `#Виштынецкоеозеро`, ...);
+- source-local preflight search may use the much broader lexicon bank because
+  it is scoped to one already known channel.
+
+A source found this way must be either:
 
 - physically inserted at `unified_source_queue.cursor + 1...N` when it is a
   plausible external source, so the next short run scans it before generic tail
@@ -110,9 +118,35 @@ The live 2026-07-09 local E2E probe over
 returned 210 raw results but only 7 unique channels for that account: 178
 local-region results, 31 spam/commercial-like results and 1 plausible external
 candidate (`Кот с рюкзаком`). A follow-up channel scan hit a large Telegram
-`FloodWait` on username resolves, so production must do the cheap surface
-classification before resolving/scanning channels and must not spend history
-budget on obvious local/spam hashtag hits.
+`FloodWait` on username resolves. That follow-up was an ad-hoc local research
+script without the production request governor; production code must route
+global search, resolves and source-local preflight through the shared
+`TelegramRequestGovernor`, entity cache and human-like pacing, do the cheap
+surface classification before resolving/scanning channels, and must not spend
+history budget on obvious local/spam hashtag hits.
+
+### 6b. Source-local preflight search
+
+When a new source enters YDB from a catalog, similar-channel edge, keyword hit
+or hashtag hit, the next cheap step is not a deep history crawl. First run a
+bounded in-channel preflight search across the lexicon:
+
+1. surface-filter title/handle/recent evidence for local-region and spam
+   terminal statuses;
+2. resolve the channel through the shared governor/cache only if needed;
+3. search the channel for a small rotating subset of high-yield terms, then
+   continue across the broader lexicon in later runs if still useful;
+4. stop early on the first fresh hit (`post_date >= now-365d`);
+5. persist `matched_query`, `keyword_hit_post_url`, `post_date`,
+   `preflight_hit_age_days`, `keyword_evidence_excerpt` and
+   `source_preflight_status`.
+
+If a fresh hit is found, the source is physically placed at
+`unified_source_queue.cursor + 1...N` and the exact post URL must be written to
+a known-post queue (`post_link_queue_item` / generalized candidate-link fetch)
+so that the post itself is scored next instead of being only a source hint. If
+the hit is older than one year, keep it as evidence and lower-priority backlog;
+do not jump it immediately ahead of fresh sources.
 
 Implementation invariants:
 
@@ -123,6 +157,9 @@ Implementation invariants:
   for history scans;
 - uncertain rows are kept for the normal semantic/vector gate rather than
   rejected by regex;
+- a keyword/preflight post hit is not a final candidate, but its URL must not be
+  lost: it should enter the known-post fetch/scoring queue and then pass the
+  normal E5+BGE/text/image/LLM funnel;
 - every physical queue reorder caused by keyword/hashtag insertion is persisted
   in YDB, not only hidden by selector priority.
 
@@ -223,7 +260,7 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
 - Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `8`).
-- Telethon network calls are paced by default (`REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1`): username resolves and similar-channel recommendation calls sleep before the call, history queries/media downloads/source-to-source scans use smaller pauses, and the call is deferred instead of skipping the pause when the runtime reserve is nearly exhausted. Public `t.me/s` fallback reads do not consume the Telethon user session and are not part of this pacing.
+- Telethon network calls are paced by default (`REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1`): username resolves, global keyword/hashtag search and similar-channel recommendation calls sleep before the call, history queries/media downloads/source-to-source scans use bounded pauses, and the call is deferred instead of skipping the pause when the runtime reserve is nearly exhausted. Public `t.me/s` fallback reads do not consume the Telethon user session and are not part of this pacing.
 - Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `40`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `60`).
 - In short live-YDB handoff runs, fetched posts are sorted before vector scoring by Kaliningrad place evidence/media presence (`REGION_TALK_PRIORITIZE_REGION_TEXT_BEFORE_VECTOR=1`) so the limited embedding budget is spent on likely region posts first.
 - Large `FloodWait` values (default threshold `300` seconds) are not slept through: record a cooldown/degraded mode, skip later resolves/history that would hit the same method/source, and still write the XLSX report.
@@ -250,6 +287,8 @@ REGION_TALK_TG_FLOODWAIT_COOLDOWN_MARGIN_SECONDS=1800
 REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1
 REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS=20
 REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS=45
+REGION_TALK_TG_KEYWORD_QUERY_DELAY_MIN_SECONDS=6
+REGION_TALK_TG_KEYWORD_QUERY_DELAY_MAX_SECONDS=14
 REGION_TALK_TG_SIMILAR_DELAY_MIN_SECONDS=20
 REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS=45
 REGION_TALK_TG_HISTORY_QUERY_DELAY_MIN_SECONDS=2
@@ -263,7 +302,11 @@ REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN=100
 REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED=10
 REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN=1000
 REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY=1
+REGION_TALK_TELEGRAM_QUERY_SOURCE=place_lexicon
 REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES=30
+REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES=18
+REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN=12
+REGION_TALK_TELEGRAM_QUERY_ROTATE=1
 REGION_TALK_MEDIA_SCORING_MODE=retry_queue_first
 REGION_TALK_ACTUAL_IMAGE_TARGET=30
 ```

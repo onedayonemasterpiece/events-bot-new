@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / lexicon-driven Telegram discovery queries**:
+  CandidateReport now builds global keyword, hashtag and source-local preflight
+  query banks from the 194-row Kaliningrad place lexicon instead of relying on
+  four hardcoded hashtags; orchestrator CandidateReport launches use a bounded
+  3-keyword + 4-hashtag rotating slice, pace global keyword/hashtag search
+  through the Telegram request governor, and expose planned keyword/hashtag/
+  preflight query counts for audit.
 - **Region Talk Channel / breadth-first hashtag discovery and cursor discipline**:
   CandidateReport now supports bounded `REGION_TALK_TELEGRAM_HASHTAG_QUERIES`,
   routes obvious local Kaliningrad sources and repeated hashtag-spam/commercial

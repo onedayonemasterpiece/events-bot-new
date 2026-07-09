@@ -9,6 +9,8 @@ The lexicon helps the Region Talk monitor recognize posts that are substantively
 It is **not** a keyword-only final classifier. It is used for:
 
 - recall of regional places that may appear without the word “Калининград”;
+- lexicon-derived Telegram discovery/preflight query banks for cities,
+  settlements, landmarks and POIs;
 - scope evidence for the LLM-owned `kaliningrad_oblast_only_scope_gate`;
 - explainability columns in XLSX;
 - features for later semantic/vector and verifier stages.
@@ -55,6 +57,21 @@ Seed v1 combines:
 Ambiguous names like `39 регион`, `Балтийское море`, `Лесное`, `Морское`, `Северный`, `Высокое` are marked with `requires_context=true` or higher `ambiguity_level`. They may support recall but should not alone decide the final candidate.
 
 Old German/Prussian names are accepted as Kaliningrad-scope aliases only when attached to the corresponding oblast place. They must not create external-region false positives by themselves.
+
+## Discovery query generation
+
+The CSV is the source of truth for Region Talk discovery keywords:
+
+- global Telegram keyword search uses a bounded rotating subset of
+  travel-intent phrases and safe `core`/`tourist`/`important` terms;
+- global Telegram hashtag search uses a separate bounded rotating subset of
+  safe hashtag variants derived from the same rows;
+- source-local preflight search can use the broader lexicon bank, because it is
+  scoped to a known channel and is only evidence for prioritization.
+
+Rows with `requires_context=true` or high ambiguity are not standalone global
+search anchors. They may support scoped/source-local search or downstream
+semantic evidence when enough Kaliningrad context is present.
 
 ## Builder
 

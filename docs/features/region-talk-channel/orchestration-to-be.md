@@ -168,12 +168,12 @@ Important invariants:
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
-  recommendations per seed, and 4 keyword-discovery queries. The orchestrator
-  uses travel-intent keyword phrases (`ездили в Калининград`,
-  `путешествие Калининград`, `Калининград что посмотреть`, etc.) rather than raw
-  single toponyms first, because live YDB showed broad `Калининград` searches
-  mostly rediscover local/regional publics that are useful for KO detection but
-  rarely pass the non-local blogger/travel publication gate. This keeps
+  recommendations per seed, and a 7-query lexicon-driven Telegram global-search
+  slice: 3 travel/toponym keyword phrases plus 4 rotating hashtags from
+  `kaliningrad-place-lexicon-v1.csv`. The query bank is the full region
+  city/settlement/POI lexicon, but each run consumes only a small human-like
+  slice because live YDB/local probes showed broad raw `Калининград` searches
+  mostly rediscover local/regional publics and hashtag spam. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
   turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
 - CandidateReport history fetches are freshness-bounded by
@@ -192,6 +192,16 @@ Important invariants:
   written as `rejected_spam_source` before Telegram resolve/history calls.
   Normal uncertain sources are not rejected by regex; they stay in the vector
   pipeline.
+- CandidateReport source-local preflight search is the prioritization bridge
+  between broad source discovery and expensive history scans. After a source is
+  added to YDB and passes cheap local/spam title filters, a bounded in-channel
+  search should query the lexicon bank (`Калининград`, `Куршская коса`,
+  `Балтийск`, `Черняховск`, `Рыбная деревня`, `Виштынецкое озеро`, ...), stop on
+  a fresh hit within 365 days, then insert both the source after the source
+  cursor and the exact post URL into a known-post fetch queue. A stale hit stays
+  as evidence but lower priority. This prevents the current failure mode where a
+  keyword/global-search post is only source context and the exact post can be
+  lost until a later deep scan.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,

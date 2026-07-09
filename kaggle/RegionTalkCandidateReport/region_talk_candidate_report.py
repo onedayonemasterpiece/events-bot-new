@@ -62,6 +62,18 @@ TELEGRAM_KEYWORD_DISCOVERY_TERMS = [
     "Дом Советов", "Готическое кольцо", "замок Нессельбек", "замок Шаакен", "замок Тапиау",
     "Тильзит", "Инстербург", "Рагнит", "маяк Заливино", "маяк Балтийск",
 ]
+TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS = [
+    "ездили в Калининград",
+    "путешествие Калининград",
+    "Калининград что посмотреть",
+    "маршрут Калининград",
+    "отзыв Калининград",
+    "ездили на Куршскую косу",
+    "путешествие Зеленоградск",
+    "путешествие Светлогорск",
+    "Балтийская коса маршрут",
+    "Виштынецкое озеро маршрут",
+]
 NEWS_WORDS = ["происшеств", "дтп", "авар", "полици", "суд", "задерж", "штраф", "войн", "полит", "скандал", "убий", "пожар"]
 AD_WORDS = ["скидк", "промокод", "купить", "заказать", "реклама", "партнёр", "партнер", "оплат", "бронь", "регистрация", "анонс", "конкурс", "диктант", "географический диктант", "билеты", "забронировать"]
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
@@ -3251,6 +3263,173 @@ def load_place_lexicon(path: Path | None) -> list[dict[str, Any]]:
     return out
 
 
+def _dedupe_keep_order(items: Iterable[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        value = re.sub(r"\s+", " ", str(item or "").strip())
+        if not value:
+            continue
+        key = normalize_geo_text(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out
+
+
+def _safe_hashtag_from_place_term(term: str) -> str:
+    cleaned = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", str(term or "").strip())
+    if not cleaned or len(cleaned) < 4:
+        return ""
+    if not re.search(r"[А-Яа-я]", cleaned):
+        return ""
+    return "#" + cleaned
+
+
+def build_region_talk_place_query_terms(lexicon: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
+    """Build lexicon-derived Telegram discovery/preflight query banks.
+
+    Global Telegram search is noisy, so it gets travel-intent phrases plus
+    bounded core/tourist/important toponyms. Source-local preflight search is
+    much safer and therefore may use a much wider city/settlement/POI bank.
+    Final candidate acceptance remains vector/LLM-owned; these are recall
+    queries and deterministic guardrails only.
+    """
+    if lexicon is None:
+        lexicon = load_place_lexicon(find_place_lexicon_file())
+    if not lexicon:
+        return {
+            "global_keyword_terms": list(TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS + TELEGRAM_KEYWORD_DISCOVERY_TERMS),
+            "hashtag_terms": ["#Калининград", "#Зеленоградск", "#Светлогорск", "#КуршскаяКоса"],
+            "source_preflight_terms": list(DEFAULT_ANCHORS + TELEGRAM_KEYWORD_DISCOVERY_TERMS),
+        }
+    # The CSV order is curated: region/Kaliningrad first, then municipal
+    # centers, then tourist/nature/landmark anchors, then local settlements.
+    # Preserve it so short non-rotated smoke runs still touch the strongest
+    # anchors before alphabetical towns.
+    rows = [r for r in lexicon if str(r.get("allowed_for_kaliningrad_scope") or "").lower() == "true"]
+    global_plain: list[str] = []
+    hashtags: list[str] = []
+    preflight: list[str] = []
+    alias_terms: list[str] = []
+    for row in rows:
+        name = str(row.get("canonical_name") or "").strip()
+        tier = str(row.get("priority_tier") or "")
+        ambiguity = str(row.get("ambiguity_level") or "")
+        requires_context = str(row.get("requires_context") or "").lower() == "true"
+        safe_global = tier in {"core", "tourist", "important"} and ambiguity in {"low", "medium"} and not requires_context
+        safe_preflight = ambiguity in {"low", "medium"} and not requires_context
+        if safe_global and name:
+            global_plain.append(name)
+            tag = _safe_hashtag_from_place_term(name)
+            if tag:
+                hashtags.append(tag)
+        if safe_preflight and name:
+            preflight.append(name)
+        if tier in {"core", "tourist", "important"} and ambiguity in {"low", "medium"}:
+            for col in ("aliases", "old_names", "common_misspellings"):
+                for alias in split_semicolon(str(row.get(col) or "")):
+                    if len(normalize_geo_text(alias)) >= 4 and re.search(r"[А-Яа-я]", alias):
+                        alias_terms.append(alias)
+                        if safe_preflight:
+                            preflight.append(alias)
+    global_keyword_terms = _dedupe_keep_order(
+        list(TELEGRAM_TRAVEL_INTENT_DISCOVERY_TERMS)
+        + global_plain
+        + alias_terms[: max(0, getenv_int("REGION_TALK_TELEGRAM_LEXICON_ALIAS_QUERY_LIMIT", 24))]
+    )
+    return {
+        "global_keyword_terms": global_keyword_terms,
+        "hashtag_terms": _dedupe_keep_order(hashtags),
+        "source_preflight_terms": _dedupe_keep_order(preflight + alias_terms),
+    }
+
+
+def _split_query_terms(raw: str) -> list[str]:
+    return [x.strip() for x in re.split(r"[;\n|]+", raw or "") if x.strip()]
+
+
+def _rotate_query_terms(items: list[str], offset: int) -> list[str]:
+    if not items:
+        return []
+    n = len(items)
+    shift = int(offset or 0) % n
+    return items[shift:] + items[:shift]
+
+
+def build_telegram_keyword_query_plan(run_id: str = "", lexicon: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Return the bounded, rotating Telegram global-search query plan.
+
+    Explicit env query lists remain supported, but the default production plan is
+    lexicon-driven and rotates through a broad Kaliningrad city/POI hashtag bank
+    instead of hardcoding only a few places.
+    """
+    query_source_mode = (os.getenv("REGION_TALK_TELEGRAM_QUERY_SOURCE") or "env_or_place_lexicon").strip().lower()
+    place_terms = build_region_talk_place_query_terms(lexicon)
+    env_keywords = _split_query_terms(os.getenv("REGION_TALK_TELEGRAM_KEYWORD_QUERIES") or "")
+    env_hashtags = _split_query_terms(os.getenv("REGION_TALK_TELEGRAM_HASHTAG_QUERIES") or "")
+    force_lexicon = query_source_mode in {"place_lexicon", "lexicon", "kaliningrad_place_lexicon"}
+    if env_keywords and not force_lexicon:
+        keyword_terms = env_keywords
+        keyword_source = "env"
+    else:
+        keyword_terms = place_terms.get("global_keyword_terms") or list(TELEGRAM_KEYWORD_DISCOVERY_TERMS)
+        keyword_source = "place_lexicon" if place_terms.get("global_keyword_terms") else "static_fallback"
+        if env_keywords and getenv_bool("REGION_TALK_TELEGRAM_APPEND_ENV_QUERIES_TO_LEXICON", False):
+            keyword_terms = env_keywords + keyword_terms
+            keyword_source = "env_plus_place_lexicon"
+    if env_hashtags and not force_lexicon:
+        hashtag_terms = env_hashtags
+        hashtag_source = "env"
+    else:
+        hashtag_terms = place_terms.get("hashtag_terms") or ["#Калининград", "#Зеленоградск", "#Светлогорск", "#КуршскаяКоса"]
+        hashtag_source = "place_lexicon" if place_terms.get("hashtag_terms") else "static_fallback"
+        if env_hashtags and getenv_bool("REGION_TALK_TELEGRAM_APPEND_ENV_QUERIES_TO_LEXICON", False):
+            hashtag_terms = env_hashtags + hashtag_terms
+            hashtag_source = "env_plus_place_lexicon"
+    keyword_terms = _dedupe_keep_order(keyword_terms)
+    hashtag_terms = _dedupe_keep_order(hashtag_terms)
+    max_queries = max(0, getenv_int("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", 30))
+    default_hashtag_limit = min(4, max_queries) if hashtag_terms else 0
+    hashtag_limit = max(0, getenv_int("REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN", default_hashtag_limit))
+    if "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES" in os.environ:
+        keyword_limit = max(0, getenv_int("REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES", max_queries))
+    else:
+        keyword_limit = max(0, max_queries - min(hashtag_limit, max_queries))
+    if keyword_limit + hashtag_limit > max_queries:
+        hashtag_limit = max(0, max_queries - keyword_limit)
+    rotate = getenv_bool("REGION_TALK_TELEGRAM_QUERY_ROTATE", True)
+    offset_raw = os.getenv("REGION_TALK_TELEGRAM_QUERY_ROTATE_OFFSET")
+    if offset_raw is not None and str(offset_raw).strip():
+        try:
+            offset = int(str(offset_raw).strip())
+        except Exception:
+            offset = 0
+    else:
+        offset = int(stable_hash(run_id or RUN_STARTED_AT.strftime("%Y-%m-%d"), length=8), 16)
+    keyword_candidates = _rotate_query_terms(keyword_terms, offset) if rotate and keyword_source != "env" else keyword_terms
+    hashtag_candidates = _rotate_query_terms(hashtag_terms, offset) if rotate and hashtag_source != "env" else hashtag_terms
+    selected_keywords = keyword_candidates[:keyword_limit]
+    selected_hashtags = hashtag_candidates[:hashtag_limit]
+    selected_queries = _dedupe_keep_order(selected_keywords + selected_hashtags)[:max_queries]
+    return {
+        "query_source_mode": query_source_mode,
+        "keyword_query_source": keyword_source,
+        "hashtag_query_source": hashtag_source,
+        "keyword_terms_planned_total": len(keyword_terms),
+        "hashtag_terms_planned_total": len(hashtag_terms),
+        "source_preflight_terms_planned_total": len(place_terms.get("source_preflight_terms") or []),
+        "keyword_query_limit": keyword_limit,
+        "hashtag_query_limit": hashtag_limit,
+        "query_rotate": str(rotate).lower(),
+        "query_rotate_offset": offset if rotate else 0,
+        "selected_keyword_queries": selected_keywords,
+        "selected_hashtag_queries": selected_hashtags,
+        "selected_queries": selected_queries,
+    }
+
+
 def term_in_text(norm_term: str, norm_text: str) -> bool:
     if not norm_term:
         return False
@@ -5419,11 +5598,9 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
     if mode in {"off", "similar_only"} or not getenv_bool("REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY", mode in {"mixed", "keyword_only"}):
         _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "disabled"
         return [], []
-    terms_raw = os.getenv("REGION_TALK_TELEGRAM_KEYWORD_QUERIES") or ""
-    terms = [x.strip() for x in re.split(r"[;\n|]+", terms_raw) if x.strip()] or TELEGRAM_KEYWORD_DISCOVERY_TERMS
-    hashtag_terms_raw = os.getenv("REGION_TALK_TELEGRAM_HASHTAG_QUERIES") or ""
-    hashtag_terms = [x.strip() for x in re.split(r"[;\n|]+", hashtag_terms_raw) if x.strip()]
-    terms = terms + [x for x in hashtag_terms if x not in terms]
+    query_plan = build_telegram_keyword_query_plan(run_id)
+    terms = list(query_plan.get("selected_queries") or [])
+    hashtag_terms = set(query_plan.get("selected_hashtag_queries") or [])
     max_queries = getenv_int("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", 30)
     per_query = getenv_int("REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY", 20)
     max_frontier = getenv_int("REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN", 300)
@@ -5448,6 +5625,21 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
             processed += 1
             if status is not None and (processed == 1 or processed % max(1, getenv_int("REGION_TALK_KEYWORD_DISCOVERY_HEARTBEAT_EVERY_QUERIES", 5)) == 0):
                 status.event("keyword_discovery_alive", phase="keyword_discovery", status="running", run_id=run_id, progress_label=f"keyword query {processed}/{min(len(terms), max_queries)}", keyword_queries_processed=processed, keyword_queries_total=min(len(terms), max_queries), keyword_sources_found=len(rows), keyword_raw_hits=raw_hits, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+            if not await governor.humanlike_pause(
+                "messages.searchGlobal",
+                "keyword_discovery",
+                query,
+                min_env="REGION_TALK_TG_KEYWORD_QUERY_DELAY_MIN_SECONDS",
+                max_env="REGION_TALK_TG_KEYWORD_QUERY_DELAY_MAX_SECONDS",
+                default_min=6.0,
+                default_max=14.0,
+                reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", 180),
+            ):
+                _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"
+                processed -= 1
+                if status is not None:
+                    status.event("keyword_discovery_skipped_runtime_budget", phase="keyword_discovery", status="deferred", run_id=run_id, progress_label=f"keyword discovery stopped before paced query {processed}/{min(len(terms), max_queries)}", keyword_queries_processed=processed, keyword_queries_total=min(len(terms), max_queries), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+                break
             governor.total_attempted += 1
             governor.requests_by_method["messages.searchGlobal"] = governor.requests_by_method.get("messages.searchGlobal", 0) + 1
             try:
@@ -5568,6 +5760,14 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
             keyword_status = "ok" if rows or not errors else "error"
         _REGION_TALK_TELEGRAM_RUNTIME.update({
             "telegram_keyword_discovery_status": keyword_status,
+            "keyword_query_source_mode": query_plan.get("query_source_mode", ""),
+            "keyword_query_source": query_plan.get("keyword_query_source", ""),
+            "hashtag_query_source": query_plan.get("hashtag_query_source", ""),
+            "keyword_queries_planned_total": query_plan.get("keyword_terms_planned_total", 0),
+            "hashtag_queries_planned_total": query_plan.get("hashtag_terms_planned_total", 0),
+            "source_preflight_queries_planned_total": query_plan.get("source_preflight_terms_planned_total", 0),
+            "keyword_queries_selected_json": json.dumps(query_plan.get("selected_keyword_queries") or [], ensure_ascii=False),
+            "hashtag_queries_selected_json": json.dumps(query_plan.get("selected_hashtag_queries") or [], ensure_ascii=False),
             "keyword_search_queries_processed": processed,
             "keyword_discovered_sources_unique": len({r.get("source_candidate_id") for r in rows if r.get("source_candidate_id")}),
             "keyword_post_hits_raw": raw_hits,
@@ -9390,6 +9590,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "telegram_similar_raw_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_raw_count", 0),
         "telegram_similar_unique_count":_REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_unique_count", 0),
         "keyword_queries_processed":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_search_queries_processed", 0),
+        "keyword_query_source":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_query_source", ""),
+        "hashtag_query_source":_REGION_TALK_TELEGRAM_RUNTIME.get("hashtag_query_source", ""),
+        "keyword_queries_planned_total":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_queries_planned_total", 0),
+        "hashtag_queries_planned_total":_REGION_TALK_TELEGRAM_RUNTIME.get("hashtag_queries_planned_total", 0),
+        "source_preflight_queries_planned_total":_REGION_TALK_TELEGRAM_RUNTIME.get("source_preflight_queries_planned_total", 0),
         "keyword_unique_sources":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique", 0),
         "keyword_post_hits_raw":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hits_raw", 0),
         "keyword_unique_channels":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_unique_channels", _REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique", 0)),
@@ -9625,6 +9830,11 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"similar_seed_queue_used_total","value":summary_row.get("similar_seed_queue_used_total")},
         {"metric":"similar_seed_cursor_advanced","value":summary_row.get("similar_seed_cursor_advanced")},
         {"metric":"telegram_keyword_discovery_status","value":summary_row.get("telegram_keyword_discovery_status")},
+        {"metric":"keyword_query_source","value":summary_row.get("keyword_query_source")},
+        {"metric":"hashtag_query_source","value":summary_row.get("hashtag_query_source")},
+        {"metric":"keyword_queries_planned_total","value":summary_row.get("keyword_queries_planned_total")},
+        {"metric":"hashtag_queries_planned_total","value":summary_row.get("hashtag_queries_planned_total")},
+        {"metric":"source_preflight_queries_planned_total","value":summary_row.get("source_preflight_queries_planned_total")},
         {"metric":"keyword_search_queries_processed","value":summary_row.get("keyword_search_queries_processed")},
         {"metric":"keyword_discovered_sources_unique","value":summary_row.get("keyword_discovered_sources_unique")},
         {"metric":"dynamic_frontier_seed_count","value":summary_row.get("dynamic_frontier_seed_count")},

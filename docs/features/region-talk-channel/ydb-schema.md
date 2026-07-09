@@ -237,7 +237,8 @@ Region Talk must keep row-level product state compact:
 - durable rows are stable-key upserts, not per-run append logs:
   `source_queue_item`, `source_status_item`, `source_candidate_item`,
   `source_edge_item`, `comment_link_item`, `processed_post_item`,
-  `candidate_memory_item`, `image_queue_item`, `publication_candidate_item`;
+  `post_link_queue_item`, `candidate_memory_item`, `image_queue_item`,
+  `publication_candidate_item`;
 - full post text, raw comment text, raw Telegram/VK payloads and media bytes are
   excluded from YDB;
 - row payloads use compact field allow-lists and short excerpts/hashes only;
@@ -282,6 +283,13 @@ Region Talk must keep row-level product state compact:
   `post_live_item:<post_id>` — compact fetched/scored post state without raw text
   or raw API payloads; text is represented only by hashes/excerpts already allowed
   in report artifacts;
+- kind `post_link_queue_item`, pk `post_link_queue_item:<post_url_hash>` —
+  known-post fetch/scoring queue for exact post URLs found by global keyword
+  search or source-local preflight. It stores `post_url`, `source_key`,
+  `matched_query`, `matched_hashtag`, `post_date`, `hit_age_days`,
+  `priority_reason`, status/lease fields and a short evidence excerpt. Consuming
+  this queue refetches the exact post and sends it through the normal
+  E5+BGE/text/image/LLM funnel; it is not a publication acceptance shortcut;
 - kind `candidate_memory_item`, pk `candidate_memory_item:<candidate_memory_id>` —
   compact cumulative candidate-memory row. CandidateReport reads and writes this
   row-level kind directly; it must not depend only on `latest_state.candidate_memory`;

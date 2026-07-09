@@ -205,6 +205,54 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         for required in ["Краснолесье", "Виштынецкое озеро", "Роминтенская пуща", "Куршская коса", "Балтийская коса"]:
             self.assertIn(required, names)
 
+    def test_place_lexicon_builds_broad_discovery_and_preflight_terms(self) -> None:
+        mod = load_module()
+        lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
+        terms = mod.build_region_talk_place_query_terms(lexicon)
+        self.assertGreaterEqual(len(terms["source_preflight_terms"]), 90)
+        self.assertGreaterEqual(len(terms["hashtag_terms"]), 70)
+        for required in ["Калининград", "Балтийск", "Черняховск", "Куршская коса", "Рыбная деревня", "Виштынецкое озеро"]:
+            self.assertIn(required, terms["source_preflight_terms"])
+        for required in ["#Калининград", "#Балтийск", "#Куршскаякоса", "#Рыбнаядеревня"]:
+            self.assertIn(required, terms["hashtag_terms"])
+        self.assertIn("путешествие Калининград", terms["global_keyword_terms"])
+
+    def test_telegram_keyword_query_plan_uses_lexicon_hashtag_quota_and_rotation(self) -> None:
+        mod = load_module()
+        old_env = {k: os.environ.get(k) for k in [
+            "REGION_TALK_TELEGRAM_QUERY_SOURCE",
+            "REGION_TALK_TELEGRAM_KEYWORD_QUERIES",
+            "REGION_TALK_TELEGRAM_HASHTAG_QUERIES",
+            "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES",
+            "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES",
+            "REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN",
+            "REGION_TALK_TELEGRAM_QUERY_ROTATE",
+            "REGION_TALK_TELEGRAM_QUERY_ROTATE_OFFSET",
+        ]}
+        try:
+            os.environ.pop("REGION_TALK_TELEGRAM_KEYWORD_QUERIES", None)
+            os.environ.pop("REGION_TALK_TELEGRAM_HASHTAG_QUERIES", None)
+            os.environ["REGION_TALK_TELEGRAM_QUERY_SOURCE"] = "place_lexicon"
+            os.environ["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"] = "7"
+            os.environ["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"] = "3"
+            os.environ["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"] = "4"
+            os.environ["REGION_TALK_TELEGRAM_QUERY_ROTATE"] = "0"
+            plan = mod.build_telegram_keyword_query_plan("unit-run")
+            self.assertEqual(plan["keyword_query_source"], "place_lexicon")
+            self.assertEqual(plan["hashtag_query_source"], "place_lexicon")
+            self.assertEqual(len(plan["selected_keyword_queries"]), 3)
+            self.assertEqual(len(plan["selected_hashtag_queries"]), 4)
+            self.assertEqual(len(plan["selected_queries"]), 7)
+            self.assertGreaterEqual(plan["hashtag_terms_planned_total"], 70)
+            self.assertGreaterEqual(plan["source_preflight_terms_planned_total"], 90)
+            self.assertIn("#Калининград", plan["selected_hashtag_queries"])
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_kaliningrad_only_scope_rejects_multi_region_lists(self) -> None:
         mod = load_module()
         lexicon = mod.load_place_lexicon(ROOT / "docs" / "features" / "region-talk-channel" / "kaliningrad-place-lexicon-v1.csv")
