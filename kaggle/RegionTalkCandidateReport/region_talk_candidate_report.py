@@ -2102,6 +2102,10 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
                 items.append(("candidate_memory_item:" + key.replace("candidate_memory_item:", ""), "candidate_memory_item", payload))
         if not items:
             return 0
+        max_items = getenv_int("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS", 0)
+        if max_items > 0 and len(items) > max_items:
+            print(f"[region-talk] online_candidate_ydb_limited rows={len(items)} limit={max_items}", flush=True)
+            items = items[:max_items]
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
         timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
         retry_settings = ydb_retry_settings(
@@ -2119,6 +2123,31 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
         _record_ydb_online_write_failure(exc, label="online_candidate")
         print(f"[region-talk] online_candidate_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
+
+
+def candidate_memory_rows_for_ydb_write(
+    rows: list[dict[str, Any]],
+    *,
+    run_id: str,
+    bge_memory_fusion_stats: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if not getenv_bool("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", True):
+        return rows
+    stats = bge_memory_fusion_stats or {}
+    if int(stats.get("promoted") or 0) > 0 or int(stats.get("rejected") or 0) > 0:
+        return rows
+    changed: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("not_refetched_this_run") or "").lower() != "true":
+            changed.append(row)
+            continue
+        if str(row.get("last_refetched_run_id") or "") == run_id:
+            changed.append(row)
+            continue
+        if str(row.get("first_candidate_run_id") or "") == run_id:
+            changed.append(row)
+            continue
+    return changed
 
 
 def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: str, id_fields: list[str], fields: list[str], run_id: str, stage: str) -> int:
@@ -3531,7 +3560,7 @@ class TelegramRequestGovernor:
         self.total_attempted += 1
         self.requests_by_method["ResolveUsernameRequest"] = self.requests_by_method.get("ResolveUsernameRequest", 0) + 1
         try:
-            entity = await client.get_entity(handle)
+            entity = await telethon_await(client.get_entity(handle), "get_entity")
             self.total_ok += 1
             self.resolve_network_ok += 1
             self.remember_entity(handle, entity, title=str(getattr(entity, "title", None) or seed.source_title), source="resolve_entity")
@@ -5879,7 +5908,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
             governor.recommendation_calls_attempted += 1
             governor.total_attempted += 1
             governor.requests_by_method["channels.getChannelRecommendations"] = governor.requests_by_method.get("channels.getChannelRecommendations", 0) + 1
-            result = await client(request_cls(channel=entity))
+            result = await telethon_await(client(request_cls(channel=entity)), "channels.getChannelRecommendations")
             governor.total_ok += 1
             governor.recommendation_calls_ok += 1
             chats = list(getattr(result, "chats", None) or [])
@@ -6060,7 +6089,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
             governor.total_attempted += 1
             governor.requests_by_method["messages.searchGlobal"] = governor.requests_by_method.get("messages.searchGlobal", 0) + 1
             try:
-                async for msg in client.iter_messages(None, search=query, limit=per_query):
+                for msg in await telethon_iter_messages_list(client, None, method_name="messages.searchGlobal", search=query, limit=per_query):
                     raw_hits += 1
                     chat = None
                     try:
@@ -6368,7 +6397,7 @@ async def run_source_fast_check_ko(
                     reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300),
                 ):
                     break
-                async for msg in client.iter_messages(entity, search=q, limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2)):
+                for msg in await telethon_iter_messages_list(client, entity, method_name="iter_messages.fast_check_ko", search=q, limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2)):
                     mid = int(getattr(msg, "id", 0) or 0)
                     if not mid:
                         continue
@@ -7138,7 +7167,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     if governor is not None:
                         governor.total_attempted += 1
                         governor.requests_by_method["get_entity.exact_post_link"] = governor.requests_by_method.get("get_entity.exact_post_link", 0) + 1
-                    entity = await client.get_entity(handle)
+                    entity = await telethon_await(client.get_entity(handle), "get_entity")
                     if governor is not None:
                         governor.total_ok += 1
                         governor.remember_entity(handle, entity, title=str(row.get("source_title") or handle), source="exact_post_link_fetch")
@@ -7164,7 +7193,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                 if governor is not None:
                     governor.total_attempted += 1
                     governor.requests_by_method[method_name] = governor.requests_by_method.get(method_name, 0) + 1
-                msg = await client.get_messages(entity, ids=mid)
+                msg = await telethon_await(client.get_messages(entity, ids=mid), "get_messages.exact_post_link")
                 if governor is not None:
                     governor.total_ok += 1
             except Exception as exc:
@@ -7523,7 +7552,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         break
                     governor.total_attempted += 1
                     governor.requests_by_method["iter_messages"] = governor.requests_by_method.get("iter_messages", 0) + 1
-                    async for msg in client.iter_messages(entity, limit=per_query, search=q):
+                    for msg in await telethon_iter_messages_list(client, entity, method_name="iter_messages", limit=per_query, search=q):
                         mid = int(getattr(msg, "id", 0) or 0)
                         if not mid or mid in seen:
                             continue
@@ -7595,7 +7624,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                                 governor.media_downloads_attempted += 1
                                 media_dir = output_dir / "media" / stable_hash("telegram", handle)
                                 media_dir.mkdir(parents=True, exist_ok=True)
-                                downloaded = await client.download_media(msg, file=str(media_dir / f"{mid}"))
+                                downloaded = await telethon_await(client.download_media(msg, file=str(media_dir / f"{mid}")), "download_media")
                                 if downloaded:
                                     primary_media_path = str(downloaded)
                                     governor.media_downloads_ok += 1
@@ -8241,6 +8270,28 @@ def telegram_cached_entity_only_enabled() -> bool:
     resolve is the scarce operation that triggered long FloodWaits.
     """
     return getenv_bool("REGION_TALK_TG_CACHED_ENTITY_ONLY", False)
+
+
+def telethon_call_timeout_seconds(method_name: str) -> float:
+    safe = re.sub(r"[^A-Z0-9]+", "_", str(method_name or "telethon").upper()).strip("_")
+    specific = f"REGION_TALK_TG_{safe}_TIMEOUT_SECONDS"
+    if os.getenv(specific) is not None:
+        return max(1.0, getenv_float(specific, 45.0))
+    return max(1.0, getenv_float("REGION_TALK_TG_CALL_TIMEOUT_SECONDS", 45.0))
+
+
+async def telethon_await(coro: Any, method_name: str) -> Any:
+    return await asyncio.wait_for(coro, timeout=telethon_call_timeout_seconds(method_name))
+
+
+async def telethon_iter_messages_list(client: Any, entity: Any, *, method_name: str, limit: int, search: Any = None) -> list[Any]:
+    async def collect() -> list[Any]:
+        out: list[Any] = []
+        async for msg in client.iter_messages(entity, limit=limit, search=search):
+            out.append(msg)
+        return out
+
+    return await asyncio.wait_for(collect(), timeout=telethon_call_timeout_seconds(method_name))
 
 
 def _prefix_for_embedding_model(model_id: str, text: str, *, query: bool) -> str:
@@ -9983,10 +10034,15 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             status="running",
             **{f"bge_m3_memory_{k}": v for k, v in bge_memory_fusion_stats.items()},
         )
-    online_candidate_items_written = write_region_talk_online_candidate_items(candidate_memory_rows, run_id=run_id, stage="candidate_memory_built")
+    candidate_memory_ydb_write_rows = candidate_memory_rows_for_ydb_write(
+        candidate_memory_rows,
+        run_id=run_id,
+        bge_memory_fusion_stats=bge_memory_fusion_stats,
+    )
+    online_candidate_items_written = write_region_talk_online_candidate_items(candidate_memory_ydb_write_rows, run_id=run_id, stage="candidate_memory_built")
     source_frontier_queue_next = build_source_frontier_queue_next(source_frontier_unique, source_rows, candidate_memory_rows, run_id)
     candidate_memory_active_rows = [r for r in candidate_memory_rows if str(r.get("current_lifecycle_status") or "") in ACTIVE_CANDIDATE_MEMORY_STATUSES and str(r.get("manual_decision") or "") != "reject"]
-    report_event("candidate_memory_build_done", phase="queue_assembly", status="running", candidate_memory_rows=len(candidate_memory_rows), candidate_memory_active_rows=len(candidate_memory_active_rows), online_candidate_items_written=online_candidate_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("candidate_memory_build_done", phase="queue_assembly", status="running", candidate_memory_rows=len(candidate_memory_rows), candidate_memory_ydb_write_rows=len(candidate_memory_ydb_write_rows), candidate_memory_active_rows=len(candidate_memory_active_rows), online_candidate_items_written=online_candidate_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
 
     def _memory_recheck_text(row: dict[str, Any]) -> str:
         return str(row.get("short_summary") or row.get("text_excerpt") or row.get("post_url") or "")

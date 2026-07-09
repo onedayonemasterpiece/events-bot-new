@@ -59,6 +59,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN",
             "REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS",
             "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS",
+            "REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY",
+            "REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS",
             "REGION_TALK_YDB_STATE_LOAD_ATTEMPTS",
             "REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS",
         ]}
@@ -86,6 +88,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"] = "0"
             os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "80"
             os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
+            os.environ["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"] = "1"
+            os.environ["REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS"] = "80"
             os.environ["REGION_TALK_YDB_STATE_LOAD_ATTEMPTS"] = "4"
             os.environ["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"] = "20"
             mod.create_or_replace_dataset = fake_create
@@ -102,6 +106,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "0")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"], "80")
             self.assertEqual(env["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"], "80")
+            self.assertEqual(env["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"], "1")
+            self.assertEqual(env["REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS"], "80")
             self.assertEqual(env["REGION_TALK_YDB_STATE_LOAD_ATTEMPTS"], "4")
             self.assertEqual(env["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"], "20")
         finally:
@@ -112,6 +118,26 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+    def test_candidate_memory_ydb_write_changed_only_skips_not_refetched_rows(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY")
+        try:
+            os.environ["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"] = "1"
+            rows = [
+                {"candidate_memory_id": "old", "not_refetched_this_run": "true", "last_refetched_run_id": "previous"},
+                {"candidate_memory_id": "fresh", "not_refetched_this_run": "false", "last_refetched_run_id": "run-1"},
+                {"candidate_memory_id": "new", "not_refetched_this_run": "true", "first_candidate_run_id": "run-1"},
+            ]
+            selected = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 0, "rejected": 0})
+            self.assertEqual([r["candidate_memory_id"] for r in selected], ["fresh", "new"])
+            selected_after_bge_change = mod.candidate_memory_rows_for_ydb_write(rows, run_id="run-1", bge_memory_fusion_stats={"promoted": 1, "rejected": 0})
+            self.assertEqual(len(selected_after_bge_change), 3)
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY", None)
+            else:
+                os.environ["REGION_TALK_YDB_CANDIDATE_MEMORY_WRITE_CHANGED_ONLY"] = old
 
 
     def test_telegram_governor_humanlike_pacing_is_logged_and_observable(self) -> None:

@@ -9,7 +9,11 @@
   immediately to live YDB cursor state for the next run. Source-queue live handoff
   no longer rewrites the full reordered tail, is capped to 80 rows in the
   orchestrator, and disables the duplicate `source_status_item` mirror by
-  default to avoid long transactional YDB upsert stalls.
+  default to avoid long transactional YDB upsert stalls. Candidate-memory live
+  handoff now writes only changed/refetched rows by default and is separately
+  capped with `REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS`; Telethon calls
+  are wrapped in per-call timeouts so a single Telegram RPC cannot consume an
+  entire short debug run.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient

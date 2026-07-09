@@ -190,6 +190,14 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
   CandidateReport, isolated BGE-M3 enrichment, ImageDiagnostic, publication
   finalizer/notifier and `scripts/region_talk_orchestrator.py` operate against
   live YDB under dry-run/no-publication guardrails.
+- Short-run runtime contract: CandidateReport must not spend the tail of a
+  10–30 minute debug cycle rewriting unchanged queues. The source queue handoff
+  is bounded to changed/current/keyword/cursor-neighbourhood rows, duplicate
+  `source_status_item` mirroring is disabled by default, candidate-memory YDB
+  handoff writes only changed/refetched rows unless BGE fusion changed memory
+  statuses, and both source/candidate handoffs have explicit row caps. Telethon
+  network operations are guarded by per-call timeouts and cached-entity-only
+  mode can defer username cache misses instead of burning FloodWait.
 - Channel/community creation: **not done**.
 - Real tokens/secrets: **not introduced**.
 - Publishing: **not performed**.
