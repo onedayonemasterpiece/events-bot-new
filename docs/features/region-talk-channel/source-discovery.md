@@ -86,6 +86,46 @@ When a monitored source posts about Kaliningrad, inspect linked/mentioned author
 
 From a good source, discover nearby/related catalog entries, but keep them `candidate` until scored.
 
+### 6a. Keyword / hashtag search expansion
+
+Telegram global search is a source-discovery signal, not a post acceptance
+signal. It can search both travel-intent phrases (`ездили в Калининград`,
+`Калининград что посмотреть`) and bounded hashtags (`#Калининград`,
+`#Зеленоградск`, `#Светлогорск`, `#КуршскаяКоса`). A source found this way must
+be either:
+
+- physically inserted at `unified_source_queue.cursor + 1...N` when it is a
+  plausible external source, so the next short run scans it before generic tail
+  backlog;
+- terminally routed to the local-source list when title/handle clearly says it
+  is a Kaliningrad-local public (`Калининград`, `Кёниг`, `kenig`, `kgd`, `39`,
+  regional towns/resorts);
+- terminally routed to the spam-source list when the title/excerpt matches
+  repeated hashtag-spam/commercial bait (`ты не сможешь...`, `VPN`,
+  `промокод`, crypto/trading, betting/casino/bonus, cheap-flight feeds) or
+  repeated spoiler/hidden-text posts.
+
+The live 2026-07-09 local E2E probe over
+`#Калининград|#калининградскаяобласть|#Зеленоградск|#Светлогорск|#КуршскаяКоса|#Балтийск|#Янтарный`
+returned 210 raw results but only 7 unique channels for that account: 178
+local-region results, 31 spam/commercial-like results and 1 plausible external
+candidate (`Кот с рюкзаком`). A follow-up channel scan hit a large Telegram
+`FloodWait` on username resolves, so production must do the cheap surface
+classification before resolving/scanning channels and must not spend history
+budget on obvious local/spam hashtag hits.
+
+Implementation invariants:
+
+- hashtag rows use `discovery_type=edge_type=telegram_hashtag_search` and stay
+  source/context evidence only;
+- local/spam terminal rows remain visible in `source_queue_item` with
+  `rejected_local_region_source` or `rejected_spam_source`, but are not selected
+  for history scans;
+- uncertain rows are kept for the normal semantic/vector gate rather than
+  rejected by regex;
+- every physical queue reorder caused by keyword/hashtag insertion is persisted
+  in YDB, not only hidden by selector priority.
+
 ### 7. Public travel blogger catalog import
 
 The operator-provided workbook `public_travel_blogger_channel_links.xlsx` is a discovery input, not an allowlist and not a monitored-source switch. The Kaggle launcher copies it into the private input dataset when present, and the runner can also read it from `REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE`. Rows are normalized from columns such as `Platform`, `Handle`, `URL`, `Type`, `Category`, `Source`, `Source page`, `Collected on`, `Notes` and exported as source-frontier candidates with `edge_type=public_travel_blogger_catalog`.

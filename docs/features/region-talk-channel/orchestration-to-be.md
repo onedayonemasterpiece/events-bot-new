@@ -182,6 +182,16 @@ Important invariants:
   `REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD=30` text posts
   on one UTC day are terminally rejected as high-volume/news-like feeds before
   spending more history budget.
+- CandidateReport keyword/hashtag discovery is breadth-first. Search hits that
+  survive the cheap source-surface filter are physically reinserted immediately
+  after the persisted source cursor (`cursor+1...N`), and any tail reorder is
+  fully persisted on that handoff so YDB metrics/audits show the same queue the
+  selector will scan. Obvious local Kaliningrad publics are written as
+  `rejected_local_region_source` (separate future-monitoring list), and obvious
+  hashtag-spam/commercial bait or repeated spoiler-hidden-text sources are
+  written as `rejected_spam_source` before Telegram resolve/history calls.
+  Normal uncertain sources are not rejected by regex; they stay in the vector
+  pipeline.
 - CandidateReport child env is forced to live YDB, E5-only main embedding and
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
@@ -249,7 +259,15 @@ Suggested stop/trigger counters:
 
 - `new_publics_discovered`;
 - `sources_processed`;
+- `publics_total`;
+- `publics_backlog_after_cursor_total`;
+- `publics_unscanned_after_cursor_total`;
+- `publics_scanned_or_rejected_before_cursor_total`;
 - `posts_fetched`;
+- `source_scan_posts_per_scanned_public_avg`;
+- `source_latest_scan_run_sources_total`;
+- `source_latest_scan_run_posts_total`;
+- `source_latest_scan_run_posts_per_source_avg`;
 - `posts_e5_scored`;
 - `bge_pending` / `bge_scored` / `bge_failed_retryable`;
 - `fusion_passed_text_gate`;

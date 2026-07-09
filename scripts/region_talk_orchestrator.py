@@ -83,10 +83,12 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": "1",
     "REGION_TALK_TELEGRAM_KEYWORD_QUERIES": (
         "ездили в Калининград|путешествие Калининград|"
-        "Калининград что посмотреть|Куршская коса маршрут|"
-        "Зеленоградск отзыв"
+        "Калининград что посмотреть"
     ),
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "4",
+    "REGION_TALK_TELEGRAM_HASHTAG_QUERIES": (
+        "#Калининград|#Зеленоградск|#Светлогорск|#КуршскаяКоса"
+    ),
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "7",
     "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
     "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "240",
@@ -593,9 +595,9 @@ def _image_queue_status_metrics(images: list[dict[str, Any]]) -> dict[str, int]:
 def _is_keyword_discovered_source(row: dict[str, Any]) -> bool:
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
-        "matched_query", "keyword_hit_post_url", "keyword_evidence_excerpt",
+        "matched_query", "matched_hashtag", "keyword_hit_post_url", "keyword_evidence_excerpt",
     ]).lower()
-    return "keyword" in haystack or "telegram_keyword_search" in haystack
+    return "keyword" in haystack or "hashtag" in haystack or "telegram_keyword_search" in haystack
 
 
 def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
@@ -1063,9 +1065,26 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     processed_post_source_keys = {k for k in (_post_source_merge_key(r) for r in processed_post_rows) if k}
     source_with_posts = [r for r in source_rows if _safe_int(r.get("posts_scanned")) > 0]
     source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
+    cursor_by_name: dict[str, dict[str, Any]] = {}
+    for row in cursors:
+        name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+        if name and ":" not in name:
+            cursor_by_name[name] = row
+    source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
     source_primary_unscanned_pending = [
         r for r, status in zip(source_rows, source_statuses)
         if status in {"", "pending_scan"} and _safe_int(r.get("posts_scanned")) <= 0 and not str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip()
+    ]
+    source_unscanned_after_cursor = [
+        r for r, status in zip(source_rows, source_statuses)
+        if _safe_int(r.get("queue_order")) > source_cursor_position
+        and status in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}
+        and not _source_has_scan_evidence(r)
+    ]
+    source_backlog_after_cursor = [
+        r for r, status in zip(source_rows, source_statuses)
+        if _safe_int(r.get("queue_order")) > source_cursor_position
+        and status in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}
     ]
     source_pending_with_scan_evidence = [
         r for r, status in zip(source_rows, source_statuses)
@@ -1088,12 +1107,6 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if str(r.get("fetch_status") or r.get("source_queue_status") or r.get("queue_status") or r.get("frontier_action") or "").startswith(rejected_status_prefixes)
         or bool(str(r.get("monitoring_exclusion_reason") or "").strip())
     ]
-    cursor_by_name: dict[str, dict[str, Any]] = {}
-    for row in cursors:
-        name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
-        if name and ":" not in name:
-            cursor_by_name[name] = row
-    source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
     keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position, source_candidates, source_edges)
     keyword_post_regex_metrics = _keyword_source_post_regex_metrics(source_rows, diagnostic_post_rows, source_candidates, source_edges)
     strong_images_ge_066 = [
@@ -1116,6 +1129,12 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_rows)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
+    latest_source_scan_run = max([str(r.get("last_scan_run_id") or "") for r in source_rows if str(r.get("last_scan_run_id") or "").strip()] or [""])
+    latest_source_scan_rows = [
+        r for r in source_rows
+        if latest_source_scan_run and str(r.get("last_scan_run_id") or "") == latest_source_scan_run and _source_has_scan_evidence(r)
+    ]
+    latest_source_scan_posts = sum(_safe_int(r.get("posts_scanned")) for r in latest_source_scan_rows)
     history_depth_rows = [r for r in source_rows if _safe_float(r.get("history_avg_post_age_days")) is not None]
     latest_history_run = max([str(r.get("last_scan_run_id") or r.get("run_id") or "") for r in history_depth_rows] or [""])
     latest_history_depth_rows = [
@@ -1133,10 +1152,18 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_scanned_with_posts_source_rows_total": len(source_with_posts),
         "publics_scanned_with_posts_repair_delta_total": max(0, source_with_posts_count - len(source_with_posts)),
         "publics_primary_unscanned_pending_total": len(source_primary_unscanned_pending),
+        "publics_unscanned_after_cursor_total": len(source_unscanned_after_cursor),
+        "publics_backlog_after_cursor_total": len(source_backlog_after_cursor),
+        "publics_scanned_or_rejected_before_cursor_total": sum(
+            1 for r, status in zip(source_rows, source_statuses)
+            if _safe_int(r.get("queue_order")) <= source_cursor_position and (_source_has_scan_evidence(r) or status.startswith("rejected_") or status.startswith("skipped") or status.startswith("error"))
+        ),
         "publics_pending_with_scan_evidence_waiting_rescan_total": len(source_pending_with_scan_evidence),
         "publics_processed_no_ko_total": len(source_processed_no_ko),
         "publics_processed_found_ko_candidate_total": len(source_processed_ko_candidate),
         "publics_processed_found_ko_low_image_quality_total": len(source_processed_ko_low_image),
+        "publics_rejected_spam_source_total": sum(1 for status in source_statuses if status == "rejected_spam_source"),
+        "publics_rejected_local_region_source_total": sum(1 for status in source_statuses if status == "rejected_local_region_source"),
         "publics_with_ko_candidates_total": source_ko_candidates_count,
         "publics_with_ko_candidates_source_rows_total": len(source_ko_candidates),
         "publics_with_ko_candidates_repair_delta_total": max(0, source_ko_candidates_count - len(source_ko_candidates)),
@@ -1149,6 +1176,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,
         "source_queue_posts_scanned_repair_delta_total": max(0, source_posts_scanned_effective_total - source_posts_scanned_raw_total),
+        "source_scan_posts_per_scanned_public_avg": round(source_posts_scanned_effective_total / source_with_posts_count, 2) if source_with_posts_count else 0,
+        "source_latest_scan_run_sources_total": len(latest_source_scan_rows),
+        "source_latest_scan_run_posts_total": latest_source_scan_posts,
+        "source_latest_scan_run_posts_per_source_avg": round(latest_source_scan_posts / len(latest_source_scan_rows), 2) if latest_source_scan_rows else 0,
         "history_depth_sources_total": len(history_depth_rows),
         "history_depth_latest_run_sources_total": len(latest_history_depth_rows),
         "history_avg_post_age_days_avg": _avg_numeric(history_depth_rows, "history_avg_post_age_days"),

@@ -67,6 +67,37 @@ AD_WORDS = ["скидк", "промокод", "купить", "заказать"
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
 POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "архитект", "истори", "маршрут", "музей", "пляж", "курорт", "прогул", "путешеств"]
 
+SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09"
+LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
+SPAM_SOURCE_STATUS = "rejected_spam_source"
+LOCAL_REGION_SOURCE_REASON = "source title/handle is Kaliningrad-local; keep for separate local-source monitoring, skip Region Talk external-publication scan"
+SPAM_SOURCE_REASON = "source title/hashtag/excerpt matches repeated hashtag-spam/commercial bait; skip Region Talk scan"
+SOURCE_LOCAL_TITLE_PATTERNS = [
+    r"калининград", r"кёниг", r"кениг", r"kenig", r"\bkgd\b", r"(?<!\w)39(?!\w)",
+    r"зеленоградск", r"светлогорск", r"балтийск", r"янтарн", r"пионерск", r"светлый",
+    r"гурьевск", r"гусев", r"черняховск", r"советск", r"неман", r"мамоново",
+    r"гвардейск", r"краснознаменск", r"полесск", r"правдинск", r"ладушкин",
+    r"славск", r"багратионовск", r"оз[её]рск", r"куршск", r"балтика",
+]
+SOURCE_SPAM_SURFACE_PATTERNS = [
+    r"ты\s+не\s+сможешь", r"ты\s+не\s+можешь", r"ты\s+не\s+усто(?:ишь|ять)",
+    r"ты\s+хочешь\s+ещ[её]", r"я\s+не\s+даю\s+тебе\s+покоя",
+    r"я\s+не\s+выхожу\s+из\s+головы", r"я\s+знаю\s+твой\s+секрет",
+    r"электрическ(?:ий|ая)\s+поцелуй", r"полночное\s+свечение",
+    r"не\s+смотри\s+на\s+меня", r"обо\s+мне", r"искушен",
+    r"vpn", r"промокод", r"деш[её]в(?:ые|ые)\s+авиа", r"авиабилет",
+    r"крипт", r"трейд(?:инг|ер)", r"binance", r"(?<![а-яa-z])ставк[аи](?![а-яa-z])", r"blackjack",
+    r"casino", r"казино", r"bonus", r"freespins?", r"знакомств", r"18\+",
+]
+SOURCE_SPAM_HASHTAG_TOKENS = {
+    "bonus", "freespins", "ставки", "ставка", "blackjack", "casino", "казино",
+    "знакомства", "мем", "мемы", "movies", "films", "music", "soundtrack",
+    "business", "bitcoin", "crypto", "крипта", "vpn", "club", "клуб",
+    "рождение", "общение", "мода", "стройка", "строика", "спорт",
+    "волейбол", "баскетбол", "новости", "происшествие", "политика",
+    "technology", "саморазвитие", "ставки", "mrt", "blum",
+}
+
 _REGION_TALK_SUPABASE_CLIENT: Any | None = None
 _REGION_TALK_GOOGLE_CLIENT: Any | None = None
 _REGION_TALK_CLIP_MODEL: Any | None = None
@@ -636,6 +667,13 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     if source_terminal_rejected_status(status):
         return {"due": False, "reason": "terminal_rejected_source", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
     scanned_before = _source_has_primary_scan_evidence(qrow, cursor, status)
+    if not scanned_before and status.startswith("processed_") and (
+        qrow.get("_ydb_updated_at")
+        or qrow.get("last_status_changed_at")
+        or int(float(qrow.get("ko_posts_found") or 0)) > 0
+        or int(float(qrow.get("candidate_posts_found") or 0)) > 0
+    ):
+        scanned_before = True
     if getenv_bool("REGION_TALK_PUBLICATION_GOAL_RESCAN_KO_SOURCES", False) and scanned_before and (
         status in {"processed_found_ko_candidate", "processed_found_ko_low_image_quality"}
         or int(float(qrow.get("ko_posts_found") or 0)) > 0
@@ -663,9 +701,9 @@ def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int
     row = queue_row if isinstance(queue_row, dict) else {}
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
-        "matched_query", "keyword_hit_post_url", "keyword_evidence_excerpt",
+        "matched_query", "matched_hashtag", "keyword_hit_post_url", "keyword_evidence_excerpt",
     ]).lower()
-    if "keyword" in haystack or "telegram_keyword_search" in haystack:
+    if "keyword" in haystack or "hashtag" in haystack or "telegram_keyword_search" in haystack:
         return 0
     return 1
 
@@ -1031,6 +1069,131 @@ def source_terminal_rejected_status(status: Any) -> bool:
     return source_rejected_by_text_volume_status(raw) or raw.startswith("rejected_")
 
 
+def _regex_hits(patterns: list[str], text: str) -> list[str]:
+    hits: list[str] = []
+    for pattern in patterns:
+        try:
+            if re.search(pattern, text or "", flags=re.I):
+                hits.append(pattern)
+        except re.error:
+            if pattern.lower() in (text or "").lower():
+                hits.append(pattern)
+    return hits
+
+
+def _surface_hashtags(text: str) -> list[str]:
+    return [
+        m.group(1).lower().replace("ё", "е")
+        for m in re.finditer(r"#([\wа-яА-ЯёЁ_]+)", text or "")
+        if m.group(1)
+    ]
+
+
+def source_discovery_surface_filter(row: dict[str, Any]) -> dict[str, Any]:
+    """Cheap title/hashtag/excerpt source filter before spending history budget.
+
+    This is intentionally conservative: it may terminally route obvious local
+    Kaliningrad publics and repeated hashtag-spam/commercial bait away from the
+    external Region Talk scan, but uncertain sources remain in the normal
+    semantic/vector pipeline.
+    """
+    title = str(
+        row.get("source_title")
+        or row.get("recommended_title")
+        or row.get("resolved_title")
+        or row.get("title_guess")
+        or row.get("seed_channel_title")
+        or ""
+    )
+    handle = str(
+        row.get("handle")
+        or row.get("username_or_handle")
+        or row.get("recommended_username")
+        or row.get("canonical_url")
+        or row.get("source_url")
+        or row.get("keyword_hit_source_url")
+        or ""
+    )
+    excerpt = str(
+        row.get("keyword_hit_text_excerpt")
+        or row.get("keyword_evidence_excerpt")
+        or row.get("text_excerpt")
+        or row.get("text")
+        or row.get("matched_query")
+        or ""
+    )
+    title_handle = " ".join([title, handle]).lower()
+    full = " ".join([title, handle, excerpt]).lower()
+    local_hits = _regex_hits(SOURCE_LOCAL_TITLE_PATTERNS, title_handle)
+    spam_hits = _regex_hits(SOURCE_SPAM_SURFACE_PATTERNS, full)
+    tags = _surface_hashtags(excerpt)
+    spam_tags = sorted({t for t in tags if t in SOURCE_SPAM_HASHTAG_TOKENS})
+    try:
+        spoiler_count = int(float(row.get("telegram_spoiler_entity_count") or row.get("spoiler_entity_count") or 0))
+    except Exception:
+        spoiler_count = 0
+    entity_types = str(row.get("entity_types") or row.get("message_entity_types") or "")
+    if "MessageEntitySpoiler" in entity_types:
+        spoiler_count += 1
+    spam_score = len(spam_hits) + (1 if len(spam_tags) >= 2 else 0) + (1 if spoiler_count >= 1 else 0)
+    if spam_score >= 2 or spam_hits:
+        classification = "spam_source_reject"
+    elif local_hits:
+        classification = "local_region_source"
+    else:
+        classification = "candidate_keep"
+    reason_parts = []
+    if local_hits:
+        reason_parts.append("local_title_or_handle=" + ",".join(local_hits[:4]))
+    if spam_hits:
+        reason_parts.append("spam_surface=" + ",".join(spam_hits[:4]))
+    if spam_tags:
+        reason_parts.append("spam_hashtags=" + ",".join(spam_tags[:8]))
+    if spoiler_count:
+        reason_parts.append(f"spoiler_entities={spoiler_count}")
+    return {
+        "source_quick_class": classification,
+        "source_surface_filter_version": SOURCE_SURFACE_FILTER_VERSION,
+        "source_local_hits": ";".join(local_hits[:8]),
+        "source_spam_hits": ";".join(spam_hits[:8]),
+        "source_spam_hashtags": ";".join(spam_tags[:12]),
+        "source_spoiler_entity_count": spoiler_count,
+        "source_surface_filter_reason": "; ".join(reason_parts),
+    }
+
+
+def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
+    if not getenv_bool("REGION_TALK_ENABLE_SOURCE_SURFACE_FILTER", True):
+        return {}
+    decision = source_discovery_surface_filter(row)
+    klass = str(decision.get("source_quick_class") or "")
+    if klass == "spam_source_reject" and getenv_bool("REGION_TALK_REJECT_SPAM_SOURCES_BY_SURFACE", True):
+        return {
+            **decision,
+            "source_queue_status": SPAM_SOURCE_STATUS,
+            "fetch_status": SPAM_SOURCE_STATUS,
+            "source_geo_class": "unknown",
+            "source_topic_class": "spam_or_commercial_hashtag_source",
+            "monitoring_exclusion_reason": SPAM_SOURCE_REASON,
+            "source_probe_reason": SPAM_SOURCE_REASON + (": " + str(decision.get("source_surface_filter_reason") or "") if decision.get("source_surface_filter_reason") else ""),
+            "next_action": "do_not_rescan_spam_source",
+            "insertion_policy": "surface_spam_rejected_before_cursor_insert",
+        }
+    if klass == "local_region_source" and getenv_bool("REGION_TALK_REJECT_LOCAL_SOURCES_BY_TITLE", True):
+        return {
+            **decision,
+            "source_queue_status": LOCAL_REGION_SOURCE_STATUS,
+            "fetch_status": LOCAL_REGION_SOURCE_STATUS,
+            "source_geo_class": "kaliningrad_local",
+            "source_topic_class": "local_region_source_surface",
+            "monitoring_exclusion_reason": LOCAL_REGION_SOURCE_REASON,
+            "source_probe_reason": LOCAL_REGION_SOURCE_REASON + (": " + str(decision.get("source_surface_filter_reason") or "") if decision.get("source_surface_filter_reason") else ""),
+            "next_action": "route_to_local_region_source_list_no_external_scan",
+            "insertion_policy": "surface_local_rejected_before_cursor_insert",
+        }
+    return decision
+
+
 def text_post_utc_day_key(value: Any) -> str:
     dt = normalize_post_datetime(value)
     return dt.date().isoformat() if dt else "unknown_date"
@@ -1186,6 +1349,9 @@ SOURCE_STATE_FIELDS = [
     "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
+    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_surface_filter_version", "source_surface_filter_reason",
+    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
     "monitoring_exclusion_reason", "high_volume_text_posts_date",
     "high_volume_text_posts_count", "high_volume_text_posts_threshold",
@@ -1197,9 +1363,13 @@ SOURCE_STATE_FIELDS = [
 SOURCE_QUEUE_STATE_FIELDS = [
     "source_queue_id", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
+    "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
+    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_surface_filter_version", "source_surface_filter_reason",
+    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "actual_images_scored_count", "avg_actual_image_score", "low_actual_image_count",
     "source_image_quality_status", "source_image_quality_min_actual_scored",
@@ -1219,6 +1389,9 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "edge_type", "candidate_source_status", "frontier_status", "frontier_stage",
     "frontier_action", "frontier_reason", "source_candidate_score", "frontier_priority",
     "confidence", "active_scan_allowed", "quarantine_reason", "source_probe_reason",
+    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_surface_filter_version", "source_surface_filter_reason",
+    "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
 ]
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
@@ -3947,9 +4120,9 @@ def _row_has_keyword_discovery_evidence(row: dict[str, Any]) -> bool:
     text = " ".join(str(row.get(field) or "") for field in [
         "added_from", "discovery_type", "discovery_types", "edge_type", "edge_types_all",
         "from_source_id", "frontier_action", "keyword_discovery_status", "online_update_stage",
-        "source_probe_reason",
+        "source_probe_reason", "matched_hashtag",
     ]).lower()
-    return "keyword" in text or "telegram_keyword_search" in text
+    return "keyword" in text or "hashtag" in text or "telegram_keyword_search" in text
 
 
 def _historical_keyword_source_rows(previous_state: dict[str, Any], run_id: str, run_now: str) -> list[dict[str, Any]]:
@@ -4099,17 +4272,21 @@ def build_unified_source_queue(
     keyword_inserted = 0
     keyword_prioritized = 0
     keyword_existing_promoted = 0
+    keyword_surface_filtered = 0
+    keyword_queue_order_shifted = 0
     historical_keyword_rows = _historical_keyword_source_rows(previous_state, run_id, run_now)
     keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or []) + historical_keyword_rows
     keyword_priority: list[tuple[dict[str, Any], bool]] = []
     seen_keyword: set[str] = set()
     for row in keyword_candidates:
-        seed = _source_queue_seed_from_row(row, default_added_from="telegram_keyword_search")
+        discovery_kind = str(row.get("discovery_type") or row.get("edge_type") or row.get("added_from") or "telegram_keyword_search")
+        seed = _source_queue_seed_from_row(row, default_added_from=discovery_kind)
         if not seed or seed["platform"] != "telegram" or seed["canonical_source_key"] in seen_keyword:
             continue
         seen_keyword.add(seed["canonical_source_key"])
         key = seed["canonical_source_key"]
         existing = entries.get(key)
+        surface_fields = source_surface_terminal_fields({**row, **seed})
         if existing:
             existing.update({k: v for k, v in seed.items() if v not in ("", None)})
             existing["keyword_discovery_status"] = "keyword_evidence"
@@ -4120,20 +4297,53 @@ def build_unified_source_queue(
             has_scan_evidence = _source_has_primary_scan_evidence(existing, {}, status)
             if (status.startswith("processed") and has_scan_evidence) or source_terminal_rejected_status(status):
                 continue
+            if source_terminal_rejected_status(surface_fields.get("source_queue_status")):
+                existing.update(surface_fields)
+                existing["keyword_discovery_status"] = "keyword_surface_filtered"
+                existing["keyword_evidence_run_id"] = run_id
+                existing["keyword_evidence_at"] = run_now
+                keyword_surface_filtered += 1
+                continue
             keyword_priority.append((seed, True))
         else:
+            if source_terminal_rejected_status(surface_fields.get("source_queue_status")):
+                next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
+                entries[key] = {
+                    **seed,
+                    **surface_fields,
+                    "source_queue_id": "srcq_" + stable_hash(key),
+                    "queue_order": next_order,
+                    "added_at": run_now,
+                    "added_from": discovery_kind,
+                    "first_seen_run_id": run_id,
+                    "keyword_discovery_status": "keyword_surface_filtered",
+                    "keyword_evidence_run_id": run_id,
+                    "keyword_evidence_at": run_now,
+                }
+                keyword_surface_filtered += 1
+                continue
             keyword_priority.append((seed, False))
     if keyword_priority:
         keyword_priority_keys = {seed["canonical_source_key"] for seed, _ in keyword_priority}
         for rec in entries.values():
             if int(rec.get("queue_order") or 0) > prev_cursor and rec.get("canonical_source_key") not in keyword_priority_keys:
-                rec["queue_order"] = int(rec.get("queue_order") or 0) + len(keyword_priority)
+                old_order = int(rec.get("queue_order") or 0)
+                rec["previous_queue_order"] = old_order
+                rec["queue_order"] = old_order + len(keyword_priority)
+                rec["queue_order_changed_this_run"] = "true"
+                rec["queue_order_changed_reason"] = "keyword_or_hashtag_insert_after_cursor_shift"
+                keyword_queue_order_shifted += 1
         for offset, (seed, existed) in enumerate(keyword_priority, start=1):
             key = seed["canonical_source_key"]
+            previous_order = int(entries.get(key, {}).get("queue_order") or 0) if existed else 0
+            new_order = prev_cursor + offset
             if existed:
                 entries[key].update({
                     **{k: v for k, v in seed.items() if v not in ("", None)},
-                    "queue_order": prev_cursor + offset,
+                    "previous_queue_order": previous_order,
+                    "queue_order": new_order,
+                    "queue_order_changed_this_run": str(previous_order != new_order).lower(),
+                    "queue_order_changed_reason": "keyword_or_hashtag_reinsert_after_cursor",
                     "keyword_discovery_status": "keyword_evidence",
                     "keyword_evidence_run_id": run_id,
                     "keyword_evidence_at": run_now,
@@ -4144,9 +4354,12 @@ def build_unified_source_queue(
                 entries[key] = {
                     **seed,
                     "source_queue_id": "srcq_" + stable_hash(key),
-                    "queue_order": prev_cursor + offset,
+                    "previous_queue_order": "",
+                    "queue_order": new_order,
+                    "queue_order_changed_this_run": "true",
+                    "queue_order_changed_reason": "keyword_or_hashtag_insert_after_cursor",
                     "added_at": run_now,
-                    "added_from": "telegram_keyword_search",
+                    "added_from": seed.get("added_from") or "telegram_keyword_search",
                     "first_seen_run_id": run_id,
                     "keyword_discovery_status": "keyword_evidence",
                     "keyword_evidence_run_id": run_id,
@@ -4223,6 +4436,7 @@ def build_unified_source_queue(
             monitoring_exclusion_reason = ""
         fetch_status = str(srow.get("fetch_status") or rec.get("last_scan_status") or "")
         previous_queue_status = str(rec.get("source_queue_status") or "")
+        original_queue_status = previous_queue_status
         terminal_rejected_status = ""
         if source_terminal_rejected_status(fetch_status):
             terminal_rejected_status = fetch_status
@@ -4245,6 +4459,16 @@ def build_unified_source_queue(
             or ko_posts > 0
             or candidate_posts > 0
         )
+        surface_fields = source_surface_terminal_fields({**rec, **srow})
+        if (
+            not terminal_rejected_status
+            and not scan_evidence
+            and str(previous_queue_status or "pending_scan") in {"", "pending_scan", "needs_rescan_or_retry"}
+            and source_terminal_rejected_status(surface_fields.get("source_queue_status"))
+        ):
+            rec.update(surface_fields)
+            previous_queue_status = str(rec.get("source_queue_status") or previous_queue_status)
+            terminal_rejected_status = previous_queue_status
         fake_processed_without_scan = previous_queue_status.startswith("processed") and not scan_evidence and not terminal_rejected_status
         scanned = bool(terminal_rejected_status) or scan_evidence
         if scanned:
@@ -4263,7 +4487,7 @@ def build_unified_source_queue(
             qstatus, color, next_action = "needs_rescan_or_retry", "yellow_retry", "retry_or_fix_source_access"
         else:
             qstatus, color, next_action = "pending_scan", "white_pending", "scan_when_cursor_reaches_source"
-        previous_status = str(rec.get("source_queue_status") or "")
+        previous_status = original_queue_status
         status_changed = bool(previous_status and previous_status != qstatus)
         out.append({
             **rec,
@@ -4287,6 +4511,15 @@ def build_unified_source_queue(
             "source_image_quality_status": image_quality_source_status,
             "source_image_quality_min_actual_scored": image_quality_min_n,
             "source_image_quality_min_avg_score": image_quality_min_score,
+            "source_geo_class": srow.get("source_geo_class") or rec.get("source_geo_class") or surface_fields.get("source_geo_class", ""),
+            "source_topic_class": srow.get("source_topic_class") or rec.get("source_topic_class") or surface_fields.get("source_topic_class", ""),
+            "source_quick_class": rec.get("source_quick_class") or surface_fields.get("source_quick_class", ""),
+            "source_surface_filter_version": rec.get("source_surface_filter_version") or surface_fields.get("source_surface_filter_version", ""),
+            "source_surface_filter_reason": rec.get("source_surface_filter_reason") or surface_fields.get("source_surface_filter_reason", ""),
+            "source_local_hits": rec.get("source_local_hits") or surface_fields.get("source_local_hits", ""),
+            "source_spam_hits": rec.get("source_spam_hits") or surface_fields.get("source_spam_hits", ""),
+            "source_spam_hashtags": rec.get("source_spam_hashtags") or surface_fields.get("source_spam_hashtags", ""),
+            "source_spoiler_entity_count": rec.get("source_spoiler_entity_count") or surface_fields.get("source_spoiler_entity_count", 0),
             "monitoring_exclusion_reason": monitoring_exclusion_reason,
             "source_probe_reason": srow.get("source_probe_reason") or rec.get("source_probe_reason") or "",
             "high_volume_text_posts_date": srow.get("high_volume_text_posts_date") or rec.get("high_volume_text_posts_date") or "",
@@ -4336,12 +4569,16 @@ def build_unified_source_queue(
         "source_queue_keyword_inserted_this_run": keyword_inserted,
         "source_queue_keyword_prioritized_this_run": keyword_prioritized,
         "source_queue_keyword_existing_promoted_this_run": keyword_existing_promoted,
+        "source_queue_keyword_surface_filtered_this_run": keyword_surface_filtered,
+        "source_queue_order_shifted_for_keyword_this_run": keyword_queue_order_shifted,
         "source_queue_historical_keyword_sources_total": len(historical_keyword_rows),
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
         "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
         "source_queue_vk_total": sum(1 for r in out if r.get("platform") == "vk"),
         "source_queue_pending_telegram_total": sum(1 for r in out if r.get("platform") == "telegram" and r.get("source_queue_status") == "pending_scan"),
         "source_queue_pending_vk_total": sum(1 for r in out if r.get("platform") == "vk" and r.get("source_queue_status") == "pending_scan"),
+        "source_queue_rejected_spam_source_total": sum(1 for r in out if r.get("source_queue_status") == SPAM_SOURCE_STATUS),
+        "source_queue_rejected_local_region_source_total": sum(1 for r in out if r.get("source_queue_status") == LOCAL_REGION_SOURCE_STATUS),
         "source_queue_non_target_skipped_this_run": skipped_non_target_queue_rows,
         "source_queue_low_image_quality_excluded_total": sum(1 for r in out if r.get("source_image_quality_status") == "exclude_low_image_quality"),
         "source_queue_only_telegram_vk": str(all(r.get("platform") in {"telegram", "vk"} for r in out)).lower(),
@@ -4352,6 +4589,11 @@ def build_unified_source_queue(
 
 def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int, run_id: str) -> list[dict[str, Any]]:
     clean = [r for r in rows if isinstance(r, dict) and not r.get("_sheet_note")]
+    if (
+        getenv_bool("REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL", True)
+        and any(str(r.get("queue_order_changed_this_run") or "").lower() == "true" for r in clean)
+    ):
+        return clean
     max_rows = getenv_int("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", 500)
     if max_rows <= 0 or len(clean) <= max_rows:
         return clean
@@ -4361,7 +4603,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             "added_from", "insertion_policy", "discovery_type", "edge_type",
             "keyword_discovery_status", "source_probe_reason",
         ]).lower()
-        return "keyword" in text or "telegram_keyword_search" in text
+        return "keyword" in text or "hashtag" in text or "telegram_keyword_search" in text
 
     def order(row: dict[str, Any]) -> int:
         try:
@@ -4378,6 +4620,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
     for row in clean:
         if (
             str(row.get("status_changed_this_run") or "").lower() == "true"
+            or str(row.get("queue_order_changed_this_run") or "").lower() == "true"
             or str(row.get("last_scan_run_id") or "") == run_id
             or str(row.get("first_seen_run_id") or "") == run_id
             or str(row.get("last_seen_run_id") or "") == run_id
@@ -5178,6 +5421,9 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
         return [], []
     terms_raw = os.getenv("REGION_TALK_TELEGRAM_KEYWORD_QUERIES") or ""
     terms = [x.strip() for x in re.split(r"[;\n|]+", terms_raw) if x.strip()] or TELEGRAM_KEYWORD_DISCOVERY_TERMS
+    hashtag_terms_raw = os.getenv("REGION_TALK_TELEGRAM_HASHTAG_QUERIES") or ""
+    hashtag_terms = [x.strip() for x in re.split(r"[;\n|]+", hashtag_terms_raw) if x.strip()]
+    terms = terms + [x for x in hashtag_terms if x not in terms]
     max_queries = getenv_int("REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES", 30)
     per_query = getenv_int("REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY", 20)
     max_frontier = getenv_int("REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN", 300)
@@ -5190,6 +5436,8 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
     raw_hits = 0
     try:
         for query in terms[:max(0, max_queries)]:
+            is_hashtag_query = query.lstrip().startswith("#") or query in hashtag_terms
+            discovery_kind = "telegram_hashtag_search" if is_hashtag_query else "telegram_keyword_search"
             if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS", discovery_tail_reserve_seconds())):
                 _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"
                 if status is not None:
@@ -5218,9 +5466,12 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     key = canonical_source_key("telegram", username, url)
                     post_url = f"https://t.me/{username}/{getattr(msg, 'id', '')}"
                     text_excerpt = re.sub(r"\s+", " ", str(getattr(msg, "message", "") or ""))[:500]
+                    entity_types = [type(e).__name__ for e in (getattr(msg, "entities", None) or [])]
+                    spoiler_count = sum(1 for name in entity_types if "Spoiler" in name)
                     post_hit_row = {
                         "run_id": run_id,
                         "matched_query": query,
+                        "matched_hashtag": query if is_hashtag_query else "",
                         "keyword_hit_post_url": post_url,
                         "keyword_hit_source_url": url,
                         "keyword_hit_text_excerpt": text_excerpt,
@@ -5231,7 +5482,12 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "frontier_action": "source_seen" if key in seen_keys else "source_queued",
                         "sent_to_pipeline": "true",
                         "acceptance_note": "keyword hit is discovery/context only, never auto-accepts publication candidate",
+                        "discovery_type": discovery_kind,
+                        "edge_type": discovery_kind,
+                        "message_entity_types": ";".join(entity_types[:20]),
+                        "telegram_spoiler_entity_count": spoiler_count,
                     }
+                    post_hit_row.update(source_discovery_surface_filter(post_hit_row))
                     post_hits.append(post_hit_row)
                     write_region_talk_online_source_item(post_hit_row, run_id=run_id, stage="keyword_hit_source_context", status=post_hit_row.get("frontier_action"))
                     if key in seen_keys:
@@ -5241,13 +5497,14 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     row = {
                         "run_id": run_id,
                         "source_candidate_id": cand_id,
-                        "discovered_from_source": "telegram_keyword_search",
+                        "discovered_from_source": discovery_kind,
                         "discovered_from_post_url": post_url,
                         "keyword_hit_post_url": post_url,
                         "keyword_hit_text_excerpt": text_excerpt,
-                        "discovery_type": "telegram_keyword_search",
-                        "edge_type": "telegram_keyword_search",
+                        "discovery_type": discovery_kind,
+                        "edge_type": discovery_kind,
                         "matched_query": query,
+                        "matched_hashtag": query if is_hashtag_query else "",
                         "raw_url": url,
                         "normalized_url": url,
                         "platform_guess": "telegram",
@@ -5262,20 +5519,28 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "frontier_reason": "Telegram keyword search by Kaliningrad toponym; source candidate only, post is not accepted here",
                         "keyword_evidence_excerpt": text_excerpt,
                         "private_state_key": "telegram:username:" + username.lower(),
+                        "message_entity_types": ";".join(entity_types[:20]),
+                        "telegram_spoiler_entity_count": spoiler_count,
                     }
+                    row.update(source_discovery_surface_filter(row))
+                    terminal_surface = source_surface_terminal_fields(row)
+                    if source_terminal_rejected_status(terminal_surface.get("source_queue_status")):
+                        row.update(terminal_surface)
+                        row["frontier_action"] = "surface_filtered_before_queue"
+                        row["frontier_status"] = str(terminal_surface.get("source_queue_status") or row.get("frontier_status") or "")
                     row["frontier_priority"] = source_candidate_score(row)
                     rows.append(row)
-                    write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_keyword_discovery", status="source_frontier")
+                    write_region_talk_online_source_item(row, run_id=run_id, stage="telegram_keyword_discovery", status=row.get("frontier_status") or "source_frontier")
                     edge = {
-                        "edge_id": "edge_" + stable_hash("keyword", query, cand_id),
-                        "from_source_id": "telegram_keyword_search",
+                        "edge_id": "edge_" + stable_hash(discovery_kind, query, cand_id),
+                        "from_source_id": discovery_kind,
                         "from_source_title": query,
                         "from_post_id": "",
                         "to_source_candidate_id": cand_id,
                         "to_source_title": title or username,
-                        "edge_type": "telegram_keyword_search",
+                        "edge_type": discovery_kind,
                         "evidence_url": row["discovered_from_post_url"],
-                        "evidence_context_short": f"Keyword '{query}' matched a public Telegram result; source only",
+                        "evidence_context_short": f"{'Hashtag' if is_hashtag_query else 'Keyword'} '{query}' matched a public Telegram result; source only",
                         "confidence": row["confidence"],
                         "discovery_depth": 0,
                         "run_id": run_id,
@@ -6117,6 +6382,19 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · public web · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": web_row.get("fetch_status"), "telegram_resolve_status": web_row.get("telegram_resolve_status"), "posts_scanned": web_row.get("posts_scanned", 0), "last_seen_post_date": web_row.get("last_seen_post_date", ""), "history_fetch_runtime_seconds": web_row.get("history_fetch_runtime_seconds", ""), "fetch_error_code": web_row.get("fetch_error_code", ""), "fetch_error_message": web_row.get("fetch_error_message", "")})
                 continue
             src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
+            surface_terminal = source_surface_terminal_fields({
+                "source_title": seed.source_title,
+                "handle": seed.handle,
+                "canonical_url": seed.canonical_url,
+                "source_url": seed.canonical_url,
+                "added_from": seed.discovered_from,
+            })
+            if source_terminal_rejected_status(surface_terminal.get("source_queue_status")):
+                src_row.update(surface_terminal)
+                src_row["fetch_attempted"] = "false"
+                append_source_row_online(source_rows, src_row, run_id=run_id, stage="source_surface_prefilter", sources_total=len(monitored))
+                status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · surface-filtered · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": src_row.get("fetch_status"), "posts_scanned": 0})
+                continue
             entity, resolve_meta = await governor.resolve_entity(client, seed)
             src_row.update(resolve_meta)
             if entity is None:
@@ -6158,6 +6436,8 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 seen: set[int] = set()
                 source_post_rows: list[dict[str, Any]] = []
                 text_posts_by_day: dict[str, int] = {}
+                source_surface_spam_posts = 0
+                source_spoiler_posts = 0
                 cutoff = history_min_post_datetime()
                 old_posts_cutoff_hit = False
                 anchor_cap = getenv_int("REGION_TALK_TG_MAX_ANCHOR_QUERIES_PER_SOURCE", 3)
@@ -6189,6 +6469,42 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                         text = str(getattr(msg, "message", None) or "").strip()
                         if not text:
                             continue
+                        entity_types = [type(e).__name__ for e in (getattr(msg, "entities", None) or [])]
+                        spoiler_count = sum(1 for name in entity_types if "Spoiler" in name)
+                        if spoiler_count:
+                            source_spoiler_posts += 1
+                        surface_decision = source_discovery_surface_filter({
+                            "source_title": title,
+                            "handle": seed.handle,
+                            "text": text,
+                            "message_entity_types": ";".join(entity_types[:20]),
+                            "telegram_spoiler_entity_count": spoiler_count,
+                        })
+                        if surface_decision.get("source_quick_class") == "spam_source_reject":
+                            source_surface_spam_posts += 1
+                        if (
+                            source_surface_spam_posts >= getenv_int("REGION_TALK_SOURCE_SPAM_POSTS_REJECT_THRESHOLD", 3)
+                            or source_spoiler_posts >= getenv_int("REGION_TALK_SOURCE_SPOILER_POSTS_REJECT_THRESHOLD", 2)
+                        ):
+                            src_row.update({
+                                "fetch_status": SPAM_SOURCE_STATUS,
+                                "source_queue_status": SPAM_SOURCE_STATUS,
+                                "source_quick_class": "spam_source_reject",
+                                "source_surface_filter_version": SOURCE_SURFACE_FILTER_VERSION,
+                                "source_surface_filter_reason": (
+                                    f"recent_scan_spam_posts={source_surface_spam_posts}; "
+                                    f"recent_scan_spoiler_posts={source_spoiler_posts}; "
+                                    f"last_reason={surface_decision.get('source_surface_filter_reason') or ''}"
+                                ),
+                                "source_spam_hits": surface_decision.get("source_spam_hits", ""),
+                                "source_spam_hashtags": surface_decision.get("source_spam_hashtags", ""),
+                                "source_spoiler_entity_count": source_spoiler_posts,
+                                "monitoring_exclusion_reason": SPAM_SOURCE_REASON,
+                                "source_probe_reason": "Rejected source during quick recent-post prefilter before deep semantic scan.",
+                                "next_action": "do_not_rescan_spam_source",
+                            })
+                            source_post_rows = []
+                            break
                         dt = getattr(msg, "date", None)
                         if is_history_post_older_than_cutoff(dt, cutoff):
                             old_posts_cutoff_hit = True

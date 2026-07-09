@@ -648,6 +648,88 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([travel, keyword], 2, previous_state=previous_state)
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/keyword_hit", "https://t.me/author_travel"])
 
+    def test_keyword_existing_pending_is_physically_reinserted_after_cursor(self) -> None:
+        mod = load_module()
+        previous = {"unified_source_queue_cursor_position": 5, "unified_source_queue": {
+            "telegram:ordinary": {
+                "canonical_source_key": "telegram:ordinary", "platform": "telegram",
+                "source_url": "https://t.me/ordinary", "source_title": "Обычный паблик",
+                "source_queue_status": "pending_scan", "queue_order": 6,
+            },
+            "telegram:keyword_hit": {
+                "canonical_source_key": "telegram:keyword_hit", "platform": "telegram",
+                "source_url": "https://t.me/keyword_hit", "source_title": "External Travel Notes",
+                "source_queue_status": "pending_scan", "queue_order": 100,
+                "added_from": "telegram_keyword_search", "insertion_policy": "legacy_tail_keyword",
+            },
+        }}
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-keyword", "2026-07-09T00:00:00+00:00")
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order"], 6)
+        self.assertEqual(by_key["telegram:ordinary"]["queue_order"], 7)
+        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order_changed_this_run"], "true")
+        self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
+        old_max = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
+        try:
+            os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "1"
+            handoff = mod._source_queue_handoff_rows(rows, cursor_position=5, run_id="run-keyword")
+        finally:
+            if old_max is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old_max
+        self.assertEqual(len([r for r in handoff if not r.get("_sheet_note")]), len(rows))
+
+    def test_hashtag_keyword_surface_filter_routes_local_and_spam_sources_out_of_cursor(self) -> None:
+        mod = load_module()
+        previous = {"unified_source_queue_cursor_position": 10, "unified_source_queue": {
+            "telegram:ordinary": {
+                "canonical_source_key": "telegram:ordinary", "platform": "telegram",
+                "source_url": "https://t.me/ordinary", "source_title": "Обычный паблик",
+                "source_queue_status": "pending_scan", "queue_order": 11,
+            },
+        }}
+        keyword_rows = [
+            {
+                "canonical_source_key": "telegram:lovekenig", "recommended_canonical_url": "https://t.me/lovekenig",
+                "recommended_username": "lovekenig", "recommended_title": "Полюбить Калининград",
+                "discovery_type": "telegram_hashtag_search", "edge_type": "telegram_hashtag_search",
+                "matched_hashtag": "#Калининград", "keyword_hit_text_excerpt": "#Калининград красивые места",
+            },
+            {
+                "canonical_source_key": "telegram:spammy", "recommended_canonical_url": "https://t.me/spammy",
+                "recommended_username": "spammy", "recommended_title": "ТЫ НЕ СМОЖЕШЬ УЙТИ 😈",
+                "discovery_type": "telegram_hashtag_search", "edge_type": "telegram_hashtag_search",
+                "matched_hashtag": "#Калининград", "keyword_hit_text_excerpt": "#Калининград #bonus #blackjack",
+            },
+            {
+                "canonical_source_key": "telegram:travelhit", "recommended_canonical_url": "https://t.me/travelhit",
+                "recommended_username": "travelhit", "recommended_title": "Маршруты по России",
+                "discovery_type": "telegram_hashtag_search", "edge_type": "telegram_hashtag_search",
+                "matched_hashtag": "#Калининград", "keyword_hit_text_excerpt": "Ездили в Калининград и на Куршскую косу, делимся маршрутом",
+            },
+        ]
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], keyword_rows, [], {}, "run-hash", "2026-07-09T00:00:00+00:00")
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:travelhit"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:lovekenig"]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(by_key["telegram:spammy"]["source_queue_status"], mod.SPAM_SOURCE_STATUS)
+        self.assertGreater(by_key["telegram:lovekenig"]["queue_order"], by_key["telegram:travelhit"]["queue_order"])
+        self.assertGreater(by_key["telegram:spammy"]["queue_order"], by_key["telegram:travelhit"]["queue_order"])
+        self.assertEqual(metrics["source_queue_keyword_surface_filtered_this_run"], 2)
+        self.assertEqual(metrics["source_queue_rejected_local_region_source_total"], 1)
+        self.assertEqual(metrics["source_queue_rejected_spam_source_total"], 1)
+
+    def test_source_spam_surface_filter_does_not_treat_vystavka_as_betting(self) -> None:
+        mod = load_module()
+        decision = mod.source_discovery_surface_filter({
+            "source_title": "Маршруты по России",
+            "handle": "@travel_notes",
+            "keyword_hit_text_excerpt": "Выставка и прогулка по Калининграду, маршрут и личные впечатления",
+        })
+        self.assertNotEqual(decision["source_quick_class"], "spam_source_reject")
+        self.assertNotIn("ставк", decision.get("source_spam_hits", ""))
+
     def test_source_selection_prioritizes_pending_travel_sources(self) -> None:
         mod = load_module()
         travel = mod.Seed(
@@ -1749,10 +1831,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         by_key = {r["canonical_source_key"]: r for r in rows}
         self.assertIn("telegram:kenigevents", by_key)
         self.assertEqual(by_key["telegram:kenigevents"]["source_url"], "https://t.me/kenigevents")
-        self.assertEqual(by_key["telegram:kenigevents"]["queue_order"], 8)
-        self.assertEqual(by_key["telegram:kenigevents"]["source_queue_status"], "pending_scan")
+        self.assertEqual(by_key["telegram:kenigevents"]["queue_order"], 1)
+        self.assertEqual(by_key["telegram:kenigevents"]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
         self.assertEqual(metrics["source_queue_historical_keyword_sources_total"], 1)
-        self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 1)
+        self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 0)
+        self.assertEqual(metrics["source_queue_keyword_surface_filtered_this_run"], 1)
 
     def test_source_queue_handoff_rows_limits_full_rewrite_but_keeps_keyword_and_cursor_neighbourhood(self) -> None:
         mod = load_module()

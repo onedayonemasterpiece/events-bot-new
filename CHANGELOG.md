@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / breadth-first hashtag discovery and cursor discipline**:
+  CandidateReport now supports bounded `REGION_TALK_TELEGRAM_HASHTAG_QUERIES`,
+  routes obvious local Kaliningrad sources and repeated hashtag-spam/commercial
+  bait to terminal source statuses before Telegram history scans, persists the
+  full reordered source queue whenever keyword/hashtag hits are physically
+  inserted at `cursor+1`, and the orchestrator exposes simple after-cursor
+  backlog plus latest-run posts-per-source metrics.
 - **Region Talk Channel / post-fusion image queue handoff**: orchestrator
   CandidateReport launches now keep
   `REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF=0`; live YDB showed
