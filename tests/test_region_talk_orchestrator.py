@@ -119,6 +119,13 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertGreaterEqual(mod._orchestrator_kind_limit("post_live_item", 6000), 20000)
         self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 6000)
 
+    def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
+        mod = load_module()
+        current = {"queue_name": "unified_source_queue", "cursor_position": 475, "_ydb_updated_at": "2026-07-09T15:40:00Z"}
+        stale = {"queue_name": "unified_source_queue", "cursor_position": 397, "_ydb_updated_at": "2026-07-09T15:50:00Z"}
+        self.assertFalse(mod._cursor_row_is_better(current, stale, "unified_source_queue"))
+        self.assertTrue(mod._cursor_row_is_better(stale, current, "unified_source_queue"))
+
     def test_progress_signature_uses_all_numeric_metrics_without_classes(self) -> None:
         mod = load_module()
         base = {

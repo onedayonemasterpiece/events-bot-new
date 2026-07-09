@@ -136,6 +136,14 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         self.assertGreaterEqual(metrics["source_queue_cursor_position"], 100)
 
+    def test_loaded_queue_cursor_prefers_highest_source_position_over_stale_history(self) -> None:
+        mod = load_module()
+        current = {"queue_name": "unified_source_queue", "cursor_position": 475, "_ydb_updated_at": "2026-07-09T15:40:00Z"}
+        stale = {"queue_name": "unified_source_queue", "cursor_position": 397, "_ydb_updated_at": "2026-07-09T15:50:00Z"}
+
+        self.assertFalse(mod.should_replace_queue_cursor(current, stale, "source"))
+        self.assertTrue(mod.should_replace_queue_cursor(stale, current, "source"))
+
     def test_runner_secret_names_only_include_selected_auth_bundle(self) -> None:
         mod = load_runner_module()
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY1")

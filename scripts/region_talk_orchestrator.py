@@ -662,6 +662,17 @@ def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
     )
 
 
+def _cursor_row_is_better(current: dict[str, Any] | None, candidate: dict[str, Any], name: str) -> bool:
+    if not current:
+        return True
+    if "source" in name or "image" in name:
+        current_pos = _safe_int(current.get("cursor_position") or current.get("done") or 0)
+        candidate_pos = _safe_int(candidate.get("cursor_position") or candidate.get("done") or 0)
+        if candidate_pos != current_pos:
+            return candidate_pos > current_pos
+    return str(candidate.get("_ydb_updated_at") or candidate.get("updated_at") or "") >= str(current.get("_ydb_updated_at") or current.get("updated_at") or "")
+
+
 def _keyword_source_metrics(
     source_rows: list[dict[str, Any]],
     cursor_position: int,
@@ -1174,7 +1185,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     cursor_by_name: dict[str, dict[str, Any]] = {}
     for row in cursors:
         name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
-        if name and ":" not in name:
+        if name and ":" not in name and _cursor_row_is_better(cursor_by_name.get(name), row, name):
             cursor_by_name[name] = row
     source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
     source_primary_unscanned_pending = [

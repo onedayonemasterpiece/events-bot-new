@@ -867,6 +867,23 @@ def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str,
     return 2
 
 
+def should_replace_queue_cursor(current: dict[str, Any] | None, candidate: dict[str, Any], short: str) -> bool:
+    if not current:
+        return True
+    if short in {"source", "image"}:
+        try:
+            current_pos = int(float(current.get("cursor_position") or 0))
+        except Exception:
+            current_pos = 0
+        try:
+            candidate_pos = int(float(candidate.get("cursor_position") or 0))
+        except Exception:
+            candidate_pos = 0
+        if candidate_pos != current_pos:
+            return candidate_pos > current_pos
+    return str(candidate.get("_ydb_updated_at") or candidate.get("updated_at") or "") >= str(current.get("_ydb_updated_at") or current.get("updated_at") or "")
+
+
 def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state: dict[str, Any] | None = None) -> list[Seed]:
     enabled = [s for s in seeds if s.monitoring_enabled]
     fallback = [s for s in seeds if not s.monitoring_enabled]
@@ -2988,6 +3005,8 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         for _pk, item in queue_cursors.items():
                             name = str(item.get("queue_name") or item.get("name") or _pk.replace("queue_cursor:", ""))
                             short = "source" if "source" in name else ("image" if "image" in name else name)
+                            if not should_replace_queue_cursor(cursors.get(short), item, short):
+                                continue
                             cursors[short] = {**(cursors.get(short) or {}), **item}
                             if short == "source":
                                 data0["unified_source_queue_cursor_position"] = item.get("cursor_position", data0.get("unified_source_queue_cursor_position", 0))

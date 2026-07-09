@@ -38,7 +38,9 @@
 - **Region Talk Channel / source cursor throughput**: CandidateReport source
   selection now prefers durable YDB queue rows after the source cursor over
   legacy static seeds, and the source cursor is monotonic so historical pending
-  gaps cannot move it backwards and cause repeated low-yield rescans.
+  gaps cannot move it backwards and cause repeated low-yield rescans. YDB cursor
+  loaders/metrics also prefer the highest retained source/image cursor over
+  stale per-run cursor history rows.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient
