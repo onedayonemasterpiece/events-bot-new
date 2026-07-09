@@ -1530,6 +1530,46 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["fake_processed_without_scan_evidence"], "true")
         self.assertEqual(metrics["source_queue_fake_processed_without_scan_evidence_total"], 1)
 
+    def test_fake_processed_keyword_hit_is_reinserted_after_cursor(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:fakekeyword": {
+                    "canonical_source_key": "telegram:fakekeyword",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/fakekeyword",
+                    "queue_order": 5,
+                    "source_queue_status": "processed_no_ko",
+                    "last_scan_run_id": "legacy-imageq-run",
+                    "posts_scanned": 0,
+                },
+                "telegram:tail": {
+                    "canonical_source_key": "telegram:tail",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/tail",
+                    "queue_order": 11,
+                    "source_queue_status": "pending_scan",
+                },
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [],
+            [],
+            [{"keyword_hit_source_url": "https://t.me/fakekeyword", "platform": "telegram", "canonical_source_key": "telegram:fakekeyword"}],
+            {},
+            "run-q",
+            "2026-07-07T00:00:00+00:00",
+        )
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:fakekeyword"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:fakekeyword"]["source_queue_status"], "pending_scan")
+        self.assertEqual(by_key["telegram:fakekeyword"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:fakekeyword"]["fake_processed_without_scan_evidence"], "true")
+        self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:fakekeyword"]["queue_order"])
+        self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
+        self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
+
     def test_image_queue_preserves_terminal_unsupported_media_status(self) -> None:
         mod = load_module()
         previous = {

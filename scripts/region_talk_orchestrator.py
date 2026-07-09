@@ -246,6 +246,45 @@ def _post_source_merge_key(row: dict[str, Any]) -> str:
     return key
 
 
+def _telegram_handle_from_url(value: str) -> str:
+    raw = str(value or "").strip().rstrip("/")
+    match = re.search(r"(?:https?://)?(?:t\.me|telegram\.me)/(@?[A-Za-z0-9_]{4,})", raw, re.I)
+    if not match:
+        return ""
+    handle = match.group(1).lstrip("@").lower()
+    if handle in {"s", "c", "joinchat", "+"} or handle.startswith("+"):
+        return ""
+    return handle
+
+
+def _source_alias_keys(row: dict[str, Any]) -> set[str]:
+    aliases: set[str] = set()
+    for field in [
+        "canonical_source_key", "source_id", "source_url", "canonical_url",
+        "url", "keyword_hit_source_url", "recommended_canonical_url",
+    ]:
+        value = str(row.get(field) or "").strip().rstrip("/")
+        if not value:
+            continue
+        aliases.add(value)
+        if value.startswith(("source_queue_item:", "source_status_item:", "online_source_item:")):
+            aliases.add(value.split(":", 1)[1])
+        handle = _telegram_handle_from_url(value)
+        if handle:
+            aliases.add(f"telegram:{handle}")
+            aliases.add(f"https://t.me/{handle}")
+    for field in ["handle", "username", "username_or_handle", "recommended_username"]:
+        handle = str(row.get(field) or "").strip().lstrip("@").lower()
+        if handle:
+            aliases.add(f"telegram:{handle}")
+            aliases.add(f"https://t.me/{handle}")
+    post_url_handle = _telegram_handle_from_url(str(row.get("post_url") or ""))
+    if post_url_handle:
+        aliases.add(f"telegram:{post_url_handle}")
+        aliases.add(f"https://t.me/{post_url_handle}")
+    return {a.lower().rstrip("/") for a in aliases if a}
+
+
 def _row_has_ko_candidate_evidence(row: dict[str, Any]) -> bool:
     return (
         str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
@@ -618,6 +657,80 @@ def _keyword_source_metrics(
     }
 
 
+def _keyword_source_post_regex_metrics(
+    source_rows: list[dict[str, Any]],
+    diagnostic_post_rows: list[dict[str, Any]],
+    source_candidates: list[dict[str, Any]] | None = None,
+    source_edges: list[dict[str, Any]] | None = None,
+) -> dict[str, int]:
+    source_by_key = {_source_merge_key(r): r for r in source_rows if _source_merge_key(r)}
+    keyword_row_keys = {_source_merge_key(r) for r in source_rows if _is_keyword_discovered_source(r) and _source_merge_key(r)}
+    candidate_key_by_id = {
+        str(r.get("source_candidate_id") or ""): _source_merge_key(r)
+        for r in (source_candidates or [])
+        if str(r.get("source_candidate_id") or "") and _source_merge_key(r)
+    }
+    keyword_edge_target_keys = {
+        candidate_key_by_id.get(str(r.get("to_source_candidate_id") or ""))
+        for r in (source_edges or [])
+        if _is_keyword_discovered_source(r)
+    }
+    keyword_keys = {k for k in (keyword_row_keys | keyword_edge_target_keys) if k}
+    keyword_aliases: set[str] = set()
+    for key in keyword_keys:
+        keyword_aliases.add(key.lower().rstrip("/"))
+        row = source_by_key.get(key)
+        if row:
+            keyword_aliases.update(_source_alias_keys(row))
+
+    keyword_post_rows: list[dict[str, Any]] = []
+    keyword_post_keys: set[str] = set()
+    source_keys_with_posts: set[str] = set()
+    for row in diagnostic_post_rows:
+        row_aliases = _source_alias_keys(row)
+        matched_aliases = keyword_aliases & row_aliases
+        if not matched_aliases:
+            continue
+        key = _post_merge_key(row)
+        if key and key in keyword_post_keys:
+            continue
+        if key:
+            keyword_post_keys.add(key)
+        keyword_post_rows.append(row)
+        source_keys_with_posts.update(a for a in matched_aliases if a.startswith("telegram:"))
+
+    rows_with_text: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for row in keyword_post_rows:
+        text = _row_text_for_regex(row)
+        if not text.strip():
+            continue
+        rows_with_text.append((row, _regex_ko_diagnostic(text)))
+    regex_raw_rows = [r for r, d in rows_with_text if d["regex_ko_raw"]]
+    regex_filtered_rows = [r for r, d in rows_with_text if d["regex_ko_filtered"]]
+    vector_rows = [r for r in keyword_post_rows if _is_vector_ko_candidate(r)]
+    regex_filtered_keys = {_post_merge_key(r) for r in regex_filtered_rows if _post_merge_key(r)}
+    vector_keys = {_post_merge_key(r) for r in vector_rows if _post_merge_key(r)}
+
+    def source_alias_set(rows: list[dict[str, Any]]) -> set[str]:
+        out: set[str] = set()
+        for row in rows:
+            out.update(a for a in _source_alias_keys(row) if a.startswith("telegram:") and a in keyword_aliases)
+        return out
+
+    return {
+        "publics_keyword_post_rows_total": len(keyword_post_rows),
+        "publics_keyword_post_rows_with_text_total": len(rows_with_text),
+        "publics_keyword_sources_with_post_rows_total": len(source_keys_with_posts),
+        "publics_keyword_regex_ko_raw_posts_total": len(regex_raw_rows),
+        "publics_keyword_regex_ko_filtered_posts_total": len(regex_filtered_rows),
+        "publics_keyword_vector_ko_candidate_posts_total": len(vector_rows),
+        "publics_keyword_regex_sources_with_ko_raw_total": len(source_alias_set(regex_raw_rows)),
+        "publics_keyword_regex_sources_with_ko_filtered_total": len(source_alias_set(regex_filtered_rows)),
+        "publics_keyword_regex_filtered_without_vector_posts_total": len(regex_filtered_keys - vector_keys),
+        "publics_keyword_vector_without_regex_filtered_posts_total": len(vector_keys - regex_filtered_keys),
+    }
+
+
 def _script_name(cmd: list[str]) -> str:
     exe = Path(str(cmd[0] if cmd else "")).name
     return str(cmd[1] if len(cmd) > 1 and exe.startswith("python") else cmd[0])
@@ -959,6 +1072,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             cursor_by_name[name] = row
     source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
     keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position, source_candidates, source_edges)
+    keyword_post_regex_metrics = _keyword_source_post_regex_metrics(source_rows, diagnostic_post_rows, source_candidates, source_edges)
     strong_images_ge_066 = [
         r for r in images
         if str(r.get("image_queue_status") or "") == "actual_scored"
@@ -1004,6 +1118,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_with_ko_candidates_source_rows_total": len(source_ko_candidates),
         "publics_with_ko_candidates_repair_delta_total": max(0, source_ko_candidates_count - len(source_ko_candidates)),
         **keyword_source_metrics,
+        **keyword_post_regex_metrics,
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),

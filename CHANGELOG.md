@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / keyword regex yield diagnostics**: orchestrator now
+  reports keyword-sourced post regex-vs-vector counters
+  (`publics_keyword_regex_*`, `publics_keyword_vector_*`) and CandidateReport
+  reinserts fake-processed keyword hits after the cursor so old queue drift
+  cannot hide channels where keyword search already saw a Kaliningrad post.
 - **Region Talk Channel / fake processed source rows**: CandidateReport no
   longer treats a bare `processed_*` source status or legacy `last_scan_run_id`
   as proof that history posts were scanned; rows without post/history evidence

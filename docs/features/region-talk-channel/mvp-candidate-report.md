@@ -818,11 +818,16 @@ accept/reject production candidates.
 `publics_keyword_queue_rows_total`, `publics_keyword_edge_targets_total` and
 `publics_keyword_queue_missing_total` so keyword hits that were already present
 in the frontier cannot disappear from monitoring. Keyword-discovered rows,
-including existing pending frontier rows with fresh keyword evidence, are
-reinserted immediately after the persisted source cursor so the next scan
-actually tests the channels where keyword search saw a Kaliningrad hit. If
-keyword-discovered channels do not show a high KO yield after scanning, the
-keyword query/frontier insertion logic needs review.
+including existing pending frontier rows and fake legacy `processed_*` rows
+without scan evidence, are reinserted immediately after the persisted source
+cursor so the next scan actually tests the channels where keyword search saw a
+Kaliningrad hit. The orchestrator also reports keyword-sourced post diagnostics:
+`publics_keyword_post_rows_with_text_total`, `publics_keyword_regex_ko_raw_posts_total`,
+`publics_keyword_regex_ko_filtered_posts_total`,
+`publics_keyword_vector_ko_candidate_posts_total`, source-level regex hit counts,
+and regex/vector deltas. If keyword-discovered channels do not show a high KO
+yield after real scans, or regex KO hits materially exceed vector KO candidates,
+the keyword query/frontier insertion or vector prototype tuning needs review.
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

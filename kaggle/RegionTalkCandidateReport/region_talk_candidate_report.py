@@ -3993,7 +3993,8 @@ def build_unified_source_queue(
             existing["keyword_evidence_at"] = run_now
             existing["insertion_policy"] = existing.get("insertion_policy") or "keyword_prioritized_existing"
             status = str(existing.get("source_queue_status") or "")
-            if status.startswith("processed") or source_terminal_rejected_status(status):
+            has_scan_evidence = _source_has_primary_scan_evidence(existing, {}, status)
+            if (status.startswith("processed") and has_scan_evidence) or source_terminal_rejected_status(status):
                 continue
             keyword_priority.append((seed, True))
         else:

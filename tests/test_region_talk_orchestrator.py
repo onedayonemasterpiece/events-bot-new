@@ -235,6 +235,42 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publics_keyword_with_ko_candidates_total"], 1)
         self.assertEqual(metrics["publics_keyword_pending_after_cursor_total"], 1)
 
+    def test_keyword_post_regex_metrics_compare_keyword_scan_posts(self) -> None:
+        mod = load_module()
+        source_rows = [
+            {"canonical_source_key": "telegram:travelhit", "source_url": "https://t.me/travelhit", "added_from": "telegram_keyword_search"},
+            {"canonical_source_key": "telegram:quiet", "source_url": "https://t.me/quiet"},
+        ]
+        posts = [
+            {
+                "post_id": "p1",
+                "source_url": "https://t.me/travelhit",
+                "post_url": "https://t.me/travelhit/1",
+                "text": "Ездили в Зеленоградск: красиво, особенно запомнилась прогулка.",
+            },
+            {
+                "post_id": "p2",
+                "post_url": "https://t.me/travelhit/2",
+                "text": "Личная история про Куршскую косу и маршрут.",
+                "vector_gate_status": "vector_accept_candidate",
+            },
+            {
+                "post_id": "p3",
+                "source_url": "https://t.me/quiet",
+                "post_url": "https://t.me/quiet/1",
+                "text": "Ездили в Зеленоградск: красиво, особенно запомнилась прогулка.",
+            },
+        ]
+        metrics = mod._keyword_source_post_regex_metrics(source_rows, posts)
+        self.assertEqual(metrics["publics_keyword_post_rows_total"], 2)
+        self.assertEqual(metrics["publics_keyword_post_rows_with_text_total"], 2)
+        self.assertEqual(metrics["publics_keyword_sources_with_post_rows_total"], 1)
+        self.assertEqual(metrics["publics_keyword_regex_ko_raw_posts_total"], 2)
+        self.assertEqual(metrics["publics_keyword_regex_ko_filtered_posts_total"], 2)
+        self.assertEqual(metrics["publics_keyword_vector_ko_candidate_posts_total"], 1)
+        self.assertEqual(metrics["publics_keyword_regex_sources_with_ko_filtered_total"], 1)
+        self.assertEqual(metrics["publics_keyword_regex_filtered_without_vector_posts_total"], 1)
+
     def test_execute_ready_selects_non_conflicting_parallel_launches(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(
