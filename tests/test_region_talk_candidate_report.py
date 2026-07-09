@@ -1503,6 +1503,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
 
+    def test_image_queue_preserves_terminal_unsupported_media_status(self) -> None:
+        mod = load_module()
+        previous = {
+            "image_candidate_queue": {
+                "https://t.me/travel/1": {
+                    "image_queue_id": "imgq_video",
+                    "image_queue_order": 1,
+                    "post_url": "https://t.me/travel/1",
+                    "source_url": "https://t.me/travel",
+                    "image_queue_status": "not_reviewable_unsupported_media",
+                    "image_model_input_type": "unsupported_media",
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "current_stage": "semantic_candidate",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                }
+            }
+        }
+        rows, _, _ = mod.build_image_candidate_queue(
+            previous,
+            [{
+                "post_url": "https://t.me/travel/1",
+                "source_url": "https://t.me/travel",
+                "has_media": True,
+                "kaliningrad_oblast_only_scope": True,
+                "kaliningrad_mention_role": "main_subject",
+                "current_stage": "semantic_candidate",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "image_model_input_type": "metadata_only",
+            }],
+            [], [], "run-q", "2026-07-07T00:00:00+00:00",
+        )
+        row = next(r for r in rows if r["post_url"] == "https://t.me/travel/1")
+        self.assertEqual(row["image_queue_status"], "not_reviewable_unsupported_media")
+        self.assertEqual(row["next_action"], "skip_unsupported_media")
+
     def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
         mod = load_module()
         previous = {

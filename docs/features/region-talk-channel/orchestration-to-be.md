@@ -104,6 +104,13 @@ Responsibilities stay unchanged:
 - compute postcardness/aesthetic/technical/safety scores;
 - write `image_queue_status=actual_scored` with `image_model_input_type=actual_image`.
 
+If Telegram/VK media resolves to a video/non-image file or an image decoder
+cannot open the downloaded payload, ImageDiagnostic must write a terminal
+`image_queue_status=not_reviewable_unsupported_media` with
+`media_acquisition_status=unsupported_media_or_decode_failed`. Such rows are
+excluded from future leases; they must not loop forever as
+`needs_actual_image_fetch` and consume the whole image batch.
+
 ### 5. Local/server orchestrator
 
 A plain Python process, later inside `eventsbot`, controls short Kaggle launches

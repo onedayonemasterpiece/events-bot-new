@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / image queue unsupported media**: ImageDiagnostic now
+  marks Telegram/VK video or non-decodable media as terminal
+  `not_reviewable_unsupported_media` instead of looping them as
+  `needs_actual_image_fetch`, and CandidateReport preserves that terminal
+  status during queue rebuilds.
 - **Region Talk Channel / keyword-yield observability**: keyword-search source
   metrics now count keyword edge targets as well as queue rows, expose
   queue-row/edge-target/missing breakdowns, and CandidateReport re-prioritizes

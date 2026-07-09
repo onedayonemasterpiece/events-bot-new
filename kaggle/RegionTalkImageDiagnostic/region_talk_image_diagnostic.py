@@ -10,6 +10,14 @@ RUN_ID = os.getenv("REGION_TALK_RUN_ID") or os.getenv("RT_IMAGE_DIAG_RUN_ID") or
 OUT = Path(os.getenv("REGION_TALK_IMAGE_DIAG_OUTPUT_DIR") or f"/kaggle/working/{RUN_ID}")
 MEDIA = OUT / "media"
 THUMBS = OUT / "contact_sheet_assets"
+IMAGE_TERMINAL_UNSUPPORTED_STATUS = "not_reviewable_unsupported_media"
+IMAGE_TERMINAL_SKIP_STATUSES = {
+    "not_reviewable_no_media",
+    IMAGE_TERMINAL_UNSUPPORTED_STATUS,
+    "rejected_text_gate",
+}
+UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
+SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
 def refresh_run_paths() -> None:
     global RUN_ID, OUT, MEDIA, THUMBS
@@ -124,7 +132,13 @@ def load_secrets() -> dict:
 
 runtime_config = load_runtime_config()
 refresh_run_paths()
-input_payload = load_json_file("image_diag_input.json")
+try:
+    input_payload = load_json_file("image_diag_input.json")
+except FileNotFoundError:
+    if os.getenv("REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT") == "1":
+        input_payload = {}
+    else:
+        raise
 secret_status = load_secrets()
 rows = input_payload.get("rows") or []
 limit = int(os.getenv("REGION_TALK_IMAGE_DIAG_TOP_N") or input_payload.get("top_n") or 50)
@@ -376,7 +390,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
         input_type=str(r.get("image_model_input_type") or "")
         lease=str(r.get("lease_run_id") or "")
         if status == "actual_scored" and input_type == "actual_image": continue
-        if status in {"not_reviewable_no_media", "rejected_text_gate"}: continue
+        if status in IMAGE_TERMINAL_SKIP_STATUSES: continue
         if status == "actual_scored" and input_type != "actual_image":
             r["previous_image_queue_status"] = status
             r["previous_image_model_input_type"] = input_type
@@ -556,7 +570,10 @@ async def fetch_telegram(batch):
                 path = await client.download_media(msg, file=str(MEDIA / f"{r['image_queue_id']}_{handle}_{mid}"))
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
                 if path:
-                    r["actual_media_path"] = str(path); r["media_fetch_status"] = "downloaded"
+                    if _path_is_unsupported_media(path):
+                        mark_unsupported_media(r, f"telegram media is not an image: {Path(str(path)).suffix.lower() or 'unknown'}", path=path)
+                    else:
+                        r["actual_media_path"] = str(path); r["media_fetch_status"] = "downloaded"
                 else:
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="download_media returned empty path"
             except Exception as exc:
@@ -601,10 +618,42 @@ def fetch_vk(r):
     except Exception as exc:
         r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]; r["media_download_seconds"] = round(time.monotonic()-t0, 3)
 
+def _path_is_unsupported_media(path: str | Path | None) -> bool:
+    if not path:
+        return False
+    suffix = Path(str(path)).suffix.lower()
+    return suffix in UNSUPPORTED_MEDIA_SUFFIXES
+
+def _path_has_supported_image_suffix(path: str | Path | None) -> bool:
+    if not path:
+        return False
+    suffix = Path(str(path)).suffix.lower()
+    return not suffix or suffix in SUPPORTED_IMAGE_SUFFIXES
+
+def mark_unsupported_media(r, reason: str, *, path: str | Path | None = None):
+    if path:
+        r["unsupported_media_path"] = str(path)
+    r["actual_media_path"] = ""
+    r["actual_image_count"] = 0
+    r["media_fetch_status"] = "unsupported_media"
+    r["media_fetch_error"] = reason[:300]
+    r["final_visual_status"] = "unsupported_media"
+    r["image_model_input_type"] = "unsupported_media"
+    r["image_model_type"] = "unsupported_media"
+    r["image_diagnostic_error"] = reason[:300]
+    return r
+
+def _row_has_terminal_media_failure(r) -> bool:
+    return str(r.get("media_fetch_status") or "") in {"unsupported_media", "decode_failed"} or str(r.get("final_visual_status") or "") == "unsupported_media"
+
 def validate_image(r):
     t=time.monotonic()
     p = r.get("actual_media_path")
     if not p: r["actual_image_count"] = 0; return None
+    if _path_is_unsupported_media(p) or not _path_has_supported_image_suffix(p):
+        r["image_decode_seconds"] = round(time.monotonic()-t, 3)
+        mark_unsupported_media(r, f"downloaded media is not an image: {Path(str(p)).suffix.lower() or 'unknown'}", path=p)
+        return None
     try:
         im = Image.open(p).convert("RGB")
         r["actual_image_count"] = 1; r["image_width"], r["image_height"] = im.size; r["image_file_bytes"] = Path(p).stat().st_size
@@ -747,7 +796,7 @@ def score_nima(r):
 
 def finalize(r):
     if r.get("actual_image_count") != 1:
-        r["final_visual_status"] = "needs_actual_image_fetch"; return
+        r["final_visual_status"] = "unsupported_media" if _row_has_terminal_media_failure(r) else "needs_actual_image_fetch"; return
     vals=[r.get("cv_overall_media_score")]
     if r.get("clip_postcardness_score") not in (None, ""): vals.append(r.get("clip_postcardness_score"))
     if r.get("laion_aesthetic_score") not in (None, ""): vals.append(r.get("laion_aesthetic_score"))
@@ -775,8 +824,16 @@ def apply_image_queue_status(r):
         r["images_scored_actual_count"] = 1
         r["next_action"] = "human_review_best_image"
     else:
-        r["image_queue_status"] = "needs_actual_image_fetch"
-        r["media_acquisition_status"] = "needs_actual_image_fetch"
+        if _row_has_terminal_media_failure(r):
+            r["image_queue_status"] = IMAGE_TERMINAL_UNSUPPORTED_STATUS
+            r["media_acquisition_status"] = "unsupported_media_or_decode_failed"
+            r["image_model_input_type"] = r.get("image_model_input_type") or "unsupported_media"
+            r["image_model_type"] = r.get("image_model_type") or "unsupported_media"
+            r["images_scored_actual_count"] = 0
+            r["next_action"] = "skip_unsupported_media"
+        else:
+            r["image_queue_status"] = "needs_actual_image_fetch"
+            r["media_acquisition_status"] = "needs_actual_image_fetch"
     if previous_status and previous_status != str(r.get("image_queue_status") or ""):
         r["previous_image_queue_status"] = previous_status
         r["status_changed_this_run"] = "true"

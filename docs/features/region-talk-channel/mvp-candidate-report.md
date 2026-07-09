@@ -740,6 +740,12 @@ available rows it waits up to `REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS`
 so it cannot become an infinite worker. This makes visible deltas such as “new
 communities added”, “source status changed”, “new image rows appeared” and
 “images scored” available online in YDB before the final XLSX is downloaded.
+If a leased media item is a video/non-image file or fails image decoding,
+ImageDiagnostic writes terminal
+`image_queue_status=not_reviewable_unsupported_media` with
+`media_acquisition_status=unsupported_media_or_decode_failed`. CandidateReport
+preserves that terminal status on later queue rebuilds, so an `.mp4` post cannot
+be repeatedly re-leased as `needs_actual_image_fetch` and starve actual photos.
 
 Legacy queue-like structures such as `source_frontier_queue_next` and
 `similar_seed_queue` must not be durable YDB queue state. Frontier/debug sheets

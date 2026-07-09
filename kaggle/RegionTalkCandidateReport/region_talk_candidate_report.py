@@ -4267,10 +4267,13 @@ def build_image_candidate_queue(
             order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
             entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
         previous_status = str(entries[key].get("image_queue_status") or "")
+        terminal_unsupported_statuses = {"not_reviewable_no_media", "not_reviewable_unsupported_media", "rejected_text_gate"}
         if actual or previous_status == "actual_scored":
             status = "actual_scored"
         elif previous_status == "image_analysis_in_progress":
             status = "image_analysis_in_progress"
+        elif previous_status in terminal_unsupported_statuses:
+            status = previous_status
         else:
             status = "needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media"
         color = "green_found_ko" if status == "actual_scored" else ("blue_cursor" if status == "image_analysis_in_progress" else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko"))
@@ -4313,12 +4316,12 @@ def build_image_candidate_queue(
             "image_queue_status": status,
             "status_color_hint": color,
             "row_fill_color": color,
-            "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else "no_media_or_not_supported"),
+            "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else ("unsupported_media_or_decode_failed" if status == "not_reviewable_unsupported_media" else "no_media_or_not_supported")),
             "media_acquisition_error_type": "" if actual else (media.get("failure_reason") or row.get("failure_reason") or status),
             "images_scored_actual_count": 1 if actual else 0,
             "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),
             "last_attempt_at": run_now if media.get("post_url") else entries[key].get("last_attempt_at", ""),
-            "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else "skip_or_manual_open")),
+            "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else ("skip_unsupported_media" if status == "not_reviewable_unsupported_media" else "skip_or_manual_open"))),
             "queue_item_updated_at": run_now,
         })
 
