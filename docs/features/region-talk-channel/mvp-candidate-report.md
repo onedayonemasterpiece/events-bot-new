@@ -813,7 +813,7 @@ and `vector_without_regex_filtered_posts_total`. These regex numbers are a
 monitoring comparator only: if filtered regex KO volume is materially higher
 than vector KO volume, the vector gates/prototypes need review; regexes do not
 accept/reject production candidates.
- Keyword-source queue health is monitored separately via
+Keyword-source queue health is monitored separately via
 `publics_keyword_discovered_total`, `publics_keyword_scanned_with_posts_total`,
 `publics_keyword_with_ko_candidates_total`,
 `publics_keyword_pending_after_cursor_total` and
@@ -838,6 +838,15 @@ reports keyword-sourced post diagnostics:
 and regex/vector deltas. If keyword-discovered channels do not show a high KO
 yield after real scans, or regex KO hits materially exceed vector KO candidates,
 the keyword query/frontier insertion or vector prototype tuning needs review.
+
+For live YDB runs CandidateReport does not rewrite the entire source queue on
+every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
+the bounded payload keeps changed/current-run rows, keyword-evidence rows, the
+forward cursor neighbourhood and pending/retry backlog. This keeps the
+30-minute run contract realistic without hiding queue size: `source_queue_total`
+stays the full queue count, while `source_queue_handoff_rows` reports how many
+rows were actually written to `source_queue_item` / `source_status_item` in the
+current handoff.
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

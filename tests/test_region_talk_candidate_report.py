@@ -1754,6 +1754,29 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_historical_keyword_sources_total"], 1)
         self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 1)
 
+    def test_source_queue_handoff_rows_limits_full_rewrite_but_keeps_keyword_and_cursor_neighbourhood(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
+        try:
+            os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "5"
+            rows = [
+                {"canonical_source_key": f"telegram:s{i}", "queue_order": i, "source_queue_status": "processed_no_ko"}
+                for i in range(1, 30)
+            ]
+            rows.append({"canonical_source_key": "telegram:keyword", "queue_order": 2, "added_from": "telegram_keyword_search", "source_queue_status": "pending_scan"})
+            rows.append({"canonical_source_key": "telegram:changed", "queue_order": 28, "status_changed_this_run": "true"})
+            selected = mod._source_queue_handoff_rows(rows, 10, "run-q")
+            keys = {r["canonical_source_key"] for r in selected}
+            self.assertLessEqual(len(selected), 5)
+            self.assertIn("telegram:keyword", keys)
+            self.assertIn("telegram:changed", keys)
+            self.assertTrue(any(8 <= int(r.get("queue_order") or 0) <= 12 for r in selected))
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old
+
     def test_image_queue_preserves_terminal_unsupported_media_status(self) -> None:
         mod = load_module()
         previous = {

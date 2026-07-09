@@ -4350,6 +4350,78 @@ def build_unified_source_queue(
     return display_rows, metrics
 
 
+def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int, run_id: str) -> list[dict[str, Any]]:
+    clean = [r for r in rows if isinstance(r, dict) and not r.get("_sheet_note")]
+    max_rows = getenv_int("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", 500)
+    if max_rows <= 0 or len(clean) <= max_rows:
+        return clean
+
+    def is_keyword(row: dict[str, Any]) -> bool:
+        text = " ".join(str(row.get(k) or "") for k in [
+            "added_from", "insertion_policy", "discovery_type", "edge_type",
+            "keyword_discovery_status", "source_probe_reason",
+        ]).lower()
+        return "keyword" in text or "telegram_keyword_search" in text
+
+    def order(row: dict[str, Any]) -> int:
+        try:
+            return int(float(row.get("queue_order") or 999999999))
+        except Exception:
+            return 999999999
+
+    selected: dict[str, dict[str, Any]] = {}
+
+    def add(row: dict[str, Any]) -> None:
+        key = str(row.get("canonical_source_key") or row.get("source_queue_id") or row.get("source_url") or row.get("canonical_url") or len(selected))
+        selected[key] = row
+
+    for row in clean:
+        if (
+            str(row.get("status_changed_this_run") or "").lower() == "true"
+            or str(row.get("last_scan_run_id") or "") == run_id
+            or str(row.get("first_seen_run_id") or "") == run_id
+            or str(row.get("last_seen_run_id") or "") == run_id
+            or is_keyword(row)
+        ):
+            add(row)
+
+    # Keep the next backlog visible/durable first.  The cursor may be small
+    # after a repaired pending-gap, and writing "cursor - 25" first would spend
+    # the bounded handoff on already-visible rows before the actual next
+    # sources.  Add the look-behind only after the forward slice.
+    for row in sorted(clean, key=order):
+        qo = order(row)
+        if qo >= int(cursor_position or 0) and qo <= int(cursor_position or 0) + 250:
+            add(row)
+        if len(selected) >= max_rows:
+            break
+
+    if len(selected) < max_rows:
+        for row in sorted(clean, key=order, reverse=True):
+            qo = order(row)
+            if qo >= max(0, int(cursor_position or 0) - 25) and qo < int(cursor_position or 0):
+                add(row)
+            if len(selected) >= max_rows:
+                break
+
+    if len(selected) < max_rows:
+        for row in sorted(clean, key=order):
+            qo = order(row)
+            if qo >= max(0, int(cursor_position or 0) - 25) and qo <= int(cursor_position or 0) + 250:
+                add(row)
+            if len(selected) >= max_rows:
+                break
+
+    if len(selected) < max_rows:
+        for row in sorted(clean, key=order):
+            if str(row.get("source_queue_status") or "") in {"pending_scan", "needs_rescan_or_retry"}:
+                add(row)
+            if len(selected) >= max_rows:
+                break
+
+    return sorted(selected.values(), key=order)[:max_rows]
+
+
 def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
     """Only text-confirmed Kaliningrad Oblast candidate posts may enter image analysis.
 
@@ -8637,8 +8709,13 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
         keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
     )
+    source_queue_handoff_rows = _source_queue_handoff_rows(
+        unified_source_queue_sheet,
+        int(unified_source_queue_metrics.get("source_queue_cursor_position") or 0),
+        run_id,
+    )
     online_source_queue_items_written = write_region_talk_online_queue_items(
-        [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+        source_queue_handoff_rows,
         kind="source_queue_item",
         id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
         fields=SOURCE_QUEUE_STATE_FIELDS,
@@ -8646,7 +8723,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         stage="unified_source_queue_built",
     )
     write_region_talk_online_queue_items(
-        [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+        source_queue_handoff_rows,
         kind="source_status_item",
         id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
         fields=SOURCE_QUEUE_STATE_FIELDS,
@@ -8666,7 +8743,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "retry_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "needs_rescan_or_retry"),
         "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
-    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), online_source_queue_items_written=online_source_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), source_queue_handoff_rows=len(source_queue_handoff_rows), online_source_queue_items_written=online_source_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     if (
         region_talk_state_backend_requested() == "ydb"
         and getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF", True)
@@ -8687,6 +8764,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "source_queue_keyword_inserted_this_run": unified_source_queue_metrics.get("source_queue_keyword_inserted_this_run", 0),
             "source_queue_keyword_existing_promoted_this_run": unified_source_queue_metrics.get("source_queue_keyword_existing_promoted_this_run", 0),
             "online_source_queue_items_written": online_source_queue_items_written,
+            "source_queue_handoff_rows": len(source_queue_handoff_rows),
             "state_backend": region_talk_state_backend_requested(),
             "ydb_read_status": state_meta.get("ydb_read_status"),
             "ydb_write_status": "ok" if online_source_queue_items_written or region_talk_state_backend_requested() != "ydb" else "no_source_queue_rows_written",
@@ -8713,6 +8791,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             phase="queue_assembly",
             status="partial",
             source_queue_total=len(source_queue_rows_written),
+            source_queue_handoff_rows=len(source_queue_handoff_rows),
             online_source_queue_items_written=online_source_queue_items_written,
             source_queue_keyword_prioritized_this_run=unified_source_queue_metrics.get("source_queue_keyword_prioritized_this_run", 0),
             next_action="run_region_talk_bge_m3_enrichment_or_next_candidate_report",

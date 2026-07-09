@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / bounded source queue handoff**: CandidateReport now bounds live YDB `source_queue_item` / `source_status_item` handoff writes with `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` (default 500), preserving changed/current-run rows, keyword-evidence rows, cursor-neighbourhood rows and pending/retry backlog while reporting both full `source_queue_total` and `source_queue_handoff_rows`.
 - **Region Talk Channel / live source queue clobber guard**: live
   `source_selected_for_run` status writes no longer overwrite durable
   `source_queue_item` rows without queue order/status, and YDB source-status
