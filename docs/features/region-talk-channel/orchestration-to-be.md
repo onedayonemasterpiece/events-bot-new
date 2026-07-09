@@ -183,8 +183,11 @@ Important invariants:
   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`). Source/text-vector
   YDB read windows are 6000 rows so queue counters are not rebuilt from a
   truncated source state once the frontier exceeds 1500 rows.
-- `RegionTalkBgeM3Enrichment` uses `--batch-limit 12 --batch-size 4` so the row
-  count and in-memory batch size are separate. Production launches set
+- `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
+  The orchestrator default is `--batch-limit 24 --batch-size 4` after the live
+  YDB backlog showed E5 production outpacing 12-row BGE batches; operators can
+  tune this with `REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT` and
+  `REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE` without code changes. Production launches set
   `REGION_TALK_BGE_E5_ONLY=1`,
   `REGION_TALK_BGE_INPUT_KINDS=text_vector_enrichment_item` and
   `REGION_TALK_BGE_YDB_SCAN_LIMIT=6000`: BGE consumes E5 rows only, preserves

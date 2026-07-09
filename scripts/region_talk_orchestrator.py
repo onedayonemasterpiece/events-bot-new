@@ -1195,9 +1195,16 @@ def build_decision_plan(
         int(metrics.get("bge_pending_sample_total") or 0),
     )
     if bge_backlog >= bge_threshold:
+        bge_batch_limit = _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", 24)
+        bge_batch_size = _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE", 4)
         actions.append(_action(
             "launch_bge_m3",
-            ["python3", "kaggle/execute_region_talk_bge_m3_enrichment.py", "--batch-limit", "12", "--batch-size", "4", "--no-wait"],
+            [
+                "python3", "kaggle/execute_region_talk_bge_m3_enrichment.py",
+                "--batch-limit", str(max(1, bge_batch_limit)),
+                "--batch-size", str(max(1, bge_batch_size)),
+                "--no-wait",
+            ],
             "pending E5 text-vector rows need paired BGE enrichment immediately after main E5",
             resource="kaggle:bge_m3",
             parallel_safe=True,

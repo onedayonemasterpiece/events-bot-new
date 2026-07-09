@@ -44,7 +44,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertTrue(actions[2]["parallel_safe"])
         self.assertTrue(actions[3]["parallel_safe"])
         self.assertIn("--batch-limit", actions[1]["cmd"])
-        self.assertIn("12", actions[1]["cmd"])
+        self.assertIn("24", actions[1]["cmd"])
         self.assertIn("--batch-size", actions[1]["cmd"])
         self.assertIn("4", actions[1]["cmd"])
         self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_E5_ONLY"], "1")
@@ -64,6 +64,42 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "5")
         self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "2")
         self.assertEqual(actions[3]["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "240")
+
+
+    def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:
+        old_limit = os.environ.get("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT")
+        old_size = os.environ.get("REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE")
+        try:
+            os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT"] = "36"
+            os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE"] = "6"
+            mod = load_module()
+            actions = mod.build_decision_plan(
+                {
+                    "publication_sent_total": 0,
+                    "publication_confirmed_total": 0,
+                    "publication_unsent_confirmed_total": 0,
+                    "image_actual_scored_total": 0,
+                    "publication_candidate_total": 0,
+                    "text_vector_e5_without_bge_exact_text_total": 600,
+                    "bge_pending_sample_total": 100,
+                    "image_pending_total": 0,
+                },
+                target_confirmed=20,
+                bge_threshold=1,
+                image_threshold=1,
+            )
+            bge = next(a for a in actions if a["action"] == "launch_bge_m3")
+            self.assertIn("36", bge["cmd"])
+            self.assertIn("6", bge["cmd"])
+        finally:
+            if old_limit is None:
+                os.environ.pop("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", None)
+            else:
+                os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT"] = old_limit
+            if old_size is None:
+                os.environ.pop("REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE", None)
+            else:
+                os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE"] = old_size
 
     def test_progress_signature_uses_all_numeric_metrics_without_classes(self) -> None:
         mod = load_module()
