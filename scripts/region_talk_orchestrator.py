@@ -138,8 +138,8 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "publication_candidate_item": 2500,
     "post_link_queue_item": 2500,
     "text_vector_enrichment_item": 6000,
-    "processed_post_item": 10000,
-    "post_live_item": 10000,
+    "processed_post_item": 20000,
+    "post_live_item": 20000,
     "source_queue_item": 6000,
     "source_status_item": 6000,
     "online_source_item": 6000,
@@ -160,6 +160,12 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
     default_cap = ORCHESTRATOR_YDB_METRIC_LIMITS.get(kind, 2000)
     key = "REGION_TALK_ORCHESTRATOR_YDB_MAX_" + re.sub(r"[^A-Za-z0-9]+", "_", kind).upper() + "_ROWS"
     cap = _env_int(key, _env_int("REGION_TALK_ORCHESTRATOR_YDB_MAX_ROWS_PER_KIND", default_cap))
+    if kind in {"processed_post_item", "post_live_item"}:
+        # Processed/live post totals are goal metrics. They must not be silently
+        # flattened by a low source/frontier debug --limit, otherwise the loop
+        # can report zero processed-post progress while CandidateReport is
+        # actually fetching/writing posts.
+        return max(1, cap)
     return max(1, min(max(1, int(requested_limit)), cap))
 
 

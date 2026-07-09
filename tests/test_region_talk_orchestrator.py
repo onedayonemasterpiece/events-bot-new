@@ -113,6 +113,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE"] = old_size
 
+    def test_processed_post_metric_limit_is_not_capped_by_debug_source_limit(self) -> None:
+        mod = load_module()
+        self.assertGreaterEqual(mod._orchestrator_kind_limit("processed_post_item", 6000), 20000)
+        self.assertGreaterEqual(mod._orchestrator_kind_limit("post_live_item", 6000), 20000)
+        self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 6000)
+
     def test_progress_signature_uses_all_numeric_metrics_without_classes(self) -> None:
         mod = load_module()
         base = {

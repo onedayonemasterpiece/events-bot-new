@@ -30,6 +30,11 @@
   metric aliases and supports optional delta loop goals such as
   `--target-ko-sources`, `--target-processed-posts`,
   `--target-image-queue`, and `--target-publication-candidates`.
+- **Region Talk Channel / processed-post metric cap**: orchestrator
+  `processed_post_item` and `post_live_item` reads now use independent 20k
+  default caps instead of the lower source/frontier debug `--limit`, so
+  `processed_posts_unique_total` and processed-post loop goals do not flatten at
+  6000 while CandidateReport is still writing new posts.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient

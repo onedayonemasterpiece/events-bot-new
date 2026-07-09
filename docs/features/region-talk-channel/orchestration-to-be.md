@@ -191,6 +191,10 @@ Important invariants:
   `candidate_memory_rows`, `publication_queue_total`, ...). Audits should use
   the canonical detailed names internally, but operator-facing comparisons may
   use the aliases to avoid “same metric, different name” confusion.
+- Goal metrics must not be hidden by debug read windows. Source/frontier rows
+  can be bounded with `--limit`, but `processed_post_item` and `post_live_item`
+  use independent larger caps so `processed_posts_unique_total` keeps moving
+  after the first 6000 rows.
 - CandidateReport history fetches are freshness-bounded by
   `REGION_TALK_HISTORY_MAX_POST_AGE_DAYS=365` by default. It should not crawl
   deeper than one year for normal product monitoring. Sources with at least
