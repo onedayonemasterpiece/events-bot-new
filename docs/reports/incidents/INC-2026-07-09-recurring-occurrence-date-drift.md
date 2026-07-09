@@ -1,6 +1,6 @@
 # INC-2026-07-09 Recurring occurrence date drift
 
-Status: open
+Status: mitigated
 Severity: sev2
 Service: VK auto-import / Smart Update / public `@kldevents` and `klgdevents` event posts
 Opened: 2026-07-09
@@ -36,6 +36,8 @@ This is a production incident because users saw a wrong logistics date in publis
 - 2026-07-09 04:19 UTC — Telegraph/ICS/VK jobs ran from stale canonical date; managed VK post later resolved to live id `6701`.
 - 2026-07-09 07:02 UTC — Telegram event post `@kldevents/2154` published from the stale recurring row.
 - 2026-07-09 — operator reported screenshot; incident investigation opened.
+- 2026-07-09 08:07 UTC — prevention commit `3adbd0ef` deployed to Fly image `deployment-01KX2YJW9H6JN3DRD9W6PWNGQ6`; `/healthz` ready after deploy.
+- 2026-07-09 08:09–08:13 UTC — production event `3980` backed up and repaired; ICS, Telegraph, VK and Telegram surfaces updated and verified.
 
 ## Root Cause
 
@@ -91,7 +93,15 @@ This is a production incident because users saw a wrong logistics date in publis
 
 ## Immediate Mitigation
 
-- Pending at incident open: canonical/public repair is required for event `3980` so the public date shows 10 July 2026 at 20:00 and stale May/season anchors do not remain in event fanout.
+- Created row-level production backup tables before mutation:
+  - `codex_backup_20260709_knight_date_event` (`1` row)
+  - `codex_backup_20260709_knight_date_event_source` (`6` rows)
+  - `codex_backup_20260709_knight_date_eventposter` (`7` rows)
+  - `codex_backup_20260709_knight_date_joboutbox` (`6` rows)
+- Repaired event `3980` canonical anchors: `date 2026-05-01 -> 2026-07-10`, `time=20:00`, `end_date -> NULL`, `date_provenance='source_text'`, `date_confidence=0.95`.
+- Resolved stale managed VK URL `wall-231920894_6681` to live managed post `https://vk.com/wall-231920894_6701`.
+- Rebuilt ICS (`event-3980-2026-07-10.ics`), Telegram calendar post (`https://t.me/kenigeventscalendar/7377`), Telegraph page, VK post and Telegram `@kldevents/2154`.
+- A duplicate body block introduced by the first VK edit was removed with a narrow authenticated `wall.edit` that preserved the two photo attachments.
 
 ## Corrective Actions
 
@@ -107,11 +117,19 @@ This is a production incident because users saw a wrong logistics date in publis
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending full run; targeted recurrence tests added.
-- post-deploy verification: pending.
+- deployed SHA: `3adbd0ef01299c5e974fa6a2e0539c70ef6948be`, reachable from `origin/main`.
+- deploy path: clean linked worktree `.worktrees/incident-20260709-date`, `flyctl deploy -a events-bot-new-wngqia`; image `events-bot-new-wngqia:deployment-01KX2YJW9H6JN3DRD9W6PWNGQ6`; Fly machine `2860d45f312248`, version `1614`, `1 passing` check.
+- regression checks:
+  - `python3 -m py_compile smart_event_update.py smart_update_identity.py tests/test_smart_update_merge_identity_gate.py tests/test_smart_event_update_duplicate_guards.py` — passed.
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with-requirements requirements.txt python -m pytest -q -p pytest_asyncio.plugin tests/test_smart_update_merge_identity_gate.py tests/test_smart_event_update_duplicate_guards.py::test_match_create_prompt_distinguishes_time_conflict_from_multi_session` — `9 passed`.
+- production repair evidence:
+  - DB `PRAGMA quick_check=ok`; event `3980` now has `date='2026-07-10'`, `time='20:00'`, `end_date=NULL`, `source_vk_post_url='https://vk.com/wall-231920894_6701'`, new ICS URL `event-3980-2026-07-10.ics`, fresh Telegram/VK/Telegraph hashes.
+  - Telegram `https://t.me/c/3954607218/2154` inspected via local E2E Telethon: text starts `📅 10 июля 20:00`, no stale May range.
+  - VK `https://vk.com/wall-231920894_6701` inspected via VK API: text starts `📅 10 июля 20:00`, two photo attachments preserved, duplicate block removed.
+  - Telegraph `https://telegra.ph/Rycarskij-turnir-Anny-Marii-04-16` text contains `10 июля` / `20:00` and no `1 мая` / `30 сентября`.
+  - `/healthz` after repair returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+- runtime evidence: file mirror checked; `ENABLE_RUNTIME_FILE_LOGGING=0`, `/data/runtime_logs/events-bot.log` existed but was stale (`mtime=2026-07-08T13:22:56Z`) for the 2026-07-09 incident window, so DB/joboutbox/public API artifacts are the durable fallback evidence.
 
 ## Prevention
 
-The durable prevention is to keep recurring/season cards and exact occurrences as separate attendee-facing identities at the LLM match/merge boundary, with deterministic guardrails only as fail-closed support. Row-level repair alone is not sufficient because future Friday occurrence posts would otherwise keep refreshing the old season row.
+The durable prevention is to keep recurring/season cards and exact occurrences as separate attendee-facing identities at the LLM match/merge boundary, with deterministic guardrails only as fail-closed support. The incident remains `mitigated` until a closure-grade VK import + Smart Update replay on a prod snapshot/shadow DB is added for this fixture and its negative control.
