@@ -4,7 +4,6 @@ import argparse, json, os, shutil, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from openpyxl import load_workbook
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in os.sys.path: os.sys.path.insert(0, str(PROJECT_ROOT))
@@ -29,6 +28,8 @@ KERNEL_PATH = PROJECT_ROOT / "kaggle" / "RegionTalkImageDiagnostic"
 OUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "kaggle" / "region-talk-image-diagnostic"
 
 def _rows_from_xlsx(path: Path, top_n: int) -> tuple[list[dict[str, Any]], int]:
+    from openpyxl import load_workbook
+
     wb=load_workbook(path, read_only=True, data_only=True); ws=wb["09a_image_candidate_queue"]
     it=ws.iter_rows(values_only=True); headers=[str(v) if v is not None else "" for v in next(it)]
     rows=[]

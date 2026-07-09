@@ -9,7 +9,9 @@
   source-candidate/source-edge metric read caps, and keeps one bounded retry for
   YDB queue writes so transient `RESOURCE_EXHAUSTED` does not hide discovery
   progress. Fast-check `no_hit` remains a lower-priority pending signal, not a
-  terminal no-KO rejection.
+  terminal no-KO rejection. The ImageDiagnostic launcher now lazy-loads
+  `openpyxl` only for XLSX input, so the normal YDB image queue path can launch
+  from the lean orchestrator environment.
 - **Region Talk Channel / strict image-queue product gate**:
   CandidateReport now treats `candidate_memory_item` as an audit/history layer
   and only writes `image_queue_item` rows for product-eligible posts: KO-only
