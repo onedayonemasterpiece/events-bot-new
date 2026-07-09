@@ -867,10 +867,30 @@ def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str,
     return 2
 
 
+def queue_cursor_short_name(name: str) -> str:
+    clean = str(name or "").replace("queue_cursor:", "").strip()
+    if clean in {"source", "unified_source_queue", "canonical_source_queue"}:
+        return "source"
+    if clean in {"image", "image_candidate_queue"}:
+        return "image"
+    return clean
+
+
+def is_canonical_queue_cursor_row(row: dict[str, Any], short: str) -> bool:
+    pk_tail = str(row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+    if ":" in pk_tail:
+        return False
+    return queue_cursor_short_name(pk_tail) == short
+
+
 def should_replace_queue_cursor(current: dict[str, Any] | None, candidate: dict[str, Any], short: str) -> bool:
     if not current:
         return True
-    if short in {"source", "image"}:
+    current_canonical = is_canonical_queue_cursor_row(current, short)
+    candidate_canonical = is_canonical_queue_cursor_row(candidate, short)
+    if current_canonical != candidate_canonical:
+        return candidate_canonical
+    if short in {"source", "image"} and current_canonical and candidate_canonical:
         try:
             current_pos = int(float(current.get("cursor_position") or 0))
         except Exception:
@@ -3004,7 +3024,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         cursors = dict(cursors)
                         for _pk, item in queue_cursors.items():
                             name = str(item.get("queue_name") or item.get("name") or _pk.replace("queue_cursor:", ""))
-                            short = "source" if "source" in name else ("image" if "image" in name else name)
+                            short = queue_cursor_short_name(name)
                             if not should_replace_queue_cursor(cursors.get(short), item, short):
                                 continue
                             cursors[short] = {**(cursors.get(short) or {}), **item}

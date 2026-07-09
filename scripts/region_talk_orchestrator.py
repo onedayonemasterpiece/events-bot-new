@@ -662,10 +662,31 @@ def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
     )
 
 
+def _queue_cursor_short_name(name: str) -> str:
+    clean = str(name or "").replace("queue_cursor:", "").strip()
+    if clean in {"source", "unified_source_queue", "canonical_source_queue"}:
+        return "unified_source_queue"
+    if clean in {"image", "image_candidate_queue"}:
+        return "image_candidate_queue"
+    return clean
+
+
+def _is_canonical_cursor_row(row: dict[str, Any], name: str) -> bool:
+    pk_tail = str(row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+    if ":" in pk_tail:
+        return False
+    return _queue_cursor_short_name(pk_tail) == _queue_cursor_short_name(name)
+
+
 def _cursor_row_is_better(current: dict[str, Any] | None, candidate: dict[str, Any], name: str) -> bool:
     if not current:
         return True
-    if "source" in name or "image" in name:
+    current_canonical = _is_canonical_cursor_row(current, name)
+    candidate_canonical = _is_canonical_cursor_row(candidate, name)
+    if current_canonical != candidate_canonical:
+        return candidate_canonical
+    canonical_queue = _queue_cursor_short_name(name) in {"unified_source_queue", "image_candidate_queue"}
+    if canonical_queue and current_canonical and candidate_canonical:
         current_pos = _safe_int(current.get("cursor_position") or current.get("done") or 0)
         candidate_pos = _safe_int(candidate.get("cursor_position") or candidate.get("done") or 0)
         if candidate_pos != current_pos:
@@ -1184,7 +1205,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     source_with_posts_count = max(len(source_with_posts), len(processed_post_source_keys))
     cursor_by_name: dict[str, dict[str, Any]] = {}
     for row in cursors:
-        name = str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", "")
+        name = _queue_cursor_short_name(str(row.get("queue_name") or row.get("_ydb_pk") or "").replace("queue_cursor:", ""))
         if name and ":" not in name and _cursor_row_is_better(cursor_by_name.get(name), row, name):
             cursor_by_name[name] = row
     source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)

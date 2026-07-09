@@ -217,8 +217,9 @@ Important invariants:
   cursor is monotonic and must not move backward because of historical pending
   gaps or keyword reinserts; gaps are diagnostics, not a reason to rescan old
   seed rows for hours. When YDB contains both canonical cursor rows and retained
-  per-run cursor history, loaders and metrics choose the highest source/image
-  cursor position rather than a newer stale historical row with a lower cursor.
+  per-run cursor history, loaders and metrics prefer the canonical cursor row
+  (`queue_cursor:source` / `queue_cursor:image`) and do not let retained
+  per-run history override the active cursor.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
