@@ -77,7 +77,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_YDB_SELECT_PAGE_SIZE": "100",
     "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "6",
     "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "6",
-    "REGION_TALK_YDB_QUEUE_MAX_RETRIES": "0",
+    "REGION_TALK_YDB_QUEUE_MAX_RETRIES": "1",
     "REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE": "25",
     "REGION_TALK_YDB_STATE_LOAD_ATTEMPTS": "4",
     "REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS": "20",
@@ -151,6 +151,9 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "source_queue_item": 6000,
     "source_status_item": 6000,
     "online_source_item": 6000,
+    "source_candidate_item": 4000,
+    "source_edge_item": 4000,
+    "comment_link_item": 4000,
 }
 
 
@@ -652,6 +655,49 @@ def _is_keyword_discovered_source(row: dict[str, Any]) -> bool:
     return "keyword" in haystack or "hashtag" in haystack or "telegram_keyword_search" in haystack
 
 
+def _is_similar_discovered_source(row: dict[str, Any]) -> bool:
+    haystack = " ".join(str(row.get(k) or "") for k in [
+        "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
+        "recommendation_source_channel_url", "similarity_seed_source_id",
+    ]).lower()
+    return "similar" in haystack or "recommendation" in haystack or "telegram_similar_channel" in haystack
+
+
+def _latest_discovery_run_metrics(
+    rows: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    *,
+    prefix: str,
+    predicate: Any,
+) -> dict[str, Any]:
+    relevant_rows = [r for r in rows if predicate(r)]
+    relevant_edges = [r for r in edges if predicate(r)]
+    run_ids = [
+        str(r.get("run_id") or "").strip()
+        for r in [*relevant_rows, *relevant_edges]
+        if str(r.get("run_id") or "").strip()
+    ]
+    latest = max(run_ids) if run_ids else ""
+    latest_rows = [r for r in relevant_rows if latest and str(r.get("run_id") or "") == latest]
+    latest_edges = [r for r in relevant_edges if latest and str(r.get("run_id") or "") == latest]
+    latest_keys = {
+        _source_merge_key(r) or str(r.get("source_candidate_id") or r.get("to_source_candidate_id") or "")
+        for r in latest_rows
+        if (_source_merge_key(r) or str(r.get("source_candidate_id") or r.get("to_source_candidate_id") or ""))
+    }
+    latest_keys.update(
+        str(r.get("to_source_candidate_id") or r.get("source_candidate_id") or "").strip()
+        for r in latest_edges
+        if str(r.get("to_source_candidate_id") or r.get("source_candidate_id") or "").strip()
+    )
+    return {
+        f"{prefix}_latest_run_id": latest,
+        f"{prefix}_latest_run_sources_total": len(latest_keys),
+        f"{prefix}_latest_run_rows_total": len(latest_rows),
+        f"{prefix}_latest_run_edges_total": len(latest_edges),
+    }
+
+
 def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
     status = str(row.get("source_queue_status") or row.get("queue_status") or row.get("fetch_status") or "")
     return bool(
@@ -751,6 +797,38 @@ def _keyword_source_metrics(
         "publics_keyword_with_ko_candidates_total": len(keyword_ko_keys),
         "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor_keys),
         "publics_keyword_ko_yield_percent": int(round((len(keyword_ko_keys) / len(keyword_scanned_keys)) * 100)) if keyword_scanned_keys else 0,
+    }
+
+
+def _similar_source_metrics(
+    source_rows: list[dict[str, Any]],
+    source_candidates: list[dict[str, Any]] | None = None,
+    source_edges: list[dict[str, Any]] | None = None,
+) -> dict[str, int]:
+    source_by_key = {_source_merge_key(r): r for r in source_rows if _source_merge_key(r)}
+    similar_row_keys = {_source_merge_key(r) for r in source_rows if _is_similar_discovered_source(r) and _source_merge_key(r)}
+    candidate_key_by_id = {
+        str(r.get("source_candidate_id") or ""): _source_merge_key(r)
+        for r in (source_candidates or [])
+        if str(r.get("source_candidate_id") or "") and _source_merge_key(r)
+    }
+    similar_edge_target_keys = {
+        candidate_key_by_id.get(str(r.get("to_source_candidate_id") or ""))
+        for r in (source_edges or [])
+        if _is_similar_discovered_source(r)
+    }
+    similar_edge_target_keys = {k for k in similar_edge_target_keys if k}
+    similar_evidence_keys = similar_row_keys | similar_edge_target_keys
+    similar_scanned_keys = {k for k in similar_evidence_keys if k in source_by_key and _source_has_scan_evidence(source_by_key[k])}
+    similar_ko_keys = {k for k in similar_evidence_keys if k in source_by_key and _source_has_ko_candidate(source_by_key[k])}
+    return {
+        "publics_similar_discovered_total": len(similar_evidence_keys),
+        "publics_similar_queue_rows_total": len(similar_row_keys),
+        "publics_similar_edge_targets_total": len(similar_edge_target_keys),
+        "publics_similar_queue_missing_total": len(similar_evidence_keys - set(source_by_key)),
+        "publics_similar_scanned_with_posts_total": len(similar_scanned_keys),
+        "publics_similar_with_ko_candidates_total": len(similar_ko_keys),
+        "publics_similar_ko_yield_percent": int(round((len(similar_ko_keys) / len(similar_scanned_keys)) * 100)) if similar_scanned_keys else 0,
     }
 
 
@@ -1255,6 +1333,19 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
     keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position, source_candidates, source_edges)
     keyword_post_regex_metrics = _keyword_source_post_regex_metrics(source_rows, diagnostic_post_rows, source_candidates, source_edges)
+    similar_source_metrics = _similar_source_metrics(source_rows, source_candidates, source_edges)
+    keyword_latest_run_metrics = _latest_discovery_run_metrics(
+        source_candidates,
+        source_edges,
+        prefix="publics_keyword",
+        predicate=_is_keyword_discovered_source,
+    )
+    similar_latest_run_metrics = _latest_discovery_run_metrics(
+        source_candidates,
+        source_edges,
+        prefix="publics_similar",
+        predicate=_is_similar_discovered_source,
+    )
     strong_images_ge_066 = [
         r for r in images
         if str(r.get("image_queue_status") or "") == "actual_scored"
@@ -1325,6 +1416,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_with_ko_candidates_repair_delta_total": max(0, source_ko_candidates_count - len(source_ko_candidates)),
         **keyword_source_metrics,
         **keyword_post_regex_metrics,
+        **similar_source_metrics,
+        **keyword_latest_run_metrics,
+        **similar_latest_run_metrics,
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),

@@ -6246,7 +6246,7 @@ def candidate_memory_shortlist_row(r: dict[str, Any], rank: int) -> dict[str, An
     }
 
 
-async def discover_telegram_similar_channels(client: Any, source_rows: list[dict[str, Any]], entity_by_source: dict[str, Any], governor: TelegramRequestGovernor, run_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+async def discover_telegram_similar_channels(client: Any, source_rows: list[dict[str, Any]], entity_by_source: dict[str, Any], governor: TelegramRequestGovernor, run_id: str, status: Status | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not getenv_bool("REGION_TALK_TG_SIMILAR_ENABLED", getenv_bool("REGION_TALK_DISCOVERY_ENABLE_TELEGRAM_SIMILAR", True)):
         _REGION_TALK_TELEGRAM_RUNTIME.update({"telegram_similar_channels_status": "disabled"})
         return [], []
@@ -6418,11 +6418,11 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
             rows.append(error_row)
             write_region_talk_online_source_item(error_row, run_id=run_id, stage="telegram_similar_discovery", status="error")
     governor.recommendation_channels_added_to_frontier = len([r for r in rows if r.get("candidate_source_status") == "source_frontier"])
-    status = _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_status")
-    if status != "skipped_runtime_budget":
-        status = "ok" if rows or not errors else "error"
+    runtime_status = _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_similar_channels_status")
+    if runtime_status != "skipped_runtime_budget":
+        runtime_status = "ok" if rows or not errors else "error"
     _REGION_TALK_TELEGRAM_RUNTIME.update({
-        "telegram_similar_channels_status": status,
+        "telegram_similar_channels_status": runtime_status,
         "telegram_similar_channels_seed_count": len(seeds),
         "telegram_similar_channels_raw_count": raw_count,
         "telegram_similar_channels_unique_count": len({r.get("source_candidate_id") for r in rows if r.get("source_candidate_id")}),
@@ -6434,6 +6434,23 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
         "similar_seed_cursor_advanced": str(bool(seed_updates)).lower(),
         "similar_seed_updates": seed_updates,
     })
+    if status is not None:
+        status.event(
+            "similar_discovery_done",
+            phase="similar_discovery",
+            status="running",
+            run_id=run_id,
+            similar_discovery_status=runtime_status,
+            similar_seed_count=len(seeds),
+            similar_raw_channels=raw_count,
+            similar_unique_channels=len({r.get("source_candidate_id") for r in rows if r.get("source_candidate_id")}),
+            similar_added_to_frontier=governor.recommendation_channels_added_to_frontier,
+            similar_edges_written=len(edges),
+            similar_fetch_errors=errors,
+            similar_floodwait_count=floodwait,
+            progress_label=f"similar discovery done: unique {len({r.get('source_candidate_id') for r in rows if r.get('source_candidate_id')})}, edges {len(edges)}",
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
     return rows, edges
 
 
@@ -6641,6 +6658,23 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
             "keyword_post_hit_rows": combined_post_hits,
             "keyword_discovery_errors": errors,
         })
+        if status is not None:
+            status.event(
+                "keyword_discovery_done",
+                phase="keyword_discovery",
+                status="running",
+                run_id=run_id,
+                keyword_discovery_status=keyword_status,
+                keyword_queries_processed=processed,
+                keyword_sources_found=len(rows),
+                keyword_unique_channels=len({r.get("canonical_source_key") for r in post_hits if r.get("canonical_source_key")}),
+                keyword_raw_hits=raw_hits,
+                keyword_hit_posts_sent_to_pipeline=len(post_hits),
+                keyword_post_link_items_written=post_link_items_written,
+                keyword_errors=errors,
+                progress_label=f"keyword discovery done: sources {len(rows)}, post hits {len(post_hits)}, raw hits {raw_hits}",
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
     return rows, edges
 
 
@@ -8259,7 +8293,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             status.event("keyword_discovery_skipped_runtime_budget", phase="keyword_discovery", status="deferred", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="keyword discovery skipped: runtime budget")
         if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
             status.event("similar_discovery_started", phase="similar_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery started")
-            similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
+            similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id, status)
         else:
             similar_rows, similar_edges = [], []
             _REGION_TALK_TELEGRAM_RUNTIME["telegram_similar_channels_status"] = "skipped_runtime_budget"

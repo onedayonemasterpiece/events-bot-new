@@ -495,6 +495,19 @@ reports keyword-sourced post diagnostics:
 and regex/vector deltas. If keyword-discovered channels do not show a high KO
 yield after real scans, or regex KO hits materially exceed vector KO candidates,
 the keyword query/frontier insertion or vector prototype tuning needs review.
+CandidateReport also emits explicit business heartbeat summary events
+`keyword_discovery_done` and `similar_discovery_done`, so a run is not judged
+only by "stage started" messages. The orchestrator reports latest-run discovery
+metrics (`publics_keyword_latest_run_*`, `publics_similar_latest_run_*`) in
+addition to cumulative evidence metrics. Similar-channel discovery is not
+product-throttled just because it grows the frontier: breadth is useful, but it
+must be measured separately from KO/publication funnel conversion.
+
+Fast-check KO is a preflight prioritizer, not a terminal no-KO classifier.
+`fast_check_status=no_hit` means "the small source-local query budget did not
+find a fresh KO hit"; the source remains pending/lower-priority for normal scan.
+Only explicit local-region or spam surface filters become terminal rejections at
+this stage.
 
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and

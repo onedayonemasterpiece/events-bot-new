@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / discovery heartbeat and non-cherry-picked metrics**:
+  CandidateReport now emits explicit `keyword_discovery_done` and
+  `similar_discovery_done` business heartbeat events with per-run counts instead
+  of relying only on "stage started" logs. The orchestrator exposes
+  `publics_similar_*` and latest-run keyword/similar discovery metrics, raises
+  source-candidate/source-edge metric read caps, and keeps one bounded retry for
+  YDB queue writes so transient `RESOURCE_EXHAUSTED` does not hide discovery
+  progress. Fast-check `no_hit` remains a lower-priority pending signal, not a
+  terminal no-KO rejection.
 - **Region Talk Channel / strict image-queue product gate**:
   CandidateReport now treats `candidate_memory_item` as an audit/history layer
   and only writes `image_queue_item` rows for product-eligible posts: KO-only
