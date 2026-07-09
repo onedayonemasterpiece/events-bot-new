@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / strict image-queue product gate**:
+  CandidateReport now treats `candidate_memory_item` as an audit/history layer
+  and only writes `image_queue_item` rows for product-eligible posts: KO-only
+  main-subject text, `vector_accept_candidate`, fused E5+BGE when required,
+  nonlocal/nonofficial/nonpromo source, no multi-region evidence, no ad/promo,
+  and durable media evidence. Candidate-memory compact rows now preserve
+  media/source fields and image handoff can recover `has_media`/`media_count`/
+  `primary_media_path` from `processed_post_item` before enqueueing. Image queue
+  metrics now include explicit blocker counters for local sources, spam,
+  official/promo sources, post ads, missing vector accept, missing BGE fusion
+  and missing media.
 - **Region Talk Channel / hard cached-entity Telethon mode + bounded YDB handoff**:
   orchestrated CandidateReport runs now set `REGION_TALK_TG_CACHED_ENTITY_ONLY=1`
   with a one-resolve exact-post warmup lane

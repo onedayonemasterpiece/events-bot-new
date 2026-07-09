@@ -1630,6 +1630,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "lease_run_id", "lease_at",
     "last_image_diag_run_id", "last_image_diag_stage", "last_image_diag_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
+    "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_surface_filter_reason", "monitoring_exclusion_reason",
     "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
     "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
     "is_ad_or_promo", "current_stage", "current_lifecycle_status", "vector_gate_status",
@@ -1640,6 +1642,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "model_disagreement_score", "image_width", "image_height",
     "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
+    "has_media", "media_count", "primary_media_path",
+    "image_product_gate_status", "image_product_gate_reason",
     "images_scored_actual_count", "next_action",
 ]
 POST_STATE_FIELDS = [
@@ -1658,6 +1662,8 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
+    "platform_post_key", "source_url", "source_scope", "source_geo_class", "source_topic_class",
+    "source_quick_class", "source_surface_filter_reason", "monitoring_exclusion_reason",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
     "publication_story_score", "nonlocal_value_score", "manual_decision", "last_seen_run_id",
     "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
@@ -1667,8 +1673,9 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "first_seen_run_id", "seen_run_count",
     "short_summary", "why_selected", "final_verifier_status", "final_verifier_decision",
     "final_verifier_reason", "final_verifier_model", "llm_gate_status", "llm_decision",
+    "has_media", "media_count", "primary_media_path", "image_status",
     "image_model_input_type", "image_queue_status", "overall_media_score", "postcardness_score",
-    "aesthetic_score", "image_publication_ready",
+    "aesthetic_score", "image_publication_ready", "image_reviewable",
 ]
 PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
@@ -1954,6 +1961,15 @@ def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "ydb_state_mode", "vk_wall_probe_status", "image_queue_total", "image_queue_pruned_non_region_previous",
         "build_report_required", "live_ydb_source_of_truth",
         "image_queue_rejected_non_region_inputs", "image_queue_text_region_confirmed_total",
+        "image_queue_product_eligible_total",
+        "image_queue_blocked_local_source_before_image_total",
+        "image_queue_blocked_spam_source_before_image_total",
+        "image_queue_blocked_official_or_promo_source_before_image_total",
+        "image_queue_blocked_post_ad_or_promo_before_image_total",
+        "image_queue_blocked_not_vector_accept_before_image_total",
+        "image_queue_blocked_missing_fusion_before_image_total",
+        "image_queue_blocked_no_media_before_image_total",
+        "image_queue_product_block_reasons_json",
         "source_rows", "source_rows_done", "posts_by_source", "review_queue_count",
         "final_verifier_queue_count", "final_verifier_deferred_until_image_scoring",
         "final_verifier_waiting_for_image_scoring", "llm_calls", "blocking_wait",
@@ -4607,7 +4623,8 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             **prev,
             "candidate_memory_id": mid, "post_id": pid, "post_url": row.get("post_url", prev.get("post_url", "")),
             "platform_post_key": row.get("platform_post_key", prev.get("platform_post_key", "")), "source_id": row.get("source_id", prev.get("source_id", "")),
-            "source_title": row.get("source_title", prev.get("source_title", "")), "post_date": row.get("post_date", prev.get("post_date", "")),
+            "source_title": row.get("source_title", prev.get("source_title", "")), "source_url": row.get("source_url", prev.get("source_url", "")),
+            "post_date": row.get("post_date", prev.get("post_date", "")),
             "first_seen_run_id": prev.get("first_seen_run_id") or row.get("first_seen_run_id") or run_id,
             "first_candidate_run_id": prev.get("first_candidate_run_id") or run_id,
             "last_seen_run_id": run_id, "last_refetched_run_id": run_id, "not_refetched_this_run": "false",
@@ -4629,12 +4646,18 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "vector_content_type": row.get("vector_content_type", prev.get("vector_content_type", "")),
             "source_geo_class": row.get("source_geo_class", prev.get("source_geo_class", "")),
             "source_topic_class": row.get("source_topic_class", prev.get("source_topic_class", "")),
+            "source_scope": row.get("source_scope", prev.get("source_scope", "")),
+            "source_quick_class": row.get("source_quick_class", prev.get("source_quick_class", "")),
+            "source_surface_filter_reason": row.get("source_surface_filter_reason", prev.get("source_surface_filter_reason", "")),
+            "monitoring_exclusion_reason": row.get("monitoring_exclusion_reason", prev.get("monitoring_exclusion_reason", "")),
             "ko_mention_ratio_recent": row.get("ko_mention_ratio_recent", prev.get("ko_mention_ratio_recent", "")),
             "travel_blogger_score": row.get("travel_blogger_score", prev.get("travel_blogger_score", "")),
             "personal_voice_score": row.get("personal_voice_score", prev.get("personal_voice_score", "")),
             "nonlocal_value_score": row.get("nonlocal_value_score", prev.get("nonlocal_value_score", "")),
             "source_priority_reason": row.get("source_priority_reason", prev.get("source_priority_reason", "")),
             "text_bucket": row.get("text_bucket", ""), "image_bucket": row.get("image_bucket", ""), "image_status": row.get("image_status", ""),
+            "has_media": row.get("has_media", prev.get("has_media", "")), "media_count": row.get("media_count", prev.get("media_count", "")),
+            "primary_media_path": row.get("primary_media_path", prev.get("primary_media_path", "")),
             "image_model_input_type": row.get("image_model_input_type", ""), "image_model_type": row.get("image_model_type", ""),
             "image_publication_ready": row.get("image_publication_ready", "false"), "image_reviewable": row.get("image_reviewable", "false"),
             "visual_decision": row.get("visual_decision", ""),
@@ -5499,6 +5522,85 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
     return sorted(mandatory_rows + optional_rows[: max_rows - len(mandatory_rows)], key=lambda r: (source_queue_priority_bucket(r), order(r)))
 
 
+IMAGE_QUEUE_BLOCKED_SOURCE_TOPICS = {
+    "local_news", "federal_media", "ads_tours", "local_region_source_surface",
+    "spam_or_commercial_hashtag_source", "official", "government", "event_announcement",
+    "afisha", "events", "news", "promo",
+}
+IMAGE_QUEUE_OFFICIAL_PROMO_SOURCE_PATTERNS = [
+    r"правительств", r"администрац", r"министерств", r"минтур", r"мчс", r"мвд",
+    r"губернатор", r"официальн", r"госуслуг", r"афиша", r"анонс", r"мероприят",
+    r"билет", r"промокод", r"скидк", r"яндекс\s+путешеств", r"деш[её]в(?:ые|ые)\s+авиа",
+    r"авиабилет", r"инвест", r"недвижим", r"ремонт", r"каршеринг", r"vpn",
+]
+
+
+def image_queue_source_disqualification_reason(row: dict[str, Any]) -> str:
+    """Return a product-gate source rejection reason before image analysis.
+
+    Candidate memory is an audit/history layer; image diagnostics is a
+    publication funnel.  The publication funnel must not spend image/runtime
+    budget on local Kaliningrad publics, official/news/announcement surfaces or
+    obvious commercial/travel-deal sources even if a post itself mentions KO.
+    """
+    terminal = source_local_region_terminal_fields(row)
+    terminal_status = str(terminal.get("source_queue_status") or row.get("source_queue_status") or row.get("fetch_status") or "")
+    if terminal_status == LOCAL_REGION_SOURCE_STATUS:
+        return "local_kaliningrad_source_for_separate_monitoring"
+    if terminal_status == SPAM_SOURCE_STATUS:
+        return "spam_or_commercial_hashtag_source"
+    if str(row.get("source_scope") or "") == "local_region" or str(row.get("source_geo_class") or "") == "kaliningrad_local":
+        return "local_kaliningrad_source_for_separate_monitoring"
+    topic = str(row.get("source_topic_class") or "")
+    if topic in IMAGE_QUEUE_BLOCKED_SOURCE_TOPICS:
+        return "source_topic_not_publication_target:" + topic
+    quick = str(row.get("source_quick_class") or "")
+    if quick in {"local_region_source", "spam_source_reject"}:
+        return "source_quick_class_not_publication_target:" + quick
+    surface = " ".join([
+        str(row.get("source_title") or ""),
+        str(row.get("source_url") or ""),
+        str(row.get("handle") or ""),
+        str(row.get("source_surface_filter_reason") or ""),
+        str(row.get("monitoring_exclusion_reason") or ""),
+    ]).lower()
+    official_hits = _regex_hits(IMAGE_QUEUE_OFFICIAL_PROMO_SOURCE_PATTERNS, surface)
+    if official_hits:
+        return "official_or_promo_source_surface:" + ",".join(official_hits[:3])
+    return ""
+
+
+def image_queue_product_gate_reason(row: dict[str, Any]) -> str:
+    """Strict publication-funnel text/source gate for image_queue_item rows."""
+    if not str(row.get("post_url") or row.get("post_id") or "").strip():
+        return "missing_post_identity"
+    source_reason = image_queue_source_disqualification_reason(row)
+    if source_reason:
+        return source_reason
+    if str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}:
+        return "post_ad_or_promo"
+    vector_status = str(row.get("vector_gate_status") or row.get("memory_vector_recheck_status") or "")
+    if vector_status != "vector_accept_candidate":
+        if vector_status.startswith("vector_reject"):
+            return vector_status
+        if vector_status.startswith("vector_defer"):
+            return vector_status
+        return "vector_accept_candidate_required"
+    if require_external_bge_m3_for_image_queue() and str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+        return "fused_e5_bge_m3_required"
+    if str(row.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"}:
+        return "not_confirmed_kaliningrad_oblast_scope"
+    mention_role = str(row.get("kaliningrad_mention_role") or "main_subject")
+    if mention_role not in {"", "main_subject", "unclear"}:
+        return "kaliningrad_not_main_subject:" + mention_role
+    if str(row.get("external_geo_mentions") or row.get("mentioned_external_regions") or row.get("mentioned_external_countries") or "").strip():
+        return "multi_region_or_external_geo_mentions"
+    stage = str(row.get("current_stage") or row.get("current_lifecycle_status") or "")
+    if stage and stage not in CANDIDATE_MEMORY_STAGES and stage not in ACTIVE_CANDIDATE_MEMORY_STATUSES and stage not in {"actual_scored", "needs_actual_image_fetch"}:
+        return "inactive_candidate_stage:" + stage
+    return ""
+
+
 def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
     """Only text-confirmed Kaliningrad Oblast candidate posts may enter image analysis.
 
@@ -5506,27 +5608,7 @@ def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
     merely image/media rows, old queue carry-over, ads, other-region posts, or
     vector rejects must not be sent to image diagnostics.
     """
-    if str(row.get("is_ad_or_promo") or "").lower() in {"true", "1", "yes"}:
-        return False
-    vector_status = str(row.get("vector_gate_status") or row.get("memory_vector_recheck_status") or "")
-    if vector_status.startswith("vector_reject"):
-        return False
-    if vector_status.startswith("vector_defer"):
-        return False
-    if require_external_bge_m3_for_image_queue() and str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
-        return False
-    if str(row.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"}:
-        return False
-    mention_role = str(row.get("kaliningrad_mention_role") or "main_subject")
-    if mention_role not in {"", "main_subject", "unclear"}:
-        return False
-    if str(row.get("external_geo_mentions") or row.get("mentioned_external_regions") or row.get("mentioned_external_countries") or "").strip():
-        # Multi-region/travel roundups and other-region official posts are text failures for image analysis.
-        return False
-    stage = str(row.get("current_stage") or row.get("current_lifecycle_status") or "")
-    if stage and stage not in CANDIDATE_MEMORY_STAGES and stage not in ACTIVE_CANDIDATE_MEMORY_STATUSES and stage not in {"actual_scored", "needs_actual_image_fetch"}:
-        return False
-    return True
+    return not image_queue_product_gate_reason(row)
 
 
 def build_image_candidate_queue(
@@ -5542,29 +5624,118 @@ def build_image_candidate_queue(
     prev_cursor = int(previous_state.get("image_candidate_queue_cursor_position") or 0)
     image_queue_pruned_non_region_previous = 0
     image_queue_rejected_non_region_inputs = 0
+    image_queue_product_block_reasons: dict[str, int] = {}
+
+    def bump_block(reason: str) -> None:
+        key = (reason or "unknown").split(":", 1)[0]
+        image_queue_product_block_reasons[key] = image_queue_product_block_reasons.get(key, 0) + 1
+
+    def rows_from_state_keys(*keys: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for key in keys:
+            value = previous_state.get(key)
+            if isinstance(value, dict):
+                out.extend([v for v in value.values() if isinstance(v, dict)])
+            elif isinstance(value, list):
+                out.extend([v for v in value if isinstance(v, dict)])
+        return out
+
+    previous_post_rows = rows_from_state_keys("processed_posts", "posts", "post_live", "post_live_posts")
+    previous_post_by_url = {str(r.get("post_url") or ""): r for r in previous_post_rows if str(r.get("post_url") or "")}
+    previous_post_by_id = {str(r.get("post_id") or ""): r for r in previous_post_rows if str(r.get("post_id") or "")}
+    previous_source_rows = rows_from_state_keys("unified_source_queue", "sources", "source_frontier_unique", "source_candidates", "discovered_sources")
+    previous_source_by_id = {str(r.get("source_id") or ""): r for r in previous_source_rows if str(r.get("source_id") or "")}
+    previous_source_by_url = {
+        str(r.get("source_url") or r.get("canonical_url") or r.get("normalized_url") or ""): r
+        for r in previous_source_rows
+        if str(r.get("source_url") or r.get("canonical_url") or r.get("normalized_url") or "")
+    }
+
+    def enrich_image_queue_input(row: dict[str, Any]) -> dict[str, Any]:
+        post_url = str(row.get("post_url") or "")
+        post_id = str(row.get("post_id") or "")
+        merged = dict(row)
+        prev_post = previous_post_by_url.get(post_url) or previous_post_by_id.get(post_id) or {}
+        for field in [
+            "has_media", "media_count", "primary_media_path", "image_status",
+            "image_model_input_type", "image_url_or_local_path", "source_url",
+            "platform_post_key", "source_id", "source_title", "post_date",
+        ]:
+            if field not in merged or merged.get(field) in ("", None):
+                if prev_post.get(field) not in ("", None):
+                    merged[field] = prev_post.get(field)
+        source_id = str(merged.get("source_id") or "")
+        source_url = str(merged.get("source_url") or "")
+        source = previous_source_by_id.get(source_id) or previous_source_by_url.get(source_url) or {}
+        for field in [
+            "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+            "source_surface_filter_reason", "monitoring_exclusion_reason", "handle",
+            "source_url", "canonical_url",
+        ]:
+            if field not in merged or merged.get(field) in ("", None):
+                if source.get(field) not in ("", None):
+                    merged[field] = source.get(field)
+        return merged
+
+    def has_image_media(row: dict[str, Any], media: dict[str, Any]) -> bool:
+        if _rt_bool(row.get("has_media")) or _rt_bool(media.get("has_media")):
+            return True
+        for value in (row.get("media_count"), media.get("media_count")):
+            try:
+                if int(float(value or 0)) > 0:
+                    return True
+            except Exception:
+                pass
+        if str(row.get("primary_media_path") or media.get("primary_media_path") or media.get("image_url_or_local_path") or "").strip():
+            return True
+        if str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") in {"actual_image", "metadata_only"}:
+            return True
+        return False
+
+    def candidate_memory_should_try_image(row: dict[str, Any]) -> bool:
+        stage = str(row.get("current_stage") or "")
+        lifecycle = str(row.get("current_lifecycle_status") or "")
+        image_status = str(row.get("image_status") or row.get("image_queue_status") or "")
+        return (
+            stage in {"image_fetch_retry_needed", "needs_image_review", "semantic_candidate", "favorite"}
+            or lifecycle in ACTIVE_CANDIDATE_MEMORY_STATUSES
+            or image_status == "needs_actual_image_fetch"
+        )
+
     for row in sorted(previous_queue_rows, key=lambda r: int(r.get("image_queue_order") or 999999999)):
+        row = enrich_image_queue_input(row)
         key = str(row.get("post_url") or row.get("post_id") or row.get("image_queue_id") or "")
         if not key:
             continue
-        if not image_queue_text_region_confirmed(row):
+        block_reason = image_queue_product_gate_reason(row)
+        if block_reason:
             image_queue_pruned_non_region_previous += 1
+            bump_block(block_reason)
             continue
         entries[key] = dict(row)
     media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
 
     def add_or_update(row: dict[str, Any], *, added_from: str) -> None:
         nonlocal image_queue_rejected_non_region_inputs
+        row = enrich_image_queue_input(row)
         post_url = str(row.get("post_url") or "")
         key = post_url or str(row.get("post_id") or "")
         if not key:
             return
-        if added_from != "media_scoring" and not image_queue_text_region_confirmed(row):
+        block_reason = image_queue_product_gate_reason(row)
+        if added_from != "media_scoring" and block_reason:
             image_queue_rejected_non_region_inputs += 1
+            bump_block(block_reason)
             return
-        if added_from == "media_scoring" and key not in entries and not image_queue_text_region_confirmed(row):
+        if added_from == "media_scoring" and key not in entries and block_reason:
             image_queue_rejected_non_region_inputs += 1
+            bump_block(block_reason)
             return
         media = media_by_url.get(post_url) or row
+        if added_from != "media_scoring" and not has_image_media(row, media):
+            image_queue_rejected_non_region_inputs += 1
+            bump_block("no_media_for_image_analysis")
+            return
         actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
         metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
         if key not in entries:
@@ -5592,6 +5763,12 @@ def build_image_candidate_queue(
             "source_id": row.get("source_id", entries[key].get("source_id", "")),
             "source_title": row.get("source_title", entries[key].get("source_title", "")),
             "source_url": row.get("source_url", entries[key].get("source_url", "")),
+            "source_scope": row.get("source_scope", entries[key].get("source_scope", "")),
+            "source_geo_class": row.get("source_geo_class", entries[key].get("source_geo_class", "")),
+            "source_topic_class": row.get("source_topic_class", entries[key].get("source_topic_class", "")),
+            "source_quick_class": row.get("source_quick_class", entries[key].get("source_quick_class", "")),
+            "source_surface_filter_reason": row.get("source_surface_filter_reason", entries[key].get("source_surface_filter_reason", "")),
+            "monitoring_exclusion_reason": row.get("monitoring_exclusion_reason", entries[key].get("monitoring_exclusion_reason", "")),
             "post_date": row.get("post_date", entries[key].get("post_date", "")),
             "kaliningrad_oblast_only_scope": row.get("kaliningrad_oblast_only_scope", entries[key].get("kaliningrad_oblast_only_scope", "")),
             "kaliningrad_mention_role": row.get("kaliningrad_mention_role", entries[key].get("kaliningrad_mention_role", "")),
@@ -5617,6 +5794,11 @@ def build_image_candidate_queue(
             "image_model_input_type": media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
             "image_model_type": media.get("image_model_type", row.get("image_model_type", entries[key].get("image_model_type", ""))),
             "image_url_or_local_path": media.get("image_url_or_local_path", row.get("primary_media_path", "")),
+            "has_media": str(has_image_media(row, media)).lower(),
+            "media_count": row.get("media_count", media.get("media_count", entries[key].get("media_count", ""))),
+            "primary_media_path": row.get("primary_media_path", media.get("primary_media_path", entries[key].get("primary_media_path", ""))),
+            "image_product_gate_status": "accepted_for_image_analysis",
+            "image_product_gate_reason": "",
             "image_queue_status": status,
             "status_color_hint": color,
             "row_fill_color": color,
@@ -5633,7 +5815,7 @@ def build_image_candidate_queue(
         if row.get("has_media"):
             add_or_update(row, added_from="current_run_text_gate")
     for row in candidate_memory_rows:
-        if row.get("post_url") and (row.get("current_lifecycle_status") in ACTIVE_CANDIDATE_MEMORY_STATUSES or row.get("image_status") == "needs_actual_image_fetch"):
+        if row.get("post_url") and candidate_memory_should_try_image(row):
             add_or_update(row, added_from="candidate_memory")
     for media in media_rows:
         if media.get("post_url"):
@@ -5667,6 +5849,18 @@ def build_image_candidate_queue(
         "image_queue_pruned_non_region_previous": image_queue_pruned_non_region_previous,
         "image_queue_rejected_non_region_inputs": image_queue_rejected_non_region_inputs,
         "image_queue_text_region_confirmed_total": sum(1 for r in display if image_queue_text_region_confirmed(r)),
+        "image_queue_product_eligible_total": sum(1 for r in display if not image_queue_product_gate_reason(r)),
+        "image_queue_blocked_local_source_before_image_total": image_queue_product_block_reasons.get("local_kaliningrad_source_for_separate_monitoring", 0),
+        "image_queue_blocked_spam_source_before_image_total": image_queue_product_block_reasons.get("spam_or_commercial_hashtag_source", 0),
+        "image_queue_blocked_official_or_promo_source_before_image_total": image_queue_product_block_reasons.get("official_or_promo_source_surface", 0),
+        "image_queue_blocked_post_ad_or_promo_before_image_total": image_queue_product_block_reasons.get("post_ad_or_promo", 0),
+        "image_queue_blocked_not_vector_accept_before_image_total": sum(
+            count for reason, count in image_queue_product_block_reasons.items()
+            if reason in {"vector_accept_candidate_required", "vector_defer_wait_bge_m3"} or reason.startswith("vector_reject")
+        ),
+        "image_queue_blocked_missing_fusion_before_image_total": image_queue_product_block_reasons.get("fused_e5_bge_m3_required", 0),
+        "image_queue_blocked_no_media_before_image_total": image_queue_product_block_reasons.get("no_media_for_image_analysis", 0),
+        "image_queue_product_block_reasons_json": json.dumps(image_queue_product_block_reasons, ensure_ascii=False, sort_keys=True),
     }
     return display, top, metrics
 
@@ -10603,9 +10797,20 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "needs_actual_fetch_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "needs_actual_image_fetch"),
         "in_progress_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "image_analysis_in_progress"),
         "actual_scored_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "actual_scored"),
+        "product_eligible_total": image_queue_metrics.get("image_queue_product_eligible_total", 0),
+        "blocked_local_source_before_image_total": image_queue_metrics.get("image_queue_blocked_local_source_before_image_total", 0),
+        "blocked_official_or_promo_source_before_image_total": image_queue_metrics.get("image_queue_blocked_official_or_promo_source_before_image_total", 0),
+        "blocked_no_media_before_image_total": image_queue_metrics.get("image_queue_blocked_no_media_before_image_total", 0),
         "progress_label": f"image queue cursor {image_queue_metrics.get('image_queue_cursor_position', 0)}/{len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
-    report_event("image_queue_build_done", phase="queue_assembly", status="running", image_queue_total=len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), image_queue_selected_next_batch=image_queue_metrics.get("image_queue_selected_next_batch"), image_queue_actual_scored_total=image_queue_metrics.get("image_queue_actual_scored_total"), online_image_queue_items_written=online_image_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event(
+        "image_queue_build_done",
+        phase="queue_assembly",
+        status="running",
+        online_image_queue_items_written=online_image_queue_items_written,
+        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        **image_queue_metrics,
+    )
     previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
     previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
     report_event("publication_queue_build_started", phase="queue_assembly", status="running", candidate_memory_product_rows=len(candidate_memory_product_rows), image_queue_total=len(image_candidate_queue_sheet), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))

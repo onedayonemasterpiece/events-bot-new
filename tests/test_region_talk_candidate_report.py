@@ -2659,9 +2659,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 f"img{i}": {
                     "image_queue_id": f"img{i}", "image_queue_order": i,
                     "post_url": f"https://t.me/visual/{i}", "source_url": "https://t.me/visual",
+                    "source_title": "Visual Travel",
                     "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject",
                     "current_stage": "semantic_candidate", "image_queue_status": "actual_scored",
                     "image_model_input_type": "actual_image", "overall_media_score": score,
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
                 }
                 for i, score in enumerate([0.2, 0.3, 0.4], start=1)
             },
@@ -2991,7 +2994,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [
-            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "S", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "candidate_score": 0.5}
+            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "Travel notes", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "candidate_score": 0.5, "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"}
             for i in range(35)
         ]
         media_rows = [
@@ -3017,12 +3020,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         mod = load_module()
         previous = {"image_candidate_queue": {
             "bad_prev": {"image_queue_id": "bad_prev", "image_queue_order": 1, "post_url": "https://t.me/bad/1", "source_title": "МЧС Краснодарского края", "kaliningrad_oblast_only_scope": False, "image_queue_status": "needs_actual_image_fetch"},
-            "good_prev": {"image_queue_id": "good_prev", "image_queue_order": 2, "post_url": "https://t.me/good/1", "source_title": "KO", "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "image_queue_status": "needs_actual_image_fetch"},
+            "good_prev": {"image_queue_id": "good_prev", "image_queue_order": 2, "post_url": "https://t.me/good/1", "source_title": "Travel", "has_media": True, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "image_queue_status": "needs_actual_image_fetch", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
         }}
         posts = [
             {"post_id": "bad_current", "post_url": "https://t.me/buryatia/1", "source_title": "Минтуризм Бурятии", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": False, "current_stage": "dropped_text_gate"},
-            {"post_id": "good_current", "post_url": "https://t.me/ko/1", "source_title": "KO", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate"},
-            {"post_id": "external", "post_url": "https://t.me/roundup/1", "source_title": "Roundup", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "one_item", "external_geo_mentions": "Бурятия", "current_stage": "semantic_candidate"},
+            {"post_id": "good_current", "post_url": "https://t.me/ko/1", "source_title": "Travel", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
+            {"post_id": "external", "post_url": "https://t.me/roundup/1", "source_title": "Roundup", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "one_item", "external_geo_mentions": "Бурятия", "current_stage": "semantic_candidate", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
         ]
         media_rows = [
             {"post_url": "https://t.me/mediaonly/1", "image_model_input_type": "actual_image", "overall_media_score": 0.9},
@@ -3039,6 +3042,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["image_queue_pruned_non_region_previous"], 1)
         self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 3)
         self.assertEqual(metrics["image_queue_text_region_confirmed_total"], len(queue))
+
+    def test_candidate_memory_image_queue_uses_previous_processed_media_and_blocks_local_sources(self) -> None:
+        mod = load_module()
+        previous = {
+            "processed_posts": {
+                "p1": {"post_id": "p1", "post_url": "https://t.me/travel/1", "has_media": True, "media_count": 1, "primary_media_path": "/tmp/travel.jpg"},
+                "p2": {"post_id": "p2", "post_url": "https://t.me/local/1", "has_media": True, "media_count": 1, "primary_media_path": "/tmp/local.jpg"},
+            }
+        }
+        base = {
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "image_fetch_retry_needed",
+            "current_lifecycle_status": "image_fetch_retry_needed",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "is_ad_or_promo": False,
+        }
+        memory_rows = [
+            {**base, "candidate_memory_id": "cm1", "post_id": "p1", "post_url": "https://t.me/travel/1", "source_title": "Travel blog"},
+            {**base, "candidate_memory_id": "cm2", "post_id": "p2", "post_url": "https://t.me/local/1", "source_title": "Полюбить Калининград"},
+        ]
+        queue, _top, metrics = mod.build_image_candidate_queue(previous, [], memory_rows, [], "run-img", "2026-07-07T00:00:00+00:00")
+        urls = {r.get("post_url") for r in queue}
+        self.assertIn("https://t.me/travel/1", urls)
+        self.assertNotIn("https://t.me/local/1", urls)
+        row = next(r for r in queue if r.get("post_url") == "https://t.me/travel/1")
+        self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["has_media"], "true")
+        self.assertEqual(metrics["image_queue_product_eligible_total"], 1)
+        self.assertEqual(metrics["image_queue_blocked_local_source_before_image_total"], 1)
 
     def test_candidate_found_jsonl_uses_stage_events_schema(self) -> None:
         mod = load_module()

@@ -231,6 +231,32 @@ Important invariants:
 - The orchestrated source-selection profile is YDB-queue-only when durable queue
   rows are available. Static CSV seeds are fallback/bootstrap data, not a source
   of repeated scans once the live queue exists.
+- `candidate_memory_item` is an audit/history layer, not the image-publication
+  queue itself. CandidateReport may keep rows there for BGE wait, weak media,
+  local-source diagnostics or later refetch, but `image_queue_item` is now a
+  strict product handoff:
+  - `vector_gate_status=vector_accept_candidate`;
+  - `text_vector_fusion_status=fused_e5_bge_m3` when external BGE is required;
+  - `kaliningrad_oblast_only_scope=true` and Kaliningrad/KO is the main subject;
+  - no external/multi-region geo evidence;
+  - post is not ad/promo;
+  - source is not Kaliningrad-local, official/government/news/afisha,
+    travel-deal/promo or hashtag-spam/commercial bait;
+  - actual media evidence is present. Candidate-memory rows can recover media
+    evidence from durable `processed_post_item`/post-live rows before deciding
+    whether to enqueue, so compact candidate-memory records no longer lose
+    `has_media`, `media_count`, `primary_media_path` or `image_status`.
+  The image handoff emits explicit blocker counters
+  (`image_queue_blocked_local_source_before_image_total`,
+  `image_queue_blocked_official_or_promo_source_before_image_total`,
+  `image_queue_blocked_post_ad_or_promo_before_image_total`,
+  `image_queue_blocked_not_vector_accept_before_image_total`,
+  `image_queue_blocked_missing_fusion_before_image_total`,
+  `image_queue_blocked_no_media_before_image_total`) next to
+  `image_queue_product_eligible_total`. These counters are required for
+  reflection: if image/publication metrics do not move, the run must show
+  whether the blocker is source quality, vector/BGE lag, missing media, or true
+  lack of eligible posts.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
