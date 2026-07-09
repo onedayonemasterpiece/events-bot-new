@@ -213,6 +213,12 @@ Debug-run budget after the 2026-07-09 long-run incident:
   similar-channel results or global keyword search chat metadata; public XLSX
   rows may expose only `private_state_key`. If a source has no cached entity,
   username resolve is a scarce operation and must be budgeted separately.
+- Orchestrated CandidateReport cycles run in `REGION_TALK_TG_CACHED_ENTITY_ONLY=1`
+  with `REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=0`: exact post-link fetch
+  and fast-check skip cache-miss rows as `retry_wait_entity_cache` /
+  `skipped_cached_entity_only_no_private_entity` instead of calling
+  `client.get_entity(handle)`. Any non-zero network resolve count in this mode is
+  a run-contract violation.
 - A `get_entity` FloodWait from exact post-link fetch is treated as a username
   resolve cooldown for source-local fast-check/history too. Cached
   `InputPeerChannel(channel_id, access_hash)` reads are still allowed during
@@ -319,7 +325,7 @@ Telegram discovery must be human-like in the P0 sense: conservative, cache-first
 - Broken/private/forbidden source does not fail the run.
 - Do not use role-scoped Telegram auth bundles outside their intended context.
 - Do not borrow E2E/human-session auth for Kaggle discovery unless the operator explicitly overrides the session plan for that run.
-- Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `8`). During a resolve cooldown, cache hits must be attempted before the cooldown gate because they do not call `ResolveUsernameRequest`.
+- Resolve Telegram entities through the shared request governor/cache first; network username resolves are capped (`REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN`, default `8`, orchestrator live-YDB cycles set `0`). During a resolve cooldown, cache hits must be attempted before the cooldown gate because they do not call `ResolveUsernameRequest`; in cached-entity-only mode cache misses are deferred rather than resolved.
 - Telethon network calls are paced by default (`REGION_TALK_TG_HUMANLIKE_PACING_ENABLED=1`): username resolves, exact post-link refetches from `post_link_queue_item`, global keyword/hashtag search and similar-channel recommendation calls sleep before the call, history queries/media downloads/source-to-source scans use bounded pauses, and the call is deferred instead of skipping the pause when the runtime reserve is nearly exhausted. Public `t.me/s` fallback reads do not consume the Telethon user session and are not part of this pacing; they are disabled for orchestrated live-YDB cycles and may only be used as an explicit diagnostic fallback.
 - Cap history sources and media downloads (`REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN`, default `40`; `REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN`, default `60`).
 - In short live-YDB handoff runs, fetched posts are sorted before vector scoring by Kaliningrad place evidence/media presence (`REGION_TALK_PRIORITIZE_REGION_TEXT_BEFORE_VECTOR=1`) so the limited embedding budget is spent on likely region posts first.

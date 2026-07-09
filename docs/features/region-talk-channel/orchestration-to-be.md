@@ -400,12 +400,15 @@ the keyword query/frontier insertion or vector prototype tuning needs review.
 
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
-the bounded payload keeps changed/current-run rows, keyword-evidence rows, the
-forward cursor neighbourhood and pending/retry backlog. This keeps the
-30-minute run contract realistic without hiding queue size: `source_queue_total`
-stays the full queue count, while `source_queue_handoff_rows` reports how many
-rows were actually written to `source_queue_item` / `source_status_item` in the
-current handoff.
+the orchestrator currently sets it to 80 with
+`REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL=0`. The bounded payload
+keeps changed/current-run rows, keyword-evidence rows, the forward cursor
+neighbourhood and pending/retry backlog, but a keyword reorder must not force a
+full queue rewrite. This keeps the 30-minute run contract realistic without
+hiding queue size: `source_queue_total` stays the full queue count, while
+`source_queue_handoff_rows` reports how many rows were actually written to
+`source_queue_item`; the duplicate `source_status_item` mirror is off by default
+in orchestrated runs.
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

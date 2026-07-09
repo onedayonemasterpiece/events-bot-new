@@ -2142,6 +2142,10 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
                 items.append((kind + ":" + key.replace(kind + ":", ""), kind, payload))
         if not items:
             return 0
+        max_items = getenv_int("REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS", 0)
+        if max_items > 0 and len(items) > max_items:
+            print(f"[region-talk] online_queue_ydb_limited kind={kind} rows={len(items)} limit={max_items}", flush=True)
+            items = items[:max_items]
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
         timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
         retry_settings = ydb_retry_settings(
@@ -2443,6 +2447,8 @@ def write_region_talk_live_cursor(name: str, payload: dict[str, Any]) -> None:
             "processed_total", "retry_total", "needs_actual_fetch_total",
             "in_progress_total", "actual_scored_total", "current_source_url",
             "current_source_title", "current_post_url", "current_image_queue_id",
+            "telegram_floodwait_method", "telegram_floodwait_seconds",
+            "telegram_cooldown_until",
         ], max_len=700)
         item.setdefault("queue_name", safe_name)
         run_id = str(item.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
@@ -2909,6 +2915,20 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                             elif short == "image":
                                 data0["image_candidate_queue_cursor_position"] = item.get("cursor_position", data0.get("image_candidate_queue_cursor_position", 0))
                                 data0["image_candidate_queue_cursor_key"] = item.get("cursor_key", data0.get("image_candidate_queue_cursor_key", ""))
+                            elif short == "telegram_cooldown":
+                                method = str(item.get("telegram_floodwait_method") or "").strip()
+                                until = str(item.get("telegram_cooldown_until") or "").strip()
+                                if method and until and parse_iso_datetime(until):
+                                    cooldowns = data0.get("telegram_cooldowns") if isinstance(data0.get("telegram_cooldowns"), dict) else {}
+                                    cooldowns = dict(cooldowns)
+                                    seconds = int(float(item.get("telegram_floodwait_seconds") or 0))
+                                    rec = {"cooldown_until": until, "last_error_seconds": seconds, "last_error_run_id": item.get("run_id", "")}
+                                    cooldowns["method:" + method] = rec
+                                    if method in {"ResolveUsernameRequest", "get_entity.exact_post_link"}:
+                                        cooldowns["method:ResolveUsernameRequest"] = rec
+                                        cooldowns["method:get_entity.exact_post_link"] = rec
+                                    data0["telegram_cooldowns"] = cooldowns
+                                    data0["telegram_cooldown_loaded_from_queue_cursor"] = "true"
                         data0["queue_cursors"] = cursors
                         data0["ydb_queue_cursor_items_loaded"] = len(queue_cursors)
                 return data0
@@ -3298,6 +3318,7 @@ class TelegramRequestGovernor:
         self.humanlike_pacing_enabled = getenv_bool("REGION_TALK_TG_HUMANLIKE_PACING_ENABLED", True)
         self.humanlike_sleep_total_seconds = 0.0
         self.humanlike_sleep_count = 0
+        self.cached_entity_only = telegram_cached_entity_only_enabled()
 
     def cache_key(self, handle_or_url: str) -> str:
         raw = canonical_handle(str(handle_or_url or "").strip()).lstrip("@").lower()
@@ -3407,6 +3428,21 @@ class TelegramRequestGovernor:
         if canonical_url:
             self.cooldowns[f"source:{canonical_url}"] = {"cooldown_until": cooldown_until, "reason": "telegram_floodwait", "last_error_seconds": seconds}
         self.log(method_name, "entity_resolve_expensive", source_id, canonical_url, "error_floodwait", ok=False, floodwait_seconds=seconds, cooldown_until=cooldown_until)
+        try:
+            write_region_talk_live_cursor("telegram_cooldown", {
+                "run_id": self.run_id,
+                "queue_name": "telegram_cooldown",
+                "phase": "telegram_fetch",
+                "status": "deferred",
+                "progress_label": f"Telegram FloodWait {seconds}s on {method_name}; cooldown until {cooldown_until}",
+                "telegram_floodwait_method": method_name,
+                "telegram_floodwait_seconds": seconds,
+                "telegram_cooldown_until": cooldown_until,
+                "current_source_url": canonical_url,
+                "current_source_title": source_id,
+            })
+        except Exception:
+            pass
         return cooldown_until
 
     def has_total_request_budget(self, method_name: str, source_id: str = "", canonical_url: str = "") -> bool:
@@ -3446,6 +3482,11 @@ class TelegramRequestGovernor:
             status = "skipped_telegram_resolve_cooldown"
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=exact_resolve_until)
             return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": exact_resolve_until}
+        if self.cached_entity_only:
+            self.resolve_skipped_by_cooldown += 1
+            status = "skipped_cached_entity_only_no_private_entity"
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, network_call=False)
+            return None, {"fetch_status": status, "telegram_resolve_status": status, "next_action": "wait_for_entity_cache_or_separate_resolve_lane"}
         if self.resolve_network_attempts >= self.max_network_resolves or not self.has_total_request_budget("ResolveUsernameRequest", source_id, canonical_url):
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
             return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
@@ -5122,13 +5163,14 @@ def build_unified_source_queue(
 
 def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int, run_id: str) -> list[dict[str, Any]]:
     clean = [r for r in rows if isinstance(r, dict) and not r.get("_sheet_note")]
-    if (
-        getenv_bool("REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL", True)
-        and any(str(r.get("queue_order_changed_this_run") or "").lower() == "true" for r in clean)
-    ):
-        return clean
     max_rows = getenv_int("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", 500)
     if max_rows <= 0 or len(clean) <= max_rows:
+        return clean
+    persist_all_reordered_tail = getenv_bool("REGION_TALK_SOURCE_QUEUE_HANDOFF_PERSIST_REORDERED_TAIL", False)
+    if persist_all_reordered_tail and any(str(r.get("queue_order_changed_this_run") or "").lower() == "true" for r in clean):
+        # Legacy escape hatch for offline/manual full rewrites only.  The
+        # orchestrated Kaggle loop must keep this disabled, otherwise a keyword
+        # reinsert can turn one short run into thousands of YDB row upserts.
         return clean
 
     def is_keyword(row: dict[str, Any]) -> bool:
@@ -6182,6 +6224,8 @@ def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: i
             continue
         if str(row.get("fast_check_status") or "") in {"ko_hit", "no_hit", "local_region_source", "spam_source_reject"}:
             continue
+        if telegram_cached_entity_only_enabled() and not row_has_cached_entity(row):
+            continue
         candidates.append(row)
     candidates = sorted(candidates, key=lambda r: (
         not row_has_cached_entity(r),
@@ -7040,6 +7084,25 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     governor.resolve_cache_hits += 1
                     governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
             if entity is None:
+                if governor is not None and governor.cached_entity_only:
+                    stat["errors"] += 1
+                    stat["last_error_code"] = "cached_entity_missing"
+                    stat["last_error_message"] = "exact post fetch is in cached-entity-only mode; username resolve forbidden"
+                    governor.resolve_skipped_by_cooldown += 1
+                    governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cached_entity_only_no_private_entity", cache_hit=False, network_call=False, ok=False)
+                    status.event(
+                        "telethon_exact_post_cache_miss_deferred",
+                        phase="fetch",
+                        status="deferred",
+                        run_id=run_id,
+                        post_url=url,
+                        current_source_handle=handle,
+                        current_source_url=canonical_url,
+                        progress_label=f"Telethon exact fetch skipped cache-miss {idx}/{len(rows)}; network resolve forbidden",
+                    )
+                    if str(row.get("_kind") or "") == "post_link_queue_item":
+                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_wait_entity_cache", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "cached_entity_missing", "fetch_error_message": "cached-entity-only mode; no channel_id/access_hash for exact post source"}], run_id=run_id, stage=stage)
+                    continue
                 if governor is not None and not governor.has_total_request_budget("get_entity.exact_post_link", "post_link_queue", canonical_url):
                     status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact resolve deferred by cooldown/budget at {idx}/{len(rows)}")
                     if str(row.get("_kind") or "") == "post_link_queue_item":
@@ -8141,6 +8204,17 @@ def _text_vector_mode() -> str:
         return "prototype"
     # Avoid surprise model downloads in local unit tests; Kaggle/product runs opt in by environment or /kaggle.
     return "dual_embeddings" if Path("/kaggle/input").exists() else "prototype"
+
+
+def telegram_cached_entity_only_enabled() -> bool:
+    """Use Telegram only through cached InputPeerChannel when enabled.
+
+    Region Talk orchestrator runs set this gate so exact-post fetch / fast-check
+    can continue on rows that already have private `channel_id/access_hash`, but
+    never fall back to username resolve (`client.get_entity(handle)`).  Username
+    resolve is the scarce operation that triggered long FloodWaits.
+    """
+    return getenv_bool("REGION_TALK_TG_CACHED_ENTITY_ONLY", False)
 
 
 def _prefix_for_embedding_model(model_id: str, text: str, *, query: bool) -> str:
@@ -10011,14 +10085,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         run_id=run_id,
         stage="unified_source_queue_built",
     )
-    write_region_talk_online_queue_items(
-        source_queue_handoff_rows,
-        kind="source_status_item",
-        id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
-        fields=SOURCE_QUEUE_STATE_FIELDS,
-        run_id=run_id,
-        stage="unified_source_queue_built",
-    )
+    online_source_status_items_written = 0
+    if getenv_bool("REGION_TALK_WRITE_SOURCE_STATUS_QUEUE_MIRROR", False):
+        online_source_status_items_written = write_region_talk_online_queue_items(
+            source_queue_handoff_rows,
+            kind="source_status_item",
+            id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
+            fields=SOURCE_QUEUE_STATE_FIELDS,
+            run_id=run_id,
+            stage="unified_source_queue_built",
+        )
     write_region_talk_live_cursor("source", {
         "run_id": run_id,
         "queue_name": "unified_source_queue",
@@ -10032,7 +10108,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "retry_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "needs_rescan_or_retry"),
         "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
-    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), source_queue_handoff_rows=len(source_queue_handoff_rows), online_source_queue_items_written=online_source_queue_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), source_queue_handoff_rows=len(source_queue_handoff_rows), online_source_queue_items_written=online_source_queue_items_written, online_source_status_items_written=online_source_status_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     if (
         region_talk_state_backend_requested() == "ydb"
         and getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF", True)

@@ -55,6 +55,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN",
             "REGION_TALK_TELEGRAM_QUERY_SOURCE",
             "REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR",
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY",
+            "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN",
+            "REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS",
+            "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS",
         ]}
         old_create = mod.create_or_replace_dataset
         old_wait = mod.wait_dataset_ready
@@ -76,6 +80,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"] = "5"
             os.environ["REGION_TALK_TELEGRAM_QUERY_SOURCE"] = "place_lexicon"
             os.environ["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"] = "1"
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
+            os.environ["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"] = "0"
+            os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "80"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
             mod.build_input_datasets(object(), run_id="unit-run", username="unit")
@@ -86,6 +94,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN"], "5")
             self.assertEqual(env["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
             self.assertEqual(env["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"], "1")
+            self.assertEqual(env["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
+            self.assertEqual(env["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "0")
+            self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"], "80")
+            self.assertEqual(env["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"], "80")
         finally:
             mod.create_or_replace_dataset = old_create
             mod.wait_dataset_ready = old_wait
@@ -260,6 +272,43 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn("method:ResolveUsernameRequest", gov.cooldowns)
             self.assertIn("method:get_entity.exact_post_link", gov.cooldowns)
             self.assertEqual(gov.cooldowns["method:ResolveUsernameRequest"]["cooldown_until"], cooldown_until)
+
+    def test_telegram_governor_cached_entity_only_blocks_network_resolve(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
+        try:
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
+            with tempfile.TemporaryDirectory() as td:
+                gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+                seed = mod.Seed(
+                    source_seed_id="seed_uncached",
+                    platform="telegram",
+                    source_title="Uncached",
+                    handle="uncached",
+                    url="https://t.me/uncached",
+                    source_kind="channel",
+                    source_scope_guess="travel",
+                    priority=1,
+                    discovered_from="unit",
+                    discovered_from_url="",
+                    why_seeded="unit",
+                    expected_value="unit",
+                    known_risks="",
+                    initial_status="pending_scan",
+                    monitoring_enabled=True,
+                    rights_policy="manual_review",
+                    notes="",
+                )
+                entity, meta = asyncio.run(gov.resolve_entity(object(), seed))
+                self.assertIsNone(entity)
+                self.assertEqual(meta["telegram_resolve_status"], "skipped_cached_entity_only_no_private_entity")
+                self.assertEqual(gov.resolve_network_attempts, 0)
+                self.assertEqual(gov.ledger[-1]["decision"], "skipped_cached_entity_only_no_private_entity")
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_TG_CACHED_ENTITY_ONLY", None)
+            else:
+                os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = old
 
     def test_source_fast_check_backlog_prefers_cached_entities(self) -> None:
         mod = load_module()
@@ -1122,7 +1171,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 os.environ.pop("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS", None)
             else:
                 os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = old_max
-        self.assertEqual(len([r for r in handoff if not r.get("_sheet_note")]), len(rows))
+        self.assertEqual(len([r for r in handoff if not r.get("_sheet_note")]), 1)
+        self.assertEqual(handoff[0]["canonical_source_key"], "telegram:keyword_hit")
 
     def test_hashtag_keyword_surface_filter_routes_local_and_spam_sources_out_of_cursor(self) -> None:
         mod = load_module()

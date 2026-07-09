@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / hard cached-entity Telethon mode + bounded YDB handoff**:
+  orchestrated CandidateReport runs now set `REGION_TALK_TG_CACHED_ENTITY_ONLY=1`
+  and `REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN=0`, so exact post-link fetch
+  and fast-check defer cache-miss Telegram rows instead of calling
+  `client.get_entity(handle)`. Telegram FloodWait cooldowns are written
+  immediately to live YDB cursor state for the next run. Source-queue live handoff
+  no longer rewrites the full reordered tail, is capped to 80 rows in the
+  orchestrator, and disables the duplicate `source_status_item` mirror by
+  default to avoid long transactional YDB upsert stalls.
 - **Region Talk Channel / local-source terminal routing**: hardened
   Kaliningrad-local source detection (`kaliningrad`, `kld`/`klgd`, `39` suffix
   and existing local profile/ratio signals), made `source_scope=local_region`
