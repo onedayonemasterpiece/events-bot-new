@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / travel-intent keyword discovery**: CandidateReport
+  orchestrator launches now use a small travel-intent keyword query set
+  (`ездили/путешествие/что посмотреть/маршрут/отзыв`) and 4 keyword queries per
+  run instead of the first two raw toponyms, after live YDB showed broad
+  `Калининград` searches mostly rediscovered local/regional publics that do not
+  advance the final blogger/travel publication funnel.
 - **Region Talk Channel / orchestrator active-kernel race handling**: if a
   launcher refuses a CandidateReport/BGE/ImageDiagnostic start because its
   stricter Kaggle slot audit sees an already active/queued kernel after the

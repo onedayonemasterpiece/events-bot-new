@@ -168,7 +168,12 @@ Important invariants:
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
   about 12 source scans per run, 5 similar-channel seeds, up to 5
-  recommendations per seed, and 2 keyword-discovery queries. This keeps
+  recommendations per seed, and 4 keyword-discovery queries. The orchestrator
+  uses travel-intent keyword phrases (`ездили в Калининград`,
+  `путешествие Калининград`, `Калининград что посмотреть`, etc.) rather than raw
+  single toponyms first, because live YDB showed broad `Калининград` searches
+  mostly rediscover local/regional publics that are useful for KO detection but
+  rarely pass the non-local blogger/travel publication gate. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
   turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
 - CandidateReport history fetches are freshness-bounded by

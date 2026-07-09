@@ -66,8 +66,9 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "12",
     "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "12",
     # Keep main runs short enough to reach the discovery tail, but still gentle
-    # toward Telegram: a few similar-channel seeds and a couple of keyword
-    # queries per run are enough to make the public/source frontier grow.
+    # toward Telegram: a few similar-channel seeds and a few travel-intent
+    # keyword queries per run are enough to make the public/source frontier grow
+    # without filling the queue with local Kaliningrad-only publics.
     "REGION_TALK_HISTORY_SOURCES_TARGET": "12",
     "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "30",
     "REGION_TALK_HISTORY_MAX_POST_AGE_DAYS": "365",
@@ -80,7 +81,12 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": "30",
     "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": "30",
     "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": "1",
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "2",
+    "REGION_TALK_TELEGRAM_KEYWORD_QUERIES": (
+        "ездили в Калининград|путешествие Калининград|"
+        "Калининград что посмотреть|Куршская коса маршрут|"
+        "Зеленоградск отзыв"
+    ),
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "4",
     "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
     "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "240",

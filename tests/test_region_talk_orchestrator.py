@@ -62,7 +62,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("12", actions[3]["cmd"])
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "5")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "2")
+        self.assertIn("путешествие Калининград", actions[3]["env"]["REGION_TALK_TELEGRAM_KEYWORD_QUERIES"])
+        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "4")
         self.assertEqual(actions[3]["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "240")
 
 
