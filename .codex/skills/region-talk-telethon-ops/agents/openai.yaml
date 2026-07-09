@@ -1,0 +1,4 @@
+interface:
+  display_name: "Region Talk Telethon Ops"
+  short_description: "Safe Region Talk Telethon operations."
+  default_prompt: "Use Region Talk Telethon Ops to diagnose or change Telegram discovery, FloodWait, entity cache, or session-boundary behavior safely."

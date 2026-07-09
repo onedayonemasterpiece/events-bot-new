@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / Telethon operations skill**: added a project skill
+  `region-talk-telethon-ops` that captures session-boundary rules, FloodWait
+  handling, entity/access_hash cache requirements, public-web fallback limits,
+  and focused verification commands for future Region Talk Telegram incidents.
 - **Region Talk Channel / Telethon-first cooldown discipline**: orchestrator
   CandidateReport runs now disable public Telegram web fallback, limit exact
   keyword post refetches to three paced Telethon calls, route exact-link fetch
