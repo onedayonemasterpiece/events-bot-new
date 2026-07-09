@@ -57,6 +57,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF"], "0")
         self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS"], "720")
+        self.assertEqual(actions[3]["env"]["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
         self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "20")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "6")
         self.assertEqual(actions[3]["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")

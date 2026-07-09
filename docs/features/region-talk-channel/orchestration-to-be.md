@@ -226,6 +226,9 @@ Important invariants:
   scanning. The main orchestrator now spends the scarce DISCOVERY1 window on
   fast-check/source history first; exact known-post fetch can be re-enabled as a
   separate bounded drain when the source cursor is healthy.
+- The orchestrated source-selection profile is YDB-queue-only when durable queue
+  rows are available. Static CSV seeds are fallback/bootstrap data, not a source
+  of repeated scans once the live queue exists.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel

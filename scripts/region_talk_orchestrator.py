@@ -90,6 +90,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # keyword queries per run are enough to make the public/source frontier grow
     # without filling the queue with local Kaliningrad-only publics.
     "REGION_TALK_HISTORY_SOURCES_TARGET": "6",
+    "REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY": "1",
     "REGION_TALK_MAX_POSTS_PER_SOURCE": "20",
     "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": "6",
     "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "20",

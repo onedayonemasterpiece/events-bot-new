@@ -42,7 +42,9 @@
   loaders/metrics also prefer canonical source/image cursor rows over retained
   per-run cursor history rows. The orchestrated CandidateReport profile no
   longer drains exact post-link rows before source history scans by default,
-  avoiding source-cursor starvation when that queue contains many terminal rows.
+  avoiding source-cursor starvation when that queue contains many terminal rows;
+  it also uses durable YDB queue rows instead of static CSV seeds whenever the
+  live queue exists.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient

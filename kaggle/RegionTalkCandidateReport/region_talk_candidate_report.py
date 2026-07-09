@@ -7564,10 +7564,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         ),
     )
     queue_dynamic = [] if ydb_candidate_links_only else unified_queue_dynamic_seeds(previous_state, queue_selection_pool)
-    dynamic = [] if ydb_candidate_links_only else queue_dynamic + frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
-    all_seed_candidates = list(seeds)
+    frontier_dynamic = [] if ydb_candidate_links_only else frontier_dynamic_seeds(previous_state, getenv_int("REGION_TALK_MAX_NEW_SOURCE_PROBES", 30))
+    dynamic = [] if ydb_candidate_links_only else queue_dynamic + frontier_dynamic
+    if queue_dynamic and getenv_bool("REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY", False):
+        all_seed_candidates = list(queue_dynamic) + [s for s in frontier_dynamic if s.canonical_url not in {q.canonical_url for q in queue_dynamic}]
+    else:
+        all_seed_candidates = list(seeds)
     seen_seed_urls = {s.canonical_url for s in all_seed_candidates}
-    for s in dynamic:
+    for s in ([] if (queue_dynamic and getenv_bool("REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY", False)) else dynamic):
         if s.canonical_url not in seen_seed_urls:
             all_seed_candidates.append(s)
             seen_seed_urls.add(s.canonical_url)
