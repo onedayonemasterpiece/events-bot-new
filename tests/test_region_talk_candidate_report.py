@@ -1376,6 +1376,58 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(queue["telegram:new"]["fetch_status"], "selected_for_run")
         self.assertEqual(queue["telegram:live"]["fetch_status"], "skipped_fetch_disabled")
 
+    def test_ydb_source_status_overlay_does_not_clobber_queue_fields_with_empty_live_rows(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:keyword": {
+                    "canonical_source_key": "telegram:keyword",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 77,
+                    "posts_scanned": 3,
+                    "source_url": "https://t.me/keyword",
+                }
+            }
+        }
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {},
+            {
+                "source_status_item:telegram:keyword": {
+                    "canonical_source_key": "telegram:keyword",
+                    "source_queue_status": "",
+                    "queue_order": "",
+                    "posts_scanned": 0,
+                    "fetch_status": "selected_for_run",
+                }
+            },
+            {
+                "online_source_item:telegram:keyword": {
+                    "canonical_source_key": "telegram:keyword",
+                    "source_queue_status": "",
+                    "queue_order": "",
+                    "posts_scanned": 0,
+                    "online_update_stage": "source_selected_for_run",
+                }
+            },
+        )
+        row = state["unified_source_queue"]["telegram:keyword"]
+        self.assertEqual(row["source_queue_status"], "pending_scan")
+        self.assertEqual(row["queue_order"], 77)
+        self.assertEqual(row["posts_scanned"], 3)
+        self.assertEqual(row["fetch_status"], "selected_for_run")
+
+    def test_online_source_selected_for_run_does_not_write_durable_source_queue(self) -> None:
+        mod = load_module()
+        payload = mod._online_source_payload(
+            {"platform": "telegram", "handle": "keyword", "canonical_url": "https://t.me/keyword"},
+            run_id="run-q",
+            stage="source_selected_for_run",
+            status="selected_for_run",
+        )
+        self.assertFalse(mod._online_source_should_write_source_queue_item(payload, "source_selected_for_run"))
+        self.assertTrue(mod._online_source_should_write_source_queue_item({**payload, "queue_order": 77}, "source_selected_for_run"))
+
     def test_vk_wall_uses_service_key_first_and_skips_catalog_paths(self) -> None:
         mod = load_module()
         old = {k: os.environ.get(k) for k in ["VK_SERVICE_TOKEN", "VK_SERVICE_KEY", "VK_ACCESS_TOKEN", "REGION_TALK_VK_READ_SERVICE_FIRST"]}

@@ -1661,6 +1661,15 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
     ], max_len=700)
 
 
+def _online_source_should_write_source_queue_item(payload: dict[str, Any], stage: str) -> bool:
+    # `source_queue_item` is the durable ordered queue. Live progress rows such
+    # as `source_selected_for_run` intentionally lack queue_order/status fields
+    # and must not overwrite the durable queue row for the same source. They are
+    # still written to `online_source_item` and `source_status_item` for operator
+    # visibility and merge overlays.
+    return bool(payload.get("queue_order") or stage == "unified_source_queue_built" or payload.get("online_update_stage") == "unified_source_queue_built")
+
+
 def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, stage: str, status: str | None = None) -> None:
     """Upsert source/frontier progress while discovery is still running.
 
@@ -1681,7 +1690,8 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
 
         def op(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            ydb_upsert_json(session, ydb, table_path, "source_queue_item:" + key, "source_queue_item", payload, updated_at)
+            if _online_source_should_write_source_queue_item(payload, stage):
+                ydb_upsert_json(session, ydb, table_path, "source_queue_item:" + key, "source_queue_item", payload, updated_at)
             ydb_upsert_json(session, ydb, table_path, "source_status_item:" + key, "source_status_item", payload, updated_at)
             ydb_upsert_json(session, ydb, table_path, "online_source_item:" + key, "online_source_item", payload, updated_at)
             if payload.get("source_candidate_id") or payload.get("candidate_source_status") or payload.get("frontier_status"):
@@ -2161,7 +2171,22 @@ def merge_ydb_source_queue_status_items(
             )
             if not key:
                 continue
-            q[key] = {**q.get(key, {}), **item}
+            current = dict(q.get(key) or {})
+            numeric_max_fields = {
+                "posts_scanned", "ko_posts_found", "candidate_posts_found",
+                "actual_images_scored_count", "low_actual_image_count",
+            }
+            for field, value in item.items():
+                if value in (None, ""):
+                    continue
+                if field in numeric_max_fields:
+                    try:
+                        current[field] = max(int(float(current.get(field) or 0)), int(float(value or 0)))
+                    except Exception:
+                        current[field] = value
+                else:
+                    current[field] = value
+            q[key] = current
             merged += 1
     data["unified_source_queue"] = q
     return merged

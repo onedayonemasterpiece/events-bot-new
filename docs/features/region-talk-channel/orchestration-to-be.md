@@ -367,3 +367,8 @@ processed state, not real history scans. CandidateReport returns them to
 `publics_fake_processed_without_scan_evidence_total` plus
 `publics_keyword_fake_processed_without_scan_evidence_total` so legacy queue
 drift cannot make keyword yield look scanned when no posts were actually read.
+Live progress rows such as `source_selected_for_run` are observability rows only:
+they must write `online_source_item` / `source_status_item`, but must not
+overwrite durable `source_queue_item` without `queue_order` and queue status.
+When YDB source status rows are merged back, empty live fields do not clobber
+non-empty durable queue fields.

@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / live source queue clobber guard**: live
+  `source_selected_for_run` status writes no longer overwrite durable
+  `source_queue_item` rows without queue order/status, and YDB source-status
+  merge preserves non-empty durable queue fields when online rows contain empty
+  observability fields.
 - **Region Talk Channel / source cursor pending-gap protection**: unified source
   queue cursoring now stops before the earliest primary `pending_scan` gap and
   source selection prioritizes keyword-evidence rows even if legacy cursor drift
