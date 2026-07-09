@@ -165,7 +165,7 @@ const footerSocialUrls = [
   'https://vk.com/kenigeventsofficial',
   'https://vk.com/klgdevents',
   'https://vk.ru/im/channels/-239844596',
-  'https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA',
+  'https://max.ru/channel_kenigevents',
 ];
 for (const url of footerSocialUrls) {
   if (!controlHtml.includes(url)) throw new Error(`Footer social URL missing: ${url}`);

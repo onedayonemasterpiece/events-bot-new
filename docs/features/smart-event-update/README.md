@@ -438,7 +438,7 @@ LLM остаётся владельцем смысловых решений, н�
      `https://t.me/kenigevents`, `https://t.me/kldevents`,
      `https://vk.com/kenigeventsofficial`, `https://vk.com/klgdevents`,
      VK-канал Афиши `https://vk.ru/im/channels/-239844596` и
-     Max `https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA`.
+     Max `https://max.ru/channel_kenigevents`.
 2. **Лог фактов (added_facts) по источникам**:
    - доступен из `/events -> Edit` через отдельную кнопку, а также шорткатом командой `/log <event_id>`;
    - формат — журнал с датой/временем, источником и фактами, что именно было добавлено/смёрджено и что было проигнорировано.

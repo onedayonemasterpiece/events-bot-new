@@ -7481,7 +7481,7 @@ BODY_SPACER_HTML = '<p>&#8203;</p>'
 # but mark it with a comment so footer navigation anchoring can ignore it.
 BODY_DIVIDER_HTML = "<!--BODY_DIVIDER--><hr>"
 
-MAX_SOCIAL_URL = "https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA"
+MAX_SOCIAL_URL = "https://max.ru/channel_kenigevents"
 
 FOOTER_LINK_HTML = (
     BODY_SPACER_HTML
@@ -7737,7 +7737,7 @@ def strip_footer_link(html_content: str) -> str:
         r"<p>ВК:\s*<a\b[^>]*href=\"https://vk\.com/kenigeventsofficial\"[^>]*>Анонсы</a>\s*·\s*"
         r"<a\b[^>]*href=\"https://vk\.com/klgdevents\"[^>]*>Афиша</a>\s*·\s*"
         r"<a\b[^>]*href=\"https://vk\.ru/im/channels/-239844596\"[^>]*>канал Афиши</a></p>\s*"
-        r"(?:<p>Max:\s*<a\b[^>]*href=\"https://max\.ru/join/[^\"]+\"[^>]*>Анонсы</a></p>\s*)?"
+        r"(?:<p>Max:\s*<a\b[^>]*href=\"https://max\.ru/(?:join/[^\"]+|channel_kenigevents)\"[^>]*>Анонсы</a></p>\s*)?"
         rf"{spacer}",
         flags=re.IGNORECASE,
     )

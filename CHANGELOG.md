@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Social links / Max public channel**: updated the shared «Полюбить Калининград Анонсы» Max URL to the public channel `https://max.ru/channel_kenigevents` across Telegraph footers, the static-site footer/checks and related publishing docs/tests; legacy join-footers remain recognized for idempotent cleanup.
 - CherryFlash guide-excursion promo now uses the v4 Blender-style depth background treatment in the production renderer and formats guide promo dates as `10 июля 16:00` instead of numeric `10.07 16:00`.
 
 ### Added

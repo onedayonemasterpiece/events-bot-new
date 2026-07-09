@@ -5063,7 +5063,7 @@ async def publish_vk_channel_promo_event_publication(
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
 TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.ru/im/channels/-239844596"
-TG_EVENT_MAX_URL = "https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA"
+TG_EVENT_MAX_URL = "https://max.ru/channel_kenigevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
