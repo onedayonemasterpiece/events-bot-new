@@ -57,7 +57,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # early image handoff; otherwise keyword hits are written as context rows
     # but never promoted behind the cursor for real history scans.
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
-    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "1",
+    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
     "REGION_TALK_YDB_MAX_POST_ROWS": "1500",
     "REGION_TALK_YDB_MAX_SOURCE_ROWS": "6000",
     "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": "1000",

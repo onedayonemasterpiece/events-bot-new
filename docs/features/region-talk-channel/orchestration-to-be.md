@@ -187,7 +187,11 @@ Important invariants:
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`). Source/text-vector
   YDB read windows are 6000 rows so queue counters are not rebuilt from a
-  truncated source state once the frontier exceeds 1500 rows.
+  truncated source state once the frontier exceeds 1500 rows. The orchestrator
+  must keep `REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF=0` for
+  production runs: live evidence showed that exiting right after source-queue
+  handoff also skips the post-fusion `build_image_candidate_queue(...)`, so
+  BGE-promoted candidate-memory rows never reach ImageDiagnostic.
 - `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
   The orchestrator default is `--batch-limit 24 --batch-size 4` after the live
   YDB backlog showed E5 production outpacing 12-row BGE batches; operators can
