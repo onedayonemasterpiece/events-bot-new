@@ -733,6 +733,8 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
     if source_terminal_rejected_status(status):
         return {"due": False, "reason": "terminal_rejected_source", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
+    if str(qrow.get("fast_check_status") or "").strip().lower() == "ko_hit":
+        return {"due": True, "reason": "fast_check_ko_hit_priority", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     scanned_before = _source_has_primary_scan_evidence(qrow, cursor, status)
     if not scanned_before and status.startswith("processed_") and (
         qrow.get("_ydb_updated_at")
@@ -1458,6 +1460,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
     "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
+    "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
@@ -4911,8 +4914,10 @@ def build_unified_source_queue(
         key = seed["canonical_source_key"]
         existing = entries.get(key)
         surface_fields = source_local_region_terminal_fields({**row, **seed})
+        evidence_fields = source_queue_keyword_evidence_fields(row)
         if existing:
             existing.update({k: v for k, v in seed.items() if v not in ("", None)})
+            existing.update(evidence_fields)
             existing["keyword_discovery_status"] = "keyword_evidence"
             existing["keyword_evidence_run_id"] = run_id
             existing["keyword_evidence_at"] = run_now
@@ -4935,6 +4940,7 @@ def build_unified_source_queue(
                 entries[key] = {
                     **seed,
                     **surface_fields,
+                    **evidence_fields,
                     "source_queue_id": "srcq_" + stable_hash(key),
                     "queue_order": next_order,
                     "added_at": run_now,
@@ -4964,6 +4970,7 @@ def build_unified_source_queue(
             if existed:
                 entries[key].update({
                     **{k: v for k, v in seed.items() if v not in ("", None)},
+                    **evidence_fields,
                     "previous_queue_order": previous_order,
                     "queue_order": new_order,
                     "queue_order_changed_this_run": str(previous_order != new_order).lower(),
@@ -4977,6 +4984,7 @@ def build_unified_source_queue(
             else:
                 entries[key] = {
                     **seed,
+                    **evidence_fields,
                     "source_queue_id": "srcq_" + stable_hash(key),
                     "previous_queue_order": "",
                     "queue_order": new_order,
@@ -5292,7 +5300,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             if len(selected) >= max_rows:
                 break
 
-    return sorted(selected.values(), key=order)[:max_rows]
+    return sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))[:max_rows]
 
 
 def image_queue_text_region_confirmed(row: dict[str, Any]) -> bool:
@@ -6321,6 +6329,80 @@ def source_fast_check_queries(run_id: str, source_index: int = 0) -> list[str]:
     return _dedupe_keep_order(core + poi_pool + rotated)[:per_source]
 
 
+def source_queue_keyword_evidence_fields(row: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key in [
+        "fast_check_status",
+        "fast_check_at",
+        "last_fast_check_run_id",
+        "fast_check_query_count",
+        "fast_check_matched_query",
+        "fast_check_hit_post_url",
+        "fast_check_hit_post_date",
+        "fast_check_error_code",
+        "fast_check_error_message",
+        "source_probe_reason",
+        "next_action",
+    ]:
+        value = row.get(key)
+        if value not in ("", None):
+            out[key] = value
+    if row.get("matched_query") and not out.get("fast_check_matched_query"):
+        out["fast_check_matched_query"] = row.get("matched_query")
+    if row.get("keyword_hit_post_url") and not out.get("fast_check_hit_post_url"):
+        out["fast_check_hit_post_url"] = row.get("keyword_hit_post_url")
+    if row.get("post_date") and not out.get("fast_check_hit_post_date"):
+        out["fast_check_hit_post_date"] = row.get("post_date")
+    if row.get("keyword_hit_post_url"):
+        out["source_probe_reason"] = out.get("source_probe_reason") or "keyword_or_fast_check_exact_post_hit"
+    return out
+
+
+def fast_check_priority_source_queue_row(
+    seed: Seed,
+    hit_row: dict[str, Any],
+    previous_state: dict[str, Any],
+    *,
+    run_id: str,
+    priority_offset: int,
+) -> dict[str, Any]:
+    qrow = _source_queue_row_for_seed(seed, previous_state)
+    cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+    previous_order = int(float(qrow.get("queue_order") or 0)) if str(qrow.get("queue_order") or "").strip() else 0
+    new_order = cursor + max(1, int(priority_offset or 1))
+    status = str(qrow.get("source_queue_status") or hit_row.get("source_queue_status") or "pending_scan")
+    if source_terminal_rejected_status(status) or status.startswith("processed"):
+        status = "needs_rescan_or_retry"
+    run_now = utc_now_iso()
+    return {
+        **qrow,
+        **hit_row,
+        **source_queue_keyword_evidence_fields(hit_row),
+        "source_queue_id": qrow.get("source_queue_id") or "srcq_" + stable_hash(key),
+        "canonical_source_key": key,
+        "platform": seed.platform,
+        "source_url": seed.canonical_url,
+        "canonical_url": seed.canonical_url,
+        "handle": seed.handle,
+        "source_title": hit_row.get("source_title") or hit_row.get("recommended_title") or qrow.get("source_title") or seed.source_title,
+        "source_queue_status": status,
+        "previous_source_queue_status": qrow.get("source_queue_status") or "",
+        "previous_queue_order": previous_order,
+        "queue_order": new_order,
+        "queue_order_changed_this_run": str(previous_order != new_order).lower(),
+        "queue_order_changed_reason": "fast_check_ko_hit_reinsert_after_cursor",
+        "keyword_discovery_status": "fast_check_ko_hit",
+        "keyword_evidence_run_id": run_id,
+        "keyword_evidence_at": run_now,
+        "insertion_policy": "fast_check_reinsert_after_cursor",
+        "is_after_cursor": "true",
+        "cursor_marker": "fast_check_after_cursor",
+        "queue_item_updated_at": run_now,
+        "next_action": "scan_source_next_after_fast_check_ko_hit",
+    }
+
+
 async def run_source_fast_check_ko(
     client: Any,
     governor: TelegramRequestGovernor,
@@ -6443,6 +6525,15 @@ async def run_source_fast_check_ko(
                 rows.append(hit_row)
                 post_hits.append(hit_row)
                 write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
+                priority_row = fast_check_priority_source_queue_row(seed, hit_row, previous_state, run_id=run_id, priority_offset=hits)
+                write_region_talk_online_queue_items(
+                    [priority_row],
+                    kind="source_queue_item",
+                    id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
+                    fields=SOURCE_QUEUE_STATE_FIELDS,
+                    run_id=run_id,
+                    stage="fast_check_ko_prioritize_source_queue",
+                )
                 post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
             else:
                 base_row.update({

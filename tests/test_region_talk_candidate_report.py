@@ -668,6 +668,88 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         seeds = mod.source_fast_check_backlog_seeds(previous_state, 5)
         self.assertEqual([s.canonical_url for s in seeds], ["https://t.me/fresh"])
 
+    def test_fast_check_ko_hit_source_is_primary_due_even_after_partial_scan(self) -> None:
+        mod = load_module()
+        hit = mod.Seed(
+            source_seed_id="unified_queue_hit", platform="telegram", source_title="KO hit source",
+            handle="@ko_hit", url="https://t.me/ko_hit", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="fast-check", expected_value="", known_risks="", initial_status="needs_rescan_or_retry",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        fresh = mod.Seed(
+            source_seed_id="unified_queue_fresh", platform="telegram", source_title="Fresh",
+            handle="@fresh_after_hit", url="https://t.me/fresh_after_hit", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="fresh", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {"unified_source_queue": {
+            "telegram:ko_hit": {
+                "canonical_source_key": "telegram:ko_hit",
+                "source_url": "https://t.me/ko_hit",
+                "source_queue_status": "needs_rescan_or_retry",
+                "posts_scanned": 12,
+                "last_scan_run_id": "old-run",
+                "fast_check_status": "ko_hit",
+                "fast_check_hit_post_url": "https://t.me/ko_hit/10",
+                "queue_order": 50,
+            },
+            "telegram:fresh_after_hit": {
+                "canonical_source_key": "telegram:fresh_after_hit",
+                "source_url": "https://t.me/fresh_after_hit",
+                "source_queue_status": "pending_scan",
+                "queue_order": 51,
+            },
+        }}
+        due = mod._seed_scan_due_state(hit, previous_state)
+        self.assertTrue(due["due"])
+        self.assertFalse(due["is_rescan"])
+        self.assertEqual(due["reason"], "fast_check_ko_hit_priority")
+        selected = mod.selected_sources_for_run([fresh, hit], 2, previous_state=previous_state)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/ko_hit", "https://t.me/fresh_after_hit"])
+
+    def test_fast_check_priority_source_queue_row_moves_after_cursor_and_persists_evidence(self) -> None:
+        mod = load_module()
+        seed = mod.Seed(
+            source_seed_id="unified_queue_hit", platform="telegram", source_title="KO hit source",
+            handle="@ko_hit", url="https://t.me/ko_hit", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="fast-check", expected_value="", known_risks="", initial_status="needs_rescan_or_retry",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous_state = {
+            "unified_source_queue_cursor_position": 100,
+            "unified_source_queue": {
+                "telegram:ko_hit": {
+                    "canonical_source_key": "telegram:ko_hit",
+                    "source_url": "https://t.me/ko_hit",
+                    "canonical_url": "https://t.me/ko_hit",
+                    "source_queue_status": "needs_rescan_or_retry",
+                    "queue_order": 431,
+                    "posts_scanned": 4,
+                }
+            },
+        }
+        row = mod.fast_check_priority_source_queue_row(
+            seed,
+            {
+                "fast_check_status": "ko_hit",
+                "keyword_hit_post_url": "https://t.me/ko_hit/10",
+                "matched_query": "Калининград",
+                "source_title": "KO hit source",
+            },
+            previous_state,
+            run_id="run-1",
+            priority_offset=2,
+        )
+        self.assertEqual(row["queue_order"], 102)
+        self.assertEqual(row["previous_queue_order"], 431)
+        self.assertEqual(row["queue_order_changed_reason"], "fast_check_ko_hit_reinsert_after_cursor")
+        self.assertEqual(row["fast_check_status"], "ko_hit")
+        self.assertEqual(row["fast_check_hit_post_url"], "https://t.me/ko_hit/10")
+        self.assertEqual(row["fast_check_matched_query"], "Калининград")
+
     def test_ydb_candidate_link_rows_respects_zero_limit_before_connect(self) -> None:
         mod = load_module()
         self.assertEqual(mod.ydb_candidate_link_rows_from_row_kv(0, kinds=("post_link_queue_item",)), [])

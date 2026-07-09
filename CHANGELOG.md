@@ -13,7 +13,10 @@
   handoff now writes only changed/refetched rows by default and is separately
   capped with `REGION_TALK_YDB_ONLINE_CANDIDATE_WRITE_MAX_ROWS`; Telethon calls
   are wrapped in per-call timeouts so a single Telegram RPC cannot consume an
-  entire short debug run.
+  entire short debug run. Fast-check KO hits now immediately persist
+  `source_queue_item` priority evidence (`fast_check_status=ko_hit`) and are
+  treated as primary due sources on the next CandidateReport run, not just as
+  exact-post link queue rows.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
   state load now supports bounded retry/backoff knobs and the orchestrator sets
   `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient

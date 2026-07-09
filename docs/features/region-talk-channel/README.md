@@ -198,6 +198,12 @@ The XLSX must be cumulative and delta-aware: it shows what was found, what is ne
   statuses, and both source/candidate handoffs have explicit row caps. Telethon
   network operations are guarded by per-call timeouts and cached-entity-only
   mode can defer username cache misses instead of burning FloodWait.
+- Fast-check KO contract: a source-local keyword hit is both an exact-post task
+  (`post_link_queue_item`) and a source-priority signal. CandidateReport must
+  persist `fast_check_status=ko_hit` on the corresponding `source_queue_item`,
+  move it into the after-cursor priority band, and treat it as primary due on
+  the next source-selection pass even if that source has previous partial scan
+  evidence. This prevents fast-check from becoming an inert side queue.
 - Channel/community creation: **not done**.
 - Real tokens/secrets: **not introduced**.
 - Publishing: **not performed**.
