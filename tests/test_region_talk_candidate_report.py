@@ -99,6 +99,36 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 else:
                     os.environ[key] = value
 
+    def test_telegram_governor_floodwait_blocks_followup_calls(self) -> None:
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+            cooldown_until = gov.mark_floodwait("get_messages.exact_post_link", "post_link_queue", "https://t.me/example", 123)
+            self.assertTrue(gov.degraded)
+            self.assertEqual(gov.telegram_phase_status, "degraded_floodwait")
+            self.assertEqual(gov.max_floodwait_seconds, 123)
+            self.assertEqual(gov.floodwait_cooldown_until, cooldown_until)
+            self.assertFalse(gov.has_total_request_budget("messages.searchGlobal", "keyword_discovery", "Калининград"))
+            self.assertEqual(gov.ledger[-1]["decision"], "skipped_telegram_cooldown")
+
+    def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
+        mod = load_module()
+        old_env = os.environ.get("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR")
+        cache = dict(mod._YDB_BUSINESS_HEARTBEAT_CACHE)
+        try:
+            os.environ["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"] = "1"
+            mod._YDB_BUSINESS_HEARTBEAT_CACHE.update({"online_write_disabled": False, "online_write_disabled_reason": "", "online_write_failures": 0})
+            mod._record_ydb_online_write_failure(Exception("Unauthenticated: token expired"), label="unit")
+            self.assertFalse(mod._ydb_online_write_allowed())
+            self.assertIn("Unauthenticated", mod._YDB_BUSINESS_HEARTBEAT_CACHE["online_write_disabled_reason"])
+        finally:
+            mod._YDB_BUSINESS_HEARTBEAT_CACHE.clear()
+            mod._YDB_BUSINESS_HEARTBEAT_CACHE.update(cache)
+            if old_env is None:
+                os.environ.pop("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR", None)
+            else:
+                os.environ["REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR"] = old_env
+
     def test_runner_ydb_backend_refuses_missing_config_without_json_fallback(self) -> None:
         mod = load_runner_module()
         old = {k: os.environ.get(k) for k in [

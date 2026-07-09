@@ -1719,7 +1719,43 @@ def ensure_ydb_kv_table(ydb: Any, session: Any, table_path: str) -> None:
 
 
 
-_YDB_BUSINESS_HEARTBEAT_CACHE: dict[str, Any] = {"ydb": None, "driver": None, "pool": None, "table_path": "", "last_alive_at": 0.0}
+_YDB_BUSINESS_HEARTBEAT_CACHE: dict[str, Any] = {
+    "ydb": None,
+    "driver": None,
+    "pool": None,
+    "table_path": "",
+    "last_alive_at": 0.0,
+    "online_write_disabled": False,
+    "online_write_disabled_reason": "",
+    "online_write_failures": 0,
+}
+
+
+def _close_cached_ydb_pool() -> None:
+    driver = _YDB_BUSINESS_HEARTBEAT_CACHE.get("driver")
+    if driver is not None:
+        try:
+            driver.stop(timeout=2)
+        except Exception:
+            pass
+    _YDB_BUSINESS_HEARTBEAT_CACHE.update({"ydb": None, "driver": None, "pool": None, "table_path": ""})
+
+
+def _ydb_online_write_allowed() -> bool:
+    return not bool(_YDB_BUSINESS_HEARTBEAT_CACHE.get("online_write_disabled"))
+
+
+def _record_ydb_online_write_failure(exc: Exception, *, label: str) -> None:
+    text = f"{type(exc).__name__}: {str(exc)[:220]}"
+    failures = int(_YDB_BUSINESS_HEARTBEAT_CACHE.get("online_write_failures") or 0) + 1
+    _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_failures"] = failures
+    _close_cached_ydb_pool()
+    lower = text.lower()
+    hard = any(marker in lower for marker in ["unauthenticated", "resourceexhausted", "connectionlost", "deadline", "timeout"])
+    if hard and getenv_bool("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR", True):
+        _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_disabled"] = True
+        _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_disabled_reason"] = f"{label}: {text}"
+        print(f"[region-talk] ydb_online_writes_disabled label={label} reason={text}", flush=True)
 
 
 def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1753,6 +1789,8 @@ def _business_heartbeat_enabled() -> bool:
 
 
 def _get_business_heartbeat_pool() -> tuple[Any, Any, Any, str]:
+    if not _ydb_online_write_allowed():
+        raise RuntimeError(str(_YDB_BUSINESS_HEARTBEAT_CACHE.get("online_write_disabled_reason") or "ydb online writes disabled"))
     cache = _YDB_BUSINESS_HEARTBEAT_CACHE
     if cache.get("pool") is not None and cache.get("ydb") is not None and cache.get("table_path"):
         return cache["ydb"], cache["driver"], cache["pool"], str(cache["table_path"])
@@ -1770,6 +1808,8 @@ def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
     a running notebook observable even when Kaggle live logs are empty.
     """
     if not _business_heartbeat_enabled():
+        return
+    if not _ydb_online_write_allowed():
         return
     event_name = str(payload.get("event_name") or "")
     now_monotonic = time.monotonic()
@@ -1803,7 +1843,11 @@ def write_region_talk_business_heartbeat(payload: dict[str, Any]) -> None:
             rows.append((f"business_event:{run_id}:{seq:06d}", "business_event", compact))
         ydb_upsert_json_many(session, ydb, table_path, rows, updated_at, chunk_size=len(rows), timeout_seconds=timeout_seconds)
 
-    pool.retry_operation_sync(op, retry_settings=retry_settings)
+    try:
+        pool.retry_operation_sync(op, retry_settings=retry_settings)
+    except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="business_heartbeat")
+        raise
 
 
 def _online_source_key(row: dict[str, Any]) -> str:
@@ -1899,6 +1943,8 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
         return
     if not getenv_bool("REGION_TALK_YDB_ONLINE_SOURCE_WRITES", True):
         return
+    if not _ydb_online_write_allowed():
+        return
     try:
         payload = _online_source_payload(row, run_id=run_id, stage=stage, status=status)
         key = str(payload.get("canonical_source_key") or "")
@@ -1920,6 +1966,7 @@ def write_region_talk_online_source_item(row: dict[str, Any], *, run_id: str, st
 
         pool.retry_operation_sync(op)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="online_source")
         print(f"[region-talk] online_source_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
@@ -1946,6 +1993,8 @@ def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stag
         return
     if not getenv_bool("REGION_TALK_YDB_ONLINE_POST_WRITES", True):
         return
+    if not _ydb_online_write_allowed():
+        return
     try:
         payload = _online_post_payload(row, run_id=run_id, stage=stage, status=status)
         key = str(payload.get("post_id") or payload.get("platform_post_key") or payload.get("post_url") or "")
@@ -1961,6 +2010,7 @@ def write_region_talk_online_post_item(row: dict[str, Any], *, run_id: str, stag
 
         pool.retry_operation_sync(op)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="online_post")
         print(f"[region-talk] online_post_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
@@ -1968,6 +2018,8 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return 0
     if not rows or not getenv_bool("REGION_TALK_YDB_ONLINE_CANDIDATE_WRITES", True):
+        return 0
+    if not _ydb_online_write_allowed():
         return 0
     try:
         now = utc_now_iso()
@@ -1993,6 +2045,7 @@ def write_region_talk_online_candidate_items(rows: list[dict[str, Any]], *, run_
 
         return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="online_candidate")
         print(f"[region-talk] online_candidate_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
 
@@ -2001,6 +2054,8 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return 0
     if not rows or not getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True):
+        return 0
+    if not _ydb_online_write_allowed():
         return 0
     try:
         now = utc_now_iso()
@@ -2038,6 +2093,7 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
 
         return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label=f"online_queue:{kind}")
         print(f"[region-talk] online_queue_ydb_failed kind={kind} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
 
@@ -2173,6 +2229,8 @@ def write_region_talk_text_vector_enrichment_items(rows: list[dict[str, Any]], *
         return 0
     if not rows or not getenv_bool("REGION_TALK_YDB_TEXT_VECTOR_ENRICHMENT_WRITES", True):
         return 0
+    if not _ydb_online_write_allowed():
+        return 0
     try:
         now = utc_now_iso()
         items: list[tuple[str, str, dict[str, Any]]] = []
@@ -2207,6 +2265,7 @@ def write_region_talk_text_vector_enrichment_items(rows: list[dict[str, Any]], *
 
         return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="text_vector_enrichment")
         print(f"[region-talk] text_vector_enrichment_ydb_failed stage={stage} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
 
@@ -2267,6 +2326,8 @@ def write_region_talk_online_stats(payload: dict[str, Any]) -> None:
         return
     if not getenv_bool("REGION_TALK_YDB_ONLINE_SOURCE_WRITES", True):
         return
+    if not _ydb_online_write_allowed():
+        return
     try:
         compact = compact_record({**payload, "updated_at": utc_now_iso()}, [
             "run_id", "updated_at", "phase", "status", "progress_label",
@@ -2277,14 +2338,21 @@ def write_region_talk_online_stats(payload: dict[str, Any]) -> None:
         run_id = str(compact.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
         updated_at = str(compact.get("updated_at") or utc_now_iso())
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
+        )
 
         def op(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            ydb_upsert_json(session, ydb, table_path, "online_stats:" + run_id, "online_stats", compact, updated_at)
-            ydb_upsert_json(session, ydb, table_path, "online_stats:latest", "online_stats", compact, updated_at)
+            ydb_upsert_json(session, ydb, table_path, "online_stats:" + run_id, "online_stats", compact, updated_at, timeout_seconds=timeout_seconds)
+            ydb_upsert_json(session, ydb, table_path, "online_stats:latest", "online_stats", compact, updated_at, timeout_seconds=timeout_seconds)
 
-        pool.retry_operation_sync(op)
+        pool.retry_operation_sync(op, retry_settings=retry_settings)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="online_stats")
         print(f"[region-talk] online_stats_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
@@ -2292,6 +2360,8 @@ def write_region_talk_live_cursor(name: str, payload: dict[str, Any]) -> None:
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return
     if not getenv_bool("REGION_TALK_YDB_ONLINE_CURSOR_WRITES", True):
+        return
+    if not _ydb_online_write_allowed():
         return
     safe_name = re.sub(r"[^A-Za-z0-9_:-]+", "_", str(name or "cursor")).strip("_") or "cursor"
     try:
@@ -2306,14 +2376,21 @@ def write_region_talk_live_cursor(name: str, payload: dict[str, Any]) -> None:
         item.setdefault("queue_name", safe_name)
         run_id = str(item.get("run_id") or os.getenv("REGION_TALK_RUN_ID") or "unknown-run")
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
+        )
 
         def op(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            ydb_upsert_json(session, ydb, table_path, "queue_cursor:" + safe_name, "queue_cursor", item, now)
-            ydb_upsert_json(session, ydb, table_path, f"queue_cursor:{safe_name}:{run_id}", "queue_cursor", item, now)
+            ydb_upsert_json(session, ydb, table_path, "queue_cursor:" + safe_name, "queue_cursor", item, now, timeout_seconds=timeout_seconds)
+            ydb_upsert_json(session, ydb, table_path, f"queue_cursor:{safe_name}:{run_id}", "queue_cursor", item, now, timeout_seconds=timeout_seconds)
 
-        pool.retry_operation_sync(op)
+        pool.retry_operation_sync(op, retry_settings=retry_settings)
     except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="live_cursor")
         print(f"[region-talk] live_cursor_ydb_failed {type(exc).__name__}: {str(exc)[:160]}", flush=True)
 
 
@@ -3214,6 +3291,11 @@ class TelegramRequestGovernor:
         return cooldown_until
 
     def has_total_request_budget(self, method_name: str, source_id: str = "", canonical_url: str = "") -> bool:
+        method_cd, method_until = self.cooldown_active(f"method:{method_name}")
+        if self.degraded or method_cd:
+            self.resolve_skipped_by_cooldown += 1
+            self.log(method_name, "rate_budget", source_id, canonical_url, "skipped_telegram_cooldown", ok=False, cooldown_until=self.floodwait_cooldown_until or method_until)
+            return False
         if self.total_attempted >= self.max_total_requests:
             self.telegram_phase_status = "degraded_request_budget_exhausted"
             self.degraded = True
@@ -5897,7 +5979,10 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                 errors += 1
                 seconds = int(getattr(exc, "seconds", 0) or 0)
                 if type(exc).__name__ == "FloodWaitError" or seconds:
-                    governor.mark_floodwait("messages.searchGlobal", "keyword_discovery", query, seconds)
+                    governor.total_error += 1
+                    cooldown_until = governor.mark_floodwait("messages.searchGlobal", "keyword_discovery", query, seconds)
+                    if status is not None:
+                        status.event("telegram_keyword_floodwait", phase="keyword_discovery", status="deferred", run_id=run_id, matched_query=query, floodwait_seconds=seconds, cooldown_until=cooldown_until, progress_label=f"keyword discovery FloodWait {seconds}s; cooldown until {cooldown_until}")
                     break
                 governor.total_error += 1
                 error_row = {"run_id": run_id, "discovery_type": "telegram_keyword_search", "edge_type": "telegram_keyword_search", "matched_query": query, "method_status": "error", "method_error_code": type(exc).__name__, "method_error_message_short": str(exc)[:180], "frontier_action": "none"}
@@ -6143,6 +6228,20 @@ async def run_source_fast_check_ko(
                 write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_no_hit")
         except Exception as exc:
             errors += 1
+            seconds = int(getattr(exc, "seconds", 0) or 0)
+            if type(exc).__name__ == "FloodWaitError" or seconds:
+                cooldown_until = governor.mark_floodwait("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url, seconds)
+                base_row.update({
+                    "fast_check_status": "error_floodwait",
+                    "fast_check_error_code": "FloodWaitError",
+                    "fast_check_error_message": str(exc)[:180],
+                    "next_allowed_resolve_at": cooldown_until,
+                    "next_action": "defer_fast_check_until_telegram_cooldown_expires",
+                })
+                rows.append(base_row)
+                write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_floodwait")
+                status.event("fast_check_ko_floodwait", phase="fast_check_ko", status="deferred", run_id=run_id, source_id=seed.source_id, current_source_url=seed.canonical_url, floodwait_seconds=seconds, cooldown_until=cooldown_until, progress_label=f"fast-check KO FloodWait {seconds}s; cooldown until {cooldown_until}")
+                break
             base_row.update({
                 "fast_check_status": "error",
                 "fast_check_error_code": type(exc).__name__,
@@ -6756,13 +6855,16 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
     status: Any,
     output_dir: Path,
     *,
+    governor: TelegramRequestGovernor | None = None,
     kinds: tuple[str, ...] | None = None,
     limit: int | None = None,
     stage: str = "ydb_candidate_link_fetch",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
-    limit = int(limit or getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180)))
-    rows = ydb_candidate_link_rows_from_row_kv(limit, kinds=kinds)
+    if limit is None:
+        limit = getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180))
+    limit = max(0, int(limit))
+    rows = ydb_candidate_link_rows_from_row_kv(limit, kinds=kinds) if limit > 0 else []
     status.event("ydb_candidate_links_loaded", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_to_score=min(limit, len(rows)), post_link_queue_mode=",".join(kinds or ()), progress_label=f"YDB candidate links {len(rows)}")
     posts: list[dict[str, Any]] = []
     source_stats: dict[str, dict[str, Any]] = {}
@@ -6771,27 +6873,96 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
         url = str(row.get("post_url") or "")
         parsed = parse_public_telegram_post_url(url)
         if not parsed:
+            if str(row.get("_kind") or "") == "post_link_queue_item":
+                write_region_talk_post_link_queue_items([{**row, "post_link_status": "terminal_bad_url", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "bad_telegram_post_url", "fetch_error_message": "post_url is not a public Telegram post URL"}], run_id=run_id, stage=stage)
             continue
         handle, mid = parsed
+        canonical_url = f"https://t.me/{handle}"
+        method_name = "get_messages.exact_post_link"
         stat = source_stats.setdefault(handle, {"handle": handle, "source_title": row.get("source_title") or handle, "attempted": 0, "ok": 0, "errors": 0, "last_seen_post_date": ""})
         stat["attempted"] += 1
-        status.event("alive", phase="fetch", status="running", run_id=run_id, progress_label=f"YDB post links {idx}/{len(rows)} · {handle}/{mid}", sources_done=idx - 1, sources_total=len(rows), current_source_handle=handle, current_source_title=stat.get("source_title"), current_source_url=f"https://t.me/{handle}")
+        status.event("alive", phase="fetch", status="running", run_id=run_id, progress_label=f"YDB post links {idx}/{len(rows)} · {handle}/{mid}", sources_done=idx - 1, sources_total=len(rows), current_source_handle=handle, current_source_title=stat.get("source_title"), current_source_url=canonical_url)
+        if governor is not None and not governor.has_total_request_budget(method_name, "post_link_queue", canonical_url):
+            status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact fetch deferred by cooldown/budget at {idx}/{len(rows)}")
+            break
         try:
-            if getenv_bool("REGION_TALK_TG_HUMANLIKE_PACING_ENABLED", True):
+            if governor is not None:
+                if not await governor.humanlike_pause(
+                    method_name,
+                    "post_link_queue",
+                    canonical_url,
+                    min_env="REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS",
+                    max_env="REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS",
+                    default_min=8.0,
+                    default_max=18.0,
+                    reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180),
+                ):
+                    status.event("telethon_exact_post_fetch_deferred", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, progress_label=f"Telethon exact fetch deferred before paced call {idx}/{len(rows)}")
+                    break
+            elif getenv_bool("REGION_TALK_TG_HUMANLIKE_PACING_ENABLED", True):
                 await asyncio.sleep(random.uniform(
-                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS", 1.0),
-                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS", 3.0),
+                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS", 8.0),
+                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS", 18.0),
                 ))
             entity = entity_cache.get(handle)
             if entity is None:
-                entity = await client.get_entity(handle)
+                try:
+                    if governor is not None:
+                        governor.total_attempted += 1
+                        governor.requests_by_method["get_entity.exact_post_link"] = governor.requests_by_method.get("get_entity.exact_post_link", 0) + 1
+                    entity = await client.get_entity(handle)
+                    if governor is not None:
+                        governor.total_ok += 1
+                except Exception as exc:
+                    stat["errors"] += 1
+                    stat["last_error_code"] = type(exc).__name__
+                    stat["last_error_message"] = str(exc)[:180]
+                    seconds = int(getattr(exc, "seconds", 0) or 0)
+                    if governor is not None and (type(exc).__name__ == "FloodWaitError" or seconds):
+                        if governor is not None:
+                            governor.total_error += 1
+                        cooldown_until = governor.mark_floodwait("get_entity.exact_post_link", "post_link_queue", canonical_url, seconds)
+                        status.event("telethon_exact_post_floodwait", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, floodwait_seconds=seconds, cooldown_until=cooldown_until, progress_label=f"Telethon exact resolve FloodWait {seconds}s; cooldown until {cooldown_until}")
+                        if str(row.get("_kind") or "") == "post_link_queue_item":
+                            write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_fetch", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "FloodWaitError", "fetch_error_message": str(exc)[:180], "next_attempt_after": cooldown_until}], run_id=run_id, stage=stage)
+                        break
+                    status.event("telethon_exact_post_fetch_failed", phase="fetch", status="running", run_id=run_id, post_url=url, current_source_handle=handle, fetch_error_code=type(exc).__name__, fetch_error_message=str(exc)[:180], progress_label=f"Telethon exact resolve failed {handle}/{mid}: {type(exc).__name__}")
+                    if str(row.get("_kind") or "") == "post_link_queue_item":
+                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
+                    continue
                 entity_cache[handle] = entity
-            msg = await client.get_messages(entity, ids=mid)
+            try:
+                if governor is not None:
+                    governor.total_attempted += 1
+                    governor.requests_by_method[method_name] = governor.requests_by_method.get(method_name, 0) + 1
+                msg = await client.get_messages(entity, ids=mid)
+                if governor is not None:
+                    governor.total_ok += 1
+            except Exception as exc:
+                stat["errors"] += 1
+                stat["last_error_code"] = type(exc).__name__
+                stat["last_error_message"] = str(exc)[:180]
+                seconds = int(getattr(exc, "seconds", 0) or 0)
+                if governor is not None and (type(exc).__name__ == "FloodWaitError" or seconds):
+                    governor.total_error += 1
+                    cooldown_until = governor.mark_floodwait(method_name, "post_link_queue", canonical_url, seconds)
+                    status.event("telethon_exact_post_floodwait", phase="fetch", status="deferred", run_id=run_id, post_url=url, current_source_handle=handle, floodwait_seconds=seconds, cooldown_until=cooldown_until, progress_label=f"Telethon exact message FloodWait {seconds}s; cooldown until {cooldown_until}")
+                    if str(row.get("_kind") or "") == "post_link_queue_item":
+                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_fetch", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "FloodWaitError", "fetch_error_message": str(exc)[:180], "next_attempt_after": cooldown_until}], run_id=run_id, stage=stage)
+                    break
+                status.event("telethon_exact_post_fetch_failed", phase="fetch", status="running", run_id=run_id, post_url=url, current_source_handle=handle, fetch_error_code=type(exc).__name__, fetch_error_message=str(exc)[:180], progress_label=f"Telethon exact message failed {handle}/{mid}: {type(exc).__name__}")
+                if str(row.get("_kind") or "") == "post_link_queue_item":
+                    write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
+                continue
             text = str(getattr(msg, "message", None) or "").strip() if msg is not None else ""
             if not text:
                 stat["errors"] += 1
+                stat["last_error_code"] = "empty_message" if msg is not None else "message_not_found"
+                stat["last_error_message"] = "message has no text" if msg is not None else "message not returned by Telethon"
+                status.event("telethon_exact_post_empty", phase="fetch", status="running", run_id=run_id, post_url=url, current_source_handle=handle, fetch_error_code=stat["last_error_code"], progress_label=f"Telethon exact empty {handle}/{mid}: {stat['last_error_code']}")
                 if str(row.get("_kind") or "") == "post_link_queue_item":
-                    write_region_talk_post_link_queue_items([{**row, "post_link_status": "terminal_no_text", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "empty_message", "fetch_error_message": "message has no text"}], run_id=run_id, stage=stage)
+                    terminal_status = "terminal_no_text" if msg is not None else "fetch_error"
+                    write_region_talk_post_link_queue_items([{**row, "post_link_status": terminal_status, "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": stat["last_error_code"], "fetch_error_message": stat["last_error_message"]}], run_id=run_id, stage=stage)
                 continue
             dt = getattr(msg, "date", None)
             has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
@@ -6985,13 +7156,14 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         raise RuntimeError("Telethon client is not authorized")
     try:
         if ydb_candidate_links_only:
-            return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir)
+            return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir, governor=governor)
         if getenv_bool("REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST", True):
             exact_limit = getenv_int("REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT", getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", 12))
             exact_source_rows, exact_posts = await fetch_ydb_candidate_link_posts_with_telethon(
                 client,
                 status,
                 output_dir,
+                governor=governor,
                 kinds=("post_link_queue_item",),
                 limit=max(0, exact_limit),
                 stage="post_link_queue_exact_fetch",
@@ -7000,7 +7172,15 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             posts.extend(exact_posts)
             if exact_posts:
                 status.event("post_link_queue_exact_fetch_done", phase="fetch", status="running", run_id=run_id, exact_posts_fetched=len(exact_posts), exact_sources=len(exact_source_rows), progress_label=f"exact post links fetched {len(exact_posts)}")
+            if governor.degraded:
+                status.event("telegram_fetch_deferred_by_cooldown", phase="fetch", status="deferred", run_id=run_id, cooldown_until=governor.floodwait_cooldown_until, floodwait_method=governor.floodwait_method, max_floodwait_seconds=governor.max_floodwait_seconds, progress_label=f"Telegram cooldown active until {governor.floodwait_cooldown_until}; stopping Telethon fetch phases")
+                return source_rows, posts
         fast_check_rows, fast_check_hits = await run_source_fast_check_ko(client, governor, previous_state, run_id, status)
+        if governor.degraded:
+            status.event("telegram_fetch_deferred_by_cooldown", phase="fetch", status="deferred", run_id=run_id, cooldown_until=governor.floodwait_cooldown_until, floodwait_method=governor.floodwait_method, max_floodwait_seconds=governor.max_floodwait_seconds, progress_label=f"Telegram cooldown active until {governor.floodwait_cooldown_until}; stopping Telethon fetch phases")
+            if fast_check_rows:
+                source_rows.extend(fast_check_rows)
+            return source_rows, posts
         if fast_check_rows:
             source_rows.extend(fast_check_rows)
         for idx, seed in enumerate(monitored, start=1):
