@@ -220,6 +220,12 @@ Important invariants:
   per-run cursor history, loaders and metrics prefer the canonical cursor row
   (`queue_cursor:source` / `queue_cursor:image`) and do not let retained
   per-run history override the active cursor.
+- Exact post-link fetch is no longer the first phase of the orchestrated
+  CandidateReport profile. Live runs showed the post-link queue can be dominated
+  by terminal local/spam/cache-miss rows and starve breadth-first source history
+  scanning. The main orchestrator now spends the scarce DISCOVERY1 window on
+  fast-check/source history first; exact known-post fetch can be re-enabled as a
+  separate bounded drain when the source cursor is healthy.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
