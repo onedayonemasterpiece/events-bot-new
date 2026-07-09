@@ -208,6 +208,9 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
   - для даты есть явная лестница provenance/trust: `missing` → `ungrounded` → `source_text` → `poster_ocr` → `canonical_source` → `operator`;
     обычный merge не переписывает `event.date` только потому, что новый источник принёс другую дату. Разрешённые автоматические случаи остаются узкими:
     canonical `parser:*`/site source может исправить якорь, а grounded дата из source text/OCR может исправить старый inferred range у long‑running события при совпадающей площадке.
+  - регулярные/сезонные события с `end_date` не считаются той же публичной карточкой, что и свежая точная occurrence внутри диапазона:
+    LLM match/merge prompts должны выбирать новую occurrence для источников вида `10 июля 20:00`, если существующая строка означает сезон/серии (`1 мая — 30 сентября`, `каждую пятницу`).
+    Узкий deterministic guard только поддерживает это fail-closed: общий ticket/title/place/poster не должен заставлять Smart Update мутировать сезонную карточку свежей афишей одного слота.
   - афиши при merge дедуплицируются не только по `poster_hash`, но и по `supabase_path`, точному `phash`, а затем по точному URL как weak fallback;
     если новый storage URL относится к уже сохранённой афише, строка `eventposter` обновляется без добавления визуального дубля в `event.photo_urls`.
 

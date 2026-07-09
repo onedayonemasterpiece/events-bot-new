@@ -22,6 +22,8 @@ def test_match_create_prompt_distinguishes_time_conflict_from_multi_session():
     assert "одно событие с конфликтом/правкой времени" in src
     assert "один и тот же источник явно перечисляет несколько самостоятельных сеансов" in src
     assert "для новой самостоятельной occurrence" in src
+    assert "Для регулярных/сезонных событий НЕ склеивай точную occurrence" in src
+    assert "Выбирай `action=create` для новой occurrence" in src
 
 
 async def _seed_club_znakomstv_event(db: Database) -> int:

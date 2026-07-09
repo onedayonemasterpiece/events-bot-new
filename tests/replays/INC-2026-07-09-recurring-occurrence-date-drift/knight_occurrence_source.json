@@ -1,0 +1,27 @@
+{
+  "incident_id": "INC-2026-07-09-recurring-occurrence-date-drift",
+  "event_id_before_repair": 3980,
+  "source_url": "https://vk.com/wall-222073295_9296",
+  "imported_at_utc": "2026-07-09 04:18:44.773469",
+  "existing_event_before": {
+    "title": "Рыцарский турнир",
+    "date": "2026-05-01",
+    "time": "20:00",
+    "end_date": "2026-09-30",
+    "location_name": "Замок Нойхаузен, Заречная 2А, Гурьевск",
+    "ticket_link": "https://turnir39.ru"
+  },
+  "source_text": "🗡️ Пятница. Замок ждёт.\n\n10 июля стены Нойхаузена вновь оживут. Лето в самом разгаре, вечера тёплые и долгие — а значит, самое время для путешествия в средневековье.\n\nВас ждёт всё то, за что вы уже полюбили наш турнир: рыцарские поединки, где сталь встречается со сталью, живая музыка и старинные танцы, в которых может поучаствовать каждый.\nМаленькие гости смогут попробовать себя в безопасных боях на мягких мечах — и, поверьте, их восторгу не будет предела.\n\nОбязательно приезжайте к открытию ворот (в 20:00) — чтобы успеть на экскурсию по замку, которая уже включена в билет.\nПрогуляться по внутреннему двору, пока солнце ещё освещает древние камни. Сделать памятные фото с рыцарями и дамами.\nА когда стемнеет — увидеть главное: огненный финал, который остаётся в памяти навсегда.\n\n10 июля. Замок Нойхаузен.\nНачало в 20:00.\n\n🎟️ Билеты: turnir39.ru\n\n📍 Гурьевск.\nЖдём вас — с детьми, с друзьями, с собой настоящим 🏰🔥",
+  "poster_ocr_text": "Рыцарский турнир\nАнны Марии\n10 июля 20:00\nв замке Нойхаузен",
+  "expected_behavior": {
+    "smart_update_match": "create_or_keep_distinct_occurrence_not_merge_into_recurring_series",
+    "date": "2026-07-10",
+    "time": "20:00",
+    "end_date": null,
+    "must_not_publish_date": "2026-05-01"
+  },
+  "negative_control": {
+    "description": "A source that explicitly edits the whole season/range, not one dated Friday occurrence, may merge into the recurring row after LLM identity gate approval.",
+    "shape": "text mentions season rules/range such as 'каждую пятницу с 1 мая по сентябрь' and does not announce one exact occurrence date."
+  }
+}

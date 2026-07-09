@@ -286,6 +286,11 @@ def deterministic_identity_veto(
     """
 
     for ev in existing:
+        if _single_occurrence_inside_recurring_series(candidate, ev):
+            # Let the LLM/create path materialize the exact occurrence instead of
+            # vetoing create against the broader recurring season row.
+            continue
+
         same_day = _date_overlaps(candidate, ev)
         same_time = _same_known_time(candidate, ev)
         title_related = _titles_related(candidate.title, ev.title)
@@ -496,12 +501,13 @@ def build_merge_identity_gate_verdict(
 
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
-    if deterministic_code and not _strong_shared_anchor(candidate_subject, existing_subject):
+    force_structural_veto = deterministic_code == "single_occurrence_vs_recurring_series"
+    if deterministic_code and (force_structural_veto or not _strong_shared_anchor(candidate_subject, existing_subject)):
         # A high-confidence LLM can still allow genuinely same long-running events,
         # but not when it already says uncertainty/distinctness or has low confidence.
         if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
             conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
-        elif relation not in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE} or confidence < 0.9:
+        elif force_structural_veto or relation not in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE} or confidence < 0.9:
             action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
             relation = MergeIdentityRelation.UNSAFE_TO_MERGE
             reason_code = deterministic_code
@@ -599,17 +605,69 @@ def _strong_shared_anchor(left: IdentitySubject, right: IdentitySubject) -> bool
     return bool(left.poster_hashes and right.poster_hashes and set(left.poster_hashes).intersection(right.poster_hashes))
 
 
-def _is_long_running(subject: IdentitySubject) -> bool:
+def _is_exhibition_like(subject: IdentitySubject) -> bool:
     event_type = _normalize_text(subject.event_type)
-    if any(word in event_type for word in ("выстав", "ярмарк", "exhibition", "fair")):
+    return any(word in event_type for word in ("выстав", "экспозиц", "ярмарк", "exhibition", "fair"))
+
+
+def _is_long_running(subject: IdentitySubject) -> bool:
+    if _is_exhibition_like(subject):
         return True
     return bool(subject.end_date and subject.date and subject.end_date != subject.date)
+
+
+def _single_occurrence_inside_recurring_series(
+    candidate: IdentitySubject,
+    existing: IdentitySubject,
+) -> bool:
+    """Return true for an exact one-day occurrence matched to a broader series row.
+
+    A fresh source like "10 июля 20:00" should not mutate a public row whose
+    anchors mean "1 мая — 30 сентября, every Friday".  This guardrail does not
+    decide broad semantic identity; it only prevents deterministic source/ticket/
+    poster anchors from treating the occurrence as the same public card as the
+    whole season.
+    """
+
+    if _is_exhibition_like(candidate) or _is_exhibition_like(existing):
+        return False
+    if not (candidate.date and existing.date and existing.end_date):
+        return False
+    if candidate.end_date and candidate.end_date != candidate.date:
+        return False
+    if existing.end_date == existing.date:
+        return False
+    if not (existing.date < candidate.date <= existing.end_date):
+        return False
+    if not (_titles_related(candidate.title, existing.title) or _locations_related(candidate, existing)):
+        return False
+    return bool(
+        _same_known_time(candidate, existing)
+        or (
+            candidate.ticket_link
+            and existing.ticket_link
+            and _normalize_url(candidate.ticket_link) == _normalize_url(existing.ticket_link)
+        )
+        or (
+            candidate.source_url
+            and existing.source_url
+            and candidate.source_url == existing.source_url
+        )
+        or (
+            candidate.poster_hashes
+            and existing.poster_hashes
+            and set(candidate.poster_hashes).intersection(existing.poster_hashes)
+        )
+    )
 
 
 def _deterministic_merge_identity_veto_reason(
     candidate: IdentitySubject,
     existing: IdentitySubject,
 ) -> str | None:
+    if _single_occurrence_inside_recurring_series(candidate, existing):
+        return "single_occurrence_vs_recurring_series"
+
     candidate_long = _is_long_running(candidate)
     existing_long = _is_long_running(existing)
     title_related = _titles_related(candidate.title, existing.title)

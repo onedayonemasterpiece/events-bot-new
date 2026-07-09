@@ -10,9 +10,11 @@ from db import Database
 from models import Event, EventIdentityDecisionLog, EventPoster, EventSource
 from smart_event_update import EventCandidate, smart_event_update
 from smart_update_identity import (
+    IdentityGateAction,
     IdentityGateMode,
     MergeIdentityAction,
     MergeIdentityRelation,
+    build_identity_gate_verdict,
     build_merge_identity_gate_verdict,
 )
 
@@ -29,20 +31,21 @@ class _Obj:
     id: int | None = None
     source_type: str | None = None
     source_url: str | None = None
+    ticket_link: str | None = None
 
 
 async def _no_topics(*_args, **_kwargs):
     return None
 
 
-async def _seed_boyko_lecture(db: Database, event_id: int = 5077) -> None:
+async def _seed_boyko_lecture(db: Database, event_id: int = 5077, event_date: str = "2026-07-03") -> None:
     async with db.get_session() as session:
         session.add(
             Event(
                 id=event_id,
                 title="Калининград и область как кинодекорация",
                 description="Лекция Андрея Бойко о Калининграде и области как кинодекорации.",
-                date="2026-07-03",
+                date=event_date,
                 time="19:00",
                 location_name="Музей изобразительных искусств",
                 location_address="Ленинский проспект, 83",
@@ -178,6 +181,82 @@ def test_merge_gate_positive_same_event_update_allowed() -> None:
     assert not verdict.should_skip_side_effects
 
 
+def test_merge_gate_blocks_single_occurrence_into_recurring_series_even_with_ticket_anchor() -> None:
+    """INC-2026-07-09: a fresh exact occurrence must not mutate the stale season row."""
+
+    recurring = _Obj(
+        id=3980,
+        title="Рыцарский турнир",
+        date="2026-05-01",
+        time="20:00",
+        end_date="2026-09-30",
+        location_name="Замок Нойхаузен, Заречная 2А, Гурьевск",
+        event_type="турнир",
+        ticket_link="https://turnir39.ru",
+    )
+    occurrence = _Obj(
+        title="Рыцарский турнир",
+        date="2026-07-10",
+        time="20:00",
+        location_name="Замок Нойхаузен, Заречная 2А, Гурьевск",
+        event_type="турнир",
+        ticket_link="https://turnir39.ru",
+        source_url="https://vk.com/wall-222073295_9296",
+    )
+
+    verdict = build_merge_identity_gate_verdict(
+        occurrence,
+        recurring,
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge",
+            "relation": "same_event",
+            "confidence": 0.97,
+            "reason_code": "same_event_update",
+            "reason": "same title, place and ticket",
+            "blocking_conflicts": [],
+            "allowed_fields": ["source", "poster"],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
+    assert verdict.should_skip_side_effects
+    assert verdict.reason_code == "single_occurrence_vs_recurring_series"
+
+
+def test_create_gate_allows_single_occurrence_next_to_recurring_series_same_ticket() -> None:
+    """The create-path identity gate must not veto a real dated occurrence."""
+
+    recurring = _Obj(
+        id=3980,
+        title="Рыцарский турнир",
+        date="2026-05-01",
+        time="20:00",
+        end_date="2026-09-30",
+        location_name="Замок Нойхаузен, Заречная 2А, Гурьевск",
+        event_type="турнир",
+        ticket_link="https://turnir39.ru",
+    )
+    occurrence = _Obj(
+        title="Рыцарский турнир",
+        date="2026-07-10",
+        time="20:00",
+        location_name="Замок Нойхаузен, Заречная 2А, Гурьевск",
+        event_type="турнир",
+        ticket_link="https://turnir39.ru",
+        source_url="https://vk.com/wall-222073295_9296",
+    )
+
+    verdict = build_identity_gate_verdict(
+        occurrence,
+        [recurring],
+        mode=IdentityGateMode.ENFORCE,
+    )
+
+    assert verdict.action is IdentityGateAction.ALLOW_CREATE
+    assert not verdict.should_veto_create
+
+
 @pytest.mark.asyncio
 async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "boyko.sqlite"))
@@ -238,7 +317,7 @@ async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch)
     db = Database(str(tmp_path / "same-event.sqlite"))
     await db.init()
     try:
-        await _seed_boyko_lecture(db)
+        await _seed_boyko_lecture(db, event_date="2026-07-13")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
@@ -259,9 +338,9 @@ async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch)
         candidate = EventCandidate(
             source_type="telegram",
             source_url="https://t.me/museum/5078",
-            source_text="3 июля в 19:00 Андрей Бойко прочитает лекцию «Калининград и область как кинодекорация».",
+            source_text="13 июля в 19:00 Андрей Бойко прочитает лекцию «Калининград и область как кинодекорация».",
             title="Калининград и область как кинодекорация",
-            date="2026-07-03",
+            date="2026-07-13",
             time="19:00",
             location_name="Музей изобразительных искусств",
             location_address="Ленинский проспект, 83",

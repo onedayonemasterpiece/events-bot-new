@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-09-recurring-occurrence-date-drift.md`
+  - Scope: Smart Update matching/merge for recurring or season rows versus exact single-date occurrences, VK auto-import source/media attachment, and public Telegram/VK/Telegraph event fanout.
+  - Must not regress: a source/poster that explicitly announces one occurrence such as `10 июля 20:00` must not mutate or republish a broader `1 мая — 30 сентября` recurring row with stale date anchors; shared title/place/ticket is not enough to veto creating the occurrence or to allow merge side effects.
 - `INC-2026-07-07-new-event-quality-degradation.md` — New event quality degradation after vector identity rollout; VK/Smart Update source-grounding, media and public fanout regression contract.
 - `INC-2026-07-05-guide-visual-digest-stale-vk-booking-link.md`
   - Scope: guide excursions visual digest `visual_schedule`, LLM extraction of `booking_url` from multi-event schedule links, and VK/Telegram caption primary-link selection.
