@@ -1503,6 +1503,62 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
 
+    def test_source_queue_cursor_stops_before_pending_gap(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 1,
+            "unified_source_queue": {
+                "telegram:done_late": {
+                    "canonical_source_key": "telegram:done_late",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/done_late",
+                    "queue_order": 50,
+                    "source_queue_status": "processed_no_ko",
+                    "posts_scanned": 3,
+                    "last_history_fetch_at": "2026-07-01T00:00:00+00:00",
+                },
+                "telegram:pending_gap": {
+                    "canonical_source_key": "telegram:pending_gap",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/pending_gap",
+                    "queue_order": 10,
+                    "source_queue_status": "pending_scan",
+                    "added_from": "telegram_keyword_search",
+                },
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00")
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(metrics["source_queue_cursor_position"], 1)
+        self.assertEqual(metrics["source_queue_pending_before_max_processed_gap_total"], 1)
+        self.assertEqual(by_key["telegram:pending_gap"]["is_after_cursor"], "true")
+
+    def test_unified_queue_dynamic_seeds_prioritizes_keyword_gap_before_cursor(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 100,
+            "unified_source_queue": {
+                "telegram:normal_after": {
+                    "canonical_source_key": "telegram:normal_after",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/normal_after",
+                    "queue_order": 101,
+                    "source_queue_status": "pending_scan",
+                },
+                "telegram:keyword_before": {
+                    "canonical_source_key": "telegram:keyword_before",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/keyword_before",
+                    "queue_order": 20,
+                    "source_queue_status": "processed_no_ko",
+                    "posts_scanned": 0,
+                    "added_from": "telegram_keyword_search",
+                },
+            },
+        }
+        selected = mod.unified_queue_dynamic_seeds(previous, 2)
+        self.assertEqual([s.canonical_url for s in selected], ["https://t.me/keyword_before", "https://t.me/normal_after"])
+
     def test_processed_status_without_scan_evidence_returns_to_pending(self) -> None:
         mod = load_module()
         previous = {

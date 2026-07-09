@@ -339,7 +339,12 @@ including existing pending frontier rows, historical `source_edge_item` /
 `canonical_source_key`+handle, and fake legacy `processed_*` rows without scan
 evidence, are reinserted immediately after the persisted source cursor so the
 next scan actually tests the channels where keyword search saw a Kaliningrad
-hit. The orchestrator also reports keyword-sourced post diagnostics:
+hit. Source queue cursor calculation treats the cursor as the point
+before the next primary `pending_scan` gap, not simply the largest processed
+order; otherwise a later processed row could hide unscanned keyword rows behind
+the cursor. The source selector also prioritizes keyword-evidence rows even when
+legacy queue drift placed them before the stored cursor. The orchestrator also
+reports keyword-sourced post diagnostics:
 `publics_keyword_post_rows_with_text_total`, `publics_keyword_regex_ko_raw_posts_total`,
 `publics_keyword_regex_ko_filtered_posts_total`,
 `publics_keyword_vector_ko_candidate_posts_total`, source-level regex hit counts,

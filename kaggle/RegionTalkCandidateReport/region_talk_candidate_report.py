@@ -901,8 +901,9 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) in {"telegram", "vk"}
     ]
     rows = sorted(rows, key=lambda r: (
-        int(r.get("queue_order") or 999999999) <= cursor,
+        source_queue_priority_bucket(r),
         str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
+        int(r.get("queue_order") or 999999999) <= cursor,
         int(r.get("queue_order") or 999999999),
     ))
     selected: list[Seed] = []
@@ -4275,7 +4276,17 @@ def build_unified_source_queue(
             "next_action": next_action,
             "queue_item_updated_at": run_now,
         })
+    pending_primary_orders = [
+        int(r.get("queue_order") or 0)
+        for r in out
+        if int(r.get("queue_order") or 0) > 0 and str(r.get("source_queue_status") or "") == "pending_scan"
+    ]
     cursor_position = max([prev_cursor] + processed_orders) if out else 0
+    if pending_primary_orders:
+        # Cursor means "highest contiguous queue position before the next primary
+        # scan gap", not just max processed order. Historical runs could process
+        # later rows first and leave keyword-hit rows behind the cursor forever.
+        cursor_position = min(cursor_position, max(0, min(pending_primary_orders) - 1))
     cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
     display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" or source_terminal_rejected_status(r.get("source_queue_status")) else 1, int(r.get("queue_order") or 0)))
     next_pending_marked = False
@@ -4294,6 +4305,7 @@ def build_unified_source_queue(
         "source_queue_retry_total": sum(1 for r in out if r.get("source_queue_status") == "needs_rescan_or_retry"),
         "source_queue_rejected_high_volume_total": sum(1 for r in out if source_rejected_by_text_volume_status(r.get("source_queue_status"))),
         "source_queue_fake_processed_without_scan_evidence_total": sum(1 for r in out if str(r.get("fake_processed_without_scan_evidence") or "").lower() == "true"),
+        "source_queue_pending_before_max_processed_gap_total": sum(1 for order in pending_primary_orders if processed_orders and order <= max(processed_orders)),
         "source_queue_cursor_position": cursor_position,
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,

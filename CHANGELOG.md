@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / source cursor pending-gap protection**: unified source
+  queue cursoring now stops before the earliest primary `pending_scan` gap and
+  source selection prioritizes keyword-evidence rows even if legacy cursor drift
+  put them before the stored cursor, preventing keyword-hit channels from being
+  skipped without real history scans.
 - **Region Talk Channel / historical keyword source promotion**: CandidateReport
   now recovers historical keyword-search evidence from `source_edge_item` and
   `source_candidate_item`, including context-only Telegram rows that have only a
