@@ -1930,11 +1930,16 @@ def _record_ydb_online_write_failure(exc: Exception, *, label: str) -> None:
     _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_failures"] = failures
     _close_cached_ydb_pool()
     lower = text.lower()
-    hard = any(marker in lower for marker in ["unauthenticated", "resourceexhausted", "connectionlost", "deadline", "timeout"])
-    if hard and getenv_bool("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR", True):
+    auth_error = any(marker in lower for marker in ["unauthenticated", "unauthorized", "permissiondenied", "access denied", "token expired"])
+    transient_error = any(marker in lower for marker in ["resourceexhausted", "connectionlost", "deadline", "timeout"])
+    disable_after_auth = getenv_bool("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR", True)
+    disable_after_transient = getenv_bool("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_TRANSIENT_ERROR", False)
+    if (auth_error and disable_after_auth) or (transient_error and disable_after_transient):
         _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_disabled"] = True
         _YDB_BUSINESS_HEARTBEAT_CACHE["online_write_disabled_reason"] = f"{label}: {text}"
         print(f"[region-talk] ydb_online_writes_disabled label={label} reason={text}", flush=True)
+    elif transient_error:
+        print(f"[region-talk] ydb_online_write_transient label={label} reason={text}", flush=True)
 
 
 def _compact_business_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -5468,6 +5473,17 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             if len(selected) >= max_rows:
                 break
 
+    def mandatory_rank(row: dict[str, Any]) -> int:
+        if str(row.get("last_scan_run_id") or "") == run_id:
+            return 0
+        if str(row.get("last_fast_check_run_id") or "") == run_id:
+            return 1
+        if str(row.get("keyword_evidence_run_id") or "") == run_id:
+            return 2
+        if str(row.get("status_changed_this_run") or "").lower() == "true":
+            return 3
+        return 4
+
     ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
     if len(ordered_selected) <= max_rows:
         return ordered_selected
@@ -5477,8 +5493,9 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
     }
     mandatory_rows = [r for r in ordered_selected if str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("canonical_url") or "") in mandatory_keys]
     optional_rows = [r for r in ordered_selected if str(r.get("canonical_source_key") or r.get("source_queue_id") or r.get("source_url") or r.get("canonical_url") or "") not in mandatory_keys]
+    mandatory_rows = sorted(mandatory_rows, key=lambda r: (mandatory_rank(r), source_queue_priority_bucket(r), order(r)))
     if len(mandatory_rows) >= max_rows:
-        return mandatory_rows
+        return mandatory_rows[:max_rows]
     return sorted(mandatory_rows + optional_rows[: max_rows - len(mandatory_rows)], key=lambda r: (source_queue_priority_bucket(r), order(r)))
 
 

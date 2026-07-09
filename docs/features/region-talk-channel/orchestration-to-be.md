@@ -462,11 +462,21 @@ neighbourhood and pending/retry backlog. Current-run scan rows
 (`last_scan_run_id`), fast-check rows and keyword-evidence rows are mandatory in
 the handoff; a mere `queue_order_changed_this_run` tail shift is not mandatory,
 otherwise one keyword insert can turn a short run into thousands of transactional
-YDB upserts. This keeps the 30-minute run contract realistic without
+YDB upserts. If the mandatory set itself exceeds the configured handoff cap, it
+is still capped with current-run scan evidence first, then fast-check, then
+keyword evidence, then generic status changes. This keeps the 30-minute run
+contract realistic without
 hiding queue size: `source_queue_total` stays the full queue count, while
 `source_queue_handoff_rows` reports how many rows were actually written to
 `source_queue_item`; the duplicate `source_status_item` mirror is off by default
 in orchestrated runs.
+
+Transient YDB failures (`ConnectionLost`, deadline/timeout) close the cached
+driver and retry on the next write, but must not disable all online writes for
+the rest of the notebook. Only authentication/authorization failures disable
+online writes by default (`REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR=1`);
+transient-error disablement is an explicit opt-in
+(`REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_TRANSIENT_ERROR=1`).
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

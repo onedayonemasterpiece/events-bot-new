@@ -24,7 +24,10 @@
   `skipped_cached_entity_only_no_private_entity` as a primary access attempt so
   unresolved rows stop starving the cursor, and makes current-run
   scan/fast-check/keyword evidence mandatory in the bounded YDB handoff while
-  leaving large tail reorder rewrites bounded.
+  leaving large tail reorder rewrites bounded. Transient YDB write failures
+  such as `ConnectionLost` now close/retry the cached driver without disabling
+  all online writes for the rest of the notebook; only auth/permission errors
+  trigger the default online-write disable gate.
 - **Region Talk Channel / post-link queue hygiene and goal loop controls**:
   exact keyword/fast-check post links from obvious Kaliningrad-local or spam
   sources now become terminal `post_link_queue_item` rows before Telethon fetch,
