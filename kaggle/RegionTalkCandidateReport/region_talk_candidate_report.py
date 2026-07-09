@@ -79,13 +79,17 @@ AD_WORDS = ["скидк", "промокод", "купить", "заказать"
 TRASH_WORDS = ["жесть", "треш", "трэш", "шок", "кошмар"]
 POSITIVE_WORDS = ["красив", "атмосфер", "море", "дюны", "архитект", "истори", "маршрут", "музей", "пляж", "курорт", "прогул", "путешеств"]
 
-SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09"
+SOURCE_SURFACE_FILTER_VERSION = "source_surface_v2026_07_09_local_scope_v2"
 LOCAL_REGION_SOURCE_STATUS = "rejected_local_region_source"
 SPAM_SOURCE_STATUS = "rejected_spam_source"
 LOCAL_REGION_SOURCE_REASON = "source title/handle is Kaliningrad-local; keep for separate local-source monitoring, skip Region Talk external-publication scan"
 SPAM_SOURCE_REASON = "source title/hashtag/excerpt matches repeated hashtag-spam/commercial bait; skip Region Talk scan"
+LOCAL_REGION_RATIO_MIN_POSTS = 30
+LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
+LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
+LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO = 0.55
 SOURCE_LOCAL_TITLE_PATTERNS = [
-    r"калининград", r"кёниг", r"кениг", r"kenig", r"\bkgd\b", r"(?<!\w)39(?!\w)",
+    r"калининград", r"kaliningrad", r"кёниг", r"кениг", r"kenig", r"koenig", r"konig", r"koenigsberg", r"königsberg", r"\bkgd\b", r"\bkld\b", r"\bklgd\b", r"(?<!\w)39(?!\w)", r"(?<=[a-zа-яё_])39(?!\d)",
     r"зеленоградск", r"светлогорск", r"балтийск", r"янтарн", r"пионерск", r"светлый",
     r"гурьевск", r"гусев", r"черняховск", r"советск", r"неман", r"мамоново",
     r"гвардейск", r"краснознаменск", r"полесск", r"правдинск", r"ладушкин",
@@ -109,6 +113,57 @@ SOURCE_SPAM_HASHTAG_TOKENS = {
     "волейбол", "баскетбол", "новости", "происшествие", "политика",
     "technology", "саморазвитие", "ставки", "mrt", "blum",
 }
+
+
+def source_scope_terminal_fields_for_local_region(reason: str, *, hits: str = "", version: str = SOURCE_SURFACE_FILTER_VERSION) -> dict[str, Any]:
+    return {
+        "source_queue_status": LOCAL_REGION_SOURCE_STATUS,
+        "fetch_status": LOCAL_REGION_SOURCE_STATUS,
+        "source_scope": "local_region",
+        "source_geo_class": "kaliningrad_local",
+        "source_topic_class": "local_region_source_surface",
+        "source_quick_class": "local_region_source",
+        "source_surface_filter_version": version,
+        "source_local_hits": hits,
+        "source_surface_filter_reason": reason,
+        "monitoring_exclusion_reason": LOCAL_REGION_SOURCE_REASON,
+        "source_probe_reason": LOCAL_REGION_SOURCE_REASON + (": " + reason if reason else ""),
+        "next_action": "route_to_local_region_source_list_no_external_scan",
+        "insertion_policy": "surface_local_rejected_before_cursor_insert",
+    }
+
+
+def local_region_ratio_decision(row: dict[str, Any]) -> dict[str, Any]:
+    try:
+        posts_scanned = int(float(row.get("posts_scanned") or 0))
+    except Exception:
+        posts_scanned = 0
+    try:
+        ko_posts = int(float(row.get("ko_posts_found") or 0))
+    except Exception:
+        ko_posts = 0
+    try:
+        candidate_posts = int(float(row.get("candidate_posts_found") or 0))
+    except Exception:
+        candidate_posts = 0
+    if posts_scanned < LOCAL_REGION_RATIO_MIN_POSTS:
+        return {}
+    ko_ratio = ko_posts / max(1, posts_scanned)
+    candidate_ratio = candidate_posts / max(1, posts_scanned)
+    if (
+        ko_posts >= LOCAL_REGION_RATIO_MIN_KO_POSTS
+        and (
+            ko_ratio >= LOCAL_REGION_RATIO_MIN_KO_RATIO
+            or candidate_ratio >= LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO
+        )
+    ):
+        reason = (
+            "local_ratio_profile="
+            f"posts_scanned:{posts_scanned},ko_posts:{ko_posts},candidate_posts:{candidate_posts},"
+            f"ko_ratio:{ko_ratio:.3f},candidate_ratio:{candidate_ratio:.3f}"
+        )
+        return source_scope_terminal_fields_for_local_region(reason, hits="profile_ratio")
+    return {}
 
 _REGION_TALK_SUPABASE_CLIENT: Any | None = None
 _REGION_TALK_GOOGLE_CLIENT: Any | None = None
@@ -1192,6 +1247,7 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
             **decision,
             "source_queue_status": SPAM_SOURCE_STATUS,
             "fetch_status": SPAM_SOURCE_STATUS,
+            "source_scope": "spam",
             "source_geo_class": "unknown",
             "source_topic_class": "spam_or_commercial_hashtag_source",
             "monitoring_exclusion_reason": SPAM_SOURCE_REASON,
@@ -1202,16 +1258,30 @@ def source_surface_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
     if klass == "local_region_source" and getenv_bool("REGION_TALK_REJECT_LOCAL_SOURCES_BY_TITLE", True):
         return {
             **decision,
-            "source_queue_status": LOCAL_REGION_SOURCE_STATUS,
-            "fetch_status": LOCAL_REGION_SOURCE_STATUS,
-            "source_geo_class": "kaliningrad_local",
-            "source_topic_class": "local_region_source_surface",
-            "monitoring_exclusion_reason": LOCAL_REGION_SOURCE_REASON,
-            "source_probe_reason": LOCAL_REGION_SOURCE_REASON + (": " + str(decision.get("source_surface_filter_reason") or "") if decision.get("source_surface_filter_reason") else ""),
-            "next_action": "route_to_local_region_source_list_no_external_scan",
-            "insertion_policy": "surface_local_rejected_before_cursor_insert",
+            **source_scope_terminal_fields_for_local_region(
+                str(decision.get("source_surface_filter_reason") or ""),
+                hits=str(decision.get("source_local_hits") or ""),
+                version=str(decision.get("source_surface_filter_version") or SOURCE_SURFACE_FILTER_VERSION),
+            ),
         }
     return decision
+
+
+def source_local_region_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
+    surface = source_surface_terminal_fields(row)
+    if source_terminal_rejected_status(surface.get("source_queue_status")):
+        return surface
+    if (
+        str(row.get("source_scope") or "") == "local_region"
+        or str(row.get("source_geo_class") or "") == "kaliningrad_local"
+        or str(row.get("source_quick_class") or "") == "local_region_source"
+    ):
+        reason = str(row.get("source_surface_filter_reason") or row.get("source_probe_reason") or "existing_local_region_source_signal")
+        return source_scope_terminal_fields_for_local_region(reason, hits=str(row.get("source_local_hits") or "existing_local_signal"))
+    ratio = local_region_ratio_decision(row)
+    if ratio:
+        return ratio
+    return surface
 
 
 def text_post_utc_day_key(value: Any) -> str:
@@ -1369,7 +1439,7 @@ SOURCE_STATE_FIELDS = [
     "source_id", "source_seed_id", "canonical_source_key",
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
-    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
@@ -1390,7 +1460,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
-    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "ko_posts_found", "candidate_posts_found",
@@ -1415,7 +1485,7 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "edge_type", "candidate_source_status", "frontier_status", "frontier_stage",
     "frontier_action", "frontier_reason", "source_candidate_score", "frontier_priority",
     "confidence", "active_scan_allowed", "quarantine_reason", "source_probe_reason",
-    "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
@@ -1907,6 +1977,7 @@ def _online_source_payload(row: dict[str, Any], *, run_id: str, stage: str, stat
         "confidence": row.get("confidence") or row.get("similarity_edge_confidence") or "",
         "source_probe_reason": row.get("source_probe_reason") or row.get("frontier_reason") or "",
         "monitoring_exclusion_reason": row.get("monitoring_exclusion_reason") or "",
+        "source_scope": row.get("source_scope") or "",
         "high_volume_text_posts_date": row.get("high_volume_text_posts_date") or "",
         "high_volume_text_posts_count": row.get("high_volume_text_posts_count") or 0,
         "high_volume_text_posts_threshold": row.get("high_volume_text_posts_threshold") or 0,
@@ -2577,6 +2648,18 @@ def merge_ydb_source_queue_status_items(
             for field, value in item.items():
                 if value in (None, ""):
                     continue
+                if field == "source_queue_status":
+                    current_terminal = source_terminal_rejected_status(current.get(field))
+                    incoming_terminal = source_terminal_rejected_status(value)
+                    if current_terminal and not incoming_terminal:
+                        continue
+                if field in {"source_scope", "source_geo_class", "source_quick_class"}:
+                    if (
+                        str(current.get("source_scope") or "") == "local_region"
+                        or str(current.get("source_geo_class") or "") == "kaliningrad_local"
+                        or str(current.get("source_quick_class") or "") == "local_region_source"
+                    ) and value not in {"local_region", "kaliningrad_local", "local_region_source"}:
+                        continue
                 if field in numeric_max_fields:
                     try:
                         current[field] = max(int(float(current.get(field) or 0)), int(float(value or 0)))
@@ -4118,7 +4201,7 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
     news_hits = sum(1 for r in sampled if float(r.get("newsiness_score") or 0) >= 0.45)
     personal_hits = sum(1 for r in sampled if str(r.get("has_firsthand_visit_evidence") or "").lower() == "true" or str(r.get("first_person_markers") or ""))
     ko_ratio = round(ko_hits / n, 3)
-    if any(w in joined for w in ["калининград", "кёнигсберг", "kenig", "kgd", "39"]):
+    if any(w in joined for w in ["калининград", "kaliningrad", "кёнигсберг", "kenig", "koenig", "konig", "kgd", "kld", "klgd", "39"]):
         geo = "kaliningrad_local"
     elif sampled and 0 < ko_ratio < 0.7:
         geo = "nonlocal_russia"
@@ -4142,6 +4225,7 @@ def classify_source_profile(srow: dict[str, Any], sampled: list[dict[str, Any]])
     personal_score = round(min(1.0, personal_hits / n + (0.2 if topic == "personal_blog" else 0.0)), 3)
     nonlocal_value = round(min(1.0, (0.45 if geo == "nonlocal_russia" else 0.10 if geo == "unknown" else 0.0) + travel_score * 0.35 + (0.20 if 0 < ko_ratio < 0.5 else 0.0)), 3)
     return {
+        "source_scope": "local_region" if geo == "kaliningrad_local" else ("external" if geo == "nonlocal_russia" else "unknown"),
         "source_geo_class": geo,
         "source_topic_class": topic,
         "ko_mention_ratio_recent": ko_ratio,
@@ -4730,7 +4814,7 @@ def build_unified_source_queue(
         seen_keyword.add(seed["canonical_source_key"])
         key = seed["canonical_source_key"]
         existing = entries.get(key)
-        surface_fields = source_surface_terminal_fields({**row, **seed})
+        surface_fields = source_local_region_terminal_fields({**row, **seed})
         if existing:
             existing.update({k: v for k, v in seed.items() if v not in ("", None)})
             existing["keyword_discovery_status"] = "keyword_evidence"
@@ -4903,7 +4987,11 @@ def build_unified_source_queue(
             or ko_posts > 0
             or candidate_posts > 0
         )
-        surface_fields = source_surface_terminal_fields({**rec, **srow})
+        surface_fields = source_local_region_terminal_fields({**rec, **srow})
+        if not terminal_rejected_status and source_terminal_rejected_status(surface_fields.get("source_queue_status")):
+            rec.update(surface_fields)
+            previous_queue_status = str(rec.get("source_queue_status") or previous_queue_status)
+            terminal_rejected_status = previous_queue_status
         if (
             not terminal_rejected_status
             and not scan_evidence
@@ -4955,6 +5043,7 @@ def build_unified_source_queue(
             "source_image_quality_status": image_quality_source_status,
             "source_image_quality_min_actual_scored": image_quality_min_n,
             "source_image_quality_min_avg_score": image_quality_min_score,
+            "source_scope": srow.get("source_scope") or rec.get("source_scope") or surface_fields.get("source_scope", ""),
             "source_geo_class": srow.get("source_geo_class") or rec.get("source_geo_class") or surface_fields.get("source_geo_class", ""),
             "source_topic_class": srow.get("source_topic_class") or rec.get("source_topic_class") or surface_fields.get("source_topic_class", ""),
             "source_quick_class": rec.get("source_quick_class") or surface_fields.get("source_quick_class", ""),
@@ -5977,7 +6066,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "telegram_spoiler_entity_count": spoiler_count,
                     }
                     row.update(source_discovery_surface_filter(row))
-                    terminal_surface = source_surface_terminal_fields(row)
+                    terminal_surface = source_local_region_terminal_fields(row)
                     if source_terminal_rejected_status(terminal_surface.get("source_queue_status")):
                         row.update(terminal_surface)
                         row["frontier_action"] = "surface_filtered_before_queue"
@@ -6172,7 +6261,7 @@ async def run_source_fast_check_ko(
             "fast_check_at": utc_now_iso(),
             "last_fast_check_run_id": run_id,
         })
-        surface_terminal = source_surface_terminal_fields(base_row)
+        surface_terminal = source_local_region_terminal_fields(base_row)
         if source_terminal_rejected_status(surface_terminal.get("source_queue_status")):
             base_row.update(surface_terminal)
             base_row["fast_check_status"] = "spam_source_reject" if surface_terminal.get("source_queue_status") == SPAM_SOURCE_STATUS else "local_region_source"
@@ -7266,7 +7355,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 status.event("alive", **{**source_progress, "progress_label": f"источники {idx}/{len(monitored)} · public web · {seed.source_title or seed.canonical_url}", "sources_done": idx, "fetch_status": web_row.get("fetch_status"), "telegram_resolve_status": web_row.get("telegram_resolve_status"), "posts_scanned": web_row.get("posts_scanned", 0), "last_seen_post_date": web_row.get("last_seen_post_date", ""), "history_fetch_runtime_seconds": web_row.get("history_fetch_runtime_seconds", ""), "fetch_error_code": web_row.get("fetch_error_code", ""), "fetch_error_message": web_row.get("fetch_error_message", "")})
                 continue
             src_row = source_status_row(seed, "ok", vk_wall_probe_status="not_applicable", selected_for_planning="true", fetch_attempted="false")
-            surface_terminal = source_surface_terminal_fields({
+            surface_terminal = source_local_region_terminal_fields({
                 "source_title": seed.source_title,
                 "handle": seed.handle,
                 "canonical_url": seed.canonical_url,

@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / local-source terminal routing**: hardened
+  Kaliningrad-local source detection (`kaliningrad`, `kld`/`klgd`, `39` suffix
+  and existing local profile/ratio signals), made `source_scope=local_region`
+  terminal over previously processed KO-candidate statuses, preserved terminal
+  local decisions during YDB row-kind merges, and backfilled live YDB
+  source rows so local channels are routed to the future local-monitoring list
+  instead of the current external blogger/travel publication funnel.
 - **Region Talk Channel / cached Telethon progress during FloodWait**:
   CandidateReport now treats exact-link `get_entity` FloodWait as a shared
   username-resolve cooldown, but attempts cached `channel_id/access_hash`

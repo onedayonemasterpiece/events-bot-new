@@ -106,8 +106,8 @@ A source found this way must be either:
   plausible external source, so the next short run scans it before generic tail
   backlog;
 - terminally routed to the local-source list when title/handle clearly says it
-  is a Kaliningrad-local public (`Калининград`, `Кёниг`, `kenig`, `kgd`, `39`,
-  regional towns/resorts);
+  is a Kaliningrad-local public (`Калининград`/`kaliningrad`, `Кёниг`/`kenig`,
+  `kgd`/`kld`/`klgd`, `39`, regional towns/resorts);
 - terminally routed to the spam-source list when the title/excerpt matches
   repeated hashtag-spam/commercial bait (`ты не сможешь...`, `VPN`,
   `промокод`, crypto/trading, betting/casino/bonus, cheap-flight feeds) or
@@ -173,6 +173,13 @@ Implementation invariants:
 - local/spam terminal rows remain visible in `source_queue_item` with
   `rejected_local_region_source` or `rejected_spam_source`, but are not selected
   for history scans;
+- local-region is a terminal source-level decision, not just an annotation: if
+  a row already has KO/candidate counters but later gets
+  `source_scope=local_region`, `source_geo_class=kaliningrad_local` or
+  `source_quick_class=local_region_source`, the queue status must still become
+  `rejected_local_region_source`. YDB merge must not let older
+  `processed_found_ko_candidate` status rows overwrite that terminal local
+  decision.
 - uncertain rows are kept for the normal semantic/vector gate rather than
   rejected by regex;
 - `fast_check_status=ko_hit` is the only source-local preflight state that gets

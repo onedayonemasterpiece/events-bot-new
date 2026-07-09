@@ -295,6 +295,96 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         seeds = mod.source_fast_check_backlog_seeds(state, 2)
         self.assertEqual([s.handle for s in seeds], ["@cached", "@uncached"])
 
+    def test_source_surface_filter_catches_latin_kaliningrad_and_39_suffix(self) -> None:
+        mod = load_module()
+        latin = mod.source_surface_terminal_fields({
+            "source_title": "Я люблю Калининград",
+            "handle": "https://t.me/i_love_kaliningrad",
+        })
+        self.assertEqual(latin["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(latin["source_scope"], "local_region")
+        self.assertIn("kaliningrad", latin["source_local_hits"])
+
+        suffix = mod.source_surface_terminal_fields({
+            "source_title": "молод39",
+            "handle": "https://t.me/molod39",
+        })
+        self.assertEqual(suffix["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(suffix["source_scope"], "local_region")
+
+    def test_source_queue_local_signal_overrides_processed_candidate_status(self) -> None:
+        mod = load_module()
+        now = "2026-07-09T00:00:00+00:00"
+        rows, metrics = mod.build_unified_source_queue(
+            {
+                "unified_source_queue": {
+                    "telegram:username:local": {
+                        "canonical_source_key": "telegram:username:local",
+                        "source_queue_id": "srcq_local",
+                        "queue_order": 1,
+                        "platform": "telegram",
+                        "source_url": "https://t.me/i_love_kaliningrad",
+                        "canonical_url": "https://t.me/i_love_kaliningrad",
+                        "handle": "@i_love_kaliningrad",
+                        "source_title": "https://t.me/i_love_kaliningrad",
+                        "source_queue_status": "processed_found_ko_candidate",
+                        "source_geo_class": "kaliningrad_local",
+                        "source_quick_class": "local_region_source",
+                        "posts_scanned": 43,
+                        "ko_posts_found": 20,
+                        "candidate_posts_found": 31,
+                    }
+                },
+                "unified_source_queue_cursor_position": 0,
+            },
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            {},
+            "unit-run",
+            now,
+        )
+        self.assertEqual(rows[0]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(rows[0]["source_scope"], "local_region")
+        self.assertEqual(metrics["source_queue_rejected_local_region_source_total"], 1)
+
+    def test_ydb_source_status_merge_preserves_terminal_local_status(self) -> None:
+        mod = load_module()
+        state = {
+            "unified_source_queue": {
+                "telegram:username:local": {
+                    "canonical_source_key": "telegram:username:local",
+                    "source_queue_status": mod.LOCAL_REGION_SOURCE_STATUS,
+                    "source_scope": "local_region",
+                    "source_geo_class": "kaliningrad_local",
+                    "source_quick_class": "local_region_source",
+                }
+            }
+        }
+        mod.merge_ydb_source_queue_status_items(
+            state,
+            {},
+            {
+                "source_status_item:telegram:username:local": {
+                    "canonical_source_key": "telegram:username:local",
+                    "source_queue_status": "processed_found_ko_candidate",
+                    "source_scope": "unknown",
+                    "source_geo_class": "unknown",
+                    "source_quick_class": "candidate_keep",
+                    "posts_scanned": 50,
+                }
+            },
+        )
+        row = state["unified_source_queue"]["telegram:username:local"]
+        self.assertEqual(row["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(row["source_scope"], "local_region")
+        self.assertEqual(row["source_geo_class"], "kaliningrad_local")
+        self.assertEqual(row["source_quick_class"], "local_region_source")
+        self.assertEqual(row["posts_scanned"], 50)
+
     def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
         mod = load_module()
         old_env = os.environ.get("REGION_TALK_YDB_DISABLE_ONLINE_WRITES_AFTER_AUTH_ERROR")

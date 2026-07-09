@@ -259,6 +259,13 @@ Region Talk must keep row-level product state compact:
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
   canonical Telegram/VK source queue row with `queue_order`, status, status-change
   fields, cursor display markers, KO/candidate counters and image-quality rollup;
+  local-region source routing is stored as
+  `source_queue_status=rejected_local_region_source`,
+  `source_scope=local_region`, `source_geo_class=kaliningrad_local`,
+  `source_quick_class=local_region_source`, with
+  `monitoring_exclusion_reason`/`source_probe_reason` explaining that the source
+  is retained for a future local-source monitor but excluded from the current
+  external blogger/travel publication funnel;
   source-local `fast-check-KO` preflight writes `fast_check_status`,
   `fast_check_at`, `fast_check_matched_query`, `fast_check_hit_post_url`,
   `fast_check_hit_post_date` and error fields back to this same row. Only
