@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / system audit brief**: added a data-driven audit brief
+  with current vs previous funnel metrics, honest bottleneck/risk analysis,
+  updated hybrid discovery/preflight/post-link model, the required
+  dedup-before-resource-spend invariant for source/channel handling, and
+  summarized Gemini Pro / Opus external review findings.
 - **Region Talk Channel / lexicon-driven Telegram discovery queries**:
   CandidateReport now builds global keyword, hashtag and source-local preflight
   query banks from the 194-row Kaliningrad place lexicon instead of relying on

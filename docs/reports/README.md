@@ -12,3 +12,4 @@
 - Gemma 4 migration repo-wide status: `gemma-4-migration-status-2026-04-22.md`
 - Region Talk BGE-M3 isolated validation: `region-talk-bge-m3-validation-2026-07-08.md`
 - Region Talk EmbeddingGemma CPU validation: `region-talk-embeddinggemma-validation-2026-07-08.md`
+- Region Talk system audit brief: `region-talk-system-audit-2026-07-09.md`
