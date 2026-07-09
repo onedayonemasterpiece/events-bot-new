@@ -532,6 +532,14 @@ def _regex_vector_comparison_metrics(rows: list[dict[str, Any]]) -> dict[str, in
     }
 
 
+def _image_queue_status_metrics(images: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "image_not_reviewable_no_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_no_media"),
+        "image_not_reviewable_unsupported_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_unsupported_media"),
+        "image_rejected_text_gate_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "rejected_text_gate"),
+    }
+
+
 def _is_keyword_discovered_source(row: dict[str, Any]) -> bool:
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
@@ -868,6 +876,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_pending = [r for r in images if str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}]
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
+    image_terminal_metrics = _image_queue_status_metrics(images)
     confirmed = [r for r in publications if is_confirmed_publication(r)]
     unsent_confirmed = [r for r in publications if is_unsent_confirmed_publication(r)]
     sent = [r for r in publications if str(r.get("sent_to_chat") or "").lower() == "true" or str(r.get("publication_candidate_status") or "") == "sent_to_chat"]
@@ -996,6 +1005,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_pending_total": len(image_pending),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
+        **image_terminal_metrics,
         "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),
         "image_strong_actual_ge_0_70_total": len(strong_images),
         "publication_candidate_total": len(publications),

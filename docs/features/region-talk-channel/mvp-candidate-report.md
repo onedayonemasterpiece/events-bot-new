@@ -746,6 +746,11 @@ ImageDiagnostic writes terminal
 `media_acquisition_status=unsupported_media_or_decode_failed`. CandidateReport
 preserves that terminal status on later queue rebuilds, so an `.mp4` post cannot
 be repeatedly re-leased as `needs_actual_image_fetch` and starve actual photos.
+The orchestrator exposes terminal image counters
+`image_not_reviewable_no_media_total`,
+`image_not_reviewable_unsupported_media_total` and
+`image_rejected_text_gate_total` alongside pending/in-progress/actual-scored
+counts.
 
 Legacy queue-like structures such as `source_frontier_queue_next` and
 `similar_seed_queue` must not be durable YDB queue state. Frontier/debug sheets

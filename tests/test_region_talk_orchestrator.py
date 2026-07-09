@@ -177,6 +177,18 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         ]
         self.assertEqual(mod._ko_candidate_source_keys(rows), {"https://t.me/ko", "https://t.me/text"})
 
+    def test_image_queue_status_metrics_include_terminal_unsupported(self) -> None:
+        mod = load_module()
+        metrics = mod._image_queue_status_metrics([
+            {"image_queue_status": "actual_scored"},
+            {"image_queue_status": "not_reviewable_no_media"},
+            {"image_queue_status": "not_reviewable_unsupported_media"},
+            {"image_queue_status": "rejected_text_gate"},
+        ])
+        self.assertEqual(metrics["image_not_reviewable_no_media_total"], 1)
+        self.assertEqual(metrics["image_not_reviewable_unsupported_media_total"], 1)
+        self.assertEqual(metrics["image_rejected_text_gate_total"], 1)
+
     def test_keyword_source_metrics_show_expected_keyword_yield(self) -> None:
         mod = load_module()
         rows = [

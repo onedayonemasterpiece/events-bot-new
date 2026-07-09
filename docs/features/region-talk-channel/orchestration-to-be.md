@@ -110,6 +110,11 @@ cannot open the downloaded payload, ImageDiagnostic must write a terminal
 `media_acquisition_status=unsupported_media_or_decode_failed`. Such rows are
 excluded from future leases; they must not loop forever as
 `needs_actual_image_fetch` and consume the whole image batch.
+The orchestrator reports terminal image counters
+`image_not_reviewable_no_media_total`,
+`image_not_reviewable_unsupported_media_total` and
+`image_rejected_text_gate_total` next to pending/in-progress/actual-scored
+counts so non-growth of `image_actual_scored_total` is explainable.
 
 ### 5. Local/server orchestrator
 
