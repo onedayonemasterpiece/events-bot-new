@@ -35,6 +35,107 @@ def load_runner_module():
 
 
 class RegionTalkCandidateReportTests(unittest.TestCase):
+    def _seed(self, mod, handle: str, *, priority: int = 0, seed_id: str | None = None):
+        return mod.Seed(
+            source_seed_id=seed_id or handle.strip("@"),
+            platform="telegram",
+            source_title=handle.strip("@"),
+            handle=handle,
+            url="https://t.me/" + handle.strip("@"),
+            source_kind="unit",
+            source_scope_guess="unit",
+            priority=priority,
+            discovered_from="unit",
+            discovered_from_url="",
+            why_seeded="unit",
+            expected_value="unit",
+            known_risks="",
+            initial_status="pending_scan",
+            monitoring_enabled=True,
+            rights_policy="unknown",
+            notes="",
+        )
+
+    def test_source_selection_prefers_cursor_queue_over_static_seed_rescans(self) -> None:
+        mod = load_module()
+        static_seed = self._seed(mod, "@staticold", priority=0, seed_id="seed_1")
+        queue_seed = self._seed(mod, "@queuefresh", priority=10, seed_id="seed_2")
+        key = mod.canonical_source_key("telegram", queue_seed.handle, queue_seed.canonical_url)
+        previous_state = {
+            "unified_source_queue_cursor_position": 100,
+            "unified_source_queue": {
+                key: {
+                    "canonical_source_key": key,
+                    "platform": "telegram",
+                    "handle": queue_seed.handle,
+                    "source_url": queue_seed.canonical_url,
+                    "canonical_url": queue_seed.canonical_url,
+                    "source_title": queue_seed.source_title,
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 101,
+                }
+            },
+        }
+
+        selected = mod.selected_sources_for_run([static_seed, queue_seed], 1, previous_state=previous_state)
+
+        self.assertEqual([s.handle for s in selected], [queue_seed.handle])
+
+    def test_source_cursor_never_regresses_when_pending_gap_is_before_previous_cursor(self) -> None:
+        mod = load_module()
+        seed = self._seed(mod, "@freshcursor", seed_id="seed_cursor")
+        key = mod.canonical_source_key("telegram", seed.handle, seed.canonical_url)
+        previous_state = {
+            "unified_source_queue_cursor_position": 100,
+            "unified_source_queue": {
+                "old-gap": {
+                    "canonical_source_key": "old-gap",
+                    "platform": "telegram",
+                    "handle": "@oldgap",
+                    "source_url": "https://t.me/oldgap",
+                    "canonical_url": "https://t.me/oldgap",
+                    "source_title": "oldgap",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 90,
+                },
+                key: {
+                    "canonical_source_key": key,
+                    "platform": "telegram",
+                    "handle": seed.handle,
+                    "source_url": seed.canonical_url,
+                    "canonical_url": seed.canonical_url,
+                    "source_title": seed.source_title,
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 101,
+                },
+            },
+        }
+        source_rows = [{
+            "source_id": seed.source_id,
+            "platform": "telegram",
+            "handle": seed.handle,
+            "canonical_url": seed.canonical_url,
+            "fetch_status": "ok",
+            "fetch_attempted": "true",
+            "posts_scanned": 3,
+            "source_title": seed.source_title,
+        }]
+
+        _rows, metrics = mod.build_unified_source_queue(
+            previous_state,
+            [seed],
+            source_rows,
+            [],
+            [],
+            [],
+            [],
+            {},
+            "unit-run",
+            "2026-07-09T00:00:00+00:00",
+        )
+
+        self.assertGreaterEqual(metrics["source_queue_cursor_position"], 100)
+
     def test_runner_secret_names_only_include_selected_auth_bundle(self) -> None:
         mod = load_runner_module()
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY1")

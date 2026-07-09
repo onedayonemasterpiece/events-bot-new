@@ -842,6 +842,31 @@ def source_product_priority_score(seed: Seed, queue_row: dict[str, Any] | None =
     return round(score, 3)
 
 
+def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str, Any] | None = None) -> int:
+    """Rank scan candidates so the durable cursor queue wins over legacy seeds.
+
+    Product discovery must move through the single source queue breadth-first.
+    Static seed CSV rows are still useful for bootstrapping/fallback, but once
+    YDB has pending rows after the cursor they must not repeatedly consume a
+    bounded Kaggle run and rescan the same historical posts.
+    """
+    state = previous_state if isinstance(previous_state, dict) else {}
+    row = due.get("queue_row") if isinstance(due, dict) else {}
+    if not isinstance(row, dict) or not row:
+        return 3
+    cursor = int(state.get("unified_source_queue_cursor_position") or state.get("canonical_source_cursor_position") or 0)
+    try:
+        order = int(float(row.get("queue_order") or 0))
+    except Exception:
+        order = 0
+    status = str(row.get("source_queue_status") or row.get("queue_status") or "").strip()
+    if order > cursor and status in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}:
+        return 0
+    if order > cursor:
+        return 1
+    return 2
+
+
 def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state: dict[str, Any] | None = None) -> list[Seed]:
     enabled = [s for s in seeds if s.monitoring_enabled]
     fallback = [s for s in seeds if not s.monitoring_enabled]
@@ -863,6 +888,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     prioritize_product_sources = getenv_bool("REGION_TALK_PRIORITIZE_TRAVEL_SOURCES", True)
     ordered = sorted(annotated, key=lambda item: (
         not bool(item[1].get("due")),
+        source_selection_queue_bucket(item[1], previous_state),
         item[0].priority,
         source_queue_priority_bucket(item[1].get("queue_row")),
         -source_product_priority_score(item[0], item[1].get("queue_row")) if prioritize_product_sources else 0,
@@ -5218,7 +5244,7 @@ def build_unified_source_queue(
         # Cursor means "highest contiguous queue position before the next primary
         # scan gap", not just max processed order. Historical runs could process
         # later rows first and leave keyword-hit rows behind the cursor forever.
-        cursor_position = min(cursor_position, max(0, min(pending_primary_orders) - 1))
+        cursor_position = max(prev_cursor, min(cursor_position, max(0, min(pending_primary_orders) - 1)))
     cursor_key = next((str(r.get("canonical_source_key") or "") for r in out if int(r.get("queue_order") or 0) == cursor_position), "")
     display_rows = sorted(out, key=lambda r: (0 if str(r.get("source_queue_status") or "").startswith("processed") or str(r.get("source_queue_status")) == "needs_rescan_or_retry" or source_terminal_rejected_status(r.get("source_queue_status")) else 1, int(r.get("queue_order") or 0)))
     next_pending_marked = False

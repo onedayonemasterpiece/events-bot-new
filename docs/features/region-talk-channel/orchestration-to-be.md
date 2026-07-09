@@ -211,6 +211,12 @@ Important invariants:
   written as `rejected_spam_source` before Telegram resolve/history calls.
   Normal uncertain sources are not rejected by regex; they stay in the vector
   pipeline.
+- Source selection is queue-first. Once the durable YDB source queue exists,
+  pending rows after `unified_source_queue` cursor are selected before legacy
+  CSV/static seeds, even if the static seed has a lower numeric priority. The
+  cursor is monotonic and must not move backward because of historical pending
+  gaps or keyword reinserts; gaps are diagnostics, not a reason to rescan old
+  seed rows for hours.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
