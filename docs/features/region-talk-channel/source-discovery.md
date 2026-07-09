@@ -138,7 +138,7 @@ to move KO hits to `cursor + 1...N`.
 Per run, the orchestrator keeps this intentionally conservative:
 
 - `REGION_TALK_FAST_CHECK_KO_ENABLED=1`;
-- `REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN=8`;
+- `REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN=5` in iterative debug runs;
 - `REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE=2`;
 - `REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY=2`;
 - all resolves/searches go through `TelegramRequestGovernor` plus human-like
@@ -185,6 +185,16 @@ Implementation invariants:
   budget; fetched links then pass the normal E5+BGE/text/image/LLM funnel;
 - every physical queue reorder caused by keyword/hashtag insertion is persisted
   in YDB, not only hidden by selector priority.
+
+Debug-run budget after the 2026-07-09 long-run incident:
+
+- CandidateReport orchestrator launches use `--max-sources 6`,
+  `REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=720`, 20 posts/source, at most four
+  global keyword/hashtag queries and three similar-channel seeds;
+- the run should reach exact post-link fetch, fast-check-KO, a small history
+  scan, E5 write and source-queue handoff, then stop before heavy report tail;
+- YDB online discovery writes are capped per run so source-frontier assembly
+  cannot block the next orchestration cycle on hundreds of row upserts.
 
 ### 7. Public travel blogger catalog import
 

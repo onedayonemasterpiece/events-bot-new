@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / shorter debug cycles**: tightened orchestrator
+  CandidateReport debug batches to six sources / shorter keyword-similar slices,
+  bounded source-local fast-check and exact post-link fetch work, capped online
+  discovery YDB row writes, and made generic YDB queue upserts use explicit
+  request/retry settings so Kaggle runs do not spend >30 minutes in tail
+  assembly during iterative debugging.
 - **Region Talk Channel / fast-check-KO and exact keyword post queue**:
   CandidateReport now runs a bounded source-local keyword preflight over the
   existing source backlog after the cursor, promotes only fresh KO-hit sources

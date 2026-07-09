@@ -277,7 +277,10 @@ Region Talk must keep row-level product state compact:
   `source_candidate_item:<source_candidate_id|canonical_source_key>` — the
   discovery-frontier public/channel candidate as soon as discovery sees it
   (similar channels, keyword hits, post links, catalog rows), before final queue
-  assembly;
+  assembly. Iterative Kaggle runs cap online discovery row writes with
+  `REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES` /
+  `REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_EDGES`; final compact state and
+  queue assembly remain the canonical durable product state;
 - kind `source_edge_item`, pk `source_edge_item:<edge_id>` — source-discovery
   graph evidence such as forward origins, post-text links and similar/keyword
   source edges;

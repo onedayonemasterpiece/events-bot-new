@@ -2017,12 +2017,26 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         if not items:
             return 0
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
+        )
 
         def op(session: Any) -> int:
             ensure_ydb_kv_table(ydb, session, table_path)
-            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+            return ydb_upsert_json_many(
+                session,
+                ydb,
+                table_path,
+                items,
+                now,
+                chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 50),
+                timeout_seconds=timeout_seconds,
+            )
 
-        return int(pool.retry_operation_sync(op) or 0)
+        return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
         print(f"[region-talk] online_queue_ydb_failed kind={kind} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
@@ -2172,12 +2186,26 @@ def write_region_talk_text_vector_enrichment_items(rows: list[dict[str, Any]], *
         if not items:
             return 0
         ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
+        )
 
         def op(session: Any) -> int:
             ensure_ydb_kv_table(ydb, session, table_path)
-            return ydb_upsert_json_many(session, ydb, table_path, items, now, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+            return ydb_upsert_json_many(
+                session,
+                ydb,
+                table_path,
+                items,
+                now,
+                chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 50),
+                timeout_seconds=timeout_seconds,
+            )
 
-        return int(pool.retry_operation_sync(op) or 0)
+        return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
     except Exception as exc:
         print(f"[region-talk] text_vector_enrichment_ydb_failed stage={stage} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
@@ -2197,9 +2225,18 @@ def write_region_talk_online_discovery_items(
     the final `unified_source_queue` is built. Comments, when enabled, are
     redacted source-discovery evidence only and never publication candidates.
     """
+    def capped(items: list[dict[str, Any]] | None, env_name: str, fallback: int) -> list[dict[str, Any]]:
+        rows = [r for r in (items or []) if isinstance(r, dict)]
+        limit = getenv_int(env_name, getenv_int("REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_ROWS", fallback))
+        if limit <= 0:
+            return []
+        if len(rows) <= limit:
+            return rows
+        return rows[:limit]
+
     return {
         "source_candidate_item": write_region_talk_online_queue_items(
-            [r for r in (source_candidates or []) if isinstance(r, dict)],
+            capped(source_candidates, "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES", 300),
             kind="source_candidate_item",
             id_fields=["source_candidate_id", "canonical_source_key", "canonical_url", "normalized_url"],
             fields=SOURCE_CANDIDATE_STATE_FIELDS,
@@ -2207,7 +2244,7 @@ def write_region_talk_online_discovery_items(
             stage=stage,
         ),
         "source_edge_item": write_region_talk_online_queue_items(
-            [r for r in (source_edges or []) if isinstance(r, dict)],
+            capped(source_edges, "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_EDGES", 300),
             kind="source_edge_item",
             id_fields=["edge_id", "to_source_candidate_id", "evidence_url"],
             fields=SOURCE_EDGE_STATE_FIELDS,
@@ -2215,7 +2252,7 @@ def write_region_talk_online_discovery_items(
             stage=stage,
         ),
         "comment_link_item": write_region_talk_online_queue_items(
-            [r for r in (comment_links or []) if isinstance(r, dict)],
+            capped(comment_links, "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_COMMENT_LINKS", 100),
             kind="comment_link_item",
             id_fields=["comment_link_id", "edge_id", "source_candidate_id", "normalized_url"],
             fields=COMMENT_DISCOVERY_STATE_FIELDS,

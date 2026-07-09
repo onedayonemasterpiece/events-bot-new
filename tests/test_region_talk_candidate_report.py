@@ -287,6 +287,28 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         mod = load_module()
         self.assertEqual(mod.ydb_candidate_link_rows_from_row_kv(0, kinds=("post_link_queue_item",)), [])
 
+    def test_online_discovery_items_are_capped_before_ydb_write(self) -> None:
+        mod = load_module()
+        old_env = os.environ.get("REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES")
+        old_writer = mod.write_region_talk_online_queue_items
+        calls = []
+        try:
+            os.environ["REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES"] = "2"
+            def fake_writer(rows, **kwargs):
+                calls.append((kwargs.get("kind"), len(rows)))
+                return len(rows)
+            mod.write_region_talk_online_queue_items = fake_writer
+            rows = [{"source_candidate_id": f"s{i}", "canonical_url": f"https://t.me/s{i}"} for i in range(5)]
+            out = mod.write_region_talk_online_discovery_items(rows, [], run_id="unit", stage="unit")
+            self.assertEqual(out["source_candidate_item"], 2)
+            self.assertIn(("source_candidate_item", 2), calls)
+        finally:
+            mod.write_region_talk_online_queue_items = old_writer
+            if old_env is None:
+                os.environ.pop("REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES", None)
+            else:
+                os.environ["REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES"] = old_env
+
     def test_telegram_keyword_query_plan_uses_lexicon_hashtag_quota_and_rotation(self) -> None:
         mod = load_module()
         old_env = {k: os.environ.get(k) for k in [

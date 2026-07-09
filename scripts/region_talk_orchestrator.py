@@ -53,50 +53,60 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
-    # The main notebook must still reach the source-queue/discovery tail after
-    # early image handoff; otherwise keyword hits are written as context rows
-    # but never promoted behind the cursor for real history scans.
+    # Debug/product runs must finish quickly enough to be observable.  The main
+    # notebook still reaches the source-queue/discovery tail, but with smaller
+    # batches and bounded YDB writes; otherwise Kaggle spends >30 minutes in
+    # tail assembly and YDB row upserts before the next iteration can start.
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
-    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
+    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "1",
+    "REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS": "720",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS": "210",
+    "REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE": "25",
+    "REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN": "90",
     "REGION_TALK_YDB_MAX_POST_ROWS": "1500",
     "REGION_TALK_YDB_MAX_SOURCE_ROWS": "6000",
     "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": "1000",
     "REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS": "6000",
     "REGION_TALK_YDB_SELECT_PAGE_SIZE": "100",
-    "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "12",
-    "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "12",
+    "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "6",
+    "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "6",
+    "REGION_TALK_YDB_QUEUE_MAX_RETRIES": "0",
+    "REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE": "25",
+    "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_CANDIDATES": "120",
+    "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_SOURCE_EDGES": "120",
+    "REGION_TALK_YDB_ONLINE_DISCOVERY_MAX_COMMENT_LINKS": "40",
     # Keep main runs short enough to reach the discovery tail, but still gentle
     # toward Telegram: a few similar-channel seeds and a few travel-intent
     # keyword queries per run are enough to make the public/source frontier grow
     # without filling the queue with local Kaliningrad-only publics.
-    "REGION_TALK_HISTORY_SOURCES_TARGET": "12",
-    "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "30",
+    "REGION_TALK_HISTORY_SOURCES_TARGET": "6",
+    "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": "20",
     "REGION_TALK_HISTORY_MAX_POST_AGE_DAYS": "365",
     "REGION_TALK_HIGH_VOLUME_TEXT_POSTS_PER_DAY_REJECT_THRESHOLD": "30",
-    "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": "12",
+    "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": "6",
     "REGION_TALK_TG_SIMILAR_ENABLED": "1",
-    "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": "5",
-    "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": "5",
-    "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": "5",
-    "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": "30",
-    "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": "30",
+    "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": "3",
+    "REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN": "3",
+    "REGION_TALK_TG_SIMILAR_MAX_RECOMMENDATIONS_PER_SEED": "4",
+    "REGION_TALK_TG_SIMILAR_MAX_NEW_FRONTIER_PER_RUN": "15",
+    "REGION_TALK_MAX_NEW_FRONTIER_PER_RUN": "15",
     "REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY": "1",
     "REGION_TALK_TELEGRAM_QUERY_SOURCE": "place_lexicon",
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "7",
-    "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES": "3",
-    "REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN": "4",
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES": "4",
+    "REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES": "2",
+    "REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN": "2",
     "REGION_TALK_TELEGRAM_QUERY_ROTATE": "1",
     "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
-    "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
+    "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "10",
     "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
-    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "12",
+    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "8",
     "REGION_TALK_FAST_CHECK_KO_ENABLED": "1",
-    "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "8",
+    "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "5",
     "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
     "REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY": "2",
-    "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "300",
-    "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "240",
-    "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "180",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "330",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "300",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "240",
 }
 
 ORCHESTRATOR_YDB_METRIC_LIMITS = {
@@ -1306,7 +1316,7 @@ def build_decision_plan(
     if include_main:
         actions.append(_action(
             "launch_candidate_report",
-            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "12", "--no-wait"],
+            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"],
             "continue main discovery/E5 producer in parallel when DISCOVERY1 is free",
             resource="telegram:DISCOVERY1",
             parallel_safe=True,
@@ -1316,7 +1326,7 @@ def build_decision_plan(
     if int(metrics.get("image_actual_scored_total") or 0) > int(metrics.get("publication_candidate_total") or 0):
         actions.append(_action("run_finalizer", ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"], "actual images exist beyond publication rows", resource="local:gemini", timeout_seconds=900))
     if not actions:
-        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "12", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
+        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
     return actions
 
 
