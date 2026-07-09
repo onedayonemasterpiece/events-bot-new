@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / orchestrator active-kernel race handling**: if a
+  launcher refuses a CandidateReport/BGE/ImageDiagnostic start because its
+  stricter Kaggle slot audit sees an already active/queued kernel after the
+  orchestrator status snapshot, the execution is now recorded as
+  `skipped_active_kernel_race` instead of a hard launch failure.
 - **Region Talk Channel / BGE backlog catch-up**: orchestrator BGE launches now default to 24 rows per run (`REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT`, batch size configurable separately) after live metrics showed CandidateReport E5 output outpacing 12-row BGE batches.
 - **Region Talk Channel / bounded source queue handoff**: CandidateReport now bounds live YDB `source_queue_item` / `source_status_item` handoff writes with `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` (default 500), preserving changed/current-run rows, keyword-evidence rows, cursor-neighbourhood rows and pending/retry backlog while reporting both full `source_queue_total` and `source_queue_handoff_rows`.
 - **Region Talk Channel / live source queue clobber guard**: live

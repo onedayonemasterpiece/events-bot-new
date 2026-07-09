@@ -466,6 +466,25 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("--env-file", cmd)
         self.assertNotIn("--run-id", cmd)
 
+    def test_run_cmd_treats_launcher_active_kernel_refusal_as_skip(self) -> None:
+        mod = load_module()
+        refusal = (
+            "RuntimeError: Region Talk Kaggle launch refused: active kernel(s) "
+            "detected zigomaro/region-talk-candidate-report(QUEUED); auth bundle "
+            "TELEGRAM_AUTH_BUNDLE_DISCOVERY1 must not be used concurrently."
+        )
+        proc = mock.Mock(returncode=1, stdout=refusal)
+        with mock.patch.object(mod.subprocess, "run", return_value=proc):
+            result = mod._run_cmd(
+                ["python3", "kaggle/execute_region_talk_candidate_report.py"],
+                dry_run=False,
+                action={"action": "launch_candidate_report", "resource": "telegram:DISCOVERY1"},
+                run_id="rt-race",
+            )
+        self.assertEqual(result["status"], "skipped_active_kernel_race")
+        self.assertEqual(result["reason"], "launcher_detected_active_kernel_after_status_snapshot")
+        self.assertEqual(result["returncode"], 1)
+
     def test_main_missing_config_is_noninteractive_by_default(self) -> None:
         mod = load_module()
         with mock.patch.dict(os.environ, {}, clear=True), \

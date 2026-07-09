@@ -197,6 +197,12 @@ Important invariants:
 - If a Kaggle kernel is already active, that action is skipped but other
   non-conflicting resources continue (for example active BGE does not block
   ImageDiagnostic or CandidateReport).
+- The child launchers remain the authoritative session-safety gate. If the
+  orchestrator's read-only Kaggle status snapshot says a kernel is free, but the
+  launcher immediately sees a queued/running conflicting Region Talk kernel and
+  refuses the launch, the orchestrator records that execution as
+  `skipped_active_kernel_race` rather than a hard failure. This keeps the
+  long-running loop stable without weakening Telegram auth-bundle isolation.
 - Notifier/finalizer are local maintenance actions and may run while Kaggle
   notebooks are active; newly Gemini-confirmed unsent rows are notified first.
 

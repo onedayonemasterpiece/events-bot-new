@@ -802,6 +802,14 @@ def _kernel_ref_for_action(action: dict[str, Any]) -> str:
     return f"{username}/{slug}" if username and slug else ""
 
 
+def _is_active_kernel_launch_refusal(output: str) -> bool:
+    text = str(output or "").lower()
+    return (
+        "region talk kaggle launch refused" in text
+        and "active kernel" in text
+    )
+
+
 def _run_cmd(cmd: list[str], *, dry_run: bool, timeout_seconds: int = 300, action: dict[str, Any] | None = None, run_id: str = "") -> dict[str, Any]:
     if dry_run:
         return {"cmd": cmd, "status": "dry_run", "run_id": run_id}
@@ -826,15 +834,19 @@ def _run_cmd(cmd: list[str], *, dry_run: bool, timeout_seconds: int = 300, actio
         child_env = os.environ.copy()
         child_env.update({str(k): str(v) for k, v in dict(action.get("env") or {}).items()})
         proc = subprocess.run(cmd, cwd=str(ROOT), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=max(30, int(timeout_seconds)), env=child_env)
-        status = "ok" if proc.returncode == 0 else "failed"
+        active_kernel_refusal = proc.returncode != 0 and _is_active_kernel_launch_refusal(proc.stdout)
+        status = "ok" if proc.returncode == 0 else ("skipped_active_kernel_race" if active_kernel_refusal else "failed")
         if update_job_meta and kernel_ref:
             _registry_call(update_job_meta(job_type, kernel_ref, meta_updates={
-                "status": "launched" if status == "ok" else "launch_failed",
+                "status": "launched" if status == "ok" else ("active_kernel_race_skipped" if active_kernel_refusal else "launch_failed"),
                 "returncode": proc.returncode,
                 "updated_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                 "output_tail": proc.stdout[-1000:],
             }))
-        return {"cmd": cmd, "status": status, "returncode": proc.returncode, "run_id": run_id, "kernel_ref": kernel_ref, "output_tail": proc.stdout[-4000:]}
+        payload = {"cmd": cmd, "status": status, "returncode": proc.returncode, "run_id": run_id, "kernel_ref": kernel_ref, "output_tail": proc.stdout[-4000:]}
+        if active_kernel_refusal:
+            payload["reason"] = "launcher_detected_active_kernel_after_status_snapshot"
+        return payload
     except Exception as exc:
         if update_job_meta and kernel_ref:
             _registry_call(update_job_meta(job_type, kernel_ref, meta_updates={
