@@ -59,7 +59,14 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # tail assembly and YDB row upserts before the next iteration can start.
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "1",
-    "REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS": "720",
+    "REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE": "1",
+    # Keep under the product requirement of <=30 minutes, but do not starve the
+    # high-yield discovery/vector/image handoff stages. A 12-minute debug window
+    # caused keyword discovery to be skipped and E5 to be capped to ~49 seconds
+    # after source/similar work; 20 minutes gives all methods a chance to run.
+    "REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS": "1200",
+    "REGION_TALK_TEXT_EMBEDDING_MODEL_TIMEOUT_SECONDS": "420",
+    "REGION_TALK_TEXT_EMBEDDING_PRIORITY_MIN_MODEL_TIMEOUT_SECONDS": "420",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS": "210",
     "REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE": "25",
     "REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN": "90",

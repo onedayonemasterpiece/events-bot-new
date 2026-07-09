@@ -12,6 +12,14 @@
   metrics now include explicit blocker counters for local sources, spam,
   official/promo sources, post ads, missing vector accept, missing BGE fusion
   and missing media.
+- **Region Talk Channel / product-first discovery and handoff order**:
+  orchestrated CandidateReport runs now use a 20-minute window (still below the
+  30-minute product bound), run keyword/hashtag discovery before similar-channel
+  exploration, keep E5 model timeout explicitly at 420 seconds, and build/write
+  the full image queue before source-queue tail handoff. This prevents the
+  high-yield keyword discovery and candidate-memory→image-queue product handoff
+  from being silently skipped by short debug runtime or source-tail early
+  returns.
 - **Region Talk Channel / hard cached-entity Telethon mode + bounded YDB handoff**:
   orchestrated CandidateReport runs now set `REGION_TALK_TG_CACHED_ENTITY_ONLY=1`
   with a one-resolve exact-post warmup lane

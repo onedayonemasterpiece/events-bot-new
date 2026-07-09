@@ -8245,13 +8245,11 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
                 "fetch_error_message": src_row.get("fetch_error_message", ""),
             })
         discovery_tail_reserve = discovery_tail_reserve_seconds()
-        if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
-            status.event("similar_discovery_started", phase="similar_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery started")
-            similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
-        else:
-            similar_rows, similar_edges = [], []
-            _REGION_TALK_TELEGRAM_RUNTIME["telegram_similar_channels_status"] = "skipped_runtime_budget"
-            status.event("similar_discovery_skipped_runtime_budget", phase="similar_discovery", status="deferred", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery skipped: runtime budget")
+        # Keyword/hashtag search is the high-yield breadth-first mechanism: it
+        # can produce a concrete KO post and source to move after the cursor.
+        # Run it before similar-channel exploration so a slow similar pass does
+        # not consume the whole discovery tail and hide the primary product
+        # discovery signal.
         if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
             status.event("keyword_discovery_started", phase="keyword_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="keyword discovery started")
             keyword_rows, keyword_edges = await discover_telegram_keyword_sources(client, governor, run_id, status=status)
@@ -8259,6 +8257,13 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             keyword_rows, keyword_edges = [], []
             _REGION_TALK_TELEGRAM_RUNTIME["telegram_keyword_discovery_status"] = "skipped_runtime_budget"
             status.event("keyword_discovery_skipped_runtime_budget", phase="keyword_discovery", status="deferred", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="keyword discovery skipped: runtime budget")
+        if runtime_budget_ok(reserve_seconds=discovery_tail_reserve):
+            status.event("similar_discovery_started", phase="similar_discovery", status="running", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery started")
+            similar_rows, similar_edges = await discover_telegram_similar_channels(client, source_rows, entity_by_source, governor, run_id)
+        else:
+            similar_rows, similar_edges = [], []
+            _REGION_TALK_TELEGRAM_RUNTIME["telegram_similar_channels_status"] = "skipped_runtime_budget"
+            status.event("similar_discovery_skipped_runtime_budget", phase="similar_discovery", status="deferred", run_id=run_id, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label="similar discovery skipped: runtime budget")
         _REGION_TALK_TELEGRAM_RUNTIME["similar_rows"] = similar_rows
         _REGION_TALK_TELEGRAM_RUNTIME["similar_edges"] = similar_edges
         _REGION_TALK_TELEGRAM_RUNTIME["keyword_rows"] = keyword_rows
@@ -10674,6 +10679,64 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         -float(r.get("best_candidate_score_ever") or 0),
         -float(r.get("best_media_score_ever") or 0),
     ))[:100]
+    image_candidate_queue_sheet: list[dict[str, Any]] = []
+    image_driven_top_sheet: list[dict[str, Any]] = []
+    image_queue_metrics: dict[str, Any] = {}
+    online_image_queue_items_written = 0
+
+    def build_and_write_image_queue_handoff(stage: str) -> None:
+        nonlocal image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics, online_image_queue_items_written
+        report_event(
+            "image_queue_build_started",
+            phase="queue_assembly",
+            status="running",
+            new_posts=len(new_posts),
+            candidate_memory_rows=len(candidate_memory_rows),
+            media_rows=len(media_rows),
+            handoff_stage=stage,
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+        )
+        image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
+            previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
+        )
+        online_image_queue_items_written = write_region_talk_online_queue_items(
+            [r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
+            kind="image_queue_item",
+            id_fields=["image_queue_id", "post_url"],
+            fields=IMAGE_QUEUE_STATE_FIELDS,
+            run_id=run_id,
+            stage=stage,
+        )
+        write_region_talk_live_cursor("image", {
+            "run_id": run_id,
+            "queue_name": "image_candidate_queue",
+            "phase": stage,
+            "status": "running",
+            "cursor_position": image_queue_metrics.get("image_queue_cursor_position", 0),
+            "cursor_key": next((str(r.get("image_queue_id") or "") for r in image_candidate_queue_sheet if isinstance(r, dict) and int(r.get("image_queue_order") or 0) == int(image_queue_metrics.get("image_queue_cursor_position") or 0)), ""),
+            "total": len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
+            "needs_actual_fetch_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "needs_actual_image_fetch"),
+            "in_progress_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "image_analysis_in_progress"),
+            "actual_scored_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "actual_scored"),
+            "product_eligible_total": image_queue_metrics.get("image_queue_product_eligible_total", 0),
+            "blocked_local_source_before_image_total": image_queue_metrics.get("image_queue_blocked_local_source_before_image_total", 0),
+            "blocked_official_or_promo_source_before_image_total": image_queue_metrics.get("image_queue_blocked_official_or_promo_source_before_image_total", 0),
+            "blocked_no_media_before_image_total": image_queue_metrics.get("image_queue_blocked_no_media_before_image_total", 0),
+            "progress_label": f"image queue cursor {image_queue_metrics.get('image_queue_cursor_position', 0)}/{len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
+        })
+        report_event(
+            "image_queue_build_done",
+            phase="queue_assembly",
+            status="running",
+            online_image_queue_items_written=online_image_queue_items_written,
+            handoff_stage=stage,
+            runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            **image_queue_metrics,
+        )
+
+    if getenv_bool("REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE", True):
+        build_and_write_image_queue_handoff("image_candidate_queue_built_before_source_queue")
+
     similar_seed_queue = build_similar_seed_queue(previous_state, source_rows, candidate_memory_rows, run_id, run_now)
     source_delta_scan_sheet = build_source_delta_scan_sheet(source_rows, previous_state, run_id)
     source_yield_metrics_sheet = build_source_yield_metrics(source_rows, posts_by_source, new_posts)
@@ -10741,9 +10804,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "source_queue_keyword_existing_promoted_this_run": unified_source_queue_metrics.get("source_queue_keyword_existing_promoted_this_run", 0),
             "online_source_queue_items_written": online_source_queue_items_written,
             "source_queue_handoff_rows": len(source_queue_handoff_rows),
+            "image_queue_total": len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
+            "image_queue_selected_next_batch": image_queue_metrics.get("image_queue_selected_next_batch", 0),
+            "image_queue_product_eligible_total": image_queue_metrics.get("image_queue_product_eligible_total", 0),
+            "image_queue_blocked_local_source_before_image_total": image_queue_metrics.get("image_queue_blocked_local_source_before_image_total", 0),
+            "image_queue_blocked_official_or_promo_source_before_image_total": image_queue_metrics.get("image_queue_blocked_official_or_promo_source_before_image_total", 0),
+            "image_queue_blocked_no_media_before_image_total": image_queue_metrics.get("image_queue_blocked_no_media_before_image_total", 0),
+            "online_image_queue_items_written": online_image_queue_items_written,
             "state_backend": region_talk_state_backend_requested(),
             "ydb_read_status": state_meta.get("ydb_read_status"),
-            "ydb_write_status": "ok" if online_source_queue_items_written or region_talk_state_backend_requested() != "ydb" else "no_source_queue_rows_written",
+            "ydb_write_status": "ok" if (online_source_queue_items_written or online_image_queue_items_written or region_talk_state_backend_requested() != "ydb") else "no_queue_rows_written",
         }
         payload = {
             "run_id": run_id,
@@ -10752,6 +10822,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             "summary": summary_row,
             "sheets": {
                 "01_run_summary": [summary_row],
+                "04m_image_queue": image_candidate_queue_sheet[:200],
                 "04s_unified_source_queue": source_queue_rows_written[:200],
                 "02_runtime_deferred_posts": runtime_deferred_posts[:200],
             },
@@ -10770,47 +10841,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             source_queue_handoff_rows=len(source_queue_handoff_rows),
             online_source_queue_items_written=online_source_queue_items_written,
             source_queue_keyword_prioritized_this_run=unified_source_queue_metrics.get("source_queue_keyword_prioritized_this_run", 0),
+            online_image_queue_items_written=online_image_queue_items_written,
+            image_queue_total=summary_row.get("image_queue_total"),
+            image_queue_product_eligible_total=summary_row.get("image_queue_product_eligible_total"),
+            image_queue_selected_next_batch=summary_row.get("image_queue_selected_next_batch"),
             next_action="run_region_talk_bge_m3_enrichment_or_next_candidate_report",
             runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
         )
         return payload
-    report_event("image_queue_build_started", phase="queue_assembly", status="running", new_posts=len(new_posts), candidate_memory_rows=len(candidate_memory_rows), media_rows=len(media_rows), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
-    image_candidate_queue_sheet, image_driven_top_sheet, image_queue_metrics = build_image_candidate_queue(
-        previous_state, new_posts, candidate_memory_rows, media_rows, run_id, run_now,
-    )
-    online_image_queue_items_written = write_region_talk_online_queue_items(
-        [r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")],
-        kind="image_queue_item",
-        id_fields=["image_queue_id", "post_url"],
-        fields=IMAGE_QUEUE_STATE_FIELDS,
-        run_id=run_id,
-        stage="image_candidate_queue_built",
-    )
-    write_region_talk_live_cursor("image", {
-        "run_id": run_id,
-        "queue_name": "image_candidate_queue",
-        "phase": "image_candidate_queue_built",
-        "status": "running",
-        "cursor_position": image_queue_metrics.get("image_queue_cursor_position", 0),
-        "cursor_key": next((str(r.get("image_queue_id") or "") for r in image_candidate_queue_sheet if isinstance(r, dict) and int(r.get("image_queue_order") or 0) == int(image_queue_metrics.get("image_queue_cursor_position") or 0)), ""),
-        "total": len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]),
-        "needs_actual_fetch_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "needs_actual_image_fetch"),
-        "in_progress_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "image_analysis_in_progress"),
-        "actual_scored_total": sum(1 for r in image_candidate_queue_sheet if isinstance(r, dict) and r.get("image_queue_status") == "actual_scored"),
-        "product_eligible_total": image_queue_metrics.get("image_queue_product_eligible_total", 0),
-        "blocked_local_source_before_image_total": image_queue_metrics.get("image_queue_blocked_local_source_before_image_total", 0),
-        "blocked_official_or_promo_source_before_image_total": image_queue_metrics.get("image_queue_blocked_official_or_promo_source_before_image_total", 0),
-        "blocked_no_media_before_image_total": image_queue_metrics.get("image_queue_blocked_no_media_before_image_total", 0),
-        "progress_label": f"image queue cursor {image_queue_metrics.get('image_queue_cursor_position', 0)}/{len([r for r in image_candidate_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
-    })
-    report_event(
-        "image_queue_build_done",
-        phase="queue_assembly",
-        status="running",
-        online_image_queue_items_written=online_image_queue_items_written,
-        runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
-        **image_queue_metrics,
-    )
+    if not image_candidate_queue_sheet:
+        build_and_write_image_queue_handoff("image_candidate_queue_built")
     previous_publication_rows = _previous_rows_dict(previous_state.get("publication_candidate_queue"))
     previous_publication_goal = previous_state.get("publication_goal") if isinstance(previous_state.get("publication_goal"), dict) else {}
     report_event("publication_queue_build_started", phase="queue_assembly", status="running", candidate_memory_product_rows=len(candidate_memory_product_rows), image_queue_total=len(image_candidate_queue_sheet), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))

@@ -178,6 +178,13 @@ Important invariants:
   mostly rediscover local/regional publics and hashtag spam. This keeps
   `publics_total` / source frontier growth visible on every healthy run without
   turning the Telegram session into an aggressive crawler. The orchestrator no-progress signature uses every numeric live metric that it emits, so source, text/vector, image, publication and scan-depth counters are monitored together without manual omissions. History depth metrics (`history_*_post_age_days`) are used to decide whether to lower/raise scan depth for speed versus coverage.
+- The default orchestrator runtime window is 20 minutes
+  (`REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=1200`), still below the 30-minute
+  product bound. This is intentional: a 12-minute window made the run
+  anti-product by skipping keyword discovery and capping E5 to the remaining
+  runtime instead of the intended model timeout. The 20-minute window keeps
+  fast-check, keyword/hashtag search, similar discovery, E5, source queue and
+  image handoff all eligible to run in one cycle.
 - Debug/product loops can be goal-driven without hiding metrics. The
   orchestrator still emits and monitors the full numeric funnel, but optional
   delta targets (`--target-new-publics`, `--target-processed-posts`,
@@ -213,6 +220,16 @@ Important invariants:
   written as `rejected_spam_source` before Telegram resolve/history calls.
   Normal uncertain sources are not rejected by regex; they stay in the vector
   pipeline.
+- Keyword/hashtag discovery is higher product priority than similar-channel
+  exploration because it can directly produce a source with a concrete
+  Kaliningrad Oblast post. In the default orchestrated run, keyword discovery
+  therefore runs before similar discovery. Similar discovery may still run, but
+  it must not consume the whole discovery tail and cause keyword search to be
+  skipped for runtime-budget reasons.
+- The full `image_queue_item` product handoff runs before source-queue tail
+  handoff. Source-queue persistence is important, but it must not return the
+  notebook early before `candidate_memory_item` rows have been checked against
+  the strict image/product gate and blocker metrics have been emitted.
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The
