@@ -1503,6 +1503,33 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
 
+    def test_processed_status_without_scan_evidence_returns_to_pending(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:fakeprocessed": {
+                    "canonical_source_key": "telegram:fakeprocessed",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/fakeprocessed",
+                    "queue_order": 5,
+                    "source_queue_status": "processed_no_ko",
+                    "last_scan_run_id": "legacy-imageq-run",
+                    "posts_scanned": 0,
+                },
+            },
+        }
+        seed = mod.Seed("fakeprocessed", "telegram", "Fake Processed", "@fakeprocessed", "https://t.me/fakeprocessed", "", "", 1, "", "", "", "", "", "", True, "", "")
+        due = mod._seed_scan_due_state(seed, previous)
+        self.assertTrue(due["due"])
+        self.assertFalse(due["is_rescan"])
+        self.assertEqual(due["reason"], "no_previous_scan_cursor")
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00")
+        row = next(r for r in rows if r["canonical_source_key"] == "telegram:fakeprocessed")
+        self.assertEqual(row["source_queue_status"], "pending_scan")
+        self.assertEqual(row["fake_processed_without_scan_evidence"], "true")
+        self.assertEqual(metrics["source_queue_fake_processed_without_scan_evidence_total"], 1)
+
     def test_image_queue_preserves_terminal_unsupported_media_status(self) -> None:
         mod = load_module()
         previous = {

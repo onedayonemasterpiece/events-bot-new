@@ -348,3 +348,10 @@ repair-delta counters: `publics_scanned_with_posts_*`,
 `source_queue_posts_scanned_total` is at least `processed_posts_unique_total`,
 and `publics_with_ko_candidates_total` is at least the number of sources
 observed in text/image/publication candidate rows.
+Rows marked `processed_*` without scan evidence (`posts_scanned`,
+history-fetch timestamp or durable cursor evidence) are treated as fake
+processed state, not real history scans. CandidateReport returns them to
+`pending_scan`, and the orchestrator exposes
+`publics_fake_processed_without_scan_evidence_total` plus
+`publics_keyword_fake_processed_without_scan_evidence_total` so legacy queue
+drift cannot make keyword yield look scanned when no posts were actually read.

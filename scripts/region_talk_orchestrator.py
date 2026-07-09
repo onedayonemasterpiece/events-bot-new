@@ -557,6 +557,15 @@ def _source_has_ko_candidate(row: dict[str, Any]) -> bool:
     )
 
 
+def _source_has_scan_evidence(row: dict[str, Any]) -> bool:
+    return bool(
+        _safe_int(row.get("posts_scanned")) > 0
+        or str(row.get("last_history_fetch_at") or "").strip()
+        or str(row.get("primary_scan_completed_at") or "").strip()
+        or str(row.get("last_successful_delta_scan_at") or "").strip()
+    )
+
+
 def _keyword_source_metrics(
     source_rows: list[dict[str, Any]],
     cursor_position: int,
@@ -580,9 +589,14 @@ def _keyword_source_metrics(
     keyword_scanned_keys = {
         k for k in keyword_evidence_keys
         if k in source_by_key and (
-            _safe_int(source_by_key[k].get("posts_scanned")) > 0
-            or str(source_by_key[k].get("source_queue_status") or "").startswith("processed")
+            _source_has_scan_evidence(source_by_key[k])
         )
+    }
+    keyword_fake_processed_without_scan_keys = {
+        k for k in keyword_evidence_keys
+        if k in source_by_key
+        and str(source_by_key[k].get("source_queue_status") or "").startswith("processed")
+        and not _source_has_scan_evidence(source_by_key[k])
     }
     keyword_ko_keys = {k for k in keyword_evidence_keys if k in source_by_key and _source_has_ko_candidate(source_by_key[k])}
     keyword_pending_after_cursor_keys = {
@@ -596,6 +610,7 @@ def _keyword_source_metrics(
         "publics_keyword_queue_rows_total": len(keyword_row_keys),
         "publics_keyword_edge_targets_total": len(keyword_edge_target_keys),
         "publics_keyword_queue_missing_total": len(keyword_evidence_keys - set(source_by_key)),
+        "publics_keyword_fake_processed_without_scan_evidence_total": len(keyword_fake_processed_without_scan_keys),
         "publics_keyword_scanned_with_posts_total": len(keyword_scanned_keys),
         "publics_keyword_with_ko_candidates_total": len(keyword_ko_keys),
         "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor_keys),
@@ -896,6 +911,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         r for r, status in zip(source_rows, source_statuses)
         if status.startswith("processed_")
     ]
+    source_fake_processed_without_scan = [
+        r for r, status in zip(source_rows, source_statuses)
+        if status.startswith("processed_") and not _source_has_scan_evidence(r)
+    ]
     source_retry = [
         r for r, status in zip(source_rows, source_statuses)
         if status in {"needs_rescan_or_retry", "retry", "error"} or status.startswith(("error", "skipped_telegram_unresolved"))
@@ -971,6 +990,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_total": len(source_rows),
         "publics_touched_or_not_pending_total": len(source_touched),
         "publics_terminal_processed_total": len(source_terminal),
+        "publics_fake_processed_without_scan_evidence_total": len(source_fake_processed_without_scan),
         "publics_needs_rescan_or_retry_total": len(source_retry),
         "publics_scanned_with_posts_total": source_with_posts_count,
         "publics_scanned_with_posts_source_rows_total": len(source_with_posts),

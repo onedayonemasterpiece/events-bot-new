@@ -211,22 +211,26 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         source_rows = [
             {"canonical_source_key": "telegram:edgehit", "queue_order": 11, "source_queue_status": "pending_scan", "posts_scanned": 0},
             {"canonical_source_key": "telegram:scanned", "queue_order": 9, "source_queue_status": "processed_found_ko_candidate", "posts_scanned": 20, "ko_posts_found": 1},
+            {"canonical_source_key": "telegram:fake", "queue_order": 8, "source_queue_status": "processed_no_ko", "posts_scanned": 0},
         ]
         candidates = [
             {"source_candidate_id": "cand1", "canonical_source_key": "telegram:edgehit"},
             {"source_candidate_id": "cand2", "canonical_source_key": "telegram:scanned"},
             {"source_candidate_id": "cand3", "canonical_source_key": "telegram:missing"},
+            {"source_candidate_id": "cand4", "canonical_source_key": "telegram:fake"},
         ]
         edges = [
             {"edge_type": "telegram_keyword_search", "to_source_candidate_id": "cand1"},
             {"edge_type": "telegram_keyword_search", "to_source_candidate_id": "cand2"},
             {"edge_type": "telegram_keyword_search", "to_source_candidate_id": "cand3"},
+            {"edge_type": "telegram_keyword_search", "to_source_candidate_id": "cand4"},
         ]
         metrics = mod._keyword_source_metrics(source_rows, cursor_position=10, source_candidates=candidates, source_edges=edges)
-        self.assertEqual(metrics["publics_keyword_discovered_total"], 3)
+        self.assertEqual(metrics["publics_keyword_discovered_total"], 4)
         self.assertEqual(metrics["publics_keyword_queue_rows_total"], 0)
-        self.assertEqual(metrics["publics_keyword_edge_targets_total"], 3)
+        self.assertEqual(metrics["publics_keyword_edge_targets_total"], 4)
         self.assertEqual(metrics["publics_keyword_queue_missing_total"], 1)
+        self.assertEqual(metrics["publics_keyword_fake_processed_without_scan_evidence_total"], 1)
         self.assertEqual(metrics["publics_keyword_scanned_with_posts_total"], 1)
         self.assertEqual(metrics["publics_keyword_with_ko_candidates_total"], 1)
         self.assertEqual(metrics["publics_keyword_pending_after_cursor_total"], 1)

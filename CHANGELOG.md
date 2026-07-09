@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / fake processed source rows**: CandidateReport no
+  longer treats a bare `processed_*` source status or legacy `last_scan_run_id`
+  as proof that history posts were scanned; rows without post/history evidence
+  return to `pending_scan`, and the orchestrator exposes overall and keyword
+  fake-processed counters so keyword yield cannot be inflated by legacy queue
+  drift.
 - **Region Talk Channel / image queue unsupported media**: ImageDiagnostic now
   marks Telegram/VK video or non-decodable media as terminal
   `not_reviewable_unsupported_media` instead of looping them as

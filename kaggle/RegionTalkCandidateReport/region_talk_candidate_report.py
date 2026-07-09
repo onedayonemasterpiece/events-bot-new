@@ -621,10 +621,8 @@ def _source_has_primary_scan_evidence(qrow: dict[str, Any], cursor: dict[str, An
         or cursor.get("last_history_fetch_at")
         or cursor.get("last_successful_delta_scan_at")
         or qrow.get("last_history_fetch_at")
-        or qrow.get("last_scan_run_id")
         or _positive_int(qrow.get("posts_scanned"))
         or _positive_int(cursor.get("posts_scanned"))
-        or status.startswith("processed")
     )
 
 
@@ -4105,7 +4103,25 @@ def build_unified_source_queue(
             terminal_rejected_status = fetch_status
         elif source_terminal_rejected_status(previous_queue_status):
             terminal_rejected_status = previous_queue_status
-        scanned = bool(terminal_rejected_status) or bool(fetch_status) or previous_queue_status.startswith("processed") or bool(rec.get("last_processed_at")) or actual_n > 0 or ko_posts > 0 or candidate_posts > 0
+        def positive_int(value: Any) -> bool:
+            try:
+                return int(float(value or 0)) > 0
+            except Exception:
+                return False
+
+        scan_evidence = bool(
+            fetch_status
+            or rec.get("last_history_fetch_at")
+            or srow.get("last_history_fetch_at")
+            or positive_int(rec.get("posts_scanned"))
+            or positive_int(srow.get("posts_scanned"))
+            or len(sampled) > 0
+            or actual_n > 0
+            or ko_posts > 0
+            or candidate_posts > 0
+        )
+        fake_processed_without_scan = previous_queue_status.startswith("processed") and not scan_evidence and not terminal_rejected_status
+        scanned = bool(terminal_rejected_status) or scan_evidence
         if scanned:
             processed_orders.append(int(rec.get("queue_order") or 0))
         if terminal_rejected_status:
@@ -4133,6 +4149,7 @@ def build_unified_source_queue(
             "last_status_changed_at": run_now if status_changed or not rec.get("last_status_changed_at") else rec.get("last_status_changed_at"),
             "status_color_hint": color,
             "row_fill_color": color,
+            "fake_processed_without_scan_evidence": str(fake_processed_without_scan).lower(),
             "last_processed_at": run_now if scanned else rec.get("last_processed_at", ""),
             "last_scan_run_id": run_id if scanned else rec.get("last_scan_run_id", ""),
             "last_scan_status": fetch_status,
@@ -4177,6 +4194,7 @@ def build_unified_source_queue(
         "source_queue_processed_total": sum(1 for r in out if str(r.get("source_queue_status") or "").startswith("processed")),
         "source_queue_retry_total": sum(1 for r in out if r.get("source_queue_status") == "needs_rescan_or_retry"),
         "source_queue_rejected_high_volume_total": sum(1 for r in out if source_rejected_by_text_volume_status(r.get("source_queue_status"))),
+        "source_queue_fake_processed_without_scan_evidence_total": sum(1 for r in out if str(r.get("fake_processed_without_scan_evidence") or "").lower() == "true"),
         "source_queue_cursor_position": cursor_position,
         "source_queue_cursor_key": cursor_key,
         "source_queue_keyword_inserted_this_run": keyword_inserted,
