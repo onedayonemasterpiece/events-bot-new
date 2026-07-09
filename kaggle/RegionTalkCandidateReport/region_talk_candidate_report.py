@@ -3221,6 +3221,39 @@ class TelegramRequestGovernor:
         raw = re.sub(r"^https?://t\.me/", "", raw, flags=re.I).split("/", 1)[0].lower()
         return "telegram:username:" + raw
 
+    def remember_entity(self, handle_or_url: str, entity: Any, *, title: str = "", source: str = "") -> bool:
+        key = self.cache_key(handle_or_url)
+        channel_id = str(getattr(entity, "id", "") or "")
+        access_hash = str(getattr(entity, "access_hash", "") or "")
+        if not channel_id or not access_hash:
+            return False
+        username = canonical_handle(str(handle_or_url or "")).lstrip("@")
+        username = re.sub(r"^https?://t\.me/", "", username, flags=re.I).split("/", 1)[0]
+        self.entity_cache[key] = {
+            **(self.entity_cache.get(key) or {}),
+            "canonical_url": "https://t.me/" + username if username else str(handle_or_url or ""),
+            "username": username,
+            "title_last_seen": str(title or getattr(entity, "title", None) or username),
+            "entity_kind": "channel",
+            "channel_id_private": channel_id,
+            "access_hash_private": access_hash,
+            "resolved_at": utc_now_iso(),
+            "last_used_at": utc_now_iso(),
+            "last_success_at": utc_now_iso(),
+            "source": source or "telethon_entity_observed",
+        }
+        return True
+
+    def cached_input_peer(self, handle_or_url: str) -> Any | None:
+        cached = self.entity_cache.get(self.cache_key(handle_or_url)) or {}
+        if cached.get("channel_id_private") and cached.get("access_hash_private"):
+            try:
+                from telethon.tl.types import InputPeerChannel  # type: ignore
+                return InputPeerChannel(int(cached["channel_id_private"]), int(cached["access_hash_private"]))
+            except Exception:
+                return None
+        return None
+
     def cooldown_active(self, key: str) -> tuple[bool, str]:
         rec = self.cooldowns.get(key) or {}
         until = str(rec.get("cooldown_until") or "")
@@ -3316,15 +3349,11 @@ class TelegramRequestGovernor:
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=method_until or source_until)
             return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": method_until or source_until}
         cached = self.entity_cache.get(key) or {}
-        if cached.get("channel_id_private") and cached.get("access_hash_private"):
-            try:
-                from telethon.tl.types import InputPeerChannel  # type: ignore
-                entity = InputPeerChannel(int(cached["channel_id_private"]), int(cached["access_hash_private"]))
-                self.resolve_cache_hits += 1
-                self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
-                return entity, {"telegram_resolve_status": "resolved_from_private_cache", "resolved_title": cached.get("title_last_seen", "")}
-            except Exception:
-                pass
+        entity_from_cache = self.cached_input_peer(seed.handle or seed.url)
+        if entity_from_cache is not None:
+            self.resolve_cache_hits += 1
+            self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
+            return entity_from_cache, {"telegram_resolve_status": "resolved_from_private_cache", "resolved_title": cached.get("title_last_seen", "")}
         if self.resolve_network_attempts >= self.max_network_resolves or not self.has_total_request_budget("ResolveUsernameRequest", source_id, canonical_url):
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "skipped_budget", ok=False)
             return None, {"fetch_status": "skipped_telegram_budget_exhausted", "telegram_resolve_status": "skipped_budget", "resolve_attempt_count": self.resolve_network_attempts}
@@ -3346,22 +3375,16 @@ class TelegramRequestGovernor:
             entity = await client.get_entity(handle)
             self.total_ok += 1
             self.resolve_network_ok += 1
-            self.entity_cache[key] = {
-                "canonical_url": canonical_url,
-                "username": handle,
-                "title_last_seen": str(getattr(entity, "title", None) or seed.source_title),
-                "entity_kind": "channel",
-                "channel_id_private": str(getattr(entity, "id", "") or ""),
-                "access_hash_private": str(getattr(entity, "access_hash", "") or ""),
-                "resolved_at": utc_now_iso(),
-                "last_used_at": utc_now_iso(),
-                "last_success_at": utc_now_iso(),
+            self.remember_entity(handle, entity, title=str(getattr(entity, "title", None) or seed.source_title), source="resolve_entity")
+            cached_after = self.entity_cache.get(key) or {}
+            cached_after.update({
                 "last_error_at": None,
                 "last_error_code": None,
                 "resolve_attempt_count": int((cached or {}).get("resolve_attempt_count") or 0) + 1,
                 "resolve_network_count": int((cached or {}).get("resolve_network_count") or 0) + 1,
                 "resolve_cache_hit_count": int((cached or {}).get("resolve_cache_hit_count") or 0),
-            }
+            })
+            self.entity_cache[key] = cached_after
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, "allowed", cache_hit=False, network_call=True, ok=True)
             return entity, {"telegram_resolve_status": "resolved_network", "resolved_title": str(getattr(entity, "title", None) or seed.source_title)}
         except Exception as exc:
@@ -5758,12 +5781,7 @@ async def discover_telegram_similar_channels(client: Any, source_rows: list[dict
                 }
                 edges.append(edge)
                 write_region_talk_online_discovery_items([row], [edge], run_id=run_id, stage="telegram_similar_discovery")
-                governor.entity_cache["telegram:username:" + username.lower()] = {
-                    "canonical_url": rec_url, "username": username, "title_last_seen": title, "entity_kind": "channel",
-                    "channel_id_private": str(getattr(ch, "id", "") or ""),
-                    "access_hash_private": str(getattr(ch, "access_hash", "") or ""),
-                    "resolved_at": utc_now_iso(), "last_used_at": "", "last_success_at": "", "source": "telegram_similar_channels",
-                }
+                governor.remember_entity(username, ch, title=title, source="telegram_similar_channels")
                 if len(rows) >= max_frontier:
                     break
             seed_updates[similar_seed_id] = {
@@ -5887,6 +5905,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                     title = str(getattr(chat, "title", None) or getattr(chat, "first_name", None) or "").strip()
                     if not username:
                         continue
+                    governor.remember_entity(username, chat, title=title, source="telegram_keyword_search")
                     url = "https://t.me/" + username
                     key = canonical_source_key("telegram", username, url)
                     post_url = f"https://t.me/{username}/{getattr(msg, 'id', '')}"
@@ -5904,6 +5923,7 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
                         "source_title": title,
                         "username_or_handle": username,
                         "canonical_source_key": key,
+                        "private_state_key": "telegram:username:" + username.lower(),
                         "frontier_action": "source_seen" if key in seen_keys else "source_queued",
                         "sent_to_pipeline": "true",
                         "acceptance_note": "keyword hit is discovery/context only, never auto-accepts publication candidate",
@@ -6905,6 +6925,11 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS", 18.0),
                 ))
             entity = entity_cache.get(handle)
+            if entity is None and governor is not None:
+                entity = governor.cached_input_peer(handle)
+                if entity is not None:
+                    governor.resolve_cache_hits += 1
+                    governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "skipped_cache_hit", cache_hit=True, network_call=False, ok=True)
             if entity is None:
                 try:
                     if governor is not None:
@@ -6913,6 +6938,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     entity = await client.get_entity(handle)
                     if governor is not None:
                         governor.total_ok += 1
+                        governor.remember_entity(handle, entity, title=str(row.get("source_title") or handle), source="exact_post_link_fetch")
                 except Exception as exc:
                     stat["errors"] += 1
                     stat["last_error_code"] = type(exc).__name__

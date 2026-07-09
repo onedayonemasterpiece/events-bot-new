@@ -200,6 +200,12 @@ Debug-run budget after the 2026-07-09 long-run incident:
   if Telethon cannot resolve/fetch or returns `FloodWait`, the run records the
   concrete Telethon reason/cooldown and defers later Telegram phases instead of
   masking the blocker with a slow web fallback.
+- Exact post-link fetch and source-local fast-check must use the private
+  Telegram entity cache first. `channel_id/access_hash` are saved only in
+  private state/YDB payloads when observed through successful resolve, Telegram
+  similar-channel results or global keyword search chat metadata; public XLSX
+  rows may expose only `private_state_key`. If a source has no cached entity,
+  username resolve is a scarce operation and must be budgeted separately.
 - These limits must be present in the launcher-written
   `region_talk_run_config.json`, not only in the local orchestrator dry-run
   action. Otherwise Kaggle silently falls back to notebook defaults and the live

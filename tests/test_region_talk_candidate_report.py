@@ -6,6 +6,7 @@ import os
 import json
 import sys
 import tempfile
+import types
 import unittest
 import zipfile
 from pathlib import Path
@@ -159,6 +160,42 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(gov.floodwait_cooldown_until, cooldown_until)
             self.assertFalse(gov.has_total_request_budget("messages.searchGlobal", "keyword_discovery", "Калининград"))
             self.assertEqual(gov.ledger[-1]["decision"], "skipped_telegram_cooldown")
+
+    def test_telegram_governor_remember_entity_builds_cached_peer(self) -> None:
+        mod = load_module()
+        class Entity:
+            id = 12345
+            access_hash = 67890
+            title = "Cached Travel"
+
+        old_modules = {name: sys.modules.get(name) for name in ["telethon", "telethon.tl", "telethon.tl.types"]}
+        fake_telethon = types.ModuleType("telethon")
+        fake_tl = types.ModuleType("telethon.tl")
+        fake_types = types.ModuleType("telethon.tl.types")
+        class InputPeerChannel:
+            def __init__(self, channel_id, access_hash):
+                self.channel_id = channel_id
+                self.access_hash = access_hash
+        fake_types.InputPeerChannel = InputPeerChannel
+        try:
+            sys.modules["telethon"] = fake_telethon
+            sys.modules["telethon.tl"] = fake_tl
+            sys.modules["telethon.tl.types"] = fake_types
+            with tempfile.TemporaryDirectory() as td:
+                gov = mod.TelegramRequestGovernor("unit-run", Path(td) / "out" / "run", {})
+                self.assertTrue(gov.remember_entity("cachedtravel", Entity(), source="unit"))
+                peer = gov.cached_input_peer("cachedtravel")
+                self.assertIsNotNone(peer)
+                self.assertEqual(peer.channel_id, 12345)
+                self.assertEqual(peer.access_hash, 67890)
+                self.assertEqual(gov.entity_cache["telegram:username:cachedtravel"]["channel_id_private"], "12345")
+                self.assertEqual(gov.entity_cache["telegram:username:cachedtravel"]["access_hash_private"], "67890")
+        finally:
+            for name, value in old_modules.items():
+                if value is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = value
 
     def test_ydb_online_write_circuit_breaker_disables_retries_after_auth_error(self) -> None:
         mod = load_module()

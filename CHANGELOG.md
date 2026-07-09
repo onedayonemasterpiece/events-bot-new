@@ -8,8 +8,11 @@
   `FloodWait.seconds` opens a cooldown. Exact-link failures now emit concrete
   Telethon reason events, the CandidateReport launcher now serializes the
   orchestrator-only Telethon/fast-check/YDB limit keys into Kaggle config, and
-  YDB `Unauthenticated` online-write failures trip a circuit breaker instead of
-  producing repeated noisy retries.
+  exact post-link fetch now uses the private Telegram entity cache before any
+  username resolve. Keyword/global-search and similar-channel discoveries store
+  `channel_id/access_hash` in private state so later fast-check/history work can
+  avoid repeated `ResolveUsernameRequest`; YDB `Unauthenticated` online-write
+  failures trip a circuit breaker instead of producing repeated noisy retries.
 - **Region Talk Channel / shorter debug cycles**: tightened orchestrator
   CandidateReport debug batches to six sources / shorter keyword-similar slices,
   bounded source-local fast-check and exact post-link fetch work, capped online
