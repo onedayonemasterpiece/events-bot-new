@@ -2932,7 +2932,33 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         data0["queue_cursors"] = cursors
                         data0["ydb_queue_cursor_items_loaded"] = len(queue_cursors)
                 return data0
-            data = pool.retry_operation_sync(op)
+            attempts = max(1, getenv_int("REGION_TALK_YDB_STATE_LOAD_ATTEMPTS", 1))
+            backoff_seconds = max(0.0, getenv_float("REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS", 0.0))
+            retry_settings = ydb_retry_settings(
+                ydb,
+                timeout_seconds=getenv_int("REGION_TALK_YDB_STATE_LOAD_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8)),
+                max_retries=getenv_int("REGION_TALK_YDB_STATE_LOAD_MAX_RETRIES", getenv_int("REGION_TALK_YDB_MAX_RETRIES", 2)),
+            )
+            last_exc: Exception | None = None
+            data: dict[str, Any] = {}
+            for attempt in range(1, attempts + 1):
+                try:
+                    data = pool.retry_operation_sync(op, retry_settings=retry_settings)
+                    if attempt > 1:
+                        meta["ydb_state_load_attempts"] = attempt
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    meta.update({
+                        "ydb_read_status": "retrying",
+                        "ydb_state_load_attempts": attempt,
+                        "ydb_state_load_last_error": f"{type(exc).__name__}: {str(exc)[:220]}",
+                    })
+                    print(f"[region-talk] ydb_state_load_retry attempt={attempt}/{attempts} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
+                    if attempt >= attempts:
+                        raise
+                    if backoff_seconds > 0:
+                        time.sleep(backoff_seconds * attempt)
             driver.stop(timeout=5)
             if not isinstance(data, dict) or not data:
                 meta.update({"ydb_read_status": "empty", "previous_state_loaded": "false", "increment_state_loaded": "false", "previous_state_source": "ydb:" + table_path})

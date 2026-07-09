@@ -10,6 +10,11 @@
   no longer rewrites the full reordered tail, is capped to 80 rows in the
   orchestrator, and disables the duplicate `source_status_item` mirror by
   default to avoid long transactional YDB upsert stalls.
+- **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB
+  state load now supports bounded retry/backoff knobs and the orchestrator sets
+  `REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4` with a 20-second backoff so transient
+  serverless YDB `RESOURCE_EXHAUSTED` / `DeadlineExceed` during parallel BGE
+  startup does not fail the notebook immediately.
 - **Region Talk Channel / local-source terminal routing**: hardened
   Kaliningrad-local source detection (`kaliningrad`, `kld`/`klgd`, `39` suffix
   and existing local profile/ratio signals), made `source_scope=local_region`

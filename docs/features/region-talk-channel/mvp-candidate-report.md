@@ -851,6 +851,11 @@ count, while `source_queue_handoff_rows` reports how many rows were actually
 written to `source_queue_item`. The legacy `source_status_item` mirror is off by
 default in orchestrated runs (`REGION_TALK_WRITE_SOURCE_STATUS_QUEUE_MIRROR=0`)
 to avoid duplicate transactional YDB upserts for the same queue handoff.
+Because BGE and CandidateReport may start near each other and both read/write
+YDB, CandidateReport state load is retried with bounded backoff in orchestrated
+runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,
+`REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS=20`) before treating YDB state as
+unavailable.
 
 Source-level monitoring totals must not rely only on the latest compact source
 row, because a historical partial run can leave stale/lower source counters.

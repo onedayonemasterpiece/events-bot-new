@@ -59,6 +59,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN",
             "REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS",
             "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS",
+            "REGION_TALK_YDB_STATE_LOAD_ATTEMPTS",
+            "REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS",
         ]}
         old_create = mod.create_or_replace_dataset
         old_wait = mod.wait_dataset_ready
@@ -84,6 +86,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             os.environ["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"] = "0"
             os.environ["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"] = "80"
             os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
+            os.environ["REGION_TALK_YDB_STATE_LOAD_ATTEMPTS"] = "4"
+            os.environ["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"] = "20"
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
             mod.build_input_datasets(object(), run_id="unit-run", username="unit")
@@ -98,6 +102,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "0")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS"], "80")
             self.assertEqual(env["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"], "80")
+            self.assertEqual(env["REGION_TALK_YDB_STATE_LOAD_ATTEMPTS"], "4")
+            self.assertEqual(env["REGION_TALK_YDB_STATE_LOAD_BACKOFF_SECONDS"], "20")
         finally:
             mod.create_or_replace_dataset = old_create
             mod.wait_dataset_ready = old_wait
