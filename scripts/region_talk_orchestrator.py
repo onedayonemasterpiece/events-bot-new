@@ -88,6 +88,13 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_TELEGRAM_QUERY_ROTATE": "1",
     "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
     "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "20",
+    "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
+    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "12",
+    "REGION_TALK_FAST_CHECK_KO_ENABLED": "1",
+    "REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN": "8",
+    "REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE": "2",
+    "REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY": "2",
+    "REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS": "300",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS": "240",
     "REGION_TALK_RUNTIME_RESERVE_BEFORE_KEYWORD_QUERY_SECONDS": "180",
 }
@@ -96,6 +103,7 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "candidate_memory_item": 2500,
     "image_queue_item": 2500,
     "publication_candidate_item": 2500,
+    "post_link_queue_item": 2500,
     "text_vector_enrichment_item": 6000,
     "processed_post_item": 10000,
     "post_live_item": 10000,
@@ -983,6 +991,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "candidate_memory_item",
             "image_queue_item",
             "publication_candidate_item",
+            "post_link_queue_item",
             "text_vector_enrichment_item",
             "processed_post_item",
             "post_live_item",
@@ -998,6 +1007,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     candidates = rows_by_kind["candidate_memory_item"]
     images = rows_by_kind["image_queue_item"]
     publications = rows_by_kind["publication_candidate_item"]
+    post_links = rows_by_kind["post_link_queue_item"]
     vectors = rows_by_kind["text_vector_enrichment_item"]
     source_candidates = rows_by_kind["source_candidate_item"]
     source_edges = rows_by_kind["source_edge_item"]
@@ -1123,6 +1133,16 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if str(r.get("publication_candidate_status") or "") in {"publication_ready", "accepted_for_publication"}
         or str(r.get("publication_status") or "") == "publication_ready"
     ]
+    post_link_statuses = [str(r.get("post_link_status") or "") for r in post_links]
+    post_link_pending = [r for r, status in zip(post_links, post_link_statuses) if status in {"", "pending_fetch", "retry_fetch", "fetch_error"}]
+    post_link_fetched = [r for r, status in zip(post_links, post_link_statuses) if status == "fetched"]
+    post_link_terminal = [r for r, status in zip(post_links, post_link_statuses) if status.startswith("terminal_")]
+    post_link_source_keys = {str(r.get("canonical_source_key") or r.get("source_key") or "") for r in post_links if str(r.get("canonical_source_key") or r.get("source_key") or "").strip()}
+    fast_check_rows = [r for r in source_rows if str(r.get("fast_check_status") or "").strip()]
+    fast_check_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "ko_hit"]
+    fast_check_no_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "no_hit"]
+    fast_check_local_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "local_region_source"]
+    fast_check_spam_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "spam_source_reject"]
     source_posts_scanned_raw_total = sum(_safe_int(r.get("posts_scanned")) for r in source_rows)
     processed_posts_unique_total = len(processed_post_rows)
     source_posts_scanned_effective_total = max(source_posts_scanned_raw_total, processed_posts_unique_total)
@@ -1169,6 +1189,19 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
+        "post_link_queue_total": len(post_links),
+        "post_link_queue_pending_total": len(post_link_pending),
+        "post_link_queue_fetched_total": len(post_link_fetched),
+        "post_link_queue_terminal_total": len(post_link_terminal),
+        "post_link_queue_unique_sources_total": len(post_link_source_keys),
+        "post_link_queue_keyword_total": sum(1 for r in post_links if "keyword" in str(r.get("priority_reason") or r.get("discovery_type") or "")),
+        "post_link_queue_hashtag_total": sum(1 for r in post_links if "hashtag" in str(r.get("priority_reason") or r.get("discovery_type") or "")),
+        "fast_check_ko_sources_total": len(fast_check_rows),
+        "fast_check_ko_hit_sources_total": len(fast_check_hit_rows),
+        "fast_check_ko_no_hit_sources_total": len(fast_check_no_hit_rows),
+        "fast_check_ko_local_rejected_sources_total": len(fast_check_local_rows),
+        "fast_check_ko_spam_rejected_sources_total": len(fast_check_spam_rows),
+        "fast_check_ko_hit_post_links_total": sum(1 for r in fast_check_hit_rows if str(r.get("fast_check_hit_post_url") or r.get("keyword_hit_post_url") or "").strip()),
         "rejected_sources_total": len(rejected_sources),
         "source_queue_posts_scanned_total": source_posts_scanned_effective_total,
         "source_queue_posts_scanned_source_rows_total": source_posts_scanned_raw_total,

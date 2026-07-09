@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / fast-check-KO and exact keyword post queue**:
+  CandidateReport now runs a bounded source-local keyword preflight over the
+  existing source backlog after the cursor, promotes only fresh KO-hit sources
+  inside the same `source_queue_item` queue, writes exact global/preflight post
+  hits as `post_link_queue_item` rows, consumes a bounded exact-link batch before
+  normal source history scans, and exposes fast-check/post-link queue metrics in
+  the orchestrator.
 - **Region Talk Channel / system audit brief**: added a data-driven audit brief
   with current vs previous funnel metrics, honest bottleneck/risk analysis,
   updated hybrid discovery/preflight/post-link model, the required

@@ -125,28 +125,46 @@ global search, resolves and source-local preflight through the shared
 surface classification before resolving/scanning channels, and must not spend
 history budget on obvious local/spam hashtag hits.
 
-### 6b. Source-local preflight search
+### 6b. Source-local fast-check-KO preflight search
 
 When a new source enters YDB from a catalog, similar-channel edge, keyword hit
-or hashtag hit, the next cheap step is not a deep history crawl. First run a
-bounded in-channel preflight search across the lexicon:
+or hashtag hit, the next cheap step is not a deep history crawl. CandidateReport
+therefore has a bounded `fast-check-KO` pass over the existing
+`unified_source_queue` backlog after the current cursor. This is **not** a
+second source queue: it reads rows from the same YDB `source_queue_item`, writes
+`fast_check_*` evidence back to the same row, and uses the normal queue builder
+to move KO hits to `cursor + 1...N`.
+
+Per run, the orchestrator keeps this intentionally conservative:
+
+- `REGION_TALK_FAST_CHECK_KO_ENABLED=1`;
+- `REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN=8`;
+- `REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE=2`;
+- `REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY=2`;
+- all resolves/searches go through `TelegramRequestGovernor` plus human-like
+  pacing.
+
+Algorithm:
 
 1. surface-filter title/handle/recent evidence for local-region and spam
    terminal statuses;
 2. resolve the channel through the shared governor/cache only if needed;
-3. search the channel for a small rotating subset of high-yield terms, then
-   continue across the broader lexicon in later runs if still useful;
+3. search the channel for `Калининград` first, then one rotating
+   town/POI/toponym from the broader lexicon (`Зеленоградск`, `Куршская коса`,
+   `Светлогорск`, `Балтийск`, ...);
 4. stop early on the first fresh hit (`post_date >= now-365d`);
 5. persist `matched_query`, `keyword_hit_post_url`, `post_date`,
-   `preflight_hit_age_days`, `keyword_evidence_excerpt` and
-   `source_preflight_status`.
+   `preflight_hit_age_days`, `keyword_evidence_excerpt` and `fast_check_status`.
 
 If a fresh hit is found, the source is physically placed at
 `unified_source_queue.cursor + 1...N` and the exact post URL must be written to
 a known-post queue (`post_link_queue_item` / generalized candidate-link fetch)
 so that the post itself is scored next instead of being only a source hint. If
-the hit is older than one year, keep it as evidence and lower-priority backlog;
-do not jump it immediately ahead of fresh sources.
+no hit is found, `fast_check_status=no_hit` is not terminal: the source remains
+eligible for normal history scanning later, but is not rechecked by fast-check
+and is deprioritized behind un-preflighted backlog. If the hit is older than one
+year, keep it as evidence and lower-priority backlog; do not jump it immediately
+ahead of fresh sources.
 
 Implementation invariants:
 
@@ -157,9 +175,14 @@ Implementation invariants:
   for history scans;
 - uncertain rows are kept for the normal semantic/vector gate rather than
   rejected by regex;
+- `fast_check_status=ko_hit` is the only source-local preflight state that gets
+  keyword priority; `no_hit`/`error` must not be promoted just because the
+  internal stage name contains “keyword”;
 - a keyword/preflight post hit is not a final candidate, but its URL must not be
-  lost: it should enter the known-post fetch/scoring queue and then pass the
-  normal E5+BGE/text/image/LLM funnel;
+  lost: CandidateReport writes it as `post_link_queue_item`, and the next normal
+  CandidateReport run first refetches a bounded batch of these exact links
+  (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`) before spending history-scan
+  budget; fetched links then pass the normal E5+BGE/text/image/LLM funnel;
 - every physical queue reorder caused by keyword/hashtag insertion is persisted
   in YDB, not only hidden by selector priority.
 

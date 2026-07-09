@@ -259,6 +259,11 @@ Region Talk must keep row-level product state compact:
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
   canonical Telegram/VK source queue row with `queue_order`, status, status-change
   fields, cursor display markers, KO/candidate counters and image-quality rollup;
+  source-local `fast-check-KO` preflight writes `fast_check_status`,
+  `fast_check_at`, `fast_check_matched_query`, `fast_check_hit_post_url`,
+  `fast_check_hit_post_date` and error fields back to this same row. Only
+  `fast_check_status=ko_hit` promotes the source to `cursor + 1...N`;
+  `no_hit`/`error` are not terminal and are not promoted;
   terminal high-volume rejections use
   `source_queue_status=rejected_high_volume_text_posts_per_day` plus
   `monitoring_exclusion_reason`, `source_probe_reason`,
@@ -289,7 +294,10 @@ Region Talk must keep row-level product state compact:
   `matched_query`, `matched_hashtag`, `post_date`, `hit_age_days`,
   `priority_reason`, status/lease fields and a short evidence excerpt. Consuming
   this queue refetches the exact post and sends it through the normal
-  E5+BGE/text/image/LLM funnel; it is not a publication acceptance shortcut;
+  E5+BGE/text/image/LLM funnel; it is not a publication acceptance shortcut.
+  `post_link_status` is `pending_fetch`/`fetch_error`/`fetched`/terminal, and
+  normal CandidateReport runs consume a bounded exact-link batch before source
+  history scans when `REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`;
 - kind `candidate_memory_item`, pk `candidate_memory_item:<candidate_memory_id>` —
   compact cumulative candidate-memory row. CandidateReport reads and writes this
   row-level kind directly; it must not depend only on `latest_state.candidate_memory`;

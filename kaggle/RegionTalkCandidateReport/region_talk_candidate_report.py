@@ -711,6 +711,14 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
+    # Fast-check hit sources should be scanned next.  Fast-check no-hit/error
+    # sources are not terminal rejects, but they should not keep winning over
+    # ordinary unscanned backlog just because a stage name contains "keyword".
+    fast_check_status = str(row.get("fast_check_status") or "").strip().lower()
+    if fast_check_status == "ko_hit":
+        return 0
+    if fast_check_status in {"no_hit", "unresolved", "error"}:
+        return 2
     haystack = " ".join(str(row.get(k) or "") for k in [
         "added_from", "insertion_policy", "discovery_type", "edge_type", "frontier_reason",
         "matched_query", "matched_hashtag", "keyword_hit_post_url", "keyword_evidence_excerpt",
@@ -1370,6 +1378,9 @@ SOURCE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "fast_check_status", "fast_check_at", "last_fast_check_run_id",
+    "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
+    "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
@@ -1390,6 +1401,9 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "history_posts_with_dates", "history_avg_post_age_days",
     "history_newest_post_age_days", "history_oldest_post_age_days",
     "history_newest_post_date", "history_oldest_post_date",
+    "fast_check_status", "fast_check_at", "last_fast_check_run_id",
+    "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
+    "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
 SOURCE_CANDIDATE_STATE_FIELDS = [
@@ -1404,6 +1418,9 @@ SOURCE_CANDIDATE_STATE_FIELDS = [
     "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
+    "fast_check_status", "fast_check_at", "last_fast_check_run_id",
+    "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
+    "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
 ]
 SOURCE_EDGE_STATE_FIELDS = [
     "edge_id", "run_id", "updated_at", "last_seen_run_id", "online_update_stage",
@@ -1416,6 +1433,16 @@ COMMENT_DISCOVERY_STATE_FIELDS = [
     "source_id", "source_title", "post_id", "post_url", "from_comment_id_hash",
     "comment_text_redacted", "normalized_url", "canonical_url", "platform_guess",
     "source_candidate_id", "edge_id", "discovery_type", "edge_type", "confidence",
+]
+POST_LINK_QUEUE_STATE_FIELDS = [
+    "post_link_queue_id", "post_link_status", "post_link_priority", "priority_reason",
+    "post_url", "keyword_hit_post_url", "source_key", "canonical_source_key",
+    "source_url", "keyword_hit_source_url", "source_title", "handle", "username_or_handle",
+    "matched_query", "matched_hashtag", "post_date", "hit_age_days",
+    "keyword_hit_text_excerpt", "evidence_excerpt_hash", "discovery_type", "edge_type",
+    "first_seen_run_id", "last_seen_run_id", "last_attempt_run_id", "last_attempt_at",
+    "fetched_post_id", "fetch_error_code", "fetch_error_message", "run_id", "updated_at",
+    "online_update_stage", "next_action",
 ]
 IMAGE_QUEUE_STATE_FIELDS = [
     "image_queue_id", "image_queue_order", "display_order", "image_queue_status", "previous_image_queue_status",
@@ -1447,7 +1474,8 @@ POST_STATE_FIELDS = [
 POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "run_id", "updated_at", "last_seen_run_id", "online_update_stage", "has_media",
     "media_count", "text_hash", "text_excerpt_hash", "text_excerpt", "short_summary", "source_url", "handle",
-    "fetch_status", "post_observation_status",
+    "fetch_status", "post_observation_status", "discovery_method", "discovery_priority",
+    "keyword_hit_query", "keyword_hit_hashtag", "ydb_candidate_link_kind", "ydb_candidate_link_pk",
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
@@ -1498,6 +1526,7 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         source_candidates = state.get("source_frontier_unique") if isinstance(state.get("source_frontier_unique"), dict) else {}
     source_edges = state.get("source_edges") if isinstance(state.get("source_edges"), dict) else {}
     comment_discovery = state.get("comment_discovery") if isinstance(state.get("comment_discovery"), dict) else {}
+    post_link_queue = state.get("post_link_queue") if isinstance(state.get("post_link_queue"), dict) else {}
     publication_candidates = state.get("publication_candidate_queue") if isinstance(state.get("publication_candidate_queue"), dict) else {}
     max_posts = getenv_int("REGION_TALK_YDB_MAX_POST_ROWS", 20000)
     max_sources = getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000)
@@ -1573,6 +1602,11 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         "comment_discovery": {
             str(k): compact_record(v, COMMENT_DISCOVERY_STATE_FIELDS, max_len=900)
             for k, v in list(comment_discovery.items())[:max_candidates]
+            if isinstance(v, dict)
+        },
+        "post_link_queue": {
+            str(k): compact_record(v, POST_LINK_QUEUE_STATE_FIELDS, max_len=900)
+            for k, v in list(post_link_queue.items())[:max_candidates]
             if isinstance(v, dict)
         },
         "processed_posts": compact_posts,
@@ -1992,6 +2026,71 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
     except Exception as exc:
         print(f"[region-talk] online_queue_ydb_failed kind={kind} {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         return 0
+
+
+def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, status: str = "pending_fetch") -> dict[str, Any]:
+    """Convert a keyword/hashtag exact post hit into durable exact-post work.
+
+    The hit remains only a recall signal: normal text/vector/image/LLM gates still
+    decide candidate quality.  YDB stores a short excerpt/hash, not raw full text.
+    """
+    post_url = str(row.get("post_url") or row.get("keyword_hit_post_url") or "").strip()
+    source_url = str(row.get("source_url") or row.get("keyword_hit_source_url") or row.get("canonical_url") or "").strip()
+    key = str(row.get("canonical_source_key") or "").strip()
+    if not key and source_url:
+        key = canonical_source_key("telegram", row.get("username_or_handle") or row.get("handle") or source_url, source_url)
+    excerpt = re.sub(r"\s+", " ", str(row.get("keyword_hit_text_excerpt") or row.get("keyword_evidence_excerpt") or "")).strip()[:500]
+    is_hashtag = bool(str(row.get("matched_hashtag") or "").strip()) or str(row.get("discovery_type") or "") == "telegram_hashtag_search"
+    return {
+        "post_link_queue_id": "postlink_" + stable_hash(post_url or row.get("source_candidate_id") or key),
+        "post_link_status": status,
+        "post_link_priority": 0,
+        "priority_reason": "global_hashtag_search_exact_post" if is_hashtag else "global_keyword_search_exact_post",
+        "post_url": post_url,
+        "keyword_hit_post_url": post_url,
+        "source_key": key,
+        "canonical_source_key": key,
+        "source_url": source_url,
+        "keyword_hit_source_url": source_url,
+        "source_title": row.get("source_title") or row.get("recommended_title") or "",
+        "handle": row.get("handle") or row.get("username_or_handle") or row.get("recommended_username") or "",
+        "username_or_handle": row.get("username_or_handle") or row.get("handle") or row.get("recommended_username") or "",
+        "matched_query": row.get("matched_query") or "",
+        "matched_hashtag": row.get("matched_hashtag") or "",
+        "post_date": row.get("post_date") or "",
+        "hit_age_days": row.get("hit_age_days") or "",
+        "keyword_hit_text_excerpt": excerpt,
+        "evidence_excerpt_hash": stable_hash(excerpt) if excerpt else "",
+        "discovery_type": row.get("discovery_type") or row.get("edge_type") or "telegram_keyword_search",
+        "edge_type": row.get("edge_type") or row.get("discovery_type") or "telegram_keyword_search",
+        "first_seen_run_id": row.get("first_seen_run_id") or run_id,
+        "last_seen_run_id": run_id,
+        "last_attempt_run_id": row.get("last_attempt_run_id") or "",
+        "last_attempt_at": row.get("last_attempt_at") or "",
+        "fetched_post_id": row.get("fetched_post_id") or "",
+        "fetch_error_code": row.get("fetch_error_code") or "",
+        "fetch_error_message": row.get("fetch_error_message") or "",
+        "run_id": run_id,
+        "next_action": "fetch_exact_post_then_score_text_vectors" if status in {"", "pending_fetch", "retry_fetch", "fetch_error"} else "already_fetched_or_terminal",
+    }
+
+
+def write_region_talk_post_link_queue_items(rows: list[dict[str, Any]], *, run_id: str, stage: str) -> int:
+    payloads: list[dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        payload = post_link_queue_item_from_keyword_hit(row, run_id=run_id, status=str(row.get("post_link_status") or "pending_fetch"))
+        if payload.get("post_url"):
+            payloads.append(payload)
+    return write_region_talk_online_queue_items(
+        payloads,
+        kind="post_link_queue_item",
+        id_fields=["post_link_queue_id", "post_url"],
+        fields=POST_LINK_QUEUE_STATE_FIELDS,
+        run_id=run_id,
+        stage=stage,
+    )
 
 
 def build_e5_text_vector_enrichment_rows(
@@ -2504,6 +2603,7 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 source_candidate_items = ydb_select_kind_items(session, ydb, table_path, "source_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 source_edge_items = ydb_select_kind_items(session, ydb, table_path, "source_edge_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
+                post_link_items = ydb_select_kind_items(session, ydb, table_path, "post_link_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
@@ -2572,6 +2672,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["comment_discovery"] = q
                         data0["ydb_row_level_comment_link_items_loaded"] = len(comment_link_items)
+                    if post_link_items:
+                        q = data0.get("post_link_queue") if isinstance(data0.get("post_link_queue"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in post_link_items.items():
+                            key = str(item.get("post_link_queue_id") or item.get("post_url") or item.get("keyword_hit_post_url") or _pk.replace("post_link_queue_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["post_link_queue"] = q
+                        data0["ydb_row_level_post_link_queue_items_loaded"] = len(post_link_items)
                     if text_vector_items:
                         q = data0.get("text_vector_enrichment") if isinstance(data0.get("text_vector_enrichment"), dict) else {}
                         q = dict(q)
@@ -2708,6 +2817,11 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                         key = str(item.get("comment_link_id") or item.get("edge_id") or item.get("source_candidate_id") or item.get("normalized_url") or "")
                         if key:
                             row_items.append(("comment_link_item:" + key, "comment_link_item", item))
+                for item in (compact.get("post_link_queue") or {}).values():
+                    if isinstance(item, dict):
+                        key = str(item.get("post_link_queue_id") or item.get("post_url") or item.get("keyword_hit_post_url") or "")
+                        if key:
+                            row_items.append(("post_link_queue_item:" + key, "post_link_queue_item", item))
                 for item in (compact.get("publication_candidate_queue") or {}).values():
                     if isinstance(item, dict):
                         key = str(item.get("publication_candidate_id") or item.get("post_url") or "")
@@ -5758,6 +5872,21 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
         keyword_status = _REGION_TALK_TELEGRAM_RUNTIME.get("telegram_keyword_discovery_status")
         if keyword_status != "skipped_runtime_budget":
             keyword_status = "ok" if rows or not errors else "error"
+        post_link_items_written = write_region_talk_post_link_queue_items(
+            post_hits,
+            run_id=run_id,
+            stage="telegram_keyword_post_link_queue",
+        ) if post_hits else 0
+        existing_post_hits = [r for r in (_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows") or []) if isinstance(r, dict)]
+        combined_post_hits: list[dict[str, Any]] = []
+        seen_post_hit_urls: set[str] = set()
+        for hit in existing_post_hits + post_hits:
+            url = str(hit.get("keyword_hit_post_url") or hit.get("post_url") or "")
+            if url and url in seen_post_hit_urls:
+                continue
+            if url:
+                seen_post_hit_urls.add(url)
+            combined_post_hits.append(hit)
         _REGION_TALK_TELEGRAM_RUNTIME.update({
             "telegram_keyword_discovery_status": keyword_status,
             "keyword_query_source_mode": query_plan.get("query_source_mode", ""),
@@ -5773,10 +5902,241 @@ async def discover_telegram_keyword_sources(client: Any, governor: TelegramReque
             "keyword_post_hits_raw": raw_hits,
             "keyword_unique_channels": len({r.get("canonical_source_key") for r in post_hits if r.get("canonical_source_key")}),
             "keyword_hit_posts_sent_to_pipeline": len(post_hits),
-            "keyword_post_hit_rows": post_hits,
+            "keyword_post_link_items_written": post_link_items_written,
+            "keyword_post_hit_rows": combined_post_hits,
             "keyword_discovery_errors": errors,
         })
     return rows, edges
+
+
+def source_fast_check_backlog_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
+    """Select cursor-forward Telegram backlog sources for cheap source-local KO preflight.
+
+    This is not a second source queue: it samples existing `unified_source_queue`
+    rows and writes evidence back to the same source row kind.
+    """
+    if max_items <= 0:
+        return []
+    rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
+    cursor = int(previous_state.get("unified_source_queue_cursor_position") or previous_state.get("canonical_source_cursor_position") or 0)
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        status = str(row.get("source_queue_status") or "")
+        if source_terminal_rejected_status(status) or status.startswith("processed"):
+            continue
+        if status not in {"", "pending_scan", "needs_rescan_or_retry", "retry", "error"}:
+            continue
+        if int(row.get("queue_order") or 999999999) <= cursor:
+            continue
+        if normalize_source_platform(str(row.get("platform") or ""), str(row.get("source_url") or row.get("canonical_url") or "")) != "telegram":
+            continue
+        if str(row.get("fast_check_status") or "") in {"ko_hit", "no_hit", "local_region_source", "spam_source_reject"}:
+            continue
+        candidates.append(row)
+    candidates = sorted(candidates, key=lambda r: (
+        str(r.get("fast_check_status") or "") == "no_hit",
+        source_queue_priority_bucket(r),
+        int(r.get("queue_order") or 999999999),
+    ))
+    out: list[Seed] = []
+    seen: set[str] = set()
+    for idx, row in enumerate(candidates, start=1):
+        seed = seed_from_unified_queue_row(row, idx)
+        if not seed:
+            continue
+        key = canonical_source_key(seed.platform, seed.handle, seed.canonical_url)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(seed)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def source_fast_check_queries(run_id: str, source_index: int = 0) -> list[str]:
+    per_source = max(1, getenv_int("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", 3))
+    terms = build_region_talk_place_query_terms().get("source_preflight_terms") or DEFAULT_ANCHORS
+    # Query 1 is the broad city/region anchor. In the default 2-query budget,
+    # query 2 should already expand recall to a tourist city/POI rather than
+    # waste another slot on "Калининградская область".
+    core = ["Калининград"]
+    poi_pool = [
+        "Зеленоградск", "Куршская коса", "Светлогорск", "Балтийск", "Янтарный",
+        "Черняховск", "Балтийская коса", "Виштынец", "Роминтенская пуща",
+    ]
+    tail = [t for t in _dedupe_keep_order(terms) if normalize_geo_text(t) not in {normalize_geo_text(x) for x in core}]
+    offset = (int(stable_hash(run_id or "fast-check", length=8), 16) + int(source_index or 0)) % max(1, len(tail) or 1)
+    rotated = _rotate_query_terms(tail, offset) if tail else []
+    return _dedupe_keep_order(core + poi_pool + rotated)[:per_source]
+
+
+async def run_source_fast_check_ko(
+    client: Any,
+    governor: TelegramRequestGovernor,
+    previous_state: dict[str, Any],
+    run_id: str,
+    status: Status,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not getenv_bool("REGION_TALK_FAST_CHECK_KO_ENABLED", False):
+        _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "disabled"
+        return [], []
+    max_sources = getenv_int("REGION_TALK_FAST_CHECK_KO_SOURCES_PER_RUN", 0)
+    if max_sources <= 0:
+        _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "disabled_zero_budget"
+        return [], []
+    seeds = source_fast_check_backlog_seeds(previous_state, max_sources)
+    if not seeds:
+        _REGION_TALK_TELEGRAM_RUNTIME["fast_check_ko_status"] = "empty_backlog"
+        return [], []
+    rows: list[dict[str, Any]] = []
+    post_hits: list[dict[str, Any]] = []
+    queried = 0
+    hits = 0
+    local_rejected = 0
+    spam_rejected = 0
+    errors = 0
+    post_link_items_written = 0
+    cutoff = history_min_post_datetime()
+    status.event("fast_check_ko_started", phase="fast_check_ko", status="running", run_id=run_id, sources_total=len(seeds), progress_label=f"fast-check KO {len(seeds)} sources")
+    for idx, seed in enumerate(seeds, start=1):
+        if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300)):
+            break
+        base_row = source_status_row(seed, "", fetch_attempted="false")
+        base_row.update({
+            "source_queue_status": seed.initial_status if seed.initial_status in {"pending_scan", "needs_rescan_or_retry"} else "pending_scan",
+            "discovery_type": "source_local_fast_check",
+            "edge_type": "source_local_fast_check",
+            "fast_check_at": utc_now_iso(),
+            "last_fast_check_run_id": run_id,
+        })
+        surface_terminal = source_surface_terminal_fields(base_row)
+        if source_terminal_rejected_status(surface_terminal.get("source_queue_status")):
+            base_row.update(surface_terminal)
+            base_row["fast_check_status"] = "spam_source_reject" if surface_terminal.get("source_queue_status") == SPAM_SOURCE_STATUS else "local_region_source"
+            base_row["next_action"] = surface_terminal.get("next_action") or "do_not_history_scan_after_fast_check_surface_filter"
+            rows.append(base_row)
+            write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status=str(base_row.get("source_queue_status") or "fast_check_surface_filtered"))
+            local_rejected += 1 if base_row["fast_check_status"] == "local_region_source" else 0
+            spam_rejected += 1 if base_row["fast_check_status"] == "spam_source_reject" else 0
+            continue
+        try:
+            entity, resolve_meta = await governor.resolve_entity(client, seed)
+            base_row.update(resolve_meta)
+            if entity is None:
+                base_row.update({"fast_check_status": "unresolved", "fast_check_error_code": base_row.get("last_resolve_error_code") or "unresolved", "next_action": "keep_pending_scan_unresolved"})
+                rows.append(base_row)
+                write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_unresolved")
+                continue
+            title = str(resolve_meta.get("resolved_title") or getattr(entity, "title", None) or seed.source_title)
+            base_row["resolved_title"] = title
+            queries = source_fast_check_queries(run_id, idx)
+            hit_row: dict[str, Any] | None = None
+            for q in queries:
+                queried += 1
+                if not governor.has_total_request_budget("iter_messages.fast_check_ko", seed.source_id, seed.canonical_url):
+                    break
+                if not await governor.humanlike_pause(
+                    "iter_messages.fast_check_ko",
+                    seed.source_id,
+                    seed.canonical_url,
+                    min_env="REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MIN_SECONDS",
+                    max_env="REGION_TALK_TG_FAST_CHECK_QUERY_DELAY_MAX_SECONDS",
+                    default_min=2.0,
+                    default_max=5.0,
+                    reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_FAST_CHECK_KO_SECONDS", 300),
+                ):
+                    break
+                async for msg in client.iter_messages(entity, search=q, limit=getenv_int("REGION_TALK_FAST_CHECK_KO_RESULTS_PER_QUERY", 2)):
+                    mid = int(getattr(msg, "id", 0) or 0)
+                    if not mid:
+                        continue
+                    dt = getattr(msg, "date", None)
+                    if is_history_post_older_than_cutoff(dt, cutoff):
+                        continue
+                    text = str(getattr(msg, "message", None) or "").strip()
+                    if not text:
+                        continue
+                    handle = seed.handle.lstrip("@")
+                    post_url = f"https://t.me/{handle}/{mid}"
+                    excerpt = re.sub(r"\s+", " ", text)[:500]
+                    hit_row = {
+                        **base_row,
+                        "source_candidate_id": "src_cand_" + stable_hash("telegram", seed.canonical_url),
+                        "source_title": title,
+                        "recommended_title": title,
+                        "username_or_handle": handle,
+                        "recommended_username": handle,
+                        "keyword_hit_source_url": seed.canonical_url,
+                        "keyword_hit_post_url": post_url,
+                        "keyword_hit_text_excerpt": excerpt,
+                        "matched_query": q,
+                        "matched_hashtag": "",
+                        "post_date": dt.isoformat() if dt else "",
+                        "fast_check_status": "ko_hit",
+                        "fast_check_query_count": queried,
+                        "fast_check_matched_query": q,
+                        "fast_check_hit_post_url": post_url,
+                        "fast_check_hit_post_date": dt.isoformat() if dt else "",
+                        "frontier_action": "fast_check_ko_hit_prioritize_existing_source_queue",
+                        "frontier_status": "fast_check_ko_hit",
+                        "candidate_source_status": "source_frontier",
+                        "discovery_type": "source_local_keyword_fast_check",
+                        "edge_type": "source_local_keyword_fast_check",
+                        "next_action": "prioritize_source_after_cursor_and_fetch_exact_post",
+                    }
+                    break
+                if hit_row:
+                    break
+            if hit_row:
+                hits += 1
+                rows.append(hit_row)
+                post_hits.append(hit_row)
+                write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
+                post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
+            else:
+                base_row.update({
+                    "fast_check_status": "no_hit",
+                    "fast_check_query_count": len(queries),
+                    "next_action": "keep_pending_scan_lower_priority_fast_check_no_hit",
+                    "discovery_type": "source_local_fast_check_no_hit",
+                    "edge_type": "source_local_fast_check_no_hit",
+                })
+                rows.append(base_row)
+                write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_no_hit")
+        except Exception as exc:
+            errors += 1
+            base_row.update({
+                "fast_check_status": "error",
+                "fast_check_error_code": type(exc).__name__,
+                "fast_check_error_message": str(exc)[:180],
+                "next_action": "retry_fast_check_or_normal_scan_later",
+            })
+            rows.append(base_row)
+            write_region_talk_online_source_item(base_row, run_id=run_id, stage="fast_check_ko", status="fast_check_error")
+    existing_hits = [r for r in (_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows") or []) if isinstance(r, dict)]
+    combined = []
+    seen_urls = set()
+    for row in existing_hits + post_hits:
+        url = str(row.get("keyword_hit_post_url") or row.get("post_url") or "")
+        if url and url in seen_urls:
+            continue
+        if url:
+            seen_urls.add(url)
+        combined.append(row)
+    _REGION_TALK_TELEGRAM_RUNTIME.update({
+        "fast_check_ko_status": "ok" if rows else "empty",
+        "fast_check_ko_sources_checked": len(rows),
+        "fast_check_ko_hits": hits,
+        "fast_check_ko_queries_processed": queried,
+        "fast_check_ko_local_rejected": local_rejected,
+        "fast_check_ko_spam_rejected": spam_rejected,
+        "fast_check_ko_errors": errors,
+        "fast_check_ko_post_link_items_written": post_link_items_written,
+        "keyword_post_hit_rows": combined,
+    })
+    status.event("fast_check_ko_done", phase="fast_check_ko", status="running", run_id=run_id, sources_checked=len(rows), ko_hits=hits, local_rejected=local_rejected, spam_rejected=spam_rejected, progress_label=f"fast-check KO done {hits}/{len(rows)}")
+    return rows, post_hits
 
 
 def score_text(text: str) -> dict[str, Any]:
@@ -6296,10 +6656,13 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
     return src_row, posts[:max_posts]
 
 
-def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
+def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
     cfg = ydb_config_status()
     if cfg.get("missing"):
         return []
+    selected_kinds = kinds or ("post_link_queue_item", "candidate_memory_item", "image_queue_item")
     try:
         ydb, driver, cfg = ydb_connect()
         table_path = ydb_kv_table_path(cfg)
@@ -6307,15 +6670,15 @@ def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
         def op(session: Any) -> list[dict[str, Any]]:
             ensure_ydb_kv_table(ydb, session, table_path)
             rows: list[dict[str, Any]] = []
-            for kind in ("candidate_memory_item", "image_queue_item"):
-                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, limit * 2))
+            for kind in selected_kinds:
+                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, limit * 3))
                 for pk, payload in items.items():
                     if not isinstance(payload, dict):
                         continue
-                    url = str(payload.get("post_url") or "").strip()
+                    url = str(payload.get("post_url") or payload.get("keyword_hit_post_url") or "").strip()
                     if not url:
                         continue
-                    rows.append({"_pk": pk, "_kind": kind, **payload})
+                    rows.append({"_pk": pk, "_kind": kind, **payload, "post_url": url})
             return rows
         raw_rows = pool.retry_operation_sync(op)
         driver.stop(timeout=5)
@@ -6323,11 +6686,25 @@ def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
         return []
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    def rank(row: dict[str, Any]) -> tuple[int, str]:
-        status = str(row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
-        pri = 0 if status == "actual_scored" else 1 if "image" in status else 2
-        return pri, str(row.get("post_date") or "")
+    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url"}
+
+    def rank(row: dict[str, Any]) -> tuple[int, str, str]:
+        kind = str(row.get("_kind") or "")
+        status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
+        if kind == "post_link_queue_item":
+            if status in terminal_link_statuses:
+                pri = 9
+            elif status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
+                pri = 0
+            else:
+                pri = 1
+        else:
+            pri = 2 if status == "actual_scored" else 3 if "image" in status else 4
+        return pri, str(row.get("post_date") or ""), str(row.get("updated_at") or "")
+
     for row in sorted(raw_rows, key=rank):
+        if str(row.get("_kind") or "") == "post_link_queue_item" and str(row.get("post_link_status") or "") in terminal_link_statuses:
+            continue
         url = str(row.get("post_url") or "").strip()
         if not url or url in seen:
             continue
@@ -6337,12 +6714,19 @@ def ydb_candidate_link_rows_from_row_kv(limit: int) -> list[dict[str, Any]]:
             break
     return out
 
-
-async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any, output_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+async def fetch_ydb_candidate_link_posts_with_telethon(
+    client: Any,
+    status: Any,
+    output_dir: Path,
+    *,
+    kinds: tuple[str, ...] | None = None,
+    limit: int | None = None,
+    stage: str = "ydb_candidate_link_fetch",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     run_id = os.getenv("REGION_TALK_RUN_ID") or f"region-talk-{RUN_STARTED_AT.strftime('%Y%m%dT%H%M%SZ')}"
-    limit = getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180))
-    rows = ydb_candidate_link_rows_from_row_kv(limit)
-    status.event("ydb_candidate_links_loaded", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_to_score=min(limit, len(rows)), progress_label=f"YDB candidate links {len(rows)}")
+    limit = int(limit or getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", getenv_int("REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN", 180)))
+    rows = ydb_candidate_link_rows_from_row_kv(limit, kinds=kinds)
+    status.event("ydb_candidate_links_loaded", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_to_score=min(limit, len(rows)), post_link_queue_mode=",".join(kinds or ()), progress_label=f"YDB candidate links {len(rows)}")
     posts: list[dict[str, Any]] = []
     source_stats: dict[str, dict[str, Any]] = {}
     entity_cache: dict[str, Any] = {}
@@ -6356,6 +6740,11 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
         stat["attempted"] += 1
         status.event("alive", phase="fetch", status="running", run_id=run_id, progress_label=f"YDB post links {idx}/{len(rows)} · {handle}/{mid}", sources_done=idx - 1, sources_total=len(rows), current_source_handle=handle, current_source_title=stat.get("source_title"), current_source_url=f"https://t.me/{handle}")
         try:
+            if getenv_bool("REGION_TALK_TG_HUMANLIKE_PACING_ENABLED", True):
+                await asyncio.sleep(random.uniform(
+                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS", 1.0),
+                    getenv_float("REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MAX_SECONDS", 3.0),
+                ))
             entity = entity_cache.get(handle)
             if entity is None:
                 entity = await client.get_entity(handle)
@@ -6364,6 +6753,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
             text = str(getattr(msg, "message", None) or "").strip() if msg is not None else ""
             if not text:
                 stat["errors"] += 1
+                if str(row.get("_kind") or "") == "post_link_queue_item":
+                    write_region_talk_post_link_queue_items([{**row, "post_link_status": "terminal_no_text", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "empty_message", "fetch_error_message": "message has no text"}], run_id=run_id, stage=stage)
                 continue
             dt = getattr(msg, "date", None)
             has_media = bool(getattr(msg, "photo", None) or getattr(msg, "document", None) or getattr(msg, "media", None))
@@ -6372,7 +6763,7 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
             post_row = {
                 "post_id": "post_" + stable_hash("telegram_ydb_link", handle, mid),
                 "source_id": "src_ydb_link_" + stable_hash("telegram", handle),
-                "source_seed_id": "ydb_candidate_links",
+                "source_seed_id": stage,
                 "source_title": title,
                 "platform": "telegram",
                 "handle": handle,
@@ -6400,14 +6791,22 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
                 "original_source_candidate_id": "",
                 "ydb_candidate_link_kind": row.get("_kind") or "",
                 "ydb_candidate_link_pk": row.get("_pk") or "",
+                "discovery_method": "exact_post_link_queue" if str(row.get("_kind") or "") == "post_link_queue_item" else "ydb_candidate_link",
+                "discovery_priority": "0" if str(row.get("_kind") or "") == "post_link_queue_item" else "2",
+                "keyword_hit_query": row.get("matched_query") or "",
+                "keyword_hit_hashtag": row.get("matched_hashtag") or "",
             }
-            append_post_online(posts, post_row, run_id=run_id, stage="ydb_candidate_link_fetch")
+            append_post_online(posts, post_row, run_id=run_id, stage=stage)
+            if str(row.get("_kind") or "") == "post_link_queue_item":
+                write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetched", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetched_post_id": post_row.get("post_id"), "fetch_error_code": "", "fetch_error_message": ""}], run_id=run_id, stage=stage)
             stat["ok"] += 1
             stat["last_seen_post_date"] = max(str(stat.get("last_seen_post_date") or ""), post_date)
         except Exception as exc:
             stat["errors"] += 1
             stat["last_error_code"] = type(exc).__name__
             stat["last_error_message"] = str(exc)[:180]
+            if str(row.get("_kind") or "") == "post_link_queue_item":
+                write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
     source_rows = []
     for handle, stat in source_stats.items():
         ok = int(stat.get("ok") or 0)
@@ -6422,13 +6821,13 @@ async def fetch_ydb_candidate_link_posts_with_telethon(client: Any, status: Any,
             "fetch_status": "ok" if ok else "error_ydb_candidate_link_fetch",
             "fetch_attempted": "true",
             "posts_scanned": ok,
-            "history_fetch_mode": "ydb_candidate_links_only_no_discovery",
-            "source_probe_reason": "Refetched only post URLs already present in YDB candidate/image queues; no source discovery/history scan.",
+            "history_fetch_mode": "exact_post_link_fetch" if kinds == ("post_link_queue_item",) else "ydb_candidate_links_only_no_discovery",
+            "source_probe_reason": "Refetched exact post URLs from post_link_queue_item; no source history scan." if kinds == ("post_link_queue_item",) else "Refetched only post URLs already present in YDB candidate/image queues; no source discovery/history scan.",
             "last_seen_post_date": stat.get("last_seen_post_date") or "",
             "fetch_error_code": stat.get("last_error_code", "") if errors else "",
             "fetch_error_message": stat.get("last_error_message", "") if errors else "",
             "vk_wall_probe_status": "not_applicable",
-        }, run_id=run_id, stage="ydb_candidate_link_fetch", sources_total=len(source_stats))
+        }, run_id=run_id, stage=stage, sources_total=len(source_stats))
     status.event("ydb_candidate_posts_fetched", phase="fetch", status="running", run_id=run_id, candidate_links=len(rows), posts_fetched=len(posts), sources_scanned=len(source_rows), progress_label=f"YDB candidate posts fetched {len(posts)}/{len(rows)}")
     return source_rows, posts
 
@@ -6550,6 +6949,23 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
     try:
         if ydb_candidate_links_only:
             return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir)
+        if getenv_bool("REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST", True):
+            exact_limit = getenv_int("REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT", getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", 12))
+            exact_source_rows, exact_posts = await fetch_ydb_candidate_link_posts_with_telethon(
+                client,
+                status,
+                output_dir,
+                kinds=("post_link_queue_item",),
+                limit=max(0, exact_limit),
+                stage="post_link_queue_exact_fetch",
+            )
+            source_rows.extend(exact_source_rows)
+            posts.extend(exact_posts)
+            if exact_posts:
+                status.event("post_link_queue_exact_fetch_done", phase="fetch", status="running", run_id=run_id, exact_posts_fetched=len(exact_posts), exact_sources=len(exact_source_rows), progress_label=f"exact post links fetched {len(exact_posts)}")
+        fast_check_rows, fast_check_hits = await run_source_fast_check_ko(client, governor, previous_state, run_id, status)
+        if fast_check_rows:
+            source_rows.extend(fast_check_rows)
         for idx, seed in enumerate(monitored, start=1):
             if not runtime_budget_ok(reserve_seconds=getenv_int("REGION_TALK_RUNTIME_RESERVE_BEFORE_REPORT_SECONDS", 180)):
                 status.event("runtime_budget_fetch_stop", phase="fetch", status="deferred", run_id=run_id, sources_done=idx - 1, sources_total=len(monitored), runtime_elapsed_seconds=round(runtime_elapsed_seconds(), 1), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1), progress_label=f"runtime budget stop at sources {idx-1}/{len(monitored)}")
@@ -9373,6 +9789,10 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "source_candidates": {str(r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")): r for r in source_frontier_unique if r.get("source_candidate_id") or r.get("canonical_source_key") or r.get("canonical_url") or r.get("normalized_url")},
         "source_edges": {str(r.get("edge_id") or stable_hash(r.get("from_source_id"), r.get("to_source_candidate_id"), r.get("evidence_url"), r.get("edge_type"))): r for r in graph_edges if r.get("edge_id") or r.get("to_source_candidate_id") or r.get("evidence_url")},
         "comment_discovery": {},
+        "post_link_queue": {
+            **(previous_state.get("post_link_queue") if isinstance(previous_state.get("post_link_queue"), dict) else {}),
+            **{str(post_link_queue_item_from_keyword_hit(r, run_id=run_id).get("post_link_queue_id")): post_link_queue_item_from_keyword_hit(r, run_id=run_id) for r in early_keyword_post_hit_rows if r.get("keyword_hit_post_url")},
+        },
         "source_cursors": source_cursors,
         "source_frontier_unique": {str(r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
         "region_talk_sources": {str(r.get("canonical_source_key") or r.get("source_candidate_id")): r for r in source_frontier_unique if r.get("source_candidate_id")},
@@ -9600,6 +10020,15 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "keyword_unique_channels":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_unique_channels", _REGION_TALK_TELEGRAM_RUNTIME.get("keyword_discovered_sources_unique", 0)),
         "keyword_nonlocal_channels":0,
         "keyword_hit_posts_sent_to_pipeline":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_hit_posts_sent_to_pipeline", 0),
+        "keyword_post_link_items_written":_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_link_items_written", 0),
+        "fast_check_ko_status":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_status", "not_run"),
+        "fast_check_ko_sources_checked":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_sources_checked", 0),
+        "fast_check_ko_hits":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_hits", 0),
+        "fast_check_ko_queries_processed":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_queries_processed", 0),
+        "fast_check_ko_local_rejected":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_local_rejected", 0),
+        "fast_check_ko_spam_rejected":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_spam_rejected", 0),
+        "fast_check_ko_errors":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_errors", 0),
+        "fast_check_ko_post_link_items_written":_REGION_TALK_TELEGRAM_RUNTIME.get("fast_check_ko_post_link_items_written", 0),
         "sources_primary_scanned_this_run":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("is_new_source_this_run") or "").lower() == "true"),
         "sources_delta_scanned_this_run":sum(1 for s in source_rows if s.get("fetch_status") == "ok" and str(s.get("history_fetch_mode") or "").startswith("delta")),
         "history_cursor_advanced":str(any(s.get("fetch_status") == "ok" and str(s.get("is_new_source_this_run") or "").lower() == "true" for s in source_rows)).lower(),
@@ -9763,6 +10192,8 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         {"metric":"publication_ready_cumulative_count","value":sum(1 for r in candidate_memory_rows if str(r.get("image_publication_ready")) == "true")},
         {"metric":"candidate_memory_note","value":("Current run shortlist is empty, but candidate_memory has %s active candidates; see 06b/21." % summary_row.get("candidate_memory_active")) if not final_shortlist and summary_row.get("candidate_memory_active") else ""},
         {"metric":"posts_fetched","value":len(posts)},
+        {"metric":"keyword_post_link_items_written","value":summary_row.get("keyword_post_link_items_written")},
+        {"metric":"fast_check_ko_post_link_items_written","value":summary_row.get("fast_check_ko_post_link_items_written")},
         {"metric":"fresh_posts","value":len(fresh_rows)},
         {"metric":"kaliningrad_oblast_only","value":sum(1 for r in fresh_rows if r.get("kaliningrad_oblast_only_scope"))},
         {"metric":"old_rejected","value":summary_row.get("dropped_stale")},

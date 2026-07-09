@@ -217,6 +217,76 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertIn(required, terms["hashtag_terms"])
         self.assertIn("путешествие Калининград", terms["global_keyword_terms"])
 
+    def test_post_link_queue_item_from_keyword_hit_keeps_exact_post_work(self) -> None:
+        mod = load_module()
+        row = {
+            "keyword_hit_post_url": "https://t.me/travel_foo/123",
+            "keyword_hit_source_url": "https://t.me/travel_foo",
+            "canonical_source_key": "telegram:travel_foo",
+            "source_title": "Travel Foo",
+            "username_or_handle": "travel_foo",
+            "matched_query": "Калининград",
+            "keyword_hit_text_excerpt": "Ездили в Калининград, очень понравилась Куршская коса",
+            "discovery_type": "telegram_keyword_search",
+        }
+        item = mod.post_link_queue_item_from_keyword_hit(row, run_id="unit-run")
+        self.assertEqual(item["post_link_status"], "pending_fetch")
+        self.assertEqual(item["post_url"], "https://t.me/travel_foo/123")
+        self.assertEqual(item["source_key"], "telegram:travel_foo")
+        self.assertEqual(item["matched_query"], "Калининград")
+        self.assertEqual(item["priority_reason"], "global_keyword_search_exact_post")
+        self.assertIn("postlink_", item["post_link_queue_id"])
+        self.assertTrue(item["evidence_excerpt_hash"])
+
+    def test_fast_check_queries_use_broad_anchor_plus_poi_under_two_query_budget(self) -> None:
+        mod = load_module()
+        old = os.environ.get("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE")
+        try:
+            os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = "2"
+            queries = mod.source_fast_check_queries("unit-run", 0)
+            self.assertEqual(queries[0], "Калининград")
+            self.assertEqual(len(queries), 2)
+            self.assertIn(queries[1], {"Зеленоградск", "Куршская коса", "Светлогорск", "Балтийск", "Янтарный", "Черняховск", "Балтийская коса", "Виштынец", "Роминтенская пуща"})
+            self.assertNotEqual(queries[1], "Калининградская область")
+        finally:
+            if old is None:
+                os.environ.pop("REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE", None)
+            else:
+                os.environ["REGION_TALK_FAST_CHECK_KO_QUERIES_PER_SOURCE"] = old
+
+    def test_fast_check_no_hit_is_not_rechecked_or_prioritized_as_keyword(self) -> None:
+        mod = load_module()
+        previous_state = {
+            "unified_source_queue_cursor_position": 10,
+            "unified_source_queue": {
+                "telegram:no_hit": {
+                    "canonical_source_key": "telegram:no_hit",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/no_hit",
+                    "source_title": "Already preflighted",
+                    "source_queue_status": "pending_scan",
+                    "fast_check_status": "no_hit",
+                    "discovery_type": "source_local_keyword_fast_check",
+                    "queue_order": 11,
+                },
+                "telegram:fresh": {
+                    "canonical_source_key": "telegram:fresh",
+                    "platform": "telegram",
+                    "source_url": "https://t.me/fresh",
+                    "source_title": "Fresh source",
+                    "source_queue_status": "pending_scan",
+                    "queue_order": 12,
+                },
+            },
+        }
+        self.assertEqual(mod.source_queue_priority_bucket(previous_state["unified_source_queue"]["telegram:no_hit"]), 2)
+        seeds = mod.source_fast_check_backlog_seeds(previous_state, 5)
+        self.assertEqual([s.canonical_url for s in seeds], ["https://t.me/fresh"])
+
+    def test_ydb_candidate_link_rows_respects_zero_limit_before_connect(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.ydb_candidate_link_rows_from_row_kv(0, kinds=("post_link_queue_item",)), [])
+
     def test_telegram_keyword_query_plan_uses_lexicon_hashtag_quota_and_rotation(self) -> None:
         mod = load_module()
         old_env = {k: os.environ.get(k) for k in [
@@ -1435,6 +1505,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "source_cursors": {"s1": {"last_seen_post_key": "1"}},
                 "unified_source_queue": {"telegram:x": {"source_queue_id": "srcq1", "queue_order": 1, "canonical_source_key": "telegram:x", "platform": "telegram", "source_url": "https://t.me/x", "source_queue_status": "pending_scan", "status_color_hint": "white_pending", "row_fill_color": "white_pending"}},
                 "image_candidate_queue": {"imgq1": {"image_queue_id": "imgq1", "image_queue_order": 1, "post_url": "https://t.me/x/1", "image_queue_status": "needs_actual_image_fetch", "status_color_hint": "yellow_retry"}},
+                "post_link_queue": {"pl1": {"post_link_queue_id": "pl1", "post_url": "https://t.me/x/2", "keyword_hit_text_excerpt": "short", "raw_text": "NO"}},
                 "source_frontier_queue_next": {"legacy": {"canonical_url": "https://t.me/legacy"}},
                 "similar_seed_queue": {"legacy": {"canonical_url": "https://t.me/similar"}},
                 "all_time_metrics": {"posts": 1},
@@ -1453,6 +1524,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("queue_cursors", compact)
         self.assertIn("unified_source_queue", compact)
         self.assertIn("image_candidate_queue", compact)
+        self.assertIn("post_link_queue", compact)
+        self.assertIn("pl1", compact["post_link_queue"])
+        self.assertNotIn("raw_text", json.dumps(compact["post_link_queue"], ensure_ascii=False))
         self.assertNotIn("source_frontier_queue_next", compact)
         self.assertNotIn("similar_seed_queue", compact)
         self.assertIn("https://t.me/x/1", blob)
