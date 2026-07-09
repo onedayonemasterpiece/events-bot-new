@@ -53,6 +53,10 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
+    # The main notebook must still reach the source-queue/discovery tail after
+    # early image handoff; otherwise keyword hits are written as context rows
+    # but never promoted behind the cursor for real history scans.
+    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
     "REGION_TALK_YDB_MAX_POST_ROWS": "1500",
     "REGION_TALK_YDB_MAX_SOURCE_ROWS": "6000",
     "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": "1000",

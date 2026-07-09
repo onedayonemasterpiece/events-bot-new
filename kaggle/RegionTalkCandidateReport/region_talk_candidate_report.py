@@ -8034,6 +8034,26 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         )
         bge_deferred_new_posts = sum(1 for r in new_posts if str(r.get("vector_gate_status") or "") == "vector_defer_wait_bge_m3")
         skip_tail_after_handoff = getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF", False)
+        discovery_tail_rows_pending = bool(
+            _REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows")
+            or _REGION_TALK_TELEGRAM_RUNTIME.get("similar_edges")
+            or _REGION_TALK_TELEGRAM_RUNTIME.get("keyword_rows")
+            or _REGION_TALK_TELEGRAM_RUNTIME.get("keyword_edges")
+            or _REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows")
+        )
+        if skip_tail_after_handoff and discovery_tail_rows_pending:
+            skip_tail_after_handoff = False
+            report_event(
+                "report_tail_continues_for_source_queue_discovery",
+                phase="queue_assembly",
+                status="running",
+                next_action="build_unified_source_queue",
+                similar_rows=len(_REGION_TALK_TELEGRAM_RUNTIME.get("similar_rows") or []),
+                keyword_rows=len(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_rows") or []),
+                keyword_edges=len(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_edges") or []),
+                keyword_post_hit_rows=len(_REGION_TALK_TELEGRAM_RUNTIME.get("keyword_post_hit_rows") or []),
+                runtime_remaining_seconds=round(runtime_remaining_seconds(), 1),
+            )
         if skip_tail_after_handoff and external_bge_required and bge_deferred_new_posts and not early_image_rows_to_write:
             skip_tail_after_handoff = False
             report_event(

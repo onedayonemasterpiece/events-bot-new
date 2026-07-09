@@ -481,10 +481,10 @@ python scripts/region_talk_embedding_quality_compare.py \
   the live `image_queue_item` handoff before any operator-only report tail:
   `early_image_queue_handoff_started` →
   `early_image_queue_handoff_done`. In the bounded discovery pass the default is
-  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1`, so a successful
-  handoff may end with `report_tail_skipped_after_live_image_queue_handoff`
-  instead of source-profile enrichment, XLSX generation or state snapshot
-  rewrites. If report-tail is explicitly enabled, the following queue-assembly
+  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=0`, so a successful
+  handoff must continue through source-frontier/source-queue assembly before any
+  optional report/XLSX tail is skipped. If report-tail is explicitly shortened,
+  the following queue-assembly
   phases must also heartbeat (`source_profile_*`, `source_frontier_*`,
   `candidate_memory_*`, `source_queue_*`, `image_queue_*`,
   `publication_queue_*`, then `state_write_*`) so a run never stays silent after

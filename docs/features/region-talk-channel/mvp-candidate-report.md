@@ -548,12 +548,12 @@ The live-YDB handoff to ImageDiagnostic is earlier than the XLSX/report tail.
 After the bounded text/vector scoring loop, CandidateReport writes
 `image_queue_item` rows and an image queue cursor immediately
 (`REGION_TALK_LIVE_IMAGE_QUEUE_HANDOFF_EARLY=1`). For the bounded discovery
-pass, `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1` is the default:
-once the image queue is durable in YDB, the notebook may finish with
-`report_tail_skipped_after_live_image_queue_handoff` instead of loading
-operator-only workbooks, source-profile enrichment, XLSX generation or state
-snapshot rewrites. Those report artifacts remain best-effort/operator outputs
-and must not block the downstream ImageDiagnostic notebook.
+pass, `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=0` is the default:
+once the image queue is durable in YDB, the notebook still continues through
+the source-frontier/source-queue tail so similar-channel and keyword-search hits
+are promoted behind the source cursor for real history scans. Operator-only XLSX
+artifacts remain best-effort and must not block ImageDiagnostic, but source queue
+updates are a production stage.
 
 In live-YDB mode the report tail is not a required product stage. The durable
 contract is:

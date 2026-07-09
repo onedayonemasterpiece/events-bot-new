@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / source-queue tail after image handoff**: main
+  CandidateReport launches now keep the source queue/discovery tail enabled
+  after early image handoff, and a requested tail skip is ignored when
+  similar/keyword discovery rows are pending, so keyword hits cannot remain
+  context-only rows without being promoted for real history scans.
 - **Region Talk Channel / keyword regex yield diagnostics**: orchestrator now
   reports keyword-sourced post regex-vs-vector counters
   (`publics_keyword_regex_*`, `publics_keyword_vector_*`) and CandidateReport
@@ -177,10 +182,10 @@
   candidate-memory dual-embedding rechecks are disabled by default for the
   image-queue CandidateReport phase.
 - **Region Talk Channel / live image-queue handoff**: CandidateReport now writes
-  `image_queue_item` rows immediately after bounded text/vector scoring and can
-  skip the operator-only report/XLSX/source-profile tail via
-  `REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=1` so
-  RegionTalkImageDiagnostic is not blocked by report generation. Kaggle stdout
+  `image_queue_item` rows immediately after bounded text/vector scoring, but the
+  production default keeps the source-frontier/source-queue tail enabled
+  (`REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF=0`) so keyword and
+  similar-channel discoveries are promoted before optional report/XLSX work is skipped. Kaggle stdout
   heartbeat/callback/model-progress spam is quiet by default while live JSONL
   events, bounded YDB writes and delayed stack-watchdog tracebacks preserve
   diagnostics for real stalls.
