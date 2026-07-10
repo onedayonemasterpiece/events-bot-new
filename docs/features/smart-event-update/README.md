@@ -542,7 +542,7 @@ python scripts/inspect/audit_future_event_vectors.py \
   --env-file .env
 ```
 
-The command reuses current `related_v1` sidecar vectors, fills missing vectors ephemerally without sidecar writes and emits top-K `vector_pairs.json`. Similarity is recall only: every proposed duplicate still requires source/OCR-grounded LLM or human adjudication; the tool never mutates Fly SQLite or Supabase.
+The command reuses a `related_v1` sidecar vector only when its `text_hash` exactly matches the current identity document, fills stale/missing vectors ephemerally with bounded provider retries and without sidecar writes, and emits top-K `vector_pairs.json`. Similarity is recall only: every proposed duplicate still requires source/OCR-grounded LLM or human adjudication; the tool never mutates Fly SQLite or Supabase.
 
 Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.
 

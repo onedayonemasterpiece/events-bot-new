@@ -1,6 +1,6 @@
 # INC-2026-07-10 Future-event semantic/date audit
 
-Status: open
+Status: mitigated
 Severity: sev2
 Service: canonical event quality / Smart Update / public fanout / vector sidecar
 Opened: 2026-07-10
@@ -48,7 +48,7 @@ Old Telegram Calendar documents `4881` and `7238` exceeded the Bot API delete wi
 
 ## Confirmed repair queue from the audit
 
-These rows have direct source/OCR contradictions and remain blocked for narrow source-backed repair rather than automatic bulk mutation:
+These source/OCR contradictions were the bounded repair queue for the second audit and were repaired in production on 2026-07-10:
 
 - `4517` — ongoing exhibition `Куплю гараж`: operational/opening-hours updates changed the canonical range to `2026-07-10..2026-08-10`; poster evidence says `13.05–31.10`.
 - `3864` — valid Pianissimo concert on `2026-08-07 20:00`, but wrong-merge residue left `event_type=выставка`, `end_date=2026-09-27` and a Telegraph page for an unrelated exhibition.
@@ -65,7 +65,7 @@ A fresh, transaction-bounded compact production export rechecked the complete st
 - predicate: ISO `event.date >= 2026-07-10`, `lifecycle_status=active`, `identity_status=canonical`, `merged_into_event_id IS NULL`;
 - cutoff: `2026-07-10T22:08:09.991179Z`;
 - production `PRAGMA quick_check=ok`;
-- exact coverage: `311/311` rows with source text or poster OCR and `311/311` identity vectors;
+- exact coverage: `311/311` rows with source text or poster OCR and `311/311` available identity vectors (availability coverage; the then runner did not yet enforce exact `text_hash` freshness, which the post-repair runner below now does);
 - vector recall: `1,557` union top-10 pairs; `71` at cosine `>=0.90`, `188` at `>=0.85`, `950` at `>=0.80`; every same-date `>=0.90` pair received source/OCR adjudication;
 - frozen raw export SHA-256: `60f49e611cb323b4f6607566720d32dea3e1f38f4f3bdb563238710c9a130970`.
 
@@ -88,6 +88,8 @@ the venue as `Парк аттракционов ЮНОСТЬ, ул. Тельма
 `Звёздный болид` ride. The fresh append row `6808` similarly mapped explicit
 `Верхнее озеро, остров Шайба` to unrelated `Остров Канта` through a generic
 single-token fuzzy match.
+
+A regression-corpus pass scanned all `174` canonical `INC-*.md` records (`23,831` lines) and mapped them into 14 recurring quality families: eventness, false negatives, date roles, datetime parsing, recurrence, identity/duplicate decisions, location drift, titles, fact/description grounding, ticket/free/link semantics, media/OCR, public projections, provider boundaries, and audit/vector provenance. The repeated signatures are reflected in the root-cause classes below rather than treated as isolated one-off rows.
 
 Authenticated VK comment coverage scanned `2,762` unique managed wall items,
 all `103` comment-bearing posts and `301` comments/replies. Other correctness
@@ -128,7 +130,7 @@ authority. Evidence is stored in ignored artifacts under
 
 ## Follow-up actions
 
-- [ ] Complete source adjudication and narrow repair of the confirmed queue above.
+- [x] Complete source adjudication and narrow repair of the confirmed queue above.
 - [ ] Persist an append-only quality decision keyed by canonical hash + source-bundle hash and enforce it before every public projection.
 - [ ] Restore the vector sidecar to current core coverage and alert on projection lag.
 - [ ] Add first-class date-role/evidence fields to producer/import contracts.
@@ -142,3 +144,73 @@ authority. Evidence is stored in ignored artifacts under
 - Zoo compensating replay: `ops_run=3421`, success, one forced source message, zero extracted/imported events, zero errors;
 - post-deploy `/healthz`: ready, DB OK, no issues;
 - audit and public-repair evidence: ignored artifacts under `artifacts/codex/INC-2026-07-10-future-date-quality/`.
+
+
+## Second-audit production mitigation — 2026-07-10 22:27–23:00Z
+
+The full second-audit queue was repaired from row-level backups
+`codex_backup_20260710_full_future_v2_*`; production `PRAGMA quick_check` remained
+`ok` after the transaction.
+
+- Nine confirmed duplicate donors were merged into the adjudicated survivors:
+  `6420 -> 4671`, `6609 -> 6395`, `6508 -> 6345`, `6722 -> 6772`,
+  `6721 -> 6772`, `6751 -> 6725`, `4757 -> 5373`, `6312 -> 5204`,
+  `5735 -> 6424`. The ninth pair (`6721/6772`) was exposed only after the
+  exact-hash replay: the later source explicitly distinguishes doors at `20:00`
+  from the concert start at `21:00`, so `6772` is the survivor.
+- Canonical date/range/source repairs were applied to `3864`, `4517`, `4782`,
+  `5295`, `6112`, `6517`, `6721`; `5295` was detached from film `6688`.
+- Source-grounded location repairs were applied to `3803`, `6113`, `6401`,
+  `6476`, `6520`, `6602`–`6604`, `6642`, `6725`, `6782`, `6798`, `6808`,
+  `6810`. In particular, `6602`–`6604` now use `Парк аттракционов ЮНОСТЬ,
+  ул. Тельмана, 3`, and `6808` uses `Верхнее озеро, остров Шайба`.
+- All eight donor Telegraph pages were tombstoned; their unique managed VK
+  posts were deleted. Four stale/donor `@kldevents` posts were deleted through
+  the approved E2E human session and a later duplicate `6604` post was also
+  removed. The remaining/current Telegram announcements were verified by
+  Telethon for title, schedule and venue.
+- Every affected Telegraph survivor page was rebuilt with current canonical
+  fields. Managed VK published or postponed cards were repaired; two old
+  `ЮНОСТЬ` cards whose VK edit window had expired were deleted and replaced.
+  The final authenticated postponed queue contained one repaired card per
+  affected event, with the ten transient duplicate queue items removed.
+- Current Supabase ICS objects were rebuilt from canonical rows. Event `6517`
+  has no synthetic ICS because its source has a multi-day range but no grounded
+  start time; this is an intentional fail-closed result.
+
+A fresh post-repair strict-future export at
+`2026-07-10T23:10:02.306492Z` contained `301` active canonical unmerged rows
+(`311 - 9` merged donors and the repaired ongoing exhibition `4517`, whose
+start date is correctly before the strict-future cutoff). The ongoing row was
+checked separately. Exact-hash vector coverage was `301/301`; the final union
+top-10 set contained `1,488` pairs (`63 >= 0.90`, `159 >= 0.85`,
+`511 >= 0.80`). The only same-date pairs at `>= 0.90` were the explicit
+no-merge controls `5618/5619` (12:00/16:00 performances) and `6684/6750`
+(distinct 14:50/11:00 excursion programmes). The replay rejects sidecar vectors
+whose `text_hash` does not equal the current identity-document hash and fills
+only exact missing hashes ephemerally; transient embedding provider timeouts
+now receive bounded retries instead of aborting the audit.
+
+### Remaining projection blocker
+
+Telegram Bot API deletion is limited to messages younger than 48 hours. The
+approved E2E human account is not an administrator of `@kenigeventscalendar`,
+and the current bot receives `MESSAGE_DELETE_FORBIDDEN` / `CHAT_WRITE_FORBIDDEN`
+for the older Calendar documents. Therefore the canonical rows, Supabase ICS,
+Telegram event channel, VK and Telegraph are repaired, but the legacy public
+Calendar documents cannot be deleted or tombstoned with the available roles.
+The incident remains **mitigated**, not closed, until a Calendar-channel admin
+role removes or replaces those immutable historical projections.
+
+### Second-audit release evidence
+
+- prevention SHA: `a0fda9d4664ac0b0073a877f49bc16d5360d640b`, reachable from `origin/main`;
+- Fly releases: `v1616`/`v1617`, image
+  `deployment-01KX727W4XEP0H733494E5V54J`, digest
+  `sha256:56e43c392811fd65d620b93ebdf100cb100b204b1bf625b2153e68704833f903`;
+- post-deploy `/healthz`: ready, DB OK, no issues;
+- focused location/vector regressions: `13 passed`; relevant incident suite:
+  `77 passed` plus one pre-existing baseline failure also reproduced before the
+  change; Python compile and vector-runner smoke passed;
+- production repair/public verification evidence is stored in ignored artifacts
+  under `artifacts/codex/INC-2026-07-10-full-future-audit-v2/`.

@@ -49,8 +49,13 @@ def fetch_supabase_vectors(ids):
   with urllib.request.urlopen(urllib.request.Request(base+'/rest/v1/'+path,headers=h),timeout=30) as r:rows=json.load(r)
   for row in rows:
    vec=parse_vector(row.get('embedding'))
-   if len(vec)==768:out[int(row['event_id'])]=vec
+   if len(vec)==768:out[int(row['event_id'])]=(vec,clean(row.get('text_hash')))
  return out
+def reuse_matching_vectors(stored,docs):
+ return {
+  eid:pair[0] for eid,pair in stored.items()
+  if eid in docs and pair[1] and pair[1]==docs[eid].sha256
+ }
 def cos(a,b):
  dot=sum(x*y for x,y in zip(a,b));aa=sum(x*x for x in a);bb=sum(x*x for x in b);return dot/math.sqrt(aa*bb) if aa and bb else 0
 async def main(args):
@@ -59,7 +64,12 @@ async def main(args):
  if args.env_file: load_env(args.env_file)
  os.environ.update({'GOOGLE_AI_ALLOW_RESERVE_FALLBACK':'0','GOOGLE_AI_LOCAL_LIMITER_FALLBACK':'0','GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR':'0','GOOGLE_AI_FALLBACK_MODELS':'','GOOGLE_AI_PROVIDER_TIMEOUT_SEC':'45','GOOGLE_AI_RESERVE_RPC_RECHECK_SECONDS':'30'})
  meta,rows,sources,posters=load_rows();docs={int(e['id']):make_doc(e,sources[int(e['id'])],posters[int(e['id'])]) for e in rows};ids=sorted(docs)
- vec=fetch_supabase_vectors(ids)
+ stored=fetch_supabase_vectors(ids)
+ # A vector is reusable only for the exact identity document being audited.
+ # Event repairs commonly change title/date/location/source evidence while the
+ # sidecar still contains the previous embedding; accepting that stale vector
+ # would make a post-repair audit look complete without auditing repaired text.
+ vec=reuse_matching_vectors(stored,docs)
  local={}
  if CACHE.exists():
   for ln in CACHE.read_text().splitlines():
@@ -75,6 +85,7 @@ async def main(args):
   sb=create_client(os.environ['SUPABASE_URL'],os.environ['SUPABASE_KEY']);client=GoogleAIClient(supabase_client=sb,secrets_provider=SecretsProvider(),consumer='future_event_quality_audit',account_name='future-event-quality-audit',default_env_var_name='GOOGLE_API_KEY4');client.provider_timeout_seconds=45
   for idx,eid in enumerate(missing,1):
    d=docs[eid]
+   provider_attempt=0
    while True:
     try:
      vals,_=await client.embed_content_async(model='gemini-embedding-2',text=d.text,output_dimensionality=768)
@@ -83,6 +94,12 @@ async def main(args):
      if exc.__class__.__name__ == 'RateLimitError' and getattr(exc,'blocked_reason',None) in {'rpm','tpm'}:
       wait=max(5.0,float(getattr(exc,'retry_after_ms',None) or 60000)/1000+1.0)
       print(json.dumps({'stage':'rate_wait','seconds':wait,'reason':getattr(exc,'blocked_reason',None)}),flush=True)
+      await asyncio.sleep(wait)
+      continue
+     provider_attempt+=1
+     if exc.__class__.__name__ == 'ProviderError' and provider_attempt <= 3:
+      wait=min(30.0,2.0**provider_attempt)
+      print(json.dumps({'stage':'provider_retry','seconds':wait,'attempt':provider_attempt,'event_id':eid,'error':str(exc)[:180]}),flush=True)
       await asyncio.sleep(wait)
       continue
      raise

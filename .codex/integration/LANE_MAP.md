@@ -23,3 +23,16 @@
 ## Integration order
 
 R01/R02/R03/R04/R05 discovery → source-grounded adjudication → R06 root causes → R07 implementation → R08 repair/release/verification.
+
+## Closure status
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| R01 | Done | final exact-cutoff export: 301 active canonical strict-future rows at 2026-07-10T23:10:02Z |
+| R02 | Done | all 174 incident records / 23,831 lines mapped into 14 regression families |
+| R03 | Done | exact-hash 301/301 vectors; 1,488 pairs; two same-date >=0.90 controls adjudicated as distinct |
+| R04 | Done | 2,762 managed VK posts, 301 comments/replies, all comment-bearing posts screened |
+| R05 | Done | 301/301 source/OCR coverage; zero missing/prose locations; confirmed exceptions repaired |
+| R06 | Done | source/OCR/comment/public evidence chain recorded in canonical incident |
+| R07 | Done | LLM-first location grounding plus exact-hash vector runner and regressions delivered |
+| R08 | Partial | canonical/TG/VK/Telegraph/ICS repaired and released; legacy Calendar documents require an unavailable channel-admin role |
