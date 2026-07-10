@@ -1650,6 +1650,7 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
     "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
+    "priority_lane", "priority_reason", "priority_updated_at",
     "last_processed_at", "last_scan_run_id", "last_scan_status", "platform",
     "source_url", "canonical_url", "canonical_source_key", "source_title", "handle",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
@@ -1702,7 +1703,8 @@ POST_LINK_QUEUE_STATE_FIELDS = [
     "source_url", "keyword_hit_source_url", "source_title", "handle", "username_or_handle",
     "matched_query", "matched_hashtag", "post_date", "hit_age_days",
     "keyword_hit_text_excerpt", "evidence_excerpt_hash", "discovery_type", "edge_type",
-    "first_seen_run_id", "last_seen_run_id", "last_attempt_run_id", "last_attempt_at",
+    "first_seen_run_id", "last_seen_run_id", "first_attempt_at", "last_attempt_run_id", "last_attempt_at",
+    "attempt_count", "fetch_attempt_count",
     "fetched_post_id", "fetch_error_code", "fetch_error_message", "next_attempt_after", "run_id", "updated_at",
     "online_update_stage", "next_action",
 ]
@@ -1733,6 +1735,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
     "has_media", "media_count", "primary_media_path",
     "image_product_gate_status", "image_product_gate_reason",
+    "publication_eligibility_decision", "publication_eligibility_gate_version",
+    "publication_eligibility_reason", "publication_eligibility_evidence_json",
     "images_scored_actual_count", "next_action",
 ]
 POST_STATE_FIELDS = [
@@ -2425,6 +2429,53 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         return 0
 
 
+def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *, run_id: str) -> int:
+    """Persist a complete queue_seq repair without the ordinary online handoff cap."""
+    if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
+        return 0
+    clean = [r for r in rows if isinstance(r, dict) and not r.get("_sheet_note")]
+    if not clean or not getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True) or not _ydb_online_write_allowed():
+        return 0
+    try:
+        now = utc_now_iso()
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for row in clean:
+            payload = compact_record(
+                {**row, "run_id": run_id, "updated_at": now, "last_seen_run_id": run_id,
+                 "online_update_stage": "source_queue_admission_sequence_repair"},
+                SOURCE_QUEUE_STATE_FIELDS + ["run_id", "updated_at", "last_seen_run_id", "online_update_stage"],
+                max_len=900,
+            )
+            key = str(payload.get("canonical_source_key") or payload.get("source_queue_id") or payload.get("source_url") or "")
+            if key:
+                items.append(("source_queue_item:" + key.replace("source_queue_item:", ""), "source_queue_item", payload))
+        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REPAIR_REQUEST_TIMEOUT_SECONDS", 20)
+        retry_settings = ydb_retry_settings(
+            ydb,
+            timeout_seconds=timeout_seconds,
+            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_REPAIR_MAX_RETRIES", 2),
+        )
+
+        def op(session: Any) -> int:
+            ensure_ydb_kv_table(ydb, session, table_path)
+            return ydb_upsert_json_many(
+                session,
+                ydb,
+                table_path,
+                items,
+                now,
+                chunk_size=getenv_int("REGION_TALK_SOURCE_QUEUE_REPAIR_CHUNK_SIZE", 50),
+                timeout_seconds=timeout_seconds,
+            )
+
+        return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
+    except Exception as exc:
+        _record_ydb_online_write_failure(exc, label="source_queue_admission_sequence_repair")
+        print(f"[region-talk] source_queue_sequence_repair_failed {type(exc).__name__}: {str(exc)[:180]}", flush=True)
+        return 0
+
+
 def write_region_talk_entity_cache_items(cache: dict[str, Any], *, run_id: str, stage: str) -> int:
     """Persist valid Telethon private entities as stable row-level cache items."""
     rows: list[dict[str, Any]] = []
@@ -2457,8 +2508,11 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
         key = canonical_source_key("telegram", row.get("username_or_handle") or row.get("handle") or source_url, source_url)
     excerpt = re.sub(r"\s+", " ", str(row.get("keyword_hit_text_excerpt") or row.get("keyword_evidence_excerpt") or "")).strip()[:500]
     is_hashtag = bool(str(row.get("matched_hashtag") or "").strip()) or str(row.get("discovery_type") or "") == "telegram_hashtag_search"
+    lifecycle_cache = _REGION_TALK_TELEGRAM_RUNTIME.setdefault("post_link_lifecycle_by_id", {})
+    queue_id = "postlink_" + stable_hash(post_url or row.get("source_candidate_id") or key)
+    existing = dict(lifecycle_cache.get(queue_id) or lifecycle_cache.get(post_url) or {})
     item = {
-        "post_link_queue_id": "postlink_" + stable_hash(post_url or row.get("source_candidate_id") or key),
+        "post_link_queue_id": queue_id,
         "post_link_status": status,
         "post_link_priority": 0,
         "priority_reason": "global_hashtag_search_exact_post" if is_hashtag else "global_keyword_search_exact_post",
@@ -2479,16 +2533,51 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
         "evidence_excerpt_hash": stable_hash(excerpt) if excerpt else "",
         "discovery_type": row.get("discovery_type") or row.get("edge_type") or "telegram_keyword_search",
         "edge_type": row.get("edge_type") or row.get("discovery_type") or "telegram_keyword_search",
-        "first_seen_run_id": row.get("first_seen_run_id") or run_id,
+        "first_seen_run_id": row.get("first_seen_run_id") or existing.get("first_seen_run_id") or run_id,
         "last_seen_run_id": run_id,
+        "first_attempt_at": row.get("first_attempt_at") or "",
         "last_attempt_run_id": row.get("last_attempt_run_id") or "",
         "last_attempt_at": row.get("last_attempt_at") or "",
+        "attempt_count": row.get("attempt_count") or 0,
+        "fetch_attempt_count": row.get("fetch_attempt_count") or row.get("attempt_count") or 0,
         "fetched_post_id": row.get("fetched_post_id") or "",
         "fetch_error_code": row.get("fetch_error_code") or "",
         "fetch_error_message": row.get("fetch_error_message") or "",
+        "next_attempt_after": row.get("next_attempt_after") or "",
         "run_id": run_id,
         "next_action": "fetch_exact_post_then_score_text_vectors" if status in {"", "pending_fetch", "retry_fetch", "fetch_error"} else "already_fetched_or_terminal",
     }
+    incoming_status = str(item.get("post_link_status") or "")
+    existing_status = str(existing.get("post_link_status") or "")
+    if incoming_status not in {"", "pending_fetch"} and str(row.get("last_attempt_run_id") or "") == run_id:
+        same_attempt_already_recorded = (
+            str(existing.get("last_attempt_run_id") or "") == run_id
+            and str(existing.get("last_attempt_at") or "") == str(row.get("last_attempt_at") or "")
+        )
+        def attempt_int(value: Any) -> int:
+            try:
+                return int(float(value or 0))
+            except (TypeError, ValueError):
+                return 0
+        previous_attempts = max(
+            attempt_int(existing.get("attempt_count") or existing.get("fetch_attempt_count")),
+            attempt_int(row.get("attempt_count") or row.get("fetch_attempt_count")),
+        )
+        attempt_count = previous_attempts if same_attempt_already_recorded else previous_attempts + 1
+        item["attempt_count"] = attempt_count
+        item["fetch_attempt_count"] = attempt_count
+        item["first_attempt_at"] = (
+            row.get("first_attempt_at") or existing.get("first_attempt_at") or row.get("last_attempt_at") or ""
+        )
+    if incoming_status in {"", "pending_fetch"} and existing_status not in {"", "pending_fetch"}:
+        for field in [
+            "post_link_status", "first_attempt_at", "last_attempt_run_id", "last_attempt_at",
+            "attempt_count", "fetch_attempt_count", "fetched_post_id", "fetch_error_code",
+            "fetch_error_message", "next_attempt_after", "next_action",
+        ]:
+            if existing.get(field) not in (None, ""):
+                item[field] = existing.get(field)
+
     terminal = source_local_region_terminal_fields({**row, **item})
     terminal_status = str(terminal.get("source_queue_status") or "")
     if source_terminal_rejected_status(terminal_status) and status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
@@ -2510,6 +2599,9 @@ def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, s
             "fetch_error_message": reason,
             "next_action": "do_not_fetch_exact_post_from_rejected_source",
         })
+    lifecycle_cache[queue_id] = dict(item)
+    if post_url:
+        lifecycle_cache[post_url] = dict(item)
     return item
 
 
@@ -2529,6 +2621,22 @@ def write_region_talk_post_link_queue_items(rows: list[dict[str, Any]], *, run_i
         run_id=run_id,
         stage=stage,
     )
+
+
+def remember_post_link_lifecycle(state: dict[str, Any]) -> None:
+    cache: dict[str, dict[str, Any]] = {}
+    queue = state.get("post_link_queue") if isinstance(state.get("post_link_queue"), dict) else {}
+    for key, row in queue.items():
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        queue_id = str(item.get("post_link_queue_id") or key or "")
+        post_url = str(item.get("post_url") or item.get("keyword_hit_post_url") or "")
+        if queue_id:
+            cache[queue_id] = item
+        if post_url:
+            cache[post_url] = item
+    _REGION_TALK_TELEGRAM_RUNTIME["post_link_lifecycle_by_id"] = cache
 
 
 def build_e5_text_vector_enrichment_rows(
@@ -3453,13 +3561,17 @@ def load_region_talk_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, 
     if requested_backend == "ydb":
         ydb_state, ydb_meta = load_region_talk_ydb_state()
         if ydb_state or ydb_meta.get("ydb_read_status") == "empty":
+            remember_post_link_lifecycle(ydb_state)
             return ydb_state, ydb_meta
         if getenv_bool("REGION_TALK_REQUIRE_YDB_STATE", False):
             raise RuntimeError("REGION_TALK_REQUIRE_YDB_STATE=1 but YDB state is unavailable: " + str(ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status")))
         fallback_state, fallback_meta = load_region_talk_json_state(output_dir)
         fallback_meta.update({**ydb_meta, "state_backend": "json_fallback", "state_fallback_used": "true", "state_fallback_reason": ydb_meta.get("ydb_error") or ydb_meta.get("ydb_read_status") or "ydb_unavailable", "previous_state_loaded": fallback_meta.get("previous_state_loaded", "false"), "previous_state_hash": fallback_meta.get("previous_state_hash", "")})
+        remember_post_link_lifecycle(fallback_state)
         return fallback_state, fallback_meta
-    return load_region_talk_json_state(output_dir)
+    state, meta = load_region_talk_json_state(output_dir)
+    remember_post_link_lifecycle(state)
+    return state, meta
 
 
 def load_region_talk_json_state(output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -5218,10 +5330,10 @@ def build_unified_source_queue(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build the single human-visible source URL queue.
 
-    Contract: only Telegram/VK sources, deduped by canonical_source_key. Rows
-    discovered by Telegram keyword search are inserted immediately after the
-    persisted cursor so they become the next backlog; all other new sources are
-    appended to the tail. Existing order is preserved.
+    Contract: only Telegram/VK sources, deduped by canonical_source_key. The
+    immutable queue_seq/legacy queue_order record admission order; keyword and
+    fast-check hits move into a priority lane consumed before the ordinary
+    backlog without renumbering thousands of existing rows.
     """
     previous_queue_rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     previous_image_queue_rows = _previous_rows_dict(previous_state.get("image_candidate_queue"))
@@ -5401,43 +5513,37 @@ def build_unified_source_queue(
                 continue
             keyword_priority.append((seed, False, evidence_fields))
     if keyword_priority:
-        keyword_priority_keys = {seed["canonical_source_key"] for seed, _, _ in keyword_priority}
-        for rec in entries.values():
-            if int(rec.get("queue_order") or 0) > prev_cursor and rec.get("canonical_source_key") not in keyword_priority_keys:
-                old_order = int(rec.get("queue_order") or 0)
-                rec["previous_queue_order"] = old_order
-                rec["queue_order"] = old_order + len(keyword_priority)
-                rec["queue_order_changed_this_run"] = "true"
-                rec["queue_order_changed_reason"] = "keyword_or_hashtag_insert_after_cursor_shift"
-                keyword_queue_order_shifted += 1
-        for offset, (seed, existed, evidence_fields) in enumerate(keyword_priority, start=1):
+        for seed, existed, evidence_fields in keyword_priority:
             key = seed["canonical_source_key"]
             previous_order = int(entries.get(key, {}).get("queue_order") or 0) if existed else 0
-            new_order = prev_cursor + offset
             if existed:
                 entries[key].update({
                     **{k: v for k, v in seed.items() if v not in ("", None)},
                     **evidence_fields,
                     "previous_queue_order": previous_order,
-                    "queue_order": new_order,
-                    "queue_order_changed_this_run": str(previous_order != new_order).lower(),
-                    "queue_order_changed_reason": "keyword_or_hashtag_reinsert_after_cursor",
+                    "queue_order": previous_order,
+                    "queue_order_changed_this_run": "false",
+                    "queue_order_changed_reason": "priority_lane_without_reordering",
                     "keyword_discovery_status": "keyword_evidence",
                     "keyword_evidence_run_id": run_id,
                     "keyword_evidence_at": run_now,
-                    "insertion_policy": "keyword_reinsert_after_cursor",
+                    "insertion_policy": "keyword_priority_lane",
+                    "priority_lane": "ko_keyword_or_fast_check",
+                    "priority_reason": "keyword_or_fast_check_ko_hit",
+                    "priority_updated_at": run_now,
                 })
                 keyword_existing_promoted += 1
             else:
+                next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
                 entries[key] = {
                     **seed,
                     **evidence_fields,
                     "source_queue_id": "srcq_" + stable_hash(key),
                     "queue_seq": next_queue_seq(),
                     "previous_queue_order": "",
-                    "queue_order": new_order,
-                    "queue_order_changed_this_run": "true",
-                    "queue_order_changed_reason": "keyword_or_hashtag_insert_after_cursor",
+                    "queue_order": next_order,
+                    "queue_order_changed_this_run": "false",
+                    "queue_order_changed_reason": "admitted_at_tail_priority_lane",
                     "added_at": run_now,
                     "added_from": seed.get("added_from") or "telegram_keyword_search",
                     "first_seen_run_id": run_id,
@@ -5446,7 +5552,10 @@ def build_unified_source_queue(
                     "keyword_discovery_status": "keyword_evidence",
                     "keyword_evidence_run_id": run_id,
                     "keyword_evidence_at": run_now,
-                    "insertion_policy": "insert_after_cursor",
+                    "insertion_policy": "keyword_priority_lane",
+                    "priority_lane": "ko_keyword_or_fast_check",
+                    "priority_reason": "keyword_or_fast_check_ko_hit",
+                    "priority_updated_at": run_now,
                 }
                 keyword_inserted += 1
             keyword_prioritized += 1
@@ -5999,6 +6108,15 @@ def build_image_candidate_queue(
             image_queue_pruned_non_region_previous += 1
             bump_block(block_reason)
             continue
+        eligibility = publication_eligibility(row, require_actual_image=False)
+        if str(eligibility.get("decision") or "") != "accept":
+            image_queue_pruned_non_region_previous += 1
+            bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
+            continue
+        row["publication_eligibility_decision"] = eligibility.get("decision")
+        row["publication_eligibility_gate_version"] = eligibility.get("gate_version")
+        row["publication_eligibility_reason"] = eligibility.get("primary_reason")
+        row["publication_eligibility_evidence_json"] = json.dumps(eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True)
         entries[key] = dict(row)
     media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
 
@@ -6022,6 +6140,11 @@ def build_image_candidate_queue(
         if added_from != "media_scoring" and not has_image_media(row, media):
             image_queue_rejected_non_region_inputs += 1
             bump_block("no_media_for_image_analysis")
+            return
+        eligibility = publication_eligibility(row, require_actual_image=False)
+        if str(eligibility.get("decision") or "") != "accept":
+            image_queue_rejected_non_region_inputs += 1
+            bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
             return
         actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
         metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
@@ -6086,6 +6209,10 @@ def build_image_candidate_queue(
             "primary_media_path": row.get("primary_media_path", media.get("primary_media_path", entries[key].get("primary_media_path", ""))),
             "image_product_gate_status": "accepted_for_image_analysis",
             "image_product_gate_reason": "",
+            "publication_eligibility_decision": eligibility.get("decision"),
+            "publication_eligibility_gate_version": eligibility.get("gate_version"),
+            "publication_eligibility_reason": eligibility.get("primary_reason"),
+            "publication_eligibility_evidence_json": json.dumps(eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True),
             "image_queue_status": status,
             "status_color_hint": color,
             "row_fill_color": color,
@@ -6262,7 +6389,10 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = (
+    os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
+    or "region_talk_publication_eligibility_v1"
+)
 PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
 PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"
 PUBLICATION_SOURCE_UNKNOWN = "unknown"
@@ -6293,6 +6423,8 @@ def _publication_source_verdict(source: dict[str, Any]) -> str:
 def publication_eligibility(
     row: dict[str, Any],
     authoritative_source: dict[str, Any] | None = None,
+    *,
+    require_actual_image: bool | None = None,
 ) -> dict[str, Any]:
     """Return a side-effect-free, fail-closed publication gate decision.
 
@@ -6313,7 +6445,21 @@ def publication_eligibility(
         if key.startswith("source_") or key in {"handle", "canonical_url", "monitoring_exclusion_reason", "fetch_status"}
     }}
     product_gate_reason = image_queue_product_gate_reason(merged)
-    base_ok, base_reason = _publication_candidate_base_ok(merged)
+    actual_image_scored = (
+        str(merged.get("image_model_input_type") or "") == "actual_image"
+        and str(merged.get("image_queue_status") or "") in {"", "actual_scored"}
+    )
+    if require_actual_image is None:
+        require_actual_image = actual_image_scored
+    if require_actual_image:
+        base_ok, base_reason = _publication_candidate_base_ok(merged)
+        eligibility_phase = "publication"
+    else:
+        has_media = _rt_bool(merged.get("has_media")) or _rt_float(merged.get("media_count")) > 0 or bool(
+            str(merged.get("primary_media_path") or merged.get("image_url_or_local_path") or "").strip()
+        )
+        base_ok, base_reason = (has_media, "" if has_media else "no_media_for_image_analysis")
+        eligibility_phase = "pre_image"
     evidence = {
         "source_verdict": source_verdict,
         "authoritative_source_used": authoritative_source is not None,
@@ -6328,21 +6474,31 @@ def publication_eligibility(
         "text_vector_fusion_status": merged.get("text_vector_fusion_status") or "",
         "image_model_input_type": merged.get("image_model_input_type") or "",
         "image_queue_status": merged.get("image_queue_status") or "",
+        "eligibility_phase": eligibility_phase,
     }
     if source_verdict == PUBLICATION_SOURCE_CONFIRMED_REJECTED:
         primary_reason = source_gate_reason or "source_verdict_local_or_spam"
+        decision = "reject"
     elif source_verdict == PUBLICATION_SOURCE_UNKNOWN:
         primary_reason = "source_verdict_unknown"
+        decision = "needs_source_review"
     elif product_gate_reason:
         primary_reason = product_gate_reason
+        decision = "needs_text_review" if product_gate_reason in {
+            "vector_accept_candidate_required",
+            "fused_e5_bge_m3_required",
+            "not_confirmed_kaliningrad_oblast_scope",
+        } or product_gate_reason.startswith("vector_defer") else "reject"
     elif not base_ok:
         primary_reason = base_reason or "publication_base_gate_rejected"
+        decision = "reject"
     else:
         primary_reason = "eligible_for_publication_verification"
-    eligible = primary_reason == "eligible_for_publication_verification"
+        decision = "accept"
+    eligible = decision == "accept"
     return {
         "eligible": eligible,
-        "decision": "accept" if eligible else "reject",
+        "decision": decision,
         "primary_reason": primary_reason,
         "evidence": evidence,
         "gate_version": PUBLICATION_ELIGIBILITY_GATE_VERSION,
@@ -7937,7 +8093,7 @@ def candidate_link_rows_for_fetch(
         if url and (status in terminal_link_statuses or status.startswith("terminal_") or (next_attempt and next_attempt > current)):
             blocked_urls.add(url)
 
-    def rank(row: dict[str, Any]) -> tuple[int, str, str]:
+    def rank(row: dict[str, Any]) -> tuple[int, float, int, str]:
         kind = str(row.get("_kind") or "")
         status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
         cache_rank = 0 if _candidate_link_handle(row) in cached_handles else 1
@@ -7950,7 +8106,13 @@ def candidate_link_rows_for_fetch(
                 pri = 4 + cache_rank
         else:
             pri = 6 if status == "actual_scored" else 7 if "image" in status else 8
-        return pri, str(row.get("post_date") or ""), str(row.get("updated_at") or "")
+        post_date = parse_iso_datetime(str(row.get("post_date") or ""))
+        freshness_rank = -post_date.timestamp() if post_date else float("inf")
+        try:
+            attempt_count = int(row.get("attempt_count") or row.get("fetch_attempt_count") or 0)
+        except (TypeError, ValueError):
+            attempt_count = 0
+        return pri, freshness_rank, attempt_count, str(row.get("updated_at") or "")
 
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
@@ -7980,7 +8142,12 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             ensure_ydb_kv_table(ydb, session, table_path)
             rows: list[dict[str, Any]] = []
             for kind in selected_kinds:
-                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, limit * 3))
+                scan_limit = (
+                    getenv_int("REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT", 5000)
+                    if kind == "post_link_queue_item"
+                    else max(1, limit * 3)
+                )
+                items = ydb_select_kind_items(session, ydb, table_path, kind, limit=max(1, scan_limit))
                 for pk, payload in items.items():
                     if not isinstance(payload, dict):
                         continue
@@ -7998,6 +8165,18 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
             )
             for item in cache_items.values():
                 if item.get("channel_id_private") and item.get("access_hash_private"):
+                    handle = str(item.get("username") or "").strip().lower().lstrip("@")
+                    if handle:
+                        cached_handles.add(handle)
+            # Backward-compatible bridge while the durable row-level cache is
+            # being populated: the previous compact latest_state already owns
+            # hundreds of valid private channel entities. Exact-link ordering
+            # must use them immediately instead of treating every source as a
+            # cache miss until each entity is observed again.
+            latest_state = ydb_select_latest_state(session, ydb, table_path)
+            legacy_cache = latest_state.get("telegram_entity_cache") if isinstance(latest_state, dict) else {}
+            for item in (legacy_cache or {}).values():
+                if isinstance(item, dict) and item.get("channel_id_private") and item.get("access_hash_private"):
                     handle = str(item.get("username") or "").strip().lower().lstrip("@")
                     if handle:
                         cached_handles.add(handle)
@@ -8487,7 +8666,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
             entity, resolve_meta = await governor.resolve_entity(client, seed)
             src_row.update(resolve_meta)
             if entity is None:
-                if getenv_bool("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", True):
+                if getenv_bool("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", False):
                     web_row, web_posts = fetch_public_telegram_web_posts_for_seed(seed, max_posts=max_posts, run_id=run_id, status=status)
                     web_row["telegram_resolve_status"] = src_row.get("telegram_resolve_status") or web_row.get("telegram_resolve_status")
                     web_row["resolve_fetch_status"] = src_row.get("fetch_status") or ""
@@ -11220,24 +11399,12 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         unified_source_queue_metrics.get("source_queue_seq_duplicate_repaired_this_run") or 0
     )
     if queue_seq_repairs and region_talk_state_backend_requested() == "ydb" and getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True):
-        online_cap = getenv_int("REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS", 0)
-        if online_cap > 0 and len(unified_source_queue_sheet) > online_cap:
-            raise RuntimeError(
-                "source queue admission sequence repair exceeds online write cap; "
-                "raise REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS for one full repair write"
-            )
-        queue_seq_repair_rows_written = write_region_talk_online_queue_items(
-            unified_source_queue_sheet,
-            kind="source_queue_item",
-            id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
-            fields=SOURCE_QUEUE_STATE_FIELDS,
-            run_id=run_id,
-            stage="source_queue_admission_sequence_repair",
-        )
-        if queue_seq_repair_rows_written < len(unified_source_queue_sheet):
+        repair_rows = [r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]
+        queue_seq_repair_rows_written = write_region_talk_source_queue_sequence_repair(repair_rows, run_id=run_id)
+        if queue_seq_repair_rows_written < len(repair_rows):
             raise RuntimeError(
                 "source queue admission sequence repair was not fully durable: "
-                f"written={queue_seq_repair_rows_written} expected={len(unified_source_queue_sheet)}"
+                f"written={queue_seq_repair_rows_written} expected={len(repair_rows)}"
             )
     source_queue_handoff_rows = _source_queue_handoff_rows(
         unified_source_queue_sheet,

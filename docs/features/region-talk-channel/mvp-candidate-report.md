@@ -325,7 +325,8 @@ De-duplicated source frontier across seeds, link graph, public travel-blogger wo
 
 Canonical product source queue. This is the single reviewer-facing URL list and
 must contain **only** Telegram channels and VK community/wall URLs. It is
-deduped by `canonical_source_key`, carries one `queue_order` cursor, and exposes
+deduped by `canonical_source_key`, carries immutable admission `queue_seq`, a
+legacy `queue_order` cursor/display field and a separate priority lane, and exposes
 `added_at`, `added_from`, `source_queue_status`, `status_color_hint`,
 `last_scan_status`, `posts_scanned`, `ko_posts_found`,
 `candidate_posts_found`, `actual_images_scored_count`,
@@ -824,9 +825,10 @@ in the frontier cannot disappear from monitoring. Keyword-discovered rows,
 including existing pending frontier rows, historical `source_edge_item` /
 `source_candidate_item` keyword evidence, context-only rows with just
 `canonical_source_key`+handle, and fake legacy `processed_*` rows without scan
-evidence, are reinserted immediately after the persisted source cursor so the
-next scan actually tests the channels where keyword search saw a Kaliningrad
-hit. Source queue cursor calculation treats the cursor as the point
+evidence, receive a persisted immediate-priority marker in the same canonical
+ledger so the next scan tests the channels where keyword search saw a
+Kaliningrad hit without rewriting immutable `queue_seq`. Source queue cursor
+calculation treats the cursor as the point
 before the next primary `pending_scan` gap, not simply the largest processed
 order; otherwise a later processed row could hide unscanned keyword rows behind
 the cursor. The source selector also prioritizes keyword-evidence rows even when
@@ -877,3 +879,12 @@ they must write `online_source_item` / `source_status_item`, but must not
 overwrite durable `source_queue_item` without `queue_order` and queue status.
 When YDB source status rows are merged back, empty live fields do not clobber
 non-empty durable queue fields.
+
+The product stats surface is rendered from the same orchestrator snapshot as
+the decision plan; it must not run a second aggregation with different grains.
+Every cycle reports the complete stock and transition diagnostics together:
+manual/keyword/hashtag/similar inflow, immutable queue-sequence integrity,
+exact ready/cooldown/entity-wait/fetched states, source and post throughput,
+current-version E5+BGE coverage/lag, image pending/actual/strong states, and
+publication confirmed/sent/ready/review-retry states. Raw source or pending
+growth is never hidden when manual/discovery inflow exceeds service throughput.

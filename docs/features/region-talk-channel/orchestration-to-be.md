@@ -209,10 +209,10 @@ Important invariants:
   on one UTC day are terminally rejected as high-volume/news-like feeds before
   spending more history budget.
 - CandidateReport keyword/hashtag discovery is breadth-first. Search hits that
-  survive the cheap source-surface filter are physically reinserted immediately
-  after the persisted source cursor (`cursor+1...N`). The handoff must persist
-  the current run's actual scan/fast-check/keyword evidence even when the
-  reordered tail itself is too large to rewrite in one short debug run; bounded
+  survive the cheap source-surface filter receive the durable
+  `ko_keyword_or_fast_check` priority lane and are selected before ordinary
+  backlog without physically rewriting `queue_seq` or `queue_order`. The handoff must persist
+  the current run's actual scan/fast-check/keyword evidence; bounded
   handoff is acceptable, losing current-run status rows is not. Obvious local
   Kaliningrad publics are written as
   `rejected_local_region_source` (separate future-monitoring list), and obvious
@@ -239,12 +239,20 @@ Important invariants:
   per-run cursor history, loaders and metrics prefer the canonical cursor row
   (`queue_cursor:source` / `queue_cursor:image`) and do not let retained
   per-run history override the active cursor.
-- Exact post-link fetch is no longer the first phase of the orchestrated
-  CandidateReport profile. Live runs showed the post-link queue can be dominated
-  by terminal local/spam/cache-miss rows and starve breadth-first source history
-  scanning. The main orchestrator now spends the scarce DISCOVERY1 window on
-  fast-check/source history first; exact known-post fetch can be re-enabled as a
-  separate bounded drain when the source cursor is healthy.
+- `queue_seq` is the immutable admission identity of a source row. Missing or
+  duplicate sequences are repaired only after a complete source-queue read;
+  keyword/fast-check priority is stored separately and does not renumber the
+  whole tail. `queue_order` remains a legacy cursor/display field during the
+  migration. Manual, keyword, hashtag and similar arrivals all use the same
+  canonical ledger and are reported as separate inflow cohorts.
+- Exact post-link fetch is the first **bounded** intake phase of every normal
+  CandidateReport run (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`, three rows
+  by default). It scans up to `REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT=5000`
+  durable rows before selecting the bounded batch, so a blocked PK prefix
+  cannot starve later ready work. Terminal, cooldown and entity-wait rows are excluded from the
+  actionable head; ready rows are ordered cached-entity first, newest first and
+  then by attempt count. This phase does not replace discovery: the same run
+  continues source history, fast-check, keyword/hashtag and similar discovery.
 - The orchestrated source-selection profile is YDB-queue-only when durable queue
   rows are available. Static CSV seeds are fallback/bootstrap data, not a source
   of repeated scans once the live queue exists.
@@ -274,6 +282,16 @@ Important invariants:
   reflection: if image/publication metrics do not move, the run must show
   whether the blocker is source quality, vector/BGE lag, missing media, or true
   lack of eligible posts.
+- Every admitted image row carries a versioned pre-image attestation from the
+  shared `publication_eligibility()` contract. Only `decision=accept` with
+  `gate_version=region_talk_publication_eligibility_v1` may be leased by
+  ImageDiagnostic. Unknown sources become `needs_source_review`; local/spam
+  sources are rejected. The finalizer joins the authoritative source ledger,
+  reapplies the same contract to actual-image rows, refreshes legacy unsigned
+  rows. Publication rows also carry a fingerprint of the authoritative source
+  classification; the notifier rereads the live source ledger and sends only
+  when that fingerprint still matches, so a channel reclassified as local or
+  spam cannot leak through a stale Gemini acceptance.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
@@ -304,15 +322,15 @@ Important invariants:
   external BGE-M3 fusion (`REGION_TALK_STATE_BACKEND=ydb`,
   `REGION_TALK_TEXT_EMBEDDING_MODEL_IDS=intfloat/multilingual-e5-base`,
   `REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE=1`). Source/text-vector
-  YDB read windows are 6000 rows so queue counters are not rebuilt from a
-  truncated source state once the frontier exceeds 1500 rows. The orchestrator
+  The canonical source queue is read with a 20k full-read safety window (and
+  refuses queue-sequence repair when that read is truncated). The orchestrator
   must keep `REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF=0` for
   production runs: live evidence showed that exiting right after source-queue
   handoff also skips the post-fusion `build_image_candidate_queue(...)`, so
   BGE-promoted candidate-memory rows never reach ImageDiagnostic.
 - `RegionTalkBgeM3Enrichment` keeps row count and in-memory batch size separate.
-  The orchestrator default is `--batch-limit 24 --batch-size 4` after the live
-  YDB backlog showed E5 production outpacing 12-row BGE batches; operators can
+  The orchestrator default is `--batch-limit 48 --batch-size 4` after the live
+  YDB backlog showed E5 production outpacing 24-row BGE batches; operators can
   tune this with `REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT` and
   `REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE` without code changes. Production launches set
   `REGION_TALK_BGE_E5_ONLY=1`,
@@ -481,9 +499,8 @@ in the frontier cannot disappear from monitoring. Keyword-discovered rows,
 including existing pending frontier rows, historical `source_edge_item` /
 `source_candidate_item` keyword evidence, context-only rows with just
 `canonical_source_key`+handle, and fake legacy `processed_*` rows without scan
-evidence, are reinserted immediately after the persisted source cursor so the
-next scan actually tests the channels where keyword search saw a Kaliningrad
-hit. Source queue cursor calculation treats the cursor as the point
+evidence, receive the same priority lane so the next scan actually tests the
+channels where keyword search saw a Kaliningrad hit. Source queue cursor calculation treats the cursor as the point
 before the next primary `pending_scan` gap, not simply the largest processed
 order; otherwise a later processed row could hide unscanned keyword rows behind
 the cursor. The source selector also prioritizes keyword-evidence rows even when
@@ -525,9 +542,8 @@ the orchestrator currently sets it to 80 with
 keeps changed/current-run rows, keyword-evidence rows, the forward cursor
 neighbourhood and pending/retry backlog. Current-run scan rows
 (`last_scan_run_id`), fast-check rows and keyword-evidence rows are mandatory in
-the handoff; a mere `queue_order_changed_this_run` tail shift is not mandatory,
-otherwise one keyword insert can turn a short run into thousands of transactional
-YDB upserts. If the mandatory set itself exceeds the configured handoff cap, it
+the handoff. Keyword priority never creates a tail shift, preventing one search
+hit from turning a short run into thousands of transactional YDB upserts. If the mandatory set itself exceeds the configured handoff cap, it
 is still capped with current-run scan evidence first, then fast-check, then
 keyword evidence, then generic status changes. This keeps the 30-minute run
 contract realistic without

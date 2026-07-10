@@ -102,9 +102,10 @@ signal. Query banks are generated from
 
 A source found this way must be either:
 
-- physically inserted at `unified_source_queue.cursor + 1...N` when it is a
-  plausible external source, so the next short run scans it before generic tail
-  backlog;
+- admitted once into the canonical ledger with immutable `queue_seq` and given
+  a high-priority due reason when it is a plausible external source, so the
+  next short run selects it before generic tail backlog without renumbering the
+  whole queue;
 - terminally routed to the local-source list when title/handle clearly says it
   is a Kaliningrad-local public (`Калининград`/`kaliningrad`, `Кёниг`/`kenig`,
   `kgd`/`kld`/`klgd`, `39`, regional towns/resorts);
@@ -132,8 +133,8 @@ or hashtag hit, the next cheap step is not a deep history crawl. CandidateReport
 therefore has a bounded `fast-check-KO` pass over the existing
 `unified_source_queue` backlog after the current cursor. This is **not** a
 second source queue: it reads rows from the same YDB `source_queue_item`, writes
-`fast_check_*` evidence back to the same row, and uses the normal queue builder
-to move KO hits to `cursor + 1...N`.
+`fast_check_*` evidence back to the same row, and uses the normal queue selector
+to promote KO hits in the same ledger without creating a second source queue.
 
 Per run, the orchestrator keeps this intentionally conservative:
 
@@ -156,8 +157,8 @@ Algorithm:
 5. persist `matched_query`, `keyword_hit_post_url`, `post_date`,
    `preflight_hit_age_days`, `keyword_evidence_excerpt` and `fast_check_status`.
 
-If a fresh hit is found, the source is physically placed at
-`unified_source_queue.cursor + 1...N` and the exact post URL must be written to
+If a fresh hit is found, the source receives an immediate priority/due marker
+in the canonical ledger and the exact post URL must be written to
 a known-post queue (`post_link_queue_item` / generalized candidate-link fetch)
 so that the post itself is scored next instead of being only a source hint. If
 no hit is found, `fast_check_status=no_hit` is not terminal: the source remains
@@ -196,13 +197,15 @@ Implementation invariants:
   CandidateReport run first refetches a bounded batch of these exact links
   (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`) before spending history-scan
   budget; fetched links then pass the normal E5+BGE/text/image/LLM funnel;
-- every physical queue reorder caused by keyword/hashtag insertion is persisted
-  in YDB, not only hidden by selector priority.
+- every keyword/hashtag/fast-check priority change is persisted as
+  `priority_lane=ko_keyword_or_fast_check` in the same YDB source ledger.
+  Neither immutable `queue_seq` nor legacy `queue_order` is rewritten merely
+  to consume that source before generic backlog.
 
 Debug-run budget after the 2026-07-09 long-run incident:
 
 - CandidateReport orchestrator launches use `--max-sources 6`,
-  `REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=720`, 20 posts/source, at most three
+  `REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS=1200`, 20 posts/source, at most three
   exact post-link refetches, four global keyword/hashtag queries and three
   similar-channel seeds;
 - the run should reach exact post-link fetch, fast-check-KO, a small history

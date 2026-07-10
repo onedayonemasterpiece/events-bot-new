@@ -74,7 +74,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "1")
         self.assertEqual(main["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
-        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "6000")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "20000")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
         self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
         self.assertIn("--max-sources", main["cmd"])
         self.assertIn("6", main["cmd"])
@@ -146,7 +147,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         mod = load_module()
         self.assertGreaterEqual(mod._orchestrator_kind_limit("processed_post_item", 6000), 20000)
         self.assertGreaterEqual(mod._orchestrator_kind_limit("post_live_item", 6000), 20000)
-        self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 6000)
+        self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 6000), 20000)
 
     def test_cursor_metric_prefers_highest_position_over_stale_history(self) -> None:
         mod = load_module()
@@ -301,12 +302,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
     def test_source_queue_integrity_reports_unordered_duplicate_and_bad_cursor(self) -> None:
         mod = load_module()
         metrics = mod._source_queue_integrity_metrics(
-            [{"queue_order": 1}, {"queue_order": 1}, {"queue_order": 0}],
+            [
+                {"queue_seq": 1, "queue_order": 1},
+                {"queue_seq": 1, "queue_order": 1},
+                {"queue_seq": 0, "queue_order": 0},
+            ],
             cursor_position=5,
         )
         self.assertEqual(metrics["source_queue_integrity_unordered_total"], 1)
         self.assertEqual(metrics["source_queue_integrity_duplicate_order_values_total"], 1)
         self.assertEqual(metrics["source_queue_integrity_duplicate_order_rows_total"], 1)
+        self.assertEqual(metrics["source_queue_integrity_legacy_order_duplicate_rows_total"], 1)
         self.assertEqual(metrics["source_queue_integrity_cursor_past_max_total"], 1)
 
     def test_publication_taxonomy_and_finalizer_are_url_level(self) -> None:
@@ -316,10 +322,31 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             {"post_url": "https://t.me/b/2", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
         ]
         publications = [
-            {"post_url": "https://t.me/a/1", "publication_candidate_status": "llm_confirmed", "sent_to_chat": "false"},
-            {"post_url": "https://t.me/c/3", "publication_candidate_status": "filtered_before_llm"},
+            {
+                "post_url": "https://t.me/a/1",
+                "publication_candidate_status": "llm_confirmed",
+                "sent_to_chat": "false",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+                "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            },
+            {
+                "post_url": "https://t.me/c/3",
+                "publication_candidate_status": "filtered_before_llm",
+                "publication_eligibility_verdict": "reject",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+            },
         ]
-        metrics = mod._publication_handoff_metrics(images, publications)
+        sources = [{
+            "canonical_source_key": "telegram:a",
+            "source_url": "https://t.me/a",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_queue_status": "processed_found_ko_candidate",
+        }]
+        publications[0]["canonical_source_key"] = "telegram:a"
+        publications[0]["authoritative_source_fingerprint"] = mod.authoritative_source_fingerprint(sources[0])
+        metrics = mod._publication_handoff_metrics(images, publications, sources)
         self.assertEqual(metrics["publication_candidate_total"], 2)
         self.assertEqual(metrics["publication_ready_total"], 1)
         self.assertEqual(metrics["publication_confirmed_total"], 1)
@@ -328,6 +355,14 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["finalizer_pending_urls"], ["https://t.me/b/2"])
         actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
         self.assertIn("run_finalizer", [action["action"] for action in actions])
+
+        unsigned = mod._publication_handoff_metrics(
+            [images[0]],
+            [{"post_url": "https://t.me/a/1", "publication_candidate_status": "llm_confirmed"}],
+            sources,
+        )
+        self.assertEqual(unsigned["publication_confirmed_total"], 0)
+        self.assertEqual(unsigned["finalizer_pending_url_total"], 1)
 
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
@@ -738,6 +773,32 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn('"ok": true', out.getvalue())
         read_metrics.assert_called_once()
         self.assertFalse(read_metrics.call_args.kwargs["allow_yc_fallback"])
+
+    def test_source_metric_populations_ignore_small_debug_limit(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod._orchestrator_kind_limit("source_queue_item", 100), 20000)
+        self.assertEqual(mod._orchestrator_kind_limit("source_candidate_item", 100), 20000)
+        self.assertEqual(mod._orchestrator_kind_limit("processed_post_item", 100), 20000)
+
+    def test_stats_message_is_rendered_from_same_metric_snapshot(self) -> None:
+        mod = load_module()
+        text = mod.build_orchestrator_stats_message({
+            "publics_total": 7055,
+            "publics_primary_unscanned_pending_total": 6393,
+            "publics_with_ko_candidates_total": 91,
+            "post_link_queue_exact_ready_total": 67,
+            "post_link_queue_fetched_total": 0,
+            "processed_posts_unique_total": 10756,
+            "text_vector_current_version_dual_coverage_percent": 87,
+            "text_vector_current_version_e5_without_bge_total": 290,
+            "publication_candidate_total": 19,
+            "publication_confirmed_total": 7,
+            "publication_sent_total": 7,
+        })
+        self.assertIn("canonical population: 7055", text)
+        self.assertIn("С KO evidence: 91", text)
+        self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
+        self.assertIn("Publication total/confirmed/sent/ready: 19/7/7/0", text)
 
 
 if __name__ == "__main__":

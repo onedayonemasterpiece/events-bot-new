@@ -257,7 +257,8 @@ Region Talk must keep row-level product state compact:
 
 
 - kind `source_queue_item`, pk `source_queue_item:<canonical_source_key>` — the
-  canonical Telegram/VK source queue row with `queue_order`, status, status-change
+  canonical Telegram/VK source queue row with immutable admission `queue_seq`,
+  legacy cursor/display `queue_order`, status, status-change
   fields, cursor display markers, KO/candidate counters and image-quality rollup;
   local-region source routing is stored as
   `source_queue_status=rejected_local_region_source`,
@@ -269,7 +270,8 @@ Region Talk must keep row-level product state compact:
   source-local `fast-check-KO` preflight writes `fast_check_status`,
   `fast_check_at`, `fast_check_matched_query`, `fast_check_hit_post_url`,
   `fast_check_hit_post_date` and error fields back to this same row. Only
-  `fast_check_status=ko_hit` promotes the source to `cursor + 1...N`;
+  `fast_check_status=ko_hit` gives the source immediate priority in the same
+  ledger;
   `no_hit`/`error` are not terminal and are not promoted;
   terminal high-volume rejections use
   `source_queue_status=rejected_high_volume_text_posts_per_day` plus
@@ -305,7 +307,13 @@ Region Talk must keep row-level product state compact:
   `priority_reason`, status/lease fields and a short evidence excerpt. Consuming
   this queue refetches the exact post and sends it through the normal
   E5+BGE/text/image/LLM funnel; it is not a publication acceptance shortcut.
-  `post_link_status` is `pending_fetch`/`fetch_error`/`fetched`/terminal, and
+  `post_link_status` is `pending_fetch`/`fetch_error`/`retry_wait_entity_cache`/
+  `fetched`/terminal; retry rows carry `next_attempt_after`, and
+  `first_attempt_at`, `last_attempt_at`, `attempt_count` and
+  `fetch_attempt_count`. Rediscovery updates evidence but cannot reset a retry,
+  cooldown, fetched or terminal lifecycle to `pending_fetch`. The consumer scans
+  a broad durable window before choosing its small execution batch, so blocked
+  primary-key head rows do not starve ready links. The
   normal CandidateReport runs consume a bounded exact-link batch before source
   history scans when `REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`;
 - kind `candidate_memory_item`, pk `candidate_memory_item:<candidate_memory_id>` —
@@ -313,14 +321,27 @@ Region Talk must keep row-level product state compact:
   row-level kind directly; it must not depend only on `latest_state.candidate_memory`;
 - kind `image_queue_item`, pk `image_queue_item:<image_queue_id>` — the downstream
   image-analysis work item for a text-confirmed Kaliningrad-only post, including
-  lease/status fields and actual-image consensus scores;
+  lease/status fields, actual-image consensus scores and the versioned upstream
+  fields `publication_eligibility_decision`,
+  `publication_eligibility_gate_version`, reason and evidence. ImageDiagnostic
+  leases only signed `accept` rows for the expected gate version;
 - kind `publication_candidate_item`, pk
   `publication_candidate_item:<publication_candidate_id|post_url>` — the ranked
   product shortlist row joined from text/source/vector evidence and
   ImageDiagnostic actual-image scores. It carries
   `publication_candidate_status=llm_confirmed|sent_to_chat|filtered_before_llm|llm_needs_review|llm_rejected|llm_budget_deferred`,
-  rank/score fields, the Gemini Lite verifier decision, goal-stop marker and
+  rank/score fields, authoritative source eligibility verdict/evidence/version,
+  retry metadata (`attempt_count`, `next_attempt_after`), authoritative source
+  fingerprint/version, tombstone/revoke
+  markers, the Gemini Lite verifier decision, goal-stop marker and
   local notification markers (`sent_to_chat`, `sent_message_id`);
+- kind `telegram_entity_cache_item`, pk
+  `telegram_entity_cache_item:<canonical-entity-key>` — private durable
+  `channel_id/access_hash` cache written in bounded batches immediately after
+  successful entity observation, so an early report-tail exit cannot lose
+  access data required by the next cached-first run. During migration,
+  `latest_state.telegram_entity_cache` remains a read-compatible fallback for
+  cache-first selection and is reported separately from row-level cache rows;
 - kind `text_vector_enrichment_item`, pk
   `text_vector_enrichment_item:<post_id>:<model_short>:<text_hash>` — durable
   per-text/per-model vector enrichment. CandidateReport now writes E5 rows
@@ -409,10 +430,10 @@ Publication finalization may run as a lightweight live-YDB consumer after
 ImageDiagnostic, without requiring the CandidateReport workbook/report tail. The
 current script is `scripts/region_talk_publication_finalizer.py`: it reads
 row-level `candidate_memory_item`, `image_queue_item(actual_scored)` and
-existing `publication_candidate_item` rows, skips already Gemini-verified post
-URLs unless `--reverify-existing` is set, writes only new verifier results, and
-treats the XLSX/CSV shortlist as an operator artifact rather than persistent
-state.
+existing `publication_candidate_item` rows, refreshes unsigned/old eligibility
+attestations, retries only due retryable Gemini rows, preserves terminal rows,
+and treats the XLSX/CSV shortlist as an operator artifact rather than
+persistent state.
 
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report

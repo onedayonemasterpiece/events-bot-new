@@ -392,6 +392,27 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             )
             self.assertEqual(get_mock.call_args.args[0], "https://t.me/s/travelcase/10")
 
+    def test_existing_confirmed_row_gets_current_eligibility_attestation_without_llm(self) -> None:
+        mod = self.mod
+        previous = {
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "llm_confirmed",
+        }
+        row = candidate_row(finalization_trigger="", _previous_publication=previous, **previous)
+        with (
+            mock.patch.object(mod.rt, "publication_eligibility", create=True, return_value=eligibility("eligible")),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=3, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-07-11T10:00:00+00:00",
+            )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["publication_status"], "gemini_accept")
+        self.assertEqual(result[0]["publication_eligibility_verdict"], "eligible")
+        self.assertEqual(result[0]["llm_attempted_this_run"], "false")
+        llm_mock.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

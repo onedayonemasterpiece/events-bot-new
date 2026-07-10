@@ -10,6 +10,7 @@ import types
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "kaggle" / "RegionTalkCandidateReport" / "region_talk_candidate_report.py"
@@ -1427,7 +1428,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         selected = mod.selected_sources_for_run([travel, keyword], 2, previous_state=previous_state)
         self.assertEqual([s.canonical_url for s in selected], ["https://t.me/keyword_hit", "https://t.me/author_travel"])
 
-    def test_keyword_existing_pending_is_physically_reinserted_after_cursor(self) -> None:
+    def test_keyword_existing_pending_uses_priority_lane_without_reordering(self) -> None:
         mod = load_module()
         previous = {"unified_source_queue_cursor_position": 5, "unified_source_queue": {
             "telegram:ordinary": {
@@ -1444,9 +1445,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         }}
         rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-keyword", "2026-07-09T00:00:00+00:00")
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order"], 6)
-        self.assertEqual(by_key["telegram:ordinary"]["queue_order"], 7)
-        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order_changed_this_run"], "true")
+        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order"], 100)
+        self.assertEqual(by_key["telegram:ordinary"]["queue_order"], 6)
+        self.assertEqual(by_key["telegram:keyword_hit"]["queue_order_changed_this_run"], "false")
+        self.assertEqual(by_key["telegram:keyword_hit"]["priority_lane"], "ko_keyword_or_fast_check")
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         old_max = os.environ.get("REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS")
         try:
@@ -1491,11 +1493,10 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         ]
         rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], keyword_rows, [], {}, "run-hash", "2026-07-09T00:00:00+00:00")
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(by_key["telegram:travelhit"]["queue_order"], 11)
+        self.assertGreater(by_key["telegram:travelhit"]["queue_order"], by_key["telegram:ordinary"]["queue_order"])
+        self.assertEqual(by_key["telegram:travelhit"]["priority_lane"], "ko_keyword_or_fast_check")
         self.assertEqual(by_key["telegram:lovekenig"]["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
         self.assertEqual(by_key["telegram:spammy"]["source_queue_status"], mod.SPAM_SOURCE_STATUS)
-        self.assertGreater(by_key["telegram:lovekenig"]["queue_order"], by_key["telegram:travelhit"]["queue_order"])
-        self.assertGreater(by_key["telegram:spammy"]["queue_order"], by_key["telegram:travelhit"]["queue_order"])
         self.assertEqual(metrics["source_queue_keyword_surface_filtered_this_run"], 2)
         self.assertEqual(metrics["source_queue_rejected_local_region_source_total"], 1)
         self.assertEqual(metrics["source_queue_rejected_spam_source_total"], 1)
@@ -1734,6 +1735,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                 "kaliningrad_mention_role": "main_subject",
                 "current_stage": "semantic_candidate",
                 "vector_gate_status": "vector_accept_candidate",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_topic_class": "travel_blogger",
             }
             missing = dict(base)
             fused = {**base, "post_id": "p2", "post_url": "https://t.me/src/2", "text_vector_fusion_status": "fused_e5_bge_m3"}
@@ -2020,12 +2024,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_topic_digest":"false", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"encyclopedic_card_candidate", "content_type":"encyclopedic_card_candidate", "llm_reason":"ok"}
         mod.media_scores = lambda has_media, text_score, post=None: {"technical_quality_score":0.4,"aesthetic_score":0.4,"postcardness_score":0.4,"region_visual_relevance_score":0.5,"publication_safety_score":0.9,"low_noise_score":0.8,"overall_media_score":0.55,"is_selected_for_publication":False,"image_publication_ready":"false","image_reviewable":"false","image_quality_bucket":"weak_image","recognized_visual_elements":"","model_short_explanation":"weak","failure_reason":"below_reviewable_image_threshold","model_id":"fake","model_version":"test","image_model_type":"clip","image_model_runtime":"kaggle_local","image_model_input_type":"actual_image","image_scoring_mode":"cv_aesthetic_clip","image_model_device":"cpu","image_download_status":"downloaded_actual_image"}
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
-        posts = [{"post_id":"post_weak_media", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/5", "platform_post_key":"tg:src:5", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны и что особенно запомнилось в поездке", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        posts = [{"post_id":"post_weak_media", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/5", "platform_post_key":"tg:src:5", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград и Куршская коса: красивый маршрут, море, дюны и что особенно запомнилось в поездке", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src", "source_scope":"external", "source_geo_class":"nonlocal_russia", "source_topic_class":"travel_blogger"}]
         with tempfile.TemporaryDirectory() as td:
             payload = mod.build_report(seeds, [], posts, "weak-image-run", Path(td))
-        self.assertTrue(payload["sheets"]["04a_final_shortlist"])
+        self.assertFalse(payload["sheets"]["04a_final_shortlist"])
         self.assertFalse(payload["sheets"]["04a_current_run_shortlist"])
-        self.assertEqual(payload["sheets"]["04a_final_shortlist"][0]["decision_bucket"], "good_text_weak_actual_image")
         self.assertEqual(len(payload["sheets"]["10_good_text_weak_media"]), 1)
         self.assertEqual(payload["sheets"]["10_good_text_weak_media"][0]["current_stage"], "good_text_weak_media")
 
@@ -2053,7 +2056,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         mod.load_llm_limit_snapshot = lambda model, default_env: {"llm_limit_source":"supabase_google_ai", "supabase_limiter_model_found":"true", "supabase_scoped_key_found":"true"}
         mod.call_region_talk_semantic_llm = lambda post, evidence, **kwargs: {"llm_gate_status":"ok", "llm_provider":"google_gemini", "llm_model":"fake", "llm_default_env_var_name":"GOOGLE_API_KEY", "llm_limit_source":"supabase_google_ai_reserve", "llm_decision":"accept", "whole_post_about_kaliningrad_oblast_score":0.9, "kaliningrad_mention_role":"main_subject", "is_digest_or_roundup":"false", "is_multi_region_roundup":"false", "is_multi_topic_digest":"false", "is_single_location_card":"true", "llm_is_ad_or_promo":"false", "llm_is_news_or_trash":"false", "llm_content_type":"single_location_photo_card", "content_type":"single_location_photo_card", "visit_evidence_type":"single_location_photo_card", "has_firsthand_visit_evidence":"false", "emotion_or_impression_evidence":"false", "review_or_opinion_evidence":"false", "original_photo_evidence":"true", "llm_reason":"single place card"}
         seeds = mod.load_seeds(ROOT / "docs" / "features" / "region-talk-channel" / "seed-sources-v1.csv")
-        posts = [{"post_id":"post_memory", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/77", "platform_post_key":"tg:src:77", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград, Светлогорск и Куршская коса: красивая прогулка, личные впечатления, маршрут, море, дюны, полезные детали и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src"}]
+        posts = [{"post_id":"post_memory", "source_id":seeds[0].source_id, "source_seed_id":seeds[0].source_seed_id, "source_title":"src", "platform":"telegram", "handle":"@src", "post_url":"https://t.me/src/77", "platform_post_key":"tg:src:77", "post_date":"2026-06-01T12:00:00+00:00", "text":"Калининград, Светлогорск и Куршская коса: красивая прогулка, личные впечатления, маршрут, море, дюны, полезные детали и что особенно запомнилось", "text_excerpt":"", "has_media":True, "media_count":1, "rights_policy":"unknown", "source_kind":"travel_media", "source_type":"travel_media", "source_url":"https://t.me/src", "source_scope":"external", "source_geo_class":"nonlocal_russia", "source_topic_class":"travel_blogger"}]
         with tempfile.TemporaryDirectory() as td:
             first = mod.build_report(seeds, [], posts, "mem-r1", Path(td) / "runs" / "mem-r1")
             second = mod.build_report(seeds, [], [], "mem-r2", Path(td) / "runs" / "mem-r2")
@@ -2063,7 +2066,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["visual_decision"], "pending")
         self.assertEqual(row["image_publication_ready"], "false")
         self.assertEqual(first["sheets"]["09b_image_fetch_retry_queue"][0]["post_url"], "https://t.me/src/77")
-        self.assertEqual(first["sheets"]["04a_final_shortlist"][0]["post_url"], "https://t.me/src/77")
+        self.assertFalse(first["sheets"]["04a_final_shortlist"])
         self.assertEqual(first["summary"]["candidate_memory_total"], 1)
         self.assertEqual(second["summary"]["candidate_memory_not_refetched_this_run"], 1)
         self.assertEqual(second["sheets"]["07b_prev_candidates_not_refetch"][0]["post_url"], "https://t.me/src/77")
@@ -2375,9 +2378,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(any("t.me/+" in u for u in urls))
         self.assertFalse(any("t.me/c/" in u for u in urls))
         orders = {r["canonical_source_key"]: r["queue_order"] for r in rows}
-        self.assertEqual(orders["telegram:keynew"], 2)
-        self.assertEqual(orders["telegram:keypost"], 3)
-        self.assertGreater(orders["telegram:tail"], orders["telegram:keypost"])
+        self.assertGreater(orders["telegram:keynew"], orders["telegram:tail"])
+        self.assertGreater(orders["telegram:keypost"], orders["telegram:keynew"])
+        by_key = {r["canonical_source_key"]: r for r in rows}
+        self.assertEqual(by_key["telegram:keynew"]["priority_lane"], "ko_keyword_or_fast_check")
+        self.assertEqual(by_key["telegram:keypost"]["priority_lane"], "ko_keyword_or_fast_check")
         self.assertGreater(orders["telegram:similar_tail"], orders["telegram:tail"])
         self.assertEqual(len([r for r in rows if r["canonical_source_key"] == "telegram:seedtg"]), 1)
         self.assertGreaterEqual(metrics["source_queue_non_target_skipped_this_run"], 5)
@@ -2413,8 +2418,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "2026-07-07T00:00:00+00:00",
         )
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(by_key["telegram:hittravel"]["queue_order"], 11)
-        self.assertEqual(by_key["telegram:hittravel"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:hittravel"]["queue_order"], 50)
+        self.assertEqual(by_key["telegram:hittravel"]["insertion_policy"], "keyword_priority_lane")
         self.assertEqual(by_key["telegram:hittravel"]["keyword_discovery_status"], "keyword_evidence")
         self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:hittravel"]["queue_order"])
         self.assertEqual(metrics["source_queue_keyword_inserted_this_run"], 0)
@@ -2447,7 +2452,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         }
         rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00")
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(metrics["source_queue_cursor_position"], 1)
+        self.assertEqual(metrics["source_queue_cursor_position"], 9)
         self.assertEqual(metrics["source_queue_pending_before_max_processed_gap_total"], 1)
         self.assertEqual(by_key["telegram:pending_gap"]["is_after_cursor"], "true")
 
@@ -2536,11 +2541,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "2026-07-07T00:00:00+00:00",
         )
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(by_key["telegram:fakekeyword"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:fakekeyword"]["queue_order"], 5)
         self.assertEqual(by_key["telegram:fakekeyword"]["source_queue_status"], "pending_scan")
-        self.assertEqual(by_key["telegram:fakekeyword"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:fakekeyword"]["insertion_policy"], "keyword_priority_lane")
         self.assertEqual(by_key["telegram:fakekeyword"]["fake_processed_without_scan_evidence"], "true")
-        self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:fakekeyword"]["queue_order"])
+        self.assertEqual(by_key["telegram:tail"]["queue_order"], 11)
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
         self.assertEqual(metrics["source_queue_keyword_prioritized_this_run"], 1)
 
@@ -2587,11 +2592,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             previous, [], [], [], [], [], [], {}, "run-q", "2026-07-07T00:00:00+00:00"
         )
         by_key = {r["canonical_source_key"]: r for r in rows}
-        self.assertEqual(by_key["telegram:edgehit"]["queue_order"], 11)
+        self.assertEqual(by_key["telegram:edgehit"]["queue_order"], 5)
         self.assertEqual(by_key["telegram:edgehit"]["source_queue_status"], "pending_scan")
-        self.assertEqual(by_key["telegram:edgehit"]["insertion_policy"], "keyword_reinsert_after_cursor")
+        self.assertEqual(by_key["telegram:edgehit"]["insertion_policy"], "keyword_priority_lane")
         self.assertEqual(by_key["telegram:edgehit"]["fake_processed_without_scan_evidence"], "true")
-        self.assertGreater(by_key["telegram:tail"]["queue_order"], by_key["telegram:edgehit"]["queue_order"])
+        self.assertEqual(by_key["telegram:tail"]["queue_order"], 11)
         self.assertEqual(metrics["source_queue_historical_keyword_sources_total"], 1)
         self.assertEqual(metrics["source_queue_keyword_existing_promoted_this_run"], 1)
 
@@ -2653,8 +2658,12 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                     "image_queue_order": 1,
                     "post_url": "https://t.me/travel/1",
                     "source_url": "https://t.me/travel",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "travel_blogger",
                     "image_queue_status": "not_reviewable_unsupported_media",
                     "image_model_input_type": "unsupported_media",
+                    "has_media": True,
                     "kaliningrad_oblast_only_scope": True,
                     "kaliningrad_mention_role": "main_subject",
                     "current_stage": "semantic_candidate",
@@ -2668,6 +2677,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             [{
                 "post_url": "https://t.me/travel/1",
                 "source_url": "https://t.me/travel",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_topic_class": "travel_blogger",
                 "has_media": True,
                 "kaliningrad_oblast_only_scope": True,
                 "kaliningrad_mention_role": "main_subject",
@@ -3033,7 +3045,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
     def test_image_candidate_queue_limits_next_batch_and_sorts_actual_top(self) -> None:
         mod = load_module()
         posts = [
-            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "Travel notes", "source_url": "https://t.me/src", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "candidate_score": 0.5, "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"}
+            {"post_id": f"p{i}", "post_url": f"https://t.me/src/{i}", "platform_post_key": f"tg:src:{i}", "source_id": "src", "source_title": "Travel notes", "source_url": "https://t.me/src", "source_scope": "external", "source_geo_class": "nonlocal_russia", "source_topic_class": "travel_blogger", "post_date": "2026-07-01T00:00:00+00:00", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "candidate_score": 0.5, "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"}
             for i in range(35)
         ]
         media_rows = [
@@ -3059,11 +3071,11 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         mod = load_module()
         previous = {"image_candidate_queue": {
             "bad_prev": {"image_queue_id": "bad_prev", "image_queue_order": 1, "post_url": "https://t.me/bad/1", "source_title": "МЧС Краснодарского края", "kaliningrad_oblast_only_scope": False, "image_queue_status": "needs_actual_image_fetch"},
-            "good_prev": {"image_queue_id": "good_prev", "image_queue_order": 2, "post_url": "https://t.me/good/1", "source_title": "Travel", "has_media": True, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "image_queue_status": "needs_actual_image_fetch", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
+            "good_prev": {"image_queue_id": "good_prev", "image_queue_order": 2, "post_url": "https://t.me/good/1", "source_title": "Travel", "source_scope": "external", "source_geo_class": "nonlocal_russia", "source_topic_class": "travel_blogger", "has_media": True, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "image_queue_status": "needs_actual_image_fetch", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
         }}
         posts = [
             {"post_id": "bad_current", "post_url": "https://t.me/buryatia/1", "source_title": "Минтуризм Бурятии", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": False, "current_stage": "dropped_text_gate"},
-            {"post_id": "good_current", "post_url": "https://t.me/ko/1", "source_title": "Travel", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
+            {"post_id": "good_current", "post_url": "https://t.me/ko/1", "source_title": "Travel", "source_scope": "external", "source_geo_class": "nonlocal_russia", "source_topic_class": "travel_blogger", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject", "current_stage": "semantic_candidate", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
             {"post_id": "external", "post_url": "https://t.me/roundup/1", "source_title": "Roundup", "has_media": True, "is_ad_or_promo": False, "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "one_item", "external_geo_mentions": "Бурятия", "current_stage": "semantic_candidate", "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"},
         ]
         media_rows = [
@@ -3098,6 +3110,9 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             "vector_gate_status": "vector_accept_candidate",
             "text_vector_fusion_status": "fused_e5_bge_m3",
             "is_ad_or_promo": False,
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
         }
         memory_rows = [
             {**base, "candidate_memory_id": "cm1", "post_id": "p1", "post_url": "https://t.me/travel/1", "source_title": "Travel blog"},
@@ -3211,7 +3226,12 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         mod = importlib.util.module_from_spec(spec)
         assert spec and spec.loader
         spec.loader.exec_module(mod)
-        old = {k: os.environ.get(k) for k in ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"]}
+        old = {k: os.environ.get(k) for k in [
+            "REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "GOOGLE_AI_PROVIDER_TIMEOUT_SEC",
+            "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS",
+            "REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN",
+        ]}
         captured: dict[str, dict] = {}
         def fake_create(_client, _username, slug, _title, writer):
             with tempfile.TemporaryDirectory() as td:
@@ -3224,6 +3244,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         try:
             os.environ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"] = "47"
             os.environ["REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"] = "11"
+            os.environ["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"] = "20000"
+            os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = "1"
             os.environ.pop("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", None)
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
@@ -3235,6 +3257,9 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_HUMANLIKE_PACING_ENABLED"], "1")
             self.assertEqual(env["REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"], "11")
             self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
+            self.assertEqual(env["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
+            self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
+            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v1")
         finally:
             for key, value in old.items():
                 if value is None:
@@ -3458,6 +3483,145 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         ])
         self.assertIn("next_attempt_after", mod.POST_LINK_QUEUE_STATE_FIELDS)
 
+        fresh_first = mod.candidate_link_rows_for_fetch([
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/cached/10", "post_date": "2026-07-01T00:00:00+00:00"},
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/cached/11", "post_date": "2026-07-09T00:00:00+00:00"},
+        ], 10, now=now, cached_entity_handles={"cached"})
+        self.assertEqual([row["post_url"] for row in fresh_first], [
+            "https://t.me/cached/11",
+            "https://t.me/cached/10",
+        ])
+
+    def test_post_link_rediscovery_preserves_retry_lifecycle(self) -> None:
+        mod = load_module()
+        previous = {
+            "post_link_queue": {
+                "pl": {
+                    "post_link_queue_id": "postlink_" + mod.stable_hash("https://t.me/travelcase/10"),
+                    "post_url": "https://t.me/travelcase/10",
+                    "post_link_status": "retry_wait_entity_cache",
+                    "first_attempt_at": "2026-07-10T00:00:00+00:00",
+                    "last_attempt_at": "2026-07-10T00:01:00+00:00",
+                    "attempt_count": 2,
+                    "fetch_attempt_count": 2,
+                    "next_attempt_after": "2026-07-10T02:00:00+00:00",
+                    "fetch_error_code": "entity_cache_miss",
+                }
+            }
+        }
+        mod.remember_post_link_lifecycle(previous)
+        item = mod.post_link_queue_item_from_keyword_hit(
+            {
+                "keyword_hit_post_url": "https://t.me/travelcase/10",
+                "keyword_hit_source_url": "https://t.me/travelcase",
+                "canonical_source_key": "telegram:travelcase",
+                "matched_query": "Калининград",
+            },
+            run_id="rediscovery-run",
+        )
+        self.assertEqual(item["post_link_status"], "retry_wait_entity_cache")
+        self.assertEqual(item["next_attempt_after"], "2026-07-10T02:00:00+00:00")
+        self.assertEqual(item["attempt_count"], 2)
+        self.assertIn("fetch_attempt_count", mod.POST_LINK_QUEUE_STATE_FIELDS)
+        attempted = mod.post_link_queue_item_from_keyword_hit(
+            {
+                **item,
+                "post_link_status": "retry_fetch",
+                "last_attempt_run_id": "attempt-run",
+                "last_attempt_at": "2026-07-10T03:00:00+00:00",
+            },
+            run_id="attempt-run",
+            status="retry_fetch",
+        )
+        self.assertEqual(attempted["attempt_count"], 3)
+        self.assertEqual(attempted["fetch_attempt_count"], 3)
+        self.assertEqual(attempted["first_attempt_at"], "2026-07-10T00:00:00+00:00")
+
+    def test_exact_post_reader_scans_beyond_blocked_primary_key_head(self) -> None:
+        mod = load_module()
+        calls: list[tuple[str, int]] = []
+        blocked = {
+            f"post_link_queue_item:00{i}": {
+                "post_link_status": "terminal_bad_url",
+                "post_url": f"https://t.me/blocked/{i}",
+            }
+            for i in range(12)
+        }
+        blocked["post_link_queue_item:999"] = {
+            "post_link_status": "pending_fetch",
+            "post_url": "https://t.me/ready/99",
+        }
+
+        class Pool:
+            def retry_operation_sync(self, op):
+                return op(object())
+
+        class Driver:
+            def stop(self, timeout=0):
+                return None
+
+        class Ydb:
+            SessionPool = lambda self, _driver: Pool()
+
+        def select(_session, _ydb, _table, kind, limit):
+            calls.append((kind, limit))
+            if kind == "post_link_queue_item":
+                return blocked
+            return {}
+
+        with mock.patch.object(mod, "ydb_config_status", return_value={"missing": ""}), \
+             mock.patch.object(mod, "ydb_connect", return_value=(Ydb(), Driver(), {})), \
+             mock.patch.object(mod, "ydb_kv_table_path", return_value="/db/table"), \
+             mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+             mock.patch.object(mod, "ydb_select_latest_state", return_value={"telegram_entity_cache": {
+                 "telegram:username:ready": {"username": "ready", "channel_id_private": "1", "access_hash_private": "2"},
+             }}), \
+             mock.patch.object(mod, "ydb_select_kind_items", side_effect=select):
+            selected = mod.ydb_candidate_link_rows_from_row_kv(1, kinds=("post_link_queue_item",))
+        self.assertEqual([row["post_url"] for row in selected], ["https://t.me/ready/99"])
+        self.assertIn(("post_link_queue_item", 5000), calls)
+
+    def test_source_queue_sequence_repair_bypasses_live_handoff_cap(self) -> None:
+        mod = load_module()
+        rows = [
+            {
+                "canonical_source_key": f"telegram:s{i}",
+                "source_queue_id": f"srcq_{i}",
+                "source_url": f"https://t.me/s{i}",
+                "queue_seq": i + 1,
+                "queue_order": i + 1,
+            }
+            for i in range(101)
+        ]
+        captured = {"items": 0}
+
+        class Pool:
+            def retry_operation_sync(self, op, retry_settings=None):
+                return op(object())
+
+        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
+            captured["items"] = len(items)
+            return len(items)
+
+        old = {name: os.environ.get(name) for name in ["REGION_TALK_STATE_BACKEND", "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"]}
+        try:
+            os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
+            with mock.patch.object(mod, "_ydb_online_write_allowed", return_value=True), \
+                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(object(), object(), Pool(), "/db/table")), \
+                 mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+                 mock.patch.object(mod, "ydb_retry_settings", return_value=None), \
+                 mock.patch.object(mod, "ydb_upsert_json_many", side_effect=upsert):
+                written = mod.write_region_talk_source_queue_sequence_repair(rows, run_id="repair-run")
+            self.assertEqual(written, 101)
+            self.assertEqual(captured["items"], 101)
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def test_queue_seq_repairs_are_stable_without_queue_order_renumber(self) -> None:
         mod = load_module()
         previous = {
@@ -3543,6 +3707,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(accepted["decision"], "accept")
         self.assertEqual(accepted["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_EXTERNAL)
         self.assertFalse(unknown["eligible"])
+        self.assertEqual(unknown["decision"], "needs_source_review")
         self.assertEqual(unknown["primary_reason"], "source_verdict_unknown")
         self.assertEqual(unknown["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_UNKNOWN)
         self.assertFalse(local["eligible"])
@@ -3550,6 +3715,51 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertTrue(mixed["eligible"])
         self.assertFalse(spam["eligible"])
         self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version"})
+
+    def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
+        mod = load_module()
+        row = {
+            "post_id": "post-1",
+            "post_url": "https://t.me/travel/1",
+            "source_id": "travel",
+            "source_title": "Travel Notes",
+            "source_url": "https://t.me/travel",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "travel_blogger",
+            "current_stage": "semantic_candidate",
+            "current_lifecycle_status": "active_candidate",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "has_media": True,
+            "media_count": 1,
+            "primary_media_path": "https://example.test/image.jpg",
+        }
+        previous = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")
+        os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = "1"
+        try:
+            queue, _top, _metrics = mod.build_image_candidate_queue(
+                {}, [], [row], [], "image-gate-run", "2026-07-10T00:00:00+00:00"
+            )
+            unknown_queue, _top2, _metrics2 = mod.build_image_candidate_queue(
+                {}, [], [{**row, "source_geo_class": "", "source_scope": "unknown"}], [],
+                "image-gate-run-unknown", "2026-07-10T00:00:00+00:00",
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", None)
+            else:
+                os.environ["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"] = previous
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]["publication_eligibility_decision"], "accept")
+        self.assertEqual(
+            queue[0]["publication_eligibility_gate_version"],
+            mod.PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        )
+        self.assertEqual(unknown_queue, [])
 
 
 if __name__ == "__main__":

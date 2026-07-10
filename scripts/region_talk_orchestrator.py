@@ -25,7 +25,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.region_talk_goal_notify import (  # noqa: E402
-    build_stats_message,
+    attach_live_source_fingerprints,
+    authoritative_source_fingerprint,
+    AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
     is_confirmed_publication,
     is_unsent_confirmed_publication,
     ensure_ydb_module,
@@ -49,6 +51,7 @@ ACTION_KERNEL_SLUGS = {
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
+CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
 
@@ -59,6 +62,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_REQUIRE_DUAL_TEXT_EMBEDDINGS": "0",
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
+    "REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION": CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
     # Debug/product runs must finish quickly enough to be observable.  The main
     # notebook still reaches the source-queue/discovery tail, but with smaller
     # batches and bounded YDB writes; otherwise Kaggle spends >30 minutes in
@@ -80,10 +84,11 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_RUNTIME_LOW_BUDGET_MAX_POSTS_TO_SCORE": "25",
     "REGION_TALK_MAX_POSTS_TO_SCORE_PER_RUN": "90",
     "REGION_TALK_YDB_MAX_POST_ROWS": "1500",
-    "REGION_TALK_YDB_MAX_SOURCE_ROWS": "6000",
+    "REGION_TALK_YDB_MAX_SOURCE_ROWS": "20000",
+    "REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT": "20000",
     "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": "1000",
     "REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS": "6000",
-    "REGION_TALK_YDB_SELECT_PAGE_SIZE": "100",
+    "REGION_TALK_YDB_SELECT_PAGE_SIZE": "300",
     "REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS": "6",
     "REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS": "6",
     "REGION_TALK_YDB_QUEUE_MAX_RETRIES": "1",
@@ -131,6 +136,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # do not replace source/history/similar/keyword/hashtag discovery below.
     "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
     "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "3",
+    "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": "5000",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
     "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
     "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": "1",
@@ -160,13 +166,13 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "text_vector_enrichment_item": 6000,
     "processed_post_item": 20000,
     "post_live_item": 20000,
-    "source_queue_item": 6000,
-    "source_status_item": 6000,
-    "online_source_item": 6000,
-    "source_candidate_item": 4000,
-    "source_edge_item": 4000,
+    "source_queue_item": 20000,
+    "source_status_item": 20000,
+    "online_source_item": 20000,
+    "source_candidate_item": 20000,
+    "source_edge_item": 20000,
     "comment_link_item": 4000,
-    "telegram_entity_cache_item": 6000,
+    "telegram_entity_cache_item": 20000,
 }
 
 
@@ -184,13 +190,68 @@ def _orchestrator_kind_limit(kind: str, requested_limit: int) -> int:
     default_cap = ORCHESTRATOR_YDB_METRIC_LIMITS.get(kind, 2000)
     key = "REGION_TALK_ORCHESTRATOR_YDB_MAX_" + re.sub(r"[^A-Za-z0-9]+", "_", kind).upper() + "_ROWS"
     cap = _env_int(key, _env_int("REGION_TALK_ORCHESTRATOR_YDB_MAX_ROWS_PER_KIND", default_cap))
-    if kind in {"processed_post_item", "post_live_item"}:
+    if kind in {
+        "processed_post_item", "post_live_item", "source_queue_item",
+        "source_status_item", "online_source_item", "source_candidate_item",
+        "source_edge_item", "telegram_entity_cache_item",
+    }:
         # Processed/live post totals are goal metrics. They must not be silently
         # flattened by a low source/frontier debug --limit, otherwise the loop
         # can report zero processed-post progress while CandidateReport is
         # actually fetching/writing posts.
         return max(1, cap)
     return max(1, min(max(1, int(requested_limit)), cap))
+
+
+def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
+    """Render one coherent stats surface from the already-read metric snapshot."""
+    value = lambda key: _safe_int(metrics.get(key))
+    return "\n".join([
+        "📊 Region Talk live YDB stats",
+        f"Источников в canonical population: {value('publics_total')}",
+        f"Pending primary scan: {value('publics_primary_unscanned_pending_total')}",
+        f"Terminal processed: {value('publics_terminal_processed_total')}",
+        f"С KO evidence: {value('publics_with_ko_candidates_total')}",
+        (
+            "Inflow manual/keyword/hashtag/similar: "
+            f"{value('discovery_inflow_manual_total')}/"
+            f"{value('discovery_inflow_keyword_total')}/"
+            f"{value('discovery_inflow_hashtag_total')}/"
+            f"{value('discovery_inflow_similar_total')}"
+        ),
+        (
+            "Queue unordered/duplicate rows: "
+            f"{value('source_queue_integrity_unordered_total')}/"
+            f"{value('source_queue_integrity_duplicate_order_rows_total')}"
+        ),
+        (
+            "Exact ready/cooldown/entity-wait/fetched: "
+            f"{value('post_link_queue_exact_ready_total')}/"
+            f"{value('post_link_queue_cooldown_total')}/"
+            f"{value('post_link_queue_entity_wait_total')}/"
+            f"{value('post_link_queue_fetched_total')}"
+        ),
+        f"Processed posts: {value('processed_posts_unique_total')}",
+        f"Candidate memory: {value('candidate_memory_total')}",
+        (
+            "Current E5/BGE paired coverage: "
+            f"{value('text_vector_current_version_dual_coverage_percent')}% "
+            f"(pending {value('text_vector_current_version_e5_without_bge_total')})"
+        ),
+        (
+            "Images pending/actual/strong>=0.70: "
+            f"{value('image_pending_total')}/"
+            f"{value('image_actual_scored_total')}/"
+            f"{value('image_strong_actual_ge_0_70_total')}"
+        ),
+        (
+            "Publication total/confirmed/sent/ready: "
+            f"{value('publication_candidate_total')}/"
+            f"{value('publication_confirmed_total')}/"
+            f"{value('publication_sent_total')}/"
+            f"{value('publication_ready_total')}"
+        ),
+    ])
 
 
 def ensure_kaggle_username_env() -> str:
@@ -589,15 +650,26 @@ def _post_link_queue_metrics(
 
 
 def _source_queue_integrity_metrics(source_rows: list[dict[str, Any]], cursor_position: int) -> dict[str, int]:
+    sequences = [_safe_int(row.get("queue_seq")) for row in source_rows]
+    positive_sequences = [sequence for sequence in sequences if sequence > 0]
+    sequence_counts: dict[int, int] = {}
+    for sequence in positive_sequences:
+        sequence_counts[sequence] = sequence_counts.get(sequence, 0) + 1
     orders = [_safe_int(row.get("queue_order")) for row in source_rows]
     positive = [order for order in orders if order > 0]
     order_counts: dict[int, int] = {}
     for order in positive:
         order_counts[order] = order_counts.get(order, 0) + 1
     return {
-        "source_queue_integrity_unordered_total": sum(1 for order in orders if order <= 0),
-        "source_queue_integrity_duplicate_order_values_total": sum(1 for count in order_counts.values() if count > 1),
-        "source_queue_integrity_duplicate_order_rows_total": sum(max(0, count - 1) for count in order_counts.values()),
+        "source_queue_integrity_missing_seq_total": sum(1 for sequence in sequences if sequence <= 0),
+        "source_queue_integrity_duplicate_seq_values_total": sum(1 for count in sequence_counts.values() if count > 1),
+        "source_queue_integrity_duplicate_seq_rows_total": sum(max(0, count - 1) for count in sequence_counts.values()),
+        # Canonical compatibility aliases now refer to immutable queue_seq.
+        "source_queue_integrity_unordered_total": sum(1 for sequence in sequences if sequence <= 0),
+        "source_queue_integrity_duplicate_order_values_total": sum(1 for count in sequence_counts.values() if count > 1),
+        "source_queue_integrity_duplicate_order_rows_total": sum(max(0, count - 1) for count in sequence_counts.values()),
+        "source_queue_integrity_legacy_order_missing_total": sum(1 for order in orders if order <= 0),
+        "source_queue_integrity_legacy_order_duplicate_rows_total": sum(max(0, count - 1) for count in order_counts.values()),
         "source_queue_integrity_cursor_past_max_total": int(bool(positive and cursor_position > max(positive))),
     }
 
@@ -619,14 +691,22 @@ def _inflow_kind(row: dict[str, Any]) -> str:
 
 
 def _discovery_inflow_metrics(rows: list[dict[str, Any]]) -> dict[str, int]:
-    kinds = [_inflow_kind(row) for row in rows]
-    return {
-        "discovery_inflow_manual_total": kinds.count("manual"),
-        "discovery_inflow_keyword_total": kinds.count("keyword"),
-        "discovery_inflow_hashtag_total": kinds.count("hashtag"),
-        "discovery_inflow_similar_total": kinds.count("similar"),
-        "discovery_inflow_source_total": kinds.count("source"),
-    }
+    evidence_counts: dict[str, int] = {}
+    unique: dict[str, set[str]] = {}
+    for index, row in enumerate(rows):
+        kind = _inflow_kind(row)
+        evidence_counts[kind] = evidence_counts.get(kind, 0) + 1
+        source_key = (
+            _source_merge_key(row)
+            or str(row.get("canonical_source_key") or row.get("source_candidate_id") or row.get("to_source_candidate_id") or "")
+            or "evidence:" + str(index)
+        )
+        unique.setdefault(kind, set()).add(source_key)
+    out: dict[str, int] = {}
+    for kind in ("manual", "keyword", "hashtag", "similar", "source"):
+        out[f"discovery_inflow_{kind}_total"] = len(unique.get(kind, set()))
+        out[f"discovery_inflow_{kind}_evidence_rows_total"] = evidence_counts.get(kind, 0)
+    return out
 
 
 def _vector_post_key(row: dict[str, Any]) -> str:
@@ -937,7 +1017,13 @@ def _latest_rows_by_post_url(rows: list[dict[str, Any]]) -> tuple[dict[str, dict
     return latest, missing_url
 
 
-def _publication_handoff_metrics(images: list[dict[str, Any]], publications: list[dict[str, Any]]) -> dict[str, Any]:
+def _publication_handoff_metrics(
+    images: list[dict[str, Any]],
+    publications: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if source_rows is not None:
+        attach_live_source_fingerprints(publications, source_rows)
     actual_rows = [
         row for row in images
         if str(row.get("image_queue_status") or "") == "actual_scored"
@@ -945,7 +1031,29 @@ def _publication_handoff_metrics(images: list[dict[str, Any]], publications: lis
     ]
     actual_by_url, actual_missing_url = _latest_rows_by_post_url(actual_rows)
     publication_by_url, publication_missing_url = _latest_rows_by_post_url(publications)
-    finalizer_pending_urls = sorted(set(actual_by_url) - set(publication_by_url))
+    now = datetime.now(timezone.utc)
+
+    def needs_finalizer(row: dict[str, Any] | None) -> bool:
+        if not row:
+            return True
+        eligibility_verdict = str(row.get("publication_eligibility_verdict") or "").lower()
+        gate_version = str(row.get("publication_eligibility_gate_version") or "")
+        if not eligibility_verdict or gate_version != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:
+            return True
+        publication_status = str(row.get("publication_status") or "").lower()
+        candidate_status = str(row.get("publication_candidate_status") or "").lower()
+        retryable = publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"} or candidate_status in {
+            "llm_budget_deferred", "llm_error", "retry_due",
+        }
+        if not retryable:
+            return False
+        retry_at = _parse_iso_datetime(row.get("next_attempt_after"))
+        return retry_at is None or retry_at <= now
+
+    finalizer_pending_urls = sorted(
+        url for url in actual_by_url
+        if needs_finalizer(publication_by_url.get(url))
+    )
 
     confirmed_urls = {url for url, row in publication_by_url.items() if is_confirmed_publication(row)}
     unsent_confirmed_urls = {url for url in confirmed_urls if is_unsent_confirmed_publication(publication_by_url[url])}
@@ -1562,10 +1670,24 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "post_live_item",
             "queue_cursor",
         ]
-        rows_by_kind = {
-            kind: read_kind_rows(pool, ydb, table, kind, _orchestrator_kind_limit(kind, limit))
-            for kind in kinds
-        }
+        rows_by_kind: dict[str, list[dict[str, Any]]] = {}
+        truncated_kinds: list[str] = []
+        for kind in kinds:
+            kind_limit = _orchestrator_kind_limit(kind, limit)
+            loaded = read_kind_rows(pool, ydb, table, kind, kind_limit + 1)
+            if len(loaded) > kind_limit:
+                truncated_kinds.append(kind)
+                loaded = loaded[:kind_limit]
+            rows_by_kind[kind] = loaded
+        latest_query = f"SELECT payload_json FROM `{table}` WHERE pk = 'latest_state';"
+        def read_latest_state(session: Any) -> dict[str, Any]:
+            result_sets = session.transaction(ydb.StaleReadOnly()).execute(latest_query, commit_tx=True)
+            rows = result_sets[0].rows if result_sets else []
+            if not rows:
+                return {}
+            payload = rows[0].payload_json
+            return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+        latest_state = pool.retry_operation_sync(read_latest_state)
     finally:
         driver.stop()
 
@@ -1577,7 +1699,16 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     source_candidates = rows_by_kind["source_candidate_item"]
     source_edges = rows_by_kind["source_edge_item"]
     comment_links = rows_by_kind["comment_link_item"]
-    entity_cache_rows = rows_by_kind["telegram_entity_cache_item"]
+    row_level_entity_cache_rows = rows_by_kind["telegram_entity_cache_item"]
+    legacy_entity_cache = latest_state.get("telegram_entity_cache") if isinstance(latest_state, dict) else {}
+    entity_cache_by_key: dict[str, dict[str, Any]] = {
+        str(row.get("entity_cache_key") or row.get("username") or row.get("canonical_url") or index): row
+        for index, row in enumerate(row_level_entity_cache_rows)
+    }
+    for key, row in (legacy_entity_cache or {}).items():
+        if isinstance(row, dict):
+            entity_cache_by_key.setdefault(str(key), row)
+    entity_cache_rows = list(entity_cache_by_key.values())
     cursors = rows_by_kind["queue_cursor"]
     source_rows = _merge_source_rows(
         rows_by_kind["source_queue_item"],
@@ -1603,7 +1734,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
     image_terminal_metrics = _image_queue_status_metrics(images)
-    publication_metrics = _publication_handoff_metrics(images, publications)
+    publication_metrics = _publication_handoff_metrics(images, publications, source_rows)
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
     vector_pair_metrics = _text_vector_pair_metrics(e5_vectors, bge_vectors)
@@ -1731,6 +1862,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     ]
 
     metrics = {
+        "metric_read_any_truncated": int(bool(truncated_kinds)),
+        "metric_read_truncated_kinds": ",".join(sorted(truncated_kinds)),
         "publics_total": len(source_rows),
         "publics_touched_or_not_pending_total": len(source_touched),
         "publics_terminal_processed_total": len(source_terminal),
@@ -1766,6 +1899,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
         **post_link_metrics,
+        "telegram_entity_cache_row_level_rows_total": len(row_level_entity_cache_rows),
+        "telegram_entity_cache_legacy_latest_state_rows_total": len(legacy_entity_cache or {}),
         "post_link_queue_unique_sources_total": len(post_link_source_keys),
         "post_link_queue_manual_total": sum(1 for r in post_links if _inflow_kind(r) == "manual"),
         "post_link_queue_keyword_total": sum(1 for r in post_links if _inflow_kind(r) == "keyword"),
@@ -1942,7 +2077,7 @@ def run_orchestrator_cycle(args: argparse.Namespace, *, allow_yc_fallback: bool,
     if active_kernel_skips:
         result["active_kernel_skips"] = active_kernel_skips
     if args.stats_message:
-        result["stats_message"] = build_stats_message(limit=args.limit)
+        result["stats_message"] = build_orchestrator_stats_message(metrics)
     if will_execute:
         selected = select_actions_for_execution(
             actions,

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "kaggle" / "RegionTalkImageDiagnostic" / "region_talk_image_diagnostic.py"
@@ -139,6 +140,28 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                 self.assertTrue(all(row["image_eligibility_status"] == "blocked" for row in blocked))
                 self.assertTrue(all(row["image_eligibility_reason"] for row in blocked))
                 self.assertTrue(all(row["image_eligibility_expected_gate_version"] == "publication-gate-test-v1" for row in blocked))
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
+    def test_image_queue_scan_is_not_limited_to_five_batches(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ["REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT"] = "5000"
+                with mock.patch.object(mod, "ydb_select_kind", return_value=[]) as select:
+                    mod.ydb_select_image_queue(10)
+                select.assert_called_once_with("image_queue_item", 5000)
+                self.assertIn(mod.IMAGE_TERMINAL_ELIGIBILITY_STATUS, mod.IMAGE_TERMINAL_SKIP_STATUSES)
             finally:
                 for key, value in old.items():
                     if value is None:

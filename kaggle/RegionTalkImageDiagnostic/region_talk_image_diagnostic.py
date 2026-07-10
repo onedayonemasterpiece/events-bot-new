@@ -15,6 +15,7 @@ IMAGE_TERMINAL_ELIGIBILITY_STATUS = "rejected_publication_eligibility"
 IMAGE_TERMINAL_SKIP_STATUSES = {
     "not_reviewable_no_media",
     IMAGE_TERMINAL_UNSUPPORTED_STATUS,
+    IMAGE_TERMINAL_ELIGIBILITY_STATUS,
     "rejected_text_gate",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
@@ -361,7 +362,8 @@ SELECT pk, payload_json FROM `{table_path}` WHERE pk >= $prefix AND pk < $prefix
     finally: driver.stop(timeout=5)
 
 def ydb_select_image_queue(limit_n: int):
-    return ydb_select_kind("image_queue_item", max(1, limit_n*5))
+    scan_limit = int(os.getenv("REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT") or "5000")
+    return ydb_select_kind("image_queue_item", max(1, scan_limit, limit_n*5))
 
 def ydb_select_source_queue(limit_n: int = 10000):
     by_key = {}

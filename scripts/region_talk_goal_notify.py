@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v1"
 
 
 def load_env(path: Path) -> None:
@@ -160,6 +165,50 @@ def ydb_table_path(database: str) -> str:
     return database.rstrip("/") + f"/{namespace}_state_kv"
 
 
+def canonical_source_key_for_row(row: dict[str, Any]) -> str:
+    key = str(row.get("canonical_source_key") or "").strip().lower().rstrip("/")
+    for prefix in ("source_queue_item:", "source_status_item:", "online_source_item:"):
+        if key.startswith(prefix):
+            key = key[len(prefix):]
+    if key:
+        return key
+    raw = str(row.get("source_url") or row.get("canonical_url") or row.get("post_url") or "").strip().lower()
+    match = re.search(r"(?:https?://)?t\.me/(?:s/)?@?([^/?#]+)", raw)
+    return "telegram:" + match.group(1).rstrip("/") if match else raw.rstrip("/")
+
+
+def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
+    if not isinstance(source, dict) or not source:
+        return ""
+    payload = {
+        "version": AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+        "canonical_source_key": canonical_source_key_for_row(source),
+        "source_queue_status": source.get("source_queue_status") or "",
+        "source_scope": source.get("source_scope") or "",
+        "source_geo_class": source.get("source_geo_class") or "",
+        "source_topic_class": source.get("source_topic_class") or "",
+        "source_quick_class": source.get("source_quick_class") or "",
+        "monitoring_exclusion_reason": source.get("monitoring_exclusion_reason") or "",
+        "source_surface_filter_version": source.get("source_surface_filter_version") or "",
+        "source_surface_filter_reason": source.get("source_surface_filter_reason") or "",
+        "queue_item_updated_at": source.get("queue_item_updated_at") or source.get("updated_at") or source.get("_ydb_updated_at") or "",
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def attach_live_source_fingerprints(publications: list[dict[str, Any]], source_rows: list[dict[str, Any]]) -> None:
+    sources: dict[str, dict[str, Any]] = {}
+    for source in source_rows:
+        key = canonical_source_key_for_row(source)
+        if key:
+            sources[key] = {**sources.get(key, {}), **source}
+    for row in publications:
+        source = sources.get(canonical_source_key_for_row(row))
+        row["_live_authoritative_source_fingerprint"] = authoritative_source_fingerprint(source)
+        row["_live_authoritative_source_found"] = str(bool(source)).lower()
+
+
 def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
     ydb = ensure_ydb_module()
     endpoint, database = ydb_endpoint_database()
@@ -168,6 +217,11 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     pool = ydb.SessionPool(driver)
     table = ydb_table_path(database)
     out = read_kind_rows(pool, ydb, table, "publication_candidate_item", max(1, int(limit) * 5))
+    source_limit = max(5000, int(os.getenv("REGION_TALK_NOTIFY_SOURCE_SCAN_LIMIT") or "20000"))
+    source_rows = read_kind_rows(pool, ydb, table, "source_queue_item", source_limit)
+    source_rows += read_kind_rows(pool, ydb, table, "source_status_item", source_limit)
+    source_rows += read_kind_rows(pool, ydb, table, "online_source_item", source_limit)
+    attach_live_source_fingerprints(out, source_rows)
     out.sort(key=lambda r: (int(r.get("publication_rank") or 999999), -float(r.get("publication_score") or 0)))
     return ydb, driver, pool, table, out
 
@@ -186,7 +240,7 @@ def read_kind_rows(pool: Any, ydb: Any, table: str, kind: str, limit: int) -> li
         configured_page = int(os.getenv("REGION_TALK_YDB_SELECT_PAGE_SIZE", "200") or "200")
     except Exception:
         configured_page = 200
-    page_size = max(1, min(200, configured_page, max_items))
+    page_size = max(1, min(500, configured_page, max_items))
     prefix = kind + ":"
     prefix_upper = kind + ";"
     after = prefix
@@ -225,6 +279,18 @@ def is_confirmed_publication(row: dict[str, Any]) -> bool:
     Treat both as confirmed so notification stats and sending do not depend on
     an operator XLSX/report-tail rewrite.
     """
+    if str(row.get("publication_tombstone") or "").lower() == "true" or str(row.get("publication_revoked") or "").lower() == "true":
+        return False
+    if str(row.get("publication_eligibility_verdict") or "").lower() != "eligible":
+        return False
+    if str(row.get("publication_eligibility_gate_version") or "") != PUBLICATION_ELIGIBILITY_GATE_VERSION:
+        return False
+    if str(row.get("authoritative_source_fingerprint_version") or "") != AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION:
+        return False
+    stored_fingerprint = str(row.get("authoritative_source_fingerprint") or "")
+    live_fingerprint = str(row.get("_live_authoritative_source_fingerprint") or "")
+    if not stored_fingerprint or not live_fingerprint or stored_fingerprint != live_fingerprint:
+        return False
     candidate_status = str(row.get("publication_candidate_status") or "")
     publication_status = str(row.get("publication_status") or "")
     return candidate_status in {"llm_confirmed", "sent_to_chat", "accepted_for_publication"} or publication_status == "gemini_accept"
@@ -271,6 +337,7 @@ def build_stats_message(limit: int = 20000) -> str:
         or bool(str(r.get("monitoring_exclusion_reason") or "").strip())
     ]
     ko_sources = [r for r in sources if int(float(r.get("ko_posts_found") or 0)) > 0]
+    attach_live_source_fingerprints(publications, sources)
     actual_images = [r for r in images if str(r.get("image_model_input_type") or "") == "actual_image" or str(r.get("image_queue_status") or "") == "actual_scored"]
     strong_images = [r for r in actual_images if float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.66]
     confirmed = [r for r in publications if is_confirmed_publication(r)]

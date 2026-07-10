@@ -1,6 +1,33 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / repaired queue-cache-exact orchestration**: source admission
+  now carries immutable `queue_seq` with full-read/truncation safety, durable
+  batched `telegram_entity_cache_item` rows and one controlled uncached resolve
+  lane. Normal CandidateReport runs consume three ready exact-post links
+  cached/newest-first while still continuing keyword, hashtag, similar and
+  source-history discovery. Exact cooldown/entity-wait/terminal states and
+  manual/keyword/hashtag/similar inflow are reported separately. Source metric
+  populations use 20k read caps, and the isolated CPU BGE-M3 worker default is
+  48 rows with batch size 4.
+- **Region Talk / queue head and lifecycle safety**: exact-post rediscovery no
+  longer resets retry/cooldown/fetched/terminal state; exact-post and image
+  workers scan a broad durable window before selecting their bounded batches.
+  Keyword/fast-check priority now uses a persisted priority lane without
+  renumbering the source ledger, and one-time `queue_seq` migration bypasses
+  the ordinary 80-row live handoff cap while remaining chunked and all-or-fail.
+  Exact-link cache-first ordering also reads the legacy compact
+  `latest_state.telegram_entity_cache` during the row-level cache migration.
+- **Region Talk / shared fail-closed publication eligibility**:
+  CandidateReport signs pre-image rows with
+  `region_talk_publication_eligibility_v1`; ImageDiagnostic leases only current
+  signed accepts; the finalizer joins the authoritative source ledger, refreshes
+  legacy attestations, tombstones/revokes local/spam/unknown rows, and retries
+  Gemini errors only after backoff. Public `t.me/s` fallback is disabled by
+  default, and the notifier sends only current signed eligible confirmations
+  whose authoritative-source fingerprint still matches live YDB state.
+  Orchestrator stats are rendered from the same metric snapshot instead of a
+  second inconsistent YDB aggregation.
 - **Region Talk Channel / local institution source guard**: `Дом китобоя` /
   `domkitoboya` and scanned museum/exhibition/address-heavy Kaliningrad
   institution profiles are now classified as local-region sources before image
@@ -85,9 +112,9 @@
   legacy static seeds, and the source cursor is monotonic so historical pending
   gaps cannot move it backwards and cause repeated low-yield rescans. YDB cursor
   loaders/metrics also prefer canonical source/image cursor rows over retained
-  per-run cursor history rows. The orchestrated CandidateReport profile no
-  longer drains exact post-link rows before source history scans by default,
-  avoiding source-cursor starvation when that queue contains many terminal rows;
+  per-run cursor history rows. The orchestrated CandidateReport profile drains
+  only a bounded ready exact-post batch before source history scans; terminal,
+  cooldown and entity-wait rows cannot starve the source cursor;
   it also uses durable YDB queue rows instead of static CSV seeds whenever the
   live queue exists.
 - **Region Talk Channel / YDB startup contention retry**: CandidateReport YDB

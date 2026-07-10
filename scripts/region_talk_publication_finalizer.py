@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import os
@@ -37,6 +38,7 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
 PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v2"
+AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v1"
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 TERMINAL_PUBLICATION_STATUSES = {
     "gemini_accept",
@@ -174,6 +176,26 @@ def authoritative_source_index(
         if key:
             indexed[key] = source
     return indexed
+
+
+def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
+    if not isinstance(source, dict) or not source:
+        return ""
+    payload = {
+        "version": AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+        "canonical_source_key": canonical_source_key_for_row(source),
+        "source_queue_status": source.get("source_queue_status") or "",
+        "source_scope": source.get("source_scope") or "",
+        "source_geo_class": source.get("source_geo_class") or "",
+        "source_topic_class": source.get("source_topic_class") or "",
+        "source_quick_class": source.get("source_quick_class") or "",
+        "monitoring_exclusion_reason": source.get("monitoring_exclusion_reason") or "",
+        "source_surface_filter_version": source.get("source_surface_filter_version") or "",
+        "source_surface_filter_reason": source.get("source_surface_filter_reason") or "",
+        "queue_item_updated_at": source.get("queue_item_updated_at") or source.get("updated_at") or source.get("_ydb_updated_at") or "",
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -384,6 +406,8 @@ def _json_evidence(value: Any) -> str:
 
 def _eligibility_fields(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     authoritative_source = row.get("_authoritative_source")
+    row["authoritative_source_fingerprint_version"] = AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION
+    row["authoritative_source_fingerprint"] = authoritative_source_fingerprint(authoritative_source)
     try:
         raw = rt.publication_eligibility(row, authoritative_source)
         result = raw if isinstance(raw, dict) else {"verdict": "review", "evidence": {"invalid_helper_result": str(raw)}}
@@ -517,6 +541,21 @@ def verify_rows(
             results.append(row)
             continue
         if not row.get("finalization_trigger"):
+            previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+            attestation_is_current = (
+                str(previous.get("publication_eligibility_verdict") or "") == "eligible"
+                and str(previous.get("publication_eligibility_gate_version") or "")
+                == str(row.get("publication_eligibility_gate_version") or "")
+                and str(previous.get("authoritative_source_fingerprint") or "")
+                == str(row.get("authoritative_source_fingerprint") or "")
+                and str(previous.get("authoritative_source_fingerprint_version") or "")
+                == AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION
+            )
+            if previous and not attestation_is_current:
+                row["llm_attempted_this_run"] = "false"
+                row["finalization_status"] = "terminal"
+                row["next_attempt_after"] = ""
+                results.append(row)
             continue
         if not row.get("text"):
             row["text"] = telegram_public_text(str(row.get("post_url") or ""))
@@ -591,6 +630,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
     fields = [
         "run_id", "updated_at", "last_seen_run_id", "post_url", "original_post_url", "post_url_normalization_version",
         "canonical_source_key", "authoritative_source_found", "source_title", "source_url", "post_date",
+        "authoritative_source_fingerprint", "authoritative_source_fingerprint_version",
         "publication_rank", "publication_pre_score", "publication_status", "publication_candidate_status", "overall_media_score", "postcardness_score",
         "aesthetic_score", "technical_quality_score", "publication_safety_score", "image_queue_status", "image_model_input_type",
         "vector_gate_status", "candidate_score", "source_class_guess", "short_summary", "text", "llm_gate_status",
@@ -664,7 +704,7 @@ def main() -> int:
     parser.add_argument("--run-id", default="")
     parser.add_argument("--max-llm", type=int, default=10)
     parser.add_argument("--limit-images", type=int, default=5000)
-    parser.add_argument("--limit-memory", type=int, default=8000)
+    parser.add_argument("--limit-memory", type=int, default=20000)
     parser.add_argument("--model", default=os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite")
     parser.add_argument("--default-env-var-name", default=os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "artifacts" / "codex" / "region-talk-finalizer")

@@ -286,6 +286,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_YDB_STATE_SNAPSHOT_FILE": os.environ.get("REGION_TALK_YDB_STATE_SNAPSHOT_FILE", ""),
         "REGION_TALK_YDB_MAX_POST_ROWS": os.environ.get("REGION_TALK_YDB_MAX_POST_ROWS", "20000"),
         "REGION_TALK_YDB_MAX_SOURCE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_SOURCE_ROWS", "5000"),
+        "REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT": os.environ.get("REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT", "20000"),
         "REGION_TALK_YDB_MAX_CANDIDATE_ROWS": os.environ.get("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", "5000"),
         "REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS": os.environ.get("REGION_TALK_YDB_PRUNE_LEGACY_QUEUE_PAYLOADS", "1"),
         "REGION_TALK_YDB_PRUNE_MAX_ROWS": os.environ.get("REGION_TALK_YDB_PRUNE_MAX_ROWS", "200"),
@@ -345,6 +346,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_POST_INPUT_MODE": os.environ.get("REGION_TALK_POST_INPUT_MODE", os.environ.get("REGION_TALK_FETCH_MODE", "")),
         "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": os.environ.get("REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST", "1"),
         "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": os.environ.get("REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT", "12"),
+        "REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT": os.environ.get("REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT", "5000"),
         "REGION_TALK_YDB_CANDIDATE_LINK_LIMIT": os.environ.get("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", "180"),
         "REGION_TALK_MAX_IMAGES_PER_POST": os.environ.get("REGION_TALK_MAX_IMAGES_PER_POST", "8"),
         "REGION_TALK_MAX_VLM_CALLS": os.environ.get("REGION_TALK_MAX_VLM_CALLS", "0"),
@@ -352,6 +354,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_TOTAL_REQUESTS_PER_RUN", "2000"),
         "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN", "30"),
         "REGION_TALK_TG_CACHED_ENTITY_ONLY": os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY", "0"),
+        "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": os.environ.get("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", "1"),
         "REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN", "150"),
         "REGION_TALK_HISTORY_SOURCES_TARGET": os.environ.get("REGION_TALK_HISTORY_SOURCES_TARGET", "150"),
         "REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE": os.environ.get("REGION_TALK_TG_MAX_HISTORY_POSTS_PER_SOURCE", "50"),
@@ -360,9 +363,10 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         "REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_MEDIA_DOWNLOADS_PER_RUN", "200"),
         "REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN": os.environ.get("REGION_TALK_TG_MAX_RECOMMENDATION_CALLS_PER_RUN", "250"),
         "REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST", "0"),
-        "REGION_TALK_TG_PUBLIC_WEB_FALLBACK": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "1"),
+        "REGION_TALK_TG_PUBLIC_WEB_FALLBACK": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "0"),
         "REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", "10"),
         "REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS": os.environ.get("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", "20"),
+        "REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION": os.environ.get("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION", "region_talk_publication_eligibility_v1"),
         "REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN": os.environ.get("REGION_TALK_MAX_SIMILAR_SEEDS_PER_RUN", "200"),
         "REGION_TALK_MAX_NEW_SOURCE_PROBES": os.environ.get("REGION_TALK_MAX_NEW_SOURCE_PROBES", "100"),
         "REGION_TALK_DISCOVERY_MODE": os.environ.get("REGION_TALK_DISCOVERY_MODE", "mixed"),
@@ -806,7 +810,7 @@ def main() -> int:
     os.environ.setdefault("REGION_TALK_SEED_FILE", "seed-sources-v2.csv")
     os.environ.setdefault("REGION_TALK_PLACE_LEXICON_FILE", "kaliningrad-place-lexicon-v1.csv")
     os.environ.setdefault("REGION_TALK_PUBLIC_BLOGGER_LINKS_FILE", "public_travel_blogger_channel_links.xlsx")
-    os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "1")
+    os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_FALLBACK", "0")
     os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_MAX_PAGES_PER_SOURCE", "10")
     os.environ.setdefault("REGION_TALK_TG_PUBLIC_WEB_TIMEOUT_SECONDS", "20")
     os.environ.setdefault("REGION_TALK_MIN_POST_DATE", "2026-01-01")
