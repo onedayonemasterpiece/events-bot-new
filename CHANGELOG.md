@@ -13,6 +13,10 @@
   processed KO candidate, non-zero KO ratio below the 0.7 local cutoff) when
   optional profile fields are absent. Sparse, unscanned, all-KO, local and spam
   sources remain fail-closed.
+- **Region Talk / actionable BGE scheduling**: the orchestrator now launches
+  BGE-M3 from the worker-compatible pending sample instead of repeatedly
+  starting zero-row CPU notebooks for legacy/version pair gaps whose BGE PKs
+  already exist.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve

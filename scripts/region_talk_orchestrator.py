@@ -1997,7 +1997,16 @@ def build_decision_plan(
         if current_backlog_key in metrics
         else int(metrics.get("text_vector_e5_without_bge_exact_text_total") or 0)
     )
-    bge_backlog = max(pair_backlog, int(metrics.get("bge_pending_sample_total") or 0))
+    # `bge_pending_sample_total` is produced by the same collect_text_rows()
+    # contract as the worker. Pair-gap metrics may include legacy/version rows
+    # whose BGE PK already exists and cannot be repaired by launching the worker
+    # again. Prefer the actionable sample whenever it is present; use the pair
+    # gap only for older metric snapshots that predate this field.
+    bge_backlog = (
+        int(metrics.get("bge_pending_sample_total") or 0)
+        if "bge_pending_sample_total" in metrics
+        else pair_backlog
+    )
     if bge_backlog >= bge_threshold:
         external_cpu_capacity = max(1, _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
         requested_limit = max(1, _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", external_cpu_capacity))

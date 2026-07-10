@@ -132,7 +132,10 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE": "9",
         }):
             actions = mod.build_decision_plan(
-                {"text_vector_current_version_e5_without_bge_total": 100},
+                {
+                    "text_vector_current_version_e5_without_bge_total": 100,
+                    "bge_pending_sample_total": 100,
+                },
                 target_confirmed=20,
                 bge_threshold=1,
                 image_threshold=1,
@@ -375,9 +378,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertNotIn("launch_bge_m3", [action["action"] for action in actions])
         metrics["text_vector_current_version_e5_without_bge_total"] = 1
         actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertNotIn("launch_bge_m3", [action["action"] for action in actions])
+        metrics["bge_pending_sample_total"] = 1
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
         self.assertIn("launch_bge_m3", [action["action"] for action in actions])
 
-    def test_decision_launches_bge_from_e5_pair_backlog_even_when_sample_metric_missing(self) -> None:
+    def test_decision_does_not_launch_bge_when_worker_sample_is_empty(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(
             {
@@ -394,7 +400,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             bge_threshold=1,
             image_threshold=1,
         )
-        self.assertIn("launch_bge_m3", [action["action"] for action in actions])
+        self.assertNotIn("launch_bge_m3", [action["action"] for action in actions])
 
     def test_regex_ko_diagnostic_keeps_filtered_ko_but_rejects_multiregion(self) -> None:
         mod = load_module()

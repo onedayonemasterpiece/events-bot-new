@@ -346,6 +346,10 @@ Important invariants:
   the paired E5 text hash, and never re-embeds BGE rows. The scan limit is
   intentionally larger than the batch limit because legacy BGE rows can sort
   before E5 rows in YDB.
+  The orchestrator launches this worker from `bge_pending_sample_total`, which
+  is computed by the worker's own `collect_text_rows()` contract. A legacy
+  E5/BGE pair-gap metric alone is not actionable when the BGE PK already exists,
+  so it must not trigger repeated zero-row CPU notebook runs.
 - If a Kaggle kernel is already active, that action is skipped but other
   non-conflicting resources continue (for example active BGE does not block
   ImageDiagnostic or CandidateReport).
