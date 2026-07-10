@@ -876,10 +876,14 @@ When image inputs join multiple source projections, the canonical
 `unified_source_queue` row has precedence over thinner frontier/candidate rows
 with the same URL; otherwise scan counters can be lost and a confirmed external
 source incorrectly falls back to `source_verdict_unknown`.
+The same precedence is fail-closed in the opposite direction: if the canonical
+ledger row is still sparse, an older thin projection cannot override it with a
+stale `source_scope=external` and send the post to image scoring prematurely.
 If an older image row was rejected only because that text/source evidence was
 incomplete, a later eligible pass reactivates it as
 `needs_actual_image_fetch`; only confirmed no-media or unsupported-media
-outcomes remain terminal.
+outcomes remain terminal. This also applies when the eligible row exists only
+in the durable previous image queue and is not repeated in the current batch.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,

@@ -6133,12 +6133,19 @@ def build_image_candidate_queue(
         source_id = str(merged.get("source_id") or "")
         source_url = str(merged.get("source_url") or "")
         source = previous_source_by_id.get(source_id) or previous_source_by_url.get(source_url) or {}
-        for field in [
+        authoritative_source_fields = [
             "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
             "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
-            "source_surface_filter_reason", "monitoring_exclusion_reason", "handle",
-            "source_url", "canonical_url",
-        ]:
+            "source_surface_filter_reason", "monitoring_exclusion_reason",
+        ]
+        # When the canonical ledger has this source, its classification and
+        # scan counters must replace stale/thin candidate-memory projections,
+        # even when an optional class field is empty. This keeps the image gate
+        # identical to the finalizer's authoritative-source verdict.
+        if source:
+            for field in authoritative_source_fields:
+                merged[field] = source.get(field)
+        for field in ["handle", "source_url", "canonical_url"]:
             if field not in merged or merged.get(field) in ("", None):
                 if source.get(field) not in ("", None):
                     merged[field] = source.get(field)
@@ -6188,6 +6195,16 @@ def build_image_candidate_queue(
         row["publication_eligibility_gate_version"] = eligibility.get("gate_version")
         row["publication_eligibility_reason"] = eligibility.get("primary_reason")
         row["publication_eligibility_evidence_json"] = json.dumps(eligibility.get("evidence") or {}, ensure_ascii=False, sort_keys=True)
+        previous_status = str(row.get("image_queue_status") or "")
+        if previous_status in {"rejected_text_gate", "rejected_publication_eligibility"}:
+            row["previous_image_queue_status"] = previous_status
+            row["image_queue_status"] = "needs_actual_image_fetch"
+            row["status_changed_this_run"] = "true"
+            row["last_status_changed_at"] = run_now
+            row["image_eligibility_status"] = ""
+            row["image_eligibility_reason"] = ""
+            row["media_acquisition_status"] = "needs_actual_image_fetch"
+            row["next_action"] = "download_actual_image_bytes_next"
         entries[key] = dict(row)
     media_by_url = {str(r.get("post_url") or ""): r for r in media_rows if r.get("post_url")}
 

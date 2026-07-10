@@ -2728,6 +2728,35 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["previous_image_queue_status"], "rejected_text_gate")
         self.assertEqual(row["publication_eligibility_decision"], "accept")
 
+    def test_image_queue_reactivates_previous_only_publication_rejection(self) -> None:
+        mod = load_module()
+        eligible = {
+            "image_queue_id": "imgq_previous_only",
+            "image_queue_order": 1,
+            "post_url": "https://t.me/travel/3",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "has_media": True,
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "semantic_candidate",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "metadata_only",
+            "image_queue_status": "rejected_publication_eligibility",
+            "image_eligibility_status": "blocked",
+        }
+        rows, _, _ = mod.build_image_candidate_queue(
+            {"image_candidate_queue": {eligible["post_url"]: eligible}},
+            [], [], [], "run-q", "2026-07-07T00:00:00+00:00",
+        )
+        row = next(r for r in rows if r["post_url"] == eligible["post_url"])
+        self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["previous_image_queue_status"], "rejected_publication_eligibility")
+        self.assertEqual(row["image_eligibility_status"], "")
+
     def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
         mod = load_module()
         previous = {
@@ -3847,6 +3876,25 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 "image-gate-run-scanned-source",
                 "2026-07-10T00:00:00+00:00",
             )
+            sparse_canonical_queue, _top4, sparse_metrics = mod.build_image_candidate_queue(
+                {
+                    "unified_source_queue": {
+                        "telegram:travel": {
+                            "source_url": "https://t.me/travel",
+                            "source_quick_class": "candidate_keep",
+                            "source_queue_status": "processed_found_ko_candidate",
+                            "posts_scanned": 1,
+                            "ko_posts_found": 1,
+                            "candidate_posts_found": 1,
+                        }
+                    }
+                },
+                [],
+                [row],
+                [],
+                "image-gate-run-sparse-canonical",
+                "2026-07-10T00:00:00+00:00",
+            )
             scanned_queue, _top3, _metrics3 = mod.build_image_candidate_queue(
                 {
                     "unified_source_queue": {
@@ -3883,6 +3931,9 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(len(scanned_queue), 1)
         self.assertEqual(scanned_queue[0]["publication_eligibility_decision"], "accept")
         self.assertEqual(scanned_queue[0]["posts_scanned"], 12)
+        self.assertEqual(sparse_canonical_queue, [])
+        sparse_reasons = json.loads(sparse_metrics["image_queue_product_block_reasons_json"])
+        self.assertGreaterEqual(sparse_reasons["source_verdict_unknown"], 1)
 
 
 if __name__ == "__main__":
