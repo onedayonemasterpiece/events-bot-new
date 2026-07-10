@@ -3255,6 +3255,78 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["image_queue_rejected_non_region_inputs"], 3)
         self.assertEqual(metrics["image_queue_text_region_confirmed_total"], len(queue))
 
+    def test_image_candidate_queue_preserves_prefetched_vk_media_url(self) -> None:
+        mod = load_module()
+        post_url = "https://vk.com/wall-211445468_273"
+        previous = {"image_candidate_queue": {
+            "vk-prefetched": {
+                "image_queue_id": "vk-prefetched",
+                "image_queue_order": 1,
+                "post_id": "vk:wall-211445468_273",
+                "post_url": post_url,
+                "platform_post_key": "vk:wall-211445468_273",
+                "source_id": "vk:-211445468",
+                "source_title": "Travel diary",
+                "source_url": "https://vk.com/public211445468",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_topic_class": "travel_blogger",
+                "source_quick_class": "candidate_keep",
+                "source_queue_status": "processed_found_ko_candidate",
+                "posts_scanned": 9,
+                "ko_posts_found": 2,
+                "candidate_posts_found": 8,
+                "has_media": "true",
+                "media_count": 6,
+                "kaliningrad_oblast_only_scope": "true",
+                "kaliningrad_mention_role": "main_subject",
+                "is_ad_or_promo": "false",
+                "current_stage": "semantic_candidate",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "image_queue_status": "needs_actual_image_fetch",
+                "image_url_or_local_path": "https://sun9-1.userapi.com/example.jpg",
+                "vk_media_photo_urls": "https://sun9-1.userapi.com/example.jpg|https://sun9-2.userapi.com/example.jpg",
+                "vk_media_prefetch_status": "resolved",
+                "vk_media_prefetch_source": "local_vk_api",
+                "vk_media_prefetch_at": "2026-07-10T13:00:00+00:00",
+            },
+        }}
+        current = [{
+            "post_id": "vk:wall-211445468_273",
+            "post_url": post_url,
+            "platform_post_key": "vk:wall-211445468_273",
+            "source_id": "vk:-211445468",
+            "source_title": "Travel diary",
+            "source_url": "https://vk.com/public211445468",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "source_quick_class": "candidate_keep",
+            "source_queue_status": "processed_found_ko_candidate",
+            "posts_scanned": 9,
+            "ko_posts_found": 2,
+            "candidate_posts_found": 8,
+            "has_media": True,
+            "media_count": 6,
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "current_stage": "semantic_candidate",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+        }]
+
+        queue, _top, _metrics = mod.build_image_candidate_queue(
+            previous, current, [], [], "run-img", "2026-07-10T14:00:00+00:00"
+        )
+
+        row = next(item for item in queue if item.get("post_url") == post_url)
+        self.assertEqual(row["image_url_or_local_path"], "https://sun9-1.userapi.com/example.jpg")
+        self.assertEqual(row["vk_media_prefetch_status"], "resolved")
+        self.assertEqual(row["vk_media_prefetch_source"], "local_vk_api")
+        self.assertEqual(row["media_acquisition_status"], "vk_public_url_ready")
+
     def test_candidate_memory_image_queue_uses_previous_processed_media_and_blocks_local_sources(self) -> None:
         mod = load_module()
         previous = {

@@ -1752,6 +1752,7 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "model_disagreement_score", "image_width", "image_height",
     "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
+    "vk_media_photo_urls", "vk_media_prefetch_status", "vk_media_prefetch_source", "vk_media_prefetch_at",
     "has_media", "media_count", "primary_media_path",
     "image_product_gate_status", "image_product_gate_reason",
     "publication_eligibility_decision", "publication_eligibility_gate_version",
@@ -6289,6 +6290,12 @@ def build_image_candidate_queue(
             status = "needs_actual_image_fetch" if metadata or row.get("has_media") else "not_reviewable_no_media"
         color = "green_found_ko" if status == "actual_scored" else ("blue_cursor" if status == "image_analysis_in_progress" else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko"))
         status_changed = bool(previous_status and previous_status != status)
+        direct_image_ref = (
+            media.get("image_url_or_local_path")
+            or row.get("image_url_or_local_path")
+            or row.get("primary_media_path")
+            or entries[key].get("image_url_or_local_path", "")
+        )
         entries[key].update({
             "previous_image_queue_status": previous_status if status_changed else entries[key].get("previous_image_queue_status", ""),
             "status_changed_this_run": str(status_changed).lower(),
@@ -6333,7 +6340,11 @@ def build_image_candidate_queue(
             "publication_safety_score": media.get("publication_safety_score", row.get("publication_safety_score", entries[key].get("publication_safety_score", ""))),
             "image_model_input_type": "actual_image" if actual else media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
             "image_model_type": media.get("image_model_type", row.get("image_model_type", entries[key].get("image_model_type", ""))),
-            "image_url_or_local_path": media.get("image_url_or_local_path", row.get("primary_media_path", "")),
+            "image_url_or_local_path": direct_image_ref,
+            "vk_media_photo_urls": row.get("vk_media_photo_urls") or entries[key].get("vk_media_photo_urls", ""),
+            "vk_media_prefetch_status": row.get("vk_media_prefetch_status") or entries[key].get("vk_media_prefetch_status", ""),
+            "vk_media_prefetch_source": row.get("vk_media_prefetch_source") or entries[key].get("vk_media_prefetch_source", ""),
+            "vk_media_prefetch_at": row.get("vk_media_prefetch_at") or entries[key].get("vk_media_prefetch_at", ""),
             "has_media": str(has_image_media(row, media)).lower(),
             "media_count": row.get("media_count", media.get("media_count", entries[key].get("media_count", ""))),
             "primary_media_path": row.get("primary_media_path", media.get("primary_media_path", entries[key].get("primary_media_path", ""))),
@@ -6346,7 +6357,7 @@ def build_image_candidate_queue(
             "image_queue_status": status,
             "status_color_hint": color,
             "row_fill_color": color,
-            "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else ("unsupported_media_or_decode_failed" if status == "not_reviewable_unsupported_media" else "no_media_or_not_supported")),
+            "media_acquisition_status": "actual_image_downloaded_and_scored" if actual else ("vk_public_url_ready" if status == "needs_actual_image_fetch" and str(direct_image_ref).startswith("http") else ("needs_actual_image_fetch" if status == "needs_actual_image_fetch" else ("unsupported_media_or_decode_failed" if status == "not_reviewable_unsupported_media" else "no_media_or_not_supported"))),
             "media_acquisition_error_type": "" if actual else (media.get("failure_reason") or row.get("failure_reason") or status),
             "images_scored_actual_count": 1 if actual else 0,
             "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),

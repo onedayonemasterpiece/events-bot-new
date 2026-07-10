@@ -456,7 +456,10 @@ add `image_url_or_local_path`, `vk_media_photo_urls`,
 `vk_media_prefetch_status=ready` and `vk_media_prefetch_source` to the same
 `image_queue_item`. These are acquisition hints only: completion still requires
 ImageDiagnostic to download/decode actual bytes and write
-`image_model_input_type=actual_image` plus `actual_scored`.
+`image_model_input_type=actual_image` plus `actual_scored`. CandidateReport owns
+a merge, not a replacement, for this row: its subsequent text/fusion refresh
+must retain the prefetch URL and provenance until actual scoring or an explicit
+terminal media result supersedes them.
 
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report

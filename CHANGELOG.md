@@ -33,7 +33,9 @@
   photo CDN URLs on the server where the production token is valid (or through
   an explicit read-only Fly proxy during local debugging), then let the
   isolated ImageDiagnostic notebook download and score the actual image instead
-  of repeating IP-bound VK API failures every cycle.
+  of repeating IP-bound VK API failures every cycle. CandidateReport queue
+  refreshes now preserve those URL/provenance fields instead of erasing them
+  before ImageDiagnostic can consume the image.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

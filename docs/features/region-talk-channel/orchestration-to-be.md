@@ -261,7 +261,9 @@ Important invariants:
   photo CDN URLs and persists those URLs in the existing `image_queue_item`.
   Local debugging may explicitly use the existing Fly app as a read-only token
   proxy; no VK token is copied out, and only public attachment URLs are written
-  to YDB. ImageDiagnostic still downloads and scores the actual bytes itself.
+  to YDB. Later CandidateReport queue refreshes must merge and preserve these
+  prefetch fields rather than reconstructing the row without them.
+  ImageDiagnostic still downloads and scores the actual bytes itself.
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The
