@@ -68,13 +68,13 @@ lanes:
     target: serial integration, docs, changelog, regression tests, live baseline/run
     depends_on: [L1, L2, L3, L4]
     execution_mode: serial_after_dependency
-    status: completed_full_region_talk_suite_212_ok_live_loop_23_cycles
+    status: completed_full_region_talk_suite_213_ok_live_loop_23_cycles
 live_acceptance:
   orchestrator_runtime_minutes: 62
   orchestrator_cycles: 23
   candidate_report: discovery_e5_queue_and_compact_ydb_write_ok
   bge_m3: isolated_cpu_batches_written_to_ydb
-  image_diagnostic: three_strictly_attested_rows_downloaded_and_actual_scored
+  image_diagnostic: four_strictly_attested_rows_downloaded_and_actual_scored
   finalizer: three_rows_evaluated_without_gemini_budget_use_and_fail_closed_to_tombstones
   discovery_kept_enabled: true
   public_telegram_web_fallback_used: false
