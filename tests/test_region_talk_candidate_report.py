@@ -508,6 +508,45 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(suffix["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
         self.assertEqual(suffix["source_scope"], "local_region")
 
+    def test_source_surface_filter_routes_dom_kitoboya_as_local_institution(self) -> None:
+        mod = load_module()
+        title = mod.source_surface_terminal_fields({
+            "source_title": "Дом китобоя",
+            "handle": "https://t.me/domkitoboya",
+        })
+        self.assertEqual(title["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(title["source_scope"], "local_region")
+        self.assertIn("дом", title["source_local_hits"])
+
+        profile = mod.source_local_region_terminal_fields({
+            "source_title": "Культурный дневник",
+            "source_url": "https://t.me/culturaldiary",
+            "posts_scanned": 16,
+            "ko_posts_found": 5,
+            "source_text_profile": "\n".join([
+                "Музей Дом китобоя ждём вас на выставке в Калининграде",
+                "Новая выставка и архивные фотографии Калининграда",
+                "Экспозиция открыта, билеты доступны, проспект Мира",
+                "Частный калининградский музей рассказывает о городе",
+            ]),
+        })
+        self.assertEqual(profile["source_queue_status"], mod.LOCAL_REGION_SOURCE_STATUS)
+        self.assertEqual(profile["source_scope"], "local_region")
+        self.assertIn("local_institution_profile", profile["source_surface_filter_reason"])
+
+    def test_image_queue_blocks_dom_kitoboya_source(self) -> None:
+        mod = load_module()
+        reason = mod.image_queue_product_gate_reason({
+            "post_url": "https://t.me/domkitoboya/3370",
+            "source_title": "Дом китобоя",
+            "source_url": "https://t.me/domkitoboya",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "kaliningrad_oblast_only_scope": "true",
+            "kaliningrad_mention_role": "main_subject",
+        })
+        self.assertEqual(reason, "local_kaliningrad_source_for_separate_monitoring")
+
     def test_source_queue_local_signal_overrides_processed_candidate_status(self) -> None:
         mod = load_module()
         now = "2026-07-09T00:00:00+00:00"

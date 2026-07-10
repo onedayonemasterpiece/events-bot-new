@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk Channel / local institution source guard**: `Дом китобоя` /
+  `domkitoboya` and scanned museum/exhibition/address-heavy Kaliningrad
+  institution profiles are now classified as local-region sources before image
+  diagnostics and final Gemini verification. The publication finalizer now
+  reuses the Region Talk source filter instead of its previous weak title-only
+  `source_class_guess`, preventing local museum channels from being accepted as
+  nonlocal travel/blogger candidates.
 - **Region Talk Channel / discovery heartbeat and non-cherry-picked metrics**:
   CandidateReport now emits explicit `keyword_discovery_done` and
   `similar_discovery_done` business heartbeat events with per-run counts instead

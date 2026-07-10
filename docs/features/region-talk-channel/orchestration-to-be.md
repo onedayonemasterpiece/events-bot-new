@@ -509,6 +509,15 @@ find a fresh KO hit"; the source remains pending/lower-priority for normal scan.
 Only explicit local-region or spam surface filters become terminal rejections at
 this stage.
 
+Local/nonlocal source classification must use both surface signals and scanned
+post profile. A source such as `Дом китобоя` / `domkitoboya` is a local
+Kaliningrad institution even though its title does not contain the city name.
+After a source scan, repeated museum/exhibition/address/local-institution
+vocabulary in the post sample is terminal local-source evidence for the
+external-publication funnel. Such sources are routed to the future local-region
+monitoring list and blocked before image diagnostics/final Gemini publication
+verification.
+
 For live YDB runs CandidateReport does not rewrite the entire source queue on
 every handoff. `REGION_TALK_SOURCE_QUEUE_HANDOFF_MAX_ROWS` defaults to 500 and
 the orchestrator currently sets it to 80 with

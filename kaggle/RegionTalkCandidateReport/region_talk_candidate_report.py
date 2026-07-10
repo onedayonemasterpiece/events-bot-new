@@ -88,12 +88,20 @@ LOCAL_REGION_RATIO_MIN_POSTS = 30
 LOCAL_REGION_RATIO_MIN_KO_POSTS = 10
 LOCAL_REGION_RATIO_MIN_KO_RATIO = 0.35
 LOCAL_REGION_RATIO_MIN_CANDIDATE_RATIO = 0.55
+LOCAL_INSTITUTION_PROFILE_MIN_POSTS = 8
+LOCAL_INSTITUTION_PROFILE_MIN_HITS = 5
 SOURCE_LOCAL_TITLE_PATTERNS = [
     r"калининград", r"kaliningrad", r"кёниг", r"кениг", r"kenig", r"koenig", r"konig", r"koenigsberg", r"königsberg", r"\bkgd\b", r"\bkld\b", r"\bklgd\b", r"(?<!\w)39(?!\w)", r"(?<=[a-zа-яё_])39(?!\d)",
     r"зеленоградск", r"светлогорск", r"балтийск", r"янтарн", r"пионерск", r"светлый",
     r"гурьевск", r"гусев", r"черняховск", r"советск", r"неман", r"мамоново",
     r"гвардейск", r"краснознаменск", r"полесск", r"правдинск", r"ладушкин",
     r"славск", r"багратионовск", r"оз[её]рск", r"куршск", r"балтика",
+    r"дом\s+китобоя", r"domkitoboya", r"домкитобоя",
+]
+SOURCE_LOCAL_INSTITUTION_PROFILE_PATTERNS = [
+    r"дом\s+китобоя", r"частн(?:ый|ого|ом)\s+калининградск(?:ий|ого|ом)\s+музе",
+    r"музе[йяею]", r"выставк", r"экспозици", r"архив", r"афиш", r"билет",
+    r"жд[её]м\s+вас", r"пр[- ]?т\s+мира", r"проспект\s+мира",
 ]
 SOURCE_SPAM_SURFACE_PATTERNS = [
     r"ты\s+не\s+сможешь", r"ты\s+не\s+можешь", r"ты\s+не\s+усто(?:ишь|ять)",
@@ -163,6 +171,48 @@ def local_region_ratio_decision(row: dict[str, Any]) -> dict[str, Any]:
             f"ko_ratio:{ko_ratio:.3f},candidate_ratio:{candidate_ratio:.3f}"
         )
         return source_scope_terminal_fields_for_local_region(reason, hits="profile_ratio")
+    return {}
+
+
+def local_institution_profile_decision(row: dict[str, Any]) -> dict[str, Any]:
+    """Detect local KO institutions from scanned source text profile.
+
+    Title/handle markers catch obvious local publics, but institutions such as
+    "Дом китобоя" can look like generic cultural accounts until their posts are
+    scanned. A repeated museum/exhibition/address profile is local-source
+    evidence for Region Talk's external blogger/travel funnel.
+    """
+    try:
+        posts_scanned = int(float(row.get("posts_scanned") or row.get("history_posts_with_dates") or 0))
+    except Exception:
+        posts_scanned = 0
+    if posts_scanned < LOCAL_INSTITUTION_PROFILE_MIN_POSTS:
+        return {}
+    surface = " ".join([
+        str(row.get("source_title") or ""),
+        str(row.get("resolved_title") or ""),
+        str(row.get("source_url") or row.get("canonical_url") or row.get("handle") or ""),
+        str(row.get("source_text_profile") or ""),
+        str(row.get("recent_post_text_sample") or ""),
+    ]).lower()
+    hits: list[str] = []
+    for pattern in SOURCE_LOCAL_INSTITUTION_PROFILE_PATTERNS:
+        try:
+            count = len(re.findall(pattern, surface, flags=re.I))
+        except re.error:
+            count = surface.count(pattern.lower())
+        if count:
+            hits.extend([pattern] * min(count, 3))
+    try:
+        ko_posts = int(float(row.get("ko_posts_found") or 0))
+    except Exception:
+        ko_posts = 0
+    if len(hits) >= LOCAL_INSTITUTION_PROFILE_MIN_HITS and ko_posts >= 1:
+        reason = (
+            "local_institution_profile="
+            f"posts_scanned:{posts_scanned},ko_posts:{ko_posts},institution_hits:{len(hits)}"
+        )
+        return source_scope_terminal_fields_for_local_region(reason, hits=";".join(sorted(set(hits))[:8]))
     return {}
 
 _REGION_TALK_SUPABASE_CLIENT: Any | None = None
@@ -1389,6 +1439,9 @@ def source_local_region_terminal_fields(row: dict[str, Any]) -> dict[str, Any]:
     ratio = local_region_ratio_decision(row)
     if ratio:
         return ratio
+    institution = local_institution_profile_decision(row)
+    if institution:
+        return institution
     return surface
 
 
@@ -5267,7 +5320,12 @@ def build_unified_source_queue(
             or ko_posts > 0
             or candidate_posts > 0
         )
-        surface_fields = source_local_region_terminal_fields({**rec, **srow})
+        source_text_profile = "\n".join(
+            str(r.get("text") or r.get("text_excerpt") or r.get("short_summary") or "")
+            for r in sampled[:40]
+            if str(r.get("text") or r.get("text_excerpt") or r.get("short_summary") or "").strip()
+        )[:12000]
+        surface_fields = source_local_region_terminal_fields({**rec, **srow, "source_text_profile": source_text_profile})
         if not terminal_rejected_status and source_terminal_rejected_status(surface_fields.get("source_queue_status")):
             rec.update(surface_fields)
             previous_queue_status = str(rec.get("source_queue_status") or previous_queue_status)

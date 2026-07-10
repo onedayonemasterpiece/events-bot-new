@@ -74,13 +74,21 @@ def telegram_public_text(url: str, *, timeout: int = 15) -> str:
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
 
 
-def source_class_guess(title: str) -> str:
-    low = (title or "").lower()
-    local_markers = [
-        "калининград", "kenig", "кёниг", "39", "янтарн", "балтийск",
-        "светлогорск", "зеленоградск", "музей", "афиша",
-    ]
-    return "local_region_source" if any(marker in low for marker in local_markers) else "nonlocal_travel_or_general_source"
+def source_class_guess(title: str, url: str = "", row: dict[str, Any] | None = None) -> str:
+    payload = {
+        **(row or {}),
+        "source_title": title,
+        "resolved_title": (row or {}).get("resolved_title") or title,
+        "source_url": url or (row or {}).get("source_url") or "",
+        "canonical_url": url or (row or {}).get("canonical_url") or (row or {}).get("source_url") or "",
+        "handle": url or (row or {}).get("handle") or "",
+    }
+    terminal = rt.source_local_region_terminal_fields(payload)
+    if terminal.get("source_queue_status") == rt.LOCAL_REGION_SOURCE_STATUS:
+        return "local_region_source"
+    if terminal.get("source_queue_status") == rt.SPAM_SOURCE_STATUS:
+        return "spam_source_reject"
+    return "nonlocal_travel_or_general_source"
 
 
 def publication_pre_score(row: dict[str, Any]) -> float:
@@ -129,7 +137,11 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
                 if publication.get(key) not in (None, ""):
                     row[key] = publication.get(key)
             row["existing_publication_candidate"] = "true"
-        row["source_class_guess"] = source_class_guess(str(row.get("source_title") or ""))
+        row["source_class_guess"] = source_class_guess(
+            str(row.get("source_title") or ""),
+            str(row.get("source_url") or ""),
+            row,
+        )
         row["short_summary"] = memory.get("short_summary") or image.get("short_summary") or ""
         row["text"] = memory.get("text") or memory.get("text_excerpt") or ""
         row["publication_pre_score"] = publication_pre_score(row)
