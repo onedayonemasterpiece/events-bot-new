@@ -2461,29 +2461,14 @@ def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *
             ensure_ydb_kv_table(ydb, session, table_path)
 
         pool.retry_operation_sync(ensure_table)
-        column_types = (
-            ydb.BulkUpsertColumns()
-            .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
-            .add_column("kind", ydb.OptionalType(ydb.PrimitiveType.Utf8))
-            .add_column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json))
-            .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        return ydb_bulk_upsert_json_many(
+            driver,
+            ydb,
+            table_path,
+            items,
+            now,
+            chunk_size=getenv_int("REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE", 500),
         )
-        bulk_rows = [
-            {
-                "pk": pk,
-                "kind": kind,
-                "payload_json": json.dumps(payload, ensure_ascii=False),
-                "updated_at": now,
-            }
-            for pk, kind, payload in items
-        ]
-        chunk_size = max(1, getenv_int("REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE", 500))
-        written = 0
-        for start in range(0, len(bulk_rows), chunk_size):
-            chunk = bulk_rows[start:start + chunk_size]
-            driver.table_client.bulk_upsert(table_path, chunk, column_types)
-            written += len(chunk)
-        return written
     except Exception as exc:
         _record_ydb_online_write_failure(exc, label="source_queue_admission_sequence_repair")
         print(f"[region-talk] source_queue_sequence_repair_failed {type(exc).__name__}: {str(exc)[:180]}", flush=True)
@@ -2975,6 +2960,47 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
             tx.execute(query, {"$pk": pk, "$kind": kind, "$payload_json": json.dumps(payload, ensure_ascii=False), "$updated_at": updated_at}, commit_tx=False, settings=settings)
             written += 1
         tx.commit(settings=settings)
+    return written
+
+
+def ydb_bulk_upsert_json_many(
+    driver: Any,
+    ydb: Any,
+    table_path: str,
+    rows: list[tuple[str, str, dict[str, Any]]],
+    updated_at: str,
+    *,
+    chunk_size: int = 500,
+) -> int:
+    """Write independent KV rows through YDB BulkUpsert.
+
+    This is for large snapshot/backfill batches that do not require one atomic
+    transaction. OLTP transitions continue to use ``ydb_upsert_json_many``.
+    """
+    if not rows:
+        return 0
+    column_types = (
+        ydb.BulkUpsertColumns()
+        .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("kind", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        .add_column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json))
+        .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+    )
+    bulk_rows = [
+        {
+            "pk": pk,
+            "kind": kind,
+            "payload_json": json.dumps(payload, ensure_ascii=False),
+            "updated_at": updated_at,
+        }
+        for pk, kind, payload in rows
+    ]
+    written = 0
+    chunk_size = max(1, int(chunk_size or 500))
+    for start in range(0, len(bulk_rows), chunk_size):
+        chunk = bulk_rows[start:start + chunk_size]
+        driver.table_client.bulk_upsert(table_path, chunk, column_types)
+        written += len(chunk)
     return written
 
 
@@ -3552,7 +3578,14 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                             row_items.append(("queue_cursor:" + str(name), "queue_cursor", item))
                     row_items.append(("queue_metrics:latest", "queue_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "queue_cursors": compact.get("queue_cursors") or {}, "source_queue_total": len(compact.get("unified_source_queue") or {}), "image_queue_total": len(compact.get("image_candidate_queue") or {})}))
                 compact["_ydb_row_level_publication_candidate_items_written"] = len(compact.get("publication_candidate_queue") or {})
-                compact["_ydb_row_level_items_written"] = ydb_upsert_json_many(session, ydb, table_path, row_items, updated_at, chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 100))
+                compact["_ydb_row_level_items_written"] = ydb_bulk_upsert_json_many(
+                    driver,
+                    ydb,
+                    table_path,
+                    row_items,
+                    updated_at,
+                    chunk_size=getenv_int("REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE", 500),
+                )
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
             pool.retry_operation_sync(op)

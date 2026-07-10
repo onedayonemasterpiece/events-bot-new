@@ -5,6 +5,8 @@
   `queue_seq` repair now uses YDB `BulkUpsert` in bounded 500-row requests
   instead of executing one YQL statement per source row, preventing a one-time
   7k-row admission migration from consuming most of a CandidateReport run.
+  Large independent compact-snapshot row batches use the same bulk path, while
+  transactional live queue/status transitions retain the OLTP writer.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve

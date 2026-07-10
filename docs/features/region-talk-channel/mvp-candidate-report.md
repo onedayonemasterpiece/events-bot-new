@@ -857,6 +857,10 @@ The exceptional one-time immutable `queue_seq` migration still persists the
 complete ledger, but uses YDB `BulkUpsert` in bounded chunks (default 500 via
 `REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE`) so migration cost is based on
 bulk requests rather than thousands of per-row transactional executions.
+Likewise, the final compact-state row projection uses bounded YDB bulk writes
+(`REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE`, default 500) because those
+independent stable-key snapshots do not require one cross-row transaction.
+Live queue transitions and heartbeats keep the transactional OLTP writer.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,
