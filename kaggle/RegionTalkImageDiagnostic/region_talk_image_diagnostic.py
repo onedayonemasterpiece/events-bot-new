@@ -19,7 +19,7 @@ IMAGE_TERMINAL_SKIP_STATUSES = {
     "rejected_text_gate",
 }
 PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 

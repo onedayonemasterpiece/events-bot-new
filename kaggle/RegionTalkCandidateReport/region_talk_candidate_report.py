@@ -1752,6 +1752,7 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "model_disagreement_score", "image_width", "image_height",
     "image_model_input_type", "image_model_type", "media_acquisition_status", "media_fetch_status",
     "media_acquisition_error_type", "media_fetch_error", "image_url_or_local_path",
+    "media_kind", "manual_media_review_required", "video_manual_review_eligible",
     "vk_media_photo_urls", "vk_media_prefetch_status", "vk_media_prefetch_source", "vk_media_prefetch_at",
     "has_media", "media_count", "primary_media_path",
     "image_product_gate_status", "image_product_gate_reason",
@@ -1772,6 +1773,9 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
     "media_count", "text_hash", "text_excerpt_hash", "text_excerpt", "short_summary", "source_url", "handle",
     "fetch_status", "post_observation_status", "discovery_method", "discovery_priority",
     "keyword_hit_query", "keyword_hit_hashtag", "ydb_candidate_link_kind", "ydb_candidate_link_pk",
+    "drop_gate", "rejection_reason", "rejection_reason_primary", "rejection_reason_details",
+    "vector_content_type", "vector_rejection_reason", "text_vector_fusion_status",
+    "media_kind", "manual_media_review_required", "video_manual_review_eligible",
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
@@ -1789,6 +1793,8 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
     "has_media", "media_count", "primary_media_path", "image_status",
     "image_model_input_type", "image_queue_status", "overall_media_score", "postcardness_score",
     "aesthetic_score", "image_publication_ready", "image_reviewable",
+    "why_not_publication_ready", "media_kind", "manual_media_review_required",
+    "video_manual_review_eligible",
 ]
 PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
@@ -1796,7 +1802,8 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "post_date", "short_summary", "why_selected", "why_not_selected", "matched_place_names",
     "candidate_score", "publication_score", "visual_score", "text_story_score", "diversity_penalty",
     "overall_media_score", "postcardness_score", "aesthetic_score", "image_model_input_type",
-    "image_queue_status", "vector_gate_status", "vector_content_type", "vector_positive_score",
+    "image_queue_status", "media_kind", "media_review_mode", "manual_media_review_required",
+    "video_manual_review_eligible", "vector_gate_status", "vector_content_type", "vector_positive_score",
     "publication_llm_status", "publication_llm_decision", "publication_llm_reason",
     "publication_llm_model", "visual_confirmation_source", "goal_stop_candidate", "sent_to_chat",
     "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
@@ -6503,6 +6510,28 @@ def publication_goal_defaults(previous_state: dict[str, Any], *, run_now: str) -
     }
 
 
+VIDEO_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv")
+
+
+def is_video_media_candidate(row: dict[str, Any]) -> bool:
+    """Return true only for durable evidence that the unsupported media is video.
+
+    Unsupported documents/audio remain rejected. Telegram ImageDiagnostic
+    records the original suffix in ``media_fetch_error`` (for example
+    ``telegram media is not an image: .mp4``), which lets the publication
+    funnel route video to explicit operator review without pretending it was
+    image-scored.
+    """
+    media_kind = str(row.get("media_kind") or row.get("media_type") or "").strip().lower()
+    if media_kind in {"video", "telegram_video", "vk_video"}:
+        return True
+    evidence = " ".join(str(row.get(key) or "") for key in [
+        "media_fetch_error", "media_acquisition_error_type", "primary_media_path",
+        "image_url_or_local_path", "unsupported_media_path",
+    ]).lower()
+    return any(suffix in evidence for suffix in VIDEO_MEDIA_SUFFIXES)
+
+
 def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     if not str(row.get("post_url") or "").strip():
         return False, "missing_post_url"
@@ -6519,6 +6548,8 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "ad_or_promo"
     if str(row.get("vector_gate_status") or "").startswith("vector_reject"):
         return False, str(row.get("vector_gate_status") or "vector_reject")
+    if is_video_media_candidate(row):
+        return True, ""
     if str(row.get("image_model_input_type") or "") != "actual_image":
         return False, "actual_image_required"
     if str(row.get("image_queue_status") or "") not in {"", "actual_scored"}:
@@ -6532,7 +6563,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = (
     os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
-    or "region_talk_publication_eligibility_v1"
+    or "region_talk_publication_eligibility_v2"
 )
 PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
 PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"
@@ -6613,11 +6644,12 @@ def publication_eligibility(
         str(merged.get("image_model_input_type") or "") == "actual_image"
         and str(merged.get("image_queue_status") or "") in {"", "actual_scored"}
     )
+    video_manual_review = is_video_media_candidate(merged)
     if require_actual_image is None:
-        require_actual_image = actual_image_scored
+        require_actual_image = actual_image_scored or video_manual_review
     if require_actual_image:
         base_ok, base_reason = _publication_candidate_base_ok(merged)
-        eligibility_phase = "publication"
+        eligibility_phase = "publication_video_manual_review" if video_manual_review else "publication"
     else:
         has_media = _rt_bool(merged.get("has_media")) or _rt_float(merged.get("media_count")) > 0 or bool(
             str(merged.get("primary_media_path") or merged.get("image_url_or_local_path") or "").strip()
@@ -6642,6 +6674,8 @@ def publication_eligibility(
         "text_vector_fusion_status": merged.get("text_vector_fusion_status") or "",
         "image_model_input_type": merged.get("image_model_input_type") or "",
         "image_queue_status": merged.get("image_queue_status") or "",
+        "media_kind": "video" if video_manual_review else (merged.get("media_kind") or ""),
+        "manual_media_review_required": video_manual_review,
         "eligibility_phase": eligibility_phase,
     }
     if source_verdict == PUBLICATION_SOURCE_CONFIRMED_REJECTED:
@@ -6670,6 +6704,7 @@ def publication_eligibility(
         "primary_reason": primary_reason,
         "evidence": evidence,
         "gate_version": PUBLICATION_ELIGIBILITY_GATE_VERSION,
+        "media_review_mode": "operator_video_review" if video_manual_review else "scored_actual_image",
     }
 
 
@@ -8321,6 +8356,41 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     if not url:
                         continue
                     rows.append({"_pk": pk, "_kind": kind, **payload, "post_url": url})
+            # Post-link rows were discovered before some sources received a
+            # terminal local/spam classification. Join the authoritative
+            # source ledger before selecting exact-fetch work so rejected
+            # sources are terminalized instead of consuming Telegram calls.
+            source_by_key: dict[str, dict[str, Any]] = {}
+            for source_kind in ("source_queue_item", "source_status_item", "online_source_item"):
+                source_items = ydb_select_kind_items(
+                    session,
+                    ydb,
+                    table_path,
+                    source_kind,
+                    limit=getenv_int("REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT", 20000),
+                )
+                for source in source_items.values():
+                    key = str(source.get("canonical_source_key") or "").strip()
+                    if not key:
+                        continue
+                    current = source_by_key.setdefault(key, {})
+                    for field, value in source.items():
+                        if value not in (None, ""):
+                            current[field] = value
+            authoritative_fields = {
+                "source_queue_status", "source_scope", "source_geo_class", "source_topic_class",
+                "source_quick_class", "source_surface_filter_version", "source_surface_filter_reason",
+                "source_local_hits", "source_spam_hits", "source_spam_hashtags",
+                "source_spoiler_entity_count", "monitoring_exclusion_reason",
+            }
+            for row in rows:
+                if str(row.get("_kind") or "") != "post_link_queue_item":
+                    continue
+                source = source_by_key.get(str(row.get("canonical_source_key") or row.get("source_key") or "").strip())
+                if source:
+                    for field in authoritative_fields:
+                        if field in source:
+                            row[field] = source.get(field)
             cached_handles: set[str] = set()
             cache_items = ydb_select_kind_items(
                 session,
@@ -9113,7 +9183,7 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     return text[:max(300, limit)]
 
 
-REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v2"
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v3"
 
 
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
@@ -9131,6 +9201,9 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "source_geo_class",
             "source_topic_class",
             "publication_text_story_score",
+            "media_kind",
+            "media_review_mode",
+            "manual_media_review_required",
         ]
         if evidence.get(key) not in (None, "")
     }
@@ -9138,13 +9211,14 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
         "task": "Return JSON: final Region Talk verifier for one Telegram/VK post.",
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "rules": [
-            "accept only if Kaliningrad Oblast is the main subject",
-            "reject ads/promos/events/news/trash and multi-region roundups where Kaliningrad is one item",
-            "accept only a firsthand visit or attributed subscriber report",
-            "accept only with personal emotion/review AND a concrete memorable, unusual, or useful detail",
-            "reject generic cards, coordinates, official routes, and impersonal promotion even with a good image",
-            "needs_review if text, visit/authorship, or actual-image evidence is insufficient",
-            "a single-location KO card is not a roundup but still needs experience and story value",
+            "accept only when Kaliningrad Oblast is the main subject",
+            "reject ads, news/events/trash and multi-region roundups",
+            "require a firsthand visit or attributed subscriber report",
+            "require personal emotion/review and one memorable or useful detail",
+            "reject generic cards, coordinates, official routes and impersonal promotion",
+            "needs_review when text or authorship evidence is insufficient",
+            "a single-location KO card still needs experience and story value",
+            "operator_video_review: judge text only; missing image scores are allowed and video quality is unverified",
         ],
         "evidence": slim_evidence,
         "post": {

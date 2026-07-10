@@ -750,6 +750,10 @@ ImageDiagnostic writes terminal
 `media_acquisition_status=unsupported_media_or_decode_failed`. CandidateReport
 preserves that terminal status on later queue rebuilds, so an `.mp4` post cannot
 be repeatedly re-leased as `needs_actual_image_fetch` and starve actual photos.
+The `.mp4` row is terminal only in ImageDiagnostic. A confirmed-external,
+KO-only, fused E5+BGE text candidate may continue to the finalizer as explicit
+manual video review; Gemini checks text and the operator watches the linked
+video in the review chat. No visual score is fabricated.
 The orchestrator exposes terminal image counters
 `image_not_reviewable_no_media_total`,
 `image_not_reviewable_unsupported_media_total` and

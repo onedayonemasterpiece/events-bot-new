@@ -535,6 +535,33 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publics_keyword_with_ko_candidates_total"], 1)
         self.assertEqual(metrics["publics_keyword_pending_after_cursor_total"], 1)
         self.assertEqual(metrics["publics_keyword_ko_yield_percent"], 50)
+        self.assertEqual(metrics["keyword_sources_with_preliminary_candidates_total"], 0)
+        self.assertEqual(metrics["keyword_sources_with_confirmed_ko_posts_total"], 1)
+        self.assertEqual(metrics["keyword_external_sources_with_confirmed_ko_posts_total"], 1)
+
+    def test_fast_check_exact_metrics_separate_keyword_match_from_strict_accept(self) -> None:
+        mod = load_module()
+        sources = [
+            {"fast_check_status": "ko_hit", "fast_check_hit_post_url": "https://t.me/a/1", "source_queue_status": "processed_found_ko_candidate"},
+            {"fast_check_status": "ko_hit", "fast_check_hit_post_url": "https://t.me/b/2", "source_queue_status": "processed_found_ko_candidate"},
+        ]
+        processed = [
+            {"post_url": "https://t.me/a/1", "updated_at": "2", "fresh_enough": True, "kaliningrad_oblast_only_scope": True, "vector_gate_status": "vector_accept_candidate"},
+            {"post_url": "https://t.me/b/2", "updated_at": "2", "fresh_enough": True, "kaliningrad_oblast_only_scope": False, "vector_gate_status": "vector_reject_multi_region_roundup"},
+        ]
+        candidates = [{"post_url": "https://t.me/a/1", "updated_at": "3", "kaliningrad_oblast_only_scope": True, "vector_gate_status": "vector_accept_candidate", "text_vector_fusion_status": "fused_e5_bge_m3"}]
+        images = [{"post_url": "https://t.me/a/1", "media_fetch_error": "telegram media is not an image: .mp4"}]
+        vectors = [
+            {"post_url": "https://t.me/a/1", "model_short": "e5"}, {"post_url": "https://t.me/a/1", "model_short": "bge_m3"},
+            {"post_url": "https://t.me/b/2", "model_short": "e5"}, {"post_url": "https://t.me/b/2", "model_short": "bge_m3"},
+        ]
+        metrics = mod._fast_check_exact_post_metrics(sources, processed, candidates, images, [], vectors)
+        self.assertEqual(metrics["fast_check_keyword_match_sources_total"], 2)
+        self.assertEqual(metrics["fast_check_exact_posts_processed_unique_total"], 2)
+        self.assertEqual(metrics["fast_check_exact_posts_dual_vectorized_total"], 2)
+        self.assertEqual(metrics["fast_check_exact_posts_strict_text_accepted_total"], 1)
+        self.assertEqual(metrics["fast_check_exact_posts_video_manual_review_total"], 1)
+        self.assertEqual(metrics["fast_check_exact_posts_text_rejection_reasons"], {"vector_reject_multi_region_roundup": 1})
 
     def test_keyword_source_metrics_include_keyword_edge_targets(self) -> None:
         mod = load_module()
@@ -866,7 +893,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             "publication_sent_total": 7,
         })
         self.assertIn("canonical population: 7055", text)
-        self.assertIn("С KO evidence: 91", text)
+        self.assertIn("Sources with broad KO/candidate evidence (legacy): 91", text)
         self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
         self.assertIn("Publication total/confirmed/sent/ready: 19/7/7/0", text)
 

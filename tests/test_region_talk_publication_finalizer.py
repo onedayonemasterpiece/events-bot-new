@@ -197,6 +197,54 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(finalized["finalization_trigger"], "")
         self.assertEqual(never_finalized["finalization_trigger"], "never_finalized")
 
+    def test_read_live_rows_includes_video_for_manual_operator_review(self) -> None:
+        mod = self.mod
+        source = external_source("videotravel")
+        kinds = {
+            "image_queue_item": {
+                "image:video": {
+                    "post_url": "https://t.me/videotravel/7",
+                    "source_url": "https://t.me/videotravel",
+                    "source_title": "Video travel",
+                    "platform": "telegram",
+                    "image_queue_status": "not_reviewable_unsupported_media",
+                    "image_model_input_type": "metadata_only",
+                    "media_fetch_error": "telegram media is not an image: .mp4",
+                    "updated_at": "2026-07-10T08:00:00+00:00",
+                },
+            },
+            "candidate_memory_item": {
+                "memory:video": {"post_url": "https://t.me/videotravel/7", "text_excerpt": "Поездка в Калининград"},
+            },
+            "publication_candidate_item": {},
+            "source_queue_item": {"source:videotravel": source},
+            "source_status_item": {},
+            "online_source_item": {},
+        }
+
+        class Pool:
+            def retry_operation_sync(self, operation):
+                return operation(object())
+
+        pool = Pool()
+
+        class Ydb:
+            def SessionPool(self, _driver):
+                return pool
+
+        with (
+            mock.patch.object(mod.rt, "ydb_connect", return_value=(Ydb(), object(), object())),
+            mock.patch.object(mod.rt, "ydb_kv_table_path", return_value="table"),
+            mock.patch.object(mod.rt, "ydb_select_kind_items", side_effect=lambda _s, _y, _t, kind, limit: kinds[kind]),
+            mock.patch.object(mod.rt, "utc_now_iso", return_value="2026-07-10T09:00:00+00:00"),
+        ):
+            _ydb, _driver, _pool, _table, rows = mod.read_live_rows(100, 100)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["media_kind"], "video")
+        self.assertEqual(rows[0]["media_review_mode"], "operator_video_review")
+        self.assertEqual(rows[0]["manual_media_review_required"], "true")
+
     def test_eligibility_helper_receives_authoritative_source_and_fields_persist(self) -> None:
         mod = self.mod
         row = candidate_row()

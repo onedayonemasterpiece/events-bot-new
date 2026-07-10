@@ -38,7 +38,7 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 
 
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
-PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v3"
+PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v4"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 TERMINAL_PUBLICATION_STATUSES = {
@@ -443,11 +443,15 @@ def source_class_guess(title: str, url: str = "", row: dict[str, Any] | None = N
 
 def publication_pre_score(row: dict[str, Any]) -> float:
     nonlocal_bonus = 0.35 if row.get("source_class_guess") == "nonlocal_travel_or_general_source" else -0.2
+    video_manual_review = rt.is_video_media_candidate(row)
     visual = float(row.get("overall_media_score") or 0)
     postcard = float(row.get("postcardness_score") or 0)
     candidate = float(row.get("candidate_score") or 0)
     vector = 0.12 if row.get("vector_gate_status") == "vector_accept_candidate" else 0.06
-    return round(nonlocal_bonus + visual * 0.45 + postcard * 0.20 + candidate * 0.15 + vector, 4)
+    # Video has no image-model score by design. Keep it below a strong scored
+    # photo, but do not rank it as zero-quality before the operator can watch it.
+    manual_video = 0.18 if video_manual_review else 0.0
+    return round(nonlocal_bonus + visual * 0.45 + postcard * 0.20 + candidate * 0.15 + vector + manual_video, 4)
 
 
 def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: bool = False) -> tuple[Any, Any, Any, str, list[dict[str, Any]]]:
@@ -485,7 +489,9 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
     now_iso = rt.utc_now_iso()
     rows_by_url: dict[str, dict[str, Any]] = {}
     for image in images_by_pk.values():
-        if image.get("image_queue_status") != "actual_scored" or image.get("image_model_input_type") != "actual_image":
+        actual_image = image.get("image_queue_status") == "actual_scored" and image.get("image_model_input_type") == "actual_image"
+        video_manual_review = rt.is_video_media_candidate(image)
+        if not actual_image and not video_manual_review:
             continue
         original_post_url = str(image.get("post_url") or "")
         post_url = normalize_post_url(original_post_url)
@@ -494,6 +500,11 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
         memory = memory_by_url.get(post_url, {})
         publication = publication_by_url.get(post_url, {})
         row = {**memory, **image}
+        if video_manual_review:
+            row["media_kind"] = "video"
+            row["manual_media_review_required"] = "true"
+            row["video_manual_review_eligible"] = "true"
+            row["media_review_mode"] = "operator_video_review"
         row["original_post_url"] = original_post_url
         row["post_url"] = post_url
         row["post_url_normalization_version"] = POST_URL_NORMALIZATION_VERSION
@@ -869,6 +880,9 @@ def verify_rows(
             "source_geo_class": row.get("source_class_guess"),
             "source_topic_class": row.get("source_topic_class") or "travel/general",
             "publication_text_story_score": row.get("candidate_score"),
+            "media_kind": row.get("media_kind"),
+            "media_review_mode": row.get("media_review_mode"),
+            "manual_media_review_required": row.get("manual_media_review_required"),
         }
         print(
             f"[region-talk-finalizer] Gemini {llm_calls}/{max(0, max_llm)} {row.get('post_url')} "
@@ -922,6 +936,7 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "authoritative_source_fingerprint", "authoritative_source_fingerprint_version",
         "publication_rank", "publication_pre_score", "publication_status", "publication_candidate_status", "overall_media_score", "postcardness_score",
         "aesthetic_score", "technical_quality_score", "publication_safety_score", "image_queue_status", "image_model_input_type",
+        "media_kind", "media_review_mode", "manual_media_review_required", "video_manual_review_eligible",
         "vector_gate_status", "candidate_score", "source_class_guess", "short_summary", "text", "llm_gate_status",
         "llm_decision", "llm_reason", "llm_model", "llm_limit_source", "content_type", "visit_evidence_type",
         "has_firsthand_visit_evidence", "emotion_or_impression_evidence", "review_or_opinion_evidence",
@@ -1059,7 +1074,9 @@ def main() -> int:
     shortlist_artifact = write_xlsx(out_dir / "region-talk-publication-shortlist.xlsx", verified, rows, include_unverified=50)
     payload = {
         "run_id": run_id,
-        "actual_scored_rows": len(rows),
+        "finalizer_input_rows": len(rows),
+        "actual_scored_rows": sum(1 for row in rows if row.get("image_queue_status") == "actual_scored" and row.get("image_model_input_type") == "actual_image"),
+        "video_manual_review_rows": sum(1 for row in rows if rt.is_video_media_candidate(row)),
         "llm_calls": len([row for row in verified if row.get("llm_attempted_this_run") == "true"]),
         "accepted_new": sum(1 for row in verified if row.get("publication_status") == "gemini_accept"),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
@@ -1078,7 +1095,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "actual_scored_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

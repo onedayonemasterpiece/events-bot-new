@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / honest discovery-to-publication metrics and video review**:
+  fast-check keyword matches are now separated from exact-post fetch, dual
+  vectorization, strict text acceptance, media and publication conversion;
+  keyword metrics distinguish preliminary candidates from confirmed KO and
+  confirmed external KO sources. Strict text-passed videos bypass image scoring
+  only as explicit operator-video-review candidates, while documents/audio stay
+  rejected; rejection reasons are persisted in compact post state and the
+  publication eligibility contract advances to v2.
 - **Region Talk / actionable dual-vector coverage**: raw E5/BGE coverage is
   retained, while metrics now separately expose ultra-short E5 rows below the
   BGE input minimum, actionable unpaired rows and actionable dual coverage.

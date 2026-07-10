@@ -19,8 +19,8 @@ A post can enter `publication_candidate_item` only when all of the following are
 - the source is not a pure Kaliningrad-local channel (`source_geo_class != kaliningrad_local`); local channels are kept for a separate future monitoring lane;
 - the source looks like a nonlocal blogger/travel/media/personal source, not local/federal news or tours/ads;
 - the text/vector gate does not reject the post as news, ad/promo, other-region travel, multi-region roundup, or low substance;
-- RegionTalkImageDiagnostic has written actual-image scores (`image_model_input_type=actual_image`, `image_queue_status=actual_scored`);
-- image scores pass publication thresholds (`REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE`, default `0.66`; `REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE`, default `0.55`);
+- for photos, RegionTalkImageDiagnostic has written actual-image scores (`image_model_input_type=actual_image`, `image_queue_status=actual_scored`) and they pass the publication thresholds (`REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE`, default `0.66`; `REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE`, default `0.55`);
+- for a positively identified video (`.mp4/.mov/.m4v/.webm/.avi/.mkv`), image scores are intentionally absent: only a strict external-source + KO-only + E5/BGE text pass may enter Gemini, and the accepted link is marked `media_review_mode=operator_video_review` for manual watching in the operator chat; unsupported documents/audio do not receive this exception;
 - Gemini Lite final verification accepts the text criteria through the Supabase google_ai reserve/limiter.
 
 `RegionTalkCandidateReport` owns discovery, E5, strict current-text E5+BGE
@@ -30,6 +30,40 @@ the visual scorer and writer of actual-image evidence. The local
 Gemini publication verification and `publication_candidate_item` terminal
 outcomes in the orchestrated path; CandidateReport's Gemini modes are disabled
 by the orchestrator.
+
+Video is not treated as a weak image and is never assigned a fabricated visual
+score. Gemini verifies only the text/product criteria. The notifier sends a
+Gemini-confirmed video link to the same operator chat, where the operator makes
+the visual/video-quality decision manually.
+
+## Honest funnel metrics
+
+Discovery matches and confirmed post decisions are different grains and must
+not be added together. The operator surface uses these stages:
+
+1. `fast_check_keyword_match_sources_total` — sources where preflight found a
+   literal query hit; this is not a confirmed KO post.
+2. `fast_check_exact_hit_post_urls_total` / `fast_check_exact_posts_processed_unique_total`
+   — exact hit links persisted and then fetched/scored.
+3. `fast_check_exact_posts_dual_vectorized_total` — exact posts with both E5
+   and BGE-M3.
+4. `fast_check_exact_posts_strict_text_accepted_total` and
+   `fast_check_exact_posts_text_rejected_total` plus
+   `fast_check_exact_posts_text_rejection_reasons` — the real text-gate result.
+5. `fast_check_exact_posts_image_queue_total` and
+   `fast_check_exact_posts_video_manual_review_total` — separate photo and
+   manual-video paths.
+6. `fast_check_exact_posts_publication_queue_total`,
+   `publication_confirmed_total`, `publication_sent_total` — Gemini and chat
+   conversion.
+
+Keyword source metrics likewise distinguish
+`keyword_sources_with_preliminary_candidates_total` from
+`keyword_sources_with_confirmed_ko_posts_total` and the narrower
+`keyword_external_sources_with_confirmed_ko_posts_total`. The legacy
+`publics_keyword_with_ko_candidates_total` remains only for compatibility and
+must be labelled broad/legacy because `candidate_posts_found` is not confirmed
+KO evidence.
 
 If a strong actual-image row is blocked only because its source has fewer than
 five sampled posts and therefore has no durable external/local verdict, the

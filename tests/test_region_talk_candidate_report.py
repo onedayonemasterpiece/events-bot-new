@@ -3552,7 +3552,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(env["REGION_TALK_TG_SIMILAR_DELAY_MAX_SECONDS"], "45")
             self.assertEqual(env["REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT"], "20000")
             self.assertEqual(env["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
-            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v1")
+            self.assertEqual(env["REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION"], "region_talk_publication_eligibility_v2")
         finally:
             for key, value in old.items():
                 if value is None:
@@ -4088,7 +4088,38 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(scanned_all_ko["eligible"])
         self.assertEqual(scanned_all_ko["primary_reason"], "source_verdict_unknown")
         self.assertFalse(spam["eligible"])
-        self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version"})
+        self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version", "media_review_mode"})
+
+    def test_publication_eligibility_routes_strict_text_video_to_operator_review(self) -> None:
+        mod = load_module()
+        video = {
+            "post_url": "https://t.me/travel/2",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "travel_blogger",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_queue_status": "not_reviewable_unsupported_media",
+            "image_model_input_type": "metadata_only",
+            "has_media": True,
+            "media_fetch_error": "telegram media is not an image: .mp4",
+        }
+        accepted = mod.publication_eligibility(video)
+        wrong_scope = mod.publication_eligibility({**video, "kaliningrad_oblast_only_scope": False})
+        document = mod.publication_eligibility(
+            {**video, "media_fetch_error": "telegram media is not an image: .pdf"},
+            require_actual_image=True,
+        )
+        self.assertTrue(accepted["eligible"])
+        self.assertEqual(accepted["media_review_mode"], "operator_video_review")
+        self.assertEqual(accepted["evidence"]["eligibility_phase"], "publication_video_manual_review")
+        self.assertFalse(wrong_scope["eligible"])
+        self.assertEqual(wrong_scope["primary_reason"], "not_confirmed_kaliningrad_oblast_scope")
+        self.assertFalse(document["eligible"])
+        self.assertEqual(document["primary_reason"], "actual_image_required")
 
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
         mod = load_module()

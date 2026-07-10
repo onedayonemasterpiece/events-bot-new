@@ -209,12 +209,15 @@ technical heartbeats. The core Region Talk funnel is:
    or raw platform payloads.
 5. **Region/text candidate** — the post passed/failed Kaliningrad-only,
    non-ad/non-news/text-value gates and candidate memory is updated.
-6. **Image queue** — text-confirmed posts with media are queued for
-   ImageDiagnostic.
+6. **Media queue** — text-confirmed posts with media are queued for
+   ImageDiagnostic; identified video remains terminal for image scoring but can
+   continue as `media_kind=video`, `manual_media_review_required=true` after the
+   strict text gate.
 7. **Image worker status** — image rows show lease, media fetch result, retry
    reason or actual-image score, plus image-worker cursor.
 8. **Publication queue** — text/vector/source evidence joins actual-image scores
-   into ranked publication candidates.
+   into ranked photo candidates, or explicitly routes strict text-passed video
+   to operator review without inventing visual scores.
 9. **Final verifier/operator notification** — Gemini Lite decision and local
    notification status are visible per candidate.
 

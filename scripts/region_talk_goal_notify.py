@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 DEFAULT_NOTIFY_CHAT_ID = "-5563945596"
@@ -479,13 +479,19 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
 def candidate_message(row: dict[str, Any]) -> str:
     rank = row.get("publication_rank") or "?"
     url = row.get("post_url") or ""
-    why = row.get("why_selected") or "выбран по тексту, визуальному score и Gemini-проверке"
+    video_manual = str(row.get("media_review_mode") or "") == "operator_video_review" or str(row.get("media_kind") or "") == "video"
+    why = row.get("why_selected") or (
+        "текст прошёл строгую E5+BGE и Gemini-проверку; качество видео нужно оценить вручную"
+        if video_manual
+        else "выбран по тексту, визуальному score и Gemini-проверке"
+    )
     summary = row.get("short_summary") or ""
     reason = str(row.get("publication_llm_reason") or row.get("llm_reason") or row.get("final_verifier_reason") or "")[:280]
     return "\n".join([
         f"✅ Region Talk candidate #{rank}",
         str(url),
         f"Почему: {why}",
+        "🎬 Видео: требуется ручной просмотр" if video_manual else "",
         f"Кратко: {summary}" if summary else "",
         f"Gemini: {reason}" if reason else "",
     ]).strip()

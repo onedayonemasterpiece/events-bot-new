@@ -86,6 +86,19 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(mod.delivery_random_id(key1), mod.delivery_random_id(key1))
         self.assertNotEqual(key1, mod.publication_delivery_key(second, "-100999"))
 
+    def test_video_candidate_message_does_not_claim_visual_score(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "publication_rank": 1,
+            "post_url": "https://t.me/travel/1",
+            "media_kind": "video",
+            "media_review_mode": "operator_video_review",
+            "llm_reason": "Текст подходит",
+        })
+        self.assertIn("требуется ручной просмотр", message)
+        self.assertIn("текст прошёл строгую E5+BGE", message)
+        self.assertNotIn("визуальному score", message)
+
 
 if __name__ == "__main__":
     unittest.main()

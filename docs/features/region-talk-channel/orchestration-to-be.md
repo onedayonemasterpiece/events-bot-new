@@ -110,6 +110,12 @@ cannot open the downloaded payload, ImageDiagnostic must write a terminal
 `media_acquisition_status=unsupported_media_or_decode_failed`. Such rows are
 excluded from future leases; they must not loop forever as
 `needs_actual_image_fetch` and consume the whole image batch.
+An identified video is terminal only for the image worker, not for the product
+funnel. If its source is confirmed external and strict KO-only fused E5+BGE
+text gates pass, the local finalizer includes it as
+`media_review_mode=operator_video_review`; Gemini checks text only and the
+operator watches the video after the confirmed link reaches the review chat.
+Other unsupported media remain terminal product rejects.
 The orchestrator reports terminal image counters
 `image_not_reviewable_no_media_total`,
 `image_not_reviewable_unsupported_media_total` and
@@ -594,6 +600,17 @@ metrics (`publics_keyword_latest_run_*`, `publics_similar_latest_run_*`) in
 addition to cumulative evidence metrics. Similar-channel discovery is not
 product-throttled just because it grows the frontier: breadth is useful, but it
 must be measured separately from KO/publication funnel conversion.
+
+The compatibility metric `publics_keyword_with_ko_candidates_total` is broad:
+it may include a source with only preliminary `candidate_posts_found`. Product
+reporting must instead show
+`keyword_sources_with_preliminary_candidates_total`,
+`keyword_sources_with_confirmed_ko_posts_total` and
+`keyword_external_sources_with_confirmed_ko_posts_total`. Fast-check is labelled
+as a keyword-match stage and reports exact-post conversion through processed,
+dual-vectorized, strict-text-accepted, image/video, publication, Gemini and sent
+stages. All post-stage counters use unique normalized post URLs and the latest
+durable row, so repeated upserts cannot inflate conversion.
 
 Fast-check KO is a preflight prioritizer, not a terminal no-KO classifier.
 `fast_check_status=no_hit` means "the small source-local query budget did not

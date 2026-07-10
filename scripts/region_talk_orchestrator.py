@@ -52,7 +52,7 @@ ACTION_KERNEL_SLUGS = {
 
 CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
 CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
-CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v2"
 POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
 POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
 
@@ -224,7 +224,25 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Источников в canonical population: {value('publics_total')}",
         f"Pending primary scan: {value('publics_primary_unscanned_pending_total')}",
         f"Terminal processed: {value('publics_terminal_processed_total')}",
-        f"С KO evidence: {value('publics_with_ko_candidates_total')}",
+        f"Sources with broad KO/candidate evidence (legacy): {value('publics_with_ko_candidates_total')}",
+        (
+            "Keyword sources discovered/scanned/preliminary/confirmed-KO/external-confirmed-KO: "
+            f"{value('publics_keyword_discovered_total')}/"
+            f"{value('publics_keyword_scanned_with_posts_total')}/"
+            f"{value('keyword_sources_with_preliminary_candidates_total')}/"
+            f"{value('keyword_sources_with_confirmed_ko_posts_total')}/"
+            f"{value('keyword_external_sources_with_confirmed_ko_posts_total')}"
+        ),
+        (
+            "Fast-check keyword matches/exact processed/dual/text accepted/image/video/publication: "
+            f"{value('fast_check_keyword_match_sources_total')}/"
+            f"{value('fast_check_exact_posts_processed_unique_total')}/"
+            f"{value('fast_check_exact_posts_dual_vectorized_total')}/"
+            f"{value('fast_check_exact_posts_strict_text_accepted_total')}/"
+            f"{value('fast_check_exact_posts_image_queue_total')}/"
+            f"{value('fast_check_exact_posts_video_manual_review_total')}/"
+            f"{value('fast_check_exact_posts_publication_queue_total')}"
+        ),
         (
             "Inflow manual/keyword/hashtag/similar: "
             f"{value('discovery_inflow_manual_total')}/"
@@ -266,6 +284,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
             f"{value('publication_confirmed_total')}/"
             f"{value('publication_sent_total')}/"
             f"{value('publication_ready_total')}"
+        ),
+        (
+            "Finalizer actual-image/video inputs/pending: "
+            f"{value('image_actual_scored_urls_total')}/"
+            f"{value('video_manual_review_candidate_urls_total')}/"
+            f"{value('finalizer_pending_url_total')}"
         ),
     ])
 
@@ -1067,6 +1091,9 @@ def _publication_handoff_metrics(
         and str(row.get("image_model_input_type") or "") == "actual_image"
     ]
     actual_by_url, actual_missing_url = _latest_rows_by_post_url(actual_rows)
+    video_rows = [row for row in images if _is_video_manual_review_row(row)]
+    video_by_url, video_missing_url = _latest_rows_by_post_url(video_rows)
+    finalizer_input_by_url = {**actual_by_url, **video_by_url}
     publication_by_url, publication_missing_url = _latest_rows_by_post_url(publications)
     now = datetime.now(timezone.utc)
     source_by_key = {
@@ -1148,7 +1175,7 @@ def _publication_handoff_metrics(
         return retry_at is None or retry_at <= now
 
     finalizer_pending_urls = sorted(
-        url for url in actual_by_url
+        url for url in finalizer_input_by_url
         if needs_finalizer(publication_by_url.get(url))
     )
 
@@ -1175,6 +1202,9 @@ def _publication_handoff_metrics(
     return {
         "image_actual_scored_urls_total": len(actual_by_url),
         "image_actual_scored_missing_url_total": actual_missing_url,
+        "video_manual_review_candidate_urls_total": len(video_by_url),
+        "video_manual_review_missing_url_total": video_missing_url,
+        "publication_finalizer_input_urls_total": len(finalizer_input_by_url),
         "image_publication_ready_urls_total": len(image_product_ready_urls),
         "publication_candidate_rows_total": len(publications),
         "publication_candidate_total": len(publication_by_url),
@@ -1346,6 +1376,123 @@ def _keyword_source_metrics(
         "publics_keyword_with_ko_candidates_total": len(keyword_ko_keys),
         "publics_keyword_pending_after_cursor_total": len(keyword_pending_after_cursor_keys),
         "publics_keyword_ko_yield_percent": int(round((len(keyword_ko_keys) / len(keyword_scanned_keys)) * 100)) if keyword_scanned_keys else 0,
+        # Honest product-grain counters. ``candidate_posts_found`` is a broad
+        # lexical/preselection counter and must not be labelled as confirmed
+        # KO evidence.
+        "keyword_sources_with_preliminary_candidates_total": sum(
+            1 for k in keyword_scanned_keys if _safe_int(source_by_key[k].get("candidate_posts_found")) > 0
+        ),
+        "keyword_sources_with_confirmed_ko_posts_total": sum(
+            1 for k in keyword_scanned_keys if _safe_int(source_by_key[k].get("ko_posts_found")) > 0
+        ),
+        "keyword_external_sources_with_confirmed_ko_posts_total": sum(
+            1 for k in keyword_scanned_keys
+            if _safe_int(source_by_key[k].get("ko_posts_found")) > 0
+            and str(source_by_key[k].get("source_queue_status") or "") == "processed_found_ko_candidate"
+        ),
+        "keyword_sources_rejected_local_total": sum(
+            1 for k in keyword_scanned_keys if str(source_by_key[k].get("source_queue_status") or "") == "rejected_local_region_source"
+        ),
+        "keyword_sources_rejected_spam_total": sum(
+            1 for k in keyword_scanned_keys if str(source_by_key[k].get("source_queue_status") or "") == "rejected_spam_source"
+        ),
+    }
+
+
+def _latest_by_post_url(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        url = _canonical_post_url(row)
+        if not url:
+            continue
+        previous = out.get(url)
+        row_time = str(row.get("updated_at") or row.get("_ydb_updated_at") or row.get("last_seen_run_id") or "")
+        previous_time = str((previous or {}).get("updated_at") or (previous or {}).get("_ydb_updated_at") or (previous or {}).get("last_seen_run_id") or "")
+        if previous is None or row_time >= previous_time:
+            out[url] = row
+    return out
+
+
+def _is_video_manual_review_row(row: dict[str, Any]) -> bool:
+    if str(row.get("media_kind") or "").lower() == "video":
+        return True
+    evidence = " ".join(str(row.get(key) or "") for key in [
+        "media_fetch_error", "primary_media_path", "image_url_or_local_path", "unsupported_media_path",
+    ]).lower()
+    return any(suffix in evidence for suffix in (".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"))
+
+
+def _fast_check_exact_post_metrics(
+    source_rows: list[dict[str, Any]],
+    processed_rows: list[dict[str, Any]],
+    candidate_rows: list[dict[str, Any]],
+    image_rows: list[dict[str, Any]],
+    publication_rows: list[dict[str, Any]],
+    vector_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    hit_rows = [row for row in source_rows if str(row.get("fast_check_status") or "") == "ko_hit"]
+    urls = {
+        _canonical_post_url(str(row.get("fast_check_hit_post_url") or row.get("keyword_hit_post_url") or ""))
+        for row in hit_rows
+    } - {""}
+    processed = _latest_by_post_url(processed_rows)
+    candidates = _latest_by_post_url(candidate_rows)
+    images = _latest_by_post_url(image_rows)
+    publications = _latest_by_post_url(publication_rows)
+    vector_models: dict[str, set[str]] = {}
+    for row in vector_rows:
+        url = _canonical_post_url(row)
+        if url:
+            vector_models.setdefault(url, set()).add(str(row.get("model_short") or row.get("model_id") or ""))
+
+    fetched_urls = {url for url in urls if url in processed}
+    paired_urls = {
+        url for url in urls
+        if any("e5" in model for model in vector_models.get(url, set()))
+        and any("bge" in model for model in vector_models.get(url, set()))
+    }
+    accepted_urls: set[str] = set()
+    rejection_counts: dict[str, int] = {}
+    for url in fetched_urls:
+        row = candidates.get(url) or processed.get(url) or {}
+        source = next((item for item in hit_rows if _canonical_post_url(str(item.get("fast_check_hit_post_url") or item.get("keyword_hit_post_url") or "")) == url), {})
+        source_status = str(source.get("source_queue_status") or "")
+        vector_status = str(row.get("vector_gate_status") or "")
+        fused = str(row.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3" or url in paired_urls
+        ko_only = str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
+        fresh = str((processed.get(url) or {}).get("fresh_enough") or "").lower() not in {"0", "false", "no"}
+        source_ok = source_status not in {"rejected_local_region_source", "rejected_spam_source"}
+        if source_ok and vector_status == "vector_accept_candidate" and fused and ko_only and fresh:
+            accepted_urls.add(url)
+            continue
+        if source_status == "rejected_local_region_source":
+            reason = "source_local"
+        elif source_status == "rejected_spam_source":
+            reason = "source_spam"
+        elif not fresh:
+            reason = "stale"
+        elif vector_status.startswith("vector_reject"):
+            reason = vector_status
+        elif not ko_only:
+            reason = "not_confirmed_ko_only"
+        elif not fused:
+            reason = "dual_vector_not_complete"
+        else:
+            reason = "other_text_gate"
+        rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+
+    video_urls = {url for url in accepted_urls if _is_video_manual_review_row(images.get(url) or {})}
+    return {
+        "fast_check_keyword_match_sources_total": len(hit_rows),
+        "fast_check_exact_hit_post_urls_total": len(urls),
+        "fast_check_exact_posts_processed_unique_total": len(fetched_urls),
+        "fast_check_exact_posts_dual_vectorized_total": len(paired_urls),
+        "fast_check_exact_posts_strict_text_accepted_total": len(accepted_urls),
+        "fast_check_exact_posts_text_rejected_total": max(0, len(fetched_urls) - len(accepted_urls)),
+        "fast_check_exact_posts_text_rejection_reasons": rejection_counts,
+        "fast_check_exact_posts_image_queue_total": len(urls & set(images)),
+        "fast_check_exact_posts_video_manual_review_total": len(video_urls),
+        "fast_check_exact_posts_publication_queue_total": len(urls & set(publications)),
     }
 
 
@@ -1954,6 +2101,14 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         or bool(str(r.get("monitoring_exclusion_reason") or "").strip())
     ]
     keyword_source_metrics = _keyword_source_metrics(source_rows, source_cursor_position, source_candidates, source_edges)
+    fast_check_exact_metrics = _fast_check_exact_post_metrics(
+        source_rows,
+        processed_post_rows,
+        candidates,
+        images,
+        publications,
+        vectors,
+    )
     keyword_post_regex_metrics = _keyword_source_post_regex_metrics(source_rows, diagnostic_post_rows, source_candidates, source_edges)
     similar_source_metrics = _similar_source_metrics(source_rows, source_candidates, source_edges)
     keyword_latest_run_metrics = _latest_discovery_run_metrics(
@@ -2032,6 +2187,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "publics_with_ko_candidates_source_rows_total": len(source_ko_candidates),
         "publics_with_ko_candidates_repair_delta_total": max(0, source_ko_candidates_count - len(source_ko_candidates)),
         **keyword_source_metrics,
+        **fast_check_exact_metrics,
         **keyword_post_regex_metrics,
         **similar_source_metrics,
         **keyword_latest_run_metrics,
