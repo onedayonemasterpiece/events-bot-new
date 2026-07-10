@@ -225,6 +225,18 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(progress["items"]["image_queue"]["metric"], "image_product_eligible_total")
         self.assertEqual(progress["items"]["image_queue"]["delta"], 4)
 
+    def test_publication_goal_ignores_historical_and_tombstone_rows(self) -> None:
+        mod = load_module()
+        baseline = {"publication_candidate_total": 19, "publication_active_candidate_total": 0}
+        current = {"publication_candidate_total": 22, "publication_active_candidate_total": 0}
+        progress = mod.loop_goal_progress(current, baseline, {"publication_candidates": 1})
+        self.assertFalse(progress["reached"])
+        self.assertEqual(
+            progress["items"]["publication_candidates"]["metric"],
+            "publication_active_candidate_total",
+        )
+        self.assertEqual(progress["items"]["publication_candidates"]["delta"], 0)
+
     def test_source_merge_preserves_max_counter_values(self) -> None:
         mod = load_module()
         rows = mod._merge_source_rows(
@@ -374,6 +386,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         publications[0]["authoritative_source_fingerprint"] = mod.authoritative_source_fingerprint(sources[0])
         metrics = mod._publication_handoff_metrics(images, publications, sources)
         self.assertEqual(metrics["publication_candidate_total"], 2)
+        self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["publication_ready_total"], 1)
         self.assertEqual(metrics["publication_confirmed_total"], 1)
         self.assertEqual(metrics["publication_rejected_total"], 1)

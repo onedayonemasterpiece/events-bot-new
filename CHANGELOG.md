@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / active publication metric**: raw historical publication rows
+  remain visible, but loop progress now uses
+  `publication_active_candidate_total` and no longer counts newly created
+  eligibility tombstones as product candidates.
 - **Region Talk / authoritative image source join**: when a canonical source
   row exists, its current classification and scan counters now replace stale
   thin candidate-memory fields before image eligibility, preventing a sparse

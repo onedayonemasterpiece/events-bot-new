@@ -1066,6 +1066,14 @@ def _publication_handoff_metrics(
         or str(row.get("publication_candidate_status") or "") == "sent_to_chat"
     }
     status_by_url = {url: str(row.get("publication_candidate_status") or "") for url, row in publication_by_url.items()}
+    active_candidate_urls = set(unsent_confirmed_urls)
+    for url, row in publication_by_url.items():
+        candidate_status = str(row.get("publication_candidate_status") or "").lower()
+        publication_status = str(row.get("publication_status") or "").lower()
+        if candidate_status in {"ready_for_llm", "llm_needs_review", "llm_budget_deferred", "llm_error", "retry_due"}:
+            active_candidate_urls.add(url)
+        elif publication_status in {"gemini_rate_limited", "gemini_error", "gemini_unknown"}:
+            active_candidate_urls.add(url)
     image_product_ready_urls = {
         url for url, row in actual_by_url.items()
         if str(row.get("image_publication_ready") or "").lower() == "true"
@@ -1076,6 +1084,7 @@ def _publication_handoff_metrics(
         "image_publication_ready_urls_total": len(image_product_ready_urls),
         "publication_candidate_rows_total": len(publications),
         "publication_candidate_total": len(publication_by_url),
+        "publication_active_candidate_total": len(active_candidate_urls),
         "publication_candidate_missing_url_total": publication_missing_url,
         # Publication-ready is the final, unsent verifier-accepted taxonomy. An
         # image-ready or ready_for_llm row is not publication-ready yet.
@@ -1626,7 +1635,9 @@ GOAL_DELTA_METRICS = {
     # Raw image_queue_total includes retained rejected/audit rows and therefore
     # can stay flat while the product obtains newly eligible work.
     "image_queue": "image_product_eligible_total",
-    "publication_candidates": "publication_candidate_total",
+    # Raw publication rows include historical sent/rejected/tombstone audit
+    # records. Product progress is the currently actionable/unsent set.
+    "publication_candidates": "publication_active_candidate_total",
     "confirmed": "publication_confirmed_total",
 }
 

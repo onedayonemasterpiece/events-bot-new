@@ -144,6 +144,10 @@ Telegram Monitoring and Guide monitoring:
   `image_product_eligible_total` for rows accepted by the current strict gate;
   `--target-image-queue` follows the eligible delta rather than rejected rows
   retained for audit;
+- `publication_candidate_total` likewise remains the raw historical/audit URL
+  count, while `publication_active_candidate_total` excludes sent, rejected and
+  eligibility tombstone rows; `--target-publication-candidates` follows only
+  the active delta;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 
