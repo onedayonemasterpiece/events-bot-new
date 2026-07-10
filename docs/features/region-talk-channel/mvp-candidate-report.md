@@ -861,6 +861,13 @@ Likewise, the final compact-state row projection uses bounded YDB bulk writes
 (`REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE`, default 500) because those
 independent stable-key snapshots do not require one cross-row transaction.
 Live queue transitions and heartbeats keep the transactional OLTP writer.
+For strict pre-image eligibility, an authoritative source is also considered
+confirmed external when its canonical source-ledger row passed the surface
+guard (`source_quick_class=candidate_keep`), has at least five actually scanned
+posts, reached `processed_found_ko_candidate`, and has a non-zero KO ratio below
+the local-source cutoff of `0.7`. This is a durable scan-evidence fallback for
+rows where the optional profile projection did not persist `source_scope`; an
+unscanned, sparse, all-KO, local or spam row remains fail-closed.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,

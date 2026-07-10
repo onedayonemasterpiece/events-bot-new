@@ -1629,6 +1629,7 @@ SOURCE_STATE_FIELDS = [
     "platform", "handle", "username_or_handle", "source_title", "canonical_url", "normalized_url",
     "source_url", "fetch_status", "vk_wall_probe_status", "source_probe_reason",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
     "source_surface_filter_version", "source_surface_filter_reason",
     "source_local_hits", "source_spam_hits", "source_spam_hashtags", "source_spoiler_entity_count",
     "posts_scanned", "last_seen_post_date", "monitor_priority_score", "source_quality_score",
@@ -6112,6 +6113,7 @@ def build_image_candidate_queue(
         source = previous_source_by_id.get(source_id) or previous_source_by_url.get(source_url) or {}
         for field in [
             "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+            "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",
             "source_surface_filter_reason", "monitoring_exclusion_reason", "handle",
             "source_url", "canonical_url",
         ]:
@@ -6224,6 +6226,10 @@ def build_image_candidate_queue(
             "source_geo_class": row.get("source_geo_class", entries[key].get("source_geo_class", "")),
             "source_topic_class": row.get("source_topic_class", entries[key].get("source_topic_class", "")),
             "source_quick_class": row.get("source_quick_class", entries[key].get("source_quick_class", "")),
+            "source_queue_status": row.get("source_queue_status", entries[key].get("source_queue_status", "")),
+            "posts_scanned": row.get("posts_scanned", entries[key].get("posts_scanned", "")),
+            "ko_posts_found": row.get("ko_posts_found", entries[key].get("ko_posts_found", "")),
+            "candidate_posts_found": row.get("candidate_posts_found", entries[key].get("candidate_posts_found", "")),
             "source_surface_filter_reason": row.get("source_surface_filter_reason", entries[key].get("source_surface_filter_reason", "")),
             "monitoring_exclusion_reason": row.get("monitoring_exclusion_reason", entries[key].get("monitoring_exclusion_reason", "")),
             "post_date": row.get("post_date", entries[key].get("post_date", "")),
@@ -6464,6 +6470,29 @@ def _publication_source_verdict(source: dict[str, Any]) -> str:
     }
     if scope in external_values or geo in external_values:
         return PUBLICATION_SOURCE_CONFIRMED_EXTERNAL
+    # A canonical source-ledger row can already contain durable sampled-history
+    # evidence even when the optional profile projection did not persist
+    # source_scope/source_geo_class. Confirm it as external only after it passed
+    # the surface guard, produced a KO candidate, and its observed KO ratio is
+    # below the established local-source cutoff. Sparse, unscanned and all-KO
+    # rows remain fail-closed.
+    try:
+        posts_scanned = int(float(source.get("posts_scanned") or 0))
+        ko_posts_found = int(float(source.get("ko_posts_found") or 0))
+        candidate_posts_found = int(float(source.get("candidate_posts_found") or 0))
+    except Exception:
+        posts_scanned = ko_posts_found = candidate_posts_found = 0
+    min_scanned = max(1, getenv_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
+    ko_ratio = (ko_posts_found / posts_scanned) if posts_scanned > 0 else 0.0
+    if (
+        quick == "candidate_keep"
+        and terminal_status == "processed_found_ko_candidate"
+        and posts_scanned >= min_scanned
+        and ko_posts_found > 0
+        and candidate_posts_found > 0
+        and 0.0 < ko_ratio < 0.7
+    ):
+        return PUBLICATION_SOURCE_CONFIRMED_EXTERNAL
     return PUBLICATION_SOURCE_UNKNOWN
 
 
@@ -6514,6 +6543,10 @@ def publication_eligibility(
         "source_geo_class": source.get("source_geo_class") or "",
         "source_topic_class": source.get("source_topic_class") or "",
         "source_queue_status": source.get("source_queue_status") or source.get("fetch_status") or "",
+        "source_quick_class": source.get("source_quick_class") or "",
+        "source_posts_scanned": source.get("posts_scanned") or 0,
+        "source_ko_posts_found": source.get("ko_posts_found") or 0,
+        "source_candidate_posts_found": source.get("candidate_posts_found") or 0,
         "source_gate_reason": source_gate_reason,
         "product_gate_reason": product_gate_reason,
         "base_gate_reason": base_reason,

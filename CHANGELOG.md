@@ -7,6 +7,12 @@
   7k-row admission migration from consuming most of a CandidateReport run.
   Large independent compact-snapshot row batches use the same bulk path, while
   transactional live queue/status transitions retain the OLTP writer.
+- **Region Talk / authoritative external-source evidence**: strict publication
+  eligibility can now confirm a nonlocal source from its canonical scanned
+  source-ledger evidence (`candidate_keep`, at least five scanned posts,
+  processed KO candidate, non-zero KO ratio below the 0.7 local cutoff) when
+  optional profile fields are absent. Sparse, unscanned, all-KO, local and spam
+  sources remain fail-closed.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve

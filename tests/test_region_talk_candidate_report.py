@@ -3718,6 +3718,26 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         unknown = mod.publication_eligibility({**row, "source_geo_class": "", "source_scope": "unknown"})
         local = mod.publication_eligibility(row, authoritative_source={"source_geo_class": "kaliningrad_local", "source_scope": "local_region"})
         mixed = mod.publication_eligibility({**row, "source_geo_class": "", "source_scope": "unknown"}, authoritative_source={"source_geo_class": "mixed_external", "source_scope": "mixed_external"})
+        scanned_external = mod.publication_eligibility(
+            {**row, "source_geo_class": "", "source_scope": "unknown"},
+            authoritative_source={
+                "source_quick_class": "candidate_keep",
+                "source_queue_status": "processed_found_ko_candidate",
+                "posts_scanned": 12,
+                "ko_posts_found": 4,
+                "candidate_posts_found": 4,
+            },
+        )
+        scanned_all_ko = mod.publication_eligibility(
+            {**row, "source_geo_class": "", "source_scope": "unknown"},
+            authoritative_source={
+                "source_quick_class": "candidate_keep",
+                "source_queue_status": "processed_found_ko_candidate",
+                "posts_scanned": 6,
+                "ko_posts_found": 6,
+                "candidate_posts_found": 4,
+            },
+        )
         spam = mod.publication_eligibility({**row, "source_queue_status": mod.SPAM_SOURCE_STATUS})
         self.assertTrue(accepted["eligible"])
         self.assertEqual(accepted["decision"], "accept")
@@ -3729,6 +3749,10 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(local["eligible"])
         self.assertEqual(local["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_REJECTED)
         self.assertTrue(mixed["eligible"])
+        self.assertTrue(scanned_external["eligible"])
+        self.assertEqual(scanned_external["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_EXTERNAL)
+        self.assertFalse(scanned_all_ko["eligible"])
+        self.assertEqual(scanned_all_ko["primary_reason"], "source_verdict_unknown")
         self.assertFalse(spam["eligible"])
         self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version"})
 
@@ -3764,6 +3788,44 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 {}, [], [{**row, "source_geo_class": "", "source_scope": "unknown"}], [],
                 "image-gate-run-unknown", "2026-07-10T00:00:00+00:00",
             )
+            scanned_queue, _top3, _metrics3 = mod.build_image_candidate_queue(
+                {
+                    "unified_source_queue": {
+                        "telegram:travel": {
+                            "source_url": "https://t.me/travel",
+                            "source_quick_class": "candidate_keep",
+                            "source_queue_status": "processed_found_ko_candidate",
+                            "posts_scanned": 12,
+                            "ko_posts_found": 4,
+                            "candidate_posts_found": 4,
+                        }
+                    }
+                },
+                [],
+                [{**row, "source_geo_class": "", "source_scope": "unknown"}],
+                [],
+                "image-gate-run-scanned-source",
+                "2026-07-10T00:00:00+00:00",
+            )
+            scanned_queue, _top3, _metrics3 = mod.build_image_candidate_queue(
+                {
+                    "unified_source_queue": {
+                        "telegram:travel": {
+                            "source_url": "https://t.me/travel",
+                            "source_quick_class": "candidate_keep",
+                            "source_queue_status": "processed_found_ko_candidate",
+                            "posts_scanned": 12,
+                            "ko_posts_found": 4,
+                            "candidate_posts_found": 4,
+                        }
+                    }
+                },
+                [],
+                [{**row, "source_geo_class": "", "source_scope": "unknown"}],
+                [],
+                "image-gate-run-scanned",
+                "2026-07-10T00:00:00+00:00",
+            )
         finally:
             if previous is None:
                 os.environ.pop("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE", None)
@@ -3776,6 +3838,11 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             mod.PUBLICATION_ELIGIBILITY_GATE_VERSION,
         )
         self.assertEqual(unknown_queue, [])
+        self.assertEqual(len(scanned_queue), 1)
+        self.assertEqual(scanned_queue[0]["publication_eligibility_decision"], "accept")
+        self.assertEqual(len(scanned_queue), 1)
+        self.assertEqual(scanned_queue[0]["publication_eligibility_decision"], "accept")
+        self.assertEqual(scanned_queue[0]["posts_scanned"], 12)
 
 
 if __name__ == "__main__":

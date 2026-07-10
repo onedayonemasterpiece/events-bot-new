@@ -63,6 +63,7 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_EXTERNAL_BGE_M3_FUSION_ENABLED": "1",
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
     "REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION": CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+    "REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS": "5",
     # Debug/product runs must finish quickly enough to be observable.  The main
     # notebook still reaches the source-queue/discovery tail, but with smaller
     # batches and bounded YDB writes; otherwise Kaggle spends >30 minutes in
