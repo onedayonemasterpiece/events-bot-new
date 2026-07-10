@@ -51,6 +51,9 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             "source_queue_status": "processed_found_ko_candidate",
             "source_scope": "external",
             "source_geo_class": "nonlocal_russia",
+            "posts_scanned": 1,
+            "ko_posts_found": 1,
+            "candidate_posts_found": 1,
             "queue_item_updated_at": "2026-07-10T00:00:00+00:00",
         }
         local = {
@@ -63,6 +66,14 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertNotEqual(
             mod.authoritative_source_fingerprint(external),
             mod.authoritative_source_fingerprint(local),
+        )
+        self.assertEqual(
+            mod.authoritative_source_fingerprint(external),
+            mod.authoritative_source_fingerprint({**external, "queue_item_updated_at": "2026-07-11T00:00:00+00:00"}),
+        )
+        self.assertNotEqual(
+            mod.authoritative_source_fingerprint(external),
+            mod.authoritative_source_fingerprint({**external, "posts_scanned": 9, "ko_posts_found": 2}),
         )
 
 

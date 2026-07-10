@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / stable source fingerprint v2**: publication source
+  attestations now change for meaningful scan/KO/candidate evidence and source
+  classifications, not for a routine queue timestamp rewrite, so source-driven
+  re-finalization happens once per material evidence change rather than every
+  cycle.
 - **Region Talk / source-evidence re-finalization**: publication tombstones are
   re-queued when the canonical source fingerprint changes, allowing stronger
   later scan evidence to replace an earlier fail-closed `review` without

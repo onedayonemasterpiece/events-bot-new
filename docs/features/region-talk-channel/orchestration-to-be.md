@@ -151,6 +151,9 @@ Telegram Monitoring and Guide monitoring:
 - a publication tombstone is sent back to the finalizer when its persisted
   authoritative-source fingerprint differs from the current source ledger, so
   newly accumulated scan evidence can promote an earlier `review` decision;
+  fingerprint v2 includes substantive scan/KO/candidate counters but excludes
+  volatile row-update timestamps, preventing unchanged tombstones from being
+  re-finalized on every CandidateReport snapshot;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

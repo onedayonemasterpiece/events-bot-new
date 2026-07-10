@@ -22,7 +22,7 @@ from typing import Any
 
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
-AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v1"
+AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 
 
 def load_env(path: Path) -> None:
@@ -180,6 +180,11 @@ def canonical_source_key_for_row(row: dict[str, Any]) -> str:
 def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
     if not isinstance(source, dict) or not source:
         return ""
+    def count(name: str) -> int:
+        try:
+            return int(float(source.get(name) or 0))
+        except (TypeError, ValueError):
+            return 0
     payload = {
         "version": AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
         "canonical_source_key": canonical_source_key_for_row(source),
@@ -191,7 +196,9 @@ def authoritative_source_fingerprint(source: dict[str, Any] | None) -> str:
         "monitoring_exclusion_reason": source.get("monitoring_exclusion_reason") or "",
         "source_surface_filter_version": source.get("source_surface_filter_version") or "",
         "source_surface_filter_reason": source.get("source_surface_filter_reason") or "",
-        "queue_item_updated_at": source.get("queue_item_updated_at") or source.get("updated_at") or source.get("_ydb_updated_at") or "",
+        "posts_scanned": count("posts_scanned"),
+        "ko_posts_found": count("ko_posts_found"),
+        "candidate_posts_found": count("candidate_posts_found"),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
