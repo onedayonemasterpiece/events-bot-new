@@ -1401,15 +1401,23 @@ def _keyword_source_metrics(
 
 def _latest_by_post_url(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for row in rows:
+    ordered = sorted(
+        rows,
+        key=lambda row: str(row.get("updated_at") or row.get("_ydb_updated_at") or row.get("last_seen_run_id") or ""),
+    )
+    for row in ordered:
         url = _canonical_post_url(row)
         if not url:
             continue
-        previous = out.get(url)
-        row_time = str(row.get("updated_at") or row.get("_ydb_updated_at") or row.get("last_seen_run_id") or "")
-        previous_time = str((previous or {}).get("updated_at") or (previous or {}).get("_ydb_updated_at") or (previous or {}).get("last_seen_run_id") or "")
-        if previous is None or row_time >= previous_time:
-            out[url] = row
+        # Several historical PKs can represent one URL. Newer compact rows are
+        # sometimes sparse, so replacing the entire record loses the earlier
+        # explicit freshness/scope/rejection evidence. Merge only present
+        # values in timestamp order and keep one unique product row.
+        current = dict(out.get(url) or {})
+        for key, value in row.items():
+            if value not in (None, ""):
+                current[key] = value
+        out[url] = current
     return out
 
 
@@ -1440,6 +1448,20 @@ def _fast_check_exact_post_metrics(
     images = _latest_by_post_url(image_rows)
     publications = _latest_by_post_url(publication_rows)
     vector_models: dict[str, set[str]] = {}
+    processed_scope_values: dict[str, list[bool]] = {}
+    processed_fresh_values: dict[str, list[bool]] = {}
+    for row in processed_rows:
+        url = _canonical_post_url(row)
+        if not url:
+            continue
+        if row.get("kaliningrad_oblast_only_scope") not in (None, ""):
+            processed_scope_values.setdefault(url, []).append(
+                str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
+            )
+        if row.get("fresh_enough") not in (None, ""):
+            processed_fresh_values.setdefault(url, []).append(
+                str(row.get("fresh_enough") or "").lower() not in {"0", "false", "no"}
+            )
     for row in vector_rows:
         url = _canonical_post_url(row)
         if url:
@@ -1464,8 +1486,10 @@ def _fast_check_exact_post_metrics(
         # The scored post projection owns region/freshness. Candidate-memory
         # duplicates may share one timestamp and retain an older scope value;
         # never let that broaden the strict product denominator.
-        ko_only = str(processed_row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
-        fresh = str(processed_row.get("fresh_enough") or "").lower() not in {"0", "false", "no"}
+        scope_values = processed_scope_values.get(url) or []
+        fresh_values = processed_fresh_values.get(url) or []
+        ko_only = bool(scope_values) and all(scope_values)
+        fresh = not fresh_values or all(fresh_values)
         source_ok = source_status not in {"rejected_local_region_source", "rejected_spam_source"}
         if source_ok and vector_status == "vector_accept_candidate" and fused and ko_only and fresh:
             accepted_urls.add(url)
