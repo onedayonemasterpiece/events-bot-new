@@ -1086,7 +1086,12 @@ def _publication_handoff_metrics(
         publication = publication_by_url.get(url) or {}
         candidate_status = str(publication.get("publication_candidate_status") or "")
         publication_status = str(publication.get("publication_status") or "")
-        return candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"} or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}
+        return (
+            candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"}
+            or candidate_status.startswith(("tombstoned", "revoked"))
+            or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}
+            or publication_status.startswith("eligibility_")
+        )
 
     source_evidence_urls = sorted(
         url for url, row in actual_by_url.items()

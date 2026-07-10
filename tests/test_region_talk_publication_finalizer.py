@@ -500,6 +500,10 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(len(cleared), 1)
         self.assertEqual(cleared[0]["publication_source_evidence_priority"], "false")
         self.assertEqual(cleared[0]["publication_source_evidence_clear_reason"], "publication_terminal_non_candidate")
+        row["publication_candidate_status"] = "tombstoned_review"
+        row["publication_status"] = "eligibility_review_tombstone"
+        self.assertEqual(mod.source_evidence_priority_updates([row], now_iso="2026-07-10T12:00:00+00:00"), [])
+        self.assertEqual(len(mod.source_evidence_priority_clear_updates([row], now_iso="2026-07-10T12:00:00+00:00")), 1)
 
     def test_durable_budget_exhaustion_defers_without_gemini_call(self) -> None:
         mod = self.mod

@@ -627,7 +627,7 @@ def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str
         previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
         candidate_status = str(row.get("publication_candidate_status") or previous.get("publication_candidate_status") or "")
         publication_status = str(row.get("publication_status") or previous.get("publication_status") or "")
-        if candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"} or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}:
+        if candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"} or candidate_status.startswith(("tombstoned", "revoked")) or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"} or publication_status.startswith("eligibility_"):
             continue
         source = row.get("_authoritative_source")
         if not isinstance(source, dict) or not source:
@@ -672,7 +672,7 @@ def source_evidence_priority_clear_updates(rows: list[dict[str, Any]], *, now_is
         previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
         candidate_status = str(row.get("publication_candidate_status") or previous.get("publication_candidate_status") or "")
         publication_status = str(row.get("publication_status") or previous.get("publication_status") or "")
-        if candidate_status not in terminal_candidates and publication_status not in terminal_publications:
+        if candidate_status not in terminal_candidates and not candidate_status.startswith(("tombstoned", "revoked")) and publication_status not in terminal_publications and not publication_status.startswith("eligibility_"):
             continue
         source = row.get("_authoritative_source")
         if not isinstance(source, dict) or not source or not rt._rt_bool(source.get("publication_source_evidence_priority")):
