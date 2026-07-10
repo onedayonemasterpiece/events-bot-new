@@ -66,6 +66,15 @@ for (const marker of [
 const eventDecisionLabHtml = readFileSync(join(root, 'lab/event-decision-block/index.html'), 'utf8');
 for (const marker of [
   'event-decision-lab',
+  'decision-v3-overlap-lab',
+  'decision-variant-v3-compact-tile',
+  'decision-variant-v3-calm-bar',
+  'decision-variant-v3-split-band',
+  'decision-variant-v3-ticket-cluster',
+  'action-metric-row',
+  '600–1 500 ₽',
+  'Бесплатно',
+  'ул. Канта, 1',
   'decision-v2-overlap-lab',
   'decision-variant-v2-date-card',
   'decision-variant-v2-medallion-shelf',

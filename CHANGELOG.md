@@ -26,6 +26,7 @@
 
 ### Changed
 
+- **Static site pages / event decision-block lab V3**: rebuilt `/lab/event-decision-block/` from 120 Pinterest references plus Gemini 3.1 Pro/a-opus design and rendered acceptance reviews, adding four mobile hero-overlap candidates with compact strong dates, exact addresses, truthful price/free states, accessible calendar/share/like icon+count controls, large horizontal medallions and the prior V2 layout as a preserved control.
 - **Static site pages / event decision-block lab V2**: reworked `/lab/event-decision-block/` around the approved hero-overlap contract after Gemini Pro and a-opus review, restoring title-inside-sheet, mandatory buy/calendar/share/like icon actions, large medallion shelves and zero-medallion safety variants.
 - **Static site pages / event hero date block**: replaced the dark gradient date card with a semantic high-contrast split-badge date block, using a large terracotta date and readable weekday/time column before the CTA row.
 - **Personalization / smart-search quota and cache**: replaced the user-facing monthly smart-search quota with a one-hour cooling window (`60` searches/hour on the registered plan, still bounded by daily provider budget), added a private salted-hash short-lived result cache whose hits do not spend quota, and made the cache physically clear on event/vector corpus updates.
