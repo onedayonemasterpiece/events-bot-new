@@ -853,6 +853,10 @@ count, while `source_queue_handoff_rows` reports how many rows were actually
 written to `source_queue_item`. The legacy `source_status_item` mirror is off by
 default in orchestrated runs (`REGION_TALK_WRITE_SOURCE_STATUS_QUEUE_MIRROR=0`)
 to avoid duplicate transactional YDB upserts for the same queue handoff.
+The exceptional one-time immutable `queue_seq` migration still persists the
+complete ledger, but uses YDB `BulkUpsert` in bounded chunks (default 500 via
+`REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE`) so migration cost is based on
+bulk requests rather than thousands of per-row transactional executions.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,

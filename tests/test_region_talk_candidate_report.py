@@ -3593,28 +3593,44 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             }
             for i in range(101)
         ]
-        captured = {"items": 0}
+        captured = {"items": 0, "chunks": 0}
 
         class Pool:
             def retry_operation_sync(self, op, retry_settings=None):
                 return op(object())
 
-        def upsert(_session, _ydb, _table, items, _now, **_kwargs):
-            captured["items"] = len(items)
-            return len(items)
+        class BulkColumns:
+            def add_column(self, *_args):
+                return self
+
+        class TableClient:
+            def bulk_upsert(self, _table, items, _columns):
+                captured["items"] += len(items)
+                captured["chunks"] += 1
+
+        class Driver:
+            table_client = TableClient()
+
+        class Ydb:
+            BulkUpsertColumns = BulkColumns
+            OptionalType = staticmethod(lambda value: value)
+
+            class PrimitiveType:
+                Utf8 = "Utf8"
+                Json = "Json"
 
         old = {name: os.environ.get(name) for name in ["REGION_TALK_STATE_BACKEND", "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"]}
         try:
             os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
             os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
             with mock.patch.object(mod, "_ydb_online_write_allowed", return_value=True), \
-                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(object(), object(), Pool(), "/db/table")), \
+                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(Ydb(), Driver(), Pool(), "/db/table")), \
                  mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
-                 mock.patch.object(mod, "ydb_retry_settings", return_value=None), \
-                 mock.patch.object(mod, "ydb_upsert_json_many", side_effect=upsert):
+                 mock.patch.dict(os.environ, {"REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE": "40"}):
                 written = mod.write_region_talk_source_queue_sequence_repair(rows, run_id="repair-run")
             self.assertEqual(written, 101)
             self.assertEqual(captured["items"], 101)
+            self.assertEqual(captured["chunks"], 3)
         finally:
             for name, value in old.items():
                 if value is None:

@@ -244,7 +244,10 @@ Important invariants:
   keyword/fast-check priority is stored separately and does not renumber the
   whole tail. `queue_order` remains a legacy cursor/display field during the
   migration. Manual, keyword, hashtag and similar arrivals all use the same
-  canonical ledger and are reported as separate inflow cohorts.
+  canonical ledger and are reported as separate inflow cohorts. The one-time
+  full-ledger repair is written with YDB `BulkUpsert` in bounded 500-row chunks
+  (`REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE`), not one YQL execution per
+  row; otherwise a 7k-row migration can consume the entire notebook budget.
 - Exact post-link fetch is the first **bounded** intake phase of every normal
   CandidateReport run (`REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST=1`, three rows
   by default). It scans up to `REGION_TALK_POST_LINK_QUEUE_SCAN_LIMIT=5000`

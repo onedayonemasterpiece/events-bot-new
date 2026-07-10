@@ -2430,7 +2430,13 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
 
 
 def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *, run_id: str) -> int:
-    """Persist a complete queue_seq repair without the ordinary online handoff cap."""
+    """Persist a complete queue_seq repair without the ordinary online handoff cap.
+
+    This is a one-time ledger migration, not an OLTP row-by-row transition.  A
+    multi-thousand-row repair therefore uses YDB ``BulkUpsert`` in bounded
+    request chunks.  The previous implementation executed one YQL statement
+    per row inside each transaction and could consume most of a Kaggle run.
+    """
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").strip().lower() != "ydb":
         return 0
     clean = [r for r in rows if isinstance(r, dict) and not r.get("_sheet_note")]
@@ -2449,27 +2455,35 @@ def write_region_talk_source_queue_sequence_repair(rows: list[dict[str, Any]], *
             key = str(payload.get("canonical_source_key") or payload.get("source_queue_id") or payload.get("source_url") or "")
             if key:
                 items.append(("source_queue_item:" + key.replace("source_queue_item:", ""), "source_queue_item", payload))
-        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
-        timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REPAIR_REQUEST_TIMEOUT_SECONDS", 20)
-        retry_settings = ydb_retry_settings(
-            ydb,
-            timeout_seconds=timeout_seconds,
-            max_retries=getenv_int("REGION_TALK_YDB_QUEUE_REPAIR_MAX_RETRIES", 2),
-        )
+        ydb, driver, pool, table_path = _get_business_heartbeat_pool()
 
-        def op(session: Any) -> int:
+        def ensure_table(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            return ydb_upsert_json_many(
-                session,
-                ydb,
-                table_path,
-                items,
-                now,
-                chunk_size=getenv_int("REGION_TALK_SOURCE_QUEUE_REPAIR_CHUNK_SIZE", 50),
-                timeout_seconds=timeout_seconds,
-            )
 
-        return int(pool.retry_operation_sync(op, retry_settings=retry_settings) or 0)
+        pool.retry_operation_sync(ensure_table)
+        column_types = (
+            ydb.BulkUpsertColumns()
+            .add_column("pk", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("kind", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+            .add_column("payload_json", ydb.OptionalType(ydb.PrimitiveType.Json))
+            .add_column("updated_at", ydb.OptionalType(ydb.PrimitiveType.Utf8))
+        )
+        bulk_rows = [
+            {
+                "pk": pk,
+                "kind": kind,
+                "payload_json": json.dumps(payload, ensure_ascii=False),
+                "updated_at": now,
+            }
+            for pk, kind, payload in items
+        ]
+        chunk_size = max(1, getenv_int("REGION_TALK_SOURCE_QUEUE_REPAIR_BULK_CHUNK_SIZE", 500))
+        written = 0
+        for start in range(0, len(bulk_rows), chunk_size):
+            chunk = bulk_rows[start:start + chunk_size]
+            driver.table_client.bulk_upsert(table_path, chunk, column_types)
+            written += len(chunk)
+        return written
     except Exception as exc:
         _record_ydb_online_write_failure(exc, label="source_queue_admission_sequence_repair")
         print(f"[region-talk] source_queue_sequence_repair_failed {type(exc).__name__}: {str(exc)[:180]}", flush=True)
