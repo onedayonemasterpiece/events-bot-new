@@ -12384,9 +12384,22 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "24_source_yield_metrics":source_yield_metrics_sheet,
     }
     report_event("vector_scoring_done", phase="vector_scoring", status="running", posts_scored=posts_scored_count, posts_deferred=len(runtime_deferred_posts), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet), scoring_stopped_by_runtime_budget=str(scoring_stopped_by_runtime_budget).lower())
+    if getenv_bool("REGION_TALK_LIGHTWEIGHT_REPORT", False):
+        lightweight_sheet_names = {
+            "00_product_summary", "00_readme", "01_run_summary", "02_increment",
+            "03_funnel", "03b_gate_counts", "04a_final_shortlist",
+            "04a_current_run_shortlist", "04p_publication_queue",
+            "04q_publication_confirmed", "06a_candidate_memory", "06b_candidate_memory_top",
+            "09a_image_candidate_queue", "09b_image_fetch_retry_queue",
+            "12e_telegram_keyword_discovery", "12e_keyword_posts",
+            "20_telegram_rate_observability", "24_source_yield_metrics",
+        }
+        report_sheets = {name: rows for name, rows in sheets.items() if name in lightweight_sheet_names}
+    else:
+        report_sheets = sheets
     xlsx = output_dir / f"region-talk-candidates-{run_id}.xlsx"
-    report_event("report_write_started", phase="report", status="running", xlsx=str(xlsx), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet))
-    write_xlsx(xlsx, sheets)
+    report_event("report_write_started", phase="report", status="running", xlsx=str(xlsx), candidates_created=len(candidates), image_queue_total=len(image_candidate_queue_sheet), report_sheet_count=len(report_sheets), lightweight_report=str(report_sheets is not sheets).lower())
+    write_xlsx(xlsx, report_sheets)
     candidate_event_rows = []
     def _candidate_event(stage: str, r: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -12469,7 +12482,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
     (output_dir / "run_events.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in run_event_rows) + "\n", encoding="utf-8")
     (output_dir / "stage_status.json").write_text(json.dumps({"run_id":run_id,"generated_at":run_now,"stage_counts":stage_counts,"summary":summary_row}, ensure_ascii=False, indent=2), encoding="utf-8")
     write_csv(output_dir / f"region-talk-candidates-{run_id}.csv", review_queue)
-    payload = {"ok": True, "run_id": run_id, "generated_at": run_now, "summary": run_summary[0], "sheets": sheets, "xlsx_path": str(xlsx)}
+    payload = {"ok": True, "run_id": run_id, "generated_at": run_now, "summary": run_summary[0], "sheets": report_sheets, "xlsx_path": str(xlsx)}
     (output_dir / f"region-talk-candidates-{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.md").write_text(render_md(payload), encoding="utf-8")
     (output_dir / f"region-talk-candidates-{run_id}.html").write_text(render_html(payload), encoding="utf-8")

@@ -25,6 +25,10 @@
   priority lane and exact-post handoff but no longer performs a competing
   immediate source-row reorder that the final unified queue handoff could
   overwrite.
+- **Region Talk / lightweight live report tail**: orchestrated CandidateReport
+  runs keep full state in YDB and export only product/funnel/shortlist and
+  observability sheets, instead of repeatedly serializing the 7k source ledger
+  into a large workbook plus duplicate JSON/HTML artifacts.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

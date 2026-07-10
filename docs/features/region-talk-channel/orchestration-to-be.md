@@ -249,6 +249,12 @@ Important invariants:
   handoff. Source-queue persistence is important, but it must not return the
   notebook early before `candidate_memory_item` rows have been checked against
   the strict image/product gate and blocker metrics have been emitted.
+- Orchestrated CandidateReport runs set `REGION_TALK_LIGHTWEIGHT_REPORT=1`.
+  Complete operational state remains in YDB; the per-run workbook/JSON contains
+  only summary, funnel, blocker, candidate/image/publication shortlist and
+  observability sheets. This avoids spending several tail minutes repeatedly
+  serializing the full multi-thousand-row source ledger. A deliberate offline
+  audit can unset the flag to build the full workbook.
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The

@@ -80,6 +80,10 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
     "REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE": "1",
+    # Full queue state is already durable in YDB. Keep per-run artifacts to the
+    # lightweight product/debug shortlist instead of serializing 7k source rows
+    # into a 40-sheet workbook and duplicate JSON/HTML copies every cycle.
+    "REGION_TALK_LIGHTWEIGHT_REPORT": "1",
     # Keep under the product requirement of <=30 minutes, but do not starve the
     # high-yield discovery/vector/image handoff stages. A 12-minute debug window
     # caused keyword discovery to be skipped and E5 to be capped to ~49 seconds

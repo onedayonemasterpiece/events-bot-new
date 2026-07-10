@@ -876,6 +876,10 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("prioritize_source_evidence", by_name)
         self.assertIn("--prioritize-source-evidence-only", by_name["prioritize_source_evidence"]["cmd"])
 
+    def test_candidate_profile_uses_lightweight_report_tail(self) -> None:
+        mod = load_module()
+        self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_LIGHTWEIGHT_REPORT"], "1")
+
 
 if __name__ == "__main__":
     unittest.main()
