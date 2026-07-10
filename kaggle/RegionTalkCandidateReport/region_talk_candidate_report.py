@@ -1207,8 +1207,8 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_filter_applied"] = "false"
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_quota"] = uncached_lane_quota
     rows = sorted(rows, key=lambda r: (
-        cached_entity_only and normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) == "telegram" and not source_queue_row_has_cached_entity(r, previous_state),
         source_queue_priority_bucket(r),
+        cached_entity_only and normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) == "telegram" and not source_queue_row_has_cached_entity(r, previous_state),
         str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
         int(r.get("queue_order") or 999999999) <= cursor,
         int(r.get("queue_order") or 999999999),

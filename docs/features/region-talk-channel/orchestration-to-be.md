@@ -386,7 +386,10 @@ Important invariants:
 - A strong actual-image finalist blocked only by sparse source evidence causes
   a marker on the existing source row. The next CandidateReport run selects
   this one bounded source-attestation scan before ordinary backlog; discovery,
-  keyword, fast-check and similar-channel intake remain enabled.
+  keyword, fast-check and similar-channel intake remain enabled. Product
+  priority is evaluated before cache preference, but uncached Telegram work is
+  still limited to one controlled resolve lane with the existing human-like
+  delays; ordinary cached sources retain preference inside the same lane.
 
 Pseudo-loop:
 

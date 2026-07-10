@@ -3580,6 +3580,47 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = old_quota
 
+    def test_uncached_publication_finalist_enters_controlled_resolve_lane_before_cached_backlog(self) -> None:
+        mod = load_module()
+        old_cached = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
+        old_quota = os.environ.get("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN")
+        try:
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
+            os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = "1"
+            queue = {
+                f"cached-{index}": {
+                    "platform": "telegram", "source_url": f"https://t.me/cached{index}",
+                    "queue_order": index + 10, "source_queue_status": "pending_scan",
+                }
+                for index in range(70)
+            }
+            queue["finalist"] = {
+                "platform": "telegram", "source_url": "https://t.me/finalist",
+                "queue_order": 1, "source_queue_status": "processed_found_ko_candidate",
+                "publication_source_evidence_priority": "true",
+                "publication_source_evidence_target_posts": 5,
+                "posts_scanned": 1,
+            }
+            state = {
+                "telegram_entity_cache": {
+                    f"telegram:username:cached{index}": {"channel_id_private": str(index + 1), "access_hash_private": str(index + 100)}
+                    for index in range(70)
+                },
+                "unified_source_queue": queue,
+            }
+            selected = mod.unified_queue_dynamic_seeds(state, 60)
+            self.assertEqual(selected[0].canonical_url, "https://t.me/finalist")
+            self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"], ["telegram:username:finalist"])
+        finally:
+            if old_cached is None:
+                os.environ.pop("REGION_TALK_TG_CACHED_ENTITY_ONLY", None)
+            else:
+                os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = old_cached
+            if old_quota is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = old_quota
+
     def test_governor_allows_only_selected_uncached_resolve_lane(self) -> None:
         mod = load_module()
         env_names = [

@@ -4,7 +4,9 @@
 - **Region Talk / full-funnel publication closure**: strong actual-image rows
   blocked only by sparse source evidence now promote that existing source for
   one bounded attestation scan; discovery remains enabled and strict
-  source/text/vector/image gates are unchanged.
+  source/text/vector/image gates are unchanged. Product-priority uncached
+  sources enter the single controlled resolve lane before the cached backlog,
+  without increasing the one-resolve quota or weakening human-like delays.
 - **Region Talk / single Gemini owner and hard budget**: the orchestrated
   CandidateReport no longer calls Gemini; the local finalizer owns final
   verification through the shared Supabase limiter, a durable deterministic
