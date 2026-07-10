@@ -65,6 +65,22 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.mod = load_module()
 
+    def test_gemini_fingerprint_changes_with_final_verifier_prompt_version(self) -> None:
+        row = {
+            "post_url": "https://t.me/travel/10",
+            "text": "Личное впечатление от поездки в Калининград",
+            "authoritative_source_fingerprint": "source-v2-value",
+            "publication_eligibility_gate_version": "region_talk_publication_eligibility_v1",
+        }
+        first = self.mod.gemini_request_fingerprint(row, model="fake")
+        old = self.mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION
+        try:
+            self.mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "changed-prompt-version"
+            second = self.mod.gemini_request_fingerprint(row, model="fake")
+        finally:
+            self.mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = old
+        self.assertNotEqual(first, second)
+
     def test_source_class_guess_uses_region_talk_local_source_filter(self) -> None:
         self.assertEqual(
             self.mod.source_class_guess("Дом китобоя", "https://t.me/domkitoboya", {}),

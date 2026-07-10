@@ -80,6 +80,7 @@ def gemini_request_fingerprint(row: dict[str, Any], *, model: str) -> str:
         "image": [row.get("overall_media_score"), row.get("postcardness_score"), row.get("image_queue_status")],
         "source": row.get("authoritative_source_fingerprint"),
         "gate": row.get("publication_eligibility_gate_version"),
+        "prompt": rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "model": model,
     }
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()

@@ -2,6 +2,15 @@
 
 Status: MVP product-goal queue. Auto-publishing to public Telegram/VK remains disabled; this queue is for human/product review and local operator notifications.
 
+The final Gemini verifier is intentionally stricter than regional relevance.
+`accept` requires KO as the main subject, a grounded firsthand visit or clearly
+attributed subscriber travel/photo report, personal emotion/impression or
+review, and a concrete memorable/unusual/useful detail. Generic destination
+cards, official route material, coordinates-only posts, ads, news and roundups
+must not reach the review chat merely because their image is attractive. The
+prompt version is part of the durable request fingerprint so a tightened policy
+cannot replay an older, weaker verdict.
+
 ## Product criteria
 
 A post can enter `publication_candidate_item` only when all of the following are true:

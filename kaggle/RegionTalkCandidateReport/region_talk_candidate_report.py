@@ -9113,6 +9113,9 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     return text[:max(300, limit)]
 
 
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v2"
+
+
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
     text = _region_talk_llm_text(post)
     slim_evidence = {
@@ -9133,11 +9136,15 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
     }
     payload = {
         "task": "Return JSON: final Region Talk verifier for one Telegram/VK post.",
+        "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "rules": [
             "accept only if Kaliningrad Oblast is the main subject",
             "reject ads/promos/events/news/trash and multi-region roundups where Kaliningrad is one item",
-            "needs_review if text or actual-image evidence is insufficient",
-            "single Kaliningrad location/photo card is not a multi-region roundup",
+            "accept only a firsthand visit or attributed subscriber report",
+            "accept only with personal emotion/review AND a concrete memorable, unusual, or useful detail",
+            "reject generic cards, coordinates, official routes, and impersonal promotion even with a good image",
+            "needs_review if text, visit/authorship, or actual-image evidence is insufficient",
+            "a single-location KO card is not a roundup but still needs experience and story value",
         ],
         "evidence": slim_evidence,
         "post": {
@@ -9160,6 +9167,38 @@ def parse_llm_json(text: str) -> dict[str, Any]:
         match = re.search(r"\{.*\}", raw, flags=re.S)
         data = json.loads(match.group(0)) if match else {}
     return data if isinstance(data, dict) else {}
+
+
+def _llm_json_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _final_verifier_acceptance_violations(data: dict[str, Any]) -> list[str]:
+    """Fail closed when an LLM `accept` contradicts its structured evidence."""
+    violations: list[str] = []
+    try:
+        region_score = float(data.get("whole_post_about_kaliningrad_oblast_score") or 0.0)
+    except (TypeError, ValueError):
+        region_score = 0.0
+    if str(data.get("kaliningrad_mention_role") or "").strip().lower() != "main_subject" or region_score < 0.8:
+        violations.append("ko_not_confirmed_as_main_subject")
+    if any(_llm_json_bool(data.get(key)) for key in ("is_ad_or_promo", "is_news_or_trash", "is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup")):
+        violations.append("promo_news_or_digest")
+    if not (
+        _llm_json_bool(data.get("has_firsthand_visit_evidence"))
+        or _llm_json_bool(data.get("is_photo_card_from_subscriber"))
+    ):
+        violations.append("no_grounded_visit_or_subscriber_report")
+    if not (
+        _llm_json_bool(data.get("emotion_or_impression_evidence"))
+        or _llm_json_bool(data.get("review_or_opinion_evidence"))
+    ):
+        violations.append("no_emotion_or_review")
+    if not _llm_json_bool(data.get("memorable_detail_evidence")):
+        violations.append("no_memorable_or_useful_detail")
+    return violations
 
 
 class _SupabaseRestResult:
@@ -9403,6 +9442,12 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
         decision = str(data.get("decision") or "needs_review").strip().lower()
         if decision not in {"accept", "needs_review", "reject"}:
             decision = "needs_review"
+        acceptance_violations = _final_verifier_acceptance_violations(data) if decision == "accept" else []
+        if acceptance_violations:
+            decision = "needs_review"
+        llm_reason = str(data.get("reason") or "")[:500]
+        if acceptance_violations:
+            llm_reason = ("accept_consistency_guard: " + ",".join(acceptance_violations) + "; " + llm_reason)[:500]
         return {
             "llm_gate_status": "ok",
             "llm_provider": "google_gemini",
@@ -9412,24 +9457,24 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             "llm_decision": decision,
             "whole_post_about_kaliningrad_oblast_score": data.get("whole_post_about_kaliningrad_oblast_score", ""),
             "kaliningrad_mention_role": str(data.get("kaliningrad_mention_role") or "unclear"),
-            "is_digest_or_roundup": str(bool(data.get("is_digest_or_roundup"))).lower(),
-            "is_multi_region_roundup": str(bool(data.get("is_multi_region_roundup"))).lower(),
-            "is_multi_topic_digest": str(bool(data.get("is_multi_topic_digest"))).lower(),
-            "is_single_location_card": str(bool(data.get("is_single_location_card"))).lower(),
-            "is_author_visit_impression": str(bool(data.get("is_author_visit_impression"))).lower(),
-            "is_official_route_material": str(bool(data.get("is_official_route_material"))).lower(),
-            "is_photo_card_from_subscriber": str(bool(data.get("is_photo_card_from_subscriber"))).lower(),
-            "llm_is_ad_or_promo": str(bool(data.get("is_ad_or_promo"))).lower(),
-            "llm_is_news_or_trash": str(bool(data.get("is_news_or_trash"))).lower(),
+            "is_digest_or_roundup": str(_llm_json_bool(data.get("is_digest_or_roundup"))).lower(),
+            "is_multi_region_roundup": str(_llm_json_bool(data.get("is_multi_region_roundup"))).lower(),
+            "is_multi_topic_digest": str(_llm_json_bool(data.get("is_multi_topic_digest"))).lower(),
+            "is_single_location_card": str(_llm_json_bool(data.get("is_single_location_card"))).lower(),
+            "is_author_visit_impression": str(_llm_json_bool(data.get("is_author_visit_impression"))).lower(),
+            "is_official_route_material": str(_llm_json_bool(data.get("is_official_route_material"))).lower(),
+            "is_photo_card_from_subscriber": str(_llm_json_bool(data.get("is_photo_card_from_subscriber"))).lower(),
+            "llm_is_ad_or_promo": str(_llm_json_bool(data.get("is_ad_or_promo"))).lower(),
+            "llm_is_news_or_trash": str(_llm_json_bool(data.get("is_news_or_trash"))).lower(),
             "llm_content_type": str(data.get("content_type") or ""),
             "content_type": str(data.get("content_type") or ""),
             "visit_evidence_type": str(data.get("visit_evidence_type") or ""),
-            "has_firsthand_visit_evidence": str(bool(data.get("has_firsthand_visit_evidence"))).lower(),
-            "emotion_or_impression_evidence": str(bool(data.get("emotion_or_impression_evidence"))).lower(),
-            "review_or_opinion_evidence": str(bool(data.get("review_or_opinion_evidence"))).lower(),
-            "memorable_detail_evidence": str(bool(data.get("memorable_detail_evidence"))).lower(),
-            "original_photo_evidence": str(bool(data.get("original_photo_evidence"))).lower(),
-            "llm_reason": str(data.get("reason") or "")[:500],
+            "has_firsthand_visit_evidence": str(_llm_json_bool(data.get("has_firsthand_visit_evidence"))).lower(),
+            "emotion_or_impression_evidence": str(_llm_json_bool(data.get("emotion_or_impression_evidence"))).lower(),
+            "review_or_opinion_evidence": str(_llm_json_bool(data.get("review_or_opinion_evidence"))).lower(),
+            "memorable_detail_evidence": str(_llm_json_bool(data.get("memorable_detail_evidence"))).lower(),
+            "original_photo_evidence": str(_llm_json_bool(data.get("original_photo_evidence"))).lower(),
+            "llm_reason": llm_reason,
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
             "llm_usage_total_tokens": getattr(usage, "total_tokens", ""),

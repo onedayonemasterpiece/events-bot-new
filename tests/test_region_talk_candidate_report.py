@@ -1993,13 +1993,51 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
                     input_tokens = 1
                     output_tokens = 1
                     total_tokens = 2
-                return '{"decision":"accept","reason":"ok"}', Usage()
+                return json.dumps({
+                    "decision": "accept",
+                    "whole_post_about_kaliningrad_oblast_score": 0.95,
+                    "kaliningrad_mention_role": "main_subject",
+                    "has_firsthand_visit_evidence": True,
+                    "emotion_or_impression_evidence": True,
+                    "review_or_opinion_evidence": True,
+                    "memorable_detail_evidence": True,
+                    "reason": "grounded personal visit",
+                }), Usage()
         mod.get_region_talk_llm_gateway = lambda default_env_var_name: FakeClient()
         async def inner():
             return mod.call_region_talk_semantic_llm({"text":"Калининград"}, {}, model="fake", default_env_var_name="GOOGLE_API_KEY3")
         result = __import__('asyncio').run(inner())
         self.assertEqual(result["llm_gate_status"], "ok")
         self.assertEqual(result["llm_decision"], "accept")
+
+    def test_llm_accept_without_personal_story_evidence_fails_closed(self) -> None:
+        mod = load_module()
+
+        class FakeClient:
+            async def generate_content_async(self, **kwargs):
+                return json.dumps({
+                    "decision": "accept",
+                    "whole_post_about_kaliningrad_oblast_score": 0.95,
+                    "kaliningrad_mention_role": "main_subject",
+                    "is_single_location_card": True,
+                    "has_firsthand_visit_evidence": False,
+                    "emotion_or_impression_evidence": False,
+                    "review_or_opinion_evidence": False,
+                    "memorable_detail_evidence": False,
+                    "reason": "generic location card",
+                }), object()
+
+        mod.get_region_talk_llm_gateway = lambda default_env_var_name: FakeClient()
+        result = mod.call_region_talk_semantic_llm(
+            {"text": "Черняховск. Координаты. К посещению обязательно."},
+            {},
+            model="fake",
+            default_env_var_name="GOOGLE_API_KEY3",
+        )
+        self.assertEqual(result["llm_gate_status"], "ok")
+        self.assertEqual(result["llm_decision"], "needs_review")
+        self.assertIn("no_grounded_visit_or_subscriber_report", result["llm_reason"])
+        self.assertIn("no_emotion_or_review", result["llm_reason"])
 
     def test_llm_call_timeout_returns_structured_error(self) -> None:
         mod = load_module()
@@ -2058,6 +2096,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             self.assertLessEqual(len(data["post"]["text"]), 900)
             self.assertNotIn("large_unused_debug", prompt)
             self.assertNotIn("debug_blob", prompt)
+            self.assertEqual(data["prompt_version"], mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION)
+            self.assertTrue(any("personal emotion" in rule for rule in data["rules"]))
         finally:
             if old is None:
                 os.environ.pop("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS", None)

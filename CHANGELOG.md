@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / product-strict Gemini verifier**: final acceptance now
+  requires grounded visit/subscriber evidence, emotion or review, and a
+  memorable/useful detail in addition to KO-only scope and strong actual
+  imagery. Generic destination cards fail closed; prompt version participates
+  in the durable request fingerprint so earlier permissive verdicts are not
+  replayed.
 - **Region Talk / full-funnel publication closure**: strong actual-image rows
   blocked only by sparse source evidence now promote that existing source for
   one bounded attestation scan; discovery remains enabled and strict
