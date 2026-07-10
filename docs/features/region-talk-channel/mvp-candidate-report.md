@@ -861,6 +861,10 @@ Likewise, the final compact-state row projection uses bounded YDB bulk writes
 (`REGION_TALK_YDB_SNAPSHOT_BULK_CHUNK_SIZE`, default 500) because those
 independent stable-key snapshots do not require one cross-row transaction.
 Live queue transitions and heartbeats keep the transactional OLTP writer.
+After the terminal `report_written` event, CandidateReport explicitly stops the
+status heartbeat client and closes its shared YDB heartbeat driver before the
+cell returns. This prevents an otherwise finished notebook from retaining a
+Kaggle `RUNNING` slot while SDK background clients drain only at `atexit`.
 For strict pre-image eligibility, an authoritative source is also considered
 confirmed external when its canonical source-ledger row passed the surface
 guard (`source_quick_class=candidate_keep`), has at least five actually scanned

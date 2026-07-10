@@ -2923,6 +2923,21 @@ def close_region_talk_business_heartbeat() -> None:
 atexit.register(close_region_talk_business_heartbeat)
 
 
+def close_region_talk_runtime_clients(status: Any | None = None) -> None:
+    """Release background status/YDB clients before the Kaggle cell returns.
+
+    Relying only on ``atexit`` can leave the kernel marked RUNNING after the
+    terminal report event while SDK background threads are still draining.
+    """
+    client = getattr(status, "client", None) if status is not None else None
+    if client is not None and hasattr(client, "stop_alive"):
+        try:
+            client.stop_alive()
+        except Exception:
+            pass
+    close_region_talk_business_heartbeat()
+
+
 def ydb_upsert_json(session: Any, ydb: Any, table_path: str, pk: str, kind: str, payload: dict[str, Any], updated_at: str, *, timeout_seconds: int | None = None) -> None:
     settings = ydb_request_settings(ydb, timeout_seconds=timeout_seconds)
     query = session.prepare(f"""
@@ -12754,6 +12769,7 @@ async def amain() -> int:
         payload = run_vector_probe(run_id, out_dir, status=status)
         summary = payload.get('summary', {})
         status.event('report_written', phase='vector_probe', status=str(payload.get('status') or 'error'), run_id=run_id, posts_fetched=0, candidates_created=0, favorites_created=0, state_backend=region_talk_state_backend_requested(), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), text_embedding_models=summary.get('text_embedding_models'), text_embedding_error=summary.get('error'))
+        close_region_talk_runtime_clients(status)
         return 0 if payload.get('ok') else 1
     source_rows, posts = await fetch_telegram_posts(seeds, status, out_dir)
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
@@ -12761,6 +12777,7 @@ async def amain() -> int:
     summary = payload.get('summary', {})
     terminal_status = 'partial' if str(payload.get('status') or summary.get('status') or '').lower() == 'partial' else 'done'
     status.event('report_written', phase='report', status=terminal_status, run_id=run_id, posts_fetched=summary.get('posts_fetched'), candidates_created=summary.get('candidates_created'), favorites_created=summary.get('favorites_created'), xlsx=str(payload.get('latest_xlsx')), state_backend=summary.get('state_backend'), ydb_read_status=summary.get('ydb_read_status'), ydb_write_status=summary.get('ydb_write_status'), ydb_state_mode=summary.get('ydb_state_mode'), vk_wall_probe_status=summary.get('vk_wall_probe_status'), sources_history_fetched_ok=summary.get('sources_history_fetched_ok'), current_run_reviewable_candidates=summary.get('current_run_reviewable_candidates'), partial_reason=summary.get('partial_reason'))
+    close_region_talk_runtime_clients(status)
     return 0
 
 

@@ -17,6 +17,10 @@
   BGE-M3 from the worker-compatible pending sample instead of repeatedly
   starting zero-row CPU notebooks for legacy/version pair gaps whose BGE PKs
   already exist.
+- **Region Talk / terminal kernel cleanup**: CandidateReport now closes its
+  status heartbeat and shared YDB heartbeat clients immediately after the
+  terminal report event instead of relying only on `atexit`, reducing stale
+  Kaggle `RUNNING` slots after product work is already complete.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve
