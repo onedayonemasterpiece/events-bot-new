@@ -11,11 +11,14 @@ OUT = Path(os.getenv("REGION_TALK_IMAGE_DIAG_OUTPUT_DIR") or f"/kaggle/working/{
 MEDIA = OUT / "media"
 THUMBS = OUT / "contact_sheet_assets"
 IMAGE_TERMINAL_UNSUPPORTED_STATUS = "not_reviewable_unsupported_media"
+IMAGE_TERMINAL_ELIGIBILITY_STATUS = "rejected_publication_eligibility"
 IMAGE_TERMINAL_SKIP_STATUSES = {
     "not_reviewable_no_media",
     IMAGE_TERMINAL_UNSUPPORTED_STATUS,
     "rejected_text_gate",
 }
+PUBLICATION_ELIGIBILITY_ACCEPT = "accept"
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
 UNSUPPORTED_MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
@@ -143,6 +146,108 @@ secret_status = load_secrets()
 rows = input_payload.get("rows") or []
 limit = int(os.getenv("REGION_TALK_IMAGE_DIAG_TOP_N") or input_payload.get("top_n") or 50)
 
+
+def expected_publication_eligibility_gate_version() -> str:
+    """Return the producer/consumer contract version required by this run."""
+    return str(
+        os.getenv("REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION")
+        or os.getenv("REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION")
+        or input_payload.get("expected_publication_eligibility_gate_version")
+        or input_payload.get("publication_eligibility_gate_version")
+        or runtime_config.get("expected_publication_eligibility_gate_version")
+        or runtime_config.get("publication_eligibility_gate_version")
+        or PUBLICATION_ELIGIBILITY_GATE_VERSION
+    ).strip()
+
+
+def _local_source_eligibility_reason(row: dict) -> str:
+    """Recognize durable local-source classifications without reclassifying text."""
+    markers = {
+        "source_scope": str(row.get("source_scope") or "").strip().lower(),
+        "source_geo_class": str(row.get("source_geo_class") or "").strip().lower(),
+        "source_quick_class": str(row.get("source_quick_class") or "").strip().lower(),
+        "source_topic_class": str(row.get("source_topic_class") or "").strip().lower(),
+        "source_queue_status": str(row.get("source_queue_status") or "").strip().lower(),
+        "image_product_gate_reason": str(row.get("image_product_gate_reason") or "").strip().lower(),
+    }
+    local_values = {
+        "local_region",
+        "kaliningrad_local",
+        "local_region_source",
+        "local_region_source_surface",
+        "rejected_local_region_source",
+        "local_kaliningrad_source_for_separate_monitoring",
+    }
+    for field, value in markers.items():
+        if value in local_values or value.startswith("local_kaliningrad_source"):
+            return f"local_source_marker:{field}={value}"
+    return ""
+
+
+def publication_eligibility_gate_reason(row: dict) -> str:
+    """Fail closed unless CandidateReport signed this exact gate contract."""
+    local_reason = _local_source_eligibility_reason(row)
+    if local_reason:
+        return local_reason
+    decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
+    if decision != PUBLICATION_ELIGIBILITY_ACCEPT:
+        return "publication_eligibility_decision_missing" if not decision else f"publication_eligibility_decision_not_accept:{decision}"
+    actual_version = str(row.get("publication_eligibility_gate_version") or "").strip()
+    expected_version = expected_publication_eligibility_gate_version()
+    if not actual_version:
+        return "publication_eligibility_gate_version_missing"
+    if actual_version != expected_version:
+        return f"publication_eligibility_gate_version_mismatch:expected={expected_version};actual={actual_version}"
+    return ""
+
+
+def apply_publication_eligibility_audit(row: dict, *, reason: str | None = None) -> dict:
+    """Persist the observed attestation and the consumer's gate result."""
+    gate_reason = publication_eligibility_gate_reason(row) if reason is None else reason
+    observed_decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
+    observed_version = str(row.get("publication_eligibility_gate_version") or "").strip()
+    row["image_eligibility_decision"] = observed_decision or "missing"
+    row["image_eligibility_gate_version"] = observed_version or "missing"
+    row["image_eligibility_expected_gate_version"] = expected_publication_eligibility_gate_version()
+    row["image_eligibility_reason"] = gate_reason or str(row.get("publication_eligibility_reason") or "accepted")
+    row["image_eligibility_status"] = "blocked" if gate_reason else "accepted"
+    row["image_eligibility_checked_at"] = datetime.now(timezone.utc).isoformat()
+    if gate_reason and not str(row.get("publication_eligibility_reason") or "").strip():
+        row["publication_eligibility_reason"] = gate_reason
+    return row
+
+
+def mark_publication_eligibility_blocked(row: dict, reason: str) -> dict:
+    previous_status = str(row.get("image_queue_status") or "")
+    apply_publication_eligibility_audit(row, reason=reason)
+    row["previous_image_queue_status"] = previous_status
+    row["image_queue_status"] = IMAGE_TERMINAL_ELIGIBILITY_STATUS
+    row["media_acquisition_status"] = "blocked_publication_eligibility"
+    row["final_visual_status"] = "blocked_publication_eligibility"
+    row["images_scored_actual_count"] = 0
+    row["next_action"] = "recompute_publication_eligibility_before_image_analysis"
+    row["status_changed_this_run"] = str(previous_status != IMAGE_TERMINAL_ELIGIBILITY_STATUS).lower()
+    if previous_status != IMAGE_TERMINAL_ELIGIBILITY_STATUS or not row.get("last_status_changed_at"):
+        row["last_status_changed_at"] = datetime.now(timezone.utc).isoformat()
+    return row
+
+
+def partition_publication_eligible_rows(batch: list[dict]) -> tuple[list[dict], list[dict]]:
+    eligible: list[dict] = []
+    blocked: list[dict] = []
+    for row in batch:
+        reason = publication_eligibility_gate_reason(row)
+        if reason:
+            blocked.append(mark_publication_eligibility_blocked(row, reason))
+        else:
+            eligible.append(apply_publication_eligibility_audit(row, reason=""))
+    return eligible, blocked
+
+
+def expose_publication_eligibility_counters(*, pending: int, blocked: int) -> None:
+    input_payload["publication_eligibility_pending_count"] = max(0, int(pending))
+    input_payload["publication_eligibility_blocked_count"] = max(0, int(blocked))
+
 def ydb_table_name(suffix: str = "state_kv") -> str:
     ns = re.sub(r"[^A-Za-z0-9_]+", "_", (os.getenv("REGION_TALK_YDB_NAMESPACE") or "region_talk").strip() or "region_talk").strip("_") or "region_talk"
     return f"{ns}_{suffix}"
@@ -183,7 +288,7 @@ def write_region_talk_image_diag_heartbeat(payload: dict):
     if (os.getenv("REGION_TALK_IMAGE_DIAG_HEARTBEAT_YDB") or "1").lower() in {"0","false","no"}: return
     if (os.getenv("REGION_TALK_STATE_BACKEND") or "").lower() != "ydb" and not os.getenv("REGION_TALK_YDB_ENDPOINT"): return
     ydb, driver, table_path = ydb_connect(); pool=ydb.SessionPool(driver); now=datetime.now(timezone.utc).isoformat()
-    allowed=["run_id","event_name","created_at","phase","reason","attempt","total","leased","remaining_budget","batch_index","rows","actual_scored","actual_images","failures","xlsx","html","summary","source","max_items_per_run","batch_size","poll_interval_seconds","wait_initial_seconds","wait_after_drain_seconds"]
+    allowed=["run_id","event_name","created_at","phase","reason","attempt","total","leased","remaining_budget","pending","blocked","publication_eligibility_pending_count","publication_eligibility_blocked_count","batch_index","rows","actual_scored","actual_images","failures","xlsx","html","summary","source","max_items_per_run","batch_size","poll_interval_seconds","wait_initial_seconds","wait_after_drain_seconds"]
     clean={k:payload.get(k) for k in allowed if payload.get(k) not in (None,"",[],{})}
     clean.setdefault("run_id", RUN_ID); clean.setdefault("updated_at", now); clean.setdefault("notebook", "RegionTalkImageDiagnostic")
     def op(session):
@@ -216,6 +321,10 @@ def ydb_upsert_cursor(name: str, payload: dict):
             "total": payload.get("total"),
             "leased": payload.get("leased"),
             "remaining_budget": payload.get("remaining_budget"),
+            "pending": payload.get("pending"),
+            "blocked": payload.get("blocked"),
+            "publication_eligibility_pending_count": payload.get("publication_eligibility_pending_count"),
+            "publication_eligibility_blocked_count": payload.get("publication_eligibility_blocked_count"),
             "progress_label": payload.get("progress_label"),
         }.items() if v not in (None, "", [], {})}
         def op(session):
@@ -300,6 +409,7 @@ UPSERT INTO `{table_path}` (pk, kind, payload_json, updated_at) VALUES ($pk, 'im
         for r in batch:
             key=str(r.get("image_queue_id") or r.get("post_url") or r.get("_ydb_pk") or "")
             if not key: continue
+            apply_publication_eligibility_audit(r)
             previous_status=str(r.get("image_queue_status") or "")
             r["last_image_diag_run_id"]=RUN_ID; r["last_image_diag_stage"]=stage; r["last_image_diag_at"]=now
             r["queue_item_updated_at"] = now
@@ -346,6 +456,7 @@ def ydb_update_source_visual_rollups():
         sid=str(srow.get("source_id") or "")
         matches=[]
         for ir in image_rows:
+            if publication_eligibility_gate_reason(ir): continue
             if not text_region_confirmed(ir): continue
             if sid and str(ir.get("source_id") or "") == sid:
                 matches.append(ir); continue
@@ -383,8 +494,11 @@ def ydb_update_source_visual_rollups():
 
 def ydb_rows_for_diagnostic(limit_n: int):
     raw=ydb_select_image_queue(limit_n)
+    eligible_raw, blocked = partition_publication_eligible_rows(raw)
+    if blocked:
+        ydb_upsert_image_rows(blocked, stage="blocked_publication_eligibility")
     pending=[]
-    for r in raw:
+    for r in eligible_raw:
         if not text_region_confirmed(r): continue
         status=str(r.get("image_queue_status") or "")
         input_type=str(r.get("image_model_input_type") or "")
@@ -403,6 +517,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
             r["stale_lease_reclaimed_from_run_id"] = lease
             r["stale_lease_reclaimed_at"] = datetime.now(timezone.utc).isoformat()
         pending.append(r)
+    expose_publication_eligibility_counters(pending=len(pending), blocked=len(blocked))
     pending=sorted(pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))[:limit_n]
     now=datetime.now(timezone.utc).isoformat()
     for r in pending:
@@ -418,7 +533,9 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
         try:
             batch, total = ydb_rows_for_diagnostic(limit_n)
             input_payload["queue_rows_total"] = total
-            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n)
+            eligibility_pending = int(input_payload.get("publication_eligibility_pending_count") or 0)
+            eligibility_blocked = int(input_payload.get("publication_eligibility_blocked_count") or 0)
+            log_event("image_queue_poll", phase="poll", reason=reason, attempt=attempt, total=total, leased=len(batch), remaining_budget=limit_n, pending=eligibility_pending, blocked=eligibility_blocked, publication_eligibility_pending_count=eligibility_pending, publication_eligibility_blocked_count=eligibility_blocked)
             ydb_upsert_cursor("image_diagnostic", {
                 "phase": "poll",
                 "status": "running",
@@ -429,7 +546,11 @@ def poll_ydb_image_queue(limit_n: int, *, wait_seconds: int, reason: str):
                 "total": total,
                 "leased": len(batch),
                 "remaining_budget": limit_n,
-                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}",
+                "pending": eligibility_pending,
+                "blocked": eligibility_blocked,
+                "publication_eligibility_pending_count": eligibility_pending,
+                "publication_eligibility_blocked_count": eligibility_blocked,
+                "progress_label": f"image diagnostic poll leased {len(batch)}/{total}; eligibility pending={eligibility_pending} blocked={eligibility_blocked}",
             })
             if batch:
                 return batch, total
@@ -453,7 +574,7 @@ if source_mode != "ydb":
 else:
     rows = []
     input_payload["source"] = "ydb"
-log_event("kernel_started", run_id=RUN_ID, source=input_payload.get("source") or source_mode, max_items_per_run=MAX_ITEMS_PER_RUN, batch_size=BATCH_SIZE, poll_interval_seconds=POLL_INTERVAL_SECONDS, wait_initial_seconds=WAIT_INITIAL_SECONDS, wait_after_drain_seconds=WAIT_AFTER_DRAIN_SECONDS, input_rows=len(rows), secret_status={"ok": secret_status.get("ok"), "keys_count": len(secret_status.get("keys") or [])})
+log_event("kernel_started", run_id=RUN_ID, source=input_payload.get("source") or source_mode, max_items_per_run=MAX_ITEMS_PER_RUN, batch_size=BATCH_SIZE, poll_interval_seconds=POLL_INTERVAL_SECONDS, wait_initial_seconds=WAIT_INITIAL_SECONDS, wait_after_drain_seconds=WAIT_AFTER_DRAIN_SECONDS, input_rows=len(rows), publication_eligibility_gate_version=expected_publication_eligibility_gate_version(), secret_status={"ok": secret_status.get("ok"), "keys_count": len(secret_status.get("keys") or [])})
 
 model_availability = {
     "cv_local_baseline": {"available": True, "detail": "PIL resolution/sharpness/brightness/contrast baseline"},
@@ -843,14 +964,22 @@ def apply_image_queue_status(r):
     return r
 
 def process_batch(batch_rows, batch_index: int):
-    rows = batch_rows
-    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows))
+    rows, eligibility_blocked_rows = partition_publication_eligible_rows(batch_rows)
+    if eligibility_blocked_rows:
+        expose_publication_eligibility_counters(pending=len(rows), blocked=len(eligibility_blocked_rows))
+        ydb_upsert_image_rows(eligibility_blocked_rows, stage="blocked_publication_eligibility")
+    elif source_mode != "ydb":
+        expose_publication_eligibility_counters(pending=len(rows), blocked=0)
+    eligibility_pending_count = int(input_payload.get("publication_eligibility_pending_count") or 0)
+    eligibility_blocked_count = int(input_payload.get("publication_eligibility_blocked_count") or 0)
+    log_event("image_batch_started", phase="batch", batch_index=batch_index, rows=len(rows), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count)
     # Fetch media, no source/comment scanning.
     tg=[r for r in rows if "t.me/" in (r.get("post_url") or "")]
     vk=[r for r in rows if "vk.com/wall" in (r.get("post_url") or "")]
     log_event("media_fetch_started", phase="media_fetch", telegram=len(tg), vk=len(vk), total=len(rows))
     try:
-        asyncio.run(fetch_telegram(tg))
+        if tg:
+            asyncio.run(fetch_telegram(tg))
         for r in tg:
             ydb_upsert_image_rows([r], stage="media_fetch_result")
     except Exception as exc:
@@ -888,8 +1017,9 @@ def process_batch(batch_rows, batch_index: int):
         apply_image_queue_status(r)
     ydb_upsert_image_rows(rows, stage="scored_or_retry")
     ydb_update_source_visual_rollups()
-    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"))
-    return rows
+    result_rows = rows + eligibility_blocked_rows
+    log_event("image_batch_done", phase="batch", batch_index=batch_index, rows=len(result_rows), actual_scored=sum(1 for r in rows if r.get("image_queue_status")=="actual_scored"), pending=eligibility_pending_count, blocked=eligibility_blocked_count, publication_eligibility_pending_count=eligibility_pending_count, publication_eligibility_blocked_count=eligibility_blocked_count)
+    return result_rows
 
 all_processed_rows=[]
 if source_mode == "ydb":
@@ -938,6 +1068,8 @@ def timing_stats(field, data):
 summary=[
     {"metric":"run_id","value":RUN_ID}, {"metric":"input_rows","value":len(rows)}, {"metric":"actual_images_count","value":len(actual_rows)},
     {"metric":"metadata_only_count","value":len(rows)-len(actual_rows)}, {"metric":"failures_count","value":len(errors)},
+    {"metric":"publication_eligibility_pending_count","value":int(input_payload.get("publication_eligibility_pending_count") or 0)},
+    {"metric":"publication_eligibility_blocked_count","value":int(input_payload.get("publication_eligibility_blocked_count") or 0)},
     {"metric":"elapsed_seconds","value":round(time.monotonic()-RUN_STARTED,3)}, {"metric":"generated_at","value":datetime.now(timezone.utc).isoformat()},
 ]
 for field in ("media_download_seconds","image_decode_seconds","cv_inference_seconds","clip_inference_seconds","laion_inference_seconds","nima_inference_seconds","total_inference_seconds","total_processing_seconds"):
