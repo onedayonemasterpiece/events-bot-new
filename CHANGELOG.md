@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / terminal source-attestation cleanup**: Gemini-rejected,
+  needs-review and revoked publication rows no longer remain in the source
+  evidence backlog; finalizer clears their source priority marker so rejected
+  posts cannot trigger repeated attestation scans.
 - **Region Talk / product-strict Gemini verifier**: final acceptance now
   requires grounded visit/subscriber evidence, emotion or review, and a
   memorable/useful detail in addition to KO-only scope and strong actual

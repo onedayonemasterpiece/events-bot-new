@@ -1082,7 +1082,16 @@ def _publication_handoff_metrics(
             scanned = 0
         return scanned < max(1, int(os.getenv("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS") or "5"))
 
-    source_evidence_urls = sorted(url for url, row in actual_by_url.items() if needs_source_evidence(row))
+    def publication_is_terminal_non_candidate(url: str) -> bool:
+        publication = publication_by_url.get(url) or {}
+        candidate_status = str(publication.get("publication_candidate_status") or "")
+        publication_status = str(publication.get("publication_status") or "")
+        return candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"} or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}
+
+    source_evidence_urls = sorted(
+        url for url, row in actual_by_url.items()
+        if needs_source_evidence(row) and not publication_is_terminal_non_candidate(url)
+    )
 
     def needs_finalizer(row: dict[str, Any] | None) -> bool:
         if not row:

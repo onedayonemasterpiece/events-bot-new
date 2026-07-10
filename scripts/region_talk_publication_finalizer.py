@@ -624,6 +624,11 @@ def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str
     target_posts = max(1, _env_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
     by_key: dict[str, dict[str, Any]] = {}
     for row in rows:
+        previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+        candidate_status = str(row.get("publication_candidate_status") or previous.get("publication_candidate_status") or "")
+        publication_status = str(row.get("publication_status") or previous.get("publication_status") or "")
+        if candidate_status in {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"} or publication_status in {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}:
+            continue
         source = row.get("_authoritative_source")
         if not isinstance(source, dict) or not source:
             continue
@@ -655,6 +660,38 @@ def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str
             "queue_item_updated_at": now_iso,
         }
         by_key[key] = updated
+    return list(by_key.values())
+
+
+def source_evidence_priority_clear_updates(rows: list[dict[str, Any]], *, now_iso: str) -> list[dict[str, Any]]:
+    """Clear attestation priority after the associated post is terminally out."""
+    by_key: dict[str, dict[str, Any]] = {}
+    terminal_candidates = {"llm_rejected", "llm_needs_review", "filtered_before_llm", "revoked"}
+    terminal_publications = {"gemini_reject", "gemini_needs_review", "eligibility_revoked"}
+    for row in rows:
+        previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
+        candidate_status = str(row.get("publication_candidate_status") or previous.get("publication_candidate_status") or "")
+        publication_status = str(row.get("publication_status") or previous.get("publication_status") or "")
+        if candidate_status not in terminal_candidates and publication_status not in terminal_publications:
+            continue
+        source = row.get("_authoritative_source")
+        if not isinstance(source, dict) or not source or not rt._rt_bool(source.get("publication_source_evidence_priority")):
+            continue
+        key = canonical_source_key_for_row(source) or canonical_source_key_for_row(row)
+        if not key:
+            continue
+        by_key[key] = {
+            **source,
+            "publication_source_evidence_priority": "false",
+            "publication_source_evidence_post_url": "",
+            "publication_source_evidence_cleared_at": now_iso,
+            "publication_source_evidence_clear_reason": "publication_terminal_non_candidate",
+            "priority_lane": "",
+            "priority_reason": "",
+            "priority_updated_at": now_iso,
+            "next_action": "normal_queue_policy",
+            "queue_item_updated_at": now_iso,
+        }
     return list(by_key.values())
 
 
@@ -991,9 +1028,16 @@ def main() -> int:
     out_dir = args.output_dir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     ydb, driver, pool, table, rows = read_live_rows(args.limit_images, args.limit_memory, reverify_existing=args.reverify_existing)
-    source_priority_rows = source_evidence_priority_updates(rows, now_iso=rt.utc_now_iso())
+    priority_now = rt.utc_now_iso()
+    source_priority_rows = source_evidence_priority_updates(rows, now_iso=priority_now)
+    source_priority_clear_rows = source_evidence_priority_clear_updates(rows, now_iso=priority_now)
+    source_rows_by_key = {
+        canonical_source_key_for_row(row): row
+        for row in source_priority_rows + source_priority_clear_rows
+        if canonical_source_key_for_row(row)
+    }
     source_priority_written = 0 if args.dry_run else write_source_evidence_priority_rows(
-        pool, ydb, table, source_priority_rows, run_id=run_id,
+        pool, ydb, table, list(source_rows_by_key.values()), run_id=run_id,
     )
     durable_budget = None
     if not args.dry_run and not args.prioritize_source_evidence_only and args.max_llm > 0:
@@ -1022,6 +1066,7 @@ def main() -> int:
         "written": written,
         "source_evidence_priority_total": len(source_priority_rows),
         "source_evidence_priority_written": source_priority_written,
+        "source_evidence_priority_cleared_total": len(source_priority_clear_rows),
         "llm_budget_id": durable_budget.budget_id if durable_budget is not None else args.llm_budget_id,
         "llm_budget_max": durable_budget.budget_max if durable_budget is not None else min(100, max(0, int(args.llm_budget_max))),
         "llm_budget_reserved_total": durable_budget.used_total if durable_budget is not None else 0,
@@ -1033,7 +1078,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "actual_scored_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "actual_scored_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

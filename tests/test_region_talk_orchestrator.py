@@ -417,6 +417,17 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(stale_review["finalizer_pending_urls"], ["https://t.me/a/1"])
 
+        terminal_reject = mod._publication_handoff_metrics(
+            [images[1]],
+            [{
+                "post_url": "https://t.me/b/2",
+                "publication_candidate_status": "llm_rejected",
+                "publication_status": "gemini_reject",
+            }],
+            [],
+        )
+        self.assertEqual(terminal_reject["publication_source_evidence_backlog_total"], 0)
+
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
         metrics = {

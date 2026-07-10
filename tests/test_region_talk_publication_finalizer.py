@@ -479,6 +479,28 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(updates[0]["publication_source_evidence_priority"], "true")
         self.assertEqual(updates[0]["publication_source_evidence_target_posts"], 5)
 
+    def test_terminal_reject_clears_and_does_not_repromote_source_attestation(self) -> None:
+        mod = self.mod
+        source = {
+            "_ydb_pk": "source_queue_item:telegram:hotel",
+            "canonical_source_key": "telegram:hotel",
+            "source_url": "https://t.me/hotel",
+            "publication_source_evidence_priority": "true",
+            "publication_source_evidence_post_url": "https://t.me/hotel/10",
+            "posts_scanned": 1,
+        }
+        row = candidate_row(
+            post_url="https://t.me/hotel/10",
+            _authoritative_source=source,
+            publication_candidate_status="llm_rejected",
+            publication_status="gemini_reject",
+        )
+        self.assertEqual(mod.source_evidence_priority_updates([row], now_iso="2026-07-10T12:00:00+00:00"), [])
+        cleared = mod.source_evidence_priority_clear_updates([row], now_iso="2026-07-10T12:00:00+00:00")
+        self.assertEqual(len(cleared), 1)
+        self.assertEqual(cleared[0]["publication_source_evidence_priority"], "false")
+        self.assertEqual(cleared[0]["publication_source_evidence_clear_reason"], "publication_terminal_non_candidate")
+
     def test_durable_budget_exhaustion_defers_without_gemini_call(self) -> None:
         mod = self.mod
         budget = mock.Mock()

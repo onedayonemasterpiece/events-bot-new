@@ -414,6 +414,9 @@ Important invariants:
   priority is evaluated before cache preference, but uncached Telegram work is
   still limited to one controlled resolve lane with the existing human-like
   delays; ordinary cached sources retain preference inside the same lane.
+  If Gemini later rejects/defers that post terminally or eligibility is
+  revoked, finalizer clears the marker and the backlog metric excludes it;
+  terminal non-candidates must not trigger repeated attestation scans.
 
 Pseudo-loop:
 
