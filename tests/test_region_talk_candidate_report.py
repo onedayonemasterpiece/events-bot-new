@@ -2757,6 +2757,44 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["previous_image_queue_status"], "rejected_publication_eligibility")
         self.assertEqual(row["image_eligibility_status"], "")
 
+    def test_image_queue_does_not_downgrade_actual_score_to_metadata_on_rescan(self) -> None:
+        mod = load_module()
+        base = {
+            "image_queue_id": "imgq_actual",
+            "image_queue_order": 1,
+            "post_url": "https://t.me/travel/4",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "has_media": True,
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "semantic_candidate",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+        }
+        previous = {
+            **base,
+            "image_queue_status": "actual_scored",
+            "image_model_input_type": "actual_image",
+            "images_scored_actual_count": 1,
+            "final_visual_status": "scored_actual_image",
+            "media_fetch_status": "downloaded",
+            "last_image_diag_run_id": "image-run-1",
+            "overall_media_score": 0.81,
+        }
+        metadata_rescan = {**base, "image_model_input_type": "metadata_only"}
+        rows, _, _ = mod.build_image_candidate_queue(
+            {"image_candidate_queue": {base["post_url"]: previous}},
+            [metadata_rescan], [], [], "run-q", "2026-07-07T00:00:00+00:00",
+        )
+        row = next(r for r in rows if r["post_url"] == base["post_url"])
+        self.assertEqual(row["image_queue_status"], "actual_scored")
+        self.assertEqual(row["image_model_input_type"], "actual_image")
+        self.assertEqual(row["images_scored_actual_count"], 1)
+        self.assertEqual(row["media_acquisition_status"], "actual_image_downloaded_and_scored")
+
     def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
         mod = load_module()
         previous = {

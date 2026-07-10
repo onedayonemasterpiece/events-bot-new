@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / durable actual-image scores**: later CandidateReport metadata
+  rescans no longer downgrade an `actual_scored` image row from `actual_image`
+  to `metadata_only` or hide it from publication-finalizer metrics.
 - **Region Talk / active publication metric**: raw historical publication rows
   remain visible, but loop progress now uses
   `publication_active_candidate_total` and no longer counts newly created

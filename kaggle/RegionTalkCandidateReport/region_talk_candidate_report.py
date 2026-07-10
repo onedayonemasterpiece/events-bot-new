@@ -6234,12 +6234,24 @@ def build_image_candidate_queue(
             image_queue_rejected_non_region_inputs += 1
             bump_block(str(eligibility.get("primary_reason") or "publication_eligibility_not_accept"))
             return
-        actual = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
-        metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
         if key not in entries:
             order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
             entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
         previous_status = str(entries[key].get("image_queue_status") or "")
+        previous_actual = previous_status == "actual_scored" and (
+            str(entries[key].get("image_model_input_type") or "") == "actual_image"
+            or str(entries[key].get("final_visual_status") or "") == "scored_actual_image"
+            or int(entries[key].get("images_scored_actual_count") or 0) > 0
+            or (
+                bool(entries[key].get("last_image_diag_run_id"))
+                and str(entries[key].get("media_fetch_status") or "") == "downloaded"
+            )
+        )
+        actual = (
+            str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "actual_image"
+            or previous_actual
+        )
+        metadata = str(media.get("image_model_input_type") or row.get("image_model_input_type") or "") == "metadata_only"
         # Media-format failures stay terminal until the underlying media changes.
         # A text/publication-gate rejection is different: canonical source or
         # dual-vector evidence can legitimately make the row eligible on a
@@ -6297,7 +6309,7 @@ def build_image_candidate_queue(
             "aesthetic_score": media.get("aesthetic_score", row.get("aesthetic_score", entries[key].get("aesthetic_score", ""))),
             "technical_quality_score": media.get("technical_quality_score", row.get("technical_quality_score", entries[key].get("technical_quality_score", ""))),
             "publication_safety_score": media.get("publication_safety_score", row.get("publication_safety_score", entries[key].get("publication_safety_score", ""))),
-            "image_model_input_type": media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
+            "image_model_input_type": "actual_image" if actual else media.get("image_model_input_type", row.get("image_model_input_type", entries[key].get("image_model_input_type", ""))),
             "image_model_type": media.get("image_model_type", row.get("image_model_type", entries[key].get("image_model_type", ""))),
             "image_url_or_local_path": media.get("image_url_or_local_path", row.get("primary_media_path", "")),
             "has_media": str(has_image_media(row, media)).lower(),

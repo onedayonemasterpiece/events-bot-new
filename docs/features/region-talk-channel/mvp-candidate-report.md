@@ -884,6 +884,9 @@ incomplete, a later eligible pass reactivates it as
 `needs_actual_image_fetch`; only confirmed no-media or unsupported-media
 outcomes remain terminal. This also applies when the eligible row exists only
 in the durable previous image queue and is not repeated in the current batch.
+CandidateReport also preserves durable actual-image evidence and scores across
+later metadata-only source rescans; it cannot downgrade `actual_image` to
+`metadata_only` or erase `images_scored_actual_count`.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,
