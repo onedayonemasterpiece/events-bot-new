@@ -1335,6 +1335,10 @@ def _keyword_source_metrics(
 ) -> dict[str, int]:
     source_by_key = {_source_merge_key(r): r for r in source_rows if _source_merge_key(r)}
     keyword_row_keys = {_source_merge_key(r) for r in source_rows if _is_keyword_discovered_source(r) and _source_merge_key(r)}
+    keyword_candidate_keys = {
+        _source_merge_key(r) for r in (source_candidates or [])
+        if _is_keyword_discovered_source(r) and _source_merge_key(r)
+    }
     candidate_key_by_id = {
         str(r.get("source_candidate_id") or ""): _source_merge_key(r)
         for r in (source_candidates or [])
@@ -1346,7 +1350,7 @@ def _keyword_source_metrics(
         if _is_keyword_discovered_source(r)
     }
     keyword_edge_target_keys = {k for k in keyword_edge_target_keys if k}
-    keyword_evidence_keys = keyword_row_keys | keyword_edge_target_keys
+    keyword_evidence_keys = keyword_row_keys | keyword_candidate_keys | keyword_edge_target_keys
     keyword_scanned_keys = {
         k for k in keyword_evidence_keys
         if k in source_by_key and (
@@ -1369,6 +1373,7 @@ def _keyword_source_metrics(
     return {
         "publics_keyword_discovered_total": len(keyword_evidence_keys),
         "publics_keyword_queue_rows_total": len(keyword_row_keys),
+        "publics_keyword_candidate_rows_total": len(keyword_candidate_keys),
         "publics_keyword_edge_targets_total": len(keyword_edge_target_keys),
         "publics_keyword_queue_missing_total": len(keyword_evidence_keys - set(source_by_key)),
         "publics_keyword_fake_processed_without_scan_evidence_total": len(keyword_fake_processed_without_scan_keys),
