@@ -292,13 +292,17 @@ Important invariants:
   classification; the notifier rereads the live source ledger and sends only
   when that fingerprint still matches, so a channel reclassified as local or
   spam cannot leak through a stale Gemini acceptance.
+- ImageDiagnostic treats a missing/failed Telethon media fetch as retry/terminal
+  evidence. Public `t.me/s` HTML recovery is disabled by default
+  (`REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK=0`) and is only an explicit
+  diagnostic opt-in, so it cannot mask Telegram cooldowns in the orchestrator.
 - CandidateReport source-local preflight search is the prioritization bridge
   between broad source discovery and expensive history scans. After a source is
   added to YDB and passes cheap local/spam title filters, a bounded in-channel
   search should query the lexicon bank (`Калининград`, `Куршская коса`,
   `Балтийск`, `Черняховск`, `Рыбная деревня`, `Виштынецкое озеро`, ...), stop on
-  a fresh hit within 365 days, then insert both the source after the source
-  cursor and the exact post URL into a known-post fetch queue. A stale hit stays
+  a fresh hit within 365 days, then promote the source into the durable priority
+  lane and insert the exact post URL into a known-post fetch queue. A stale hit stays
   as evidence but lower priority. This prevents the current failure mode where a
   keyword/global-search post is only source context and the exact post can be
   lost until a later deep scan.

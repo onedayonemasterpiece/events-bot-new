@@ -78,6 +78,7 @@ def main() -> int:
     os.environ["REGION_TALK_RUN_ID"]=run_id; os.environ.setdefault("REGION_TALK_DRY_RUN","1"); os.environ.setdefault("REGION_TALK_DISABLE_PUBLISH","1"); os.environ.setdefault("REGION_TALK_AUTH_BUNDLE_ENV","TELEGRAM_AUTH_BUNDLE_DISCOVERY2")
     os.environ["REGION_TALK_IMAGE_DIAG_SOURCE"]=args.source
     os.environ.setdefault("REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT", "5000")
+    os.environ.setdefault("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK", "0")
     os.environ.setdefault("REGION_TALK_STATE_BACKEND", "ydb" if args.source == "ydb" else os.environ.get("REGION_TALK_STATE_BACKEND", "local"))
     qxlsx=None; rows=[]; total=0
     if args.source == "xlsx":
@@ -96,6 +97,7 @@ def main() -> int:
             "REGION_TALK_IMAGE_DIAG_WAIT_INITIAL_SECONDS", "REGION_TALK_IMAGE_DIAG_WAIT_AFTER_DRAIN_SECONDS",
             "REGION_TALK_IMAGE_DIAG_POLL_INTERVAL_SECONDS",
             "REGION_TALK_IMAGE_DIAG_QUEUE_SCAN_LIMIT",
+            "REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK",
             "REGION_TALK_IMAGE_DIAG_STALE_LEASE_SECONDS",
             "REGION_TALK_STATE_BACKEND", "REGION_TALK_REQUIRE_YDB_STATE",
             "REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL", "REGION_TALK_ALLOW_KAGGLE_YDB_SECRET",

@@ -18,6 +18,8 @@
   the ordinary 80-row live handoff cap while remaining chunked and all-or-fail.
   Exact-link cache-first ordering also reads the legacy compact
   `latest_state.telegram_entity_cache` during the row-level cache migration.
+  ImageDiagnostic no longer falls back to public `t.me/s` HTML after a missing
+  or failed Telethon media fetch unless an explicit diagnostic opt-in is set.
 - **Region Talk / shared fail-closed publication eligibility**:
   CandidateReport signs pre-image rows with
   `region_talk_publication_eligibility_v1`; ImageDiagnostic leases only current

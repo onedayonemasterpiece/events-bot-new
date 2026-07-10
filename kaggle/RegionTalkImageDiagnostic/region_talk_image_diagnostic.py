@@ -634,6 +634,9 @@ def decode_bundle():
     if not b64: return None
     return json.loads(base64.urlsafe_b64decode(b64.encode("ascii")).decode("utf-8"))
 
+def public_tg_html_fallback_enabled() -> bool:
+    return str(os.getenv("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK") or "0").strip().lower() in {"1", "true", "yes", "on"}
+
 async def fetch_telegram(batch):
     remaining = []
     for r in batch:
@@ -680,7 +683,7 @@ async def fetch_telegram(batch):
             try:
                 msg = await client.get_messages(handle, ids=mid)
                 if not msg or not getattr(msg, "media", None):
-                    public_url = _public_tg_post_image_url(handle, mid)
+                    public_url = _public_tg_post_image_url(handle, mid) if public_tg_html_fallback_enabled() else ""
                     if public_url:
                         path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
                         r["actual_media_path"] = _download_http_image(public_url, path)
@@ -689,7 +692,9 @@ async def fetch_telegram(batch):
                         log_event("image_fetch_result", phase="telegram_fetch", index=idx, total=len(batch), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
                         continue
                     else:
-                        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="telegram message has no direct media"; continue
+                        r["media_fetch_status"]="needs_actual_image_fetch"
+                        r["media_fetch_error"]="telegram message has no direct media; public t.me/s fallback disabled"
+                        continue
                 path = await client.download_media(msg, file=str(MEDIA / f"{r['image_queue_id']}_{handle}_{mid}"))
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
                 if path:
@@ -701,13 +706,14 @@ async def fetch_telegram(batch):
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="download_media returned empty path"
             except Exception as exc:
                 try:
-                    public_url = _public_tg_post_image_url(handle, mid)
+                    public_url = _public_tg_post_image_url(handle, mid) if public_tg_html_fallback_enabled() else ""
                     if public_url:
                         path = MEDIA / f"{r['image_queue_id']}_{handle}_{mid}_public.jpg"
                         r["actual_media_path"] = _download_http_image(public_url, path)
                         r["media_fetch_status"]="downloaded_public_tg_html"
                     else:
-                        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:300]
+                        r["media_fetch_status"]="needs_actual_image_fetch"
+                        r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:260] + "; public t.me/s fallback disabled"
                 except Exception as web_exc:
                     r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"] = type(exc).__name__ + ": " + str(exc)[:160] + "; public_html=" + type(web_exc).__name__ + ": " + str(web_exc)[:120]
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)

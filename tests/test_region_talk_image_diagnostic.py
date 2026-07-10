@@ -169,6 +169,21 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_public_telegram_html_fallback_is_explicit_opt_in(self) -> None:
+        old = os.environ.get("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK")
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                os.environ.pop("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK", None)
+                self.assertFalse(mod.public_tg_html_fallback_enabled())
+                os.environ["REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK"] = "1"
+                self.assertTrue(mod.public_tg_html_fallback_enabled())
+            finally:
+                if old is None:
+                    os.environ.pop("REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK", None)
+                else:
+                    os.environ["REGION_TALK_IMAGE_DIAG_PUBLIC_TG_HTML_FALLBACK"] = old
+
     def test_process_batch_rejects_before_media_fetch_or_scoring(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
