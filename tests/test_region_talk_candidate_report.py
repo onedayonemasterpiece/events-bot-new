@@ -3329,6 +3329,228 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
 
         mod.assert_region_talk_kaggle_slots_free(FakeClient(), ["u/candidate", "u/image"], auth_bundle_env="TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
 
+    def test_entity_cache_batches_row_level_writes_and_reports_metrics(self) -> None:
+        mod = load_module()
+        old_batch = os.environ.get("REGION_TALK_ENTITY_CACHE_WRITE_BATCH_SIZE")
+        old_writer = mod.write_region_talk_entity_cache_items
+        calls = []
+        try:
+            os.environ["REGION_TALK_ENTITY_CACHE_WRITE_BATCH_SIZE"] = "2"
+
+            def fake_writer(cache, *, run_id, stage):
+                calls.append((dict(cache), run_id, stage))
+                return len(cache)
+
+            mod.write_region_talk_entity_cache_items = fake_writer
+            governor = mod.TelegramRequestGovernor("cache-run", Path("/tmp/region-talk-cache"), {})
+            entity1 = types.SimpleNamespace(id=101, access_hash=201, title="One")
+            entity2 = types.SimpleNamespace(id=102, access_hash=202, title="Two")
+            self.assertTrue(governor.remember_entity("one", entity1))
+            self.assertEqual(calls, [])
+            self.assertTrue(governor.remember_entity("two", entity2))
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(set(calls[0][0]), {"telegram:username:one", "telegram:username:two"})
+            metrics = governor.observability_row("start", "finish")
+            self.assertEqual(metrics["entity_cache_write_batches_attempted"], 1)
+            self.assertEqual(metrics["entity_cache_write_batches_ok"], 1)
+            self.assertEqual(metrics["entity_cache_rows_written"], 2)
+            self.assertEqual(metrics["entity_cache_dirty_pending"], 0)
+        finally:
+            mod.write_region_talk_entity_cache_items = old_writer
+            if old_batch is None:
+                os.environ.pop("REGION_TALK_ENTITY_CACHE_WRITE_BATCH_SIZE", None)
+            else:
+                os.environ["REGION_TALK_ENTITY_CACHE_WRITE_BATCH_SIZE"] = old_batch
+
+    def test_cached_first_queue_keeps_one_valid_uncached_lane(self) -> None:
+        mod = load_module()
+        old_cached = os.environ.get("REGION_TALK_TG_CACHED_ENTITY_ONLY")
+        old_quota = os.environ.get("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN")
+        try:
+            os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = "1"
+            os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = "1"
+            state = {
+                "telegram_entity_cache": {
+                    "telegram:username:cached": {"channel_id_private": "1", "access_hash_private": "2"},
+                },
+                "unified_source_queue": {
+                    "bad": {"platform": "telegram", "source_url": "https://t.me/channel/123", "queue_order": 1, "source_queue_status": "pending_scan"},
+                    "uncached": {"platform": "telegram", "source_url": "https://t.me/uncached", "queue_order": 2, "source_queue_status": "pending_scan"},
+                    "uncached-duplicate": {"platform": "telegram", "source_url": "https://t.me/uncached", "queue_order": 3, "source_queue_status": "pending_scan"},
+                    "cached": {"platform": "telegram", "source_url": "https://t.me/cached", "queue_order": 10, "source_queue_status": "pending_scan"},
+                },
+            }
+            selected = mod.unified_queue_dynamic_seeds(state, 4)
+            self.assertEqual([seed.canonical_url for seed in selected], ["https://t.me/cached", "https://t.me/uncached"])
+            self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"], 1)
+            self.assertEqual(mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"], ["telegram:username:uncached"])
+        finally:
+            if old_cached is None:
+                os.environ.pop("REGION_TALK_TG_CACHED_ENTITY_ONLY", None)
+            else:
+                os.environ["REGION_TALK_TG_CACHED_ENTITY_ONLY"] = old_cached
+            if old_quota is None:
+                os.environ.pop("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", None)
+            else:
+                os.environ["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"] = old_quota
+
+    def test_governor_allows_only_selected_uncached_resolve_lane(self) -> None:
+        mod = load_module()
+        env_names = [
+            "REGION_TALK_TG_CACHED_ENTITY_ONLY",
+            "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN",
+            "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS",
+            "REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS",
+        ]
+        old = {name: os.environ.get(name) for name in env_names}
+        try:
+            os.environ.update({
+                "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+                "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
+                "REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS": "0",
+                "REGION_TALK_TG_RESOLVE_DELAY_MAX_SECONDS": "0",
+            })
+            mod._REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"] = ["telegram:username:allowed"]
+
+            class Client:
+                async def get_entity(self, handle):
+                    return types.SimpleNamespace(id=44, access_hash=55, title=handle)
+
+            governor = mod.TelegramRequestGovernor("lane-run", Path("/tmp/region-talk-lane"), {})
+            def seed(handle):
+                return mod.Seed(
+                    handle.lstrip("@"), "telegram", handle.lstrip("@"), handle,
+                    "https://t.me/" + handle.lstrip("@"), "unit", "unit", 0,
+                    "unit", "", "unit", "unit", "", "pending_scan", True,
+                    "unknown", "",
+                )
+
+            allowed, allowed_meta = asyncio.run(governor.resolve_entity(Client(), seed("@allowed")))
+            denied, denied_meta = asyncio.run(governor.resolve_entity(Client(), seed("@denied")))
+            self.assertIsNotNone(allowed)
+            self.assertEqual(allowed_meta["telegram_resolve_status"], "resolved_network")
+            self.assertIsNone(denied)
+            self.assertEqual(denied_meta["telegram_resolve_status"], "skipped_cached_entity_only_no_private_entity")
+            self.assertEqual(governor.uncached_resolve_lane_attempts, 1)
+            self.assertEqual(governor.uncached_resolve_lane_ok, 1)
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_candidate_link_order_honors_next_attempt_and_cache(self) -> None:
+        mod = load_module()
+        now = mod.datetime(2026, 7, 10, tzinfo=mod.timezone.utc)
+        raw = [
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/uncached/1"},
+            {"_kind": "post_link_queue_item", "post_link_status": "retry_fetch", "post_url": "https://t.me/cached/2"},
+            {"_kind": "post_link_queue_item", "post_link_status": "pending_fetch", "post_url": "https://t.me/cached/3"},
+            {"_kind": "post_link_queue_item", "post_link_status": "retry_fetch", "post_url": "https://t.me/waiting/4", "next_attempt_after": "2026-07-10T01:00:00+00:00"},
+            {"_kind": "candidate_memory_item", "post_url": "https://t.me/waiting/4"},
+        ]
+        selected = mod.candidate_link_rows_for_fetch(raw, 10, now=now, cached_entity_handles={"cached"})
+        self.assertEqual([row["post_url"] for row in selected], [
+            "https://t.me/cached/3",
+            "https://t.me/uncached/1",
+            "https://t.me/cached/2",
+        ])
+        self.assertIn("next_attempt_after", mod.POST_LINK_QUEUE_STATE_FIELDS)
+
+    def test_queue_seq_repairs_are_stable_without_queue_order_renumber(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue": {
+                "telegram:a": {"canonical_source_key": "telegram:a", "platform": "telegram", "source_url": "https://t.me/travela", "queue_order": 1, "queue_seq": 5, "source_queue_status": "pending_scan"},
+                "telegram:b": {"canonical_source_key": "telegram:b", "platform": "telegram", "source_url": "https://t.me/travelb", "queue_order": 2, "queue_seq": 5, "source_queue_status": "pending_scan"},
+                "telegram:c": {"canonical_source_key": "telegram:c", "platform": "telegram", "source_url": "https://t.me/travelc", "queue_order": 3, "source_queue_status": "pending_scan"},
+            },
+        }
+        rows, metrics = mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "seq-run", "2026-07-10T00:00:00+00:00")
+        by_url = {row["source_url"]: row for row in rows}
+        self.assertEqual([by_url[f"https://t.me/travel{x}"]["queue_order"] for x in "abc"], [1, 2, 3])
+        self.assertEqual(len({row["queue_seq"] for row in rows}), 3)
+        self.assertEqual(metrics["source_queue_seq_duplicate_repaired_this_run"], 1)
+        self.assertEqual(metrics["source_queue_seq_missing_repaired_this_run"], 1)
+        rows2, metrics2 = mod.build_unified_source_queue(
+            {"unified_source_queue": {row["canonical_source_key"]: row for row in rows}},
+            [], [], [], [], [], [], {}, "seq-run-2", "2026-07-10T01:00:00+00:00",
+        )
+        self.assertEqual(
+            {row["canonical_source_key"]: row["queue_seq"] for row in rows2},
+            {row["canonical_source_key"]: row["queue_seq"] for row in rows},
+        )
+        self.assertEqual(metrics2["source_queue_seq_duplicate_repaired_this_run"], 0)
+        self.assertEqual(metrics2["source_queue_seq_missing_repaired_this_run"], 0)
+
+    def test_queue_seq_refuses_repair_from_truncated_ydb_read(self) -> None:
+        mod = load_module()
+        previous = {
+            "ydb_source_queue_full_read_complete": "false",
+            "ydb_row_level_source_queue_items_truncated": "true",
+            "unified_source_queue": {
+                "telegram:a": {"canonical_source_key": "telegram:a", "platform": "telegram", "source_url": "https://t.me/travela", "queue_order": 1, "source_queue_status": "pending_scan"},
+            },
+        }
+        with self.assertRaisesRegex(RuntimeError, "full YDB source_queue_item read"):
+            mod.build_unified_source_queue(previous, [], [], [], [], [], [], {}, "seq-run", "2026-07-10T00:00:00+00:00")
+
+    def test_keyword_evidence_does_not_leak_between_sources(self) -> None:
+        mod = load_module()
+        previous = {
+            "unified_source_queue_cursor_position": 0,
+            "unified_source_queue": {
+                "telegram:a": {"canonical_source_key": "telegram:a", "platform": "telegram", "source_url": "https://t.me/travela", "queue_order": 10, "source_queue_status": "pending_scan"},
+                "telegram:b": {"canonical_source_key": "telegram:b", "platform": "telegram", "source_url": "https://t.me/travelb", "queue_order": 11, "source_queue_status": "pending_scan"},
+            },
+        }
+        rows, _metrics = mod.build_unified_source_queue(
+            previous, [], [], [], [],
+            [
+                {"canonical_source_key": "telegram:a", "platform": "telegram", "canonical_url": "https://t.me/travela", "matched_query": "Калининград"},
+                {"canonical_source_key": "telegram:b", "platform": "telegram", "canonical_url": "https://t.me/travelb", "matched_query": "Балтийск"},
+            ],
+            [], {}, "keyword-run", "2026-07-10T00:00:00+00:00",
+        )
+        by_url = {row["source_url"]: row for row in rows}
+        self.assertEqual(by_url["https://t.me/travela"]["fast_check_matched_query"], "Калининград")
+        self.assertEqual(by_url["https://t.me/travelb"]["fast_check_matched_query"], "Балтийск")
+
+    def test_publication_eligibility_is_fail_closed_with_tri_state_source(self) -> None:
+        mod = load_module()
+        row = {
+            "post_url": "https://t.me/travel/1",
+            "source_title": "Travel Notes",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "travel_blogger",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "overall_media_score": 0.86,
+            "postcardness_score": 0.77,
+        }
+        accepted = mod.publication_eligibility(row)
+        unknown = mod.publication_eligibility({**row, "source_geo_class": "", "source_scope": "unknown"})
+        local = mod.publication_eligibility(row, authoritative_source={"source_geo_class": "kaliningrad_local", "source_scope": "local_region"})
+        mixed = mod.publication_eligibility({**row, "source_geo_class": "", "source_scope": "unknown"}, authoritative_source={"source_geo_class": "mixed_external", "source_scope": "mixed_external"})
+        spam = mod.publication_eligibility({**row, "source_queue_status": mod.SPAM_SOURCE_STATUS})
+        self.assertTrue(accepted["eligible"])
+        self.assertEqual(accepted["decision"], "accept")
+        self.assertEqual(accepted["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_EXTERNAL)
+        self.assertFalse(unknown["eligible"])
+        self.assertEqual(unknown["primary_reason"], "source_verdict_unknown")
+        self.assertEqual(unknown["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_UNKNOWN)
+        self.assertFalse(local["eligible"])
+        self.assertEqual(local["evidence"]["source_verdict"], mod.PUBLICATION_SOURCE_CONFIRMED_REJECTED)
+        self.assertTrue(mixed["eligible"])
+        self.assertFalse(spam["eligible"])
+        self.assertEqual(set(accepted), {"eligible", "decision", "primary_reason", "evidence", "gate_version"})
+
 
 if __name__ == "__main__":
     unittest.main()

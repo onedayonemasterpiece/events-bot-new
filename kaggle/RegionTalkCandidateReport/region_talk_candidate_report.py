@@ -942,6 +942,19 @@ def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str,
     return 2
 
 
+def source_selection_cache_bucket(seed: Seed, previous_state: dict[str, Any] | None = None) -> int:
+    """Prefer sources whose private entity is already durable."""
+    if seed.platform != "telegram":
+        return 0
+    state = previous_state if isinstance(previous_state, dict) else {}
+    row = _source_queue_row_for_seed(seed, state) or {
+        "platform": seed.platform,
+        "handle": seed.handle,
+        "source_url": seed.canonical_url,
+    }
+    return 0 if source_queue_row_has_cached_entity(row, state) else 1
+
+
 def queue_cursor_short_name(name: str) -> str:
     clean = str(name or "").replace("queue_cursor:", "").strip()
     if clean in {"source", "unified_source_queue", "canonical_source_queue"}:
@@ -1001,6 +1014,7 @@ def selected_sources_for_run(seeds: list[Seed], max_sources: int, previous_state
     ordered = sorted(annotated, key=lambda item: (
         not bool(item[1].get("due")),
         source_selection_queue_bucket(item[1], previous_state),
+        source_selection_cache_bucket(item[0], previous_state),
         item[0].priority,
         source_queue_priority_bucket(item[1].get("queue_row")),
         -source_product_priority_score(item[0], item[1].get("queue_row")) if prioritize_product_sources else 0,
@@ -1156,6 +1170,7 @@ def source_queue_row_has_cached_entity(row: dict[str, Any], previous_state: dict
 
 
 def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) -> list[Seed]:
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"] = []
     rows = _previous_rows_dict(previous_state.get("unified_source_queue") or previous_state.get("canonical_source_queue"))
     if not rows:
         return []
@@ -1165,20 +1180,26 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) in {"telegram", "vk"}
     ]
     cached_entity_only = telegram_cached_entity_only_enabled()
-    cached_rows = [r for r in rows if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) != "telegram" or source_queue_row_has_cached_entity(r, previous_state)]
-    if cached_entity_only and cached_rows:
-        rows = cached_rows
+    cached_rows = [
+        r for r in rows
+        if normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) != "telegram"
+        or source_queue_row_has_cached_entity(r, previous_state)
+    ]
+    uncached_lane_quota = max(0, getenv_int("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", 1))
     _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_candidate_rows"] = len(cached_rows)
-    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_filter_applied"] = str(bool(cached_entity_only and cached_rows)).lower()
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_entity_candidate_rows"] = max(0, len(rows) - len(cached_rows))
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_cached_entity_filter_applied"] = "false"
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_quota"] = uncached_lane_quota
     rows = sorted(rows, key=lambda r: (
-        source_queue_priority_bucket(r),
         cached_entity_only and normalize_source_platform(str(r.get("platform") or ""), str(r.get("source_url") or r.get("canonical_url") or "")) == "telegram" and not source_queue_row_has_cached_entity(r, previous_state),
+        source_queue_priority_bucket(r),
         str(r.get("source_queue_status") or "") not in {"pending_scan", "needs_rescan_or_retry"},
         int(r.get("queue_order") or 999999999) <= cursor,
         int(r.get("queue_order") or 999999999),
     ))
     selected: list[Seed] = []
     seen: set[str] = set()
+    uncached_lane_keys: list[str] = []
     for i, row in enumerate(rows, start=1):
         seed = seed_from_unified_queue_row(row, i)
         if not seed:
@@ -1186,10 +1207,17 @@ def unified_queue_dynamic_seeds(previous_state: dict[str, Any], max_items: int) 
         key = seed.canonical_url
         if key in seen:
             continue
+        is_uncached_telegram = seed.platform == "telegram" and not source_queue_row_has_cached_entity(row, previous_state)
+        if cached_entity_only and is_uncached_telegram:
+            if len(uncached_lane_keys) >= uncached_lane_quota:
+                continue
+            uncached_lane_keys.append("telegram:username:" + seed.handle.lstrip("@").lower())
         seen.add(key)
         selected.append(seed)
         if len(selected) >= max_items:
             break
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_keys"] = uncached_lane_keys
+    _REGION_TALK_TELEGRAM_RUNTIME["source_queue_uncached_resolve_lane_selected"] = len(uncached_lane_keys)
     return selected
 
 
@@ -1615,8 +1643,10 @@ SOURCE_STATE_FIELDS = [
     "next_action", "updated_at", "last_run_id",
 ]
 SOURCE_QUEUE_STATE_FIELDS = [
-    "source_queue_id", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
+    "source_queue_id", "queue_seq", "queue_order", "display_order", "source_queue_status", "previous_source_queue_status",
     "status_changed_this_run", "last_status_changed_at", "status_color_hint", "row_fill_color",
+    "previous_queue_seq", "queue_seq_repaired_this_run", "queue_seq_repair_reason",
+    "admitted_at", "admitted_run_id",
     "previous_queue_order", "queue_order_changed_this_run", "queue_order_changed_reason",
     "cursor_marker", "is_after_cursor", "added_at", "added_from", "first_seen_run_id",
     "keyword_discovery_status", "keyword_evidence_run_id", "keyword_evidence_at", "insertion_policy",
@@ -1673,8 +1703,14 @@ POST_LINK_QUEUE_STATE_FIELDS = [
     "matched_query", "matched_hashtag", "post_date", "hit_age_days",
     "keyword_hit_text_excerpt", "evidence_excerpt_hash", "discovery_type", "edge_type",
     "first_seen_run_id", "last_seen_run_id", "last_attempt_run_id", "last_attempt_at",
-    "fetched_post_id", "fetch_error_code", "fetch_error_message", "run_id", "updated_at",
+    "fetched_post_id", "fetch_error_code", "fetch_error_message", "next_attempt_after", "run_id", "updated_at",
     "online_update_stage", "next_action",
+]
+ENTITY_CACHE_STATE_FIELDS = [
+    "entity_cache_key", "canonical_url", "username", "title_last_seen", "entity_kind",
+    "channel_id_private", "access_hash_private", "resolved_at", "last_used_at",
+    "last_success_at", "source", "run_id", "updated_at", "last_seen_run_id",
+    "online_update_stage",
 ]
 IMAGE_QUEUE_STATE_FIELDS = [
     "image_queue_id", "image_queue_order", "display_order", "image_queue_status", "previous_image_queue_status",
@@ -1858,6 +1894,7 @@ def compact_region_talk_state_for_ydb(state: dict[str, Any]) -> dict[str, Any]:
         },
         "unified_source_queue_cursor_position": state.get("unified_source_queue_cursor_position", 0),
         "unified_source_queue_cursor_key": state.get("unified_source_queue_cursor_key", ""),
+        "unified_source_queue_total": len(source_queue),
         "unified_source_queue": {
             str(k): compact_record(v, SOURCE_QUEUE_STATE_FIELDS, max_len=700)
             for k, v in list(source_queue.items())[:max_sources]
@@ -2388,6 +2425,25 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         return 0
 
 
+def write_region_talk_entity_cache_items(cache: dict[str, Any], *, run_id: str, stage: str) -> int:
+    """Persist valid Telethon private entities as stable row-level cache items."""
+    rows: list[dict[str, Any]] = []
+    for key, value in (cache or {}).items():
+        if not isinstance(value, dict):
+            continue
+        if not value.get("channel_id_private") or not value.get("access_hash_private"):
+            continue
+        rows.append({"entity_cache_key": str(key), **value})
+    return write_region_talk_online_queue_items(
+        rows,
+        kind="telegram_entity_cache_item",
+        id_fields=["entity_cache_key", "username", "canonical_url"],
+        fields=ENTITY_CACHE_STATE_FIELDS,
+        run_id=run_id,
+        stage=stage,
+    )
+
+
 def post_link_queue_item_from_keyword_hit(row: dict[str, Any], *, run_id: str, status: str = "pending_fetch") -> dict[str, Any]:
     """Convert a keyword/hashtag exact post hit into durable exact-post work.
 
@@ -2891,6 +2947,15 @@ def merge_ydb_source_queue_status_items(
             for field, value in item.items():
                 if value in (None, ""):
                     continue
+                if field == "queue_seq":
+                    try:
+                        current_queue_seq = int(float(current.get("queue_seq") or 0))
+                    except Exception:
+                        current_queue_seq = 0
+                    if current_queue_seq > 0:
+                        # Status/live overlays may be stale and must never move
+                        # an already admitted row.
+                        continue
                 if field == "source_queue_status":
                     current_terminal = source_terminal_rejected_status(current.get(field))
                     incoming_terminal = source_terminal_rejected_status(value)
@@ -3034,7 +3099,17 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 data0 = ydb_select_latest_state(session, ydb, table_path)
                 # Merge row-level queue items written by parallel notebooks (e.g. ImageDiagnostic).
                 image_items = ydb_select_kind_items(session, ydb, table_path, "image_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
-                source_items = ydb_select_kind_items(session, ydb, table_path, "source_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
+                source_queue_full_read_limit = max(
+                    getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000),
+                    getenv_int("REGION_TALK_YDB_SOURCE_QUEUE_FULL_READ_LIMIT", 100000),
+                )
+                source_items = ydb_select_kind_items(
+                    session,
+                    ydb,
+                    table_path,
+                    "source_queue_item",
+                    limit=source_queue_full_read_limit + 1,
+                )
                 source_status_items = ydb_select_kind_items(session, ydb, table_path, "source_status_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 online_source_items = ydb_select_kind_items(session, ydb, table_path, "online_source_item", limit=getenv_int("REGION_TALK_YDB_MAX_SOURCE_ROWS", 5000))
                 publication_items = ydb_select_kind_items(session, ydb, table_path, "publication_candidate_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
@@ -3045,8 +3120,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 post_link_items = ydb_select_kind_items(session, ydb, table_path, "post_link_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
+                entity_cache_items = ydb_select_kind_items(session, ydb, table_path, "telegram_entity_cache_item", limit=getenv_int("REGION_TALK_YDB_MAX_ENTITY_CACHE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 if isinstance(data0, dict):
+                    source_items_truncated = len(source_items) > source_queue_full_read_limit
+                    if source_items_truncated:
+                        source_items = dict(list(source_items.items())[:source_queue_full_read_limit])
+                    data0["ydb_source_queue_full_read_limit"] = source_queue_full_read_limit
+                    data0["ydb_source_queue_full_read_complete"] = str(not source_items_truncated).lower()
+                    data0["ydb_row_level_source_queue_items_truncated"] = str(source_items_truncated).lower()
                     if post_items:
                         p = data0.get("processed_posts") if isinstance(data0.get("processed_posts"), dict) else {}
                         p = dict(p)
@@ -3080,6 +3162,11 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                         data0["ydb_row_level_source_status_items_loaded"] = len(source_status_items)
                         data0["ydb_row_level_online_source_items_loaded"] = len(online_source_items)
                         data0["ydb_row_level_source_queue_status_items_merged"] = merged_sources
+                    expected_source_queue_total = int(data0.get("unified_source_queue_total") or 0)
+                    loaded_source_queue_total = len(data0.get("unified_source_queue") or {})
+                    if expected_source_queue_total > loaded_source_queue_total:
+                        data0["ydb_source_queue_full_read_complete"] = "false"
+                        data0["ydb_row_level_source_queue_items_truncated"] = "true"
                     if source_candidate_items:
                         q = data0.get("discovered_sources") if isinstance(data0.get("discovered_sources"), dict) else {}
                         q = dict(q)
@@ -3130,6 +3217,15 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["text_vector_enrichment"] = q
                         data0["ydb_row_level_text_vector_enrichment_items_loaded"] = len(text_vector_items)
+                    if entity_cache_items:
+                        q = data0.get("telegram_entity_cache") if isinstance(data0.get("telegram_entity_cache"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in entity_cache_items.items():
+                            key = str(item.get("entity_cache_key") or _pk.replace("telegram_entity_cache_item:", ""))
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["telegram_entity_cache"] = q
+                        data0["ydb_row_level_telegram_entity_cache_items_loaded"] = len(entity_cache_items)
                     if publication_items:
                         q = data0.get("publication_candidate_queue") if isinstance(data0.get("publication_candidate_queue"), dict) else {}
                         q = dict(q)
@@ -3562,6 +3658,12 @@ class TelegramRequestGovernor:
         self.state = state if isinstance(state, dict) else {}
         self.entity_cache: dict[str, Any] = dict(self.state.get("telegram_entity_cache") or {})
         self.entity_cache_loaded_from_path = str((self.state.get("_loaded_from_path") or self.state.get("state_path") or ""))
+        self.entity_cache_dirty: dict[str, Any] = {}
+        self.entity_cache_write_batches_attempted = 0
+        self.entity_cache_write_batches_ok = 0
+        self.entity_cache_rows_attempted = 0
+        self.entity_cache_rows_written = 0
+        self.entity_cache_write_failures = 0
         self.cooldowns: dict[str, Any] = dict(self.state.get("telegram_cooldowns") or {})
         self.ledger: list[dict[str, Any]] = []
         self.requests_by_method: dict[str, int] = {}
@@ -3598,6 +3700,11 @@ class TelegramRequestGovernor:
         self.humanlike_sleep_total_seconds = 0.0
         self.humanlike_sleep_count = 0
         self.cached_entity_only = telegram_cached_entity_only_enabled()
+        self.uncached_resolve_lane_quota = max(0, getenv_int("REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN", 1))
+        self.uncached_resolve_lane_attempts = 0
+        self.uncached_resolve_lane_ok = 0
+        self.uncached_resolve_lane_skipped = 0
+        self.uncached_resolve_lane_keys = set(_REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_uncached_resolve_lane_keys") or [])
 
     def cache_key(self, handle_or_url: str) -> str:
         raw = canonical_handle(str(handle_or_url or "").strip()).lstrip("@").lower()
@@ -3625,7 +3732,31 @@ class TelegramRequestGovernor:
             "last_success_at": utc_now_iso(),
             "source": source or "telethon_entity_observed",
         }
+        self.entity_cache_dirty[key] = dict(self.entity_cache[key])
+        batch_size = max(1, getenv_int("REGION_TALK_ENTITY_CACHE_WRITE_BATCH_SIZE", 1))
+        if len(self.entity_cache_dirty) >= batch_size:
+            self.flush_entity_cache(stage="telethon_entity_cache_observed")
         return True
+
+    def flush_entity_cache(self, *, stage: str) -> int:
+        """Flush dirty cache rows in one idempotent YDB batch."""
+        if not self.entity_cache_dirty:
+            return 0
+        pending = dict(self.entity_cache_dirty)
+        self.entity_cache_write_batches_attempted += 1
+        self.entity_cache_rows_attempted += len(pending)
+        try:
+            written = int(write_region_talk_entity_cache_items(pending, run_id=self.run_id, stage=stage) or 0)
+        except Exception:
+            written = 0
+        self.entity_cache_rows_written += max(0, written)
+        if written >= len(pending):
+            self.entity_cache_write_batches_ok += 1
+            for key in pending:
+                self.entity_cache_dirty.pop(key, None)
+        else:
+            self.entity_cache_write_failures += 1
+        return written
 
     def cached_input_peer(self, handle_or_url: str) -> Any | None:
         cached = self.entity_cache.get(self.cache_key(handle_or_url)) or {}
@@ -3761,8 +3892,13 @@ class TelegramRequestGovernor:
             status = "skipped_telegram_resolve_cooldown"
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, cooldown_until=exact_resolve_until)
             return None, {"fetch_status": status, "telegram_resolve_status": status, "next_allowed_resolve_at": exact_resolve_until}
-        if self.cached_entity_only:
+        uncached_lane_allowed = (
+            key in self.uncached_resolve_lane_keys
+            and self.uncached_resolve_lane_attempts < self.uncached_resolve_lane_quota
+        )
+        if self.cached_entity_only and not uncached_lane_allowed:
             self.resolve_skipped_by_cooldown += 1
+            self.uncached_resolve_lane_skipped += 1
             status = "skipped_cached_entity_only_no_private_entity"
             self.log("ResolveUsernameRequest", "entity_resolve_expensive", source_id, canonical_url, status, ok=False, network_call=False)
             return None, {"fetch_status": status, "telegram_resolve_status": status, "next_action": "wait_for_entity_cache_or_separate_resolve_lane"}
@@ -3781,12 +3917,16 @@ class TelegramRequestGovernor:
         ):
             return None, {"fetch_status": "skipped_runtime_budget_before_telegram_resolve", "telegram_resolve_status": "skipped_runtime_budget_before_call"}
         self.resolve_network_attempts += 1
+        if self.cached_entity_only and uncached_lane_allowed:
+            self.uncached_resolve_lane_attempts += 1
         self.total_attempted += 1
         self.requests_by_method["ResolveUsernameRequest"] = self.requests_by_method.get("ResolveUsernameRequest", 0) + 1
         try:
             entity = await telethon_await(client.get_entity(handle), "get_entity")
             self.total_ok += 1
             self.resolve_network_ok += 1
+            if self.cached_entity_only and uncached_lane_allowed:
+                self.uncached_resolve_lane_ok += 1
             self.remember_entity(handle, entity, title=str(getattr(entity, "title", None) or seed.source_title), source="resolve_entity")
             cached_after = self.entity_cache.get(key) or {}
             cached_after.update({
@@ -3829,6 +3969,12 @@ class TelegramRequestGovernor:
             "entity_cache_loaded_from_path": self.entity_cache_loaded_from_path,
             "entity_cache_write_path": str((self.output_dir.parent.parent / "state" / "region-talk-state.json")),
             "entity_cache_entries": len(self.entity_cache),
+            "entity_cache_dirty_pending": len(self.entity_cache_dirty),
+            "entity_cache_write_batches_attempted": self.entity_cache_write_batches_attempted,
+            "entity_cache_write_batches_ok": self.entity_cache_write_batches_ok,
+            "entity_cache_rows_attempted": self.entity_cache_rows_attempted,
+            "entity_cache_rows_written": self.entity_cache_rows_written,
+            "entity_cache_write_failures": self.entity_cache_write_failures,
             "entity_cache_hit_rate": round(self.resolve_cache_hits / max(1, self.resolve_cache_hits + self.resolve_network_attempts), 3),
             "resolved_sources_available_for_history_fetch": sum(1 for v in self.entity_cache.values() if isinstance(v, dict) and v.get("channel_id_private") and v.get("access_hash_private")),
             "resolved_sources_used_without_network_resolve": self.resolve_cache_hits,
@@ -3842,6 +3988,10 @@ class TelegramRequestGovernor:
             "resolve_network_floodwait": self.resolve_network_floodwait,
             "resolve_skipped_by_cache": self.resolve_cache_hits,
             "resolve_skipped_by_cooldown": self.resolve_skipped_by_cooldown,
+            "uncached_resolve_lane_quota": self.uncached_resolve_lane_quota,
+            "uncached_resolve_lane_attempts": self.uncached_resolve_lane_attempts,
+            "uncached_resolve_lane_ok": self.uncached_resolve_lane_ok,
+            "uncached_resolve_lane_skipped": self.uncached_resolve_lane_skipped,
             "max_floodwait_seconds": self.max_floodwait_seconds,
             "floodwait_method": self.floodwait_method,
             "floodwait_cooldown_until": self.floodwait_cooldown_until,
@@ -5079,6 +5229,22 @@ def build_unified_source_queue(
     entries: dict[str, dict[str, Any]] = {}
     skipped_non_target_queue_rows = 0
 
+    def queue_positive_int(value: Any) -> int:
+        try:
+            parsed = int(float(value or 0))
+        except Exception:
+            parsed = 0
+        return parsed if parsed > 0 else 0
+
+    source_queue_read_truncated = str(previous_state.get("ydb_row_level_source_queue_items_truncated") or "").lower() == "true"
+
+    def require_full_queue_read(reason: str) -> None:
+        if source_queue_read_truncated or str(previous_state.get("ydb_source_queue_full_read_complete") or "true").lower() == "false":
+            raise RuntimeError(
+                "source queue admission sequence requires a full YDB source_queue_item read; "
+                f"unsafe truncated repair/admission refused ({reason})"
+            )
+
     def merge_existing(row: dict[str, Any]) -> None:
         nonlocal skipped_non_target_queue_rows
         seed = _source_queue_seed_from_row(row)
@@ -5087,11 +5253,57 @@ def build_unified_source_queue(
                 skipped_non_target_queue_rows += 1
             return
         key = seed["canonical_source_key"]
-        order = int(row.get("queue_order") or 0)
-        entries[key] = {**row, **{k: v for k, v in seed.items() if v not in ("", None)}, "queue_order": order}
+        order = queue_positive_int(row.get("queue_order"))
+        entries[key] = {
+            **row,
+            **{k: v for k, v in seed.items() if v not in ("", None)},
+            "queue_seq": queue_positive_int(row.get("queue_seq")),
+            "queue_order": order,
+        }
 
     for row in sorted(previous_queue_rows, key=lambda r: int(r.get("queue_order") or 999999999)):
         merge_existing(row)
+
+    queue_seq_missing_repaired = 0
+    queue_seq_duplicate_repaired = 0
+    used_queue_seqs: set[int] = set()
+    max_queue_seq = max([queue_positive_int(rec.get("queue_seq")) for rec in entries.values()] or [0])
+    for key, rec in sorted(entries.items(), key=lambda item: (queue_positive_int(item[1].get("queue_order")) or 999999999, item[0])):
+        seq = queue_positive_int(rec.get("queue_seq"))
+        if seq > 0 and seq not in used_queue_seqs:
+            used_queue_seqs.add(seq)
+            continue
+        require_full_queue_read("repair_missing_or_duplicate_queue_seq")
+        previous_seq = seq
+        legacy_order = queue_positive_int(rec.get("queue_order"))
+        if previous_seq == 0 and legacy_order > 0 and legacy_order not in used_queue_seqs:
+            repaired_seq = legacy_order
+        else:
+            max_queue_seq += 1
+            while max_queue_seq in used_queue_seqs:
+                max_queue_seq += 1
+            repaired_seq = max_queue_seq
+        max_queue_seq = max(max_queue_seq, repaired_seq)
+        rec["previous_queue_seq"] = previous_seq or ""
+        rec["queue_seq"] = repaired_seq
+        rec["queue_seq_repaired_this_run"] = "true"
+        rec["queue_seq_repair_reason"] = "missing_queue_seq" if previous_seq == 0 else "duplicate_queue_seq"
+        rec["admitted_at"] = rec.get("admitted_at") or rec.get("added_at") or run_now
+        rec["admitted_run_id"] = rec.get("admitted_run_id") or rec.get("first_seen_run_id") or run_id
+        used_queue_seqs.add(repaired_seq)
+        if previous_seq == 0:
+            queue_seq_missing_repaired += 1
+        else:
+            queue_seq_duplicate_repaired += 1
+
+    def next_queue_seq() -> int:
+        nonlocal max_queue_seq
+        require_full_queue_read("admit_new_source")
+        max_queue_seq += 1
+        while max_queue_seq in used_queue_seqs:
+            max_queue_seq += 1
+        used_queue_seqs.add(max_queue_seq)
+        return max_queue_seq
 
     def append_or_update(row: dict[str, Any], *, added_from: str) -> bool:
         nonlocal skipped_non_target_queue_rows
@@ -5108,10 +5320,13 @@ def build_unified_source_queue(
         entries[key] = {
             **seed,
             "source_queue_id": "srcq_" + stable_hash(key),
+            "queue_seq": next_queue_seq(),
             "queue_order": next_order,
             "added_at": run_now,
             "added_from": added_from,
             "first_seen_run_id": run_id,
+            "admitted_at": run_now,
+            "admitted_run_id": run_id,
         }
         return True
 
@@ -5132,7 +5347,7 @@ def build_unified_source_queue(
     keyword_queue_order_shifted = 0
     historical_keyword_rows = _historical_keyword_source_rows(previous_state, run_id, run_now)
     keyword_candidates = list(keyword_discovery_rows or []) + list(keyword_post_hit_rows or []) + historical_keyword_rows
-    keyword_priority: list[tuple[dict[str, Any], bool]] = []
+    keyword_priority: list[tuple[dict[str, Any], bool, dict[str, Any]]] = []
     seen_keyword: set[str] = set()
     for row in keyword_candidates:
         discovery_kind = str(row.get("discovery_type") or row.get("edge_type") or row.get("added_from") or "telegram_keyword_search")
@@ -5162,7 +5377,7 @@ def build_unified_source_queue(
                 existing["keyword_evidence_at"] = run_now
                 keyword_surface_filtered += 1
                 continue
-            keyword_priority.append((seed, True))
+            keyword_priority.append((seed, True, evidence_fields))
         else:
             if source_terminal_rejected_status(surface_fields.get("source_queue_status")):
                 next_order = max([int(v.get("queue_order") or 0) for v in entries.values()] or [0]) + 1
@@ -5171,19 +5386,22 @@ def build_unified_source_queue(
                     **surface_fields,
                     **evidence_fields,
                     "source_queue_id": "srcq_" + stable_hash(key),
+                    "queue_seq": next_queue_seq(),
                     "queue_order": next_order,
                     "added_at": run_now,
                     "added_from": discovery_kind,
                     "first_seen_run_id": run_id,
+                    "admitted_at": run_now,
+                    "admitted_run_id": run_id,
                     "keyword_discovery_status": "keyword_surface_filtered",
                     "keyword_evidence_run_id": run_id,
                     "keyword_evidence_at": run_now,
                 }
                 keyword_surface_filtered += 1
                 continue
-            keyword_priority.append((seed, False))
+            keyword_priority.append((seed, False, evidence_fields))
     if keyword_priority:
-        keyword_priority_keys = {seed["canonical_source_key"] for seed, _ in keyword_priority}
+        keyword_priority_keys = {seed["canonical_source_key"] for seed, _, _ in keyword_priority}
         for rec in entries.values():
             if int(rec.get("queue_order") or 0) > prev_cursor and rec.get("canonical_source_key") not in keyword_priority_keys:
                 old_order = int(rec.get("queue_order") or 0)
@@ -5192,7 +5410,7 @@ def build_unified_source_queue(
                 rec["queue_order_changed_this_run"] = "true"
                 rec["queue_order_changed_reason"] = "keyword_or_hashtag_insert_after_cursor_shift"
                 keyword_queue_order_shifted += 1
-        for offset, (seed, existed) in enumerate(keyword_priority, start=1):
+        for offset, (seed, existed, evidence_fields) in enumerate(keyword_priority, start=1):
             key = seed["canonical_source_key"]
             previous_order = int(entries.get(key, {}).get("queue_order") or 0) if existed else 0
             new_order = prev_cursor + offset
@@ -5215,6 +5433,7 @@ def build_unified_source_queue(
                     **seed,
                     **evidence_fields,
                     "source_queue_id": "srcq_" + stable_hash(key),
+                    "queue_seq": next_queue_seq(),
                     "previous_queue_order": "",
                     "queue_order": new_order,
                     "queue_order_changed_this_run": "true",
@@ -5222,6 +5441,8 @@ def build_unified_source_queue(
                     "added_at": run_now,
                     "added_from": seed.get("added_from") or "telegram_keyword_search",
                     "first_seen_run_id": run_id,
+                    "admitted_at": run_now,
+                    "admitted_run_id": run_id,
                     "keyword_discovery_status": "keyword_evidence",
                     "keyword_evidence_run_id": run_id,
                     "keyword_evidence_at": run_now,
@@ -5442,6 +5663,11 @@ def build_unified_source_queue(
         "source_queue_keyword_existing_promoted_this_run": keyword_existing_promoted,
         "source_queue_keyword_surface_filtered_this_run": keyword_surface_filtered,
         "source_queue_order_shifted_for_keyword_this_run": keyword_queue_order_shifted,
+        "source_queue_seq_missing_repaired_this_run": queue_seq_missing_repaired,
+        "source_queue_seq_duplicate_repaired_this_run": queue_seq_duplicate_repaired,
+        "source_queue_seq_max": max_queue_seq,
+        "source_queue_seq_duplicate_total": len([s for s in [queue_positive_int(r.get("queue_seq")) for r in out] if s > 0]) - len({s for s in [queue_positive_int(r.get("queue_seq")) for r in out] if s > 0}),
+        "source_queue_seq_missing_total": sum(1 for r in out if queue_positive_int(r.get("queue_seq")) == 0),
         "source_queue_historical_keyword_sources_total": len(historical_keyword_rows),
         "source_queue_catalog_sources_total": sum(1 for r in out if "public_travel_blogger_catalog" in str(r.get("added_from") or r.get("discovery_types") or "")),
         "source_queue_telegram_total": sum(1 for r in out if r.get("platform") == "telegram"),
@@ -5504,6 +5730,7 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             or str(row.get("keyword_evidence_run_id") or "") == run_id
             or str(row.get("last_fast_check_run_id") or "") == run_id
             or str(row.get("status_changed_this_run") or "").lower() == "true"
+            or str(row.get("queue_seq_repaired_this_run") or "").lower() == "true"
         )
 
     for row in clean:
@@ -5563,7 +5790,9 @@ def _source_queue_handoff_rows(rows: list[dict[str, Any]], cursor_position: int,
             return 2
         if str(row.get("status_changed_this_run") or "").lower() == "true":
             return 3
-        return 4
+        if str(row.get("queue_seq_repaired_this_run") or "").lower() == "true":
+            return 4
+        return 5
 
     ordered_selected = sorted(selected.values(), key=lambda r: (source_queue_priority_bucket(r), order(r)))
     if len(ordered_selected) <= max_rows:
@@ -6033,6 +6262,93 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
+PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
+PUBLICATION_SOURCE_CONFIRMED_EXTERNAL = "confirmed_nonlocal_or_mixed_external"
+PUBLICATION_SOURCE_CONFIRMED_REJECTED = "confirmed_local_or_spam"
+PUBLICATION_SOURCE_UNKNOWN = "unknown"
+
+
+def _publication_source_verdict(source: dict[str, Any]) -> str:
+    terminal = source_local_region_terminal_fields(source)
+    terminal_status = str(terminal.get("source_queue_status") or source.get("source_queue_status") or source.get("fetch_status") or "")
+    scope = str(source.get("source_scope") or "").strip().lower().replace("-", "_")
+    geo = str(source.get("source_geo_class") or "").strip().lower().replace("-", "_")
+    quick = str(source.get("source_quick_class") or "").strip().lower()
+    if (
+        terminal_status in {LOCAL_REGION_SOURCE_STATUS, SPAM_SOURCE_STATUS}
+        or scope in {"local", "local_region", "kaliningrad_local"}
+        or geo in {"local", "local_region", "kaliningrad_local"}
+        or quick in {"local_region_source", "spam_source_reject"}
+    ):
+        return PUBLICATION_SOURCE_CONFIRMED_REJECTED
+    external_values = {
+        "external", "nonlocal", "nonlocal_russia", "confirmed_nonlocal",
+        "mixed_external", "nonlocal_mixed", "external_mixed",
+    }
+    if scope in external_values or geo in external_values:
+        return PUBLICATION_SOURCE_CONFIRMED_EXTERNAL
+    return PUBLICATION_SOURCE_UNKNOWN
+
+
+def publication_eligibility(
+    row: dict[str, Any],
+    authoritative_source: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a side-effect-free, fail-closed publication gate decision.
+
+    The source verdict is tri-state. Only a confirmed nonlocal or
+    mixed-external source may proceed to the existing strict source/text/vector
+    and actual-image publication gates.
+    """
+    post = dict(row or {})
+    source = dict(post)
+    if authoritative_source is not None:
+        for key, value in dict(authoritative_source).items():
+            if value not in (None, ""):
+                source[key] = value
+    source_verdict = _publication_source_verdict(source)
+    source_gate_reason = image_queue_source_disqualification_reason(source)
+    merged = {**post, **{
+        key: value for key, value in source.items()
+        if key.startswith("source_") or key in {"handle", "canonical_url", "monitoring_exclusion_reason", "fetch_status"}
+    }}
+    product_gate_reason = image_queue_product_gate_reason(merged)
+    base_ok, base_reason = _publication_candidate_base_ok(merged)
+    evidence = {
+        "source_verdict": source_verdict,
+        "authoritative_source_used": authoritative_source is not None,
+        "source_scope": source.get("source_scope") or "",
+        "source_geo_class": source.get("source_geo_class") or "",
+        "source_topic_class": source.get("source_topic_class") or "",
+        "source_queue_status": source.get("source_queue_status") or source.get("fetch_status") or "",
+        "source_gate_reason": source_gate_reason,
+        "product_gate_reason": product_gate_reason,
+        "base_gate_reason": base_reason,
+        "vector_gate_status": merged.get("vector_gate_status") or "",
+        "text_vector_fusion_status": merged.get("text_vector_fusion_status") or "",
+        "image_model_input_type": merged.get("image_model_input_type") or "",
+        "image_queue_status": merged.get("image_queue_status") or "",
+    }
+    if source_verdict == PUBLICATION_SOURCE_CONFIRMED_REJECTED:
+        primary_reason = source_gate_reason or "source_verdict_local_or_spam"
+    elif source_verdict == PUBLICATION_SOURCE_UNKNOWN:
+        primary_reason = "source_verdict_unknown"
+    elif product_gate_reason:
+        primary_reason = product_gate_reason
+    elif not base_ok:
+        primary_reason = base_reason or "publication_base_gate_rejected"
+    else:
+        primary_reason = "eligible_for_publication_verification"
+    eligible = primary_reason == "eligible_for_publication_verification"
+    return {
+        "eligible": eligible,
+        "decision": "accept" if eligible else "reject",
+        "primary_reason": primary_reason,
+        "evidence": evidence,
+        "gate_version": PUBLICATION_ELIGIBILITY_GATE_VERSION,
+    }
+
+
 def _publication_text_story_score(row: dict[str, Any]) -> float:
     bool_bonus = 0.0
     for key, weight in [
@@ -6111,13 +6427,23 @@ def build_publication_candidate_queue(
     pool = _merge_candidate_and_image_rows(candidate_rows, image_rows)
     pre_ranked: list[dict[str, Any]] = []
     for row in pool:
-        ok, reason = _publication_candidate_base_ok(row)
+        eligibility = publication_eligibility(row)
+        ok = bool(eligibility.get("eligible"))
+        reason = str(eligibility.get("primary_reason") or "")
         visual = max(_rt_float(row.get("overall_media_score")), _rt_float(row.get("final_visual_score")))
         postcard = _rt_float(row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score"))
         text_story = _publication_text_story_score(row)
         nonlocal_score = _rt_float(row.get("nonlocal_value_score"))
         base_score = round(min(1.0, 0.42 * visual + 0.18 * postcard + 0.30 * text_story + 0.10 * nonlocal_score), 3)
-        pre_ranked.append({**row, "_publication_base_ok": ok, "_publication_base_reject_reason": reason, "_publication_base_score": base_score, "_publication_visual_score": visual, "_publication_text_story_score": text_story})
+        pre_ranked.append({
+            **row,
+            "_publication_base_ok": ok,
+            "_publication_base_reject_reason": reason,
+            "_publication_eligibility": eligibility,
+            "_publication_base_score": base_score,
+            "_publication_visual_score": visual,
+            "_publication_text_story_score": text_story,
+        })
     pre_ranked.sort(key=lambda r: (-_rt_float(r.get("_publication_base_score")), -_rt_float(r.get("overall_media_score")), -_rt_float(r.get("postcardness_score")), str(r.get("post_date") or "")))
     for row in pre_ranked:
         post_url = str(row.get("post_url") or "")
@@ -7583,6 +7909,62 @@ def fetch_public_telegram_web_posts_for_seed(seed: Seed, *, max_posts: int, run_
     return src_row, posts[:max_posts]
 
 
+def _candidate_link_handle(row: dict[str, Any]) -> str:
+    parsed = parse_public_telegram_post_url(str(row.get("post_url") or ""))
+    return parsed[0].lower() if parsed else ""
+
+
+def candidate_link_rows_for_fetch(
+    raw_rows: list[dict[str, Any]],
+    limit: int,
+    *,
+    now: datetime | None = None,
+    cached_entity_handles: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Order exact-post work fresh/cache-first and honor retry timestamps."""
+    if limit <= 0:
+        return []
+    current = now or datetime.now(timezone.utc)
+    cached_handles = {str(h or "").lower().lstrip("@") for h in (cached_entity_handles or set())}
+    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url", "terminal_source_rejected"}
+    blocked_urls: set[str] = set()
+    for row in raw_rows:
+        if str(row.get("_kind") or "") != "post_link_queue_item":
+            continue
+        url = str(row.get("post_url") or "").strip()
+        status = str(row.get("post_link_status") or "")
+        next_attempt = parse_iso_datetime(str(row.get("next_attempt_after") or ""))
+        if url and (status in terminal_link_statuses or status.startswith("terminal_") or (next_attempt and next_attempt > current)):
+            blocked_urls.add(url)
+
+    def rank(row: dict[str, Any]) -> tuple[int, str, str]:
+        kind = str(row.get("_kind") or "")
+        status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
+        cache_rank = 0 if _candidate_link_handle(row) in cached_handles else 1
+        if kind == "post_link_queue_item":
+            if status in {"", "pending_fetch"}:
+                pri = 0 + cache_rank
+            elif status in {"retry_fetch", "fetch_error", "retry_wait_entity_cache"}:
+                pri = 2 + cache_rank
+            else:
+                pri = 4 + cache_rank
+        else:
+            pri = 6 if status == "actual_scored" else 7 if "image" in status else 8
+        return pri, str(row.get("post_date") or ""), str(row.get("updated_at") or "")
+
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in sorted(raw_rows, key=rank):
+        url = str(row.get("post_url") or "").strip()
+        if not url or url in blocked_urls or url in seen:
+            continue
+        seen.add(url)
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
@@ -7594,7 +7976,7 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
         ydb, driver, cfg = ydb_connect()
         table_path = ydb_kv_table_path(cfg)
         pool = ydb.SessionPool(driver)
-        def op(session: Any) -> list[dict[str, Any]]:
+        def op(session: Any) -> tuple[list[dict[str, Any]], set[str]]:
             ensure_ydb_kv_table(ydb, session, table_path)
             rows: list[dict[str, Any]] = []
             for kind in selected_kinds:
@@ -7606,40 +7988,25 @@ def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | Non
                     if not url:
                         continue
                     rows.append({"_pk": pk, "_kind": kind, **payload, "post_url": url})
-            return rows
-        raw_rows = pool.retry_operation_sync(op)
+            cached_handles: set[str] = set()
+            cache_items = ydb_select_kind_items(
+                session,
+                ydb,
+                table_path,
+                "telegram_entity_cache_item",
+                limit=getenv_int("REGION_TALK_YDB_MAX_ENTITY_CACHE_ROWS", 5000),
+            )
+            for item in cache_items.values():
+                if item.get("channel_id_private") and item.get("access_hash_private"):
+                    handle = str(item.get("username") or "").strip().lower().lstrip("@")
+                    if handle:
+                        cached_handles.add(handle)
+            return rows, cached_handles
+        raw_rows, cached_handles = pool.retry_operation_sync(op)
         driver.stop(timeout=5)
     except Exception:
         return []
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    terminal_link_statuses = {"fetched", "scored", "terminal_no_text", "terminal_bad_url", "terminal_source_rejected"}
-
-    def rank(row: dict[str, Any]) -> tuple[int, str, str]:
-        kind = str(row.get("_kind") or "")
-        status = str(row.get("post_link_status") or row.get("image_queue_status") or row.get("current_lifecycle_status") or "")
-        if kind == "post_link_queue_item":
-            if status in terminal_link_statuses or status.startswith("terminal_"):
-                pri = 9
-            elif status in {"", "pending_fetch", "retry_fetch", "fetch_error"}:
-                pri = 0
-            else:
-                pri = 1
-        else:
-            pri = 2 if status == "actual_scored" else 3 if "image" in status else 4
-        return pri, str(row.get("post_date") or ""), str(row.get("updated_at") or "")
-
-    for row in sorted(raw_rows, key=rank):
-        if str(row.get("_kind") or "") == "post_link_queue_item" and (str(row.get("post_link_status") or "") in terminal_link_statuses or str(row.get("post_link_status") or "").startswith("terminal_")):
-            continue
-        url = str(row.get("post_url") or "").strip()
-        if not url or url in seen:
-            continue
-        seen.add(url)
-        out.append(row)
-        if len(out) >= limit:
-            break
-    return out
+    return candidate_link_rows_for_fetch(raw_rows, limit, cached_entity_handles=cached_handles)
 
 async def fetch_ydb_candidate_link_posts_with_telethon(
     client: Any,
@@ -7752,7 +8119,15 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                             progress_label=f"Telethon exact fetch skipped cache-miss {idx}/{len(rows)}; network resolve forbidden",
                         )
                         if str(row.get("_kind") or "") == "post_link_queue_item":
-                            write_region_talk_post_link_queue_items([{**row, "post_link_status": "retry_wait_entity_cache", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": "cached_entity_missing", "fetch_error_message": "cached-entity-only mode; no channel_id/access_hash for exact post source"}], run_id=run_id, stage=stage)
+                            write_region_talk_post_link_queue_items([{
+                                **row,
+                                "post_link_status": "retry_wait_entity_cache",
+                                "last_attempt_run_id": run_id,
+                                "last_attempt_at": utc_now_iso(),
+                                "next_attempt_after": iso_after_seconds(getenv_int("REGION_TALK_POST_LINK_ENTITY_CACHE_RETRY_SECONDS", 3600)),
+                                "fetch_error_code": "cached_entity_missing",
+                                "fetch_error_message": "cached-entity-only mode; no channel_id/access_hash for exact post source",
+                            }], run_id=run_id, stage=stage)
                         continue
                     governor.log("get_entity.exact_post_link", "entity_resolve_expensive", "post_link_queue", canonical_url, "allowed_exact_post_entity_warmup", cache_hit=False, network_call=True, ok=True, exact_network_resolve_budget=exact_network_resolve_budget, exact_network_resolves=exact_network_resolves)
                 if governor is not None and not governor.has_total_request_budget("get_entity.exact_post_link", "post_link_queue", canonical_url):
@@ -8035,7 +8410,9 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         raise RuntimeError("Telethon client is not authorized")
     try:
         if ydb_candidate_links_only:
-            return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir, governor=governor)
+            raw_kinds = (os.getenv("REGION_TALK_YDB_CANDIDATE_LINK_KINDS") or "").strip()
+            candidate_link_kinds = tuple(k.strip() for k in raw_kinds.split(",") if k.strip()) or None
+            return await fetch_ydb_candidate_link_posts_with_telethon(client, status, output_dir, governor=governor, kinds=candidate_link_kinds)
         if getenv_bool("REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST", True):
             exact_limit = getenv_int("REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT", getenv_int("REGION_TALK_YDB_CANDIDATE_LINK_LIMIT", 12))
             exact_source_rows, exact_posts = await fetch_ydb_candidate_link_posts_with_telethon(
@@ -8361,6 +8738,7 @@ async def fetch_telegram_posts(seeds: list[Seed], status: Status, output_dir: Pa
         _REGION_TALK_TELEGRAM_RUNTIME["keyword_rows"] = keyword_rows
         _REGION_TALK_TELEGRAM_RUNTIME["keyword_edges"] = keyword_edges
     finally:
+        governor.flush_entity_cache(stage="telethon_entity_cache_final_flush")
         governor.write_ledger()
         _REGION_TALK_TELEGRAM_RUNTIME["entity_cache"] = governor.entity_cache
         _REGION_TALK_TELEGRAM_RUNTIME["cooldowns"] = governor.cooldowns
@@ -10838,6 +11216,29 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         previous_state, seeds, source_rows, source_frontier_unique, public_blogger_rows,
         keyword_discovery_rows, early_keyword_post_hit_rows, posts_by_source, run_id, run_now,
     )
+    queue_seq_repairs = int(unified_source_queue_metrics.get("source_queue_seq_missing_repaired_this_run") or 0) + int(
+        unified_source_queue_metrics.get("source_queue_seq_duplicate_repaired_this_run") or 0
+    )
+    if queue_seq_repairs and region_talk_state_backend_requested() == "ydb" and getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_WRITES", True):
+        online_cap = getenv_int("REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS", 0)
+        if online_cap > 0 and len(unified_source_queue_sheet) > online_cap:
+            raise RuntimeError(
+                "source queue admission sequence repair exceeds online write cap; "
+                "raise REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS for one full repair write"
+            )
+        queue_seq_repair_rows_written = write_region_talk_online_queue_items(
+            unified_source_queue_sheet,
+            kind="source_queue_item",
+            id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
+            fields=SOURCE_QUEUE_STATE_FIELDS,
+            run_id=run_id,
+            stage="source_queue_admission_sequence_repair",
+        )
+        if queue_seq_repair_rows_written < len(unified_source_queue_sheet):
+            raise RuntimeError(
+                "source queue admission sequence repair was not fully durable: "
+                f"written={queue_seq_repair_rows_written} expected={len(unified_source_queue_sheet)}"
+            )
     source_queue_handoff_rows = _source_queue_handoff_rows(
         unified_source_queue_sheet,
         int(unified_source_queue_metrics.get("source_queue_cursor_position") or 0),
@@ -11159,6 +11560,14 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "entity_cache_loaded_from_path":tg_obs.get("entity_cache_loaded_from_path", ""),
         "entity_cache_write_path":tg_obs.get("entity_cache_write_path", ""),
         "entity_cache_hit_rate":tg_obs.get("entity_cache_hit_rate", ""),
+        "entity_cache_write_batches_attempted":tg_obs.get("entity_cache_write_batches_attempted", 0),
+        "entity_cache_write_batches_ok":tg_obs.get("entity_cache_write_batches_ok", 0),
+        "entity_cache_rows_attempted":tg_obs.get("entity_cache_rows_attempted", 0),
+        "entity_cache_rows_written":tg_obs.get("entity_cache_rows_written", 0),
+        "entity_cache_write_failures":tg_obs.get("entity_cache_write_failures", 0),
+        "source_queue_uncached_resolve_lane_selected":_REGION_TALK_TELEGRAM_RUNTIME.get("source_queue_uncached_resolve_lane_selected", 0),
+        "source_queue_uncached_resolve_lane_attempts":tg_obs.get("uncached_resolve_lane_attempts", 0),
+        "source_queue_uncached_resolve_lane_ok":tg_obs.get("uncached_resolve_lane_ok", 0),
         "resolved_sources_available_for_history_fetch":tg_obs.get("resolved_sources_available_for_history_fetch", ""),
         "resolved_sources_used_without_network_resolve":tg_obs.get("resolved_sources_used_without_network_resolve", ""),
         "telegram_sources_deferred_by_cooldown":sum(1 for s in source_rows if "cooldown" in str(s.get("fetch_status") or "")),
