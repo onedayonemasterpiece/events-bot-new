@@ -137,6 +137,9 @@ Telegram Monitoring and Guide monitoring:
 - row-level YDB queue metrics read through primary-key prefix ranges, not
   table-wide `kind` scans, so `ResourceExhausted` in one queue does not stall the
   whole loop;
+- exact latest Candidate/BGE/Image heartbeat rows included in every metric
+  snapshot with `run_id`, event, phase, status, timestamp and sequence, so an
+  active Kaggle status cannot be attributed to an older YDB run;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

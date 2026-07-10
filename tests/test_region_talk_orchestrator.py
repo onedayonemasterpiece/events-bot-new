@@ -177,6 +177,20 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_publics))
         self.assertNotEqual(mod._progress_signature(base), mod._progress_signature(more_future_metric))
 
+    def test_heartbeat_metrics_keep_run_identity_and_stage(self) -> None:
+        mod = load_module()
+        metrics = mod._heartbeat_metric_fields("candidate", {
+            "run_id": "candidate-run-2",
+            "event_name": "image_queue_build_done",
+            "phase": "queue_assembly",
+            "status": "running",
+            "created_at": "2026-07-10T10:00:00Z",
+            "event_seq": 52,
+        })
+        self.assertEqual(metrics["candidate_heartbeat_run_id"], "candidate-run-2")
+        self.assertEqual(metrics["candidate_heartbeat_event_name"], "image_queue_build_done")
+        self.assertEqual(metrics["candidate_heartbeat_event_seq"], 52)
+
     def test_canonical_metric_aliases_include_snapshot_names(self) -> None:
         mod = load_module()
         metrics = mod.with_canonical_metric_aliases({

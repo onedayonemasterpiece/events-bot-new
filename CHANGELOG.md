@@ -21,6 +21,10 @@
   status heartbeat and shared YDB heartbeat clients immediately after the
   terminal report event instead of relying only on `atexit`, reducing stale
   Kaggle `RUNNING` slots after product work is already complete.
+- **Region Talk / heartbeat run correlation**: every orchestrator metric
+  snapshot now carries exact latest Candidate/BGE/Image heartbeat run IDs,
+  events, phases, timestamps and sequence numbers, preventing a current Kaggle
+  status from being diagnosed against a stale previous YDB run.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve

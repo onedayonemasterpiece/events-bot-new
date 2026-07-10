@@ -1607,6 +1607,18 @@ def with_canonical_metric_aliases(metrics: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _heartbeat_metric_fields(prefix: str, row: dict[str, Any] | None) -> dict[str, Any]:
+    payload = row or {}
+    return {
+        f"{prefix}_heartbeat_run_id": str(payload.get("run_id") or ""),
+        f"{prefix}_heartbeat_event_name": str(payload.get("event_name") or ""),
+        f"{prefix}_heartbeat_phase": str(payload.get("phase") or ""),
+        f"{prefix}_heartbeat_status": str(payload.get("status") or ""),
+        f"{prefix}_heartbeat_created_at": str(payload.get("created_at") or payload.get("updated_at") or ""),
+        f"{prefix}_heartbeat_event_seq": _safe_int(payload.get("event_seq")),
+    }
+
+
 GOAL_DELTA_METRICS = {
     "new_publics": "publics_total",
     "processed_posts": "processed_posts_unique_total",
@@ -1682,15 +1694,20 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
                 truncated_kinds.append(kind)
                 loaded = loaded[:kind_limit]
             rows_by_kind[kind] = loaded
-        latest_query = f"SELECT payload_json FROM `{table}` WHERE pk = 'latest_state';"
-        def read_latest_state(session: Any) -> dict[str, Any]:
+        latest_query = f"SELECT pk, payload_json, updated_at FROM `{table}` WHERE pk IN ('latest_state', 'latest_business_heartbeat', 'latest_business_heartbeat:bge_m3_enrichment', 'latest_business_heartbeat:image_diagnostic');"
+        def read_latest_rows(session: Any) -> dict[str, dict[str, Any]]:
             result_sets = session.transaction(ydb.StaleReadOnly()).execute(latest_query, commit_tx=True)
             rows = result_sets[0].rows if result_sets else []
-            if not rows:
-                return {}
-            payload = rows[0].payload_json
-            return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
-        latest_state = pool.retry_operation_sync(read_latest_state)
+            out: dict[str, dict[str, Any]] = {}
+            for row in rows:
+                payload = row.payload_json
+                value = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+                if isinstance(value, dict):
+                    value.setdefault("updated_at", str(getattr(row, "updated_at", "") or ""))
+                    out[str(row.pk)] = value
+            return out
+        latest_rows = pool.retry_operation_sync(read_latest_rows)
+        latest_state = latest_rows.get("latest_state") or {}
     finally:
         driver.stop()
 
@@ -1948,6 +1965,9 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **regex_vector_metrics,
         "bge_pending_sample_total": len(bge_pending_rows),
         "bge_pending_sample_limit": bge_sample_limit,
+        **_heartbeat_metric_fields("candidate", latest_rows.get("latest_business_heartbeat")),
+        **_heartbeat_metric_fields("bge", latest_rows.get("latest_business_heartbeat:bge_m3_enrichment")),
+        **_heartbeat_metric_fields("image", latest_rows.get("latest_business_heartbeat:image_diagnostic")),
         **{
             f"cursor_{name}_position": _safe_int(row.get("cursor_position") or row.get("done") or 0)
             for name, row in cursor_by_name.items()
