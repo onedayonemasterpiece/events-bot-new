@@ -28,6 +28,38 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
         os.environ["REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION"] = "publication-gate-test-v1"
         return load_module()
 
+    def test_vk_fetch_uses_prefetched_public_url_before_vk_api(self) -> None:
+        keys = (
+            "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",
+            "REGION_TALK_IMAGE_DIAG_ALLOW_MISSING_INPUT",
+            "REGION_TALK_IMAGE_DIAG_EXPECTED_ELIGIBILITY_GATE_VERSION",
+        )
+        old = {key: os.environ.get(key) for key in keys}
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                mod = self._load_in_temp_output(td)
+                def fake_download(url, path):
+                    self.assertEqual(url, "https://sun.example/vk-photo.jpg?quality=95")
+                    Path(path).write_bytes(b"image")
+                    return str(path)
+
+                mod._download_http_image = fake_download
+                with mock.patch.object(mod.requests, "get", side_effect=AssertionError("VK API must not be called")):
+                    row = {
+                        "image_queue_id": "vk-prefetched",
+                        "post_url": "https://vk.com/wall-211445468_273",
+                        "image_url_or_local_path": "https://sun.example/vk-photo.jpg?quality=95",
+                    }
+                    mod.fetch_vk(row)
+                self.assertEqual(row["media_fetch_status"], "downloaded_public_url")
+                self.assertTrue(Path(row["actual_media_path"]).exists())
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_publication_eligibility_gate_fails_closed_and_blocks_local_source(self) -> None:
         keys = (
             "REGION_TALK_IMAGE_DIAG_OUTPUT_DIR",

@@ -729,10 +729,26 @@ async def fetch_telegram(batch):
         await client.disconnect()
 
 def fetch_vk(r):
+    t0 = time.monotonic()
+    direct_url = str(r.get("image_url_or_local_path") or r.get("primary_media_path") or "").strip()
+    if direct_url.startswith("http") or direct_url.startswith("//"):
+        try:
+            suffix = ".jpg"
+            match = re.search(r"\.(jpg|jpeg|png|webp)(?:\?|$)", direct_url, re.I)
+            if match:
+                suffix = "." + match.group(1).lower().replace("jpeg", "jpg")
+            path = MEDIA / f"{r['image_queue_id']}_vk_public_url{suffix}"
+            r["actual_media_path"] = _download_http_image(direct_url, path)
+            r["media_fetch_status"] = "downloaded_public_url"
+            r["media_download_seconds"] = round(time.monotonic()-t0, 3)
+            return
+        except Exception as exc:
+            r["media_fetch_error"] = "direct_url=" + type(exc).__name__ + ": " + str(exc)[:220]
     token = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4") or os.getenv("VK_ACCESS_TOKEN5") or os.getenv("VK_ACCESS_TOKEN") or os.getenv("VK_SERVICE_TOKEN") or ""
-    owner, pid = parse_vk(r.get("post_url", "")); t0 = time.monotonic()
+    owner, pid = parse_vk(r.get("post_url", ""))
     if not token or owner is None:
-        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]="VK token unavailable or url parse failed"; return
+        prior_error = str(r.get("media_fetch_error") or "")
+        r["media_fetch_status"]="needs_actual_image_fetch"; r["media_fetch_error"]=(prior_error + "; " if prior_error else "") + "VK token unavailable or url parse failed"; return
     try:
         resp = requests.get("https://api.vk.com/method/wall.getById", params={"posts": f"{owner}_{pid}", "access_token": token, "v": "5.199"}, timeout=25)
         data = resp.json(); items = data.get("response")

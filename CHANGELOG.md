@@ -45,7 +45,9 @@
   isolated ImageDiagnostic notebook download and score the actual image instead
   of repeating IP-bound VK API failures every cycle. CandidateReport queue
   refreshes now preserve those URL/provenance fields instead of erasing them
-  before ImageDiagnostic can consume the image.
+  before ImageDiagnostic can consume the image. The VK diagnostic branch now
+  downloads that URL before trying the IP-bound VK API, matching the existing
+  Telegram direct-URL-first behavior.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

@@ -267,7 +267,10 @@ Important invariants:
   proxy; no VK token is copied out, and only public attachment URLs are written
   to YDB. Later CandidateReport queue refreshes must merge and preserve these
   prefetch fields rather than reconstructing the row without them.
-  ImageDiagnostic still downloads and scores the actual bytes itself.
+  ImageDiagnostic still downloads and scores the actual bytes itself. Its VK
+  branch consumes the prefetched public URL before attempting `wall.getById`;
+  the VK API is only fallback, so an IP-bound Kaggle token cannot mask a valid
+  server-resolved image.
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The
