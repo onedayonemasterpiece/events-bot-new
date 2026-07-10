@@ -1826,6 +1826,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     )
 
     image_pending = [r for r in images if str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}]
+    image_pending_vk_without_url = [
+        row for row in image_pending
+        if re.search(r"vk\.com/wall-?\d+_\d+", str(row.get("post_url") or ""), re.I)
+        and not str(row.get("image_url_or_local_path") or row.get("primary_media_path") or "").startswith(("http://", "https://"))
+    ]
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
     image_product_eligible = [
@@ -2033,6 +2038,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_queue_total": len(images),
         "image_product_eligible_total": len(image_product_eligible),
         "image_pending_total": len(image_pending),
+        "image_pending_vk_without_url_total": len(image_pending_vk_without_url),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
         **image_terminal_metrics,
@@ -2091,6 +2097,22 @@ def build_decision_plan(
         timeout_seconds=300,
         env=MAIN_DISCOVERY_YDB_BUDGET_ENV,
     ))
+
+    if int(metrics.get("image_pending_vk_without_url_total") or 0) > 0:
+        actions.append(_action(
+            "prefetch_vk_media",
+            [
+                "python3",
+                "scripts/region_talk_vk_media_prefetch.py",
+                "--max-items",
+                "10",
+                "--allow-fly-fallback",
+            ],
+            f"{int(metrics.get('image_pending_vk_without_url_total') or 0)} VK image rows need a server-side public CDN URL before Kaggle scoring",
+            resource="local:vk-media-prefetch",
+            parallel_safe=True,
+            timeout_seconds=180,
+        ))
 
     # Pipeline invariant: after the main notebook writes fresh E5 rows, BGE is
     # the next required consumer. Do not let finalizer/image actions hide this

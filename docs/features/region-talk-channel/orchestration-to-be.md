@@ -255,6 +255,13 @@ Important invariants:
   observability sheets. This avoids spending several tail minutes repeatedly
   serializing the full multi-thousand-row source ledger. A deliberate offline
   audit can unset the flag to build the full workbook.
+- Pending VK image rows are prefetched by
+  `scripts/region_talk_vk_media_prefetch.py` before Kaggle scoring. The future
+  server-side orchestrator uses its production VK user token to resolve public
+  photo CDN URLs and persists those URLs in the existing `image_queue_item`.
+  Local debugging may explicitly use the existing Fly app as a read-only token
+  proxy; no VK token is copied out, and only public attachment URLs are written
+  to YDB. ImageDiagnostic still downloads and scores the actual bytes itself.
 - Source selection is queue-first. Once the durable YDB source queue exists,
   pending rows after `unified_source_queue` cursor are selected before legacy
   CSV/static seeds, even if the static seed has a lower numeric priority. The

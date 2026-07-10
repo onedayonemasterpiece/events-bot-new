@@ -29,6 +29,11 @@
   runs keep full state in YDB and export only product/funnel/shortlist and
   observability sheets, instead of repeatedly serializing the 7k source ledger
   into a large workbook plus duplicate JSON/HTML artifacts.
+- **Region Talk / VK media prefetch**: pending VK image rows can resolve public
+  photo CDN URLs on the server where the production token is valid (or through
+  an explicit read-only Fly proxy during local debugging), then let the
+  isolated ImageDiagnostic notebook download and score the actual image instead
+  of repeating IP-bound VK API failures every cycle.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

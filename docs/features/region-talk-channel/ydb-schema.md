@@ -451,6 +451,13 @@ Strong rows blocked only by sparse source evidence update the existing
 CandidateReport consumes that marker through the normal unified source selector
 and stops prioritizing it once the target sample depth is reached.
 
+For VK rows whose API token is IP-bound, the local/server prefetch stage may
+add `image_url_or_local_path`, `vk_media_photo_urls`,
+`vk_media_prefetch_status=ready` and `vk_media_prefetch_source` to the same
+`image_queue_item`. These are acquisition hints only: completion still requires
+ImageDiagnostic to download/decode actual bytes and write
+`image_model_input_type=actual_image` plus `actual_scored`.
+
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report
 artifacts only. The Kaggle writer may rewrite old compact state rows through the

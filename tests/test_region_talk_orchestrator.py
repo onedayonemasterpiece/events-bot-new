@@ -880,6 +880,26 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         mod = load_module()
         self.assertEqual(mod.MAIN_DISCOVERY_YDB_BUDGET_ENV["REGION_TALK_LIGHTWEIGHT_REPORT"], "1")
 
+    def test_vk_image_without_direct_url_schedules_server_prefetch(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "image_pending_vk_without_url_total": 1,
+                "image_pending_total": 1,
+                "publication_confirmed_total": 0,
+                "publication_sent_total": 0,
+                "bge_pending_sample_total": 0,
+                "finalizer_pending_url_total": 0,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        by_name = {action["action"]: action for action in actions}
+        self.assertIn("prefetch_vk_media", by_name)
+        self.assertIn("--allow-fly-fallback", by_name["prefetch_vk_media"]["cmd"])
+        self.assertIn("launch_image_diagnostic", by_name)
+
 
 if __name__ == "__main__":
     unittest.main()
