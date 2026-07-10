@@ -6103,12 +6103,19 @@ def build_image_candidate_queue(
     previous_post_by_url = {str(r.get("post_url") or ""): r for r in previous_post_rows if str(r.get("post_url") or "")}
     previous_post_by_id = {str(r.get("post_id") or ""): r for r in previous_post_rows if str(r.get("post_id") or "")}
     previous_source_rows = rows_from_state_keys("unified_source_queue", "sources", "source_frontier_unique", "source_candidates", "discovered_sources")
-    previous_source_by_id = {str(r.get("source_id") or ""): r for r in previous_source_rows if str(r.get("source_id") or "")}
-    previous_source_by_url = {
-        str(r.get("source_url") or r.get("canonical_url") or r.get("normalized_url") or ""): r
-        for r in previous_source_rows
-        if str(r.get("source_url") or r.get("canonical_url") or r.get("normalized_url") or "")
-    }
+    # The canonical source ledger is listed first and carries scanned-history
+    # counters required by the strict source verdict. Do not let a later
+    # frontier/source-candidate projection with the same URL but fewer fields
+    # overwrite it.
+    previous_source_by_id: dict[str, dict[str, Any]] = {}
+    previous_source_by_url: dict[str, dict[str, Any]] = {}
+    for source_row in previous_source_rows:
+        source_id = str(source_row.get("source_id") or "")
+        source_url = str(source_row.get("source_url") or source_row.get("canonical_url") or source_row.get("normalized_url") or "")
+        if source_id:
+            previous_source_by_id.setdefault(source_id, source_row)
+        if source_url:
+            previous_source_by_url.setdefault(source_url, source_row)
 
     def enrich_image_queue_input(row: dict[str, Any]) -> dict[str, Any]:
         post_url = str(row.get("post_url") or "")

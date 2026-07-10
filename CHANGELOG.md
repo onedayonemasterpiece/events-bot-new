@@ -25,6 +25,10 @@
   snapshot now carries exact latest Candidate/BGE/Image heartbeat run IDs,
   events, phases, timestamps and sequence numbers, preventing a current Kaggle
   status from being diagnosed against a stale previous YDB run.
+- **Region Talk / canonical source-join precedence**: image eligibility now
+  preserves the canonical source-ledger row when thinner frontier/candidate
+  projections share its URL, so scanned-history evidence is not overwritten
+  into `source_verdict_unknown`.
 - **Region Talk / repaired queue-cache-exact orchestration**: source admission
   now carries immutable `queue_seq` with full-read/truncation safety, durable
   batched `telegram_entity_cache_item` rows and one controlled uncached resolve

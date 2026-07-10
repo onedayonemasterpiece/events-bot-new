@@ -872,6 +872,10 @@ posts, reached `processed_found_ko_candidate`, and has a non-zero KO ratio below
 the local-source cutoff of `0.7`. This is a durable scan-evidence fallback for
 rows where the optional profile projection did not persist `source_scope`; an
 unscanned, sparse, all-KO, local or spam row remains fail-closed.
+When image inputs join multiple source projections, the canonical
+`unified_source_queue` row has precedence over thinner frontier/candidate rows
+with the same URL; otherwise scan counters can be lost and a confirmed external
+source incorrectly falls back to `source_verdict_unknown`.
 Because BGE and CandidateReport may start near each other and both read/write
 YDB, CandidateReport state load is retried with bounded backoff in orchestrated
 runs (`REGION_TALK_YDB_STATE_LOAD_ATTEMPTS=4`,

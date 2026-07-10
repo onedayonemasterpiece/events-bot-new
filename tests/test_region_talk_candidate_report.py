@@ -3799,7 +3799,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                             "ko_posts_found": 4,
                             "candidate_posts_found": 4,
                         }
-                    }
+                    },
+                    "source_candidates": {
+                        "duplicate-thin-projection": {
+                            "canonical_url": "https://t.me/travel",
+                            "source_title": "Travel Notes",
+                        }
+                    },
                 },
                 [],
                 [{**row, "source_geo_class": "", "source_scope": "unknown"}],
