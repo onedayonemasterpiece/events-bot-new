@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / actionable dual-vector coverage**: raw E5/BGE coverage is
+  retained, while metrics now separately expose ultra-short E5 rows below the
+  BGE input minimum, actionable unpaired rows and actionable dual coverage.
+  This distinguishes real BGE backlog from intentionally non-vectorized emoji
+  or one-line captions without hiding either population.
 - **Region Talk / terminal source-attestation cleanup**: Gemini-rejected,
   needs-review and revoked publication rows no longer remain in the source
   evidence backlog; finalizer clears their source priority marker so rejected

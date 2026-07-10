@@ -247,9 +247,12 @@ def build_orchestrator_stats_message(metrics: dict[str, Any]) -> str:
         f"Processed posts: {value('processed_posts_unique_total')}",
         f"Candidate memory: {value('candidate_memory_total')}",
         (
-            "Current E5/BGE paired coverage: "
-            f"{value('text_vector_current_version_dual_coverage_percent')}% "
-            f"(pending {value('text_vector_current_version_e5_without_bge_total')})"
+            "Current E5/BGE raw/actionable coverage: "
+            f"{value('text_vector_current_version_dual_coverage_percent')}%/"
+            f"{value('text_vector_current_version_dual_actionable_coverage_percent')}% "
+            f"(raw pending {value('text_vector_current_version_e5_without_bge_total')}; "
+            f"actionable {value('text_vector_current_version_e5_without_bge_actionable_total')}; "
+            f"short excluded {value('text_vector_current_version_e5_below_bge_min_text_total')})"
         ),
         (
             "Images pending/actual/strong>=0.70: "
@@ -830,6 +833,24 @@ def _text_vector_pair_metrics(
     current_bge_posts = {key for key in (_vector_post_key(row) for row in current_bge_rows) if key}
     current_total = len(latest_e5_by_post)
     current_paired = len(paired)
+    bge_min_text_chars = max(1, _env_int("REGION_TALK_BGE_MIN_TEXT_CHARS", 24))
+
+    def bge_input_text_length(row: dict[str, Any]) -> int:
+        parts: list[str] = []
+        for field in (
+            "text", "full_text", "text_excerpt", "short_summary", "why_keep_in_memory",
+            "why_this_is_about_kaliningrad", "what_positive", "what_neutral_or_useful",
+            "llm_reason", "publication_story_reason", "model_short_explanation",
+        ):
+            value = re.sub(r"\s+", " ", str(row.get(field) or "")).strip()
+            if value and value not in parts:
+                parts.append(value)
+        return len(re.sub(r"\s+", " ", ". ".join(parts)).strip())
+
+    actionable_e5_rows = [row for row in latest_e5_by_post.values() if bge_input_text_length(row) >= bge_min_text_chars]
+    actionable_pending_rows = [row for row in pending if bge_input_text_length(row) >= bge_min_text_chars]
+    below_bge_min_rows = [row for row in pending if bge_input_text_length(row) < bge_min_text_chars]
+    actionable_paired = len(actionable_e5_rows) - len(actionable_pending_rows)
     metrics.update({
         "text_vector_current_version_e5_unique_posts_total": current_total,
         "text_vector_current_version_bge_m3_unique_posts_total": len(current_bge_posts),
@@ -837,6 +858,9 @@ def _text_vector_pair_metrics(
         "text_vector_current_version_e5_without_bge_total": len(pending),
         "text_vector_current_version_semantic_bank_mismatch_total": semantic_version_mismatch,
         "text_vector_current_version_dual_coverage_percent": int(round((current_paired / current_total) * 100)) if current_total else 0,
+        "text_vector_current_version_e5_below_bge_min_text_total": len(below_bge_min_rows),
+        "text_vector_current_version_e5_without_bge_actionable_total": len(actionable_pending_rows),
+        "text_vector_current_version_dual_actionable_coverage_percent": int(round((actionable_paired / len(actionable_e5_rows)) * 100)) if actionable_e5_rows else 0,
         "text_vector_current_version_bge_pair_lag_seconds_avg": int(round(sum(paired_lags) / len(paired_lags))) if paired_lags else 0,
         "text_vector_current_version_bge_pair_lag_seconds_max": max(paired_lags) if paired_lags else 0,
         "text_vector_current_version_bge_pending_lag_seconds_avg": int(round(sum(pending_lags) / len(pending_lags))) if pending_lags else 0,

@@ -277,9 +277,9 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         mod = load_module()
         now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
         e5 = [
-            {"post_url": "https://t.me/a/1", "text_hash": "old", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T08:00:00Z"},
-            {"post_url": "https://t.me/a/1", "text_hash": "h1", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T10:00:00Z"},
-            {"post_url": "https://t.me/b/2", "text_hash": "h2", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v2", "created_at": "2026-07-10T09:00:00Z"},
+            {"post_url": "https://t.me/a/1", "text_hash": "old", "text_excerpt": "Старый длинный текст о поездке в Калининградскую область", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T08:00:00Z"},
+            {"post_url": "https://t.me/a/1", "text_hash": "h1", "text_excerpt": "Личный подробный рассказ о поездке в Калининградскую область", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T10:00:00Z"},
+            {"post_url": "https://t.me/b/2", "text_hash": "h2", "text_excerpt": "Привет!", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v2", "created_at": "2026-07-10T09:00:00Z"},
             {"post_url": "https://t.me/stale/3", "text_hash": "h3", "encoder_contract": "e5_legacy", "semantic_bank_version": "v1", "created_at": "2026-07-10T09:00:00Z"},
         ]
         bge = [
@@ -292,6 +292,9 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["text_vector_current_version_e5_without_bge_total"], 1)
         self.assertEqual(metrics["text_vector_current_version_semantic_bank_mismatch_total"], 1)
         self.assertEqual(metrics["text_vector_current_version_dual_coverage_percent"], 50)
+        self.assertEqual(metrics["text_vector_current_version_e5_below_bge_min_text_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_e5_without_bge_actionable_total"], 0)
+        self.assertEqual(metrics["text_vector_current_version_dual_actionable_coverage_percent"], 100)
         self.assertEqual(metrics["text_vector_current_version_bge_pair_lag_seconds_max"], 120)
         self.assertEqual(metrics["text_vector_current_version_bge_pending_lag_seconds_max"], 10800)
         self.assertEqual(metrics["text_vector_stale_version_e5_rows_total"], 1)

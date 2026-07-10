@@ -181,10 +181,11 @@ artifacts/codex/region-talk-ydb-venv/bin/python scripts/region_talk_orchestrator
 
 Important invariants:
 
-- BGE-M3 is launched immediately when either `bge_pending_sample_total >= 1`
-  or `text_vector_e5_without_bge_exact_text_total >= 1`; the latter is the
-  production invariant for dual coverage and is not hidden by raw legacy BGE
-  totals.
+- BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, using
+  the worker's own text-length/PK contract. Raw E5/BGE coverage remains visible,
+  but the scorecard also reports actionable coverage and E5 rows excluded below
+  `REGION_TALK_BGE_MIN_TEXT_CHARS` (default 24); ultra-short captions must not
+  masquerade as a runnable BGE backlog or be hidden from the raw metric.
 - CandidateReport is still included in the same ready cycle to keep
   discovery/E5 growing in parallel while BGE/Image consume older queues.
 - Main CandidateReport uses a non-aggressive discovery profile by default:
