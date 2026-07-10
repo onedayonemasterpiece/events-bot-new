@@ -2694,6 +2694,40 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(row["image_queue_status"], "not_reviewable_unsupported_media")
         self.assertEqual(row["next_action"], "skip_unsupported_media")
 
+    def test_image_queue_reactivates_previously_rejected_text_gate_when_now_eligible(self) -> None:
+        mod = load_module()
+        eligible = {
+            "post_url": "https://t.me/travel/2",
+            "source_url": "https://t.me/travel",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "travel_blogger",
+            "has_media": True,
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "current_stage": "semantic_candidate",
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "metadata_only",
+        }
+        previous = {
+            "image_candidate_queue": {
+                eligible["post_url"]: {
+                    **eligible,
+                    "image_queue_id": "imgq_reactivate",
+                    "image_queue_order": 1,
+                    "image_queue_status": "rejected_text_gate",
+                }
+            }
+        }
+        rows, _, _ = mod.build_image_candidate_queue(
+            previous, [eligible], [], [], "run-q", "2026-07-07T00:00:00+00:00"
+        )
+        row = next(r for r in rows if r["post_url"] == eligible["post_url"])
+        self.assertEqual(row["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(row["previous_image_queue_status"], "rejected_text_gate")
+        self.assertEqual(row["publication_eligibility_decision"], "accept")
+
     def test_source_queue_uses_ydb_image_queue_scores_for_source_rollup(self) -> None:
         mod = load_module()
         previous = {

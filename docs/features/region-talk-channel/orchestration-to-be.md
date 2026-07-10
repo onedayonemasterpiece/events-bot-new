@@ -140,6 +140,10 @@ Telegram Monitoring and Guide monitoring:
 - exact latest Candidate/BGE/Image heartbeat rows included in every metric
   snapshot with `run_id`, event, phase, status, timestamp and sequence, so an
   active Kaggle status cannot be attributed to an older YDB run;
+- `image_queue_total` retained as the transparent raw/audit row count, plus
+  `image_product_eligible_total` for rows accepted by the current strict gate;
+  `--target-image-queue` follows the eligible delta rather than rejected rows
+  retained for audit;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

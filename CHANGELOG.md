@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / product image metric**: the orchestrator now reports strict-gate
+  `image_product_eligible_total` alongside the unchanged raw image-row total,
+  and its image-queue loop target follows the eligible delta rather than
+  retained rejected audit rows.
+- **Region Talk / image-row reactivation**: image rows rejected by an earlier
+  incomplete text/source gate are returned to `needs_actual_image_fetch` once
+  canonical external-source and dual-vector evidence is complete; actual
+  unsupported-media outcomes remain terminal.
 - **Region Talk / source-ledger migration throughput**: the exceptional full
   `queue_seq` repair now uses YDB `BulkUpsert` in bounded 500-row requests
   instead of executing one YQL statement per source row, preventing a one-time

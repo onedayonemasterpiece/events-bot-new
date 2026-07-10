@@ -216,6 +216,15 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertTrue(progress["items"]["new_publics"]["reached"])
         self.assertFalse(progress["items"]["processed_posts"]["reached"])
 
+    def test_image_queue_goal_tracks_eligible_rows_not_retained_raw_rows(self) -> None:
+        mod = load_module()
+        baseline = {"image_queue_total": 77, "image_product_eligible_total": 0}
+        current = {"image_queue_total": 77, "image_product_eligible_total": 4}
+        progress = mod.loop_goal_progress(current, baseline, {"image_queue": 1})
+        self.assertTrue(progress["reached"])
+        self.assertEqual(progress["items"]["image_queue"]["metric"], "image_product_eligible_total")
+        self.assertEqual(progress["items"]["image_queue"]["delta"], 4)
+
     def test_source_merge_preserves_max_counter_values(self) -> None:
         mod = load_module()
         rows = mod._merge_source_rows(

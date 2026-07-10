@@ -6223,7 +6223,11 @@ def build_image_candidate_queue(
             order = max([int(v.get("image_queue_order") or 0) for v in entries.values()] or [0]) + 1
             entries[key] = {"image_queue_id": "imgq_" + stable_hash(key), "image_queue_order": order, "added_at": run_now, "added_from": added_from}
         previous_status = str(entries[key].get("image_queue_status") or "")
-        terminal_unsupported_statuses = {"not_reviewable_no_media", "not_reviewable_unsupported_media", "rejected_text_gate"}
+        # Media-format failures stay terminal until the underlying media changes.
+        # A text/publication-gate rejection is different: canonical source or
+        # dual-vector evidence can legitimately make the row eligible on a
+        # later CandidateReport pass, so it must be reactivated for image fetch.
+        terminal_unsupported_statuses = {"not_reviewable_no_media", "not_reviewable_unsupported_media"}
         if actual or previous_status == "actual_scored":
             status = "actual_scored"
         elif previous_status == "image_analysis_in_progress":

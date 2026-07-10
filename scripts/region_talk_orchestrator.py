@@ -1623,7 +1623,9 @@ GOAL_DELTA_METRICS = {
     "new_publics": "publics_total",
     "processed_posts": "processed_posts_unique_total",
     "ko_sources": "publics_with_ko_candidates_total",
-    "image_queue": "image_queue_total",
+    # Raw image_queue_total includes retained rejected/audit rows and therefore
+    # can stay flat while the product obtains newly eligible work.
+    "image_queue": "image_product_eligible_total",
     "publication_candidates": "publication_candidate_total",
     "confirmed": "publication_confirmed_total",
 }
@@ -1753,6 +1755,11 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_pending = [r for r in images if str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}]
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
+    image_product_eligible = [
+        r for r in images
+        if str(r.get("publication_eligibility_decision") or "") == "accept"
+        and str(r.get("publication_eligibility_gate_version") or "")
+    ]
     image_terminal_metrics = _image_queue_status_metrics(images)
     publication_metrics = _publication_handoff_metrics(images, publications, source_rows)
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
@@ -1951,6 +1958,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "processed_posts_unique_total": processed_posts_unique_total,
         "candidate_memory_total": len(candidates),
         "image_queue_total": len(images),
+        "image_product_eligible_total": len(image_product_eligible),
         "image_pending_total": len(image_pending),
         "image_in_progress_total": len(image_in_progress),
         "image_actual_scored_total": len(image_actual),
