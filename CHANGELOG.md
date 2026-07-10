@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / image retry containment**: ImageDiagnostic no longer
+  re-leases a failed media row repeatedly in the same notebook run; the row
+  stays retryable for a later run without creating an authorization-error hot
+  loop.
 - **Region Talk / durable actual-image scores**: later CandidateReport metadata
   rescans no longer downgrade an `actual_scored` image row from `actual_image`
   to `metadata_only` or hide it from publication-finalizer metrics.

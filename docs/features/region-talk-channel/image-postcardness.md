@@ -125,3 +125,7 @@ The first test runner may implement only one mode, but docs/config must name all
 - `cv_aesthetic` — cheap CV plus lightweight aesthetic/technical scoring.
 - `cv_aesthetic_clip` — cheap CV + aesthetic + CLIP/SigLIP zero-shot prompts.
 - `cv_aesthetic_clip_vlm` — full cascade with VLM verifier for top media only.
+Image acquisition failures remain retryable across separate notebook runs, but
+an item with `last_image_diag_run_id` equal to the current run is not leased
+again in that run. This prevents a persistent Telegram/VK authorization error
+from becoming a same-run hot retry loop while preserving later recovery.

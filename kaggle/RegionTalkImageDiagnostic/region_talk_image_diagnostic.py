@@ -507,6 +507,11 @@ def ydb_rows_for_diagnostic(limit_n: int):
         lease=str(r.get("lease_run_id") or "")
         if status == "actual_scored" and input_type == "actual_image": continue
         if status in IMAGE_TERMINAL_SKIP_STATUSES: continue
+        # A failed media acquisition remains retryable for a future notebook
+        # run, but must not be leased repeatedly by this same run. Otherwise a
+        # persistent Telegram/VK auth error creates an unbounded hot retry loop.
+        if str(r.get("last_image_diag_run_id") or "") == RUN_ID and status != "image_analysis_in_progress":
+            continue
         if status == "actual_scored" and input_type != "actual_image":
             r["previous_image_queue_status"] = status
             r["previous_image_model_input_type"] = input_type

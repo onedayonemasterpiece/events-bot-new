@@ -116,6 +116,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
 
                 raw = [
                     queue_row("eligible"),
+                    queue_row("attempted_same_run", last_image_diag_run_id=mod.RUN_ID),
                     queue_row("rejected", publication_eligibility_decision="reject"),
                     queue_row("legacy", publication_eligibility_decision="", publication_eligibility_gate_version=""),
                     queue_row("local", source_geo_class="kaliningrad_local"),
@@ -126,7 +127,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
 
                 leased, total = mod.ydb_rows_for_diagnostic(10)
 
-                self.assertEqual(total, 4)
+                self.assertEqual(total, 5)
                 self.assertEqual([row["image_queue_id"] for row in leased], ["eligible"])
                 self.assertEqual(leased[0]["image_queue_status"], "image_analysis_in_progress")
                 self.assertEqual(mod.input_payload["publication_eligibility_pending_count"], 1)
