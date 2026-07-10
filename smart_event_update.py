@@ -21,7 +21,11 @@ import urllib.request
 from sqlalchemy import and_, delete, or_, select
 
 from db import Database
-from location_reference import normalise_event_location_from_reference
+from location_reference import (
+    find_known_venue_in_text,
+    normalise_event_location_from_reference,
+    normalize_venue_key,
+)
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
 from media_dedup import compute_dhash_hex, hamming_distance_hex
 from models import (
@@ -662,6 +666,29 @@ EVENTNESS_REVIEW_SCHEMA = {
         "grounded_title",
         "has_single_concrete_event",
         "missing_anchors",
+    ],
+    "additionalProperties": False,
+}
+
+LOCATION_GROUNDING_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {"type": "string", "enum": ["keep", "repair", "uncertain"]},
+        "confidence": {"type": "number"},
+        "location_name": {"type": ["string", "null"]},
+        "location_address": {"type": ["string", "null"]},
+        "city": {"type": ["string", "null"]},
+        "evidence_quote": {"type": "string"},
+        "reason_short": {"type": "string"},
+    },
+    "required": [
+        "decision",
+        "confidence",
+        "location_name",
+        "location_address",
+        "city",
+        "evidence_quote",
+        "reason_short",
     ],
     "additionalProperties": False,
 }
@@ -4349,6 +4376,154 @@ def _source_supports_location_value(text: str | None, value: str | None) -> bool
     probe_compact = re.sub(r"[\s\-–—/]+", "", probe)
     haystack_compact = re.sub(r"[\s\-–—/]+", "", haystack)
     return len(probe_compact) >= 5 and probe_compact in haystack_compact
+
+
+def _candidate_location_grounding_corpus(candidate: "EventCandidate") -> str:
+    parts = [candidate.source_text or "", candidate.raw_excerpt or ""]
+    for poster in candidate.posters[:4]:
+        parts.extend([poster.ocr_title or "", poster.ocr_text or ""])
+    return "\n".join(part for part in parts if str(part).strip()).strip()
+
+
+def _candidate_needs_llm_location_grounding_review(
+    candidate: "EventCandidate",
+) -> tuple[bool, str]:
+    """Route suspicious social-source venues to semantic review.
+
+    This function only detects a grounding conflict. It never chooses a venue.
+    The incident class includes a generic reference token (for example
+    ``остров``) snapping an explicit ``остров Шайба`` source to ``Остров
+    Канта``, and a broad complex name surviving when the source explicitly
+    names a hall inside that complex.
+    """
+
+    if str(candidate.source_type or "").strip().lower() not in {"vk", "tg", "telegram"}:
+        return False, "non_social_source"
+    # Test/offline mode and intentionally disabled provider lanes must retain
+    # the existing ordering of semantic guards. Production enables the LLM;
+    # transient provider failures still fail closed inside the review call.
+    if SMART_UPDATE_LLM_DISABLED:
+        return False, "llm_disabled"
+    corpus = _candidate_location_grounding_corpus(candidate)
+    if not corpus:
+        return True, "missing_source_evidence"
+
+    # Route only when the source itself exposes a location role. This avoids a
+    # new LLM call merely because a short fixture/secondary source omits an
+    # already-known venue, while covering explicit `📍/Где/Площадка/Адрес`
+    # blocks and the named-island/lake regression.
+    has_explicit_location_role = bool(
+        re.search(
+            r"(?iu)(?:📍|(?:^|\n)\s*(?:где|место|площадка|адрес)\s*[:—-]|\b(?:остров|озеро)\s+[«\"']?[A-ZА-ЯЁ])",
+            corpus,
+        )
+    )
+    if not has_explicit_location_role:
+        return False, "no_explicit_location_role"
+
+    name_supported = _source_supports_location_value(corpus, candidate.location_name)
+    address_supported = _source_supports_location_value(corpus, candidate.location_address)
+    if not name_supported and not address_supported:
+        return True, "canonical_location_not_in_source"
+
+    try:
+        explicit = find_known_venue_in_text(corpus, city=candidate.city)
+    except Exception:
+        explicit = None
+    if explicit is not None:
+        current_key = normalize_venue_key(candidate.location_name)
+        explicit_keys = {explicit.name_key, explicit.line_key}
+        if current_key and current_key not in explicit_keys:
+            return True, "more_specific_known_venue_in_source"
+    return False, "source_grounded"
+
+
+async def _llm_review_candidate_location_grounding(
+    candidate: "EventCandidate",
+    *,
+    trigger_reason: str,
+) -> tuple[bool, str]:
+    """Verify or repair a suspicious venue from source evidence, fail closed.
+
+    Vector/reference matching is recall only. The LLM owns the semantic choice;
+    deterministic checks below merely require that its evidence and repaired
+    value are present in the supplied source/OCR bundle.
+    """
+
+    if SMART_UPDATE_LLM_DISABLED:
+        return False, "llm_disabled"
+    corpus = _candidate_location_grounding_corpus(candidate)
+    payload = {
+        "candidate": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "location_name": candidate.location_name,
+            "location_address": candidate.location_address,
+            "city": candidate.city,
+            "source_url": candidate.source_url,
+        },
+        "retrieval_trigger": trigger_reason,
+        "source_and_poster_evidence": _clip(corpus, 4200),
+    }
+    prompt = (
+        "Ты проверяешь локацию события перед записью и публикацией. "
+        "Поля candidate — гипотеза; source_and_poster_evidence — авторитет. "
+        "Reference/vector retrieval является только подсказкой и не доказывает площадку.\n"
+        "Определи attendee-facing место проведения именно этого события. Не путай: "
+        "площадку с артистом/организатором, парк с одноимённым дворцом спорта, "
+        "конкретный зал с широким кварталом, один остров/озеро с другим. "
+        "Если источник явно называет более конкретное место, выбери его. "
+        "Ничего не выдумывай. Для repair верни короткую дословную evidence_quote. "
+        "Если доказательств недостаточно — uncertain. Верни только JSON.\n"
+        f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        LOCATION_GROUNDING_REVIEW_SCHEMA,
+        max_tokens=500,
+        label="location_grounding_review",
+    )
+    if not isinstance(data, dict):
+        return False, "llm_unavailable"
+    decision = str(data.get("decision") or "uncertain").strip().lower()
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    evidence_quote = str(data.get("evidence_quote") or "").strip()
+    quote_grounded = bool(
+        evidence_quote
+        and _norm_text_for_grounding(evidence_quote)
+        in _norm_text_for_grounding(corpus)
+    )
+
+    if decision == "keep" and confidence >= 0.9 and quote_grounded:
+        if _source_supports_location_value(corpus, candidate.location_name) or _source_supports_location_value(
+            corpus, candidate.location_address
+        ):
+            return True, "llm_keep"
+        return False, "llm_keep_not_grounded"
+
+    if decision != "repair" or confidence < 0.8 or not quote_grounded:
+        return False, f"llm_{decision or 'uncertain'}"
+
+    proposed_name = str(data.get("location_name") or "").strip() or None
+    proposed_address = str(data.get("location_address") or "").strip() or None
+    proposed_city = str(data.get("city") or "").strip() or None
+    if not proposed_name:
+        return False, "llm_repair_missing_name"
+    if not (
+        _source_supports_location_value(corpus, proposed_name)
+        or _source_supports_location_value(corpus, proposed_address)
+    ):
+        return False, "llm_repair_value_not_grounded"
+
+    candidate.location_name = proposed_name
+    candidate.location_address = proposed_address
+    if proposed_city:
+        candidate.city = proposed_city
+    return True, "llm_repair"
 
 
 def _has_retrospective_future_teaser_shape(title: str | None, text: str | None) -> bool:
@@ -13404,6 +13579,41 @@ async def _smart_event_update_impl(
         source_chat_username=candidate.source_chat_username,
         source_url=candidate.source_url,
     )
+    needs_location_review, location_review_trigger = (
+        _candidate_needs_llm_location_grounding_review(candidate)
+    )
+    if needs_location_review:
+        location_ok, location_review_result = await _llm_review_candidate_location_grounding(
+            candidate,
+            trigger_reason=location_review_trigger,
+        )
+        logger.info(
+            "smart_update.location_grounding_review trigger=%s result=%s ok=%s source_type=%s source_url=%s location=%s address=%s city=%s",
+            location_review_trigger,
+            location_review_result,
+            int(location_ok),
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.location_name, 100),
+            _clip_title(candidate.location_address, 100),
+            candidate.city,
+        )
+        if not location_ok:
+            return SmartUpdateResult(
+                status="invalid",
+                reason=f"location_grounding_review:{location_review_result}",
+            )
+        (
+            candidate.location_name,
+            candidate.location_address,
+            candidate.city,
+        ) = _canonicalize_location_fields(
+            location_name=candidate.location_name,
+            location_address=candidate.location_address,
+            city=candidate.city,
+            source_chat_username=candidate.source_chat_username,
+            source_url=candidate.source_url,
+        )
     if not candidate.date:
         logger.warning(
             "smart_update.invalid reason=missing_date source_type=%s source_url=%s title=%s",

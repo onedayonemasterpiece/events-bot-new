@@ -86,6 +86,22 @@ def test_generic_city_park_not_fuzzy_bound_to_zelenogradsk_culture_center() -> N
     }
 
 
+def test_unknown_island_not_fuzzy_bound_to_kant_island() -> None:
+    """Generic geography cannot identify a different named island."""
+
+    payload = {
+        "location_name": "Верхнее озеро, остров Шайба",
+        "location_address": None,
+        "city": "Калининград",
+    }
+    main._normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Верхнее озеро, остров Шайба",
+        "location_address": None,
+        "city": "Калининград",
+    }
+
+
 def test_known_venue_without_alias_still_normalises_when_address_empty() -> None:
     payload = {"location_name": "Янтарь холл", "location_address": None, "city": None}
     main._normalise_event_location_from_reference(payload)

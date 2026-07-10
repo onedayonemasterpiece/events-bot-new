@@ -322,6 +322,8 @@ Smart Update содержит детекцию фестивалей как ча�
 - Reference-слой умеет также искать единственную известную площадку в свободном тексте по каноническому имени, алиасу или адресу; Telegram Monitoring использует это только как recovery после пустой или явно прозоподобной `location_name`, чтобы не закреплять фрагменты описания как площадку.
 - Curated aliases in `docs/reference/location-aliases.md` force canonical `location_name/location_address/city` from `docs/reference/locations.md` when the alias matches exactly. This is intentionally a reference-normalization guardrail, not a semantic matcher: broad/ambiguous room labels such as bare `Кинозал` still need source context or the Gemma 4 venue-review stage.
 - Для нормализации по `docs/reference/locations.md` действует guardrail: неизвестная площадка не должна схлопываться в известную запись по общему токену вроде `школа`; если в источнике есть явный конфликтующий адрес, сохраняем raw `location_name/location_address/city`, а не создаём гибрид из справочника и текста поста.
+- Географические слова `остров` и `озеро` также не являются identity-токенами площадки: `Верхнее озеро, остров Шайба` не может fuzzy-схлопнуться в `Остров Канта` только по слову `остров`.
+- После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует случаи, где итоговая площадка/адрес отсутствуют в source+OCR или reference-recall нашёл более конкретную площадку; решение `keep|repair|uncertain` принимает LLM. `repair` принимается только с дословной source/OCR evidence quote и source-grounded новым значением, а provider/grounding uncertainty fail-closes до create/merge/publication. Это предотвращает подмены вида парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта` и `Бастион Холл` → широкий квартал `Понарт`.
 - Цель: стабильный dedup/merge и единообразный summary-блок Telegraph.
 - Детерминированные ранние фильтры “не-событий” (без LLM), чтобы не создавать псевдо-ивенты:
   - `skipped_non_event:non_event_notice` (инфо‑объявления/госуслуги и т.п.)
@@ -530,6 +532,17 @@ The future-event quality audit is separate from identity deduplication:
 5. fail closed when any catalog id, vector, source bundle or validated LLM verdict is missing.
 
 Supabase pgvector remains a retrieval sidecar and may be stale; Fly SQLite remains canonical. A future enforce-mode publication gate must key a current quality decision to both the event hash and source-bundle hash, so any logistics/media/source change invalidates the pass before Telegram/VK/Telegraph/static fanout.
+
+For a reproducible read-only vector-first catalog pass, freeze a compact JSON/JSON.GZ export with `events`, linked `event_source(s)` and `eventposter(s)`, then run:
+
+```bash
+python scripts/inspect/audit_future_event_vectors.py \
+  --export artifacts/codex/<incident>/future-events.json.gz \
+  --output artifacts/codex/<incident>/vector-audit \
+  --env-file .env
+```
+
+The command reuses current `related_v1` sidecar vectors, fills missing vectors ephemerally without sidecar writes and emits top-K `vector_pairs.json`. Similarity is recall only: every proposed duplicate still requires source/OCR-grounded LLM or human adjudication; the tool never mutates Fly SQLite or Supabase.
 
 Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.
 

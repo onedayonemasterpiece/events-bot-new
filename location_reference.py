@@ -369,6 +369,8 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
         "центр",
         "пространство",
         "парк",
+        "остров",
+        "озеро",
         "школа",
         "библиотека",
         "галерея",
