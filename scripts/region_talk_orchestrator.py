@@ -1517,6 +1517,7 @@ def _fast_check_exact_post_metrics(
         "fast_check_exact_posts_processed_unique_total": len(fetched_urls),
         "fast_check_exact_posts_dual_vectorized_total": len(paired_urls),
         "fast_check_exact_posts_strict_text_accepted_total": len(accepted_urls),
+        "fast_check_exact_posts_strict_text_accepted_urls": sorted(accepted_urls),
         "fast_check_exact_posts_text_rejected_total": max(0, len(fetched_urls) - len(accepted_urls)),
         "fast_check_exact_posts_text_rejection_reasons": rejection_counts,
         "fast_check_exact_posts_image_queue_total": len(urls & set(images)),
