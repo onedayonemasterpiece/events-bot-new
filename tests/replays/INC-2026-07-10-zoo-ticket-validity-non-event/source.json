@@ -1,0 +1,24 @@
+{
+  "incident_id": "INC-2026-07-10-zoo-ticket-validity-non-event",
+  "source_type": "telegram",
+  "source_url": "https://t.me/kldzoo/7641",
+  "message_date": "2026-07-09T06:03:25+00:00",
+  "source_username": "kldzoo",
+  "source_title": "Калининградский зоопарк",
+  "source_default_location": "Калининградский зоопарк, Мира 26, Калининград",
+  "text": "📣Внимание!\n\nКалининградский зоопарк открыт и работает в обычном режиме:\n\nзоопарк 9:00 - 21:00\nкассы 9:00 - 19:30\n\nБилеты можно купить в кассах, а можно — на сайте зоопарка.\n\nВходной билет действителен до 31 декабря 2026 года.\n\nНа фото колобус в ожидании интересных посетителей😌",
+  "expected": {
+    "telegram_monitor_events": [],
+    "smart_update_status": "skipped_non_event",
+    "smart_update_reason": "weak_eventness_review_non_event",
+    "issue_classes": [
+      "operational_notice_imported_as_event",
+      "ticket_validity_deadline_used_as_event_date",
+      "institution_hours_used_as_event_time"
+    ]
+  },
+  "positive_controls": [
+    "a named zoo excursion with an occurrence date/time remains an event",
+    "a genuine dated visitor timetable with real date headers remains extractable"
+  ]
+}

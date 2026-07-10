@@ -556,7 +556,12 @@ def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     assert "schedule_like = bool(" in source
     assert "festival_program_like = bool(" in source
-    assert "if schedule_like and not festival_program_like:\n        text = '[]'" in source
+    assert "SCHEDULE_SCREEN_SCHEMA" in source
+    assert "institution_hours_or_ticket_terms" in source
+    assert "This is a semantic routing decision, not event extraction" in source
+    assert "ticket_valid_until" in source
+    assert "extract_events schedule screen failed; fail closed" in source
+    assert "schedule_screen_decision == 'event_timetable'" in source
     assert "If a festival post lists several dated program items" in source
     assert "Extract attendable schedule items from one small Telegram timetable chunk as strict JSON array." in source
     assert 'one date header like "18 АПРЕЛЯ" followed by up to three time lines' in source
@@ -575,6 +580,26 @@ def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     assert 'a trailing "📍Остров Канта" line applies to all schedule rows' in source
     assert "schedule_blocks" in source
     assert "extract_events schedule rescue failed" in source
+
+
+def test_tg_monitor_ticket_validity_work_hours_incident_contract() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    replay = json.loads(
+        Path(
+            "tests/replays/INC-2026-07-10-zoo-ticket-validity-non-event/source.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert 'open and working normally / открыт и работает в обычном режиме' in source
+    assert 'Visitor, venue, museum, zoo, library, park, or cash-desk hours are work_hours' in source
+    assert 'A date in "ticket valid until / билет действителен до" is ticket_valid_until' in source
+    assert "schedule rescue skipped: no genuine date-header blocks" in source
+    assert "schedule_blocks = [content[:1800]]" not in source
+    assert "A ticket-validity/expiry date is not an event date" in source
+    assert "visitor/cash-desk hours are not event start times" in source
+    assert replay["source_url"] == "https://t.me/kldzoo/7641"
+    assert replay["expected"]["telegram_monitor_events"] == []
+    assert "Входной билет действителен до 31 декабря 2026 года" in replay["text"]
 
 
 def test_tg_monitor_named_exhibition_rescue_pass_is_llm_first() -> None:

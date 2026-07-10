@@ -989,3 +989,98 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
         assert calls == ["eventness_review"]
     finally:
         await db.close()
+
+
+def test_operational_ticket_validity_shape_routes_to_llm_not_deterministic_skip() -> None:
+    source_text = (
+        "Калининградский зоопарк открыт и работает в обычном режиме. "
+        "Зоопарк 9:00 - 21:00, кассы 9:00 - 19:30. "
+        "Входной билет действителен до 31 декабря 2026 года."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kldzoo/7641",
+        source_text=source_text,
+        title="Калининградский зоопарк",
+        date="2026-12-31",
+        time="09:00",
+        location_name="Калининградский зоопарк",
+        city="Калининград",
+        event_type="выставка",
+    )
+
+    assert su._looks_like_work_schedule_notice(candidate.title, source_text) is False
+    assert su._candidate_needs_llm_eventness_review(candidate, source_text) is True
+
+    real_excursion = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kldzoo/positive-control",
+        source_text=(
+            "12 июля в 14:00 состоится экскурсия «Слон по городу идёт». "
+            "Сбор у входа в Калининградский зоопарк, билеты на сайте."
+        ),
+        title="Экскурсия «Слон по городу идёт»",
+        date="2026-07-12",
+        time="14:00",
+        location_name="Калининградский зоопарк",
+        city="Калининград",
+        event_type="экскурсия",
+    )
+    assert su._candidate_needs_llm_eventness_review(real_excursion, real_excursion.source_text) is False
+
+
+@pytest.mark.asyncio
+async def test_zoo_ticket_validity_notice_is_llm_reviewed_and_skipped(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def fake_ask(prompt, schema, *, max_tokens, label):
+        calls.append(label)
+        assert label == "eventness_review"
+        assert "Входной билет действителен до 31 декабря 2026 года" in prompt
+        assert "срок действия, не дата события" in prompt
+        return {
+            "decision": "non_event",
+            "confidence": 0.99,
+            "reason_short": "work hours and ticket validity only",
+            "grounded_title": None,
+            "has_single_concrete_event": False,
+            "missing_anchors": ["attendee-facing program"],
+        }
+
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/kldzoo/7641",
+            source_text=(
+                "Калининградский зоопарк открыт и работает в обычном режиме:\n"
+                "зоопарк 9:00 - 21:00\nкассы 9:00 - 19:30\n"
+                "Билеты можно купить в кассах и на сайте.\n"
+                "Входной билет действителен до 31 декабря 2026 года."
+            ),
+            raw_excerpt="Зоопарк открыт; билет действителен до 31 декабря.",
+            title="Калининградский зоопарк",
+            date="2026-12-31",
+            time="09:00",
+            location_name="Калининградский зоопарк",
+            location_address="Мира 26",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "weak_eventness_review_non_event"
+        assert calls == ["eventness_review"]
+        async with db.get_session() as session:
+            rows = (await session.execute(select(Event))).scalars().all()
+            assert rows == []
+    finally:
+        await db.close()

@@ -517,6 +517,20 @@ LLM остаётся владельцем смысловых решений, н�
 
 Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
 
+Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. The LLM treats normal venue operation, admission-ticket purchase/validity and work-hours-only posts as `non_event` unless the same source names a concrete attendee-facing program. Identity/vector `allow_create` is never a quality approval, and uncertainty/LLM unavailability for this high-risk route fails closed before public creation.
+
+### Vector-first future quality audit contract
+
+The future-event quality audit is separate from identity deduplication:
+
+1. select every active canonical future event from Fly SQLite and assert exact id coverage;
+2. retrieve/compute versioned claim vectors plus incident-prototype and nearest-event candidates;
+3. give every row, its linked source bundle and vector-retrieved context to the LLM source-grounding verifier;
+4. persist/report `pass | repair | remove | needs_review | indeterminate` without treating similarity as evidence or mutating production automatically;
+5. fail closed when any catalog id, vector, source bundle or validated LLM verdict is missing.
+
+Supabase pgvector remains a retrieval sidecar and may be stale; Fly SQLite remains canonical. A future enforce-mode publication gate must key a current quality decision to both the event hash and source-bundle hash, so any logistics/media/source change invalidates the pass before Telegram/VK/Telegraph/static fanout.
+
 Short non-location fragments that arrive as `location_name` (for example `И не забывайте` or `В программе — ...`) are fail-closed safety issues: deterministic code may reject the field, but must not invent the semantic venue. Recovery must come from source-grounded defaults, explicit address/venue evidence, or an LLM-owned review stage.
 
 ### Static-site public projection gate

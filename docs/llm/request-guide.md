@@ -20,6 +20,17 @@ Deterministic code is allowed as *supporting plumbing*:
   cleanup, contradiction checks that do not decide event meaning on their own);
 - hints passed *to the LLM input* to steer it (without rewriting the resulting text).
 
+For timetable-like social posts, structural date/time counting may only route a
+small LLM screen. The semantic stage must assign the role of the date/time
+evidence (for example `occurrence`, `work_hours`, `ticket_valid_until`,
+`deadline`, `historical`) before extraction. A ticket-validity date or
+visitor/cash-desk hours must never be promoted to event logistics by a regex.
+
+For vector-first quality workflows, embeddings provide recall only: nearest
+events and incident prototypes select context for the LLM verifier, but vector
+similarity is not source evidence and cannot approve, merge, repair or publish a
+row. Missing vector/LLM/source coverage is `indeterminate` and fails closed.
+
 Deterministic code must not replace an LLM-owned semantic decision with broad
 keyword logic. For example, do not decide that an event is free merely because no
 price was found, do not convert library/museum date lists into work-hours skips

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-10-zoo-ticket-validity-non-event.md`
+  - Scope: Telegram Monitoring schedule routing, operational-hours/ticket-validity date roles, Smart Update LLM eventness review, vector-quality boundary, and all public event fanout surfaces.
+  - Must not regress: a venue-open/normal-mode notice with visitor/cash-desk hours and `билет действителен до <date>` must not become an event, the validity date must not become `event.date`, the hours must not become `event.time`, and identity-vector `allow_create` must never count as quality approval.
 - `INC-2026-07-09-recurring-occurrence-date-drift.md`
   - Scope: Smart Update matching/merge for recurring or season rows versus exact single-date occurrences, VK auto-import source/media attachment, and public Telegram/VK/Telegraph event fanout.
   - Must not regress: a source/poster that explicitly announces one occurrence such as `10 июля 20:00` must not mutate or republish a broader `1 мая — 30 сентября` recurring row with stale date anchors; shared title/place/ticket is not enough to veto creating the occurrence or to allow merge side effects.

@@ -5962,6 +5962,18 @@ _LOCATION_VALUE_CAMPAIGN_RE = re.compile(
     r"(?iu)\b(?:акци[яию]|скидк\w*|пушкинск\w+\s+карт\w*|как\s+принять\s+участие|услови[яй]\s+акци)\b"
 )
 
+# This is deliberately a routing-only safety net.  It does not decide that the
+# source is a non-event; it identifies a narrow logistics/date-role ambiguity
+# that must be adjudicated by the LLM eventness stage before public creation.
+_OPERATIONAL_DATE_ROLE_RE = re.compile(
+    r"(?iu)(?:"
+    r"\bбилет\w*\b.{0,100}\bдействител\w*\b.{0,80}\b(?:до|по)\b|"
+    r"\b(?:касс\w*|зоопарк\w*|музе[йя]\w*|библиотек\w*|парк\w*)\b.{0,120}"
+    r"\b\d{1,2}[:.]\d{2}\s*[–—-]\s*\d{1,2}[:.]\d{2}\b|"
+    r"\bоткрыт\w*\s+и\s+работа\w*\s+в\s+обычн\w+\s+режим\w*\b"
+    r")"
+)
+
 
 def _strip_location_value_temporal_decoration(value: str) -> str:
     compact = re.sub(r"\s+", " ", value or "").strip()
@@ -11090,6 +11102,11 @@ def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str |
     # attendable event rather than an entitlement/promo mechanic.
     if _LOCATION_VALUE_CAMPAIGN_RE.search("\n".join(part for part in (title, raw) if part)):
         return True
+    # Operational hours and ticket-validity dates are a semantic date-role
+    # question.  Regex only routes the already suspicious source shape; the LLM
+    # below decides eventness from source evidence and fails closed on uncertainty.
+    if _OPERATIONAL_DATE_ROLE_RE.search("\n".join(part for part in (title, raw) if part)):
+        return True
     return False
 
 
@@ -11131,6 +11148,7 @@ async def _llm_review_candidate_eventness(
         "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
         "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
         "- Акции/скидки/льготы/инструкции участия (например по Пушкинской карте) — non_event, если это не один конкретный сеанс/программа/выставка с собственным событием. Длинный период действия акции сам по себе не делает её событием.\n"
+        "- Режим работы площадки, часы посетителей/касс, сообщение 'открыто и работает в обычном режиме', правила покупки билетов и срок действия входного билета — non_event, если источник не называет отдельную attendee-facing программу. Дата 'билет действителен до ...' — срок действия, не дата события; часы площадки/кассы — не время события.\n"
         "- Пост-отчёт о прошедшем событии с коротким хвостом вроде 'ждём вас на следующей выставке/ярмарке ...' — non_event/uncertain, если будущие дата, площадка, адрес и программа не подтверждены явно в источнике.\n"
         "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
         "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"

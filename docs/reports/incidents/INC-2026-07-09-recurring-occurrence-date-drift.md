@@ -38,6 +38,7 @@ This is a production incident because users saw a wrong logistics date in publis
 - 2026-07-09 — operator reported screenshot; incident investigation opened.
 - 2026-07-09 08:07 UTC — prevention commit `3adbd0ef` deployed to Fly image `deployment-01KX2YJW9H6JN3DRD9W6PWNGQ6`; `/healthz` ready after deploy.
 - 2026-07-09 08:09–08:13 UTC — production event `3980` backed up and repaired; ICS, Telegraph, VK and Telegram surfaces updated and verified.
+- 2026-07-10 UTC — operator reported the old `1 мая` shape again while requesting a wider future-event audit. Fresh DB, source/OCR, official calendar and authenticated Telegram/VK/Telegraph checks confirmed that the current occurrence remains correctly published as `10 июля 20:00`; no current event/post was deleted. The old `1 мая — 30 сентября` row remains preserved only in the incident backup evidence.
 
 ## Root Cause
 
