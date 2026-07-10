@@ -52,6 +52,7 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     }
                     mod.fetch_vk(row)
                 self.assertEqual(row["media_fetch_status"], "downloaded_public_url")
+                self.assertEqual(row["media_fetch_error"], "")
                 self.assertTrue(Path(row["actual_media_path"]).exists())
             finally:
                 for key, value in old.items():

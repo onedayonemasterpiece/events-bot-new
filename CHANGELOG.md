@@ -47,7 +47,8 @@
   refreshes now preserve those URL/provenance fields instead of erasing them
   before ImageDiagnostic can consume the image. The VK diagnostic branch now
   downloads that URL before trying the IP-bound VK API, matching the existing
-  Telegram direct-URL-first behavior.
+  Telegram direct-URL-first behavior, and successful direct downloads clear
+  stale acquisition errors from earlier attempts.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

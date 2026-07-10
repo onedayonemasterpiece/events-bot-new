@@ -657,6 +657,7 @@ async def fetch_telegram(batch):
                 r["actual_media_path"] = _download_http_image(direct_url, path)
                 r["media_download_seconds"] = round(time.monotonic()-t0, 3)
                 r["media_fetch_status"] = "downloaded_public_url"
+                r["media_fetch_error"] = ""
                 log_event("image_fetch_result", phase="public_url_fetch", image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=True, seconds=r.get("media_download_seconds"))
                 continue
             except Exception as exc:
@@ -740,6 +741,7 @@ def fetch_vk(r):
             path = MEDIA / f"{r['image_queue_id']}_vk_public_url{suffix}"
             r["actual_media_path"] = _download_http_image(direct_url, path)
             r["media_fetch_status"] = "downloaded_public_url"
+            r["media_fetch_error"] = ""
             r["media_download_seconds"] = round(time.monotonic()-t0, 3)
             return
         except Exception as exc:
