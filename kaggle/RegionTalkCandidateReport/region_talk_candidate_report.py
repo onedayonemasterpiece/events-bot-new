@@ -808,6 +808,18 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
     status = str(qrow.get("source_queue_status") or qrow.get("queue_status") or qrow.get("fetch_status") or cursor.get("fetch_status") or seed.initial_status or "")
     if source_terminal_rejected_status(status):
         return {"due": False, "reason": "terminal_rejected_source", "is_rescan": True, "cursor": cursor, "queue_row": qrow}
+    try:
+        publication_evidence_target = max(
+            1,
+            int(float(qrow.get("publication_source_evidence_target_posts") or 0))
+            or getenv_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5),
+        )
+        publication_evidence_scanned = int(float(qrow.get("posts_scanned") or cursor.get("posts_scanned") or 0))
+    except Exception:
+        publication_evidence_target = max(1, getenv_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
+        publication_evidence_scanned = 0
+    if _rt_bool(qrow.get("publication_source_evidence_priority")) and publication_evidence_scanned < publication_evidence_target:
+        return {"due": True, "reason": "publication_source_evidence_completion", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     if str(qrow.get("fast_check_status") or "").strip().lower() == "ko_hit":
         return {"due": True, "reason": "fast_check_ko_hit_priority", "is_rescan": False, "cursor": cursor, "queue_row": qrow}
     scanned_before = _source_has_primary_scan_evidence(qrow, cursor, status)
@@ -843,6 +855,8 @@ def _seed_scan_due_state(seed: Seed, previous_state: dict[str, Any] | None = Non
 
 def source_queue_priority_bucket(queue_row: dict[str, Any] | None = None) -> int:
     row = queue_row if isinstance(queue_row, dict) else {}
+    if _rt_bool(row.get("publication_source_evidence_priority")):
+        return -1
     # Fast-check hit sources should be scanned next.  Fast-check no-hit/error
     # sources are not terminal rejects, but they should not keep winning over
     # ordinary unscanned backlog just because a stage name contains "keyword".
@@ -929,6 +943,8 @@ def source_selection_queue_bucket(due: dict[str, Any], previous_state: dict[str,
     row = due.get("queue_row") if isinstance(due, dict) else {}
     if not isinstance(row, dict) or not row:
         return 3
+    if str(due.get("reason") or "") == "publication_source_evidence_completion":
+        return -1
     cursor = int(state.get("unified_source_queue_cursor_position") or state.get("canonical_source_cursor_position") or 0)
     try:
         order = int(float(row.get("queue_order") or 0))
@@ -1668,6 +1684,8 @@ SOURCE_QUEUE_STATE_FIELDS = [
     "fast_check_status", "fast_check_at", "last_fast_check_run_id",
     "fast_check_query_count", "fast_check_matched_query", "fast_check_hit_post_url",
     "fast_check_hit_post_date", "fast_check_error_code", "fast_check_error_message",
+    "publication_source_evidence_priority", "publication_source_evidence_post_url",
+    "publication_source_evidence_requested_at", "publication_source_evidence_target_posts",
     "next_action", "queue_item_updated_at", "source_visual_rollup_updated_at", "source_visual_rollup_run_id",
 ]
 SOURCE_CANDIDATE_STATE_FIELDS = [
@@ -1780,7 +1798,8 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "image_queue_status", "vector_gate_status", "vector_content_type", "vector_positive_score",
     "publication_llm_status", "publication_llm_decision", "publication_llm_reason",
     "publication_llm_model", "visual_confirmation_source", "goal_stop_candidate", "sent_to_chat",
-    "sent_message_id", "created_at", "last_seen_run_id", "last_confirmed_run_id",
+    "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
+    "created_at", "last_seen_run_id", "last_confirmed_run_id",
 ]
 PUBLICATION_CONFIRMED_STATUSES = {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
 
@@ -6833,6 +6852,10 @@ def build_publication_candidate_queue(
             "goal_stop_candidate": "false",
             "sent_to_chat": str(post_url in sent_urls).lower(),
             "sent_message_id": prev.get("sent_message_id", ""),
+            "sent_at": prev.get("sent_at", ""),
+            "sent_chat_id": prev.get("sent_chat_id", ""),
+            "delivery_key": prev.get("delivery_key", ""),
+            "delivery_random_id": prev.get("delivery_random_id", ""),
             "created_at": prev.get("created_at") or run_now,
             "last_seen_run_id": run_id,
             "last_confirmed_run_id": run_id if is_confirmed else prev.get("last_confirmed_run_id", ""),
@@ -7617,15 +7640,9 @@ async def run_source_fast_check_ko(
                 rows.append(hit_row)
                 post_hits.append(hit_row)
                 write_region_talk_online_source_item(hit_row, run_id=run_id, stage="fast_check_ko", status="fast_check_ko_hit")
-                priority_row = fast_check_priority_source_queue_row(seed, hit_row, previous_state, run_id=run_id, priority_offset=hits)
-                write_region_talk_online_queue_items(
-                    [priority_row],
-                    kind="source_queue_item",
-                    id_fields=["canonical_source_key", "source_queue_id", "source_url", "canonical_url"],
-                    fields=SOURCE_QUEUE_STATE_FIELDS,
-                    run_id=run_id,
-                    stage="fast_check_ko_prioritize_source_queue",
-                )
+                # The end-of-run unified queue handoff is the only writer of
+                # durable source priority. A second immediate queue write used
+                # to be reverted by that handoff's pre-run snapshot.
                 post_link_items_written += write_region_talk_post_link_queue_items([hit_row], run_id=run_id, stage="fast_check_ko_post_link_queue")
             else:
                 base_row.update({
@@ -9920,12 +9937,16 @@ def find_text_vector_enrichment_for_post(
         lookups.append((f"url+hash:{post_url}|{text_hash}", "post_url_text_hash"))
     if post_id and text_hash:
         lookups.append((f"id+hash:{post_id}|{text_hash}", "post_id_text_hash"))
-    if post_url:
-        lookups.append((f"url:{post_url}", "post_url"))
-    if post_id:
-        lookups.append((f"id:{post_id}", "post_id"))
     if text_hash:
         lookups.append((f"hash:{text_hash}", "text_hash_only"))
+    else:
+        # Legacy/manual inspection may look up a row without a current text
+        # hash. Production fusion always supplies the hash and must never fall
+        # back to a stale vector for the same URL/post id.
+        if post_url:
+            lookups.append((f"url:{post_url}", "post_url"))
+        if post_id:
+            lookups.append((f"id:{post_id}", "post_id"))
     for key, mode in lookups:
         rows = index.get(key) or []
         if rows:
@@ -9961,6 +9982,18 @@ def fuse_e5_with_external_bge_m3(
         [],
     )
     bge_text_hash = str(bge_row.get("text_hash") or "")
+    if text_hash and bge_text_hash != text_hash:
+        out = dict(e5_scores_or_row)
+        out.update({
+            "text_vector_fusion_status": "external_bge_m3_fusion_incomplete",
+            "external_bge_m3_status": "stale_text_hash",
+            "bge_m3_enrichment_id": bge_row.get("text_vector_enrichment_id", ""),
+            "bge_m3_match_mode": match_mode,
+            "bge_m3_text_hash": bge_text_hash,
+            "bge_m3_text_hash_match": "false",
+            "pending_bge_m3_text_hash": text_hash,
+        })
+        return out
     bge_ko_geo = _rt_float(bge_row.get("bge_m3_ko_geo_score"), 0.0)
     bge_external_geo = _rt_float(bge_row.get("bge_m3_external_geo_score"), 0.0)
     if bge_external_geo >= getenv_float("REGION_TALK_BGE_EXTERNAL_GEO_REJECT_SCORE", 0.55) and bge_external_geo > bge_ko_geo:

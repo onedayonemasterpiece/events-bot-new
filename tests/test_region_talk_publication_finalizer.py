@@ -434,6 +434,71 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(result[0]["llm_attempted_this_run"], "false")
         llm_mock.assert_not_called()
 
+    def test_strong_finalist_blocked_only_by_source_is_promoted_for_attestation(self) -> None:
+        mod = self.mod
+        source = {
+            "_ydb_pk": "source_queue_item:telegram:travelcase",
+            "canonical_source_key": "telegram:travelcase",
+            "source_url": "https://t.me/travelcase",
+            "source_queue_status": "processed_found_ko_candidate",
+            "source_quick_class": "candidate_keep",
+            "posts_scanned": 1,
+            "ko_posts_found": 1,
+            "candidate_posts_found": 1,
+        }
+        row = candidate_row(
+            _authoritative_source=source,
+            overall_media_score=0.78,
+            postcardness_score=0.84,
+            image_queue_status="actual_scored",
+            image_model_input_type="actual_image",
+        )
+        def fake_gate(_row, authoritative_source):
+            if str((authoritative_source or {}).get("source_scope") or "") == "external":
+                return {"eligible": True, "primary_reason": "eligible_for_publication_verification"}
+            return {"eligible": False, "primary_reason": "source_verdict_unknown"}
+        with mock.patch.object(mod.rt, "publication_eligibility", side_effect=fake_gate):
+            updates = mod.source_evidence_priority_updates([row], now_iso="2026-07-10T12:00:00+00:00")
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(updates[0]["publication_source_evidence_priority"], "true")
+        self.assertEqual(updates[0]["publication_source_evidence_target_posts"], 5)
+
+    def test_durable_budget_exhaustion_defers_without_gemini_call(self) -> None:
+        mod = self.mod
+        budget = mock.Mock()
+        budget.budget_id = "unit-budget"
+        budget.reserve.return_value = {"status": "exhausted"}
+        row = candidate_row()
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=100, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-07-10T12:00:00+00:00", durable_budget=budget,
+            )
+        self.assertEqual(result[0]["publication_candidate_status"], "llm_budget_deferred")
+        self.assertEqual(result[0]["llm_budget_status"], "exhausted")
+        llm_mock.assert_not_called()
+
+    def test_completed_budget_request_replays_without_gemini_call(self) -> None:
+        mod = self.mod
+        budget = mock.Mock()
+        budget.budget_id = "unit-budget"
+        budget.reserve.return_value = {"status": "replay", "result": {"llm_gate_status": "ok", "llm_decision": "accept"}}
+        row = candidate_row()
+        with (
+            mock.patch.object(mod, "_eligibility_fields", return_value=("eligible", {})),
+            mock.patch.object(mod.rt, "call_region_talk_semantic_llm") as llm_mock,
+        ):
+            result = mod.verify_rows(
+                [row], max_llm=100, model="gemini-test", default_env_var_name="KEY",
+                now_iso="2026-07-10T12:00:00+00:00", durable_budget=budget,
+            )
+        self.assertEqual(result[0]["publication_candidate_status"], "llm_confirmed")
+        self.assertEqual(result[0]["llm_attempted_this_run"], "false")
+        llm_mock.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

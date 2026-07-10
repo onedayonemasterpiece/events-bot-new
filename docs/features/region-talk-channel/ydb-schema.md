@@ -435,6 +435,22 @@ attestations, retries only due retryable Gemini rows, preserves terminal rows,
 and treats the XLSX/CSV shortlist as an operator artifact rather than
 persistent state.
 
+Additional row kinds used by the full publication tail:
+
+- `region_talk_llm_budget_item:<budget_id>`: hard-clamped cumulative Region
+  Talk Gemini budget (`reserved_total`, `remaining`, `budget_max<=100`);
+- `region_talk_llm_request_item:<budget_id>:<fingerprint>`: deterministic
+  final-verifier reservation/result used to avoid repeat calls after restart;
+- `publication_delivery_item:<sha256(chat_id|canonical_post_url)>`: prepared
+  Telegram-chat delivery state, deterministic MTProto `random_id`, peer id,
+  message id and timestamps.
+
+Strong rows blocked only by sparse source evidence update the existing
+`source_queue_item` (not a second source queue) with
+`publication_source_evidence_priority`, target post count and finalist URL.
+CandidateReport consumes that marker through the normal unified source selector
+and stops prioritizing it once the target sample depth is reached.
+
 YDB must not carry parallel durable queue processes such as
 `source_frontier_queue_next` or `similar_seed_queue`; those are XLSX/debug/report
 artifacts only. The Kaggle writer may rewrite old compact state rows through the

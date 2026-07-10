@@ -380,6 +380,13 @@ Important invariants:
   long-running loop stable without weakening Telegram auth-bundle isolation.
 - Notifier/finalizer are local maintenance actions and may run while Kaggle
   notebooks are active; newly Gemini-confirmed unsent rows are notified first.
+  CandidateReport's Gemini modes are disabled in the orchestrated profile, so
+  the local finalizer is the single verifier owner. It uses the shared Supabase
+  limiter plus a durable daily/debug budget clamped to 100 requests.
+- A strong actual-image finalist blocked only by sparse source evidence causes
+  a marker on the existing source row. The next CandidateReport run selects
+  this one bounded source-attestation scan before ordinary backlog; discovery,
+  keyword, fast-check and similar-channel intake remain enabled.
 
 Pseudo-loop:
 
@@ -403,9 +410,16 @@ while confirmed_sent < 20 and llm_calls_used < 100 and progress_budget_ok:
       notify operator chat: CandidateReport queue/discovery run started
       launch CandidateReport with <=30 min runtime
 
+  if strong_finalist_source_evidence_backlog > 0:
+      mark its existing source row for bounded attestation completion
+
+  if strict_finalizer_pending > 0 and durable_llm_budget_remaining > 0:
+      run local finalizer (max three new Gemini requests per cycle)
+
   after completions:
       run stats notifier
-      send newly Gemini-confirmed links
+      send newly Gemini-confirmed links with canonical URL/chat delivery key
+      and deterministic Telegram random_id
       stop if no-progress cycles or operator limits are reached
 ```
 

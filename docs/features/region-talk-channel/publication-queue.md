@@ -14,7 +14,21 @@ A post can enter `publication_candidate_item` only when all of the following are
 - image scores pass publication thresholds (`REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE`, default `0.66`; `REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE`, default `0.55`);
 - Gemini Lite final verification accepts the text criteria through the Supabase google_ai reserve/limiter.
 
-The final queue is produced by `RegionTalkCandidateReport`, because it is the only notebook that has the full text/vector/source/YDB state and can join the image scores written by `RegionTalkImageDiagnostic`. ImageDiagnostic remains the visual scorer and writer of image evidence.
+`RegionTalkCandidateReport` owns discovery, E5, strict current-text E5+BGE
+fusion, and the signed image-queue handoff. `RegionTalkImageDiagnostic` remains
+the visual scorer and writer of actual-image evidence. The local
+`scripts/region_talk_publication_finalizer.py` is the **single owner** of final
+Gemini publication verification and `publication_candidate_item` terminal
+outcomes in the orchestrated path; CandidateReport's Gemini modes are disabled
+by the orchestrator.
+
+If a strong actual-image row is blocked only because its source has fewer than
+five sampled posts and therefore has no durable external/local verdict, the
+finalizer marks that existing source row with
+`publication_source_evidence_priority=true`. The next CandidateReport scan
+selects this bounded evidence-completion lane before ordinary backlog. It does
+not weaken the source gate: after the scan, the finalizer recomputes the same
+fail-closed source/text/vector/image eligibility.
 
 ## Ranking
 
@@ -60,9 +74,32 @@ Goal fields include:
   verification calls);
 - `goal_status=running|complete|llm_budget_exhausted`.
 
+Local finalizer calls additionally use durable YDB rows:
+
+- `region_talk_llm_budget_item:<budget_id>` — cumulative reserved requests,
+  hard-clamped to `100`;
+- `region_talk_llm_request_item:<budget_id>:<fingerprint>` — deterministic
+  request identity and completed result replay.
+
+The shared Supabase `google_ai_reserve` remains the cross-service RPM/TPM/RPD
+authority. The Region Talk ledger is an extra product-run ceiling. Internal
+provider retries are set to one attempt; retryable rows are retried by the
+durable finalizer state instead.
+
 ## Local Telegram notification
 
-Use `scripts/region_talk_goal_notify.py` locally, never on Kaggle. It uses `TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` and sends unsent `llm_confirmed` `publication_candidate_item` links to the operator chat, then marks rows as `sent_to_chat` in YDB.
+Use `scripts/region_talk_goal_notify.py` locally, never on Kaggle. It uses
+`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION` and sends unsent `llm_confirmed`
+links to the operator chat. Delivery is deduplicated by canonical post URL plus
+numeric chat id in `publication_delivery_item`. A deterministic Telegram
+`random_id` is persisted before sending and reused after a crash; the notifier
+also takes a local exclusive lock. After Telegram acceptance it records chat,
+random id, message id and timestamps both in the delivery ledger and candidate
+row. Finalizer/CandidateReport writers preserve these sent markers.
+
+Invite links are checked without joining first. A one-time join requires the
+explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
+expected numeric peer and fail closed on a wrong target.
 
 Example:
 

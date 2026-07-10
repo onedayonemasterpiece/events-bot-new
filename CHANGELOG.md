@@ -1,6 +1,27 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / full-funnel publication closure**: strong actual-image rows
+  blocked only by sparse source evidence now promote that existing source for
+  one bounded attestation scan; discovery remains enabled and strict
+  source/text/vector/image gates are unchanged.
+- **Region Talk / single Gemini owner and hard budget**: the orchestrated
+  CandidateReport no longer calls Gemini; the local finalizer owns final
+  verification through the shared Supabase limiter, a durable deterministic
+  request ledger, one provider attempt per logical call, and a hard cumulative
+  ceiling clamped to 100.
+- **Region Talk / crash-safe candidate delivery**: prepared-chat delivery now
+  deduplicates canonical post URL plus numeric chat id, persists a deterministic
+  Telegram `random_id` before send, records a delivery ledger, locks the local
+  E2E sender, checks invites before joining, and preserves delivery markers in
+  later CandidateReport/finalizer writes.
+- **Region Talk / current-text dual fusion**: BGE-M3 lookup no longer falls back
+  to stale URL/post-id vectors when a current text hash is available; mismatched
+  hashes remain deferred instead of being labelled fused.
+- **Region Talk / one fast-check queue writer**: fast-check keeps its logical
+  priority lane and exact-post handoff but no longer performs a competing
+  immediate source-row reorder that the final unified queue handoff could
+  overwrite.
 - **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
   are considered current only when their persisted authoritative-source
   fingerprint and version match v2, allowing legacy tombstones to migrate once

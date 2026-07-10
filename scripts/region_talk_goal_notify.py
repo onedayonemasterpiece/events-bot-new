@@ -13,7 +13,9 @@ import base64
 import hashlib
 import json
 import os
+import random
 import re
+import fcntl
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -23,6 +25,7 @@ from typing import Any
 
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
+DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 
 
 def load_env(path: Path) -> None:
@@ -382,11 +385,78 @@ def build_stats_message(limit: int = 20000) -> str:
     ])
 
 
-def upsert_sent(pool: Any, ydb: Any, table: str, row: dict[str, Any], message_id: int) -> None:
+def canonical_post_url(row: dict[str, Any]) -> str:
+    raw = str(row.get("post_url") or "").strip().lower().rstrip("/")
+    raw = re.sub(r"^https?://(?:www\.)?(?:telegram\.me|t\.me)/s/", "https://t.me/", raw)
+    raw = re.sub(r"^https?://(?:www\.)?telegram\.me/", "https://t.me/", raw)
+    return raw.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+
+
+def delivery_random_id(delivery_key: str) -> int:
+    value = int.from_bytes(hashlib.sha256(delivery_key.encode("utf-8")).digest()[:8], "big")
+    if value >= 2**63:
+        value -= 2**64
+    return value or 1
+
+
+def publication_delivery_key(row: dict[str, Any], chat_id: str) -> str:
+    return hashlib.sha256(f"{chat_id}|{canonical_post_url(row)}".encode("utf-8")).hexdigest()
+
+
+def read_delivery(pool: Any, ydb: Any, table: str, delivery_key: str) -> dict[str, Any]:
+    pk = "publication_delivery_item:" + delivery_key
+    query_text = f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{table}` WHERE pk = $pk;"
+    def op(session: Any) -> dict[str, Any]:
+        query = session.prepare(query_text)
+        result = session.transaction(ydb.StaleReadOnly()).execute(query, {"$pk": pk}, commit_tx=True)
+        rows = result[0].rows if result else []
+        if not rows:
+            return {}
+        value = rows[0].payload_json
+        return json.loads(value) if isinstance(value, str) else dict(value or {})
+    return dict(pool.retry_operation_sync(op) or {})
+
+
+def upsert_delivery(pool: Any, ydb: Any, table: str, delivery_key: str, payload: dict[str, Any]) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    item = {**payload, "delivery_key": delivery_key, "updated_at": now}
+    query_text = f"""
+DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8;
+UPSERT INTO `{table}` (pk, kind, payload_json, updated_at) VALUES ($pk, $kind, $payload_json, $updated_at);
+"""
+    def op(session: Any) -> None:
+        query = session.prepare(query_text)
+        session.transaction(ydb.SerializableReadWrite()).execute(
+            query,
+            {"$pk": "publication_delivery_item:" + delivery_key, "$kind": "publication_delivery_item", "$payload_json": json.dumps(item, ensure_ascii=False), "$updated_at": now},
+            commit_tx=True,
+        )
+    pool.retry_operation_sync(op)
+
+
+def upsert_sent(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    row: dict[str, Any],
+    message_id: int,
+    *,
+    chat_id: str = "",
+    delivery_key: str = "",
+    random_id: int = 0,
+) -> None:
     now = datetime.now(timezone.utc).isoformat()
     item = dict(row)
     pk = str(item.pop("_ydb_pk", "")) or "publication_candidate_item:" + str(item.get("publication_candidate_id") or item.get("post_url"))
-    item.update({"sent_to_chat": "true", "sent_message_id": str(message_id), "sent_at": now, "publication_candidate_status": "sent_to_chat"})
+    item.update({
+        "sent_to_chat": "true",
+        "sent_message_id": str(message_id),
+        "sent_at": now,
+        "sent_chat_id": chat_id,
+        "delivery_key": delivery_key,
+        "delivery_random_id": str(random_id or ""),
+        "publication_candidate_status": "sent_to_chat",
+    })
     query_text = f"""
 DECLARE $pk AS Utf8;
 DECLARE $kind AS Utf8;
@@ -420,12 +490,18 @@ def candidate_message(row: dict[str, Any]) -> str:
     ]).strip()
 
 
-async def resolve_peer(client: Any, target: str) -> Any:
+async def resolve_peer(client: Any, target: str, *, allow_join_chat: bool = False) -> Any:
     raw = (target or "").strip()
     invite = re.search(r"t\.me/(?:\+|joinchat/)([A-Za-z0-9_-]+)", raw)
     if invite:
         from telethon import functions, errors  # type: ignore
         code = invite.group(1)
+        checked = await client(functions.messages.CheckChatInviteRequest(code))
+        chat = getattr(checked, "chat", None)
+        if chat is not None:
+            return chat
+        if not allow_join_chat:
+            raise RuntimeError("E2E delivery account is not a member of the prepared Region Talk chat; pass --allow-join-chat once after operator approval")
         try:
             result = await client(functions.messages.ImportChatInviteRequest(code))
             chats = getattr(result, "chats", None) or []
@@ -436,12 +512,21 @@ async def resolve_peer(client: Any, target: str) -> Any:
             chat = getattr(checked, "chat", None)
             if chat is not None:
                 return chat
-        except Exception:
-            checked = await client(functions.messages.CheckChatInviteRequest(code))
-            chat = getattr(checked, "chat", None)
-            if chat is not None:
-                return chat
     return await client.get_entity(raw)
+
+
+def _message_id_from_updates(result: Any, random_id: int) -> int:
+    for update in getattr(result, "updates", None) or []:
+        if int(getattr(update, "random_id", 0) or 0) == int(random_id):
+            mid = int(getattr(update, "id", 0) or 0)
+            if mid:
+                return mid
+    for update in getattr(result, "updates", None) or []:
+        message = getattr(update, "message", None)
+        mid = int(getattr(message, "id", 0) or 0)
+        if mid:
+            return mid
+    return 0
 
 
 async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
@@ -457,7 +542,14 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         messages = [args.message]
     else:
         ydb, driver, pool, table, rows = read_publication_rows(args.limit)
-        rows = [r for r in rows if is_unsent_confirmed_publication(r)][: args.limit]
+        deduped: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not is_unsent_confirmed_publication(row):
+                continue
+            key = canonical_post_url(row)
+            if key and key not in deduped:
+                deduped[key] = row
+        rows = list(deduped.values())[: args.limit]
         messages = [candidate_message(r) for r in rows]
     client = TelegramClient(StringSession(auth["session"]), auth["api_id"], auth["api_hash"], **auth.get("device", {}))
     await client.connect()
@@ -465,16 +557,72 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
     try:
         if not await client.is_user_authorized():
             raise RuntimeError("local E2E Telegram session is not authorized")
-        peer = await resolve_peer(client, args.chat)
+        me = await client.get_me()
+        expected_account_id = str(os.getenv("REGION_TALK_NOTIFY_ACCOUNT_ID") or "").strip()
+        actual_account_id = str(getattr(me, "id", "") or "")
+        if expected_account_id and actual_account_id != expected_account_id:
+            raise RuntimeError(f"E2E delivery account id {actual_account_id} does not match expected {expected_account_id}")
+        peer = await resolve_peer(client, args.chat, allow_join_chat=bool(args.allow_join_chat))
+        from telethon import functions, utils  # type: ignore
+        input_peer = await client.get_input_entity(peer)
+        chat_id = str(utils.get_peer_id(peer))
+        expected_chat_id = str(args.expected_chat_id or "").strip()
+        if expected_chat_id and chat_id != expected_chat_id:
+            raise RuntimeError(f"resolved Region Talk chat id {chat_id} does not match expected {expected_chat_id}")
         for idx, text in enumerate(messages):
             if args.dry_run:
                 sent.append({"dry_run": True, "text": text[:120], "post_url": rows[idx].get("post_url") if idx < len(rows) else ""})
                 continue
-            msg = await client.send_message(peer, text, link_preview=True)
-            mid = int(getattr(msg, "id", 0) or 0)
             if idx < len(rows) and ydb is not None and pool is not None and table is not None:
-                upsert_sent(pool, ydb, table, rows[idx], mid)
+                row = rows[idx]
+                delivery_key = publication_delivery_key(row, chat_id)
+                existing = read_delivery(pool, ydb, table, delivery_key)
+                random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
+                if str(existing.get("status") or "") == "delivered":
+                    mid = int(existing.get("message_id") or 0)
+                    upsert_sent(pool, ydb, table, row, mid, chat_id=chat_id, delivery_key=delivery_key, random_id=random_id)
+                    sent.append({"message_id": mid, "post_url": row.get("post_url"), "delivery_key": delivery_key, "replayed": True})
+                    continue
+                upsert_delivery(pool, ydb, table, delivery_key, {
+                    **existing,
+                    "status": "sending",
+                    "post_url": canonical_post_url(row),
+                    "chat_id": chat_id,
+                    "random_id": str(random_id),
+                    "sending_started_at": existing.get("sending_started_at") or datetime.now(timezone.utc).isoformat(),
+                })
+                try:
+                    result = await client(functions.messages.SendMessageRequest(
+                        peer=input_peer,
+                        message=text,
+                        random_id=random_id,
+                        no_webpage=False,
+                    ))
+                    mid = _message_id_from_updates(result, random_id)
+                except Exception as exc:
+                    if type(exc).__name__ != "RandomIdDuplicateError":
+                        raise
+                    # Telegram has already accepted this deterministic delivery.
+                    mid = int(existing.get("message_id") or 0)
+                upsert_delivery(pool, ydb, table, delivery_key, {
+                    **existing,
+                    "status": "delivered",
+                    "post_url": canonical_post_url(row),
+                    "chat_id": chat_id,
+                    "random_id": str(random_id),
+                    "message_id": str(mid),
+                    "delivered_at": datetime.now(timezone.utc).isoformat(),
+                })
+                upsert_sent(pool, ydb, table, row, mid, chat_id=chat_id, delivery_key=delivery_key, random_id=random_id)
+            else:
+                msg = await client.send_message(peer, text, link_preview=True)
+                mid = int(getattr(msg, "id", 0) or 0)
             sent.append({"message_id": mid, "post_url": rows[idx].get("post_url") if idx < len(rows) else ""})
+            if idx + 1 < len(messages) and not args.dry_run:
+                await asyncio.sleep(random.uniform(
+                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MIN_SECONDS") or "2"),
+                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MAX_SECONDS") or "5"),
+                ))
     finally:
         await client.disconnect()
         if driver is not None:
@@ -485,7 +633,9 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--env-file", type=Path, default=Path(".env"))
-    ap.add_argument("--chat", default=os.getenv("REGION_TALK_NOTIFY_CHAT") or "https://t.me/+kfaIRh98oHVkYWFi")
+    ap.add_argument("--chat", default="")
+    ap.add_argument("--expected-chat-id", default="")
+    ap.add_argument("--allow-join-chat", action="store_true")
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--message", default="", help="Send a single status message instead of YDB publication candidates")
     ap.add_argument("--stats", action="store_true", help="Send live Region Talk YDB statistics instead of candidate links")
@@ -493,7 +643,16 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     load_env(args.env_file)
-    result = asyncio.run(send_rows(args))
+    args.chat = args.chat or os.getenv("REGION_TALK_NOTIFY_CHAT") or DEFAULT_NOTIFY_CHAT
+    args.expected_chat_id = args.expected_chat_id or os.getenv("REGION_TALK_NOTIFY_CHAT_ID") or ""
+    lock_path = Path(os.getenv("REGION_TALK_NOTIFY_LOCK_FILE") or "/tmp/events-bot-region-talk-notify.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("w") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("another Region Talk notifier already owns the E2E delivery session") from exc
+        result = asyncio.run(send_rows(args))
     print(json.dumps(result, ensure_ascii=False))
     return 0
 

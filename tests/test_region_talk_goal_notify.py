@@ -76,6 +76,16 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             mod.authoritative_source_fingerprint({**external, "posts_scanned": 9, "ko_posts_found": 2}),
         )
 
+    def test_delivery_identity_is_stable_per_canonical_post_and_chat(self) -> None:
+        mod = load_module()
+        first = {"post_url": "https://telegram.me/TravelCase/10?single=1"}
+        second = {"post_url": "https://t.me/travelcase/10/"}
+        key1 = mod.publication_delivery_key(first, "-100123")
+        key2 = mod.publication_delivery_key(second, "-100123")
+        self.assertEqual(key1, key2)
+        self.assertEqual(mod.delivery_random_id(key1), mod.delivery_random_id(key1))
+        self.assertNotEqual(key1, mod.publication_delivery_key(second, "-100999"))
+
 
 if __name__ == "__main__":
     unittest.main()

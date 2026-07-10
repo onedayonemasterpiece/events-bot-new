@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
 from scripts.region_talk_goal_notify import (  # noqa: E402
     attach_live_source_fingerprints,
     authoritative_source_fingerprint,
+    canonical_source_key_for_row,
     AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
     is_confirmed_publication,
     is_unsent_confirmed_publication,
@@ -64,6 +65,11 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE": "1",
     "REGION_TALK_PUBLICATION_ELIGIBILITY_GATE_VERSION": CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
     "REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS": "5",
+    # CandidateReport owns discovery/E5/fusion/image handoff only. The local
+    # finalizer is the single owner of strict Gemini publication verification.
+    "REGION_TALK_ENABLE_EARLY_LLM": "0",
+    "REGION_TALK_ENABLE_FINAL_LLM_VERIFIER": "0",
+    "REGION_TALK_PUBLICATION_MAX_LLM_VERIFY_PER_RUN": "0",
     # Debug/product runs must finish quickly enough to be observable.  The main
     # notebook still reaches the source-queue/discovery tail, but with smaller
     # batches and bounded YDB writes; otherwise Kaggle spends >30 minutes in
@@ -1035,6 +1041,44 @@ def _publication_handoff_metrics(
     actual_by_url, actual_missing_url = _latest_rows_by_post_url(actual_rows)
     publication_by_url, publication_missing_url = _latest_rows_by_post_url(publications)
     now = datetime.now(timezone.utc)
+    source_by_key = {
+        canonical_source_key_for_row(row): row
+        for row in (source_rows or [])
+        if canonical_source_key_for_row(row)
+    }
+
+    def needs_source_evidence(row: dict[str, Any]) -> bool:
+        try:
+            visual = float(row.get("overall_media_score") or row.get("final_visual_score") or 0)
+            postcard = float(row.get("postcardness_score") or 0)
+        except (TypeError, ValueError):
+            return False
+        if visual < float(os.getenv("REGION_TALK_PUBLICATION_MIN_OVERALL_MEDIA_SCORE") or "0.66"):
+            return False
+        if postcard < float(os.getenv("REGION_TALK_PUBLICATION_MIN_POSTCARDNESS_SCORE") or "0.55"):
+            return False
+        preimage_decision = str(row.get("publication_eligibility_decision") or "").lower()
+        if preimage_decision and preimage_decision not in {"accept", "eligible", "allow", "allowed", "pass"}:
+            return False
+        source = source_by_key.get(canonical_source_key_for_row(row))
+        if not source:
+            return False
+        scope = str(source.get("source_scope") or "").lower().replace("-", "_")
+        geo = str(source.get("source_geo_class") or "").lower().replace("-", "_")
+        status = str(source.get("source_queue_status") or source.get("fetch_status") or "").lower()
+        quick = str(source.get("source_quick_class") or "").lower()
+        external = {"external", "nonlocal", "nonlocal_russia", "confirmed_nonlocal", "mixed_external", "nonlocal_mixed", "external_mixed"}
+        if scope in external or geo in external:
+            return False
+        if any(marker in status for marker in ("local_region", "spam_source")) or quick in {"local_region_source", "spam_source_reject"}:
+            return False
+        try:
+            scanned = int(float(source.get("posts_scanned") or 0))
+        except (TypeError, ValueError):
+            scanned = 0
+        return scanned < max(1, int(os.getenv("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS") or "5"))
+
+    source_evidence_urls = sorted(url for url, row in actual_by_url.items() if needs_source_evidence(row))
 
     def needs_finalizer(row: dict[str, Any] | None) -> bool:
         if not row:
@@ -1103,6 +1147,8 @@ def _publication_handoff_metrics(
         "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
         "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"llm_needs_review", "llm_budget_deferred", "llm_error"}),
         "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
+        "publication_source_evidence_backlog_total": len(source_evidence_urls),
+        "publication_source_evidence_backlog_urls": source_evidence_urls,
         "finalizer_pending_url_total": len(finalizer_pending_urls),
         "finalizer_pending_urls": finalizer_pending_urls,
     }
@@ -1700,6 +1746,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "candidate_memory_item",
             "image_queue_item",
             "publication_candidate_item",
+            "region_talk_llm_budget_item",
+            "publication_delivery_item",
             "post_link_queue_item",
             "text_vector_enrichment_item",
             "processed_post_item",
@@ -1735,6 +1783,8 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     candidates = rows_by_kind["candidate_memory_item"]
     images = rows_by_kind["image_queue_item"]
     publications = rows_by_kind["publication_candidate_item"]
+    llm_budgets = rows_by_kind["region_talk_llm_budget_item"]
+    deliveries = rows_by_kind["publication_delivery_item"]
     post_links = rows_by_kind["post_link_queue_item"]
     vectors = rows_by_kind["text_vector_enrichment_item"]
     source_candidates = rows_by_kind["source_candidate_item"]
@@ -1985,6 +2035,10 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),
         "image_strong_actual_ge_0_70_total": len(strong_images),
         **publication_metrics,
+        "publication_delivery_rows_total": len(deliveries),
+        "publication_delivery_completed_total": sum(1 for row in deliveries if str(row.get("status") or "") == "delivered"),
+        "publication_llm_budget_reserved_total": sum(int(float(row.get("reserved_total") or 0)) for row in llm_budgets),
+        "publication_llm_budget_remaining_total": sum(int(float(row.get("remaining") or 0)) for row in llm_budgets),
         "text_vector_enrichment_total": len(vectors),
         "text_vector_e5_total": len(e5_vectors),
         "text_vector_bge_m3_total": len(bge_vectors),
@@ -2087,6 +2141,20 @@ def build_decision_plan(
             "text-confirmed image queue has pending rows; uses DISCOVERY2",
             resource="telegram:DISCOVERY2",
             parallel_safe=True,
+            timeout_seconds=300,
+        ))
+    if int(metrics.get("publication_source_evidence_backlog_total") or 0) > 0:
+        actions.append(_action(
+            "prioritize_source_evidence",
+            [
+                "python3",
+                "scripts/region_talk_publication_finalizer.py",
+                "--max-llm",
+                "0",
+                "--prioritize-source-evidence-only",
+            ],
+            f"{int(metrics.get('publication_source_evidence_backlog_total') or 0)} strong finalist sources need bounded source attestation",
+            resource="local:ydb-source-evidence",
             timeout_seconds=300,
         ))
     if int(metrics.get("finalizer_pending_url_total") or 0) > 0:

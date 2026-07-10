@@ -1721,6 +1721,66 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(fused["bge_m3_text_hash_match"], "true")
         self.assertGreater(float(fused["vector_positive_semantic_score"]), float(fused["vector_negative_score"]))
 
+    def test_external_bge_m3_stale_text_hash_never_fuses(self) -> None:
+        mod = load_module()
+        index = mod.build_text_vector_enrichment_index({
+            "text_vector_enrichment": {
+                "old": {
+                    "model_id": mod.BGE_M3_TEXT_MODEL_ID,
+                    "post_url": "https://t.me/travelcase/10",
+                    "post_id": "p10",
+                    "text_hash": "old-hash",
+                    "semantic_scores_by_class": {"ko_visit_impression": 0.9},
+                }
+            }
+        }, model="bge_m3")
+        row, mode = mod.find_text_vector_enrichment_for_post(
+            index,
+            {"post_url": "https://t.me/travelcase/10", "post_id": "p10"},
+            text_hash="new-hash",
+        )
+        self.assertIsNone(row)
+        self.assertEqual(mode, "")
+        incomplete = mod.fuse_e5_with_external_bge_m3(
+            {"text_embedding_scores_by_model": {mod.E5_TEXT_MODEL_ID: {"ko_visit_impression": 0.8}}},
+            next(iter(index["url:https://t.me/travelcase/10"])),
+            text_hash="new-hash",
+            match_mode="post_url",
+        )
+        self.assertEqual(incomplete["text_vector_fusion_status"], "external_bge_m3_fusion_incomplete")
+        self.assertEqual(incomplete["external_bge_m3_status"], "stale_text_hash")
+
+    def test_publication_source_evidence_completion_is_selected_before_backlog(self) -> None:
+        mod = load_module()
+        finalist = mod.Seed(
+            source_seed_id="finalist", platform="telegram", source_title="Travel finalist",
+            handle="@finalist", url="https://t.me/finalist", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=99, discovered_from="unit", discovered_from_url="",
+            why_seeded="publication", expected_value="", known_risks="", initial_status="processed_found_ko_candidate",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        pending = mod.Seed(
+            source_seed_id="pending", platform="telegram", source_title="Pending",
+            handle="@pending", url="https://t.me/pending", source_kind="unified_source_queue",
+            source_scope_guess="canonical_queue", priority=0, discovered_from="unit", discovered_from_url="",
+            why_seeded="pending", expected_value="", known_risks="", initial_status="pending_scan",
+            monitoring_enabled=True, rights_policy="unknown", notes="",
+        )
+        previous = {"unified_source_queue": {
+            "telegram:finalist": {
+                "canonical_source_key": "telegram:finalist", "source_url": "https://t.me/finalist",
+                "source_queue_status": "processed_found_ko_candidate", "queue_order": 1,
+                "posts_scanned": 1, "publication_source_evidence_priority": "true",
+                "publication_source_evidence_target_posts": 5,
+            },
+            "telegram:pending": {
+                "canonical_source_key": "telegram:pending", "source_url": "https://t.me/pending",
+                "source_queue_status": "pending_scan", "queue_order": 2,
+            },
+        }}
+        selected = mod.selected_sources_for_run([pending, finalist], 2, previous_state=previous)
+        self.assertEqual([seed.canonical_url for seed in selected], ["https://t.me/finalist", "https://t.me/pending"])
+
     def test_image_queue_requires_fused_e5_bge_when_enabled(self) -> None:
         mod = load_module()
         old = os.environ.get("REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE")

@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+import uuid
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,7 +38,7 @@ import region_talk_candidate_report as rt  # type: ignore  # noqa: E402
 
 
 POST_URL_NORMALIZATION_VERSION = "region_talk_post_url_v1"
-PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v2"
+PUBLICATION_FINALIZER_STATE_VERSION = "region_talk_publication_finalizer_v3"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 PUBLIC_TME_FALLBACK_ENV = "REGION_TALK_ALLOW_PUBLIC_TME_S_FALLBACK"
 TERMINAL_PUBLICATION_STATUSES = {
@@ -70,6 +71,139 @@ REJECT_VERDICTS = {
     "spam_or_commercial_hashtag_source",
     "blocked",
 }
+
+
+def gemini_request_fingerprint(row: dict[str, Any], *, model: str) -> str:
+    payload = {
+        "post_url": normalize_post_url(str(row.get("post_url") or "")),
+        "text_hash": hashlib.sha256(str(row.get("text") or row.get("short_summary") or "").encode("utf-8")).hexdigest(),
+        "image": [row.get("overall_media_score"), row.get("postcardness_score"), row.get("image_queue_status")],
+        "source": row.get("authoritative_source_fingerprint"),
+        "gate": row.get("publication_eligibility_gate_version"),
+        "model": model,
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+class DurableGeminiBudget:
+    """Atomic, cumulative Region Talk request budget layered over Supabase.
+
+    Supabase remains the cross-service RPM/TPM/RPD authority. This ledger adds
+    the product/debug ceiling (never above 100) and a deterministic request key
+    so completed final-verifier calls can be replayed without another provider
+    request.
+    """
+
+    def __init__(self, pool: Any, ydb: Any, table: str, *, budget_id: str, budget_max: int) -> None:
+        self.pool = pool
+        self.ydb = ydb
+        self.table = table
+        self.budget_id = re.sub(r"[^A-Za-z0-9_.:-]+", "-", budget_id).strip("-") or "region-talk-debug"
+        self.budget_max = min(100, max(0, int(budget_max)))
+        self.owner = "finalizer-" + uuid.uuid4().hex
+        self.used_total = 0
+        self.replayed_total = 0
+        self.blocked_total = 0
+        self._request_payloads: dict[str, dict[str, Any]] = {}
+
+    @property
+    def budget_pk(self) -> str:
+        return "region_talk_llm_budget_item:" + self.budget_id
+
+    def request_pk(self, fingerprint: str) -> str:
+        return f"region_talk_llm_request_item:{self.budget_id}:{fingerprint}"
+
+    @staticmethod
+    def _payload(result_sets: Any) -> dict[str, Any]:
+        rows = result_sets[0].rows if result_sets else []
+        if not rows:
+            return {}
+        value = rows[0].payload_json
+        return json.loads(value) if isinstance(value, str) else dict(value or {})
+
+    def reserve(self, fingerprint: str) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        lease_until = (now + timedelta(minutes=10)).isoformat()
+        request_pk = self.request_pk(fingerprint)
+
+        def op(session: Any) -> dict[str, Any]:
+            select = session.prepare(
+                f"DECLARE $pk AS Utf8; SELECT payload_json FROM `{self.table}` WHERE pk = $pk;"
+            )
+            upsert = session.prepare(
+                f"DECLARE $pk AS Utf8; DECLARE $kind AS Utf8; DECLARE $payload_json AS Json; DECLARE $updated_at AS Utf8; "
+                f"UPSERT INTO `{self.table}` (pk, kind, payload_json, updated_at) VALUES ($pk, $kind, $payload_json, $updated_at);"
+            )
+            tx = session.transaction(self.ydb.SerializableReadWrite())
+            budget = self._payload(tx.execute(select, {"$pk": self.budget_pk}, commit_tx=False))
+            request = self._payload(tx.execute(select, {"$pk": request_pk}, commit_tx=False))
+            if str(request.get("status") or "") == "completed" and isinstance(request.get("result"), dict):
+                tx.commit()
+                return {"status": "replay", "result": request["result"], "request": request, "budget": budget}
+            lease = _parse_time(request.get("lease_until"))
+            if request and lease and lease > now and str(request.get("lease_owner") or "") != self.owner:
+                tx.commit()
+                return {"status": "busy", "request": request, "budget": budget}
+            used = int(budget.get("reserved_total") or 0)
+            is_new = not bool(request)
+            if is_new and used >= self.budget_max:
+                tx.commit()
+                return {"status": "exhausted", "budget": budget}
+            if is_new:
+                used += 1
+            budget = {
+                **budget,
+                "budget_id": self.budget_id,
+                "budget_max": self.budget_max,
+                "reserved_total": used,
+                "remaining": max(0, self.budget_max - used),
+                "updated_at": now_iso,
+            }
+            request = {
+                **request,
+                "budget_id": self.budget_id,
+                "request_fingerprint": fingerprint,
+                "status": "reserved",
+                "lease_owner": self.owner,
+                "lease_until": lease_until,
+                "reserved_at": request.get("reserved_at") or now_iso,
+                "updated_at": now_iso,
+            }
+            tx.execute(upsert, {"$pk": self.budget_pk, "$kind": "region_talk_llm_budget_item", "$payload_json": json.dumps(budget, ensure_ascii=False), "$updated_at": now_iso}, commit_tx=False)
+            tx.execute(upsert, {"$pk": request_pk, "$kind": "region_talk_llm_request_item", "$payload_json": json.dumps(request, ensure_ascii=False), "$updated_at": now_iso}, commit_tx=False)
+            tx.commit()
+            return {"status": "reserved", "request": request, "budget": budget}
+
+        result = self.pool.retry_operation_sync(op)
+        self.used_total = int((result.get("budget") or {}).get("reserved_total") or self.used_total)
+        if result.get("status") == "replay":
+            self.replayed_total += 1
+        elif result.get("status") in {"busy", "exhausted"}:
+            self.blocked_total += 1
+        if isinstance(result.get("request"), dict):
+            self._request_payloads[fingerprint] = dict(result["request"])
+        return result
+
+    def complete(self, fingerprint: str, result: dict[str, Any]) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        request = {
+            **self._request_payloads.get(fingerprint, {}),
+            "budget_id": self.budget_id,
+            "request_fingerprint": fingerprint,
+            "status": "completed",
+            "result": result,
+            "completed_at": now,
+            "lease_until": "",
+            "updated_at": now,
+        }
+        pk = self.request_pk(fingerprint)
+
+        def op(session: Any) -> None:
+            rt.ydb_upsert_json(session, self.ydb, self.table, pk, "region_talk_llm_request_item", request, now, timeout_seconds=8)
+
+        self.pool.retry_operation_sync(op)
+        self._request_payloads[fingerprint] = request
 
 
 def load_env(path: Path) -> None:
@@ -379,6 +513,7 @@ def read_live_rows(limit_images: int, limit_memory: int, *, reverify_existing: b
                 "publication_status", "publication_candidate_status", "llm_gate_status", "llm_decision", "llm_reason",
                 "llm_model", "content_type", "visit_evidence_type", "next_attempt_after", "last_attempt_at",
                 "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
+                "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
             ]:
                 if publication.get(key) not in (None, ""):
                     row[key] = publication.get(key)
@@ -477,6 +612,83 @@ def _eligibility_fields(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return normalized_verdict, result
 
 
+def source_evidence_priority_updates(rows: list[dict[str, Any]], *, now_iso: str) -> list[dict[str, Any]]:
+    """Return source-ledger rows blocked *only* by missing source evidence.
+
+    This is a bounded completion lane, not a broad rescan: a source is promoted
+    only after its post already has current dual-vector/text evidence and a
+    strong actual-image score, and the unchanged publication gate would accept
+    it if the source were durably confirmed external.
+    """
+    target_posts = max(1, _env_int("REGION_TALK_PUBLICATION_SOURCE_MIN_SCANNED_POSTS", 5))
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        source = row.get("_authoritative_source")
+        if not isinstance(source, dict) or not source:
+            continue
+        current = rt.publication_eligibility(row, source)
+        if str(current.get("primary_reason") or "") != "source_verdict_unknown":
+            continue
+        external_probe = {**source, "source_scope": "external"}
+        if not bool(rt.publication_eligibility(row, external_probe).get("eligible")):
+            continue
+        try:
+            posts_scanned = int(float(source.get("posts_scanned") or 0))
+        except (TypeError, ValueError):
+            posts_scanned = 0
+        if posts_scanned >= target_posts:
+            continue
+        key = canonical_source_key_for_row(source) or canonical_source_key_for_row(row)
+        if not key:
+            continue
+        updated = {
+            **source,
+            "publication_source_evidence_priority": "true",
+            "publication_source_evidence_post_url": normalize_post_url(str(row.get("post_url") or "")),
+            "publication_source_evidence_requested_at": now_iso,
+            "publication_source_evidence_target_posts": target_posts,
+            "priority_lane": "publication_source_evidence",
+            "priority_reason": "strong_finalist_needs_source_attestation",
+            "priority_updated_at": now_iso,
+            "next_action": "scan_source_to_complete_publication_attestation",
+            "queue_item_updated_at": now_iso,
+        }
+        by_key[key] = updated
+    return list(by_key.values())
+
+
+def write_source_evidence_priority_rows(
+    pool: Any,
+    ydb: Any,
+    table: str,
+    rows: list[dict[str, Any]],
+    *,
+    run_id: str,
+) -> int:
+    if not rows:
+        return 0
+    now = rt.utc_now_iso()
+    items: list[tuple[str, str, dict[str, Any]]] = []
+    for row in rows:
+        payload = {k: v for k, v in row.items() if not str(k).startswith("_")}
+        payload.update({"run_id": run_id, "updated_at": now, "last_seen_run_id": run_id})
+        key = canonical_source_key_for_row(payload)
+        if not key:
+            continue
+        pk = str(row.get("_ydb_pk") or "") or "source_queue_item:" + key
+        if not pk.startswith("source_queue_item:"):
+            pk = "source_queue_item:" + key
+        items.append((pk, "source_queue_item", payload))
+    if not items:
+        return 0
+
+    def op(session: Any) -> int:
+        rt.ensure_ydb_kv_table(ydb, session, table)
+        return rt.ydb_upsert_json_many(session, ydb, table, items, now, chunk_size=20, timeout_seconds=8)
+
+    return int(pool.retry_operation_sync(op) or 0)
+
+
 def _previous_was_publishable(row: dict[str, Any]) -> bool:
     previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else row
     return (
@@ -539,6 +751,7 @@ def verify_rows(
     model: str,
     default_env_var_name: str,
     now_iso: str | None = None,
+    durable_budget: DurableGeminiBudget | None = None,
 ) -> list[dict[str, Any]]:
     now_iso = now_iso or rt.utc_now_iso()
     results: list[dict[str, Any]] = []
@@ -582,11 +795,31 @@ def verify_rows(
             continue
         if llm_calls >= max(0, max_llm):
             continue
-        llm_calls += 1
-        row["publication_rank"] = llm_calls
+        fingerprint = gemini_request_fingerprint(row, model=model)
+        replay_result: dict[str, Any] | None = None
+        if durable_budget is not None:
+            reservation = durable_budget.reserve(fingerprint)
+            reservation_status = str(reservation.get("status") or "")
+            if reservation_status == "replay":
+                replay_result = dict(reservation.get("result") or {})
+            elif reservation_status in {"busy", "exhausted"}:
+                row["publication_status"] = "gemini_rate_limited"
+                row["publication_candidate_status"] = "llm_budget_deferred"
+                row["finalization_status"] = "retryable"
+                row["llm_attempted_this_run"] = "false"
+                row["llm_budget_id"] = durable_budget.budget_id
+                row["llm_budget_status"] = reservation_status
+                row["next_attempt_after"] = _retry_after(now_iso, "rate_limited")
+                results.append(row)
+                continue
+        if replay_result is None:
+            llm_calls += 1
+        row["publication_rank"] = max(1, llm_calls)
         row["attempt_count"] = int(row.get("attempt_count") or 0) + 1
         row["last_attempt_at"] = now_iso
-        row["llm_attempted_this_run"] = "true"
+        row["llm_attempted_this_run"] = str(replay_result is None).lower()
+        row["llm_request_fingerprint"] = fingerprint
+        row["llm_budget_id"] = durable_budget.budget_id if durable_budget is not None else ""
         evidence = {
             "stage": "final_publication_verifier",
             "overall_media_score": row.get("overall_media_score"),
@@ -604,15 +837,22 @@ def verify_rows(
             f"source={row.get('source_title')} pre_score={row.get('publication_pre_score')}",
             flush=True,
         )
-        try:
-            llm_verdict = rt.call_region_talk_semantic_llm(
-                row,
-                evidence,
-                model=model,
-                default_env_var_name=default_env_var_name,
-            )
-        except Exception as exc:
-            llm_verdict = {"llm_gate_status": "error", "llm_reason": f"{type(exc).__name__}: {str(exc)[:240]}"}
+        if replay_result is not None:
+            llm_verdict = replay_result
+            row["llm_budget_status"] = "replayed_completed_request"
+        else:
+            try:
+                llm_verdict = rt.call_region_talk_semantic_llm(
+                    row,
+                    evidence,
+                    model=model,
+                    default_env_var_name=default_env_var_name,
+                )
+            except Exception as exc:
+                llm_verdict = {"llm_gate_status": "error", "llm_reason": f"{type(exc).__name__}: {str(exc)[:240]}"}
+            if durable_budget is not None:
+                durable_budget.complete(fingerprint, llm_verdict)
+                row["llm_budget_status"] = "completed"
         row.update(llm_verdict)
         gate_status = str(llm_verdict.get("llm_gate_status") or "unknown").lower()
         decision = str(llm_verdict.get("llm_decision") or "").lower()
@@ -652,6 +892,8 @@ def write_publication_rows(pool: Any, ydb: Any, table: str, rows: list[dict[str,
         "publication_eligibility_verdict", "publication_eligibility_evidence", "publication_eligibility_gate_version",
         "publication_tombstone", "publication_revoked", "revoked_at", "finalization_status", "finalization_trigger",
         "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run", "finalizer_state_version",
+        "llm_request_fingerprint", "llm_budget_id", "llm_budget_status",
+        "sent_to_chat", "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
     ]
     items = []
     for row in rows:
@@ -714,25 +956,60 @@ def main() -> int:
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env")
     parser.add_argument("--run-id", default="")
     parser.add_argument("--max-llm", type=int, default=10)
+    parser.add_argument(
+        "--llm-budget-id",
+        default="",
+    )
+    parser.add_argument("--llm-budget-max", type=int, default=None)
     parser.add_argument("--limit-images", type=int, default=5000)
     parser.add_argument("--limit-memory", type=int, default=20000)
     parser.add_argument("--model", default=os.getenv("REGION_TALK_LLM_MODEL") or "gemini-3.1-flash-lite")
     parser.add_argument("--default-env-var-name", default=os.getenv("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME") or "GOOGLE_API_KEY3")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "artifacts" / "codex" / "region-talk-finalizer")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--prioritize-source-evidence-only",
+        action="store_true",
+        help="Promote only strong finalists blocked by missing source attestation; do not call Gemini.",
+    )
     parser.add_argument("--reverify-existing", action="store_true", help="Ignore existing publication_candidate_item verifier statuses and call Gemini again.")
     args = parser.parse_args()
     load_env(args.env_file)
+    args.llm_budget_id = args.llm_budget_id or os.getenv("REGION_TALK_LLM_BUDGET_ID") or datetime.now(timezone.utc).strftime("region-talk-debug-%Y%m%d")
+    args.llm_budget_max = _env_int("REGION_TALK_LLM_BUDGET_MAX", 100) if args.llm_budget_max is None else args.llm_budget_max
     os.environ.setdefault("REGION_TALK_LLM_MODEL", args.model)
     os.environ.setdefault("REGION_TALK_LLM_DEFAULT_ENV_VAR_NAME", args.default_env_var_name)
     os.environ.setdefault("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "45")
     os.environ.setdefault("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", os.environ.get("REGION_TALK_LLM_CALL_TIMEOUT_SECONDS", "45"))
     os.environ.setdefault("REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS", "2200")
+    # One logical finalizer request equals at most one provider attempt. A
+    # failed attempt is retried by the durable finalizer state, not invisibly
+    # inside the provider gateway, keeping the <=100 budget auditable.
+    os.environ.setdefault("GOOGLE_AI_MAX_RETRIES", "1")
     run_id = args.run_id or "region-talk-finalizer-local-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     out_dir = args.output_dir / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     ydb, driver, pool, table, rows = read_live_rows(args.limit_images, args.limit_memory, reverify_existing=args.reverify_existing)
-    verified = [] if args.dry_run else verify_rows(rows, max_llm=args.max_llm, model=args.model, default_env_var_name=args.default_env_var_name)
+    source_priority_rows = source_evidence_priority_updates(rows, now_iso=rt.utc_now_iso())
+    source_priority_written = 0 if args.dry_run else write_source_evidence_priority_rows(
+        pool, ydb, table, source_priority_rows, run_id=run_id,
+    )
+    durable_budget = None
+    if not args.dry_run and not args.prioritize_source_evidence_only and args.max_llm > 0:
+        durable_budget = DurableGeminiBudget(
+            pool,
+            ydb,
+            table,
+            budget_id=args.llm_budget_id,
+            budget_max=min(100, max(0, int(args.llm_budget_max))),
+        )
+    verified = [] if args.dry_run or args.prioritize_source_evidence_only else verify_rows(
+        rows,
+        max_llm=min(100, max(0, int(args.max_llm))),
+        model=args.model,
+        default_env_var_name=args.default_env_var_name,
+        durable_budget=durable_budget,
+    )
     written = 0 if args.dry_run else write_publication_rows(pool, ydb, table, verified, run_id)
     shortlist_artifact = write_xlsx(out_dir / "region-talk-publication-shortlist.xlsx", verified, rows, include_unverified=50)
     payload = {
@@ -742,13 +1019,20 @@ def main() -> int:
         "accepted_new": sum(1 for row in verified if row.get("publication_status") == "gemini_accept"),
         "accepted_total": sum(1 for row in rows if row.get("publication_status") == "gemini_accept" or row.get("publication_candidate_status") == "llm_confirmed"),
         "written": written,
+        "source_evidence_priority_total": len(source_priority_rows),
+        "source_evidence_priority_written": source_priority_written,
+        "llm_budget_id": durable_budget.budget_id if durable_budget is not None else args.llm_budget_id,
+        "llm_budget_max": durable_budget.budget_max if durable_budget is not None else min(100, max(0, int(args.llm_budget_max))),
+        "llm_budget_reserved_total": durable_budget.used_total if durable_budget is not None else 0,
+        "llm_budget_replayed_total": durable_budget.replayed_total if durable_budget is not None else 0,
+        "llm_budget_blocked_total": durable_budget.blocked_total if durable_budget is not None else 0,
         "shortlist_artifact": str(shortlist_artifact),
         "xlsx": str(shortlist_artifact) if shortlist_artifact.suffix == ".xlsx" else "",
         "verified": verified,
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "actual_scored_rows", "llm_calls", "accepted_new", "accepted_total", "written", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "actual_scored_rows", "llm_calls", "accepted_new", "accepted_total", "written", "source_evidence_priority_total", "source_evidence_priority_written", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

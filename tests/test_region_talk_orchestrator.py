@@ -856,6 +856,26 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertIn("Exact ready/cooldown/entity-wait/fetched: 67/0/0/0", text)
         self.assertIn("Publication total/confirmed/sent/ready: 19/7/7/0", text)
 
+    def test_strong_source_attestation_backlog_schedules_bounded_priority_pass(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_source_evidence_backlog_total": 1,
+                "publication_confirmed_total": 0,
+                "publication_sent_total": 0,
+                "bge_pending_sample_total": 0,
+                "image_pending_total": 0,
+                "finalizer_pending_url_total": 0,
+            },
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        by_name = {action["action"]: action for action in actions}
+        self.assertIn("launch_candidate_report", by_name)
+        self.assertIn("prioritize_source_evidence", by_name)
+        self.assertIn("--prioritize-source-evidence-only", by_name["prioritize_source_evidence"]["cmd"])
+
 
 if __name__ == "__main__":
     unittest.main()
