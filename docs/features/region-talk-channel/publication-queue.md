@@ -29,7 +29,10 @@ the visual scorer and writer of actual-image evidence. The local
 `scripts/region_talk_publication_finalizer.py` is the **single owner** of final
 Gemini publication verification and `publication_candidate_item` terminal
 outcomes in the orchestrated path; CandidateReport's Gemini modes are disabled
-by the orchestrator.
+by the orchestrator. CandidateReport may refresh ranking/source/media context,
+but must preserve every `finalizer_state_version` terminal status, eligibility
+attestation, retry field and delivery marker; it must never reopen a
+Gemini-rejected URL as pending after a later discovery run.
 
 Video is not treated as a weak image and is never assigned a fabricated visual
 score. Gemini verifies only the text/product criteria. The notifier sends a

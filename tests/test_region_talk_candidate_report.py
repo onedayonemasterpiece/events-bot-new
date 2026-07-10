@@ -3227,6 +3227,37 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(goal["llm_calls_used_total"], 9)
         self.assertEqual(goal["llm_calls_used_preverified_this_run"], 2)
 
+    def test_candidate_report_preserves_local_finalizer_terminal_state(self) -> None:
+        mod = load_module()
+        rows, _goal = mod.build_publication_candidate_queue(
+            [{
+                "candidate_memory_id": "cm1", "post_id": "p1", "post_url": "https://t.me/travel/1",
+                "source_id": "s1", "source_title": "Travel", "source_geo_class": "nonlocal_russia",
+                "source_scope": "external", "source_topic_class": "travel_blogger",
+                "kaliningrad_oblast_only_scope": True, "kaliningrad_mention_role": "main_subject",
+                "is_ad_or_promo": False, "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+            }],
+            [{
+                "post_url": "https://t.me/travel/1", "image_queue_status": "actual_scored",
+                "image_model_input_type": "actual_image", "overall_media_score": 0.86, "postcardness_score": 0.77,
+            }],
+            [{
+                "post_url": "https://t.me/travel/1", "publication_candidate_status": "llm_rejected",
+                "publication_status": "gemini_reject", "finalizer_state_version": "region_talk_publication_finalizer_v4",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": "region_talk_publication_eligibility_v2",
+                "llm_decision": "reject", "llm_reason": "no firsthand experience",
+            }],
+            {"publication_goal_id": "unit-goal", "target_confirmed": 20, "llm_budget_max": 100},
+            run_id="pub-run-preserve", run_now="2026-07-10T00:00:00+00:00",
+            llm_model="gemini-3.1-flash-lite", llm_default_env_var_name="GOOGLE_API_KEY3",
+        )
+        self.assertEqual(rows[0]["publication_candidate_status"], "llm_rejected")
+        self.assertEqual(rows[0]["publication_status"], "gemini_reject")
+        self.assertEqual(rows[0]["finalizer_state_version"], "region_talk_publication_finalizer_v4")
+        self.assertEqual(rows[0]["llm_reason"], "no firsthand experience")
+
     def test_status_event_uses_kaggle_progress_argument(self) -> None:
         mod = load_module()
         class Client:

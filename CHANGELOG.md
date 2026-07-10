@@ -9,6 +9,9 @@
   only as explicit operator-video-review candidates, while documents/audio stay
   rejected; rejection reasons are persisted in compact post state and the
   publication eligibility contract advances to v2.
+- **Region Talk / finalizer ownership preservation**: later CandidateReport
+  queue refreshes retain local-finalizer eligibility, terminal Gemini/retry and
+  delivery fields instead of reopening the same post as pending.
 - **Region Talk / actionable dual-vector coverage**: raw E5/BGE coverage is
   retained, while metrics now separately expose ultra-short E5 rows below the
   BGE input minimum, actionable unpaired rows and actionable dual coverage.

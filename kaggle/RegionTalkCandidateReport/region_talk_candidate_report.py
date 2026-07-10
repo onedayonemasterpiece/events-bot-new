@@ -1807,6 +1807,17 @@ PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_llm_status", "publication_llm_decision", "publication_llm_reason",
     "publication_llm_model", "visual_confirmation_source", "goal_stop_candidate", "sent_to_chat",
     "sent_message_id", "sent_at", "sent_chat_id", "delivery_key", "delivery_random_id",
+    # Local finalizer is the terminal owner. CandidateReport may refresh the
+    # handoff row, but compact YDB writes must preserve its attestation,
+    # verifier, retry and delivery state instead of making the same URL pending
+    # again after every discovery run.
+    "publication_status", "publication_eligibility_verdict", "publication_eligibility_evidence",
+    "publication_eligibility_gate_version", "authoritative_source_fingerprint",
+    "authoritative_source_fingerprint_version", "authoritative_source_found",
+    "finalization_status", "finalization_trigger", "finalizer_state_version",
+    "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run",
+    "llm_gate_status", "llm_decision", "llm_reason", "llm_model", "llm_limit_source",
+    "publication_tombstone", "publication_revoked", "revoked_at",
     "created_at", "last_seen_run_id", "last_confirmed_run_id",
 ]
 PUBLICATION_CONFIRMED_STATUSES = {"llm_confirmed", "sent_to_chat", "accepted_for_publication"}
@@ -6812,11 +6823,17 @@ def build_publication_candidate_queue(
         publication_score = round(max(0.0, _rt_float(row.get("_publication_base_score")) - diversity_penalty), 3)
         base_ok = bool(row.get("_publication_base_ok"))
         status = str(prev.get("publication_candidate_status") or ("ready_for_llm" if base_ok else "filtered_before_llm"))
+        finalizer_owned = bool(str(prev.get("finalizer_state_version") or "").strip())
         llm_status = str(prev.get("publication_llm_status") or "")
         llm_decision = str(prev.get("publication_llm_decision") or "")
         llm_reason = str(prev.get("publication_llm_reason") or "")
         llm_model_used = str(prev.get("publication_llm_model") or "")
-        if base_ok and post_url not in confirmed_urls:
+        if finalizer_owned:
+            # The local finalizer is the sole terminal Gemini owner. Discovery
+            # refreshes ranking/source/media context but never reopen, defer or
+            # replace its durable result.
+            pass
+        elif base_ok and post_url not in confirmed_urls:
             final_status = str(row.get("final_verifier_status") or row.get("llm_gate_status") or "")
             final_decision = str(row.get("final_verifier_decision") or row.get("llm_decision") or "")
             if final_status == "ok" and final_decision == "accept":
@@ -6902,6 +6919,20 @@ def build_publication_candidate_queue(
             "sent_chat_id": prev.get("sent_chat_id", ""),
             "delivery_key": prev.get("delivery_key", ""),
             "delivery_random_id": prev.get("delivery_random_id", ""),
+            **{
+                key: prev.get(key)
+                for key in [
+                    "publication_status", "publication_eligibility_verdict", "publication_eligibility_evidence",
+                    "publication_eligibility_gate_version", "authoritative_source_fingerprint",
+                    "authoritative_source_fingerprint_version", "authoritative_source_found",
+                    "finalization_status", "finalization_trigger", "finalizer_state_version",
+                    "attempt_count", "last_attempt_at", "next_attempt_after", "llm_attempted_this_run",
+                    "llm_gate_status", "llm_decision", "llm_reason", "llm_model", "llm_limit_source",
+                    "publication_tombstone", "publication_revoked", "revoked_at",
+                    "media_kind", "media_review_mode", "manual_media_review_required", "video_manual_review_eligible",
+                ]
+                if prev.get(key) not in (None, "")
+            },
             "created_at": prev.get("created_at") or run_now,
             "last_seen_run_id": run_id,
             "last_confirmed_run_id": run_id if is_confirmed else prev.get("last_confirmed_run_id", ""),
