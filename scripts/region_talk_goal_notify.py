@@ -26,6 +26,7 @@ from typing import Any
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v1"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v2"
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
+DEFAULT_NOTIFY_CHAT_ID = "-5563945596"
 
 
 def load_env(path: Path) -> None:
@@ -653,7 +654,7 @@ def main() -> int:
     args = ap.parse_args()
     load_env(args.env_file)
     args.chat = args.chat or os.getenv("REGION_TALK_NOTIFY_CHAT") or DEFAULT_NOTIFY_CHAT
-    args.expected_chat_id = args.expected_chat_id or os.getenv("REGION_TALK_NOTIFY_CHAT_ID") or ""
+    args.expected_chat_id = args.expected_chat_id or os.getenv("REGION_TALK_NOTIFY_CHAT_ID") or DEFAULT_NOTIFY_CHAT_ID
     lock_path = Path(os.getenv("REGION_TALK_NOTIFY_LOCK_FILE") or "/tmp/events-bot-region-talk-notify.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w") as lock:
