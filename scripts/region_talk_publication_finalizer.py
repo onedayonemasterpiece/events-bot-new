@@ -502,6 +502,10 @@ def _ineligible_state_is_current(row: dict[str, Any], verdict: str) -> bool:
         == str(row.get("publication_eligibility_gate_version") or "")
         and str(previous.get("publication_eligibility_evidence") or "")
         == str(row.get("publication_eligibility_evidence") or "")
+        and str(previous.get("authoritative_source_fingerprint_version") or "")
+        == AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION
+        and str(previous.get("authoritative_source_fingerprint") or "")
+        == str(row.get("authoritative_source_fingerprint") or "")
     )
 
 

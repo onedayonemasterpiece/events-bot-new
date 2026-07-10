@@ -70,6 +70,27 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             self.mod.source_class_guess("Дом китобоя", "https://t.me/domkitoboya", {}),
             "local_region_source",
         )
+
+    def test_ineligible_tombstone_is_current_only_with_current_source_fingerprint(self) -> None:
+        row = {
+            "publication_eligibility_verdict": "review",
+            "publication_eligibility_gate_version": "gate-v1",
+            "publication_eligibility_evidence": "same-evidence",
+            "authoritative_source_fingerprint": "source-v2-value",
+            "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            "_previous_publication": {
+                "publication_status": "eligibility_review_tombstone",
+                "publication_candidate_status": "tombstoned_review",
+                "publication_eligibility_verdict": "review",
+                "publication_eligibility_gate_version": "gate-v1",
+                "publication_eligibility_evidence": "same-evidence",
+                "authoritative_source_fingerprint": "source-v2-value",
+                "authoritative_source_fingerprint_version": self.mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+            },
+        }
+        self.assertTrue(self.mod._ineligible_state_is_current(row, "review"))
+        row["_previous_publication"]["authoritative_source_fingerprint_version"] = "region_talk_source_fingerprint_v1"
+        self.assertFalse(self.mod._ineligible_state_is_current(row, "review"))
         self.assertEqual(
             self.mod.source_class_guess("Travel notes", "https://t.me/example_travel", {}),
             "nonlocal_travel_or_general_source",

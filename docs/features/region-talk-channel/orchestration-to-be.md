@@ -154,6 +154,8 @@ Telegram Monitoring and Guide monitoring:
   fingerprint v2 includes substantive scan/KO/candidate counters but excludes
   volatile row-update timestamps, preventing unchanged tombstones from being
   re-finalized on every CandidateReport snapshot;
+  existing v1 tombstones are rewritten once with the v2 fingerprint even when
+  their eligibility verdict remains unchanged, closing the migration loop;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

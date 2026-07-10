@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / fingerprint tombstone migration**: unchanged ineligible rows
+  are considered current only when their persisted authoritative-source
+  fingerprint and version match v2, allowing legacy tombstones to migrate once
+  instead of remaining perpetually pending.
 - **Region Talk / canonical URL authority**: strict image-source joins now
   prefer the canonical ledger row found by source URL over a thinner source-id
   projection, including legacy canonical rows that do not yet carry
