@@ -119,7 +119,7 @@ The same investigation rechecked the operator's second report, `Рыцарски
 
 ## Follow-up Actions
 
-- [x] Complete the zero-write full-future vector-first + LLM audit: exact `305/305` catalog coverage, `193` reused vectors + `112` local fills, zero provider-error verdicts after retries. Source-confirmed repairs and the remaining fail-closed review queue are tracked in `INC-2026-07-10-future-event-semantic-audit.md`.
+- [x] Complete the zero-write full-future vector-first + LLM audit: exact frozen `305/305` coverage, `193` reused vectors + `112` local fills, zero provider-error verdicts after retries; nine rows imported after freeze also received vector + LLM `pass`, yielding exact active-future coverage `308/308` at the explicit `2026-07-10T14:07:17Z` cutoff. Source-confirmed repairs and the remaining fail-closed review queue are tracked in `INC-2026-07-10-future-event-semantic-audit.md`.
 - [ ] Add a durable append-only quality-decision/publication gate keyed by event hash + source-bundle hash; identity-vector approval must remain separate.
 - [ ] Restore/schedule current vector-sidecar coverage and alert on core-vs-sidecar lag without making Supabase canonical.
 - [ ] Add first-class date-role/evidence fields to the producer/server contract after replay evaluation.

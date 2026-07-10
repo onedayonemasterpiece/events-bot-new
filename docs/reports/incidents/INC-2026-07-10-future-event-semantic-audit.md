@@ -27,6 +27,7 @@ The audit reproduced the reported Zoo defect and exposed additional high-confide
 - final LLM verdicts: `174 pass`, `82 repair-candidate`, `6 remove-candidate`, `42 needs_review`, `1 indeterminate`;
 - provider-error verdicts after retry: `0`;
 - fail-closed candidate set: `131` rows. This is a review queue, **not 131 confirmed defects**: common false-positive shapes include a correct current-year inference from a day/month-only source and one valid occurrence extracted from a multi-date series.
+- post-freeze current-inventory check: nine newly imported rows `6799`–`6807` received local vectors and source-grounded LLM `pass` verdicts. At the explicit cutoff `2026-07-10T14:07:17Z`, after six confirmed cancellations/supersessions, the active-future inventory was `308`, so cutoff coverage was `308/308` (`299` surviving frozen rows + nine append rows); `314` unique rows were examined across the incident window. The scheduled VK importer was still running at cutoff, so this is an exact bounded inventory claim, not a claim that later imports are pre-audited.
 
 Gemma 4 performed the primary audit. Provider `500`/quota failures were removed rather than counted as verdicts and retried per row; the final small retry set used the repository's normal `gemini-3.1-flash-lite` bulk-verification class. That retry is supplementary bulk classification, not an external consultant review. Destructive actions below were based on direct source/OCR and survivor verification, not the raw model label.
 
