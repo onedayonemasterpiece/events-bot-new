@@ -163,7 +163,11 @@ def wait_dataset_ready(client: Any, dataset_ref: str, *, expected_files: list[st
         try:
             last_status = str(client.dataset_status(dataset_ref))
             raw_files = client.dataset_list_files(dataset_ref)
-            last_files = [str(getattr(x, "name", x)) for x in raw_files]
+            last_files = [
+                str(x.get("name") or x) if isinstance(x, dict)
+                else str(getattr(x, "name", x))
+                for x in raw_files
+            ]
             if last_status.lower() == "ready" and all(name in last_files for name in expected_files):
                 return
         except Exception:

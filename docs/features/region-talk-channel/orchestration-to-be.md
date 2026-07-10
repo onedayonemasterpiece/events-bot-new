@@ -255,6 +255,10 @@ Important invariants:
   observability sheets. This avoids spending several tail minutes repeatedly
   serializing the full multi-thousand-row source ledger. A deliberate offline
   audit can unset the flag to build the full workbook.
+- CandidateReport, BGE-M3 and ImageDiagnostic share one Kaggle input-dataset
+  readiness contract. It accepts both Kaggle SDK file objects and the mapping
+  rows returned by the project wrapper; a ready dataset must not consume its
+  whole launch timeout merely because the wrapper normalized files to dicts.
 - Pending VK image rows are prefetched by
   `scripts/region_talk_vk_media_prefetch.py` before Kaggle scoring. The future
   server-side orchestrator uses its production VK user token to resolve public

@@ -29,6 +29,10 @@
   runs keep full state in YDB and export only product/funnel/shortlist and
   observability sheets, instead of repeatedly serializing the 7k source ledger
   into a large workbook plus duplicate JSON/HTML artifacts.
+- **Region Talk / Kaggle dataset readiness**: the shared CandidateReport/BGE/
+  ImageDiagnostic launcher now recognizes mapping-shaped file rows returned by
+  the Kaggle wrapper, avoiding false four-minute waits on already-ready input
+  datasets.
 - **Region Talk / VK media prefetch**: pending VK image rows can resolve public
   photo CDN URLs on the server where the production token is valid (or through
   an explicit read-only Fly proxy during local debugging), then let the

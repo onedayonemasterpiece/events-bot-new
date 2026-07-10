@@ -57,6 +57,23 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             notes="",
         )
 
+    def test_kaggle_dataset_ready_accepts_mapping_file_rows(self) -> None:
+        runner = load_runner_module()
+
+        class Client:
+            def dataset_status(self, _dataset_ref):
+                return "ready"
+
+            def dataset_list_files(self, _dataset_ref):
+                return [{"name": "region_talk_run_config.json"}, {"name": "google_ai/__init__.py"}]
+
+        runner.wait_dataset_ready(
+            Client(),
+            "zigomaro/example",
+            expected_files=["region_talk_run_config.json", "google_ai/__init__.py"],
+            timeout_seconds=1,
+        )
+
     def test_source_selection_prefers_cursor_queue_over_static_seed_rescans(self) -> None:
         mod = load_module()
         static_seed = self._seed(mod, "@staticold", priority=0, seed_id="seed_1")
