@@ -68,7 +68,7 @@ lanes:
     target: serial integration, docs, changelog, regression tests, live baseline/run
     depends_on: [L1, L2, L3, L4]
     execution_mode: serial_after_dependency
-    status: completed_full_region_talk_suite_210_ok_live_loop_23_cycles
+    status: completed_full_region_talk_suite_212_ok_live_loop_23_cycles
 live_acceptance:
   orchestrator_runtime_minutes: 62
   orchestrator_cycles: 23
@@ -82,4 +82,6 @@ live_acceptance:
     authoritative_source_join_simulation_queue_total: 18
     previous_gate_rejections_reactivated: true
     sparse_canonical_source_overrides_thin_external_claim: true
+    actual_image_evidence_survives_metadata_rescan: live_confirmed
+    same_run_image_retry_loop: fixed_and_tested
 ```
