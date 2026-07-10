@@ -1454,13 +1454,18 @@ def _fast_check_exact_post_metrics(
     accepted_urls: set[str] = set()
     rejection_counts: dict[str, int] = {}
     for url in fetched_urls:
-        row = candidates.get(url) or processed.get(url) or {}
+        processed_row = processed.get(url) or {}
+        candidate_row = candidates.get(url) or {}
+        row = {**processed_row, **candidate_row}
         source = next((item for item in hit_rows if _canonical_post_url(str(item.get("fast_check_hit_post_url") or item.get("keyword_hit_post_url") or "")) == url), {})
         source_status = str(source.get("source_queue_status") or "")
         vector_status = str(row.get("vector_gate_status") or "")
         fused = str(row.get("text_vector_fusion_status") or "") == "fused_e5_bge_m3" or url in paired_urls
-        ko_only = str(row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
-        fresh = str((processed.get(url) or {}).get("fresh_enough") or "").lower() not in {"0", "false", "no"}
+        # The scored post projection owns region/freshness. Candidate-memory
+        # duplicates may share one timestamp and retain an older scope value;
+        # never let that broaden the strict product denominator.
+        ko_only = str(processed_row.get("kaliningrad_oblast_only_scope") or "").lower() in {"1", "true", "yes"}
+        fresh = str(processed_row.get("fresh_enough") or "").lower() not in {"0", "false", "no"}
         source_ok = source_status not in {"rejected_local_region_source", "rejected_spam_source"}
         if source_ok and vector_status == "vector_accept_candidate" and fused and ko_only and fresh:
             accepted_urls.add(url)
