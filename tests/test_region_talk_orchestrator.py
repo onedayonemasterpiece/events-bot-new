@@ -403,6 +403,20 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(unsigned["publication_confirmed_total"], 0)
         self.assertEqual(unsigned["finalizer_pending_url_total"], 1)
 
+        stale_review = mod._publication_handoff_metrics(
+            [images[0]],
+            [{
+                "post_url": "https://t.me/a/1",
+                "canonical_source_key": "telegram:a",
+                "publication_candidate_status": "tombstoned_review",
+                "publication_eligibility_verdict": "review",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+                "authoritative_source_fingerprint": "stale-source-fingerprint",
+            }],
+            sources,
+        )
+        self.assertEqual(stale_review["finalizer_pending_urls"], ["https://t.me/a/1"])
+
     def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
         mod = load_module()
         metrics = {

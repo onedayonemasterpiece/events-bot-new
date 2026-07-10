@@ -1039,6 +1039,14 @@ def _publication_handoff_metrics(
     def needs_finalizer(row: dict[str, Any] | None) -> bool:
         if not row:
             return True
+        live_fingerprint = str(row.get("_live_authoritative_source_fingerprint") or "")
+        persisted_fingerprint = str(row.get("authoritative_source_fingerprint") or "")
+        if (
+            str(row.get("_live_authoritative_source_found") or "").lower() == "true"
+            and live_fingerprint
+            and live_fingerprint != persisted_fingerprint
+        ):
+            return True
         eligibility_verdict = str(row.get("publication_eligibility_verdict") or "").lower()
         gate_version = str(row.get("publication_eligibility_gate_version") or "")
         if not eligibility_verdict or gate_version != CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION:

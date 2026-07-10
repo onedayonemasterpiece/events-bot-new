@@ -148,6 +148,9 @@ Telegram Monitoring and Guide monitoring:
   count, while `publication_active_candidate_total` excludes sent, rejected and
   eligibility tombstone rows; `--target-publication-candidates` follows only
   the active delta;
+- a publication tombstone is sent back to the finalizer when its persisted
+  authoritative-source fingerprint differs from the current source ledger, so
+  newly accumulated scan evidence can promote an earlier `review` decision;
 - one Python runtime/venv for the orchestrator and child launchers, so local
   preflight dependencies (`ydb`, `openpyxl`, `kaggle`, `telethon`) are stable.
 

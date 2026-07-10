@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / source-evidence re-finalization**: publication tombstones are
+  re-queued when the canonical source fingerprint changes, allowing stronger
+  later scan evidence to replace an earlier fail-closed `review` without
+  repeatedly reprocessing unchanged tombstones.
 - **Region Talk / image retry containment**: ImageDiagnostic no longer
   re-leases a failed media row repeatedly in the same notebook run; the row
   stays retryable for a later run without creating an authorization-error hot
