@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,11 @@ ACTION_KERNEL_SLUGS = {
     "launch_image_diagnostic": "region-talk-image-diagnostic",
 }
 
+CURRENT_E5_ENCODER_CONTRACT = "e5_semantic_bank_scores_v1"
+CURRENT_BGE_M3_ENCODER_CONTRACT = "bge_m3_flagembedding_dense_v1"
+POST_LINK_READY_STATUSES = {"", "pending_fetch", "retry_fetch", "fetch_error"}
+POST_LINK_TERMINAL_STATUSES = {"fetched", "scored"}
+
 MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_STATE_BACKEND": "ydb",
     "REGION_TALK_REQUIRE_YDB_STATE": "1",
@@ -57,8 +63,11 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     # notebook still reaches the source-queue/discovery tail, but with smaller
     # batches and bounded YDB writes; otherwise Kaggle spends >30 minutes in
     # tail assembly and YDB row upserts before the next iteration can start.
+    # Neither early-tail switch may cut off the publication-candidate handoff.
+    # The bounded 20-minute work budget leaves ten minutes for image/source/
+    # publication queue assembly and its row-level YDB writes.
     "REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF": "0",
-    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "1",
+    "REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF": "0",
     "REGION_TALK_BUILD_IMAGE_QUEUE_BEFORE_SOURCE_QUEUE": "1",
     # Keep under the product requirement of <=30 minutes, but do not starve the
     # high-yield discovery/vector/image handoff stages. A 12-minute debug window
@@ -118,9 +127,12 @@ MAIN_DISCOVERY_YDB_BUDGET_ENV = {
     "REGION_TALK_TELEGRAM_QUERY_ROTATE": "1",
     "REGION_TALK_TELEGRAM_KEYWORD_RESULTS_PER_QUERY": "5",
     "REGION_TALK_MAX_KEYWORD_DISCOVERED_SOURCES_PER_RUN": "10",
-    "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "0",
-    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "1",
+    # Manual and discovered exact URLs are the first bounded intake lane.  They
+    # do not replace source/history/similar/keyword/hashtag discovery below.
+    "REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST": "1",
+    "REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT": "3",
     "REGION_TALK_TG_CACHED_ENTITY_ONLY": "1",
+    "REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN": "1",
     "REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN": "1",
     "REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN": "1",
     "REGION_TALK_TG_EXACT_POST_FETCH_DELAY_MIN_SECONDS": "8",
@@ -154,6 +166,7 @@ ORCHESTRATOR_YDB_METRIC_LIMITS = {
     "source_candidate_item": 4000,
     "source_edge_item": 4000,
     "comment_link_item": 4000,
+    "telegram_entity_cache_item": 6000,
 }
 
 
@@ -433,6 +446,189 @@ def _min_numeric(rows: list[dict[str, Any]], field: str) -> float:
     return round(min(nums), 2) if nums else 0.0
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _canonical_post_url(row_or_url: dict[str, Any] | str) -> str:
+    if isinstance(row_or_url, dict):
+        raw = str(row_or_url.get("post_url") or row_or_url.get("keyword_hit_post_url") or "")
+    else:
+        raw = str(row_or_url or "")
+    return raw.strip().split("?", 1)[0].rstrip("/").lower()
+
+
+def _is_public_telegram_post_url(url: str) -> bool:
+    return bool(re.fullmatch(r"https?://t\.me/(?!c/)[a-z0-9_]+/[0-9]+", str(url or ""), flags=re.I))
+
+
+def _source_aliases(row: dict[str, Any]) -> set[str]:
+    aliases: set[str] = set()
+    for field in ("entity_cache_key", "private_state_key", "canonical_source_key", "source_key"):
+        value = str(row.get(field) or "").strip().lower()
+        if value:
+            aliases.add(value)
+    for field in ("username", "username_or_handle", "handle"):
+        value = str(row.get(field) or "").strip().lower().lstrip("@")
+        if value:
+            aliases.update({value, "telegram:username:" + value, "telegram:" + value})
+    for field in ("canonical_url", "source_url", "keyword_hit_source_url", "post_url"):
+        value = str(row.get(field) or "").strip().lower().split("?", 1)[0].rstrip("/")
+        match = re.match(r"https?://t\.me/([a-z0-9_]+)(?:/[0-9]+)?$", value, flags=re.I)
+        if match:
+            handle = match.group(1).lower()
+            aliases.update({handle, "telegram:username:" + handle, "telegram:" + handle, "https://t.me/" + handle})
+    return aliases
+
+
+def _entity_cache_metrics(post_links: list[dict[str, Any]], entity_cache_rows: list[dict[str, Any]]) -> dict[str, int]:
+    valid_rows = [
+        row for row in entity_cache_rows
+        if str(row.get("channel_id_private") or "").strip() and str(row.get("access_hash_private") or "").strip()
+    ]
+    cached_aliases: set[str] = set()
+    for row in valid_rows:
+        cached_aliases.update(_source_aliases(row))
+    active_rows = [row for row in post_links if _post_link_state(row) not in {"terminal", "unknown"}]
+    cache_hits = [row for row in active_rows if _source_aliases(row) & cached_aliases]
+    entity_wait_rows = [row for row in active_rows if _post_link_state(row) == "entity_wait"]
+    return {
+        "telegram_entity_cache_rows_total": len(entity_cache_rows),
+        "telegram_entity_cache_valid_rows_total": len(valid_rows),
+        "telegram_entity_cache_invalid_rows_total": len(entity_cache_rows) - len(valid_rows),
+        "post_link_queue_entity_cache_hit_total": len(cache_hits),
+        "post_link_queue_entity_cache_miss_total": max(0, len(active_rows) - len(cache_hits)),
+        "post_link_queue_entity_wait_cache_now_available_total": sum(1 for row in entity_wait_rows if _source_aliases(row) & cached_aliases),
+    }
+
+
+def _post_link_state(row: dict[str, Any], *, now: datetime | None = None) -> str:
+    status = str(row.get("post_link_status") or "").strip().lower()
+    if status in POST_LINK_TERMINAL_STATUSES or status.startswith("terminal_"):
+        return "terminal"
+    if status == "retry_wait_entity_cache" or "entity_cache" in str(row.get("fetch_error_code") or "").lower():
+        return "entity_wait"
+    next_attempt = _parse_iso_datetime(row.get("next_attempt_after"))
+    current = now or datetime.now(timezone.utc)
+    if (next_attempt and next_attempt > current) or "cooldown" in status:
+        return "cooldown"
+    if status in POST_LINK_READY_STATUSES:
+        return "ready" if _is_public_telegram_post_url(_canonical_post_url(row)) else "unknown"
+    return "unknown"
+
+
+def _post_link_queue_metrics(
+    post_links: list[dict[str, Any]],
+    entity_cache_rows: list[dict[str, Any]] | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    current = now or datetime.now(timezone.utc)
+    states = [_post_link_state(row, now=current) for row in post_links]
+    urls = [_canonical_post_url(row) for row in post_links]
+    url_counts: dict[str, int] = {}
+    for url in urls:
+        if url:
+            url_counts[url] = url_counts.get(url, 0) + 1
+
+    def queue_key(item: tuple[dict[str, Any], str]) -> tuple[int, str, str]:
+        row, _state = item
+        return (
+            _safe_int(row.get("post_link_priority")),
+            str(row.get("first_seen_at") or row.get("created_at") or row.get("updated_at") or row.get("first_seen_run_id") or ""),
+            _canonical_post_url(row),
+        )
+
+    active = sorted(
+        [(row, state) for row, state in zip(post_links, states) if state != "terminal"],
+        key=queue_key,
+    )
+    blocked_prefix: list[tuple[dict[str, Any], str]] = []
+    for item in active:
+        if item[1] == "ready":
+            break
+        blocked_prefix.append(item)
+    if not any(state == "ready" for _, state in active):
+        blocked_prefix = active
+
+    metrics: dict[str, Any] = {
+        "post_link_queue_total": len(post_links),
+        "post_link_queue_exact_ready_total": states.count("ready"),
+        "post_link_queue_cooldown_total": states.count("cooldown"),
+        "post_link_queue_entity_wait_total": states.count("entity_wait"),
+        "post_link_queue_terminal_total": states.count("terminal"),
+        "post_link_queue_unknown_status_total": states.count("unknown"),
+        # Backward-compatible alias: pending means actionable now, not every
+        # retry/cooldown/entity-wait row.
+        "post_link_queue_pending_total": states.count("ready"),
+        "post_link_queue_fetched_total": sum(1 for row in post_links if str(row.get("post_link_status") or "").lower() == "fetched"),
+        "post_link_queue_unique_urls_total": len(url_counts),
+        "post_link_queue_integrity_missing_url_total": urls.count(""),
+        "post_link_queue_integrity_invalid_url_total": sum(1 for url in urls if url and not _is_public_telegram_post_url(url)),
+        "post_link_queue_integrity_duplicate_url_values_total": sum(1 for count in url_counts.values() if count > 1),
+        "post_link_queue_integrity_duplicate_url_rows_total": sum(max(0, count - 1) for count in url_counts.values()),
+        "post_link_queue_head_blocked_total": len(blocked_prefix),
+        "post_link_queue_head_blocked_cooldown_total": sum(1 for _, state in blocked_prefix if state == "cooldown"),
+        "post_link_queue_head_blocked_entity_wait_total": sum(1 for _, state in blocked_prefix if state == "entity_wait"),
+        "post_link_queue_head_blocked_integrity_total": sum(1 for _, state in blocked_prefix if state == "unknown"),
+        "post_link_queue_head_ready": int(bool(active and active[0][1] == "ready")),
+        "post_link_queue_head_url": _canonical_post_url(active[0][0]) if active else "",
+        "post_link_queue_head_state": active[0][1] if active else "empty",
+    }
+    metrics.update(_entity_cache_metrics(post_links, entity_cache_rows or []))
+    return metrics
+
+
+def _source_queue_integrity_metrics(source_rows: list[dict[str, Any]], cursor_position: int) -> dict[str, int]:
+    orders = [_safe_int(row.get("queue_order")) for row in source_rows]
+    positive = [order for order in orders if order > 0]
+    order_counts: dict[int, int] = {}
+    for order in positive:
+        order_counts[order] = order_counts.get(order, 0) + 1
+    return {
+        "source_queue_integrity_unordered_total": sum(1 for order in orders if order <= 0),
+        "source_queue_integrity_duplicate_order_values_total": sum(1 for count in order_counts.values() if count > 1),
+        "source_queue_integrity_duplicate_order_rows_total": sum(max(0, count - 1) for count in order_counts.values()),
+        "source_queue_integrity_cursor_past_max_total": int(bool(positive and cursor_position > max(positive))),
+    }
+
+
+def _inflow_kind(row: dict[str, Any]) -> str:
+    haystack = " ".join(str(row.get(field) or "") for field in (
+        "inflow_type", "intake_type", "added_from", "insertion_policy", "discovery_type", "edge_type",
+        "frontier_reason", "priority_reason", "source", "source_kind", "matched_query", "matched_hashtag",
+    )).lower()
+    if any(token in haystack for token in ("manual", "operator", "user_provided", "human_intake")):
+        return "manual"
+    if "hashtag" in haystack:
+        return "hashtag"
+    if "similar" in haystack or "recommendation" in haystack:
+        return "similar"
+    if "keyword" in haystack or "fast_check" in haystack:
+        return "keyword"
+    return "source"
+
+
+def _discovery_inflow_metrics(rows: list[dict[str, Any]]) -> dict[str, int]:
+    kinds = [_inflow_kind(row) for row in rows]
+    return {
+        "discovery_inflow_manual_total": kinds.count("manual"),
+        "discovery_inflow_keyword_total": kinds.count("keyword"),
+        "discovery_inflow_hashtag_total": kinds.count("hashtag"),
+        "discovery_inflow_similar_total": kinds.count("similar"),
+        "discovery_inflow_source_total": kinds.count("source"),
+    }
+
+
 def _vector_post_key(row: dict[str, Any]) -> str:
     post_url = str(row.get("post_url") or "").strip()
     if post_url:
@@ -457,14 +653,23 @@ def _vector_exact_text_key(row: dict[str, Any]) -> str:
     return "hash:" + text_sha
 
 
-def _text_vector_pair_metrics(e5_vectors: list[dict[str, Any]], bge_vectors: list[dict[str, Any]]) -> dict[str, int]:
+def _vector_row_timestamp(row: dict[str, Any]) -> datetime | None:
+    return _parse_iso_datetime(row.get("created_at") or row.get("_ydb_updated_at") or row.get("updated_at"))
+
+
+def _text_vector_pair_metrics(
+    e5_vectors: list[dict[str, Any]],
+    bge_vectors: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
     e5_post = {k for k in (_vector_post_key(r) for r in e5_vectors) if k}
     bge_post = {k for k in (_vector_post_key(r) for r in bge_vectors) if k}
     e5_exact = {k for k in (_vector_exact_text_key(r) for r in e5_vectors) if k}
     bge_exact = {k for k in (_vector_exact_text_key(r) for r in bge_vectors) if k}
     post_paired = e5_post & bge_post
     exact_paired = e5_exact & bge_exact
-    return {
+    metrics = {
         "text_vector_e5_unique_posts_total": len(e5_post),
         "text_vector_bge_m3_unique_posts_total": len(bge_post),
         "text_vector_dual_post_paired_total": len(post_paired),
@@ -476,6 +681,77 @@ def _text_vector_pair_metrics(e5_vectors: list[dict[str, Any]], bge_vectors: lis
         "text_vector_dual_post_coverage_percent": int(round((len(post_paired) / len(e5_post)) * 100)) if e5_post else 0,
         "text_vector_dual_exact_text_coverage_percent": int(round((len(exact_paired) / len(e5_exact)) * 100)) if e5_exact else 0,
     }
+
+    current_e5_rows = [row for row in e5_vectors if str(row.get("encoder_contract") or "") == CURRENT_E5_ENCODER_CONTRACT]
+    current_bge_rows = [row for row in bge_vectors if str(row.get("encoder_contract") or "") == CURRENT_BGE_M3_ENCODER_CONTRACT]
+    # Current means the newest E5 text per post under the active encoder
+    # contract. Historical hashes remain visible in raw metrics but must not
+    # masquerade as current BGE lag.
+    latest_e5_by_post: dict[str, dict[str, Any]] = {}
+    for row in current_e5_rows:
+        post_key = _vector_post_key(row)
+        exact_key = _vector_exact_text_key(row)
+        if not post_key or not exact_key:
+            continue
+        previous = latest_e5_by_post.get(post_key)
+        if previous is None or str(row.get("created_at") or row.get("_ydb_updated_at") or row.get("updated_at") or "") >= str(previous.get("created_at") or previous.get("_ydb_updated_at") or previous.get("updated_at") or ""):
+            latest_e5_by_post[post_key] = row
+
+    bge_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in current_bge_rows:
+        exact_key = _vector_exact_text_key(row)
+        version = str(row.get("semantic_bank_version") or "")
+        if not exact_key:
+            continue
+        key = (exact_key, version)
+        previous = bge_by_pair.get(key)
+        if previous is None or str(row.get("created_at") or row.get("_ydb_updated_at") or row.get("updated_at") or "") >= str(previous.get("created_at") or previous.get("_ydb_updated_at") or previous.get("updated_at") or ""):
+            bge_by_pair[key] = row
+
+    paired: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    pending: list[dict[str, Any]] = []
+    semantic_version_mismatch = 0
+    for e5_row in latest_e5_by_post.values():
+        exact_key = _vector_exact_text_key(e5_row)
+        version = str(e5_row.get("semantic_bank_version") or "")
+        bge_row = bge_by_pair.get((exact_key, version))
+        if bge_row is not None:
+            paired.append((e5_row, bge_row))
+            continue
+        if any(key[0] == exact_key for key in bge_by_pair):
+            semantic_version_mismatch += 1
+        pending.append(e5_row)
+
+    paired_lags = []
+    for e5_row, bge_row in paired:
+        e5_at = _vector_row_timestamp(e5_row)
+        bge_at = _vector_row_timestamp(bge_row)
+        if e5_at and bge_at:
+            paired_lags.append(max(0, int((bge_at - e5_at).total_seconds())))
+    current = now or datetime.now(timezone.utc)
+    pending_lags = [
+        max(0, int((current - created_at).total_seconds()))
+        for row in pending
+        if (created_at := _vector_row_timestamp(row)) is not None
+    ]
+    current_bge_posts = {key for key in (_vector_post_key(row) for row in current_bge_rows) if key}
+    current_total = len(latest_e5_by_post)
+    current_paired = len(paired)
+    metrics.update({
+        "text_vector_current_version_e5_unique_posts_total": current_total,
+        "text_vector_current_version_bge_m3_unique_posts_total": len(current_bge_posts),
+        "text_vector_current_version_dual_paired_total": current_paired,
+        "text_vector_current_version_e5_without_bge_total": len(pending),
+        "text_vector_current_version_semantic_bank_mismatch_total": semantic_version_mismatch,
+        "text_vector_current_version_dual_coverage_percent": int(round((current_paired / current_total) * 100)) if current_total else 0,
+        "text_vector_current_version_bge_pair_lag_seconds_avg": int(round(sum(paired_lags) / len(paired_lags))) if paired_lags else 0,
+        "text_vector_current_version_bge_pair_lag_seconds_max": max(paired_lags) if paired_lags else 0,
+        "text_vector_current_version_bge_pending_lag_seconds_avg": int(round(sum(pending_lags) / len(pending_lags))) if pending_lags else 0,
+        "text_vector_current_version_bge_pending_lag_seconds_max": max(pending_lags) if pending_lags else 0,
+        "text_vector_stale_version_e5_rows_total": len(e5_vectors) - len(current_e5_rows),
+        "text_vector_stale_version_bge_m3_rows_total": len(bge_vectors) - len(current_bge_rows),
+    })
+    return metrics
 
 
 REGEX_KO_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p, re.I) for p in [
@@ -644,6 +920,63 @@ def _image_queue_status_metrics(images: list[dict[str, Any]]) -> dict[str, int]:
         "image_not_reviewable_no_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_no_media"),
         "image_not_reviewable_unsupported_media_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "not_reviewable_unsupported_media"),
         "image_rejected_text_gate_total": sum(1 for r in images if str(r.get("image_queue_status") or "") == "rejected_text_gate"),
+    }
+
+
+def _latest_rows_by_post_url(rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:
+    latest: dict[str, dict[str, Any]] = {}
+    missing_url = 0
+    for row in rows:
+        url = _canonical_post_url(row)
+        if not url:
+            missing_url += 1
+            continue
+        previous = latest.get(url)
+        if previous is None or str(row.get("updated_at") or row.get("_ydb_updated_at") or row.get("created_at") or "") >= str(previous.get("updated_at") or previous.get("_ydb_updated_at") or previous.get("created_at") or ""):
+            latest[url] = row
+    return latest, missing_url
+
+
+def _publication_handoff_metrics(images: list[dict[str, Any]], publications: list[dict[str, Any]]) -> dict[str, Any]:
+    actual_rows = [
+        row for row in images
+        if str(row.get("image_queue_status") or "") == "actual_scored"
+        and str(row.get("image_model_input_type") or "") == "actual_image"
+    ]
+    actual_by_url, actual_missing_url = _latest_rows_by_post_url(actual_rows)
+    publication_by_url, publication_missing_url = _latest_rows_by_post_url(publications)
+    finalizer_pending_urls = sorted(set(actual_by_url) - set(publication_by_url))
+
+    confirmed_urls = {url for url, row in publication_by_url.items() if is_confirmed_publication(row)}
+    unsent_confirmed_urls = {url for url in confirmed_urls if is_unsent_confirmed_publication(publication_by_url[url])}
+    sent_urls = {
+        url for url, row in publication_by_url.items()
+        if str(row.get("sent_to_chat") or "").lower() == "true"
+        or str(row.get("publication_candidate_status") or "") == "sent_to_chat"
+    }
+    status_by_url = {url: str(row.get("publication_candidate_status") or "") for url, row in publication_by_url.items()}
+    image_product_ready_urls = {
+        url for url, row in actual_by_url.items()
+        if str(row.get("image_publication_ready") or "").lower() == "true"
+    }
+    return {
+        "image_actual_scored_urls_total": len(actual_by_url),
+        "image_actual_scored_missing_url_total": actual_missing_url,
+        "image_publication_ready_urls_total": len(image_product_ready_urls),
+        "publication_candidate_rows_total": len(publications),
+        "publication_candidate_total": len(publication_by_url),
+        "publication_candidate_missing_url_total": publication_missing_url,
+        # Publication-ready is the final, unsent verifier-accepted taxonomy. An
+        # image-ready or ready_for_llm row is not publication-ready yet.
+        "publication_ready_total": len(unsent_confirmed_urls),
+        "publication_confirmed_total": len(confirmed_urls),
+        "publication_sent_total": len(sent_urls),
+        "publication_unsent_confirmed_total": len(unsent_confirmed_urls),
+        "publication_verifier_pending_total": sum(1 for status in status_by_url.values() if status == "ready_for_llm"),
+        "publication_review_or_retry_total": sum(1 for status in status_by_url.values() if status in {"llm_needs_review", "llm_budget_deferred", "llm_error"}),
+        "publication_rejected_total": sum(1 for status in status_by_url.values() if status in {"filtered_before_llm", "llm_rejected"}),
+        "finalizer_pending_url_total": len(finalizer_pending_urls),
+        "finalizer_pending_urls": finalizer_pending_urls,
     }
 
 
@@ -1054,12 +1387,24 @@ def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready
     if not actions:
         return []
     if not execute_ready:
-        return [actions[0]]
+        return [next((action for action in actions if str(action.get("action") or "") == "launch_candidate_report"), actions[0])]
     max_count = max(1, int(max_actions or 1))
     if str(actions[0].get("action") or "") == "stop":
         return [actions[0]]
     selected: list[dict[str, Any]] = []
     used_resources: set[str] = set()
+    # Reserve the first execution slot for continuous exact/manual/discovery
+    # intake. Maintenance and enrichment actions must not starve DISCOVERY1.
+    for action in actions:
+        if str(action.get("action") or "") != "launch_candidate_report":
+            continue
+        selected.append(action)
+        resource = str(action.get("resource") or "")
+        if resource:
+            used_resources.add(resource)
+        break
+    if len(selected) >= max_count:
+        return selected
     for action in actions:
         if action.get("parallel_safe"):
             continue
@@ -1073,6 +1418,8 @@ def select_actions_for_execution(actions: list[dict[str, Any]], *, execute_ready
             return selected
     for action in actions:
         if not action.get("parallel_safe"):
+            continue
+        if str(action.get("action") or "") == "launch_candidate_report":
             continue
         resource = str(action.get("resource") or "")
         if resource and resource in used_resources:
@@ -1205,6 +1552,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
             "source_candidate_item",
             "source_edge_item",
             "comment_link_item",
+            "telegram_entity_cache_item",
             "candidate_memory_item",
             "image_queue_item",
             "publication_candidate_item",
@@ -1229,6 +1577,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     source_candidates = rows_by_kind["source_candidate_item"]
     source_edges = rows_by_kind["source_edge_item"]
     comment_links = rows_by_kind["comment_link_item"]
+    entity_cache_rows = rows_by_kind["telegram_entity_cache_item"]
     cursors = rows_by_kind["queue_cursor"]
     source_rows = _merge_source_rows(
         rows_by_kind["source_queue_item"],
@@ -1254,9 +1603,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
     image_in_progress = [r for r in images if str(r.get("image_queue_status") or "") == "image_analysis_in_progress"]
     image_actual = [r for r in images if str(r.get("image_queue_status") or "") == "actual_scored" and str(r.get("image_model_input_type") or "") == "actual_image"]
     image_terminal_metrics = _image_queue_status_metrics(images)
-    confirmed = [r for r in publications if is_confirmed_publication(r)]
-    unsent_confirmed = [r for r in publications if is_unsent_confirmed_publication(r)]
-    sent = [r for r in publications if str(r.get("sent_to_chat") or "").lower() == "true" or str(r.get("publication_candidate_status") or "") == "sent_to_chat"]
+    publication_metrics = _publication_handoff_metrics(images, publications)
     e5_vectors = [r for r in vectors if str(r.get("model_short") or "") == "e5" or str(r.get("model_id") or "").startswith("intfloat/multilingual-e5")]
     bge_vectors = [r for r in vectors if str(r.get("model_short") or "") == "bge_m3" or str(r.get("model_id") or "") == "BAAI/bge-m3"]
     vector_pair_metrics = _text_vector_pair_metrics(e5_vectors, bge_vectors)
@@ -1295,6 +1642,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         if name and ":" not in name and _cursor_row_is_better(cursor_by_name.get(name), row, name):
             cursor_by_name[name] = row
     source_cursor_position = _safe_int((cursor_by_name.get("unified_source_queue") or cursor_by_name.get("source_scan") or {}).get("cursor_position") or 0)
+    source_queue_integrity_metrics = _source_queue_integrity_metrics(source_rows, source_cursor_position)
     source_primary_unscanned_pending = [
         r for r, status in zip(source_rows, source_statuses)
         if status in {"", "pending_scan"} and _safe_int(r.get("posts_scanned")) <= 0 and not str(r.get("last_scan_run_id") or r.get("last_history_fetch_at") or "").strip()
@@ -1346,6 +1694,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         prefix="publics_similar",
         predicate=_is_similar_discovered_source,
     )
+    inflow_metrics = _discovery_inflow_metrics([*source_rows, *source_candidates, *source_edges, *post_links])
     strong_images_ge_066 = [
         r for r in images
         if str(r.get("image_queue_status") or "") == "actual_scored"
@@ -1358,15 +1707,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         and str(r.get("image_model_input_type") or "") == "actual_image"
         and float(r.get("overall_media_score") or r.get("final_visual_score") or 0) >= 0.70
     ]
-    publication_ready = [
-        r for r in publications
-        if str(r.get("publication_candidate_status") or "") in {"publication_ready", "accepted_for_publication"}
-        or str(r.get("publication_status") or "") == "publication_ready"
-    ]
-    post_link_statuses = [str(r.get("post_link_status") or "") for r in post_links]
-    post_link_pending = [r for r, status in zip(post_links, post_link_statuses) if status in {"", "pending_fetch", "retry_fetch", "fetch_error"}]
-    post_link_fetched = [r for r, status in zip(post_links, post_link_statuses) if status == "fetched"]
-    post_link_terminal = [r for r, status in zip(post_links, post_link_statuses) if status.startswith("terminal_")]
+    post_link_metrics = _post_link_queue_metrics(post_links, entity_cache_rows)
     post_link_source_keys = {str(r.get("canonical_source_key") or r.get("source_key") or "") for r in post_links if str(r.get("canonical_source_key") or r.get("source_key") or "").strip()}
     fast_check_rows = [r for r in source_rows if str(r.get("fast_check_status") or "").strip()]
     fast_check_hit_rows = [r for r in fast_check_rows if str(r.get("fast_check_status") or "") == "ko_hit"]
@@ -1419,16 +1760,17 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **similar_source_metrics,
         **keyword_latest_run_metrics,
         **similar_latest_run_metrics,
+        **inflow_metrics,
+        **source_queue_integrity_metrics,
         "source_candidates_total": len(source_candidates),
         "source_edges_total": len(source_edges),
         "comment_link_rows_total": len(comment_links),
-        "post_link_queue_total": len(post_links),
-        "post_link_queue_pending_total": len(post_link_pending),
-        "post_link_queue_fetched_total": len(post_link_fetched),
-        "post_link_queue_terminal_total": len(post_link_terminal),
+        **post_link_metrics,
         "post_link_queue_unique_sources_total": len(post_link_source_keys),
-        "post_link_queue_keyword_total": sum(1 for r in post_links if "keyword" in str(r.get("priority_reason") or r.get("discovery_type") or "")),
-        "post_link_queue_hashtag_total": sum(1 for r in post_links if "hashtag" in str(r.get("priority_reason") or r.get("discovery_type") or "")),
+        "post_link_queue_manual_total": sum(1 for r in post_links if _inflow_kind(r) == "manual"),
+        "post_link_queue_keyword_total": sum(1 for r in post_links if _inflow_kind(r) == "keyword"),
+        "post_link_queue_hashtag_total": sum(1 for r in post_links if _inflow_kind(r) == "hashtag"),
+        "post_link_queue_similar_total": sum(1 for r in post_links if _inflow_kind(r) == "similar"),
         "fast_check_ko_sources_total": len(fast_check_rows),
         "fast_check_ko_hit_sources_total": len(fast_check_hit_rows),
         "fast_check_ko_no_hit_sources_total": len(fast_check_no_hit_rows),
@@ -1460,11 +1802,7 @@ def read_region_talk_queue_metrics(limit: int, *, bge_sample_limit: int, allow_y
         **image_terminal_metrics,
         "image_strong_actual_ge_0_66_total": len(strong_images_ge_066),
         "image_strong_actual_ge_0_70_total": len(strong_images),
-        "publication_candidate_total": len(publications),
-        "publication_ready_total": len(publication_ready),
-        "publication_confirmed_total": len(confirmed),
-        "publication_sent_total": len(sent),
-        "publication_unsent_confirmed_total": len(unsent_confirmed),
+        **publication_metrics,
         "text_vector_enrichment_total": len(vectors),
         "text_vector_e5_total": len(e5_vectors),
         "text_vector_bge_m3_total": len(bge_vectors),
@@ -1493,23 +1831,42 @@ def build_decision_plan(
     image_threshold: int,
     include_main: bool = True,
 ) -> list[dict[str, Any]]:
-    if int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed:
-        return [{"action": "stop", "reason": "target_confirmed_reached"}]
     actions: list[dict[str, Any]] = []
     if int(metrics.get("publication_unsent_confirmed_total") or 0) > 0:
         actions.append(_action("notify_confirmed", ["python3", "scripts/region_talk_goal_notify.py", "--limit", "20"], "confirmed rows not sent to operator chat", resource="telegram:e2e", timeout_seconds=180))
+
+    # Discovery/manual intake is continuous product work, not a recommendation
+    # that stops when the publication goal is reached. ``include_main`` remains
+    # accepted for CLI/API compatibility, but can no longer disable this lane.
+    goal_reached = int(metrics.get("publication_sent_total") or 0) >= target_confirmed or int(metrics.get("publication_confirmed_total") or 0) >= target_confirmed
+    actions.append(_action(
+        "launch_candidate_report",
+        ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"],
+        "continue exact-link intake and all discovery methods" + (" after publication goal" if goal_reached else ""),
+        resource="telegram:DISCOVERY1",
+        parallel_safe=True,
+        timeout_seconds=300,
+        env=MAIN_DISCOVERY_YDB_BUDGET_ENV,
+    ))
 
     # Pipeline invariant: after the main notebook writes fresh E5 rows, BGE is
     # the next required consumer. Do not let finalizer/image actions hide this
     # backlog; BGE has no Telegram session and can run in parallel with both
     # CandidateReport(DISCOVERY1) and ImageDiagnostic(DISCOVERY2).
-    bge_backlog = max(
-        int(metrics.get("text_vector_e5_without_bge_exact_text_total") or 0),
-        int(metrics.get("bge_pending_sample_total") or 0),
+    current_backlog_key = "text_vector_current_version_e5_without_bge_total"
+    pair_backlog = (
+        int(metrics.get(current_backlog_key) or 0)
+        if current_backlog_key in metrics
+        else int(metrics.get("text_vector_e5_without_bge_exact_text_total") or 0)
     )
+    bge_backlog = max(pair_backlog, int(metrics.get("bge_pending_sample_total") or 0))
     if bge_backlog >= bge_threshold:
-        bge_batch_limit = _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", 24)
-        bge_batch_size = _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE", 4)
+        external_cpu_capacity = max(1, _env_int("REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS", 48))
+        requested_limit = max(1, _env_int("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", external_cpu_capacity))
+        bge_batch_limit = min(requested_limit, external_cpu_capacity)
+        # The external BGE runtime has a measured batch-size contract of four.
+        # CandidateReport remains E5-only, while this process loads BGE only.
+        bge_batch_size = 4
         actions.append(_action(
             "launch_bge_m3",
             [
@@ -1526,6 +1883,7 @@ def build_decision_plan(
                 "REGION_TALK_BGE_E5_ONLY": "1",
                 "REGION_TALK_BGE_INPUT_KINDS": "text_vector_enrichment_item",
                 "REGION_TALK_BGE_YDB_SCAN_LIMIT": "6000",
+                "REGION_TALK_BGE_BATCH_SIZE": "4",
             },
         ))
     if int(metrics.get("image_pending_total") or 0) >= image_threshold:
@@ -1537,20 +1895,14 @@ def build_decision_plan(
             parallel_safe=True,
             timeout_seconds=300,
         ))
-    if include_main:
+    if int(metrics.get("finalizer_pending_url_total") or 0) > 0:
         actions.append(_action(
-            "launch_candidate_report",
-            ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"],
-            "continue main discovery/E5 producer in parallel when DISCOVERY1 is free",
-            resource="telegram:DISCOVERY1",
-            parallel_safe=True,
-            timeout_seconds=300,
-            env=MAIN_DISCOVERY_YDB_BUDGET_ENV,
+            "run_finalizer",
+            ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"],
+            f"{int(metrics.get('finalizer_pending_url_total') or 0)} actual-image post URLs have no publication row",
+            resource="local:gemini",
+            timeout_seconds=900,
         ))
-    if int(metrics.get("image_actual_scored_total") or 0) > int(metrics.get("publication_candidate_total") or 0):
-        actions.append(_action("run_finalizer", ["python3", "scripts/region_talk_publication_finalizer.py", "--max-llm", "3"], "actual images exist beyond publication rows", resource="local:gemini", timeout_seconds=900))
-    if not actions:
-        actions.append(_action("launch_candidate_report", ["python3", "kaggle/execute_region_talk_candidate_report.py", "--max-sources", "6", "--no-wait"], "produce new E5/discovery rows", resource="telegram:DISCOVERY1", parallel_safe=True, timeout_seconds=300, env=MAIN_DISCOVERY_YDB_BUDGET_ENV))
     return actions
 
 
@@ -1626,7 +1978,7 @@ def main() -> int:
     parser.add_argument("--image-threshold", type=int, default=1)
     parser.add_argument("--stats-message", action="store_true", help="also include human stats text")
     parser.add_argument("--allow-yc-fallback", action="store_true", help="allow local /home/dev/yandex-cloud/bin/yc to discover endpoint/database and mint IAM token")
-    parser.add_argument("--no-main", action="store_true", help="do not include CandidateReport producer in the plan")
+    parser.add_argument("--no-main", action="store_true", help="deprecated compatibility flag; CandidateReport discovery/manual intake remains enabled")
     parser.add_argument("--execute", action="store_true", help="execute the first planned action (default: dry-run only)")
     parser.add_argument("--execute-ready", action="store_true", help="execute all non-conflicting parallel-safe launch actions in this cycle")
     parser.add_argument("--max-actions-per-cycle", type=int, default=4)

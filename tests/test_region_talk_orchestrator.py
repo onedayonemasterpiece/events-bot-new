@@ -6,6 +6,7 @@ import io
 import os
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -34,50 +35,56 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_candidate_total": 3,
                 "bge_pending_sample_total": 4,
                 "image_pending_total": 7,
+                "finalizer_pending_url_total": 2,
             },
             target_confirmed=20,
             bge_threshold=1,
             image_threshold=1,
         )
-        self.assertEqual([a["action"] for a in actions[:5]], ["notify_confirmed", "launch_bge_m3", "launch_image_diagnostic", "launch_candidate_report", "run_finalizer"])
-        self.assertTrue(actions[1]["parallel_safe"])
-        self.assertTrue(actions[2]["parallel_safe"])
-        self.assertTrue(actions[3]["parallel_safe"])
-        self.assertIn("--batch-limit", actions[1]["cmd"])
-        self.assertIn("24", actions[1]["cmd"])
-        self.assertIn("--batch-size", actions[1]["cmd"])
-        self.assertIn("4", actions[1]["cmd"])
-        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_E5_ONLY"], "1")
-        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_INPUT_KINDS"], "text_vector_enrichment_item")
-        self.assertEqual(actions[1]["env"]["REGION_TALK_BGE_YDB_SCAN_LIMIT"], "6000")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TEXT_EMBEDDING_MODEL_IDS"], "intfloat/multilingual-e5-base")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF"], "0")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS"], "720")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "20")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "6")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "0")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "6000")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
-        self.assertIn("--max-sources", actions[3]["cmd"])
-        self.assertIn("6", actions[3]["cmd"])
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "3")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "4")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "2")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"], "2")
-        self.assertEqual(actions[3]["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "300")
+        self.assertEqual([a["action"] for a in actions[:5]], ["notify_confirmed", "launch_candidate_report", "launch_bge_m3", "launch_image_diagnostic", "run_finalizer"])
+        by_name = {action["action"]: action for action in actions}
+        main = by_name["launch_candidate_report"]
+        bge = by_name["launch_bge_m3"]
+        self.assertTrue(main["parallel_safe"])
+        self.assertTrue(bge["parallel_safe"])
+        self.assertTrue(by_name["launch_image_diagnostic"]["parallel_safe"])
+        self.assertIn("--batch-limit", bge["cmd"])
+        self.assertIn("48", bge["cmd"])
+        self.assertIn("--batch-size", bge["cmd"])
+        self.assertIn("4", bge["cmd"])
+        self.assertEqual(bge["env"]["REGION_TALK_BGE_E5_ONLY"], "1")
+        self.assertEqual(bge["env"]["REGION_TALK_BGE_INPUT_KINDS"], "text_vector_enrichment_item")
+        self.assertEqual(bge["env"]["REGION_TALK_BGE_BATCH_SIZE"], "4")
+        self.assertEqual(bge["env"]["REGION_TALK_BGE_YDB_SCAN_LIMIT"], "6000")
+        self.assertEqual(main["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
+        self.assertEqual(main["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_TEXT_EMBEDDING_MODEL_IDS"], "intfloat/multilingual-e5-base")
+        self.assertEqual(main["env"]["REGION_TALK_REQUIRE_EXTERNAL_BGE_M3_FOR_IMAGE_QUEUE"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_IMAGE_QUEUE_HANDOFF"], "0")
+        self.assertEqual(main["env"]["REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF"], "0")
+        self.assertEqual(main["env"]["REGION_TALK_NOTEBOOK_MAX_RUNTIME_SECONDS"], "1200")
+        self.assertEqual(main["env"]["REGION_TALK_SOURCE_SELECTION_YDB_QUEUE_ONLY"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_POSTS_PER_SOURCE"], "20")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_HISTORY_SOURCES_PER_RUN"], "6")
+        self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FETCH_FIRST"], "0")
+        self.assertEqual(main["env"]["REGION_TALK_TG_PUBLIC_WEB_FALLBACK"], "0")
+        self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+        self.assertEqual(main["env"]["REGION_TALK_TG_CACHED_ENTITY_ONLY"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_SOURCE_QUEUE_UNCACHED_RESOLVE_LANE_PER_RUN"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_TG_MAX_NETWORK_RESOLVES_PER_RUN"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_TG_EXACT_POST_NETWORK_RESOLVE_BUDGET_PER_RUN"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_SOURCE_ROWS"], "6000")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS"], "6000")
+        self.assertIn("--max-sources", main["cmd"])
+        self.assertIn("6", main["cmd"])
+        self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_MAX_SEED_CHANNELS_PER_RUN"], "3")
+        self.assertEqual(main["env"]["REGION_TALK_TELEGRAM_QUERY_SOURCE"], "place_lexicon")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_QUERIES"], "4")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "2")
+        self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"], "2")
+        self.assertEqual(main["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "300")
 
 
     def test_bge_batch_limit_is_configurable_for_backlog_catchup(self) -> None:
@@ -104,7 +111,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             )
             bge = next(a for a in actions if a["action"] == "launch_bge_m3")
             self.assertIn("36", bge["cmd"])
-            self.assertIn("6", bge["cmd"])
+            batch_size_index = bge["cmd"].index("--batch-size") + 1
+            self.assertEqual(bge["cmd"][batch_size_index], "4")
         finally:
             if old_limit is None:
                 os.environ.pop("REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT", None)
@@ -114,6 +122,25 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 os.environ.pop("REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE", None)
             else:
                 os.environ["REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE"] = old_size
+
+    def test_bge_batch_limit_respects_external_cpu_runtime_capacity(self) -> None:
+        mod = load_module()
+        with mock.patch.dict(os.environ, {
+            "REGION_TALK_EXTERNAL_CPU_BGE_CAPACITY_ROWS": "24",
+            "REGION_TALK_ORCHESTRATOR_BGE_BATCH_LIMIT": "60",
+            "REGION_TALK_ORCHESTRATOR_BGE_BATCH_SIZE": "9",
+        }):
+            actions = mod.build_decision_plan(
+                {"text_vector_current_version_e5_without_bge_total": 100},
+                target_confirmed=20,
+                bge_threshold=1,
+                image_threshold=1,
+            )
+        bge = next(action for action in actions if action["action"] == "launch_bge_m3")
+        limit_index = bge["cmd"].index("--batch-limit") + 1
+        size_index = bge["cmd"].index("--batch-size") + 1
+        self.assertEqual(bge["cmd"][limit_index], "24")
+        self.assertEqual(bge["cmd"][size_index], "4")
 
     def test_processed_post_metric_limit_is_not_capped_by_debug_source_limit(self) -> None:
         mod = load_module()
@@ -207,6 +234,114 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["text_vector_bge_without_e5_exact_text_total"], 1)
         self.assertEqual(metrics["text_vector_dual_exact_text_coverage_percent"], 50)
 
+    def test_current_vector_pairing_and_lag_ignore_stale_hashes_and_contracts(self) -> None:
+        mod = load_module()
+        now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+        e5 = [
+            {"post_url": "https://t.me/a/1", "text_hash": "old", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T08:00:00Z"},
+            {"post_url": "https://t.me/a/1", "text_hash": "h1", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T10:00:00Z"},
+            {"post_url": "https://t.me/b/2", "text_hash": "h2", "encoder_contract": mod.CURRENT_E5_ENCODER_CONTRACT, "semantic_bank_version": "v2", "created_at": "2026-07-10T09:00:00Z"},
+            {"post_url": "https://t.me/stale/3", "text_hash": "h3", "encoder_contract": "e5_legacy", "semantic_bank_version": "v1", "created_at": "2026-07-10T09:00:00Z"},
+        ]
+        bge = [
+            {"post_url": "https://t.me/a/1", "text_hash": "h1", "paired_e5_text_hash": "h1", "encoder_contract": mod.CURRENT_BGE_M3_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T10:02:00Z"},
+            {"post_url": "https://t.me/b/2", "text_hash": "h2", "paired_e5_text_hash": "h2", "encoder_contract": mod.CURRENT_BGE_M3_ENCODER_CONTRACT, "semantic_bank_version": "v1", "created_at": "2026-07-10T09:05:00Z"},
+        ]
+        metrics = mod._text_vector_pair_metrics(e5, bge, now=now)
+        self.assertEqual(metrics["text_vector_current_version_e5_unique_posts_total"], 2)
+        self.assertEqual(metrics["text_vector_current_version_dual_paired_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_e5_without_bge_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_semantic_bank_mismatch_total"], 1)
+        self.assertEqual(metrics["text_vector_current_version_dual_coverage_percent"], 50)
+        self.assertEqual(metrics["text_vector_current_version_bge_pair_lag_seconds_max"], 120)
+        self.assertEqual(metrics["text_vector_current_version_bge_pending_lag_seconds_max"], 10800)
+        self.assertEqual(metrics["text_vector_stale_version_e5_rows_total"], 1)
+
+    def test_post_link_queue_states_head_blocking_integrity_and_entity_cache(self) -> None:
+        mod = load_module()
+        now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+        rows = [
+            {"post_url": "https://t.me/cool/1", "post_link_status": "retry_fetch", "post_link_priority": 0, "next_attempt_after": "2026-07-10T13:00:00Z"},
+            {"post_url": "https://t.me/wait/2", "post_link_status": "retry_wait_entity_cache", "post_link_priority": 1, "handle": "@wait"},
+            {"post_url": "https://t.me/ready/3", "post_link_status": "pending_fetch", "post_link_priority": 2},
+            {"post_url": "https://t.me/ready/3?single=1", "post_link_status": "fetch_error", "post_link_priority": 3},
+            {"post_url": "https://t.me/done/4", "post_link_status": "fetched", "post_link_priority": 0},
+            {"post_url": "not-a-post", "post_link_status": "pending_fetch", "post_link_priority": 4},
+        ]
+        cache = [{"entity_cache_key": "telegram:username:wait", "username": "wait", "channel_id_private": "1", "access_hash_private": "2"}]
+        metrics = mod._post_link_queue_metrics(rows, cache, now=now)
+        self.assertEqual(metrics["post_link_queue_exact_ready_total"], 2)
+        self.assertEqual(metrics["post_link_queue_cooldown_total"], 1)
+        self.assertEqual(metrics["post_link_queue_entity_wait_total"], 1)
+        self.assertEqual(metrics["post_link_queue_terminal_total"], 1)
+        self.assertEqual(metrics["post_link_queue_unknown_status_total"], 1)
+        self.assertEqual(metrics["post_link_queue_head_blocked_total"], 2)
+        self.assertEqual(metrics["post_link_queue_head_blocked_cooldown_total"], 1)
+        self.assertEqual(metrics["post_link_queue_head_blocked_entity_wait_total"], 1)
+        self.assertEqual(metrics["post_link_queue_integrity_duplicate_url_rows_total"], 1)
+        self.assertEqual(metrics["post_link_queue_integrity_invalid_url_total"], 1)
+        self.assertEqual(metrics["telegram_entity_cache_valid_rows_total"], 1)
+        self.assertEqual(metrics["post_link_queue_entity_wait_cache_now_available_total"], 1)
+
+    def test_manual_keyword_hashtag_similar_inflow_metrics_are_distinct(self) -> None:
+        mod = load_module()
+        metrics = mod._discovery_inflow_metrics([
+            {"added_from": "manual_seed"},
+            {"discovery_type": "telegram_keyword_search"},
+            {"discovery_type": "telegram_hashtag_search", "matched_hashtag": "#kaliningrad"},
+            {"edge_type": "telegram_similar_channel"},
+            {"added_from": "source_history"},
+        ])
+        self.assertEqual(metrics["discovery_inflow_manual_total"], 1)
+        self.assertEqual(metrics["discovery_inflow_keyword_total"], 1)
+        self.assertEqual(metrics["discovery_inflow_hashtag_total"], 1)
+        self.assertEqual(metrics["discovery_inflow_similar_total"], 1)
+        self.assertEqual(metrics["discovery_inflow_source_total"], 1)
+
+    def test_source_queue_integrity_reports_unordered_duplicate_and_bad_cursor(self) -> None:
+        mod = load_module()
+        metrics = mod._source_queue_integrity_metrics(
+            [{"queue_order": 1}, {"queue_order": 1}, {"queue_order": 0}],
+            cursor_position=5,
+        )
+        self.assertEqual(metrics["source_queue_integrity_unordered_total"], 1)
+        self.assertEqual(metrics["source_queue_integrity_duplicate_order_values_total"], 1)
+        self.assertEqual(metrics["source_queue_integrity_duplicate_order_rows_total"], 1)
+        self.assertEqual(metrics["source_queue_integrity_cursor_past_max_total"], 1)
+
+    def test_publication_taxonomy_and_finalizer_are_url_level(self) -> None:
+        mod = load_module()
+        images = [
+            {"post_url": "https://t.me/a/1", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
+            {"post_url": "https://t.me/b/2", "image_queue_status": "actual_scored", "image_model_input_type": "actual_image", "image_publication_ready": "true"},
+        ]
+        publications = [
+            {"post_url": "https://t.me/a/1", "publication_candidate_status": "llm_confirmed", "sent_to_chat": "false"},
+            {"post_url": "https://t.me/c/3", "publication_candidate_status": "filtered_before_llm"},
+        ]
+        metrics = mod._publication_handoff_metrics(images, publications)
+        self.assertEqual(metrics["publication_candidate_total"], 2)
+        self.assertEqual(metrics["publication_ready_total"], 1)
+        self.assertEqual(metrics["publication_confirmed_total"], 1)
+        self.assertEqual(metrics["publication_rejected_total"], 1)
+        self.assertEqual(metrics["finalizer_pending_url_total"], 1)
+        self.assertEqual(metrics["finalizer_pending_urls"], ["https://t.me/b/2"])
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertIn("run_finalizer", [action["action"] for action in actions])
+
+    def test_current_vector_backlog_drives_bge_instead_of_stale_aggregate(self) -> None:
+        mod = load_module()
+        metrics = {
+            "text_vector_current_version_e5_without_bge_total": 0,
+            "text_vector_e5_without_bge_exact_text_total": 99,
+            "bge_pending_sample_total": 0,
+        }
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertNotIn("launch_bge_m3", [action["action"] for action in actions])
+        metrics["text_vector_current_version_e5_without_bge_total"] = 1
+        actions = mod.build_decision_plan(metrics, target_confirmed=20, bge_threshold=1, image_threshold=1)
+        self.assertIn("launch_bge_m3", [action["action"] for action in actions])
+
     def test_decision_launches_bge_from_e5_pair_backlog_even_when_sample_metric_missing(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan(
@@ -224,7 +359,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
             bge_threshold=1,
             image_threshold=1,
         )
-        self.assertEqual(actions[0]["action"], "launch_bge_m3")
+        self.assertIn("launch_bge_m3", [action["action"] for action in actions])
 
     def test_regex_ko_diagnostic_keeps_filtered_ko_but_rejects_multiregion(self) -> None:
         mod = load_module()
@@ -372,14 +507,15 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_candidate_total": 3,
                 "bge_pending_sample_total": 4,
                 "image_pending_total": 7,
+                "finalizer_pending_url_total": 2,
             },
             target_confirmed=20,
             bge_threshold=1,
             image_threshold=1,
         )
         selected = mod.select_actions_for_execution(actions, execute_ready=True, max_actions=3)
-        self.assertEqual([a["action"] for a in selected], ["launch_bge_m3", "launch_image_diagnostic", "launch_candidate_report"])
-        self.assertEqual([a["resource"] for a in selected], ["kaggle:bge_m3", "telegram:DISCOVERY2", "telegram:DISCOVERY1"])
+        self.assertEqual([a["action"] for a in selected], ["launch_candidate_report", "launch_bge_m3", "launch_image_diagnostic"])
+        self.assertEqual([a["resource"] for a in selected], ["telegram:DISCOVERY1", "kaggle:bge_m3", "telegram:DISCOVERY2"])
 
     def test_execute_ready_can_include_local_finalizer_after_parallel_launches(self) -> None:
         mod = load_module()
@@ -392,18 +528,40 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_candidate_total": 3,
                 "bge_pending_sample_total": 4,
                 "image_pending_total": 7,
+                "finalizer_pending_url_total": 2,
             },
             target_confirmed=20,
             bge_threshold=1,
             image_threshold=1,
         )
         selected = mod.select_actions_for_execution(actions, execute_ready=True, max_actions=4)
-        self.assertEqual([a["action"] for a in selected], ["launch_bge_m3", "launch_image_diagnostic", "launch_candidate_report", "run_finalizer"])
+        self.assertEqual([a["action"] for a in selected], ["launch_candidate_report", "launch_bge_m3", "launch_image_diagnostic", "run_finalizer"])
 
-    def test_decision_stops_at_target(self) -> None:
+    def test_decision_keeps_discovery_enabled_at_target(self) -> None:
         mod = load_module()
         actions = mod.build_decision_plan({"publication_confirmed_total": 20, "publication_sent_total": 0}, target_confirmed=20, bge_threshold=1, image_threshold=1)
-        self.assertEqual(actions, [{"action": "stop", "reason": "target_confirmed_reached"}])
+        self.assertEqual([action["action"] for action in actions], ["launch_candidate_report"])
+        self.assertIn("after publication goal", actions[0]["reason"])
+
+    def test_include_main_false_cannot_disable_discovery_or_manual_intake(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan({}, target_confirmed=20, bge_threshold=1, image_threshold=1, include_main=False)
+        main = next(action for action in actions if action["action"] == "launch_candidate_report")
+        self.assertEqual(main["env"]["REGION_TALK_FETCH_POST_LINK_QUEUE_FIRST"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_POST_LINK_QUEUE_FETCH_LIMIT"], "3")
+        self.assertEqual(main["env"]["REGION_TALK_ENABLE_TELEGRAM_KEYWORD_DISCOVERY"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_TG_SIMILAR_ENABLED"], "1")
+
+    def test_single_action_execution_reserves_discovery_slot(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {"publication_unsent_confirmed_total": 1},
+            target_confirmed=20,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        selected = mod.select_actions_for_execution(actions, execute_ready=False, max_actions=1)
+        self.assertEqual([action["action"] for action in selected], ["launch_candidate_report"])
 
     def test_filter_actions_skips_active_kaggle_kernels(self) -> None:
         mod = load_module()
@@ -467,6 +625,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_candidate_total": 3,
                 "bge_pending_sample_total": 4,
                 "image_pending_total": 7,
+                "finalizer_pending_url_total": 2,
             },
             target_confirmed=20,
             bge_threshold=1,
@@ -487,6 +646,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_candidate_total": 3,
                 "bge_pending_sample_total": 4,
                 "image_pending_total": 7,
+                "finalizer_pending_url_total": 2,
             },
             target_confirmed=20,
             bge_threshold=1,
@@ -495,7 +655,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         kept, skipped = mod.filter_actions_for_active_kernels(actions, {"region-talk-bge-m3-enrichment": "RUNNING"})
         self.assertIn({"action": "launch_bge_m3", "kernel_slug": "region-talk-bge-m3-enrichment", "status": "RUNNING", "reason": "kernel_already_active"}, skipped)
         selected = mod.select_actions_for_execution(kept, execute_ready=True, max_actions=3)
-        self.assertEqual([a["action"] for a in selected], ["launch_image_diagnostic", "launch_candidate_report", "run_finalizer"])
+        self.assertEqual([a["action"] for a in selected], ["launch_candidate_report", "launch_image_diagnostic", "run_finalizer"])
 
     def test_prepare_action_command_injects_env_file_and_run_id(self) -> None:
         mod = load_module()
