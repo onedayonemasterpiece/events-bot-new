@@ -255,6 +255,8 @@ Important invariants:
   observability sheets. This avoids spending several tail minutes repeatedly
   serializing the full multi-thousand-row source ledger. A deliberate offline
   audit can unset the flag to build the full workbook.
+  The launcher must serialize this flag into `region_talk_run_config.json`;
+  setting it only in the local orchestrator process does not affect Kaggle.
 - CandidateReport, BGE-M3 and ImageDiagnostic share one Kaggle input-dataset
   readiness contract. It accepts both Kaggle SDK file objects and the mapping
   rows returned by the project wrapper; a ready dataset must not consume its

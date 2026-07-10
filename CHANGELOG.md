@@ -34,7 +34,9 @@
 - **Region Talk / lightweight live report tail**: orchestrated CandidateReport
   runs keep full state in YDB and export only product/funnel/shortlist and
   observability sheets, instead of repeatedly serializing the 7k source ledger
-  into a large workbook plus duplicate JSON/HTML artifacts.
+  into a large workbook plus duplicate JSON/HTML artifacts. The Kaggle launcher
+  now actually serializes the lightweight flag into its run config; previously
+  the notebook silently built all 58 sheets despite the orchestrator setting.
 - **Region Talk / Kaggle dataset readiness**: the shared CandidateReport/BGE/
   ImageDiagnostic launcher now recognizes mapping-shaped file rows returned by
   the Kaggle wrapper, avoiding false four-minute waits on already-ready input
