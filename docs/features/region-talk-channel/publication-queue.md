@@ -99,7 +99,9 @@ row. Finalizer/CandidateReport writers preserve these sent markers.
 
 Invite links are checked without joining first. A one-time join requires the
 explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
-expected numeric peer and fail closed on a wrong target.
+expected numeric peer and fail closed on a wrong target. Every notifier result,
+including a zero-row dry run, reports the resolved numeric chat and delivery
+account ids so operators can pin them without sending a test message.
 
 Example:
 

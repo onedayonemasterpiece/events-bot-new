@@ -16,7 +16,8 @@
   deduplicates canonical post URL plus numeric chat id, persists a deterministic
   Telegram `random_id` before send, records a delivery ledger, locks the local
   E2E sender, checks invites before joining, and preserves delivery markers in
-  later CandidateReport/finalizer writes.
+  later CandidateReport/finalizer writes. Dry-run results expose resolved chat
+  and account ids for target pinning without a test message.
 - **Region Talk / current-text dual fusion**: BGE-M3 lookup no longer falls back
   to stale URL/post-id vectors when a current text hash is available; mismatched
   hashes remain deferred instead of being labelled fused.

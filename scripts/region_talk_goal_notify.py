@@ -554,6 +554,8 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
     client = TelegramClient(StringSession(auth["session"]), auth["api_id"], auth["api_hash"], **auth.get("device", {}))
     await client.connect()
     sent: list[dict[str, Any]] = []
+    chat_id = ""
+    actual_account_id = ""
     try:
         if not await client.is_user_authorized():
             raise RuntimeError("local E2E Telegram session is not authorized")
@@ -627,7 +629,14 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         await client.disconnect()
         if driver is not None:
             driver.stop()
-    return {"ok": True, "sent": sent, "sent_count": len(sent), "dry_run": bool(args.dry_run)}
+    return {
+        "ok": True,
+        "sent": sent,
+        "sent_count": len(sent),
+        "dry_run": bool(args.dry_run),
+        "resolved_chat_id": chat_id,
+        "delivery_account_id": actual_account_id,
+    }
 
 
 def main() -> int:
