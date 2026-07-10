@@ -6,7 +6,7 @@ Service: Telegram Monitoring / Smart Update / Telegram, VK, Telegraph and ICS ev
 Opened: 2026-07-10
 Closed: —
 Owners: events-bot maintainer / Codex
-Related incidents: `INC-2026-07-09-recurring-occurrence-date-drift.md`, `INC-2026-07-07-new-event-quality-degradation.md`, `INC-2026-07-03-event-6045-static-defect.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`, `INC-2026-04-30-tg-monitoring-event-quality-regressions.md`, `INC-2026-04-30-tg-monitoring-work-schedule-false-skips.md`
+Related incidents: `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-07-09-recurring-occurrence-date-drift.md`, `INC-2026-07-07-new-event-quality-degradation.md`, `INC-2026-07-03-event-6045-static-defect.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`, `INC-2026-04-30-tg-monitoring-event-quality-regressions.md`, `INC-2026-04-30-tg-monitoring-work-schedule-false-skips.md`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`, `docs/operations/runtime-logs.md`
 
 ## Summary
@@ -39,6 +39,8 @@ The same investigation rechecked the operator's second report, `Рыцарски
 - 2026-07-10 — operator reported the issue; incident opened and exact public/source evidence collected.
 - 2026-07-10 — production root overlay was independently found at 100% while taking the incident snapshot. Terminal/published temporary video outputs `844`–`851` were removed, restoring about 5.7 GB and a successful `/tmp` write probe before repair continued.
 - 2026-07-10 — row-level backups were created; Telegram event/calendar posts, live VK post and ICS object were deleted; Telegraph was replaced with a neutral tombstone; event `6783` was cancelled and silenced.
+- 2026-07-10 13:16 UTC — prevention SHA `732e34702f68f94b47b3c034d34999d1444a8efd` was deployed from clean `origin/main` as Fly image `deployment-01KX62P844FWPSCVYCPZDBE8NR`, machine version `1615`; the post-deploy health check was ready with no issues.
+- 2026-07-10 13:21–13:24 UTC — scoped compensating Telegram Monitoring run `ops_run=3421`, `trigger=incident_catchup`, reprocessed only `@kldzoo/7641` through the reserved remote `S22` role. It completed `success`: one forced message, zero extracted/imported events and zero errors. The force row was consumed and no replacement event was created.
 
 ## Root Cause
 
@@ -117,7 +119,7 @@ The same investigation rechecked the operator's second report, `Рыцарски
 
 ## Follow-up Actions
 
-- [ ] Complete the zero-write full-future vector-first + LLM audit and classify every flagged event from source evidence.
+- [x] Complete the zero-write full-future vector-first + LLM audit: exact `305/305` catalog coverage, `193` reused vectors + `112` local fills, zero provider-error verdicts after retries. Source-confirmed repairs and the remaining fail-closed review queue are tracked in `INC-2026-07-10-future-event-semantic-audit.md`.
 - [ ] Add a durable append-only quality-decision/publication gate keyed by event hash + source-bundle hash; identity-vector approval must remain separate.
 - [ ] Restore/schedule current vector-sidecar coverage and alert on core-vs-sidecar lag without making Supabase canonical.
 - [ ] Add first-class date-role/evidence fields to the producer/server contract after replay evaluation.
@@ -125,10 +127,13 @@ The same investigation rechecked the operator's second report, `Рыцарски
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: targeted incident tests pass; full-suite run has one baseline failure also reproducible on pre-change `origin/main` (`test_zero_ticket_price_without_explicit_free_evidence_stays_not_free`).
-- production repair evidence: DB/API mutation succeeded; post-repair public verification pending.
+- deployed SHA: `732e34702f68f94b47b3c034d34999d1444a8efd`, reachable from and equal to `origin/main` at deploy time.
+- deploy path: clean-worktree `flyctl deploy -a events-bot-new-wngqia`; image `deployment-01KX62P844FWPSCVYCPZDBE8NR`, machine version `1615`, one passing machine check.
+- regression checks: focused producer/Smart Update/incident/recurrence suite `59 passed`; the broader two-file run had one baseline failure also reproducible on pre-change `origin/main` (`test_zero_ticket_price_without_explicit_free_evidence_stays_not_free`).
+- production replay: `ops_run=3421`, `success`, `sources_scanned=1`, `messages_processed=1`, `messages_forced=1`, `messages_with_events=0`, `events_created=0`, `events_merged=0`, `errors_count=0`.
+- full-future audit: exact `305/305` pre-repair rows, `193` reused + `112` locally filled vectors, final LLM counts `174 pass / 82 repair-candidate / 6 remove-candidate / 42 needs_review / 1 indeterminate`, with zero provider-error verdicts; model flags remain fail-closed candidates until source adjudication.
+- production repair verification: `telegram_scanned_message(20,7641)` is `done` with `events_extracted=0/events_imported=0`; event `6783` remains `cancelled/silent`; no later Zoo/31-December replacement row exists. Authenticated Telegram checks return message-not-found, VK returns `is_deleted=true`, Telegraph contains the tombstone, and the ICS object returns not-found.
+- post-deploy health: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`; production snapshot and repaired DB both passed SQLite quick check.
 
 ## Prevention
 

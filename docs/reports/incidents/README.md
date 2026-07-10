@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-10-future-event-semantic-audit.md`
+  - Scope: exact future canonical inventory audits, vector-first recall with LLM source/date-role adjudication, deadline/historical non-events, wrong-time/date duplicates, merge contamination, venue drift and all managed public projections.
+  - Must not regress: vector similarity/identity approval must never count as semantic quality evidence; every audited row needs a current source-grounded LLM verdict, provider/missing-evidence cases fail closed, and destructive repair requires a source-confirmed survivor plus backups.
 - `INC-2026-07-10-zoo-ticket-validity-non-event.md`
   - Scope: Telegram Monitoring schedule routing, operational-hours/ticket-validity date roles, Smart Update LLM eventness review, vector-quality boundary, and all public event fanout surfaces.
   - Must not regress: a venue-open/normal-mode notice with visitor/cash-desk hours and `билет действителен до <date>` must not become an event, the validity date must not become `event.date`, the hours must not become `event.time`, and identity-vector `allow_create` must never count as quality approval.

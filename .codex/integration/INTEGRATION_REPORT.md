@@ -1,40 +1,52 @@
-# Integration Report — Smart Update Vector Identity Gate
+# Integration Report — INC-2026-07-10 future-date quality
 
-Base: `origin/main` / `f44a3f3db3112e03e2cbf6ba4e24fff44cd1afc8`
-Integration branch: `integration/smart-update-vector-identity-gate`
-Head: updated after reviewer fixes
+Base / release source: `origin/main`
+Integration branch: `integration/incident-20260710-future-date`
+Prevention/deploy SHA: `732e34702f68f94b47b3c034d34999d1444a8efd`
+Mode: read-only parallel discovery, then one serial production integrator
 
-| Lane | Requirement IDs | Branch/commit | Status | Evidence |
-|---|---|---|---|---|
-| schema-core | R01, R10 | `4f72962a` | merged | event identity/date provenance fields; `event_identity_decision_log`; `event_identity_lock`; py_compile + sqlite smoke in lane |
-| vector-rpc | R02, R03, R11 | `07e16fee` + integration fixes | merged | `event_identity.py`; service-role RPC migration; `identity_candidate_v1` document includes model/dim metadata; related_v1/search_v3 union recall; tests |
-| smart-update-core | R04, R05, R06, R11, R12, R14 | `df4f9a9b` + integration fixes | merged | identity gate flags, structured verdicts, deterministic/vector guard, vector recall evidence, insertion before create, low-risk vector-failure fallback, final pre-insert duplicate probe |
-| date-media | R07, R08 | `86ba2db2` + integration fixes | merged | date provenance trust helpers; newly created events populate date/end_date provenance/confidence; poster dedup helpers integrated into Smart Update |
-| public-gate / monitor | R09, G03 | `c0cf3ffe` + continuation | partial/merged | exporter-side public projection gate remains partial because `origin/main` lacks the static-site caller; added repo-native read-only SQLite `/vystavki/` monitor `scripts/inspect/audit_public_exhibition_duplicates.py` with JSON/Prometheus metrics, real `event.added_at`-based 14-day window semantics, and fail-on-high-confidence mode |
-| scheduled-ops-audit | G03, G04 | continuation | merged | optional `ENABLE_EXHIBITION_DUPLICATE_AUDIT=1` APScheduler job records `ops_run(kind='exhibition_duplicate_audit')`, includes identity-gate decision/veto/fail-safe/vector-error rollout counters, alerts admin on high-confidence pairs, and raises after persisted `failed` status; env/docs/tests added |
-| identity-rollout-audit | G03, G04 | continuation | merged | `scripts/inspect/audit_identity_gate_rollout.py` provides read-only JSON/Prometheus 14-day `event_identity_decision_log` metrics; low-risk vector errors are persisted as `suppressed_vector_error`; identity-gate exception path records exactly one fail-safe row |
-| tests-replay | R13, G01, G02 | integration fixes + continuation | merged | import-boundary Smart Update replay tests cover all listed exhibition clusters, recurring high-similarity control, and same-source multi-session control; pure replay-contract tests remain as constants/evidence |
+## Requirement closure
 
-## Integration tests
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| R01 | Find and repair/delete Zoo 31-December event everywhere | Done | event `6783` cancelled/silent; TG event+calendar, live VK and ICS deleted; Telegraph tombstoned; source preserved |
+| R02 | Find and resolve Knight Tournament 1-May series defect | Done | event `3980` rechecked as correct `2026-07-10 20:00`; earlier season-flattening repair remains under `INC-2026-07-09` |
+| R03 | Open/classify incidents | Done | new Zoo incident plus full-future semantic-audit incident; existing Knight incident updated/reused |
+| R04 | Inspect all managed/public surfaces | Done | DB, source, Telegram E2E, VK API, Telegraph, ICS and outbox evidence; stale/live VK ids resolved before destructive writes |
+| R05 | Audit every current future event vector-first + LLM-first | Done | frozen `305/305`; `193` reused sidecar vectors + `112` local fills; final LLM `174 pass / 82 repair-candidate / 6 remove-candidate / 42 needs_review / 1 indeterminate`; zero provider-error verdicts |
+| R06 | Identify root-cause classes | Done | date-role loss, operational-time loss, recurrence flattening, identity/merge contamination, venue-prior overreach, projection lag |
+| R07 | Prepare prevention, LLM-first/vector-first | Done | LLM schedule/date-role screen, unsafe rescue removal, Smart Update fail-closed LLM eventness routing, vector-first audit/public-gate contract and exact replay |
+| R08 | Release, catch up and verify | Done | clean `origin/main` deploy, Fly image/machine healthy, scoped S22 catch-up `ops_run=3421` produced zero events |
 
-- `python3 -m compileall -q event_identity.py smart_update_identity.py smart_event_update.py db.py models.py site/scripts/export-production-preview-data.py tests/test_event_identity.py tests/test_smart_update_identity_gate.py tests/test_smart_event_update_date_media_helpers.py tests/test_static_site_public_gate.py`
-- `git diff --check`
-- `PYTHONDONTWRITEBYTECODE=1 uv run --isolated --with-requirements requirements.txt --with pytest pytest -q -p no:cacheprovider tests/test_event_identity.py tests/test_smart_update_identity_gate.py tests/test_smart_update_identity_replay_contracts.py tests/test_smart_update_identity_persistence.py tests/test_smart_update_identity_incident_replay.py tests/test_exhibition_identity_duplicate_monitor.py tests/test_exhibition_duplicate_audit_scheduler.py tests/test_smart_event_update_date_media_helpers.py tests/test_static_site_public_gate.py tests/test_dedup_adjudicator.py tests/test_genai_dump_and_poster_dedup.py` → 80 passed
-- `PYTHONDONTWRITEBYTECODE=1 uv run --isolated --with-requirements requirements.txt --with pytest pytest -q -p no:cacheprovider tests/test_identity_gate_rollout_audit.py tests/test_exhibition_duplicate_audit_scheduler.py tests/test_smart_update_identity_persistence.py` → 10 passed
-- `uv run --isolated --with-requirements requirements.txt --with pytest pytest -q tests/test_pre_create_duplicate_probe.py tests/test_dedup_adjudicator.py` → 22 passed
+## Lane outcomes
 
-## Known verification issue
+| Lane | Requirement IDs | Status | Integrated result |
+|---|---|---|---|
+| prod-event-discovery | R01, R02, R04 | completed | exact target/public/source inventory and survivor verification |
+| incident-code-mapping | R03, R06 | completed | prior incident family and concrete producer/Smart Update root path |
+| vector-audit-design | R05, R07 | completed | compatible vector recall → LLM source adjudication → fail-closed publication contract |
+| serial-integrator | R01–R08 | completed | code/tests/docs, production repair, deploy, catch-up and closure evidence |
 
-Broader pre-existing/adjacent suite command `tests/test_pre_create_duplicate_probe.py tests/test_smart_event_update_duplicate_guards.py tests/test_smart_event_update_non_event_guards.py` has one failure: `test_smart_update_rejects_reaction_text_location_candidate` currently returns `skipped_non_event` instead of expected `invalid` because LLM-disabled eventness review fires before the later prose-location invalid branch. This is not in the new identity-gate code path, but should be resolved before merging if full suite cleanliness is required.
+## Production repairs
 
-## Reviewer follow-up status
+- Source-confirmed non-events removed: `6783`, `6057`, `6787`.
+- Source/vector-confirmed bad duplicates superseded and removed: `2759 → 2758`, `6622 → 6510`, `6771 → 6720`.
+- All wrong `@kldevents` messages are absent. Old Calendar documents `4881`/`7238`, which exceeded Telegram's delete window, were replaced in place by `removed.txt` tombstones; Calendar `7374` was deleted.
+- VK managed posts `3746`, `5974`, `6707`, `6892`, `6900` return `is_deleted=true`; Telegraph pages are tombstones; repaired DB quick check is `ok`.
+- Direct source review left a narrow repair queue instead of unsafe bulk mutation: `4517`, `3864`, `5735`, `6312`, `6517`, `6725`, `6782`, `6798`.
 
-- Persisted decision log: addressed for enabled identity gate invocations and final duplicate veto.
-- Candidate doc metadata: addressed with `embedding_model` and `embedding_dim`.
-- Date provenance population: addressed on create path.
-- Failure policy: adjusted so vector infra errors fail safe for parser/weak-date candidates but allow low-risk source-grounded non-parser creates through existing Smart Update behavior.
-- Concurrency: partially addressed with final pre-insert duplicate probe; full application lock/negative pair lock usage remains follow-up.
-- Public/static gate: partial because the chosen base did not contain the active static site exporter/caller; mitigated with repo-native read-only `/vystavki/` duplicate monitor plus optional scheduled ops audit for the 14-day enforce acceptance window.
-- 14-day metric semantics: `events_public_exhibition_duplicate_pairs_since_total` now uses `event.added_at` where available; schemas without `added_at` fail closed by counting pairs in the window.
-- Identity-gate rollout observability: read-only 14-day report now covers decision volume, vetoes, fail-safes, vector errors, final-probe vetoes, modes and reasons. Low-risk vector infra failures that do not block creates are persisted in `decision_payload.suppressed_vector_error`; exception path double-recording was removed.
-- Incident replay: import-boundary Smart Update tests now prove 5/5 known exhibition clusters do not create a second canonical row, while recurring and same-source multi-session controls create distinct occurrences.
+## Validation
+
+- `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py smart_event_update.py`
+- Focused producer/Smart Update/incident/recurrence suite: `59 passed`.
+- Separate recurrence suite: `19 passed`; exact producer/Zoo suite: `40 passed`.
+- Broader two-file run: `70 passed, 1 failed`; the same `test_zero_ticket_price_without_explicit_free_evidence_stays_not_free` failure reproduces on pre-change `origin/main`.
+- Deploy: Fly image `deployment-01KX62P844FWPSCVYCPZDBE8NR`, machine version `1615`, one passing machine check.
+- Post-deploy `/healthz`: `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+- Compensating production replay: `ops_run=3421`, `success`, one forced `@kldzoo/7641`, zero extracted/imported events, zero errors.
+
+## Material follow-ups / blockers
+
+- Durable hash-bound semantic quality decisions before every public projection and automatic vector-sidecar lag alert remain P1 follow-ups; Fly SQLite remains canonical.
+- Full source adjudication of the fail-closed LLM candidate queue is intentionally not converted into automatic destructive repair.
+- External Opus acceptance review was not completed because the available lane reached quota; no lower-class response was presented as consultant review. This did not block incident tests, source verification or release gates.

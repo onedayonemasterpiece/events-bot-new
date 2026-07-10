@@ -29,7 +29,7 @@ lanes:
     expected_output: exact target inventory and correctness classification
     verification_scope: inspection_only
     effort: high
-    status: spawned
+    status: completed
   - id: incident-code-mapping
     role: investigator
     requirement_ids: [R03, R06]
@@ -43,7 +43,7 @@ lanes:
     expected_output: incident family map and code/prompt root-cause map
     verification_scope: inspection_only
     effort: extra-high
-    status: spawned
+    status: completed
   - id: vector-audit-design
     role: architect
     requirement_ids: [R05, R07]
@@ -57,7 +57,7 @@ lanes:
     expected_output: compatible implementation design and reusable components
     verification_scope: inspection_only
     effort: extra-high
-    status: spawned
+    status: completed
   - id: serial-integrator
     role: integrator
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
@@ -71,5 +71,5 @@ lanes:
     expected_output: merged prevention and verified all-surface repair
     verification_scope: full_local_and_production
     effort: extra-high
-    status: in_progress
+    status: completed
 ```
