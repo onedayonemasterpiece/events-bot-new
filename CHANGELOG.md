@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- **Region Talk / canonical URL authority**: strict image-source joins now
+  prefer the canonical ledger row found by source URL over a thinner source-id
+  projection, including legacy canonical rows that do not yet carry
+  `source_id`.
 - **Region Talk / stable source fingerprint v2**: publication source
   attestations now change for meaningful scan/KO/candidate evidence and source
   classifications, not for a routine queue timestamp rewrite, so source-driven

@@ -6132,7 +6132,10 @@ def build_image_candidate_queue(
                     merged[field] = prev_post.get(field)
         source_id = str(merged.get("source_id") or "")
         source_url = str(merged.get("source_url") or "")
-        source = previous_source_by_id.get(source_id) or previous_source_by_url.get(source_url) or {}
+        # URL identity points to the canonical queue ledger even when that row
+        # predates source_id persistence. A source-candidate row with the same
+        # source_id must not outrank the canonical URL row.
+        source = previous_source_by_url.get(source_url) or previous_source_by_id.get(source_id) or {}
         authoritative_source_fields = [
             "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
             "source_queue_status", "posts_scanned", "ko_posts_found", "candidate_posts_found",

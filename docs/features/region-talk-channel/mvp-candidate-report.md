@@ -879,6 +879,9 @@ source incorrectly falls back to `source_verdict_unknown`.
 The same precedence is fail-closed in the opposite direction: if the canonical
 ledger row is still sparse, an older thin projection cannot override it with a
 stale `source_scope=external` and send the post to image scoring prematurely.
+Canonical URL lookup also precedes a thinner `source_id` projection, because
+older canonical rows may legitimately lack `source_id`; otherwise the thin row
+can still bypass URL-level authority.
 If an older image row was rejected only because that text/source evidence was
 incomplete, a later eligible pass reactivates it as
 `needs_actual_image_fetch`; only confirmed no-media or unsupported-media

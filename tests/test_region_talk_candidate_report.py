@@ -3925,10 +3925,23 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                             "ko_posts_found": 1,
                             "candidate_posts_found": 1,
                         }
-                    }
+                    },
+                    "source_candidates": {
+                        "thin-by-id": {
+                            "source_id": "src_travel_thin",
+                            "source_url": "https://t.me/travel",
+                            "source_scope": "external",
+                            "source_geo_class": "nonlocal_russia",
+                            "source_quick_class": "candidate_keep",
+                            "source_queue_status": "processed_found_ko_candidate",
+                            "posts_scanned": 9,
+                            "ko_posts_found": 2,
+                            "candidate_posts_found": 8,
+                        }
+                    },
                 },
                 [],
-                [row],
+                [{**row, "source_id": "src_travel_thin"}],
                 [],
                 "image-gate-run-sparse-canonical",
                 "2026-07-10T00:00:00+00:00",
