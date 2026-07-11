@@ -683,6 +683,27 @@ hiding queue size: `source_queue_total` stays the full queue count, while
 `source_queue_item`; the duplicate `source_status_item` mirror is off by default
 in orchestrated runs.
 
+For live orchestrated runs those independent stable-key queue rows use YDB
+`BulkUpsert` (`REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT=1`). They are not one
+atomic business transition, so compiling and executing one YQL statement per
+row only wastes CandidateReport runtime. A profiled run spent 64.3 seconds on
+80 source rows and then failed its final state snapshot with `DeadlineExceed`.
+Bulk queue handoff removes that serial transaction amplification. Retention and
+legacy-payload cleanup are disabled in this latency-sensitive path and belong
+to a separate maintenance operation.
+
+The CandidateReport scoring budget is workload-aware. Source count alone is
+insufficient because exact-post, keyword and history lanes can produce more
+than forty posts from five selected sources. Before E5 starts, the notebook
+reserves `REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS` (300 seconds in the
+orchestrator) for queue assembly and durable YDB writes, estimates scoring cost
+with `REGION_TALK_RUNTIME_SECONDS_PER_SCORED_POST`, and caps this run's scoring
+pool. The existing KO-evidence-first sorting is applied before the cap, so
+deferred low-priority posts do not displace keyword/fast-check evidence. The
+`runtime_scoring_budget_applied` heartbeat exposes all inputs and the resulting
+limit; `source_queue_build_done.source_queue_handoff_write_seconds` exposes the
+actual queue-write cost.
+
 Transient YDB failures (`ConnectionLost`, deadline/timeout) close the cached
 driver and retry on the next write, but must not disable all online writes for
 the rest of the notebook. Only authentication/authorization failures disable

@@ -162,6 +162,33 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertFalse(mod.should_replace_queue_cursor(current, stale, "source"))
         self.assertTrue(mod.should_replace_queue_cursor(stale, current, "source"))
 
+    def test_runtime_aware_scoring_limit_reserves_transaction_tail(self) -> None:
+        mod = load_module()
+        old = {key: os.environ.get(key) for key in [
+            "REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS",
+            "REGION_TALK_RUNTIME_SECONDS_PER_SCORED_POST",
+            "REGION_TALK_RUNTIME_MIN_POSTS_TO_SCORE",
+        ]}
+        try:
+            os.environ["REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS"] = "300"
+            os.environ["REGION_TALK_RUNTIME_SECONDS_PER_SCORED_POST"] = "5"
+            os.environ["REGION_TALK_RUNTIME_MIN_POSTS_TO_SCORE"] = "8"
+            limit, evidence = mod.runtime_aware_posts_to_score_limit(90, 41, remaining_seconds=410)
+            self.assertEqual(limit, 22)
+            self.assertEqual(evidence["dynamic_max"], 22)
+            self.assertEqual(evidence["fixed_tail_seconds"], 300.0)
+
+            low_limit, _ = mod.runtime_aware_posts_to_score_limit(90, 41, remaining_seconds=250)
+            self.assertEqual(low_limit, 8)
+            small_limit, _ = mod.runtime_aware_posts_to_score_limit(90, 5, remaining_seconds=410)
+            self.assertEqual(small_limit, 5)
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_runner_secret_names_only_include_selected_auth_bundle(self) -> None:
         mod = load_runner_module()
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_DISCOVERY1")
@@ -4121,6 +4148,56 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             self.assertEqual(written, 101)
             self.assertEqual(captured["items"], 101)
             self.assertEqual(captured["chunks"], 3)
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_online_queue_handoff_uses_bulk_upsert_for_independent_rows(self) -> None:
+        mod = load_module()
+        rows = [{"canonical_source_key": f"telegram:s{i}", "source_url": f"https://t.me/s{i}"} for i in range(3)]
+        captured: dict[str, object] = {}
+
+        class Pool:
+            def retry_operation_sync(self, op, retry_settings=None):
+                captured["retry_settings"] = retry_settings
+                return op(object())
+
+        driver = object()
+
+        def fake_bulk(actual_driver, _ydb, table_path, items, _updated_at, *, chunk_size):
+            captured.update({"driver": actual_driver, "table": table_path, "items": items, "chunk_size": chunk_size})
+            return len(items)
+
+        old = {name: os.environ.get(name) for name in [
+            "REGION_TALK_STATE_BACKEND",
+            "REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT",
+            "REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS",
+        ]}
+        try:
+            os.environ["REGION_TALK_STATE_BACKEND"] = "ydb"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT"] = "1"
+            os.environ["REGION_TALK_YDB_ONLINE_QUEUE_WRITE_MAX_ROWS"] = "80"
+            with mock.patch.object(mod, "_ydb_online_write_allowed", return_value=True), \
+                 mock.patch.object(mod, "_get_business_heartbeat_pool", return_value=(object(), driver, Pool(), "/db/table")), \
+                 mock.patch.object(mod, "ensure_ydb_kv_table", return_value=None), \
+                 mock.patch.object(mod, "ydb_retry_settings", return_value="retry"), \
+                 mock.patch.object(mod, "ydb_bulk_upsert_json_many", side_effect=fake_bulk):
+                written = mod.write_region_talk_online_queue_items(
+                    rows,
+                    kind="source_queue_item",
+                    id_fields=["canonical_source_key"],
+                    fields=["canonical_source_key", "source_url"],
+                    run_id="bulk-run",
+                    stage="unit",
+                )
+            self.assertEqual(written, 3)
+            self.assertIs(captured["driver"], driver)
+            self.assertEqual(captured["table"], "/db/table")
+            self.assertEqual(len(captured["items"]), 3)
+            self.assertEqual(captured["chunk_size"], 100)
         finally:
             for name, value in old.items():
                 if value is None:

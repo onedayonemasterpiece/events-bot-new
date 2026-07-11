@@ -266,6 +266,41 @@ def runtime_budget_ok(*, reserve_seconds: int = 120) -> bool:
     return runtime_remaining_seconds() > reserve_seconds
 
 
+def runtime_aware_posts_to_score_limit(
+    configured_max: int,
+    posts_available: int,
+    *,
+    remaining_seconds: float | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Reserve the expensive queue/YDB tail before starting E5 scoring.
+
+    Source-count budgets are not a reliable proxy for work: exact-post,
+    keyword and history lanes can make five sources yield forty posts.  Use the
+    measured remaining wall time and preserve a fixed tail for queue assembly
+    and durable YDB writes; the KO-priority sort then decides which posts use
+    the bounded scoring slots.
+    """
+    available_posts = max(0, int(posts_available or 0))
+    configured = max(0, int(configured_max or 0))
+    if configured <= 0:
+        configured = available_posts
+    remaining = runtime_remaining_seconds() if remaining_seconds is None else float(remaining_seconds)
+    fixed_tail = max(0.0, getenv_float("REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS", 300.0))
+    seconds_per_post = max(0.5, getenv_float("REGION_TALK_RUNTIME_SECONDS_PER_SCORED_POST", 5.0))
+    minimum = max(1, getenv_int("REGION_TALK_RUNTIME_MIN_POSTS_TO_SCORE", 8))
+    dynamic = max(minimum, int(max(0.0, remaining - fixed_tail) // seconds_per_post))
+    limit = min(available_posts, configured, dynamic)
+    return limit, {
+        "configured_max": configured,
+        "posts_available": available_posts,
+        "remaining_seconds": round(remaining, 1),
+        "fixed_tail_seconds": round(fixed_tail, 1),
+        "seconds_per_scored_post": round(seconds_per_post, 2),
+        "dynamic_max": dynamic,
+        "selected_limit": limit,
+    }
+
+
 def start_region_talk_stack_watchdog() -> None:
     """Emit Python stack dumps during opaque Kaggle stalls."""
     global _REGION_TALK_STACK_WATCHDOG_STARTED
@@ -2450,7 +2485,7 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
         if max_items > 0 and len(items) > max_items:
             print(f"[region-talk] online_queue_ydb_limited kind={kind} rows={len(items)} limit={max_items}", flush=True)
             items = items[:max_items]
-        ydb, _driver, pool, table_path = _get_business_heartbeat_pool()
+        ydb, driver, pool, table_path = _get_business_heartbeat_pool()
         timeout_seconds = getenv_int("REGION_TALK_YDB_QUEUE_REQUEST_TIMEOUT_SECONDS", getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8))
         retry_settings = ydb_retry_settings(
             ydb,
@@ -2458,14 +2493,27 @@ def write_region_talk_online_queue_items(rows: list[dict[str, Any]], *, kind: st
             max_retries=getenv_int("REGION_TALK_YDB_QUEUE_MAX_RETRIES", 0),
         )
 
-        def op(session: Any) -> int:
+        def ensure_table(session: Any) -> None:
             ensure_ydb_kv_table(ydb, session, table_path)
-            return ydb_upsert_json_many(
-                session,
+
+        pool.retry_operation_sync(ensure_table, retry_settings=retry_settings)
+        if getenv_bool("REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT", True):
+            # Queue rows have independent stable primary keys and do not need a
+            # single multi-row transaction.  BulkUpsert avoids compiling and
+            # executing one YQL statement per row (80 rows took 64s in a live
+            # CandidateReport run and consumed the final-state deadline).
+            return int(ydb_bulk_upsert_json_many(
+                driver,
                 ydb,
                 table_path,
                 items,
                 now,
+                chunk_size=getenv_int("REGION_TALK_YDB_ONLINE_QUEUE_BULK_CHUNK_SIZE", 100),
+            ) or 0)
+
+        def op(session: Any) -> int:
+            return ydb_upsert_json_many(
+                session, ydb, table_path, items, now,
                 chunk_size=getenv_int("REGION_TALK_YDB_ROW_UPSERT_CHUNK_SIZE", 50),
                 timeout_seconds=timeout_seconds,
             )
@@ -3561,11 +3609,20 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
             payload = json.dumps(compact, ensure_ascii=False, sort_keys=True)
             state_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             pool = ydb.SessionPool(driver)
+            state_timeout_seconds = getenv_int(
+                "REGION_TALK_YDB_STATE_WRITE_REQUEST_TIMEOUT_SECONDS",
+                max(12, getenv_int("REGION_TALK_YDB_REQUEST_TIMEOUT_SECONDS", 8)),
+            )
+            state_retry_settings = ydb_retry_settings(
+                ydb,
+                timeout_seconds=state_timeout_seconds,
+                max_retries=getenv_int("REGION_TALK_YDB_STATE_WRITE_MAX_RETRIES", 1),
+            )
             def op(session: Any) -> None:
                 ensure_ydb_kv_table(ydb, session, table_path)
-                ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at)
-                ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at)
-                ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at)
+                ydb_upsert_json(session, ydb, table_path, "latest_state", "state_snapshot", compact, updated_at, timeout_seconds=state_timeout_seconds)
+                ydb_upsert_json(session, ydb, table_path, "run:" + str(compact.get("run_id") or updated_at), "run_state_snapshot", compact, updated_at, timeout_seconds=state_timeout_seconds)
+                ydb_upsert_json(session, ydb, table_path, "metrics:" + str(compact.get("run_id") or updated_at), "run_metrics", {"run_id": compact.get("run_id"), "updated_at": updated_at, "all_time_metrics": compact.get("all_time_metrics") or {}}, updated_at, timeout_seconds=state_timeout_seconds)
                 row_items: list[tuple[str, str, dict[str, Any]]] = []
                 row_write_mode = (os.getenv("REGION_TALK_YDB_ROW_WRITE_MODE") or "changed").strip().lower()
                 skip_row_rewrite = getenv_bool("REGION_TALK_YDB_SKIP_ROW_LEVEL_REWRITE", True)
@@ -3657,7 +3714,7 @@ def save_region_talk_ydb_state(output_dir: Path, state: dict[str, Any]) -> dict[
                 )
                 compact["_ydb_pruned_legacy_queue_payload_rows"] = ydb_prune_legacy_queue_payloads(session, ydb, table_path)
                 compact["_ydb_retention_pruned_rows"] = ydb_prune_compact_retention(session, ydb, table_path)
-            pool.retry_operation_sync(op)
+            pool.retry_operation_sync(op, retry_settings=state_retry_settings)
             driver.stop(timeout=5)
             return {**meta, "ydb_write_status": "ok", "state_write_status": "ok", "state_write_path": "ydb:" + table_path, "latest_state_run_id": state.get("run_id", ""), "latest_state_uri": "ydb:" + table_path + "#latest_state", "latest_state_hash": state_hash, "latest_state_pointer_path": "ydb:" + table_path + "#latest_state", "ydb_table_path": table_path, "ydb_state_mode": "compact_kv", "ydb_compact_schema_version": compact.get("state_schema_version", ""), "ydb_compact_queue_contract_version": compact.get("queue_contract_version", ""), "ydb_pruned_legacy_queue_payload_rows": compact.get("_ydb_pruned_legacy_queue_payload_rows", 0), "ydb_retention_pruned_rows": json.dumps(compact.get("_ydb_retention_pruned_rows", {}), ensure_ascii=False, sort_keys=True), "ydb_compact_sources": len(compact.get("sources") or {}), "ydb_compact_source_candidates": len(compact.get("source_candidates") or {}), "ydb_compact_source_edges": len(compact.get("source_edges") or {}), "ydb_compact_comment_discovery": len(compact.get("comment_discovery") or {}), "ydb_compact_processed_posts": len(compact.get("processed_posts") or {}), "ydb_compact_candidate_memory": len(compact.get("candidate_memory") or {}), "ydb_compact_publication_candidate_queue": len(compact.get("publication_candidate_queue") or {}), "ydb_compact_unified_source_queue": len(compact.get("unified_source_queue") or {}), "ydb_compact_image_candidate_queue": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_processed_post_items_written": len(compact.get("processed_posts") or {}), "ydb_row_level_candidate_memory_items_written": len(compact.get("candidate_memory") or {}), "ydb_row_level_source_candidate_items_written": len(compact.get("source_candidates") or {}), "ydb_row_level_source_edge_items_written": len(compact.get("source_edges") or {}), "ydb_row_level_comment_link_items_written": len(compact.get("comment_discovery") or {}), "ydb_row_level_source_queue_items_written": len(compact.get("unified_source_queue") or {}), "ydb_row_level_image_queue_items_written": len(compact.get("image_candidate_queue") or {}), "ydb_row_level_publication_candidate_items_written": compact.get("_ydb_row_level_publication_candidate_items_written", 0), "ydb_queue_cursor_items_written": len(compact.get("queue_cursors") or {}), "ydb_row_level_items_written": compact.get("_ydb_row_level_items_written", 0)}
         except Exception as exc:
@@ -10860,6 +10917,16 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
             posts_to_score=min(max_posts_to_score, len(scoring_pool)) if max_posts_to_score > 0 else len(scoring_pool),
             prioritization="kaliningrad_place_evidence_before_vector",
         )
+    max_posts_to_score, runtime_scoring_budget = runtime_aware_posts_to_score_limit(
+        max_posts_to_score,
+        len(scoring_pool),
+    )
+    report_event(
+        "runtime_scoring_budget_applied",
+        phase="candidate_processing",
+        status="running",
+        **runtime_scoring_budget,
+    )
     posts_for_scoring = scoring_pool[:max_posts_to_score] if max_posts_to_score > 0 else scoring_pool
     selected_keys = {str(p.get("post_id") or p.get("post_url") or p.get("platform_post_key") or id(p)) for p in posts_for_scoring}
     runtime_deferred_posts = [p for p in scoring_pool if str(p.get("post_id") or p.get("post_url") or p.get("platform_post_key") or id(p)) not in selected_keys]
@@ -11932,6 +11999,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         int(unified_source_queue_metrics.get("source_queue_cursor_position") or 0),
         run_id,
     )
+    source_queue_handoff_write_started_at = time.monotonic()
     online_source_queue_items_written = write_region_talk_online_queue_items(
         source_queue_handoff_rows,
         kind="source_queue_item",
@@ -11963,7 +12031,7 @@ def build_report(seeds: list[Seed], source_rows: list[dict[str, Any]], posts: li
         "retry_total": sum(1 for r in unified_source_queue_sheet if isinstance(r, dict) and r.get("source_queue_status") == "needs_rescan_or_retry"),
         "progress_label": f"source queue cursor {unified_source_queue_metrics.get('source_queue_cursor_position', 0)}/{len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get('_sheet_note')])}",
     })
-    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), source_queue_handoff_rows=len(source_queue_handoff_rows), online_source_queue_items_written=online_source_queue_items_written, online_source_status_items_written=online_source_status_items_written, runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
+    report_event("source_queue_build_done", phase="queue_assembly", status="running", source_queue_total=len([r for r in unified_source_queue_sheet if isinstance(r, dict) and not r.get("_sheet_note")]), source_queue_handoff_rows=len(source_queue_handoff_rows), online_source_queue_items_written=online_source_queue_items_written, online_source_status_items_written=online_source_status_items_written, source_queue_handoff_write_seconds=round(time.monotonic() - source_queue_handoff_write_started_at, 3), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
     if (
         region_talk_state_backend_requested() == "ydb"
         and getenv_bool("REGION_TALK_SKIP_REPORT_TAIL_AFTER_SOURCE_QUEUE_HANDOFF", True)

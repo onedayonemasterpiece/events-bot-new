@@ -137,6 +137,11 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_KEYWORD_PHRASE_QUERIES"], "2")
         self.assertEqual(main["env"]["REGION_TALK_MAX_TELEGRAM_HASHTAG_QUERIES_PER_RUN"], "2")
         self.assertEqual(main["env"]["REGION_TALK_RUNTIME_RESERVE_BEFORE_DISCOVERY_TAIL_SECONDS"], "300")
+        self.assertEqual(main["env"]["REGION_TALK_RUNTIME_FIXED_TAIL_SECONDS"], "300")
+        self.assertEqual(main["env"]["REGION_TALK_RUNTIME_SECONDS_PER_SCORED_POST"], "5")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_ONLINE_QUEUE_BULK_UPSERT"], "1")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_STATE_WRITE_REQUEST_TIMEOUT_SECONDS"], "20")
+        self.assertEqual(main["env"]["REGION_TALK_YDB_RETENTION_PRUNE"], "0")
 
     def test_candidate_adaptive_budget_reduces_breadth_near_runtime_limit(self) -> None:
         mod = load_module()
