@@ -10,7 +10,7 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Public focus preview `preview-20260711-event-transport-presentation-v3` replaces the campaign-like rail copy with neutral travel help, adds one calendar file/reminder per train, estimated end-time handling, an explicit no-return state and the official-Avtovokzal-backed Romanovo bus/walking-map example. The initial v1 stale-event link and v2 rail-only preview are superseded.
 
-The 400-event focus fixture built 421 pages and 87 transport `.ics` files and passed `npm run check:preview`. The presentation candidate is governed by [presentation-release-checklist.md](presentation-release-checklist.md); the scheduled Kaggle refresh remains a P0 blocker before production promotion.
+The 400-event focus fixture built 421 pages and 87 transport `.ics` files and passed `npm run check:preview`. Public checks returned `200` for all three demo pages, the local Romanovo map and a transport ICS with `text/calendar`; mobile rail/no-return/bus and desktop bus screenshots are stored under ignored `artifacts/codex/site-presentation-transport/visual-v3/`. The presentation candidate is governed by [presentation-release-checklist.md](presentation-release-checklist.md); the scheduled Kaggle refresh remains a P0 blocker before production promotion.
 
 - Real rail event `6510`: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-posvyaschenie-muslimu-magomaevu-i-anne-german-svetlogorsk-6510/>
 - Real late concert `6397`, estimated end and no return train: <https://kenigevents.ru/preview-20260711-event-transport-presentation-v3/sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/>
