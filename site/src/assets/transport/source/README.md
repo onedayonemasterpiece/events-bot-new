@@ -8,12 +8,13 @@
 - Runtime derivative: lossless WebP at `site/public/assets/transport/kppk-lastochka.webp`.
 - Do not treat this artwork as a carrier logo. The separately sourced official КППК/RZD logo remains under `site/public/assets/partners/`.
 
-## `romanovo-holmogorye-map.png`
+## `romanovo-holmogorye-route-square.png` and `romanovo-holmogorye-route-portrait.png`
 
 - A pedestrian route was calculated on 2026-07-11 from the central `Романово` stop (`54.8958609, 20.2759337`) to the venue (`54.8817051, 20.2792613`): about `2.0 km / 26 min`.
-- The decoded route geometry is drawn as a blue polyline over a Yandex Static Maps preview with start/end pins and Yandex attribution.
-- 650×300 PNG, SHA-256 `badfef93456abdc683a632c8d32ce36b3c5fb0a39d3a0f5ba15ef825015c4065`.
-- Runtime path: `site/public/assets/transport/romanovo-holmogorye-map.png`; the page exposes one preferred interactive Yandex pedestrian route from central Romanovo plus the venue-coordinate link. The longer `Романовский поворот` walk remains disclosed as text.
+- The Valhalla/OSM geometry was decoded, simplified to 29 points and drawn as a blue polyline over Yandex Static Maps at zoom 14 with start/end pins and Yandex attribution.
+- Square desktop/tablet asset: 450×450 PNG, SHA-256 `113cb5c061803157d757c186dc76dbfecad89c96f198789544f8e686e521d2eb`.
+- Portrait mobile asset: 360×450 PNG, SHA-256 `fae27c0d4180ce146adc817c79631ab4e19bbf21269a4d844b53a63bae8d98a8`.
+- Runtime uses `<picture>` to select the portrait crop at `max-width: 720px` and the square crop otherwise. The page exposes one preferred interactive Yandex pedestrian route plus the venue-coordinate link; the longer `Романовский поворот` walk remains disclosed as text.
 
 ## `bus-svgrepo-337651.svg`
 

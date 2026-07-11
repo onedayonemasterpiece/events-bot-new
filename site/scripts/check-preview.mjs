@@ -23,7 +23,8 @@ const required = [
   'favicon.svg',
   'assets/transport/kppk-lastochka.webp',
   'assets/transport/bus-svgrepo-337651.svg',
-  'assets/transport/romanovo-holmogorye-map.png',
+  'assets/transport/romanovo-holmogorye-route-square.png',
+  'assets/transport/romanovo-holmogorye-route-portrait.png',
   'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/outbound-2026-07-12-6725.ics',
   'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-12-6730.ics',
   'sobytiya/kontsert-kaver-gruppy-diskodyadi-svetlogorsk-6397/transport/return-2026-07-13-6700.ics',
@@ -393,11 +394,11 @@ if (!busDemoEvent) throw new Error('Missing real event 6710 Romanovo bus regress
 const busDemoHtml = stripGeneratedCode(readFileSync(join(root, `sobytiya/${busDemoEvent.slug}/index.html`), 'utf8'));
 if (!busDemoHtml.includes('data-event-bus-schedule') || !busDemoHtml.includes('data-bus-route="romanovo-holmogorye"')) throw new Error('Event 6710 must expose the Romanovo bus block');
 if (busDemoHtml.includes('data-event-transport-schedule')) throw new Error('Romanovo event 6710 must not expose a train block');
-for (const needle of ['<img class="event-bus__symbol"', 'bus-svgrepo-337651.svg', 'До Романово — около 1 часа в автобусе', 'От автовокзала до остановки «Северный вокзал» у всех маршрутов — ориентировочно 10–15 минут', 'data-bus-number="118/118А"', '06:00', '08:40', 'data-bus-number="119"', '08:10', 'data-bus-return-number="118/118А"', '≈ 11:55', '≈ 17:55', 'data-bus-return-number="119"', '≈ 12:35', '≈ 16:05', 'Открыто по субботам с 11:00 до 16:00', 'rtt=pd']) {
+for (const needle of ['<img class="event-bus__symbol"', 'bus-svgrepo-337651.svg', 'До Романово — около 1 часа в автобусе', 'От автовокзала до остановки «Северный вокзал» у всех маршрутов — ориентировочно 10–15 минут', 'data-bus-number="118/118А"', '07:40', '08:00', '08:40', 'data-bus-number="119"', '08:10', 'data-bus-return-number="118/118А"', '≈ 13:15', '≈ 17:55', 'data-bus-return-number="119"', '≈ 13:45', '≈ 16:05', 'после 1 ч 15 мин на площадке', 'Открыто по субботам с 11:00 до 16:00', 'romanovo-holmogorye-route-square.png', 'romanovo-holmogorye-route-portrait.png', 'rtt=pd']) {
   if (!busDemoHtml.includes(needle)) throw new Error(`Event 6710 bus block missing ${needle}`);
 }
-if ((busDemoHtml.match(/Открыть пеший маршрут/gu) || []).length !== 1 || busDemoHtml.includes('Северный ≈') || busDemoHtml.includes('≈ 18:35') || busDemoHtml.includes('≈ 21:55') || busDemoHtml.includes('≈ 22:35') || busDemoHtml.includes('≈ 46 мин в автобусе')) throw new Error('Event 6710 bus block must avoid duplicated walking/North labels, unequal route estimates and pointless late returns');
-if (!busDemoHtml.includes('/assets/transport/romanovo-holmogorye-map.png') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Открыть пеший маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly include a local walking-route map and one external route link');
+if ((busDemoHtml.match(/Открыть пеший маршрут/gu) || []).length !== 1 || busDemoHtml.includes('Северный ≈') || busDemoHtml.includes('>06:00</time>') || busDemoHtml.includes('>06:20</time>') || busDemoHtml.includes('>06:55</time>') || busDemoHtml.includes('≈ 11:55') || busDemoHtml.includes('≈ 12:35') || busDemoHtml.includes('≈ 18:35') || busDemoHtml.includes('≈ 21:55') || busDemoHtml.includes('≈ 22:35') || busDemoHtml.includes('≈ 46 мин в автобусе')) throw new Error('Event 6710 bus block must avoid too-early outbound/return options, duplicated labels and pointless late returns');
+if (!busDemoHtml.includes('<picture') || !busDemoHtml.includes('media="(max-width: 720px)"') || !busDemoHtml.includes('loading="eager"') || !busDemoHtml.includes('Открыть пеший маршрут') || !busDemoHtml.includes('Точка на карте')) throw new Error('Event 6710 bus block must eagerly use responsive route-focused maps and one external route link');
 if (busDemoHtml.includes('avl39.ru/routes/reg/kaliningrad/')) throw new Error('Event 6710 bus block must not expose a schedule verification link');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');

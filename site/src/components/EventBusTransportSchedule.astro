@@ -7,6 +7,7 @@ interface Props { event: PreviewEvent; }
 const { event } = Astro.props;
 const suggestion = getEventBusSuggestion(event);
 const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
+const formatVisitDuration = (minutes: number) => `${Math.floor(minutes / 60)} ч ${minutes % 60} мин`;
 ---
 {suggestion && (
   <aside class="event-bus" data-event-bus-schedule data-bus-route={suggestion.id} aria-labelledby={headingId}>
@@ -38,7 +39,7 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
 
       <section class="event-bus__direction" data-bus-return>
         <p class="event-bus__step">Обратно · можно уехать раньше</p>
-        <p class="event-bus__return-note">{suggestion.venueHoursLabel}. Показаны варианты во время посещения и после закрытия.</p>
+        <p class="event-bus__return-note">{suggestion.venueHoursLabel}. Первые варианты — после {formatVisitDuration(suggestion.minimumVisitMinutes)} на площадке и пути до остановки.</p>
         {suggestion.returnGroups.map((group) => (
           <div class="event-bus__group" data-bus-return-number={group.routes}>
             <div class="event-bus__group-head">
@@ -54,7 +55,10 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
     </div>
 
     <div class="event-bus__map">
-      <img src={withBase(suggestion.mapImageUrl)} width="650" height="300" alt="Пешеходный маршрут от остановки Романово до Сказочного Холмогорья" loading="eager" decoding="async" />
+      <picture>
+        <source media="(max-width: 720px)" srcset={withBase(suggestion.mapPortraitImageUrl)} />
+        <img src={withBase(suggestion.mapSquareImageUrl)} width="450" height="450" alt="Пешеходный маршрут от остановки Романово до Сказочного Холмогорья" loading="eager" decoding="async" />
+      </picture>
       <div class="event-bus__map-links">
         <a href={suggestion.walkMapUrl} target="_blank" rel="noopener noreferrer nofollow">Открыть пеший маршрут</a>
         <a href={suggestion.venueMapUrl} target="_blank" rel="noopener noreferrer nofollow">Точка на карте</a>
@@ -87,7 +91,8 @@ const headingId = suggestion ? `event-bus-heading-${event.id}` : undefined;
   .event-bus__time-chip--single { display: inline-flex; min-width: 0; padding: 0.46rem 0.62rem; }
   .event-bus__return-note { margin: -0.2rem 0 0.35rem; color: var(--muted); font-size: 0.78rem; }
   .event-bus__map { padding: 0.75rem 1.1rem 1rem; border-top: 1px solid rgba(35,83,102,0.12); }
-  .event-bus__map img { display: block; width: 100%; height: auto; border: 0; border-radius: 16px; background: #e9eff1; }
+  .event-bus__map picture { display: block; }
+  .event-bus__map img { display: block; width: min(100%,450px); height: auto; margin: 0 auto; border: 0; border-radius: 16px; background: #e9eff1; }
   .event-bus__map-links { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; margin-top: 0.55rem; }
   .event-bus__map-links a { color: #1f708a; font-size: 0.78rem; font-weight: 850; }
   .event-bus footer { padding: 0.72rem 1.1rem 0.85rem; border-top: 1px solid rgba(35,83,102,0.12); color: var(--muted); font-size: 0.74rem; }
