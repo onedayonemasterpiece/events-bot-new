@@ -7,7 +7,8 @@
   credits are explicitly neutral in Gemini ad classification. Attribution
   provenance now survives later monitored-source queue overlays. Cached exact KO
   intake expands from three to at most eight posts without increasing username
-  resolves, while BGE prioritizes those rows with a FIFO reserve and the
+  resolves; permanently invalid public-post identities no longer retry forever
+  in that priority lane. BGE prioritizes exact rows with a FIFO reserve and the
   orchestrator polls downstream backlog faster until dual enrichment catches
   up.
 - **Region Talk / honest discovery-to-publication metrics and video review**:

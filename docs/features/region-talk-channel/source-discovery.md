@@ -214,6 +214,10 @@ Implementation invariants:
   at most eight when the actionable queue already has cached
   `channel_id/access_hash`, without raising the one-username-resolve budget;
   fetched links then pass the normal E5+BGE/text/image/LLM funnel;
+- permanent exact-link identity failures (`ChannelInvalid`, invalid/unoccupied
+  username/peer) become `terminal_invalid_public_post_source` instead of
+  retrying forever at the head of the high-priority lane; FloodWait and
+  transient RPC failures remain retryable;
 - every keyword/hashtag/fast-check priority change is persisted as
   `priority_lane=ko_keyword_or_fast_check` in the same YDB source ledger.
   Neither immutable `queue_seq` nor legacy `queue_order` is rewritten merely

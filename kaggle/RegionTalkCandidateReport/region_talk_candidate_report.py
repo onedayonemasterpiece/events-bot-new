@@ -8521,6 +8521,17 @@ def candidate_link_rows_for_fetch(
     return out
 
 
+def exact_post_fetch_error_is_terminal(exc: Exception) -> bool:
+    """Return true for permanent public-post identity failures."""
+    return type(exc).__name__ in {
+        "ChannelInvalidError",
+        "ChatIdInvalidError",
+        "UsernameInvalidError",
+        "UsernameNotOccupiedError",
+        "PeerIdInvalidError",
+    }
+
+
 def ydb_candidate_link_rows_from_row_kv(limit: int, kinds: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
@@ -8786,7 +8797,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                         break
                     status.event("telethon_exact_post_fetch_failed", phase="fetch", status="running", run_id=run_id, post_url=url, current_source_handle=handle, fetch_error_code=type(exc).__name__, fetch_error_message=str(exc)[:180], progress_label=f"Telethon exact resolve failed {handle}/{mid}: {type(exc).__name__}")
                     if str(row.get("_kind") or "") == "post_link_queue_item":
-                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
+                        terminal = exact_post_fetch_error_is_terminal(exc)
+                        write_region_talk_post_link_queue_items([{**row, "post_link_status": "terminal_invalid_public_post_source" if terminal else "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
                     continue
                 entity_cache[handle] = entity
             try:
@@ -8810,7 +8822,8 @@ async def fetch_ydb_candidate_link_posts_with_telethon(
                     break
                 status.event("telethon_exact_post_fetch_failed", phase="fetch", status="running", run_id=run_id, post_url=url, current_source_handle=handle, fetch_error_code=type(exc).__name__, fetch_error_message=str(exc)[:180], progress_label=f"Telethon exact message failed {handle}/{mid}: {type(exc).__name__}")
                 if str(row.get("_kind") or "") == "post_link_queue_item":
-                    write_region_talk_post_link_queue_items([{**row, "post_link_status": "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
+                    terminal = exact_post_fetch_error_is_terminal(exc)
+                    write_region_talk_post_link_queue_items([{**row, "post_link_status": "terminal_invalid_public_post_source" if terminal else "fetch_error", "last_attempt_run_id": run_id, "last_attempt_at": utc_now_iso(), "fetch_error_code": type(exc).__name__, "fetch_error_message": str(exc)[:180]}], run_id=run_id, stage=stage)
                 continue
             text = str(getattr(msg, "message", None) or "").strip() if msg is not None else ""
             if not text:

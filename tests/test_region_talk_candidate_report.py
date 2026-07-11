@@ -3044,6 +3044,13 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIsNone(mod.parse_public_telegram_post_url("https://t.me/c/123/456"))
         self.assertIsNone(mod.parse_public_telegram_post_url("https://vk.com/wall-1_2"))
 
+    def test_permanent_exact_post_identity_errors_are_terminal(self) -> None:
+        mod = load_module()
+        channel_invalid = type("ChannelInvalidError", (Exception,), {})()
+        flood_wait = type("FloodWaitError", (Exception,), {})()
+        self.assertTrue(mod.exact_post_fetch_error_is_terminal(channel_invalid))
+        self.assertFalse(mod.exact_post_fetch_error_is_terminal(flood_wait))
+
     def test_dual_embedding_batch_releases_each_model(self) -> None:
         mod = load_module()
 
