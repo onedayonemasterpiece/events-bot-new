@@ -17,6 +17,11 @@ shared `/promo` management menu, the upcoming KONB-CherryFlash auto-promote
 rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 [partner-promo.md](partner-promo.md).
 
+A planned guide-excursion standalone video activity is specified separately in
+`docs/features/guide-excursion-video-promo/README.md`; keep detailed renderer
+and carousel requirements there to avoid duplicating this promo-campaign
+contract.
+
 ## Data Model
 
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,

@@ -249,6 +249,18 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  guide_excursion_video_promo:
+    status: draft_spec
+    docs: docs/features/guide-excursion-video-promo/README.md
+    reference_video: docs/features/guide-excursion-video-promo/reference/VID_20260708_142351.mp4
+    related_promo_campaigns: docs/features/promo-campaigns/README.md
+    related_cherryflash: docs/features/cherryflash/README.md
+    planned_entrypoints:
+      - promo.py
+      - video_announce/cherryflash_excursions.py
+      - scripts/render_cherryflash_guide_true3d_v4.py
+      - vk_review.py
+      - telegram_business.py
   info_partners:
     status: draft_preview
     docs: docs/features/info-partners/README.md

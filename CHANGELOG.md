@@ -9,6 +9,8 @@
 
 ### Added
 
+- **Guide excursion video promo**: added a draft feature spec and preserved the carousel-card reference video for a standalone excursion promo activity that will render one daily photo-led video for VK/Telegram.
+
 - **Future-event quality audit**: added a reproducible read-only vector-first full-catalog runner that reuses current sidecar embeddings, fills missing vectors ephemerally, and emits recall pairs for source-grounded LLM/human adjudication without mutating either database.
 
 - **CherryFlash / guide excursions**: added a base-profile-only guide-excursion promo scene that selects one future occurrence with a personal avatar and explicit free-place count, inserts it in a random slot 2–6 with a random palette, and renders the approved avatar-led CherryFlash composition while excluding partner/Eco tracks.
